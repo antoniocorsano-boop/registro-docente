@@ -7,6 +7,8 @@ import {
   UDA_KEY
 } from '../utils';
 import { sanitizePersistedSettings } from './dataClassification';
+import { SecureVault } from './secureVault';
+import type { VaultRecordKey } from './vaultTypes';
 
 export interface KeyValueStorage {
   getItem(key: string): string | null;
@@ -47,6 +49,11 @@ export interface MigrationInvariants {
   udas: number;
 }
 
+export interface MigrationResult {
+  migratedKeys: string[];
+  invariants: MigrationInvariants;
+}
+
 const LEGACY_ENTRIES = [
   [STORAGE_KEY, 'appData'],
   [CUSTOM_TESTS_KEY, 'customTests'],
@@ -55,6 +62,19 @@ const LEGACY_ENTRIES = [
   [SUBMISSIONS_KEY, 'submissions'],
   [META_KEY, 'meta']
 ] as const;
+
+const MIGRATION_RECORDS: ReadonlyArray<{
+  legacyKey: string;
+  property: Exclude<keyof LegacySnapshot, 'presentKeys'>;
+  recordKey: VaultRecordKey;
+}> = [
+  { legacyKey: STORAGE_KEY, property: 'appData', recordKey: 'appData' },
+  { legacyKey: CUSTOM_TESTS_KEY, property: 'customTests', recordKey: 'customTests' },
+  { legacyKey: SETTINGS_KEY, property: 'settings', recordKey: 'settings' },
+  { legacyKey: UDA_KEY, property: 'udas', recordKey: 'udas' },
+  { legacyKey: SUBMISSIONS_KEY, property: 'submissions', recordKey: 'submissions' },
+  { legacyKey: META_KEY, property: 'meta', recordKey: 'meta' }
+];
 
 function parseLegacyJson(key: string, raw: string): unknown {
   try {
@@ -66,6 +86,10 @@ function parseLegacyJson(key: string, raw: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function valuesMatch(expected: unknown, actual: unknown): boolean {
+  return JSON.stringify(expected) === JSON.stringify(actual);
 }
 
 export function collectLegacySnapshot(storage: KeyValueStorage): LegacySnapshot {
@@ -148,5 +172,68 @@ export function sanitizeLegacySnapshot(snapshot: LegacySnapshot): LegacySnapshot
     settings: snapshot.settings
       ? sanitizePersistedSettings(snapshot.settings)
       : undefined
+  };
+}
+
+export async function migrateLegacyToVault(
+  storage: KeyValueStorage,
+  vault: SecureVault,
+  password: string
+): Promise<MigrationResult> {
+  const source = collectLegacySnapshot(storage);
+  const validation = validateLegacySnapshot(source);
+  if (!validation.valid) {
+    throw new Error(`Snapshot legacy non valido: ${validation.errors.join(' ')}`);
+  }
+  if (source.presentKeys.length === 0) {
+    throw new Error('Nessun dato legacy da migrare.');
+  }
+
+  const sanitized = sanitizeLegacySnapshot(source);
+  const expectedInvariants = buildMigrationInvariants(sanitized);
+
+  await vault.createStaging(password);
+
+  try {
+    for (const mapping of MIGRATION_RECORDS) {
+      const value = sanitized[mapping.property];
+      if (value === undefined) continue;
+      await vault.put(mapping.recordKey, value);
+    }
+
+    const readback: LegacySnapshot = { presentKeys: [...sanitized.presentKeys] };
+    for (const mapping of MIGRATION_RECORDS) {
+      const expected = sanitized[mapping.property];
+      if (expected === undefined) continue;
+
+      const actual = await vault.get(mapping.recordKey);
+      if (!valuesMatch(expected, actual)) {
+        throw new Error(`Readback cifrato non coerente per ${mapping.recordKey}.`);
+      }
+      (readback as Record<string, unknown>)[mapping.property] = actual;
+    }
+
+    const actualInvariants = buildMigrationInvariants(readback);
+    if (!valuesMatch(expectedInvariants, actualInvariants)) {
+      throw new Error('Verifica invarianti della migrazione non riuscita.');
+    }
+
+    await vault.activate();
+  } catch (error) {
+    try {
+      await vault.discardStaging();
+    } catch {
+      // Preserve the original migration error; an ACTIVE vault cannot be discarded here.
+    }
+    throw error;
+  }
+
+  for (const legacyKey of source.presentKeys) {
+    storage.removeItem(legacyKey);
+  }
+
+  return {
+    migratedKeys: [...source.presentKeys],
+    invariants: expectedInvariants
   };
 }
