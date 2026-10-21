@@ -108,6 +108,11 @@ export class SecureVault {
     await this.store.putRecord(record);
   }
 
+  async delete(key: VaultRecordKey): Promise<void> {
+    this.requireUnlocked();
+    await this.store.deleteRecord(key);
+  }
+
   async activate(): Promise<void> {
     this.requireUnlocked();
     const metadata = await this.store.getMetadata();
