@@ -92,6 +92,23 @@ function valuesMatch(expected: unknown, actual: unknown): boolean {
   return JSON.stringify(expected) === JSON.stringify(actual);
 }
 
+type LegacySnapshotProperty = Exclude<keyof LegacySnapshot, 'presentKeys'>;
+
+function setLegacySnapshotProperty(
+  snapshot: LegacySnapshot,
+  property: LegacySnapshotProperty,
+  value: unknown
+): void {
+  switch (property) {
+    case 'appData': snapshot.appData = value; break;
+    case 'customTests': snapshot.customTests = value; break;
+    case 'settings': snapshot.settings = value as LegacySettings; break;
+    case 'udas': snapshot.udas = value; break;
+    case 'submissions': snapshot.submissions = value; break;
+    case 'meta': snapshot.meta = value; break;
+  }
+}
+
 export function collectLegacySnapshot(storage: KeyValueStorage): LegacySnapshot {
   const snapshot: LegacySnapshot = { presentKeys: [] };
 
@@ -100,7 +117,7 @@ export function collectLegacySnapshot(storage: KeyValueStorage): LegacySnapshot 
     if (raw === null) continue;
 
     const parsed = parseLegacyJson(key, raw);
-    (snapshot as Record<string, unknown>)[property] = parsed;
+    setLegacySnapshotProperty(snapshot, property, parsed);
     snapshot.presentKeys.push(key);
   }
 
@@ -210,7 +227,7 @@ export async function migrateLegacyToVault(
       if (!valuesMatch(expected, actual)) {
         throw new Error(`Readback/invarianti non coerenti per ${mapping.recordKey}.`);
       }
-      (readback as Record<string, unknown>)[mapping.property] = actual;
+      setLegacySnapshotProperty(readback, mapping.property, actual);
     }
 
     const actualInvariants = buildMigrationInvariants(readback);
