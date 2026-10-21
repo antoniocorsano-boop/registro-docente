@@ -250,12 +250,12 @@ describe('SEC-1 verify-before-delete migration', () => {
     expect(await vaultStore.listRecordKeys()).toEqual([]);
   });
 
-  test('readback invariant mismatch leaves legacy keys intact and discards staging vault', async () => {
+  test('readback mismatch leaves legacy keys intact and discards staging vault', async () => {
     const storage = makeMigrationStorage();
     const vaultStore = new MemoryVaultStore();
     const vault = new CorruptingReadbackVault(vaultStore);
 
-    await expect(migrateLegacyToVault(storage, vault, 'teacher-password')).rejects.toThrow('invarianti');
+    await expect(migrateLegacyToVault(storage, vault, 'teacher-password')).rejects.toThrow('Readback');
 
     expect(storage.removed).toEqual([]);
     expect(await vaultStore.getMetadata()).toBeNull();
