@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { evaluateDataFlow, type DataClassification } from './src/security/dataClassification';
+import { evaluateDataFlow, type DataClassification } from './src/security/dataClassification.ts';
 
 dotenv.config();
 
