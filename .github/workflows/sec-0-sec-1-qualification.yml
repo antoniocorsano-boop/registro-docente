@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   verify:
@@ -25,7 +26,28 @@ jobs:
       - name: Typecheck
         id: typecheck
         continue-on-error: true
-        run: bun run lint
+        shell: bash
+        run: |
+          set +e
+          bun run lint > typecheck.log 2>&1
+          code=$?
+          cat typecheck.log
+          diagnostic=$(grep -m 1 -E 'error TS[0-9]+:' typecheck.log || tail -n 1 typecheck.log)
+          diagnostic=${diagnostic//$'\n'/ }
+          diagnostic=${diagnostic:0:120}
+          echo "diagnostic=$diagnostic" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Publish typecheck diagnostic
+        if: steps.typecheck.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIAGNOSTIC: ${{ steps.typecheck.outputs.diagnostic }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='SEC-0/1 baseline typecheck' \
+            -f description="${DIAGNOSTIC:-Typecheck failed; inspect workflow log.}"
 
       - name: Security tests when present
         shell: bash
