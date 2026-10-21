@@ -453,6 +453,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       .catch(error => console.error('Secure submission save failed', error));
   };
 
+  const handleSaveStudentSubmission = useCallback(async (submission: OnlineSubmission) => {
+    const previous = submissions;
+    const updated = [...previous, submission];
+    setSubmissions(updated);
+    try {
+      await secureStorage.saveSubmissions(updated);
+      toast('Consegna salvata nel vault locale');
+    } catch (error) {
+      setSubmissions(previous);
+      throw error;
+    }
+  }, [secureStorage, submissions, toast]);
+
   // Import submissions into class grades
   const handleImportSubmissionsToRegister = (targetUdaId?: string) => {
     if (submissions.length === 0) {
@@ -654,6 +667,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           tests={tests}
           defaultTestId={studentMode.testId}
           defaultClassName={studentMode.className}
+          onSaveSubmission={handleSaveStudentSubmission}
           onExit={() => {
             setStudentMode(prev => ({ ...prev, isOpen: false }));
             try {
