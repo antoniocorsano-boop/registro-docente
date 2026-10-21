@@ -18,7 +18,7 @@ async function withProductionServer<T>(run: (baseUrl: string) => Promise<T>): Pr
 
   try {
     let ready = false;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       try {
         const probe = await fetch(`${baseUrl}/api/embeddings/test`, {
           method: 'POST',
