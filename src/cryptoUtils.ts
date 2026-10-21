@@ -90,7 +90,7 @@ function sanitizeBackupData<T>(data: T): T {
   return clone(data) as T;
 }
 
-async function deriveBackupKey(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+async function deriveBackupKey(password: string, salt: ArrayBuffer, iterations: number): Promise<CryptoKey> {
   if (!password) throw new Error('Password di backup mancante.');
 
   const cryptoApi = getCrypto();
@@ -125,7 +125,7 @@ export async function encryptDataWithPassword(data: unknown, password: string): 
 
   const salt = cryptoApi.getRandomValues(new Uint8Array(16));
   const iv = cryptoApi.getRandomValues(new Uint8Array(12));
-  const key = await deriveBackupKey(password, salt, BACKUP_KDF_ITERATIONS_V2);
+  const key = await deriveBackupKey(password, salt.buffer, BACKUP_KDF_ITERATIONS_V2);
   const encryptedBuffer = await cryptoApi.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -223,7 +223,7 @@ export async function decryptDataWithPassword(encryptedContent: string, password
     throw new Error('Formato cifrato non valido o corrotto.');
   }
 
-  const key = await deriveBackupKey(password, new Uint8Array(saltBuffer), iterations);
+  const key = await deriveBackupKey(password, saltBuffer, iterations);
 
   try {
     const decryptedBuffer = await cryptoApi.subtle.decrypt(
