@@ -12,8 +12,15 @@ import type { VaultMetadataV1, VaultRecordKey } from './vaultTypes';
 
 export class SecureVault {
   private sessionDek: CryptoKey | null = null;
+  private mutationTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly store: VaultStore) {}
+
+  private enqueueMutation(operation: () => Promise<void>): Promise<void> {
+    const run = this.mutationTail.then(operation, operation);
+    this.mutationTail = run.then(() => undefined, () => undefined);
+    return run;
+  }
 
   private requireUnlocked(): CryptoKey {
     if (!this.sessionDek) {
@@ -104,13 +111,20 @@ export class SecureVault {
 
   async put<T>(key: VaultRecordKey, value: T, schemaVersion = 1): Promise<void> {
     const dek = this.requireUnlocked();
-    const record = await encryptJsonRecord(key, schemaVersion, value, dek);
-    await this.store.putRecord(record);
+    await this.enqueueMutation(async () => {
+      const record = await encryptJsonRecord(key, schemaVersion, value, dek);
+      await this.store.putRecord(record);
+    });
   }
 
   async delete(key: VaultRecordKey): Promise<void> {
     this.requireUnlocked();
-    await this.store.deleteRecord(key);
+    await this.enqueueMutation(() => this.store.deleteRecord(key));
+  }
+
+  async clearAll(): Promise<void> {
+    this.lock();
+    await this.enqueueMutation(() => this.store.clearAll());
   }
 
   async activate(): Promise<void> {

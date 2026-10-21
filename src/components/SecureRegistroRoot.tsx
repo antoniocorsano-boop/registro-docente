@@ -8,7 +8,7 @@ import {
   SUBMISSIONS_KEY,
   UDA_KEY
 } from '../utils';
-import { migrateLegacyToVault } from '../security/legacyMigration';
+import { cleanupVerifiedLegacyAfterActivation, migrateLegacyToVault } from '../security/legacyMigration';
 import {
   SecureAppStorage,
   decideVaultBootstrap,
@@ -28,10 +28,21 @@ const LEGACY_DATA_KEYS = [
   META_KEY
 ] as const;
 
+const AUTO_LOCK_STORAGE_KEY = 'registro_auto_lock_minutes';
+const DEFAULT_AUTO_LOCK_MS = 15 * 60_000;
+type AutoLockMinutes = 0 | 15 | 30 | 60;
+
+function readAutoLockMinutes(): AutoLockMinutes {
+  const raw = window.localStorage.getItem(AUTO_LOCK_STORAGE_KEY);
+  const parsed = raw === null ? 15 : Number(raw);
+  return parsed === 0 || parsed === 15 || parsed === 30 || parsed === 60 ? parsed : 15;
+}
+
 export const SecureRegistroRoot: React.FC = () => {
   const [gateState, setGateState] = useState<VaultGateState>('CHECKING');
   const [snapshot, setSnapshot] = useState<SecureAppSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(() => readAutoLockMinutes());
   const storeRef = useRef<IndexedDbVaultStore | null>(null);
   const vaultRef = useRef<SecureVault | null>(null);
   const storageRef = useRef<SecureAppStorage | null>(null);
@@ -87,6 +98,12 @@ export const SecureRegistroRoot: React.FC = () => {
     void inspectBootstrap();
   }, [inspectBootstrap]);
 
+  const handleLock = useCallback(() => {
+    vaultRef.current?.lock();
+    setSnapshot(null);
+    setGateState('LOCKED');
+  }, []);
+
   const loadReadySnapshot = useCallback(async () => {
     const { storage } = getRuntime();
     const nextSnapshot = await storage.loadSnapshot();
@@ -103,7 +120,13 @@ export const SecureRegistroRoot: React.FC = () => {
   const handleUnlock = useCallback(async (password: string) => {
     const { vault } = getRuntime();
     await vault.unlock(password);
-    await loadReadySnapshot();
+    try {
+      await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
+      await loadReadySnapshot();
+    } catch (error) {
+      vault.lock();
+      throw error;
+    }
   }, [getRuntime, loadReadySnapshot]);
 
   const handleMigrate = useCallback(async (password: string) => {
@@ -137,12 +160,41 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [inspectBootstrap]);
 
   const handleFactoryReset = useCallback(async () => {
-    const { store, vault } = getRuntime();
-    await store.clearAll();
-    vault.lock();
+    const { vault } = getRuntime();
+    await vault.clearAll();
+    for (const legacyKey of LEGACY_DATA_KEYS) {
+      window.localStorage.removeItem(legacyKey);
+    }
     setSnapshot(null);
     setGateState('SETUP_REQUIRED');
   }, [getRuntime]);
+
+  useEffect(() => {
+    if (gateState !== 'READY' || autoLockMinutes === 0) return;
+
+    let timeoutId = window.setTimeout(handleLock, autoLockMinutes * 60_000);
+    const resetTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(handleLock, autoLockMinutes * 60_000);
+    };
+
+    const activityEvents = ['pointerdown', 'keydown'] as const;
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, resetTimer);
+    }
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, resetTimer);
+      }
+    };
+  }, [autoLockMinutes, gateState, handleLock]);
+
+  const handleAutoLockChange = (minutes: AutoLockMinutes) => {
+    setAutoLockMinutes(minutes);
+    window.localStorage.setItem(AUTO_LOCK_STORAGE_KEY, String(minutes));
+  };
 
   return (
     <VaultGate
@@ -154,11 +206,35 @@ export const SecureRegistroRoot: React.FC = () => {
       onRetry={handleRetry}
     >
       {snapshot && storageRef.current ? (
-        <App
-          initialSnapshot={snapshot}
-          secureStorage={storageRef.current}
-          onFactoryReset={handleFactoryReset}
-        />
+        <>
+          <App
+            initialSnapshot={snapshot}
+            secureStorage={storageRef.current}
+            onFactoryReset={handleFactoryReset}
+          />
+          <div className="fixed bottom-3 right-3 z-50 flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/95 p-2 text-xs text-slate-200 shadow-xl">
+            <label htmlFor="vault-auto-lock" className="sr-only">Blocco automatico Registro</label>
+            <select
+              id="vault-auto-lock"
+              value={autoLockMinutes}
+              onChange={(event) => handleAutoLockChange(Number(event.target.value) as AutoLockMinutes)}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2"
+              title="Blocco automatico per inattività"
+            >
+              <option value={0}>Mai durante la lezione</option>
+              <option value={15}>15 min</option>
+              <option value={30}>30 min</option>
+              <option value={60}>60 min</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleLock}
+              className="rounded-lg border border-slate-600 px-3 py-2 font-semibold hover:bg-slate-800"
+            >
+              Blocca Registro
+            </button>
+          </div>
+        </>
       ) : null}
     </VaultGate>
   );

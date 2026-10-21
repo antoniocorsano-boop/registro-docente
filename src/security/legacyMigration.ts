@@ -192,6 +192,37 @@ export function sanitizeLegacySnapshot(snapshot: LegacySnapshot): LegacySnapshot
   };
 }
 
+export async function cleanupVerifiedLegacyAfterActivation(
+  storage: KeyValueStorage,
+  vault: SecureVault
+): Promise<string[]> {
+  const source = collectLegacySnapshot(storage);
+  if (source.presentKeys.length === 0) return [];
+
+  const validation = validateLegacySnapshot(source);
+  if (!validation.valid) {
+    throw new Error(`Residuo legacy non valido: ${validation.errors.join(' ')}`);
+  }
+
+  const sanitized = sanitizeLegacySnapshot(source);
+
+  for (const mapping of MIGRATION_RECORDS) {
+    const expected = sanitized[mapping.property];
+    if (expected === undefined) continue;
+
+    const actual = await vault.get(mapping.recordKey);
+    if (!valuesMatch(expected, actual)) {
+      throw new Error(`Residuo legacy non coerente con il vault ACTIVE per ${mapping.recordKey}.`);
+    }
+  }
+
+  for (const legacyKey of source.presentKeys) {
+    storage.removeItem(legacyKey);
+  }
+
+  return [...source.presentKeys];
+}
+
 export async function migrateLegacyToVault(
   storage: KeyValueStorage,
   vault: SecureVault,
