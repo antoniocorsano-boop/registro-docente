@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #030712;
+  --surface: #0b0f19;
+  --surface-variant: #111827;
+  --surface-hover: #1f2937;
+  --border: rgba(0, 216, 214, 0.2);
+  --border-focus: #00d8d6;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+
+  --primary: #00d8d6;
+  --primary-hover: #22d3ee;
+  --primary-text: #030712;
+
+  --danger: #f43f5e;
+  --danger-bg: rgba(244, 63, 94, 0.14);
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.14);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --info: #38bdf8;
+  --info-bg: rgba(56, 189, 248, 0.14);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+
+  --neon-glow: 0 0 18px rgba(0, 216, 214, 0.22);
+  --neon-glow-strong: 0 0 28px rgba(0, 216, 214, 0.4);
+}
+
+body.theme-matrix {
+  --primary: #10b981;
+  --primary-hover: #34d399;
+  --border: rgba(16, 185, 129, 0.22);
+  --border-focus: #10b981;
+  --neon-glow: 0 0 18px rgba(16, 185, 129, 0.22);
+  --neon-glow-strong: 0 0 28px rgba(16, 185, 129, 0.4);
+}
+
+body.theme-purple {
+  --primary: #c084fc;
+  --primary-hover: #d8b4fe;
+  --border: rgba(192, 132, 252, 0.22);
+  --border-focus: #c084fc;
+  --neon-glow: 0 0 18px rgba(192, 132, 252, 0.22);
+  --neon-glow-strong: 0 0 28px rgba(192, 132, 252, 0.4);
+}
+
+body.theme-amber {
+  --primary: #fbbf24;
+  --primary-hover: #fcd34d;
+  --border: rgba(251, 191, 36, 0.22);
+  --border-focus: #fbbf24;
+  --neon-glow: 0 0 18px rgba(251, 191, 36, 0.22);
+  --neon-glow-strong: 0 0 28px rgba(251, 191, 36, 0.4);
+}
+
+body.theme-mixed {
+  --primary: #38bdf8;
+  --primary-hover: #7dd3fc;
+  --border: rgba(192, 132, 252, 0.24);
+  --border-focus: #38bdf8;
+  --neon-glow: 0 0 18px rgba(56, 189, 248, 0.22);
+  --neon-glow-strong: 0 0 28px rgba(192, 132, 252, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-main);
+  min-height: 100vh;
+}
+
+/* Custom badges */
+.badge-ok {
+  background-color: var(--success-bg);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.badge-bad {
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+}
+
+.badge-warn {
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.badge-info {
+  background-color: var(--info-bg);
+  color: var(--info);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+/* Custom interactive inputs and buttons */
+.neon-input {
+  background-color: var(--surface-variant);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.neon-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--neon-glow);
+}
+
+.neon-btn-primary {
+  background-color: var(--primary);
+  color: var(--primary-text);
+  border: 1px solid var(--primary);
+  font-weight: 700;
+  box-shadow: var(--neon-glow);
+  transition: all 0.2s ease;
+}
+
+.neon-btn-primary:hover {
+  background-color: var(--primary-hover);
+  box-shadow: var(--neon-glow-strong);
+}
+
+.neon-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.neon-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.neon-card-highlight {
+  border: 1.5px solid var(--primary);
+  box-shadow: var(--neon-glow);
+}
+
+/* Print styles for official report */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  header, nav, aside, button, .no-print {
+    display: none !important;
+  }
+}

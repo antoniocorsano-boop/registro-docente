@@ -1,0 +1,8 @@
+{
+  "name": "Registro Docente & Flashcards Pro Neon",
+  "description": "Registro elettronico per docenti con gestione valutazioni, livelli di competenza D.M. 221/2025, tabellone scrutinio, programmazione UDA con Gantt, e verifiche formative con Flashcards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
