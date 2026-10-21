@@ -138,4 +138,48 @@ describe('SEC-3 outbound boundary closure', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test('embedding test route rejects an unknown provider before local fallback', async () => {
+    await withProductionServer(async baseUrl => {
+      const response = await fetch(`${baseUrl}/api/embeddings/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: {
+            provider: 'other',
+            endpointUrl: 'http://example.invalid:8080',
+            modelName: 'nomic-embed-text',
+            apiType: 'openai-compatible',
+            enabled: true
+          },
+          prompt: 'contenuto professionale del docente',
+          classification: 'TEACHER_PROFESSIONAL'
+        })
+      });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  test('embedding generate route rejects an unknown provider before local fallback', async () => {
+    await withProductionServer(async baseUrl => {
+      const response = await fetch(`${baseUrl}/api/embeddings/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texts: ['contenuto professionale del docente'],
+          config: {
+            provider: 'other',
+            endpointUrl: 'http://example.invalid:8080',
+            modelName: 'nomic-embed-text',
+            apiType: 'openai-compatible',
+            enabled: true
+          },
+          classification: 'TEACHER_PROFESSIONAL'
+        })
+      });
+
+      expect(response.status).toBe(403);
+    });
+  });
 });
