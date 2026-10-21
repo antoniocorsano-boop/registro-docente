@@ -26,7 +26,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   udas = [],
   onSaveEvaluations,
   onCancelEdit,
-  isPrivacyShieldActive = false
+  isPrivacyShieldActive = true
 }) => {
 
   const [period, setPeriod] = useState<'Q1' | 'Q2'>('Q1');

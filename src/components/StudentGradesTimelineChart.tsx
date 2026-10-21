@@ -33,7 +33,7 @@ export const StudentGradesTimelineChart: React.FC<StudentGradesTimelineChartProp
   students,
   grades,
   initialStudentId,
-  isPrivacyShieldActive = false
+  isPrivacyShieldActive = true
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     initialStudentId || students[0]?.id || ''
