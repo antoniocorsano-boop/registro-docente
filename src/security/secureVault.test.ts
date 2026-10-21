@@ -111,7 +111,7 @@ describe('SEC-1 SecureVault lifecycle', () => {
     await expect(vault.unlock('teacher-password')).rejects.toThrow('STAGING');
 
     const retryVault = new SecureVault(store);
-    await expect(retryVault.activate()).rejects.toThrow('sbloccato');
+    await expect(retryVault.activate()).rejects.toThrow('bloccato');
   });
 
   test('changes password by rewrapping the DEK without reciphering records', async () => {
