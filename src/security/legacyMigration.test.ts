@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildMigrationInvariants,
   collectLegacySnapshot,
+  cleanupVerifiedLegacyAfterActivation,
   migrateLegacyToVault,
   sanitizeLegacySnapshot,
   validateLegacySnapshot,
@@ -260,5 +261,47 @@ describe('SEC-1 verify-before-delete migration', () => {
     expect(storage.removed).toEqual([]);
     expect(await vaultStore.getMetadata()).toBeNull();
     expect(await vaultStore.listRecordKeys()).toEqual([]);
+  });
+});
+
+
+describe('SEC-1 post-activation legacy cleanup recovery', () => {
+  async function createMatchingActiveVault(storage: MemoryLegacyStorage): Promise<SecureVault> {
+    const snapshot = sanitizeLegacySnapshot(collectLegacySnapshot(storage));
+    const vault = new SecureVault(new MemoryVaultStore());
+    await vault.initializeActive('teacher-password');
+    if (snapshot.appData !== undefined) await vault.put('appData', snapshot.appData);
+    if (snapshot.settings !== undefined) await vault.put('settings', snapshot.settings);
+    if (snapshot.udas !== undefined) await vault.put('udas', snapshot.udas);
+    if (snapshot.customTests !== undefined) await vault.put('customTests', snapshot.customTests);
+    if (snapshot.submissions !== undefined) await vault.put('submissions', snapshot.submissions);
+    if (snapshot.meta !== undefined) await vault.put('meta', snapshot.meta);
+    return vault;
+  }
+
+  test('removes residual legacy plaintext only after it matches the unlocked ACTIVE vault', async () => {
+    const storage = makeMigrationStorage();
+    const vault = await createMatchingActiveVault(storage);
+
+    const removed = await cleanupVerifiedLegacyAfterActivation(storage, vault);
+
+    expect(removed.sort()).toEqual([
+      CUSTOM_TESTS_KEY,
+      META_KEY,
+      SETTINGS_KEY,
+      STORAGE_KEY,
+      SUBMISSIONS_KEY,
+      UDA_KEY
+    ].sort());
+    expect(storage.removed.sort()).toEqual(removed.sort());
+  });
+
+  test('leaves every residual legacy key intact when any plaintext value mismatches the ACTIVE vault', async () => {
+    const storage = makeMigrationStorage();
+    const vault = await createMatchingActiveVault(storage);
+    await vault.put('appData', { classes: [], currentClassId: null });
+
+    await expect(cleanupVerifiedLegacyAfterActivation(storage, vault)).rejects.toThrow(/residuo|coerente|match/i);
+    expect(storage.removed).toEqual([]);
   });
 });

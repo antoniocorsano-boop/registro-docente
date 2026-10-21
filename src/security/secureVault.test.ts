@@ -37,6 +37,27 @@ class MemoryVaultStore implements VaultStore {
   }
 }
 
+class BlockingVaultStore extends MemoryVaultStore {
+  putCalls = 0;
+  private firstEnteredResolve!: () => void;
+  private releaseFirstResolve!: () => void;
+  readonly firstEntered = new Promise<void>(resolve => { this.firstEnteredResolve = resolve; });
+  private readonly releaseFirst = new Promise<void>(resolve => { this.releaseFirstResolve = resolve; });
+
+  override async putRecord(record: EncryptedVaultRecord): Promise<void> {
+    this.putCalls += 1;
+    if (this.putCalls === 1) {
+      this.firstEnteredResolve();
+      await this.releaseFirst;
+    }
+    await super.putRecord(record);
+  }
+
+  release(): void {
+    this.releaseFirstResolve();
+  }
+}
+
 describe('SEC-1 vault storage boundary', () => {
   test('rejects an unavailable IndexedDB factory instead of falling back to plaintext storage', () => {
     expect(() => new IndexedDbVaultStore(undefined)).toThrow('IndexedDB');
@@ -132,6 +153,45 @@ describe('SEC-1 SecureVault lifecycle', () => {
     await expect(vault.unlock('old-password')).rejects.toThrow();
     await vault.unlock('new-password');
     await expect(vault.get<{ theme: string }>('settings')).resolves.toEqual({ theme: 'cyan' });
+  });
+
+
+
+  test('serializes record mutations so a later save cannot be overwritten by an earlier slow save', async () => {
+    const store = new BlockingVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+
+    const first = vault.put('meta', { changes: 1, lastBackup: null });
+    await store.firstEntered;
+    const second = vault.put('meta', { changes: 2, lastBackup: null });
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(store.putCalls).toBe(1);
+
+    store.release();
+    await Promise.all([first, second]);
+    await expect(vault.get('meta')).resolves.toEqual({ changes: 2, lastBackup: null });
+  });
+
+  test('clearAll locks immediately, waits for queued writes, then leaves no metadata or records', async () => {
+    const store = new BlockingVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+
+    const pendingWrite = vault.put('appData', { value: 'sensitive' });
+    await store.firstEntered;
+    const reset = vault.clearAll();
+
+    expect(vault.isUnlocked()).toBe(false);
+    await expect(vault.put('meta', { changes: 99 })).rejects.toThrow('bloccato');
+
+    store.release();
+    await pendingWrite;
+    await reset;
+
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
   });
 
   test('discards only staging vaults and never clears an active vault', async () => {
