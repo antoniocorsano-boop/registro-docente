@@ -1,0 +1,57 @@
+name: PREDEPLOY Security Qualification
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Security tests
+        id: security
+        continue-on-error: true
+        run: bun run test:security
+
+      - name: Build
+        run: bun run build
+
+      - name: Production server startup smoke
+        shell: bash
+        run: |
+          set +e
+          NODE_ENV=production PORT=0 timeout 5s node server.ts
+          code=$?
+          if [[ "$code" -eq 124 ]]; then
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Preserve qualification gates
+        if: steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure'
+        run: |
+          echo "At least one PREDEPLOY qualification gate failed."
+          exit 1
