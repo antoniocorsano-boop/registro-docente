@@ -104,4 +104,23 @@ describe('SEC-1 verified vault backup restore', () => {
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(afterFailure.settings?.embeddingConfig?.apiKey).toBeUndefined();
   });
+
+  test('returns an initially empty vault to empty when a restore readback fails', async () => {
+    const store = new RestoreTestStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const storage = new SecureAppStorage(vault);
+
+    store.armOneReadCorruption('appData', 6);
+    await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
+
+    expect(await storage.loadSnapshot()).toEqual({
+      appData: null,
+      settings: null,
+      udas: null,
+      customTests: null,
+      submissions: null,
+      meta: null
+    });
+  });
 });
