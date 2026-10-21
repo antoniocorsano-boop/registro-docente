@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { OnlineTest } from '../types';
-import { SUBMISSIONS_KEY, uid } from '../utils';
+import { OnlineSubmission, OnlineTest } from '../types';
+import { uid } from '../utils';
 import { ArrowRight, CheckCircle2, RotateCcw, XCircle, Award, Lightbulb, AlertCircle } from 'lucide-react';
 
 interface StudentPortalProps {
   tests: Record<string, OnlineTest>;
   defaultTestId?: string;
   defaultClassName?: string;
+  onSaveSubmission: (submission: OnlineSubmission) => Promise<void>;
   onExit: () => void;
 }
 
@@ -15,6 +16,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   tests,
   defaultTestId = 'energia',
   defaultClassName = '3ª A',
+  onSaveSubmission,
   onExit
 }) => {
   const currentTest = tests[defaultTestId] || Object.values(tests)[0] || {
@@ -82,25 +84,22 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
         });
       } catch (e) {}
 
-      // Save submission to localStorage
-      try {
-        const raw = localStorage.getItem(SUBMISSIONS_KEY);
-        const submissions = raw ? JSON.parse(raw) : [];
-        submissions.push({
-          id: uid(),
-          testId: currentTest.id,
-          name: studentName.trim(),
-          class: selectedClass,
-          testTitle: currentTest.title,
-          score: finalScore,
-          total: total,
-          date: new Date().toISOString(),
-          answers: userAnswers
-        });
-        localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(submissions));
-      } catch (e) {
-        console.error('Error saving submission', e);
-      }
+      const submission: OnlineSubmission = {
+        id: uid(),
+        testId: currentTest.id,
+        name: studentName.trim(),
+        class: selectedClass,
+        testTitle: currentTest.title,
+        score: finalScore,
+        total: total,
+        date: new Date().toISOString(),
+        answers: userAnswers
+      };
+
+      void onSaveSubmission(submission).catch(error => {
+        console.error('Secure submission save failed', error);
+        alert('La consegna non è stata salvata nel vault locale. Avvisa il docente.');
+      });
     }
   };
 

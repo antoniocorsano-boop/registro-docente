@@ -471,7 +471,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   };
 
   // Embedding configuration from settings or default
-  const embeddingConfig = settings.embeddingConfig || DEFAULT_EMBEDDING_CONFIG;
+  const embeddingConfig = settings?.embeddingConfig || DEFAULT_EMBEDDING_CONFIG;
 
   // Search & Semantic Search state
   const [searchQuery, setSearchQuery] = useState('');
