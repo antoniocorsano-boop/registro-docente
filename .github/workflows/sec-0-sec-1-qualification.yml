@@ -16,16 +16,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Install dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
 
       - name: Typecheck
-        run: npm run lint
+        run: bun run lint
 
       - name: Security tests when present
         shell: bash
@@ -33,10 +31,10 @@ jobs:
           shopt -s nullglob
           tests=(src/security/*.test.ts)
           if (( ${#tests[@]} )); then
-            node --import tsx --test "${tests[@]}"
+            bun test "${tests[@]}"
           else
             echo "No security tests yet; baseline verification only."
           fi
 
       - name: Build
-        run: npm run build
+        run: bun run build
