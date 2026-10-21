@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -19,8 +20,13 @@ async function listFiles(root: string): Promise<string[]> {
   }
 }
 
-async function listTrackedFiles(root: string): Promise<string[]> {
-  return listFiles(root);
+function listTrackedFiles(root: string): string[] {
+  const stdout = execFileSync('git', ['ls-files', '--', root], { encoding: 'utf8' });
+  return stdout
+    .split('\n')
+    .map((file) => file.trim())
+    .filter(Boolean)
+    .sort();
 }
 
 describe('PREDEPLOY repository and static-asset hygiene', () => {
@@ -29,8 +35,8 @@ describe('PREDEPLOY repository and static-asset hygiene', () => {
     expect(files).toEqual([]);
   });
 
-  test('does not track AI Studio temporary media artifacts', async () => {
-    const files = await listTrackedFiles('.aistudio');
+  test('does not track AI Studio temporary media artifacts', () => {
+    const files = listTrackedFiles('.aistudio');
     const tempMedia = files.filter((file) => file.includes('/.tempmediaStorage/'));
     expect(tempMedia).toEqual([]);
   });
@@ -42,7 +48,7 @@ describe('PREDEPLOY repository and static-asset hygiene', () => {
     await writeFile(fixture, 'ignored fixture');
 
     try {
-      const files = await listTrackedFiles('.aistudio');
+      const files = listTrackedFiles('.aistudio');
       expect(files).not.toContain(fixture);
     } finally {
       await rm('.aistudio/artifacts/predeploy-fixture', { recursive: true, force: true });
