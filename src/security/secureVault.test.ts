@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { SecureVault } from './secureVault';
 import { IndexedDbVaultStore, type VaultStore } from './vaultStore';
 import type { EncryptedVaultRecord, VaultMetadataV1, VaultRecordKey } from './vaultTypes';
 
@@ -76,5 +77,75 @@ describe('SEC-1 vault storage boundary', () => {
 
     await store.clearAll();
     expect(await store.getMetadata()).toBeNull();
+  });
+});
+
+describe('SEC-1 SecureVault lifecycle', () => {
+  test('initializes an active vault, locks it and requires unlock before reads', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+
+    await vault.initializeActive('teacher-password');
+    expect(vault.isUnlocked()).toBe(true);
+
+    await vault.put('appData', { value: 7 });
+    await expect(vault.get<{ value: number }>('appData')).resolves.toEqual({ value: 7 });
+
+    vault.lock();
+    expect(vault.isUnlocked()).toBe(false);
+    await expect(vault.get('appData')).rejects.toThrow('bloccato');
+
+    await expect(vault.unlock('wrong-password')).rejects.toThrow();
+    await vault.unlock('teacher-password');
+    await expect(vault.get<{ value: number }>('appData')).resolves.toEqual({ value: 7 });
+  });
+
+  test('keeps staging distinct from active and allows activation only from staging', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+
+    await vault.createStaging('teacher-password');
+    expect((await store.getMetadata())?.state).toBe('STAGING');
+
+    vault.lock();
+    await expect(vault.unlock('teacher-password')).rejects.toThrow('STAGING');
+
+    const retryVault = new SecureVault(store);
+    await expect(retryVault.activate()).rejects.toThrow('sbloccato');
+  });
+
+  test('changes password by rewrapping the DEK without reciphering records', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+
+    await vault.initializeActive('old-password');
+    await vault.put('settings', { theme: 'cyan' });
+    const before = await store.getRecord('settings');
+
+    await vault.changePassword('old-password', 'new-password');
+    const after = await store.getRecord('settings');
+
+    expect(after?.iv).toEqual(before?.iv);
+    expect(after?.ciphertext).toEqual(before?.ciphertext);
+
+    vault.lock();
+    await expect(vault.unlock('old-password')).rejects.toThrow();
+    await vault.unlock('new-password');
+    await expect(vault.get<{ theme: string }>('settings')).resolves.toEqual({ theme: 'cyan' });
+  });
+
+  test('discards only staging vaults and never clears an active vault', async () => {
+    const stagingStore = new MemoryVaultStore();
+    const stagingVault = new SecureVault(stagingStore);
+    await stagingVault.createStaging('password');
+    await stagingVault.discardStaging();
+    expect(await stagingStore.getMetadata()).toBeNull();
+    expect(stagingVault.isUnlocked()).toBe(false);
+
+    const activeStore = new MemoryVaultStore();
+    const activeVault = new SecureVault(activeStore);
+    await activeVault.initializeActive('password');
+    await expect(activeVault.discardStaging()).rejects.toThrow('ACTIVE');
+    expect((await activeStore.getMetadata())?.state).toBe('ACTIVE');
   });
 });
