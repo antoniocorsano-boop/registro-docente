@@ -12,6 +12,12 @@ function getCrypto(): Crypto {
   return globalThis.crypto;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function createIv(): Uint8Array {
   return getCrypto().getRandomValues(new Uint8Array(12));
 }
@@ -35,7 +41,7 @@ export async function deriveKeyEncryptionKey(
   const cryptoApi = getCrypto();
   const keyMaterial = await cryptoApi.subtle.importKey(
     'raw',
-    encoder.encode(password),
+    toArrayBuffer(encoder.encode(password)),
     'PBKDF2',
     false,
     ['deriveKey']
@@ -44,7 +50,7 @@ export async function deriveKeyEncryptionKey(
   return cryptoApi.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: toArrayBuffer(salt),
       iterations: KDF_ITERATIONS_V1,
       hash: 'SHA-256'
     },
@@ -63,7 +69,7 @@ export async function wrapDataEncryptionKey(
   const iv = createIv();
   const rawDek = await cryptoApi.subtle.exportKey('raw', dek);
   const wrappedKey = await cryptoApi.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: toArrayBuffer(iv) },
     kek,
     rawDek
   );
@@ -78,7 +84,7 @@ export async function unwrapDataEncryptionKey(
 ): Promise<CryptoKey> {
   const cryptoApi = getCrypto();
   const rawDek = await cryptoApi.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: toArrayBuffer(iv) },
     kek,
     wrappedKey
   );
@@ -103,11 +109,11 @@ export async function encryptJsonRecord<T>(
   const ciphertext = await cryptoApi.subtle.encrypt(
     {
       name: 'AES-GCM',
-      iv,
-      additionalData: additionalData(recordKey, schemaVersion)
+      iv: toArrayBuffer(iv),
+      additionalData: toArrayBuffer(additionalData(recordKey, schemaVersion))
     },
     dek,
-    encoder.encode(JSON.stringify(value))
+    toArrayBuffer(encoder.encode(JSON.stringify(value)))
   );
 
   return {
@@ -125,8 +131,8 @@ export async function decryptJsonRecord<T>(
   const plaintext = await getCrypto().subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv: record.iv,
-      additionalData: additionalData(record.recordKey, record.schemaVersion)
+      iv: toArrayBuffer(record.iv),
+      additionalData: toArrayBuffer(additionalData(record.recordKey, record.schemaVersion))
     },
     dek,
     record.ciphertext
