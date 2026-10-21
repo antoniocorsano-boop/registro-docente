@@ -63,7 +63,7 @@ export function evaluateDataFlow(
 }
 
 export function sanitizePersistedSettings<
-  T extends { embeddingConfig?: { apiKey?: string; [key: string]: unknown } }
+  T extends { embeddingConfig?: { apiKey?: string } }
 >(settings: T): T {
   if (!settings.embeddingConfig) {
     return { ...settings };
