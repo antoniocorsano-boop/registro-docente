@@ -1,0 +1,42 @@
+name: SEC-0 SEC-1 Qualification
+
+on:
+  push:
+    branches:
+      - feat/sec-0-sec-1-secure-vault
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Security tests when present
+        shell: bash
+        run: |
+          shopt -s nullglob
+          tests=(src/security/*.test.ts)
+          if (( ${#tests[@]} )); then
+            node --import tsx --test "${tests[@]}"
+          else
+            echo "No security tests yet; baseline verification only."
+          fi
+
+      - name: Build
+        run: npm run build
