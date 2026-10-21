@@ -38,20 +38,15 @@ describe('SEC-1 application vault wiring', () => {
   });
 
   test('wires configurable inactivity auto-lock and an explicit manual lock action', async () => {
-    const appSource = await Bun.file('src/App.tsx').text();
     const rootSource = await Bun.file('src/components/SecureRegistroRoot.tsx').text();
-    const navbarSource = await Bun.file('src/components/Navbar.tsx').text();
-    const typesSource = await Bun.file('src/types.ts').text();
-    const utilsSource = await Bun.file('src/utils.ts').text();
 
-    expect(typesSource).toContain('autoLockMinutes?: 0 | 15 | 30 | 60');
-    expect(utilsSource).toContain('autoLockMinutes: 15');
-    expect(appSource).toContain('settings.autoLockMinutes');
-    expect(appSource).toContain('window.setTimeout');
-    expect(appSource).toContain("'pointerdown'");
-    expect(appSource).toContain("'keydown'");
-    expect(appSource).toContain('onLock');
+    expect(rootSource).toContain('AUTO_LOCK_STORAGE_KEY');
+    expect(rootSource).toContain('15 * 60_000');
+    expect(rootSource).toContain('window.setTimeout');
+    expect(rootSource).toContain("'pointerdown'");
+    expect(rootSource).toContain("'keydown'");
     expect(rootSource).toContain("setGateState('LOCKED')");
-    expect(navbarSource).toContain('Blocca Registro');
+    expect(rootSource).toContain('Mai durante la lezione');
+    expect(rootSource).toContain('Blocca Registro');
   });
 });
