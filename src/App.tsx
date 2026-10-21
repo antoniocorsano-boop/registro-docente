@@ -28,7 +28,8 @@ import {
   UDA_KEY,
   uid
 } from './utils';
-import type { SecureAppSnapshot, SecureAppStorage } from './security/secureAppStorage';
+import type { CompleteSecureAppSnapshot, SecureAppSnapshot, SecureAppStorage } from './security/secureAppStorage';
+import { normalizeBackupPayload } from './security/backupPayload';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -536,113 +537,38 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       .catch(error => console.error('Secure settings save failed', error));
   };
 
-  // Export JSON Backup
+  // Backup actions are routed to the protected Privacy area.
   const handleExportBackup = () => {
-    const payload = {
-      app: 'registro-docente',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      data: appData,
-      settings: settings,
-      udas: udas,
-      customTests: tests,
-      submissions: submissions
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Backup_RegistroDocente_${today()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
-    setMeta(nextMeta);
-    void secureStorage.saveMeta(nextMeta);
-    toast('Backup esportato');
+    setActiveTab('privacy');
+    toast('Usa il backup cifrato con password nella sezione Privacy');
   };
 
-  // Import JSON Backup
   const handleImportBackup = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-
-    input.onchange = (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const raw = JSON.parse(event.target?.result as string);
-          if (raw && (raw.data || raw.classes)) {
-            const loadedData: AppData = raw.data || { classes: raw.classes, currentClassId: null };
-            setAppData(loadedData);
-            await secureStorage.saveAppData(loadedData);
-
-            if (raw.settings) {
-              setSettings(raw.settings);
-              await secureStorage.saveSettings(raw.settings);
-            }
-
-            if (raw.udas) {
-              setUdas(raw.udas);
-              await secureStorage.saveUdas(raw.udas);
-            }
-
-            if (raw.customTests) {
-              setTests(raw.customTests);
-              await secureStorage.saveCustomTests(raw.customTests);
-            }
-
-            if (raw.submissions) {
-              setSubmissions(raw.submissions);
-              await secureStorage.saveSubmissions(raw.submissions);
-            }
-
-            const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
-            setMeta(nextMeta);
-            await secureStorage.saveMeta(nextMeta);
-
-            setActiveTab('home');
-            alert('Registro ripristinato con successo dal file di backup!');
-          } else {
-            alert('Il file selezionato non contiene una struttura di backup valida.');
-          }
-        } catch (err) {
-          console.error(err);
-          alert('Errore durante la decodifica del file JSON di backup.');
-        }
-      };
-      reader.readAsText(file);
-    };
-
-    input.click();
+    setActiveTab('privacy');
+    toast('Ripristina un backup cifrato nella sezione Privacy');
   };
 
   // Import Encrypted Backup
-  const handleImportEncryptedBackup = async (decryptedData: any) => {
-    if (decryptedData.classes || decryptedData.data) {
-      const loadedClasses = decryptedData.classes || decryptedData.data?.classes || [];
-      const nextAppData: AppData = {
-        classes: loadedClasses,
-        currentClassId: null
-      };
-      setAppData(nextAppData);
-      await secureStorage.saveAppData(nextAppData);
+  const handleImportEncryptedBackup = async (decryptedData: unknown) => {
+    const currentSnapshot: CompleteSecureAppSnapshot = {
+      appData,
+      settings,
+      udas,
+      customTests: tests,
+      submissions,
+      meta
+    };
+    const candidate = normalizeBackupPayload(decryptedData, currentSnapshot);
+    const restored = await secureStorage.restoreSnapshotVerified(candidate);
 
-      if (decryptedData.settings) {
-        setSettings(decryptedData.settings);
-        await secureStorage.saveSettings(decryptedData.settings);
-      }
-
-      toast('Registro cifrato ripristinato');
-      setActiveTab('home');
-    }
+    setAppData(restored.appData);
+    setSettings(restored.settings);
+    setUdas(restored.udas);
+    setTests(restored.customTests);
+    setSubmissions(restored.submissions);
+    setMeta(restored.meta);
+    setActiveTab('home');
+    toast('Backup cifrato verificato e ripristinato');
   };
 
   // Factory Reset / Diritto all'Oblio
@@ -851,9 +777,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           <PrivacyView
             settings={settings}
             classes={appData.classes}
+            backupSnapshot={{
+              appData,
+              settings,
+              udas,
+              customTests: tests,
+              submissions,
+              meta
+            }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
-            onExportEncryptedBackup={() => {}}
+            onExportEncryptedBackup={() => {
+              const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
+              setMeta(nextMeta);
+              void secureStorage.saveMeta(nextMeta);
+            }}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
           />

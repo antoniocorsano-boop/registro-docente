@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
+import { createBackupPayload } from '../security/backupPayload';
+import type { CompleteSecureAppSnapshot } from '../security/secureAppStorage';
 import { today } from '../utils';
 import {
   ShieldCheck,
@@ -21,16 +23,18 @@ import {
 interface PrivacyViewProps {
   settings: AppSettings;
   classes: ClassData[];
+  backupSnapshot: CompleteSecureAppSnapshot;
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
   onExportEncryptedBackup: (encryptedJson: string) => void;
-  onImportEncryptedBackup: (decryptedData: any) => void;
+  onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
 }
 
 export const PrivacyView: React.FC<PrivacyViewProps> = ({
   settings,
   classes,
+  backupSnapshot,
   isPrivacyShieldActive,
   onTogglePrivacyShield,
   onExportEncryptedBackup,
@@ -70,15 +74,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
     setIsEncrypting(true);
     try {
-      // Gather current state from localStorage or pass directly
-      const payload = {
-        app: 'registro-docente',
-        version: 2,
-        encryptedAt: new Date().toISOString(),
-        settings,
-        classes
-      };
-
+      const payload = createBackupPayload(backupSnapshot);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
 
       // Download file
@@ -91,6 +87,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      onExportEncryptedBackup(encryptedString);
 
       setEncryptPassword('');
       setConfirmPassword('');
@@ -121,14 +118,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         const encryptedText = event.target?.result as string;
         const decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
 
-        if (decryptedData && (decryptedData.classes || decryptedData.data)) {
-          onImportEncryptedBackup(decryptedData);
-          setDecryptPassword('');
-          setSelectedEncryptedFile(null);
-          alert('Backup cifrato decrittografato e ripristinato con successo!');
-        } else {
-          alert('File decifrato ma il formato dati non corrisponde al registro docente.');
-        }
+        await onImportEncryptedBackup(decryptedData);
+        setDecryptPassword('');
+        setSelectedEncryptedFile(null);
+        alert('Backup cifrato verificato e ripristinato con successo!');
       } catch (err: any) {
         console.error(err);
         alert(err.message || 'Password errata o file non valido.');
@@ -150,13 +143,13 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <span>Privacy First & Conformità GDPR</span>
+                <span>Privacy First & Protezione dei dati</span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-600">
-                  Zero-Cloud
+                  Local First
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Architettura locale protetta conforme al Regolamento UE 2016/679 (GDPR) e alle linee guida del Garante Privacy per le scuole.
+                Architettura tecnica Privacy First: vault locale cifrato, controllo del docente e confini espliciti per ogni eventuale servizio remoto.
               </p>
             </div>
           </div>
@@ -172,10 +165,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)]">
             <div className="flex items-center gap-2 text-cyan-400 mb-1.5 font-bold text-xs uppercase tracking-wider">
-              <ServerOff className="w-4 h-4" /> 100% Archiviazione Locale
+              <ServerOff className="w-4 h-4" /> Vault Locale Cifrato
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              I dati risiedono <b>esclusivamente</b> nella memoria protetta del tuo browser. Nessun dato personale o voto viene mai inviato a server esterni.
+              I dati del Registro sono conservati nel Secure Local Vault cifrato sul dispositivo. I provider IA locali sono la modalità predefinita; un <b>provider remoto</b>, se configurato, richiede una scelta esplicita e non deve ricevere dati personali degli studenti.
             </p>
           </div>
 
