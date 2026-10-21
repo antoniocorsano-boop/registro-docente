@@ -140,6 +140,7 @@ async function fetchLocalEmbedding(baseUrl: string, body: any, headers: Record<s
     // Try /v1/embeddings first
     let res = await fetch(`${cleanUrl}/v1/embeddings`, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: controller.signal
@@ -158,6 +159,7 @@ async function fetchLocalEmbedding(baseUrl: string, body: any, headers: Record<s
     // Fallback to llama.cpp native /embedding
     res = await fetch(`${cleanUrl}/embedding`, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ content: Array.isArray(body.input) ? body.input[0] : body.input }),
       signal: controller.signal

@@ -110,6 +110,13 @@ function assertLoopbackLocalEndpoint(config: LocalEmbeddingConfig): void {
   }
 }
 
+function assertSupportedEmbeddingProvider(config: LocalEmbeddingConfig): void {
+  const provider: unknown = config.provider;
+  if (provider !== 'local' && provider !== 'gemini') {
+    throw new Error('Provider embedding non consentito.');
+  }
+}
+
 /**
  * Attempt to generate an embedding directly from the client (e.g. Termux llama-server on localhost)
  */
@@ -129,6 +136,7 @@ async function fetchDirectLocalEmbedding(
   try {
     const res = await fetch(`${baseUrl}/v1/embeddings`, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         input: text,
@@ -154,6 +162,7 @@ async function fetchDirectLocalEmbedding(
   try {
     const res = await fetch(`${baseUrl}/embedding`, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         content: text
@@ -184,6 +193,7 @@ async function fetchDirectLocalEmbedding(
   try {
     const res = await fetch(`${baseUrl}/api/embeddings`, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         model: config.modelName || 'nomic-embed-text',
@@ -255,6 +265,7 @@ export async function getEmbedding(
   const cleanText = text.trim();
   if (!cleanText) return [];
 
+  assertSupportedEmbeddingProvider(config);
   assertEmbeddingFlowAllowed(config, context);
   assertLoopbackLocalEndpoint(config);
 
@@ -316,6 +327,16 @@ export async function testEmbeddingConnection(
   config: LocalEmbeddingConfig
 ): Promise<EmbeddingTestResult> {
   const start = performance.now();
+
+  try {
+    assertSupportedEmbeddingProvider(config);
+  } catch (err: any) {
+    return {
+      success: false,
+      latencyMs: Math.round(performance.now() - start),
+      error: err.message || 'Provider embedding non consentito.'
+    };
+  }
 
   if (config.provider === 'local') {
     try {
