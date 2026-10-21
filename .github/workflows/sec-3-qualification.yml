@@ -1,0 +1,116 @@
+name: SEC-3 Outbound Boundary Closure Qualification
+
+on:
+  push:
+    branches:
+      - feat/sec-3-outbound-boundary-closure
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          bun run lint > typecheck.log 2>&1
+          code=$?
+          cat typecheck.log
+          diagnostic=$(grep -m 1 -E 'error TS[0-9]+:' typecheck.log || tail -n 1 typecheck.log)
+          diagnostic=${diagnostic//$'\n'/ }
+          diagnostic=${diagnostic:0:120}
+          echo "diagnostic=$diagnostic" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Publish typecheck diagnostic
+        if: steps.typecheck.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIAGNOSTIC: ${{ steps.typecheck.outputs.diagnostic }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='SEC-3 typecheck' \
+            -f description="${DIAGNOSTIC:-Typecheck failed; inspect workflow log.}"
+
+      - name: Security tests
+        id: security
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          bun test src/security/*.test.ts > security.log 2>&1
+          code=$?
+          cat security.log
+          diagnostic=$(grep -m 1 -E '^\(fail\)|FAIL|failed|error:' security.log || tail -n 1 security.log)
+          expected=$(grep -m 1 -E '^Expected' security.log || true)
+          received=$(grep -m 1 -E '^Received' security.log || true)
+          diagnostic=${diagnostic//$'\n'/ }
+          expected=${expected//$'\n'/ }
+          received=${received//$'\n'/ }
+          echo "diagnostic=${diagnostic:0:120}" >> "$GITHUB_OUTPUT"
+          echo "expected=${expected:0:120}" >> "$GITHUB_OUTPUT"
+          echo "received=${received:0:120}" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Publish security-test diagnostic
+        if: steps.security.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIAGNOSTIC: ${{ steps.security.outputs.diagnostic }}
+          EXPECTED: ${{ steps.security.outputs.expected }}
+          RECEIVED: ${{ steps.security.outputs.received }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='SEC-3 security tests' \
+            -f description="${DIAGNOSTIC:-Security tests failed; inspect workflow log.}"
+          if [[ -n "$EXPECTED" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='SEC-3 test expected' \
+              -f description="$EXPECTED"
+          fi
+          if [[ -n "$RECEIVED" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='SEC-3 test received' \
+              -f description="$RECEIVED"
+          fi
+
+      - name: Build
+        run: bun run build
+
+      - name: Production server startup smoke
+        shell: bash
+        run: |
+          set +e
+          NODE_ENV=production PORT=0 timeout 5s node server.ts > server-smoke.log 2>&1
+          code=$?
+          cat server-smoke.log
+          if [[ "$code" -eq 124 ]]; then
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Preserve qualification gates
+        if: steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure'
+        run: |
+          echo "At least one SEC-3 qualification gate failed; diagnostics were published as commit statuses."
+          exit 1
