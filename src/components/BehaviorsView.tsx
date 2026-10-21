@@ -12,7 +12,7 @@ interface BehaviorsViewProps {
 export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
   currentClass,
   onSaveBehaviors,
-  isPrivacyShieldActive = false
+  isPrivacyShieldActive = true
 }) => {
 
   const [selectedDate, setSelectedDate] = useState<string>(today());

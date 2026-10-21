@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { ClassData, Student } from '../types';
-import { sanitizeName, sortStudents, uid } from '../utils';
+import { formatStudentNameWithPrivacy, sanitizeName, sortStudents, uid } from '../utils';
 import { Users, UserPlus, Upload, RefreshCw, Trash2, FileSpreadsheet } from 'lucide-react';
 
 interface StudentsManagementViewProps {
@@ -10,6 +10,7 @@ interface StudentsManagementViewProps {
   onRemoveStudent: (studentId: string) => void;
   onInvertNames: () => void;
   onBulkAddStudents: (students: Student[]) => void;
+  isPrivacyShieldActive?: boolean;
 }
 
 export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
@@ -17,7 +18,8 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   onAddStudent,
   onRemoveStudent,
   onInvertNames,
-  onBulkAddStudents
+  onBulkAddStudents,
+  isPrivacyShieldActive = true
 }) => {
   const [newStudentName, setNewStudentName] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -169,13 +171,13 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
-                  <span className="font-semibold text-slate-200">{student.name}</span>
+                  <span className="font-semibold text-slate-200">{formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}</span>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm(`Rimuovere l'alunno "${student.name}" e tutte le sue valutazioni da questa classe?`)) {
+                    if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" e tutte le sue valutazioni da questa classe?`)) {
                       onRemoveStudent(student.id);
                     }
                   }}

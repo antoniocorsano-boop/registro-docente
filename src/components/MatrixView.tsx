@@ -23,7 +23,7 @@ interface MatrixViewProps {
 export const MatrixView: React.FC<MatrixViewProps> = ({
   currentClass,
   onOpenStudentReport,
-  isPrivacyShieldActive = false,
+  isPrivacyShieldActive = true,
   settings
 }) => {
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>('ALL');

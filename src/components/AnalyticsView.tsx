@@ -42,7 +42,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   currentClass,
   settings,
   onOpenStudentReport,
-  isPrivacyShieldActive = false
+  isPrivacyShieldActive = true
 }) => {
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>('ALL');
   const [useWeighted, setUseWeighted] = useState<boolean>(settings.useWeightedAverage ?? true);
@@ -544,7 +544,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             {studentMetrics.map((m, idx) => (
               <tr key={m.student.id} className="even:bg-slate-50">
                 <td className="border border-slate-300 p-1.5">{idx + 1}</td>
-                <td className="border border-slate-300 p-1.5 text-left font-medium">{m.student.name}</td>
+                <td className="border border-slate-300 p-1.5 text-left font-medium">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</td>
                 <td className="border border-slate-300 p-1.5">{formatGrade(m.q1WeightedAvg)}</td>
                 <td className="border border-slate-300 p-1.5">{formatGrade(m.q2WeightedAvg)}</td>
                 <td className="border border-slate-300 p-1.5 font-bold">{formatGrade(m.totalWeightedAvg)}</td>

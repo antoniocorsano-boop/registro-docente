@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
-import { uid } from '../utils';
+import { formatStudentNameWithPrivacy, uid } from '../utils';
 import {
   FileQuestion,
   Upload,
@@ -33,6 +33,7 @@ interface VerificheOnlineViewProps {
   submissions: OnlineSubmission[];
   udas?: UdaRecord[];
   settings?: AppSettings;
+  isPrivacyShieldActive?: boolean;
   onSaveNewTest: (test: OnlineTest) => void;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => void;
@@ -46,6 +47,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   submissions,
   udas = [],
   settings,
+  isPrivacyShieldActive = true,
   onSaveNewTest,
   onDeleteTest,
   onDeleteSubmission,
@@ -1357,7 +1359,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                       return (
                         <tr key={sub.id} className="hover:bg-slate-800/40 transition-colors">
                           <td className="p-2.5 text-left font-semibold text-slate-100 border-r border-[var(--border)]">
-                            {sub.name}
+                            {formatStudentNameWithPrivacy(sub.name, isPrivacyShieldActive)}
                           </td>
                           <td className="p-2.5 border-r border-[var(--border)]">
                             <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-cyan-300 font-mono">

@@ -139,20 +139,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }, []);
 
   // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
-  const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('registro_privacy_shield_active') === 'true';
-    } catch (e) {
-      return false;
-    }
-  });
+  const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
 
   const handleTogglePrivacyShield = useCallback(() => {
     setIsPrivacyShieldActive(prev => {
       const next = !prev;
-      try {
-        localStorage.setItem('registro_privacy_shield_active', String(next));
-      } catch (e) {}
       toast(next ? 'Privacy Shield LIM: Attivo' : 'Privacy Shield LIM: Disattivato');
       return next;
     });
@@ -714,6 +705,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onSelectStudent={setSelectedStudentForReport}
             settings={settings}
             udas={udas}
+            isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
 
@@ -726,6 +718,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onRemoveStudent={handleRemoveStudent}
             onInvertNames={handleInvertNames}
             onBulkAddStudents={handleBulkAddStudents}
+            isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
 
@@ -737,6 +730,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             submissions={submissions}
             udas={udas}
             settings={settings}
+            isPrivacyShieldActive={isPrivacyShieldActive}
             onSaveNewTest={handleSaveNewTest}
             onDeleteSubmission={handleDeleteSubmission}
             onImportSubmissionsToRegister={handleImportSubmissionsToRegister}

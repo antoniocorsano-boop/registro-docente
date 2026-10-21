@@ -5,6 +5,7 @@ import {
   calcWeightedAvg,
   DEFAULT_EVALUATION_WEIGHTS,
   formatGrade,
+  formatStudentNameWithPrivacy,
   getCompetenceLevel,
   TYPES_LABEL
 } from '../utils';
@@ -50,6 +51,7 @@ interface StudentReportViewProps {
   onSelectStudent: (id: string) => void;
   settings?: AppSettings;
   udas?: UdaRecord[];
+  isPrivacyShieldActive?: boolean;
 }
 
 // Custom Tooltip for Recharts Radar
@@ -251,7 +253,8 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   selectedStudentId,
   onSelectStudent,
   settings,
-  udas = []
+  udas = [],
+  isPrivacyShieldActive = true
 }) => {
   const [radarMode, setRadarMode] = useState<'competencies' | 'udas'>('competencies');
 
@@ -265,6 +268,8 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       </div>
     );
   }
+
+  const displayStudentName = formatStudentNameWithPrivacy(currentStudent.name, isPrivacyShieldActive);
 
   const weights: Record<EvaluationType, number> = settings?.evaluationWeights || DEFAULT_EVALUATION_WEIGHTS;
   const grades = (currentClass.grades || []).filter(g => g.studentId === currentStudent.id);
@@ -397,7 +402,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             >
               {students.map(s => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive)}
                 </option>
               ))}
             </select>
@@ -476,7 +481,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               </h3>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Rappresentazione multidimensionale del raggiungimento dei livelli di competenza per <b>{currentStudent.name}</b> in base alle UDA curricolari.
+              Rappresentazione multidimensionale del raggiungimento dei livelli di competenza per <b>{displayStudentName}</b> in base alle UDA curricolari.
             </p>
           </div>
 
@@ -527,7 +532,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                 />
                 {/* 1. Student Score Polygon */}
                 <Radar
-                  name={currentStudent.name}
+                  name={displayStudentName}
                   dataKey="studentScore"
                   stroke="#00d8d6"
                   fill="#00d8d6"

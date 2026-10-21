@@ -30,7 +30,7 @@ interface ClassComparisonBarChartProps {
 export const ClassComparisonBarChart: React.FC<ClassComparisonBarChartProps> = ({
   studentMetrics,
   classAvg,
-  isPrivacyShieldActive = false,
+  isPrivacyShieldActive = true,
   useWeighted = true
 }) => {
   const chartData = useMemo(() => {
