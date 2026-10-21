@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { evaluateDataFlow, type DataClassification } from './src/security/dataClassification';
 
 dotenv.config();
 
@@ -14,6 +15,20 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
+
+function isRemoteEmbeddingAllowed(
+  classification: unknown,
+  explicitTeacherOptIn: unknown
+): boolean {
+  if (typeof classification !== 'string') return false;
+  return (
+    evaluateDataFlow(
+      classification as DataClassification,
+      'REMOTE_PROVIDER',
+      explicitTeacherOptIn === true
+    ) === 'ALLOW'
+  );
+}
 
 // API: Generate complete UDA description using Gemini
 app.post('/api/gemini/generate-uda-description', async (req, res) => {
@@ -139,13 +154,25 @@ async function fetchLocalEmbedding(baseUrl: string, body: any, headers: Record<s
 // API: Test embedding connectivity (Local llama-server / Ollama / Gemini)
 app.post('/api/embeddings/test', async (req, res) => {
   try {
-    const { config, prompt = 'Programmazione didattica per competenze D.M. 221/2025' } = req.body;
+    const {
+      config,
+      prompt = 'Programmazione didattica per competenze D.M. 221/2025',
+      classification,
+      explicitTeacherOptIn
+    } = req.body;
 
     if (!config) {
       return res.status(400).json({ error: 'Configurazione mancante.' });
     }
 
     if (config.provider === 'gemini') {
+      if (!isRemoteEmbeddingAllowed(classification, explicitTeacherOptIn)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Flusso dati verso provider remoto non consentito dalla policy SEC-2.'
+        });
+      }
+
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({
@@ -207,7 +234,7 @@ app.post('/api/embeddings/test', async (req, res) => {
 // API: Batch generate embeddings (Local llama-server or Gemini)
 app.post('/api/embeddings/generate', async (req, res) => {
   try {
-    const { texts, config } = req.body;
+    const { texts, config, classification, explicitTeacherOptIn } = req.body;
     if (!texts || !Array.isArray(texts) || texts.length === 0) {
       return res.status(400).json({ error: 'Array di testi non valido.' });
     }
@@ -217,6 +244,12 @@ app.post('/api/embeddings/generate', async (req, res) => {
     }
 
     if (config.provider === 'gemini') {
+      if (!isRemoteEmbeddingAllowed(classification, explicitTeacherOptIn)) {
+        return res.status(403).json({
+          error: 'Flusso dati verso provider remoto non consentito dalla policy SEC-2.'
+        });
+      }
+
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({ error: 'GEMINI_API_KEY non configurata.' });
