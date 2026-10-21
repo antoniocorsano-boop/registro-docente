@@ -9,7 +9,9 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:security": "bun test src/security/*.test.ts",
+    "test": "bun run test:security"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
