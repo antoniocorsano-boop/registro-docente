@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getEmbedding } from '../services/embeddingService';
+import { getEmbedding, testEmbeddingConnection } from '../services/embeddingService';
 import type { LocalEmbeddingConfig } from '../types';
 
 async function withProductionServer<T>(run: (baseUrl: string) => Promise<T>): Promise<T> {
@@ -181,5 +181,122 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
+  });
+
+  test('getEmbedding rejects an unknown provider before any direct-client fetch', async () => {
+    const config = {
+      provider: 'other',
+      endpointUrl: 'https://example.invalid:8080',
+      modelName: 'nomic-embed-text',
+      apiType: 'openai-compatible',
+      enabled: true
+    } as unknown as LocalEmbeddingConfig;
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async input => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], model: 'unexpected' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        getEmbedding('contenuto professionale SEC-3 unknown provider', config, {
+          classification: 'TEACHER_PROFESSIONAL'
+        })
+      ).rejects.toThrow(/provider|non consentito/i);
+      expect(calls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('testEmbeddingConnection rejects an unknown provider before any direct-client fetch', async () => {
+    const config = {
+      provider: 'other',
+      endpointUrl: 'https://example.invalid:8080',
+      modelName: 'nomic-embed-text',
+      apiType: 'openai-compatible',
+      enabled: true
+    } as unknown as LocalEmbeddingConfig;
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async input => {
+      calls.push(String(input));
+      return new Response(
+        JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }], model: 'unexpected' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    try {
+      const result = await testEmbeddingConnection(config);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/provider|non consentito/i);
+      expect(calls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('local embedding boundaries do not follow redirects from an allowed loopback endpoint', async () => {
+    let redirectedRequests = 0;
+    const redirectTarget = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch() {
+        redirectedRequests += 1;
+        return new Response(
+          JSON.stringify({ data: [{ embedding: [0.4, 0.5, 0.6] }], model: 'redirect-target' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    });
+    const redirector = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch() {
+        return new Response(null, {
+          status: 307,
+          headers: { Location: `http://127.0.0.1:${redirectTarget.port}/capture` }
+        });
+      }
+    });
+    const config: LocalEmbeddingConfig = {
+      provider: 'local',
+      endpointUrl: `http://127.0.0.1:${redirector.port}`,
+      modelName: 'nomic-embed-text',
+      apiType: 'openai-compatible',
+      enabled: true
+    };
+
+    try {
+      await withProductionServer(async baseUrl => {
+        const response = await fetch(`${baseUrl}/api/embeddings/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            config,
+            prompt: 'contenuto professionale redirect server',
+            classification: 'TEACHER_PROFESSIONAL'
+          })
+        });
+
+        expect(response.ok).toBe(false);
+      });
+      expect(redirectedRequests).toBe(0);
+
+      await expect(
+        getEmbedding('contenuto professionale redirect direct client', config, {
+          classification: 'TEACHER_PROFESSIONAL'
+        })
+      ).rejects.toThrow();
+      expect(redirectedRequests).toBe(0);
+    } finally {
+      redirector.stop(true);
+      redirectTarget.stop(true);
+    }
   });
 });
