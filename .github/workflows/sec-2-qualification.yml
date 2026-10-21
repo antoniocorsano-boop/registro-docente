@@ -97,6 +97,18 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Production server startup smoke
+        shell: bash
+        run: |
+          set +e
+          NODE_ENV=production PORT=0 timeout 5s node server.ts > server-smoke.log 2>&1
+          code=$?
+          cat server-smoke.log
+          if [[ "$code" -eq 124 ]]; then
+            exit 0
+          fi
+          exit "$code"
+
       - name: Preserve qualification gates
         if: steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure'
         run: |
