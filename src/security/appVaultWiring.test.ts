@@ -33,8 +33,8 @@ describe('SEC-1 application vault wiring', () => {
     }
     expect(appSource).not.toContain('localStorage.clear()');
 
-    // UI-only preference remains intentionally non-sensitive.
-    expect(appSource).toContain("localStorage.setItem('registro_privacy_shield_active'");
+    // PRIVACY-01: the display shield is intentionally session-only and fails closed on reload.
+    expect(appSource).not.toContain('registro_privacy_shield_active');
   });
 
   test('wires configurable inactivity auto-lock and an explicit manual lock action', async () => {
