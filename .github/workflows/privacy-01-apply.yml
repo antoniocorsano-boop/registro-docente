@@ -1,0 +1,180 @@
+name: PRIVACY-01 Apply Bounded Fix
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'fix/privacy-default-on-ux-mobile-01'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply exact PRIVACY-01 transformations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'Expected pattern missing in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          def replace_all_expected(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count < 1:
+                  raise SystemExit(f'Expected pattern missing in {path}: {old!r}')
+              p.write_text(text.replace(old, new))
+
+          # App: fail closed on every session; no persistence of disabled privacy state.
+          replace_once(
+              'src/App.tsx',
+              """  const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(() => {\n    try {\n      return localStorage.getItem('registro_privacy_shield_active') === 'true';\n    } catch (e) {\n      return false;\n    }\n  });\n\n  const handleTogglePrivacyShield = useCallback(() => {\n    setIsPrivacyShieldActive(prev => {\n      const next = !prev;\n      try {\n        localStorage.setItem('registro_privacy_shield_active', String(next));\n      } catch (e) {}\n      toast(next ? 'Privacy Shield LIM: Attivo' : 'Privacy Shield LIM: Disattivato');\n      return next;\n    });\n  }, [toast]);""",
+              """  const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);\n\n  const handleTogglePrivacyShield = useCallback(() => {\n    setIsPrivacyShieldActive(prev => {\n      const next = !prev;\n      toast(next ? 'Privacy Shield LIM: Attivo' : 'Privacy Shield LIM: Disattivato');\n      return next;\n    });\n  }, [toast]);"""
+          )
+
+          replace_once(
+              'src/App.tsx',
+              """          <StudentReportView\n            currentClass={currentClass}\n            selectedStudentId={selectedStudentForReport}\n            onSelectStudent={setSelectedStudentForReport}\n            settings={settings}\n            udas={udas}\n          />""",
+              """          <StudentReportView\n            currentClass={currentClass}\n            selectedStudentId={selectedStudentForReport}\n            onSelectStudent={setSelectedStudentForReport}\n            settings={settings}\n            udas={udas}\n            isPrivacyShieldActive={isPrivacyShieldActive}\n          />"""
+          )
+
+          replace_once(
+              'src/App.tsx',
+              """          <StudentsManagementView\n            currentClass={currentClass}\n            onAddStudent={handleAddStudent}\n            onRemoveStudent={handleRemoveStudent}\n            onInvertNames={handleInvertNames}\n            onBulkAddStudents={handleBulkAddStudents}\n          />""",
+              """          <StudentsManagementView\n            currentClass={currentClass}\n            onAddStudent={handleAddStudent}\n            onRemoveStudent={handleRemoveStudent}\n            onInvertNames={handleInvertNames}\n            onBulkAddStudents={handleBulkAddStudents}\n            isPrivacyShieldActive={isPrivacyShieldActive}\n          />"""
+          )
+
+          replace_once(
+              'src/App.tsx',
+              """            settings={settings}\n            onSaveNewTest={handleSaveNewTest}""",
+              """            settings={settings}\n            isPrivacyShieldActive={isPrivacyShieldActive}\n            onSaveNewTest={handleSaveNewTest}"""
+          )
+
+          # Existing privacy-aware components must fail closed when called without the prop.
+          for path in [
+              'src/components/EvaluationsView.tsx',
+              'src/components/BehaviorsView.tsx',
+              'src/components/AnalyticsView.tsx',
+              'src/components/MatrixView.tsx',
+              'src/components/ClassComparisonBarChart.tsx',
+              'src/components/StudentGradesTimelineChart.tsx',
+          ]:
+              replace_all_expected(path, 'isPrivacyShieldActive = false', 'isPrivacyShieldActive = true')
+
+          # Student report: selector, narrative and radar legend all use one masked display identity.
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              "  formatGrade,\n  getCompetenceLevel,",
+              "  formatGrade,\n  formatStudentNameWithPrivacy,\n  getCompetenceLevel,"
+          )
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              "  settings?: AppSettings;\n  udas?: UdaRecord[];\n}",
+              "  settings?: AppSettings;\n  udas?: UdaRecord[];\n  isPrivacyShieldActive?: boolean;\n}"
+          )
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              "  settings,\n  udas = []\n}) => {",
+              "  settings,\n  udas = [],\n  isPrivacyShieldActive = true\n}) => {"
+          )
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              """  if (!currentStudent) {\n    return (\n      <div className=\"neon-card p-6 text-center text-slate-400\">\n        Nessun alunno presente nella classe.\n      </div>\n    );\n  }\n\n  const weights:""",
+              """  if (!currentStudent) {\n    return (\n      <div className=\"neon-card p-6 text-center text-slate-400\">\n        Nessun alunno presente nella classe.\n      </div>\n    );\n  }\n\n  const displayStudentName = formatStudentNameWithPrivacy(currentStudent.name, isPrivacyShieldActive);\n\n  const weights:"""
+          )
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              "                  {s.name}\n",
+              "                  {formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive)}\n"
+          )
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              '<b>{currentStudent.name}</b>',
+              '<b>{displayStudentName}</b>'
+          )
+          replace_once(
+              'src/components/StudentReportView.tsx',
+              'name={currentStudent.name}',
+              'name={displayStudentName}'
+          )
+
+          # Analytics print/export obeys the same privacy state as the screen.
+          replace_once(
+              'src/components/AnalyticsView.tsx',
+              '<td className=\"border border-slate-300 p-1.5 text-left font-medium\">{m.student.name}</td>',
+              '<td className=\"border border-slate-300 p-1.5 text-left font-medium\">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</td>'
+          )
+
+          # Student management masks the roster and destructive confirmation identity.
+          replace_once(
+              'src/components/StudentsManagementView.tsx',
+              "import { sanitizeName, sortStudents, uid } from '../utils';",
+              "import { formatStudentNameWithPrivacy, sanitizeName, sortStudents, uid } from '../utils';"
+          )
+          replace_once(
+              'src/components/StudentsManagementView.tsx',
+              "  onBulkAddStudents: (students: Student[]) => void;\n}",
+              "  onBulkAddStudents: (students: Student[]) => void;\n  isPrivacyShieldActive?: boolean;\n}"
+          )
+          replace_once(
+              'src/components/StudentsManagementView.tsx',
+              "  onInvertNames,\n  onBulkAddStudents\n}) => {",
+              "  onInvertNames,\n  onBulkAddStudents,\n  isPrivacyShieldActive = true\n}) => {"
+          )
+          replace_once(
+              'src/components/StudentsManagementView.tsx',
+              '<span className=\"font-semibold text-slate-200\">{student.name}</span>',
+              '<span className=\"font-semibold text-slate-200\">{formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}</span>'
+          )
+          replace_once(
+              'src/components/StudentsManagementView.tsx',
+              '${student.name}',
+              '${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}'
+          )
+
+          # Teacher-facing online submissions mask stored student names.
+          replace_once(
+              'src/components/VerificheOnlineView.tsx',
+              "import { uid } from '../utils';",
+              "import { formatStudentNameWithPrivacy, uid } from '../utils';"
+          )
+          replace_once(
+              'src/components/VerificheOnlineView.tsx',
+              "  settings?: AppSettings;\n  onSaveNewTest:",
+              "  settings?: AppSettings;\n  isPrivacyShieldActive?: boolean;\n  onSaveNewTest:"
+          )
+          replace_once(
+              'src/components/VerificheOnlineView.tsx',
+              "  udas = [],\n  settings,\n  onSaveNewTest,",
+              "  udas = [],\n  settings,\n  isPrivacyShieldActive = true,\n  onSaveNewTest,"
+          )
+          replace_once(
+              'src/components/VerificheOnlineView.tsx',
+              '{sub.name}\n',
+              '{formatStudentNameWithPrivacy(sub.name, isPrivacyShieldActive)}\n'
+          )
+
+      - name: Remove transient workflow and commit bounded fix
+        shell: bash
+        run: |
+          rm .github/workflows/privacy-01-apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows/privacy-01-apply.yml
+          git diff --cached --check
+          git commit -m "fix(privacy): default shield on and mask teacher identities"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
