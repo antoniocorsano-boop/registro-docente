@@ -193,6 +193,13 @@ app.post('/api/embeddings/test', async (req, res) => {
       return res.status(400).json({ error: 'Configurazione mancante.' });
     }
 
+    if (config.provider !== 'local' && config.provider !== 'gemini') {
+      return res.status(403).json({
+        success: false,
+        error: 'Provider embedding non consentito.'
+      });
+    }
+
     if (
       config.provider === 'local' &&
       !isLoopbackEndpointUrl(config.endpointUrl || 'http://127.0.0.1:8080')
@@ -279,6 +286,13 @@ app.post('/api/embeddings/generate', async (req, res) => {
 
     if (!config) {
       return res.status(400).json({ error: 'Configurazione mancante.' });
+    }
+
+    if (config.provider !== 'local' && config.provider !== 'gemini') {
+      return res.status(403).json({
+        success: false,
+        error: 'Provider embedding non consentito.'
+      });
     }
 
     if (
