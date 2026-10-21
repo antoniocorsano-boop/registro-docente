@@ -607,7 +607,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           period: targetUda.period,
           civicEducation: targetUda.civicEducation,
           competencies: targetUda.competencies,
-          authenticTask: targetUda.authenticTask
+          authenticTask: targetUda.authenticTask,
+          classification: 'TEACHER_PROFESSIONAL',
+          explicitTeacherOptIn: true
         })
       });
 

@@ -87,6 +87,29 @@ function normalizeUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
 
+function isLoopbackEndpointUrl(value: string): boolean {
+  if (!value.trim()) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertLoopbackLocalEndpoint(config: LocalEmbeddingConfig): void {
+  if (config.provider === 'local' && !isLoopbackEndpointUrl(config.endpointUrl)) {
+    throw new Error('Endpoint embedding locale non consentito: usare esclusivamente loopback.');
+  }
+}
+
 /**
  * Attempt to generate an embedding directly from the client (e.g. Termux llama-server on localhost)
  */
@@ -233,6 +256,7 @@ export async function getEmbedding(
   if (!cleanText) return [];
 
   assertEmbeddingFlowAllowed(config, context);
+  assertLoopbackLocalEndpoint(config);
 
   const cacheKey = `${config.provider}:${config.endpointUrl}:${config.modelName}:${cleanText}`;
   if (vectorCache.has(cacheKey)) {
@@ -292,6 +316,18 @@ export async function testEmbeddingConnection(
   config: LocalEmbeddingConfig
 ): Promise<EmbeddingTestResult> {
   const start = performance.now();
+
+  if (config.provider === 'local') {
+    try {
+      assertLoopbackLocalEndpoint(config);
+    } catch (err: any) {
+      return {
+        success: false,
+        latencyMs: Math.round(performance.now() - start),
+        error: err.message || 'Endpoint embedding locale non consentito.'
+      };
+    }
+  }
 
   if (config.provider === 'gemini') {
     try {
