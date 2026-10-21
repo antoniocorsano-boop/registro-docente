@@ -66,7 +66,7 @@ jobs:
           bun test "${tests[@]}" > security.log 2>&1
           code=$?
           cat security.log
-          diagnostic=$(grep -m 1 -E 'Cannot find module|error:|FAIL|failed' security.log || tail -n 1 security.log)
+          diagnostic=$(grep -m 1 -E '^\(fail\)|Cannot find module|FAIL|failed|error:' security.log || tail -n 1 security.log)
           diagnostic=${diagnostic//$'\n'/ }
           diagnostic=${diagnostic:0:120}
           echo "diagnostic=$diagnostic" >> "$GITHUB_OUTPUT"
