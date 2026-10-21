@@ -1,0 +1,112 @@
+import { describe, expect, test } from 'bun:test';
+
+async function withProductionServer<T>(run: (baseUrl: string) => Promise<T>): Promise<T> {
+  const port = 44000 + Math.floor(Math.random() * 1000);
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const server = Bun.spawn(['node', 'server.ts'], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(port),
+      GEMINI_API_KEY: ''
+    },
+    stdout: 'pipe',
+    stderr: 'pipe'
+  });
+
+  try {
+    let ready = false;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try {
+        const probe = await fetch(`${baseUrl}/api/embeddings/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        if (probe.status === 400) {
+          ready = true;
+          break;
+        }
+      } catch {
+        // Server not listening yet.
+      }
+      await Bun.sleep(50);
+    }
+
+    expect(ready).toBe(true);
+    return await run(baseUrl);
+  } finally {
+    server.kill();
+    await server.exited;
+  }
+}
+
+describe('SEC-3 outbound boundary closure', () => {
+  test('UDA Gemini action declares professional classification and explicit teacher opt-in', async () => {
+    const source = await Bun.file('src/components/UdaGanttView.tsx').text();
+    const routeIndex = source.indexOf("fetch('/api/gemini/generate-uda-description'");
+    expect(routeIndex).toBeGreaterThan(-1);
+
+    const requestSlice = source.slice(routeIndex, routeIndex + 1400);
+    expect(requestSlice).toContain("classification: 'TEACHER_PROFESSIONAL'");
+    expect(requestSlice).toContain('explicitTeacherOptIn: true');
+  });
+
+  test('UDA Gemini server boundary fails closed when policy metadata is missing', async () => {
+    await withProductionServer(async baseUrl => {
+      const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Materiali e sostenibilità',
+          durationMonths: 2,
+          hours: 12,
+          className: '2C',
+          period: 'Q1'
+        })
+      });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  test('UDA Gemini server boundary blocks student personal data even with opt-in', async () => {
+    await withProductionServer(async baseUrl => {
+      const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Profilo individuale studente',
+          className: '3C',
+          period: 'Q1',
+          classification: 'STUDENT_PERSONAL',
+          explicitTeacherOptIn: true
+        })
+      });
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  test('local embedding provider rejects a non-loopback endpoint before outbound fetch', async () => {
+    await withProductionServer(async baseUrl => {
+      const response = await fetch(`${baseUrl}/api/embeddings/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: {
+            provider: 'local',
+            endpointUrl: 'http://example.invalid:8080',
+            modelName: 'nomic-embed-text',
+            apiType: 'openai-compatible',
+            enabled: true
+          },
+          prompt: 'contenuto professionale del docente',
+          classification: 'TEACHER_PROFESSIONAL'
+        })
+      });
+
+      expect(response.status).toBe(403);
+    });
+  });
+});
