@@ -1,0 +1,39 @@
+import { describe, expect, test } from 'bun:test';
+
+const SENSITIVE_KEYS = [
+  'STORAGE_KEY',
+  'SETTINGS_KEY',
+  'UDA_KEY',
+  'CUSTOM_TESTS_KEY',
+  'SUBMISSIONS_KEY',
+  'META_KEY'
+] as const;
+
+describe('SEC-1 application vault wiring', () => {
+  test('boots through SecureRegistroRoot before rendering App', async () => {
+    const mainSource = await Bun.file('src/main.tsx').text();
+
+    expect(mainSource).toContain('SecureRegistroRoot');
+    expect(mainSource).toContain('<SecureRegistroRoot');
+  });
+
+  test('App consumes an unlocked secure snapshot and storage adapter', async () => {
+    const appSource = await Bun.file('src/App.tsx').text();
+
+    expect(appSource).toContain('initialSnapshot');
+    expect(appSource).toContain('secureStorage');
+  });
+
+  test('App never reads or writes sensitive datasets through localStorage', async () => {
+    const appSource = await Bun.file('src/App.tsx').text();
+
+    for (const key of SENSITIVE_KEYS) {
+      expect(appSource).not.toContain(`localStorage.getItem(${key})`);
+      expect(appSource).not.toContain(`localStorage.setItem(${key}`);
+    }
+    expect(appSource).not.toContain('localStorage.clear()');
+
+    // UI-only preference remains intentionally non-sensitive.
+    expect(appSource).toContain("localStorage.setItem('registro_privacy_shield_active'");
+  });
+});
