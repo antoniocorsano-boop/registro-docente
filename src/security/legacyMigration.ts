@@ -208,7 +208,7 @@ export async function migrateLegacyToVault(
 
       const actual = await vault.get(mapping.recordKey);
       if (!valuesMatch(expected, actual)) {
-        throw new Error(`Readback cifrato non coerente per ${mapping.recordKey}.`);
+        throw new Error(`Readback/invarianti non coerenti per ${mapping.recordKey}.`);
       }
       (readback as Record<string, unknown>)[mapping.property] = actual;
     }
