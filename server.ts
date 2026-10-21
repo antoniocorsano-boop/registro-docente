@@ -163,7 +163,7 @@ app.post('/api/embeddings/test', async (req, res) => {
         contents: prompt
       });
 
-      const values = response.embedding?.values || [];
+      const values = response.embeddings?.[0]?.values || [];
       return res.json({
         success: true,
         dimensions: values.length,
@@ -237,7 +237,7 @@ app.post('/api/embeddings/generate', async (req, res) => {
           model: 'text-embedding-004',
           contents: t
         });
-        embeddings.push(resp.embedding?.values || []);
+        embeddings.push(resp.embeddings?.[0]?.values || []);
       }
 
       return res.json({
