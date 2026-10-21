@@ -67,9 +67,14 @@ jobs:
           code=$?
           cat security.log
           diagnostic=$(grep -m 1 -E '^\(fail\)|Cannot find module|FAIL|failed|error:' security.log || tail -n 1 security.log)
+          expected=$(grep -m 1 -E '^Expected' security.log || true)
+          received=$(grep -m 1 -E '^Received' security.log || true)
           diagnostic=${diagnostic//$'\n'/ }
-          diagnostic=${diagnostic:0:120}
-          echo "diagnostic=$diagnostic" >> "$GITHUB_OUTPUT"
+          expected=${expected//$'\n'/ }
+          received=${received//$'\n'/ }
+          echo "diagnostic=${diagnostic:0:120}" >> "$GITHUB_OUTPUT"
+          echo "expected=${expected:0:120}" >> "$GITHUB_OUTPUT"
+          echo "received=${received:0:120}" >> "$GITHUB_OUTPUT"
           exit "$code"
 
       - name: Publish security-test diagnostic
@@ -77,11 +82,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DIAGNOSTIC: ${{ steps.security.outputs.diagnostic }}
+          EXPECTED: ${{ steps.security.outputs.expected }}
+          RECEIVED: ${{ steps.security.outputs.received }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='SEC-0/1 security tests' \
             -f description="${DIAGNOSTIC:-Security tests failed; inspect workflow log.}"
+          if [[ -n "$EXPECTED" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='SEC-0/1 test expected' \
+              -f description="$EXPECTED"
+          fi
+          if [[ -n "$RECEIVED" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='SEC-0/1 test received' \
+              -f description="$RECEIVED"
+          fi
 
       - name: Build
         run: bun run build
