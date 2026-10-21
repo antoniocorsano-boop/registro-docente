@@ -1,4 +1,9 @@
 import { LocalEmbeddingConfig } from '../types';
+import {
+  evaluateDataFlow,
+  type DataClassification,
+  type DestinationClass
+} from '../security/dataClassification';
 
 // In-memory cache for generated embeddings during session
 const vectorCache = new Map<string, number[]>();
@@ -31,6 +36,43 @@ export interface EmbeddingTestResult {
   model?: string;
   error?: string;
   method?: 'direct-client' | 'server-proxy';
+}
+
+export interface EmbeddingDataContext {
+  classification: DataClassification;
+  explicitTeacherOptIn?: boolean;
+}
+
+/**
+ * Existing embedding features are teacher/curriculum tools. Selecting and enabling
+ * Gemini Cloud is treated as the teacher's explicit opt-in for those existing flows.
+ * Callers handling a stricter class must pass it explicitly; sensitive classes are
+ * denied by evaluateDataFlow regardless of opt-in.
+ */
+function defaultEmbeddingContext(config: LocalEmbeddingConfig): EmbeddingDataContext {
+  return {
+    classification: 'TEACHER_PROFESSIONAL',
+    explicitTeacherOptIn: config.provider === 'gemini' && config.enabled
+  };
+}
+
+function assertEmbeddingFlowAllowed(
+  config: LocalEmbeddingConfig,
+  context: EmbeddingDataContext
+): void {
+  const destination: DestinationClass =
+    config.provider === 'gemini' ? 'REMOTE_PROVIDER' : 'LOCAL_PROVIDER';
+  const decision = evaluateDataFlow(
+    context.classification,
+    destination,
+    context.explicitTeacherOptIn === true
+  );
+
+  if (decision !== 'ALLOW') {
+    throw new Error(
+      `Flusso dati embedding non consentito: ${context.classification} -> ${destination}.`
+    );
+  }
 }
 
 /**
@@ -148,14 +190,17 @@ async function fetchDirectLocalEmbedding(
  */
 async function fetchProxyEmbedding(
   text: string,
-  config: LocalEmbeddingConfig
+  config: LocalEmbeddingConfig,
+  context: EmbeddingDataContext
 ): Promise<{ embedding: number[]; model: string }> {
   const res = await fetch('/api/embeddings/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       texts: [text],
-      config
+      config,
+      classification: context.classification,
+      explicitTeacherOptIn: context.explicitTeacherOptIn === true
     }),
     signal: AbortSignal.timeout(15000)
   });
@@ -181,10 +226,13 @@ async function fetchProxyEmbedding(
  */
 export async function getEmbedding(
   text: string,
-  config: LocalEmbeddingConfig
+  config: LocalEmbeddingConfig,
+  context: EmbeddingDataContext = defaultEmbeddingContext(config)
 ): Promise<number[]> {
   const cleanText = text.trim();
   if (!cleanText) return [];
+
+  assertEmbeddingFlowAllowed(config, context);
 
   const cacheKey = `${config.provider}:${config.endpointUrl}:${config.modelName}:${cleanText}`;
   if (vectorCache.has(cacheKey)) {
@@ -193,7 +241,7 @@ export async function getEmbedding(
 
   // If Gemini provider is selected, use the server proxy directly
   if (config.provider === 'gemini') {
-    const result = await fetchProxyEmbedding(cleanText, config);
+    const result = await fetchProxyEmbedding(cleanText, config, context);
     vectorCache.set(cacheKey, result.embedding);
     return result.embedding;
   }
@@ -206,7 +254,7 @@ export async function getEmbedding(
   } catch (directErr) {
     // Fallback to server proxy
     try {
-      const proxyResult = await fetchProxyEmbedding(cleanText, config);
+      const proxyResult = await fetchProxyEmbedding(cleanText, config, context);
       vectorCache.set(cacheKey, proxyResult.embedding);
       return proxyResult.embedding;
     } catch (proxyErr: any) {
@@ -222,7 +270,8 @@ export async function getEmbedding(
  */
 export async function getEmbeddingsBatch(
   texts: string[],
-  config: LocalEmbeddingConfig
+  config: LocalEmbeddingConfig,
+  context: EmbeddingDataContext = defaultEmbeddingContext(config)
 ): Promise<number[][]> {
   const results: number[][] = [];
   for (const t of texts) {
@@ -230,7 +279,7 @@ export async function getEmbeddingsBatch(
       results.push([]);
       continue;
     }
-    const vec = await getEmbedding(t, config);
+    const vec = await getEmbedding(t, config, context);
     results.push(vec);
   }
   return results;
@@ -249,7 +298,12 @@ export async function testEmbeddingConnection(
       const res = await fetch('/api/embeddings/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, prompt: TEST_PROMPT })
+        body: JSON.stringify({
+          config,
+          prompt: TEST_PROMPT,
+          classification: 'PUBLIC_APP',
+          explicitTeacherOptIn: true
+        })
       });
       const data = await res.json();
       const latencyMs = Math.round(performance.now() - start);
@@ -297,7 +351,12 @@ export async function testEmbeddingConnection(
       const proxyRes = await fetch('/api/embeddings/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, prompt: TEST_PROMPT })
+        body: JSON.stringify({
+          config,
+          prompt: TEST_PROMPT,
+          classification: 'PUBLIC_APP',
+          explicitTeacherOptIn: false
+        })
       });
       const data = await proxyRes.json();
       const latencyMs = Math.round(performance.now() - start);
@@ -382,13 +441,14 @@ export const MINISTERIAL_COMPETENCY_DESCRIPTORS = [
 export async function rankBySemanticSimilarity<T extends { id: string; text: string }>(
   query: string,
   candidates: T[],
-  config: LocalEmbeddingConfig
+  config: LocalEmbeddingConfig,
+  context: EmbeddingDataContext = defaultEmbeddingContext(config)
 ): Promise<Array<{ item: T; similarity: number }>> {
   if (!query.trim() || candidates.length === 0) {
     return candidates.map(item => ({ item, similarity: 0 }));
   }
 
-  const queryVector = await getEmbedding(query, config);
+  const queryVector = await getEmbedding(query, config, context);
   if (!queryVector || queryVector.length === 0) {
     return candidates.map(item => ({ item, similarity: 0 }));
   }
@@ -397,7 +457,7 @@ export async function rankBySemanticSimilarity<T extends { id: string; text: str
 
   for (const cand of candidates) {
     try {
-      const candVector = await getEmbedding(cand.text, config);
+      const candVector = await getEmbedding(cand.text, config, context);
       const sim = cosineSimilarity(queryVector, candVector);
       scored.push({ item: cand, similarity: Math.max(0, sim) });
     } catch {
