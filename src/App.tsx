@@ -28,6 +28,7 @@ import {
   UDA_KEY,
   uid
 } from './utils';
+import type { SecureAppSnapshot, SecureAppStorage } from './security/secureAppStorage';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -47,23 +48,23 @@ import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 
 
-export default function App() {
+export interface AppProps {
+  initialSnapshot: SecureAppSnapshot;
+  secureStorage: SecureAppStorage;
+  onFactoryReset: () => Promise<void>;
+}
+
+export default function App({ initialSnapshot, secureStorage, onFactoryReset }: AppProps) {
   // 1. Settings & Theme
   const [settings, setSettings] = useState<AppSettings>(() => {
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return {
+    const persisted = initialSnapshot.settings;
+    return persisted
+      ? {
           ...DEFAULT_SETTINGS,
-          ...parsed,
-          embeddingConfig: parsed.embeddingConfig || DEFAULT_SETTINGS.embeddingConfig
-        };
-      }
-      return DEFAULT_SETTINGS;
-    } catch (e) {
-      return DEFAULT_SETTINGS;
-    }
+          ...persisted,
+          embeddingConfig: persisted.embeddingConfig || DEFAULT_SETTINGS.embeddingConfig
+        }
+      : DEFAULT_SETTINGS;
   });
 
   // Apply theme to document.body
@@ -76,24 +77,17 @@ export default function App() {
 
   // 2. Main App Data (Classes, Students, Grades, Behaviors)
   const [appData, setAppData] = useState<AppData>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.classes)) {
-          return {
-            classes: parsed.classes.map((c: any) => ({
-              ...c,
-              students: sortStudents(c.students || []),
-              grades: c.grades || [],
-              behaviors: c.behaviors || []
-            })),
-            currentClassId: parsed.currentClassId || null
-          };
-        }
-      }
-    } catch (e) {
-      console.error('Error loading app data', e);
+    const persisted = initialSnapshot.appData;
+    if (persisted && Array.isArray(persisted.classes)) {
+      return {
+        classes: persisted.classes.map((c: any) => ({
+          ...c,
+          students: sortStudents(c.students || []),
+          grades: c.grades || [],
+          behaviors: c.behaviors || []
+        })),
+        currentClassId: persisted.currentClassId || null
+      };
     }
     return {
       classes: INITIAL_CLASSES.map(c => ({
@@ -107,34 +101,21 @@ export default function App() {
   });
 
   // 3. Online Tests & Flashcards
-  const [tests, setTests] = useState<Record<string, OnlineTest>>(() => {
-    try {
-      const raw = localStorage.getItem(CUSTOM_TESTS_KEY);
-      return raw ? { ...INITIAL_TESTS, ...JSON.parse(raw) } : INITIAL_TESTS;
-    } catch (e) {
-      return INITIAL_TESTS;
-    }
-  });
+  const [tests, setTests] = useState<Record<string, OnlineTest>>(() =>
+    initialSnapshot.customTests
+      ? { ...INITIAL_TESTS, ...initialSnapshot.customTests }
+      : INITIAL_TESTS
+  );
 
   // 4. Online Submissions
-  const [submissions, setSubmissions] = useState<OnlineSubmission[]>(() => {
-    try {
-      const raw = localStorage.getItem(SUBMISSIONS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const [submissions, setSubmissions] = useState<OnlineSubmission[]>(() =>
+    initialSnapshot.submissions || []
+  );
 
   // 5. UDA Records
-  const [udas, setUdas] = useState<UdaRecord[]>(() => {
-    try {
-      const raw = localStorage.getItem(UDA_KEY);
-      return raw ? JSON.parse(raw) : INITIAL_UDAS;
-    } catch (e) {
-      return INITIAL_UDAS;
-    }
-  });
+  const [udas, setUdas] = useState<UdaRecord[]>(() =>
+    initialSnapshot.udas || INITIAL_UDAS
+  );
 
   // 6. Navigation and UI state
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -145,14 +126,9 @@ export default function App() {
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
 
   // Metadata for backup tracking
-  const [meta, setMeta] = useState<{ changes: number; lastBackup: string | null }>(() => {
-    try {
-      const raw = localStorage.getItem(META_KEY);
-      return raw ? JSON.parse(raw) : { changes: 0, lastBackup: null };
-    } catch (e) {
-      return { changes: 0, lastBackup: null };
-    }
-  });
+  const [meta, setMeta] = useState<{ changes: number; lastBackup: string | null }>(() =>
+    initialSnapshot.meta || { changes: 0, lastBackup: null }
+  );
 
   const toast = useCallback((msg: string) => {
     setSaveIndicatorText(msg);
@@ -215,23 +191,23 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Save changes to localStorage and increment modification counter
+  // Persist sensitive data only through the unlocked Secure Local Vault.
   const persistAppData = useCallback((newAppData: AppData, showModal = true) => {
     setAppData(newAppData);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newAppData));
-      const nextMeta = { ...meta, changes: (meta.changes || 0) + 1 };
-      setMeta(nextMeta);
-      localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
-      toast('Salvato in locale');
-      if (showModal) {
-        setIsBackupModalOpen(true);
-      }
-    } catch (e) {
-      console.error('Save failed', e);
-      alert('Attenzione: salvataggio locale non riuscito.');
-    }
-  }, [meta, toast]);
+    const nextMeta = { ...meta, changes: (meta.changes || 0) + 1 };
+    setMeta(nextMeta);
+
+    void Promise.all([
+      secureStorage.saveAppData(newAppData),
+      secureStorage.saveMeta(nextMeta)
+    ]).then(() => {
+      toast('Salvato nel vault locale');
+      if (showModal) setIsBackupModalOpen(true);
+    }).catch((error) => {
+      console.error('Secure vault save failed', error);
+      alert('Attenzione: salvataggio cifrato non riuscito.');
+    });
+  }, [meta, secureStorage, toast]);
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
@@ -463,20 +439,18 @@ export default function App() {
   const handleSaveNewTest = (newTest: OnlineTest) => {
     const updatedTests = { ...tests, [newTest.id]: newTest };
     setTests(updatedTests);
-    try {
-      localStorage.setItem(CUSTOM_TESTS_KEY, JSON.stringify(updatedTests));
-      toast('Test salvato');
-    } catch (e) {}
+    void secureStorage.saveCustomTests(updatedTests)
+      .then(() => toast('Test salvato'))
+      .catch(error => console.error('Secure test save failed', error));
   };
 
   // Delete submission
   const handleDeleteSubmission = (submissionId: string) => {
     const updated = submissions.filter(s => s.id !== submissionId);
     setSubmissions(updated);
-    try {
-      localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(updated));
-      toast('Consegna eliminata');
-    } catch (e) {}
+    void secureStorage.saveSubmissions(updated)
+      .then(() => toast('Consegna eliminata'))
+      .catch(error => console.error('Secure submission save failed', error));
   };
 
   // Import submissions into class grades
@@ -536,19 +510,17 @@ export default function App() {
   // Save UDAs
   const handleSaveUdas = (newUdas: UdaRecord[]) => {
     setUdas(newUdas);
-    try {
-      localStorage.setItem(UDA_KEY, JSON.stringify(newUdas));
-      toast('UDA salvate');
-    } catch (e) {}
+    void secureStorage.saveUdas(newUdas)
+      .then(() => toast('UDA salvate'))
+      .catch(error => console.error('Secure UDA save failed', error));
   };
 
   // Save Settings
   const handleUpdateSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
-      toast('Impostazioni aggiornate');
-    } catch (e) {}
+    void secureStorage.saveSettings(newSettings)
+      .then(() => toast('Impostazioni aggiornate'))
+      .catch(error => console.error('Secure settings save failed', error));
   };
 
   // Export JSON Backup
@@ -576,7 +548,7 @@ export default function App() {
 
     const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
     setMeta(nextMeta);
-    localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
+    void secureStorage.saveMeta(nextMeta);
     toast('Backup esportato');
   };
 
@@ -591,37 +563,37 @@ export default function App() {
       if (!file) return;
 
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const raw = JSON.parse(event.target?.result as string);
           if (raw && (raw.data || raw.classes)) {
             const loadedData: AppData = raw.data || { classes: raw.classes, currentClassId: null };
             setAppData(loadedData);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(loadedData));
+            await secureStorage.saveAppData(loadedData);
 
             if (raw.settings) {
               setSettings(raw.settings);
-              localStorage.setItem(SETTINGS_KEY, JSON.stringify(raw.settings));
+              await secureStorage.saveSettings(raw.settings);
             }
 
             if (raw.udas) {
               setUdas(raw.udas);
-              localStorage.setItem(UDA_KEY, JSON.stringify(raw.udas));
+              await secureStorage.saveUdas(raw.udas);
             }
 
             if (raw.customTests) {
               setTests(raw.customTests);
-              localStorage.setItem(CUSTOM_TESTS_KEY, JSON.stringify(raw.customTests));
+              await secureStorage.saveCustomTests(raw.customTests);
             }
 
             if (raw.submissions) {
               setSubmissions(raw.submissions);
-              localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(raw.submissions));
+              await secureStorage.saveSubmissions(raw.submissions);
             }
 
             const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
             setMeta(nextMeta);
-            localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
+            await secureStorage.saveMeta(nextMeta);
 
             setActiveTab('home');
             alert('Registro ripristinato con successo dal file di backup!');
@@ -640,7 +612,7 @@ export default function App() {
   };
 
   // Import Encrypted Backup
-  const handleImportEncryptedBackup = (decryptedData: any) => {
+  const handleImportEncryptedBackup = async (decryptedData: any) => {
     if (decryptedData.classes || decryptedData.data) {
       const loadedClasses = decryptedData.classes || decryptedData.data?.classes || [];
       const nextAppData: AppData = {
@@ -648,11 +620,11 @@ export default function App() {
         currentClassId: null
       };
       setAppData(nextAppData);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextAppData));
+      await secureStorage.saveAppData(nextAppData);
 
       if (decryptedData.settings) {
         setSettings(decryptedData.settings);
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(decryptedData.settings));
+        await secureStorage.saveSettings(decryptedData.settings);
       }
 
       toast('Registro cifrato ripristinato');
@@ -661,13 +633,17 @@ export default function App() {
   };
 
   // Factory Reset / Diritto all'Oblio
-  const handleFactoryReset = () => {
-    localStorage.clear();
-    setAppData({ classes: [], currentClassId: null });
-    setMeta({ changes: 0, lastBackup: null });
-    setActiveTab('home');
-    toast('Reset dati completato');
-    alert('Tutti i dati e la memoria locale sono stati cancellati definitivamente (Diritto all\'Oblio).');
+  const handleFactoryReset = async () => {
+    try {
+      await onFactoryReset();
+      setAppData({ classes: [], currentClassId: null });
+      setMeta({ changes: 0, lastBackup: null });
+      setActiveTab('home');
+      toast('Reset dati completato');
+    } catch (error) {
+      console.error('Secure factory reset failed', error);
+      alert('Reset sicuro non riuscito. I dati cifrati non sono stati dichiarati cancellati.');
+    }
   };
 
   return (
