@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readdir } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 async function listFiles(root: string): Promise<string[]> {
@@ -19,6 +19,10 @@ async function listFiles(root: string): Promise<string[]> {
   }
 }
 
+async function listTrackedFiles(root: string): Promise<string[]> {
+  return listFiles(root);
+}
+
 describe('PREDEPLOY repository and static-asset hygiene', () => {
   test('does not publish AI Studio scratch assets from public/', async () => {
     const files = await listFiles('public/assets/aistudio');
@@ -26,8 +30,22 @@ describe('PREDEPLOY repository and static-asset hygiene', () => {
   });
 
   test('does not track AI Studio temporary media artifacts', async () => {
-    const files = await listFiles('.aistudio');
+    const files = await listTrackedFiles('.aistudio');
     const tempMedia = files.filter((file) => file.includes('/.tempmediaStorage/'));
     expect(tempMedia).toEqual([]);
+  });
+
+  test('ignored AI Studio temporary media is not treated as tracked', async () => {
+    const fixtureDir = '.aistudio/artifacts/predeploy-fixture/.tempmediaStorage';
+    const fixture = `${fixtureDir}/ignored.jpg`;
+    await mkdir(fixtureDir, { recursive: true });
+    await writeFile(fixture, 'ignored fixture');
+
+    try {
+      const files = await listTrackedFiles('.aistudio');
+      expect(files).not.toContain(fixture);
+    } finally {
+      await rm('.aistudio/artifacts/predeploy-fixture', { recursive: true, force: true });
+    }
   });
 });
