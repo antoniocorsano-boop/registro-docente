@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { getEmbedding } from '../services/embeddingService';
+import type { LocalEmbeddingConfig } from '../types';
 
 async function withProductionServer<T>(run: (baseUrl: string) => Promise<T>): Promise<T> {
   const port = 44000 + Math.floor(Math.random() * 1000);
@@ -88,7 +90,7 @@ describe('SEC-3 outbound boundary closure', () => {
     });
   });
 
-  test('local embedding provider rejects a non-loopback endpoint before outbound fetch', async () => {
+  test('local embedding server proxy rejects a non-loopback endpoint before outbound fetch', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/embeddings/test`, {
         method: 'POST',
@@ -108,5 +110,32 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
+  });
+
+  test('local embedding direct client rejects a non-loopback endpoint before any fetch', async () => {
+    const config: LocalEmbeddingConfig = {
+      provider: 'local',
+      endpointUrl: 'https://example.invalid:8080',
+      modelName: 'nomic-embed-text',
+      apiType: 'openai-compatible',
+      enabled: true
+    };
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async input => {
+      calls.push(String(input));
+      return new Response('{}', { status: 500 });
+    }) as typeof fetch;
+
+    try {
+      await expect(
+        getEmbedding('contenuto professionale SEC-3 direct boundary', config, {
+          classification: 'TEACHER_PROFESSIONAL'
+        })
+      ).rejects.toThrow(/loopback|locale|non consentito/i);
+      expect(calls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
