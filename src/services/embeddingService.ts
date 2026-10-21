@@ -87,6 +87,36 @@ function normalizeUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
 
+function isLoopbackEndpointUrl(value: string): boolean {
+  if (!value.trim()) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertLoopbackLocalEndpoint(config: LocalEmbeddingConfig): void {
+  if (config.provider === 'local' && !isLoopbackEndpointUrl(config.endpointUrl)) {
+    throw new Error('Endpoint embedding locale non consentito: usare esclusivamente loopback.');
+  }
+}
+
+function assertSupportedEmbeddingProvider(config: LocalEmbeddingConfig): void {
+  const provider: unknown = config.provider;
+  if (provider !== 'local' && provider !== 'gemini') {
+    throw new Error('Provider embedding non consentito.');
+  }
+}
+
 /**
  * Attempt to generate an embedding directly from the client (e.g. Termux llama-server on localhost)
  */
@@ -106,6 +136,7 @@ async function fetchDirectLocalEmbedding(
   try {
     const res = await fetch(`${baseUrl}/v1/embeddings`, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         input: text,
@@ -131,6 +162,7 @@ async function fetchDirectLocalEmbedding(
   try {
     const res = await fetch(`${baseUrl}/embedding`, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         content: text
@@ -161,6 +193,7 @@ async function fetchDirectLocalEmbedding(
   try {
     const res = await fetch(`${baseUrl}/api/embeddings`, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         model: config.modelName || 'nomic-embed-text',
@@ -232,7 +265,9 @@ export async function getEmbedding(
   const cleanText = text.trim();
   if (!cleanText) return [];
 
+  assertSupportedEmbeddingProvider(config);
   assertEmbeddingFlowAllowed(config, context);
+  assertLoopbackLocalEndpoint(config);
 
   const cacheKey = `${config.provider}:${config.endpointUrl}:${config.modelName}:${cleanText}`;
   if (vectorCache.has(cacheKey)) {
@@ -292,6 +327,28 @@ export async function testEmbeddingConnection(
   config: LocalEmbeddingConfig
 ): Promise<EmbeddingTestResult> {
   const start = performance.now();
+
+  try {
+    assertSupportedEmbeddingProvider(config);
+  } catch (err: any) {
+    return {
+      success: false,
+      latencyMs: Math.round(performance.now() - start),
+      error: err.message || 'Provider embedding non consentito.'
+    };
+  }
+
+  if (config.provider === 'local') {
+    try {
+      assertLoopbackLocalEndpoint(config);
+    } catch (err: any) {
+      return {
+        success: false,
+        latencyMs: Math.round(performance.now() - start),
+        error: err.message || 'Endpoint embedding locale non consentito.'
+      };
+    }
+  }
 
   if (config.provider === 'gemini') {
     try {

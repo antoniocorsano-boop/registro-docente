@@ -30,6 +30,23 @@ function isRemoteEmbeddingAllowed(
   );
 }
 
+function isLoopbackEndpointUrl(value: unknown): boolean {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1'
+    );
+  } catch {
+    return false;
+  }
+}
+
 // API: Generate complete UDA description using Gemini
 app.post('/api/gemini/generate-uda-description', async (req, res) => {
   try {
@@ -41,11 +58,22 @@ app.post('/api/gemini/generate-uda-description', async (req, res) => {
       period,
       civicEducation,
       competencies,
-      authenticTask
+      authenticTask,
+      classification,
+      explicitTeacherOptIn
     } = req.body;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       return res.status(400).json({ error: 'Il titolo dell\'UDA è obbligatorio.' });
+    }
+
+    if (
+      classification !== 'TEACHER_PROFESSIONAL' ||
+      !isRemoteEmbeddingAllowed(classification, explicitTeacherOptIn)
+    ) {
+      return res.status(403).json({
+        error: 'Flusso dati UDA verso provider remoto non consentito dalla policy SEC-3.'
+      });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -112,6 +140,7 @@ async function fetchLocalEmbedding(baseUrl: string, body: any, headers: Record<s
     // Try /v1/embeddings first
     let res = await fetch(`${cleanUrl}/v1/embeddings`, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: controller.signal
@@ -130,6 +159,7 @@ async function fetchLocalEmbedding(baseUrl: string, body: any, headers: Record<s
     // Fallback to llama.cpp native /embedding
     res = await fetch(`${cleanUrl}/embedding`, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ content: Array.isArray(body.input) ? body.input[0] : body.input }),
       signal: controller.signal
@@ -163,6 +193,23 @@ app.post('/api/embeddings/test', async (req, res) => {
 
     if (!config) {
       return res.status(400).json({ error: 'Configurazione mancante.' });
+    }
+
+    if (config.provider !== 'local' && config.provider !== 'gemini') {
+      return res.status(403).json({
+        success: false,
+        error: 'Provider embedding non consentito.'
+      });
+    }
+
+    if (
+      config.provider === 'local' &&
+      !isLoopbackEndpointUrl(config.endpointUrl || 'http://127.0.0.1:8080')
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: 'Endpoint embedding locale non consentito: usare esclusivamente loopback.'
+      });
     }
 
     if (config.provider === 'gemini') {
@@ -241,6 +288,23 @@ app.post('/api/embeddings/generate', async (req, res) => {
 
     if (!config) {
       return res.status(400).json({ error: 'Configurazione mancante.' });
+    }
+
+    if (config.provider !== 'local' && config.provider !== 'gemini') {
+      return res.status(403).json({
+        success: false,
+        error: 'Provider embedding non consentito.'
+      });
+    }
+
+    if (
+      config.provider === 'local' &&
+      !isLoopbackEndpointUrl(config.endpointUrl || 'http://127.0.0.1:8080')
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: 'Endpoint embedding locale non consentito: usare esclusivamente loopback.'
+      });
     }
 
     if (config.provider === 'gemini') {
