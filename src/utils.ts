@@ -16,10 +16,10 @@ export const TYPES_LABEL: Record<EvaluationType, string> = {
 };
 
 export const LEVELS: CompetenceLevel[] = [
-  { id: 'AV', label: 'Avanzato (8.5 - 10)', desc: 'Piena autonomia e padronanza complessa', min: 8.5, color: '#10b981', badgeClass: 'badge-ok' },
-  { id: 'IN', label: 'Intermedio (7 - 8.4)', desc: 'Autonomia in contesti noti', min: 7.0, color: '#38bdf8', badgeClass: 'badge-info' },
-  { id: 'BA', label: 'Base (6 - 6.9)', desc: 'Esecuzione con guida essenziale', min: 6.0, color: '#fbbf24', badgeClass: 'badge-warn' },
-  { id: 'PA', label: 'In Via di Prima Acq. (< 6)', desc: 'Necessita di costante supporto e recupero', min: 0.0, color: '#f43f5e', badgeClass: 'badge-bad' }
+  { id: 'AV', label: 'Fascia alta (8.5 - 10)', desc: 'Indicatore analitico interno: media tra 8,5 e 10', min: 8.5, color: '#10b981', badgeClass: 'badge-ok' },
+  { id: 'IN', label: 'Fascia medio-alta (7 - 8.4)', desc: 'Indicatore analitico interno: media tra 7 e 8,4', min: 7.0, color: '#38bdf8', badgeClass: 'badge-info' },
+  { id: 'BA', label: 'Fascia base analitica (6 - 6.9)', desc: 'Indicatore analitico interno: media tra 6 e 6,9', min: 6.0, color: '#fbbf24', badgeClass: 'badge-warn' },
+  { id: 'PA', label: 'Sotto soglia analitica (< 6)', desc: 'Indicatore analitico interno: media inferiore a 6', min: 0.0, color: '#f43f5e', badgeClass: 'badge-bad' }
 ];
 
 export const BEHAVIOR_OPTIONS = [
@@ -37,8 +37,8 @@ export const DEFAULT_EVALUATION_WEIGHTS: Record<EvaluationType, number> = {
   verifica: 100, // 100%
   orale: 100,    // 100%
   disegno: 100,  // 100%
-  test: 80,      // 80% (formativo)
-  osserv: 50     // 50% (osservazione continuativa)
+  test: 100,     // 100% default neutro
+  osserv: 100    // 100% default neutro
 };
 
 export const DEFAULT_EMBEDDING_CONFIG: NonNullable<AppSettings['embeddingConfig']> = {
@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   subject: 'Tecnologia & Disegno Tecnico',
   theme: 'cyan',
   evaluationWeights: DEFAULT_EVALUATION_WEIGHTS,
-  useWeightedAverage: true,
+  useWeightedAverage: false,
   embeddingConfig: DEFAULT_EMBEDDING_CONFIG
 };
 

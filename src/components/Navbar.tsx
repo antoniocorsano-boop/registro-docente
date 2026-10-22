@@ -247,7 +247,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <BarChart3 className="w-3.5 h-3.5" />
-                <span>Analytics D.M. 221</span>
+                <span>Analytics</span>
               </button>
             </div>
           </div>
@@ -376,7 +376,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <BarChart3 className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>Analisi & Soglie (D.M. 221)</span>
+                <span>Analisi & indicatori</span>
               </button>
 
               <button

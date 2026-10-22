@@ -176,8 +176,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <th className="p-2.5 border-r border-[var(--border)]">Media</th>
                   <th className="p-2.5 border-r border-[var(--border)]">Trend</th>
                   <th className="p-2.5 border-r border-[var(--border)]">Suff. %</th>
-                  <th className="p-2.5 border-r border-[var(--border)]">Avanzato (AV)</th>
-                  <th className="p-2.5">A Rischio (PA)</th>
+                  <th className="p-2.5 border-r border-[var(--border)]">Fascia alta (≥ 8,5)</th>
+                  <th className="p-2.5">Media &lt; 6</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">

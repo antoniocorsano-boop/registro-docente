@@ -38,17 +38,16 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   );
 
   const weights = settings?.evaluationWeights || DEFAULT_EVALUATION_WEIGHTS;
-  const isWeighted = settings?.useWeightedAverage !== false;
+  const isWeighted = settings?.useWeightedAverage === true;
 
-  // Compute proposed grade based on current active settings (weighted or arithmetic)
+  // Compute a mathematical support indicator based on current active settings
   const computeProposed = (sGrades: Grade[]) => {
     const avg = isWeighted ? calcWeightedAvg(sGrades, weights) : calcAvg(sGrades);
     if (avg === null || isNaN(avg)) {
-      return { avg: null, rounded: null, isAtRisk: false };
+      return { avg: null, isAtRisk: false };
     }
     return {
       avg,
-      rounded: Math.round(avg),
       isAtRisk: avg < 6.0
     };
   };
@@ -86,14 +85,14 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             }`}
           >
             {proposed.isAtRisk && <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />}
-            {proposed.rounded}
+            {formatGrade(proposed.avg)}
           </span>
           <span
             className={`text-[9px] font-semibold leading-tight ${
               proposed.isAtRisk ? 'text-rose-400 font-bold' : 'text-slate-400'
             }`}
           >
-            {proposed.isAtRisk ? 'Insufficienza' : 'Idoneo'} ({formatGrade(proposed.avg)})
+            {proposed.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
           </span>
         </div>
       ) : (
@@ -111,7 +110,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
             <Table className="w-5 h-5 text-[var(--primary)]" /> Tabellone Classe: {currentClass.name}
           </h3>
           <p className="text-xs text-slate-400">
-            Griglia sinottica con voti, medie e colonna per il <b>Voto Proposto</b> in sede di scrutinio.
+            Griglia sinottica con voti, medie e un <b>Indicatore media</b> di supporto matematico, non deliberativo.
           </p>
         </div>
 
@@ -162,7 +161,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-700'
             }`}
           >
-            Solo Medie & Livelli
+            Solo Medie & Fasce
           </button>
         </div>
 
@@ -175,10 +174,10 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
               ? 'bg-purple-950/70 border-purple-500 text-purple-300 shadow-[0_0_10px_rgba(192,132,252,0.3)]'
               : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200'
           }`}
-          title="Mostra / nascondi la colonna con il voto intero proposto calcolato in automatico"
+          title="Mostra / nascondi la colonna con l'indicatore matematico della media"
         >
           <Award className="w-3.5 h-3.5 text-purple-400" />
-          <span>Voto Proposto: {showProposedGrade ? 'VISIBILE' : 'NASCOSTO'}</span>
+          <span>Indicatore media: {showProposedGrade ? 'VISIBILE' : 'NASCOSTO'}</span>
         </button>
       </div>
 
@@ -200,8 +199,8 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                   MEDIA
                 </th>
                 {showProposedGrade && (
-                  <th className="p-2.5 border-r border-[var(--border)] bg-purple-950/70 text-purple-200 font-extrabold min-w-[110px]" title="Voto proposto arrotondato con avviso di rischio insufficienza">
-                    VOTO PROP.
+                  <th className="p-2.5 border-r border-[var(--border)] bg-purple-950/70 text-purple-200 font-extrabold min-w-[110px]" title="Indicatore matematico della media con soglia analitica 6/10">
+                    IND. MEDIA
                   </th>
                 )}
                 <th className="p-2.5 border-r border-[var(--border)] min-w-[80px]">Trend</th>
@@ -293,7 +292,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 </th>
                 {showProposedGrade && (
                   <th className="p-2.5 border-r border-[var(--border)] bg-purple-950/70 text-purple-200 font-extrabold min-w-[110px]">
-                    VOTO PROP.
+                    IND. MEDIA
                   </th>
                 )}
                 {typesList.map(t => (
@@ -361,12 +360,12 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 </th>
                 {showProposedGrade && (
                   <th className="p-2.5 border-r border-[var(--border)] bg-purple-950/70 text-purple-200 font-extrabold min-w-[110px]">
-                    VOTO PROP.
+                    IND. MEDIA
                   </th>
                 )}
                 <th className="p-2.5 border-r border-[var(--border)] min-w-[80px]">Trend</th>
-                <th className="p-2.5 border-r border-[var(--border)] min-w-[120px]">Livello (D.M. 221)</th>
-                <th className="p-2.5 min-w-[90px]">Esito</th>
+                <th className="p-2.5 border-r border-[var(--border)] min-w-[120px]">Fascia analitica</th>
+                <th className="p-2.5 min-w-[90px]">Indicatore 6/10</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
@@ -408,7 +407,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                     </td>
                     <td className="p-2.5">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${totalAvg !== null && totalAvg >= 6 ? 'badge-ok' : 'badge-bad'}`}>
-                        {totalAvg !== null && totalAvg >= 6 ? 'Idoneo' : 'A Rischio'}
+                        {totalAvg === null ? 'Non disponibile' : totalAvg >= 6 ? 'Media ≥ 6' : 'Media < 6'}
                       </span>
                     </td>
                   </tr>

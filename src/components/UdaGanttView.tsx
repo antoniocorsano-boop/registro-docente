@@ -62,7 +62,7 @@ interface UdaGanttViewProps {
   onNavigateTab?: (tab: any) => void;
 }
 
-// Configuration of Activity Types with weighting coefficients according to D.M. 221/2025
+// Internal planning coefficients for the UDA activity index; not a normative scale
 export const ACTIVITY_TYPE_CONFIG: Record<
   UdaActivityType,
   {
@@ -240,7 +240,7 @@ export function calcUdaCompetenceCredits(
   const evalBonus = uniqueBatches * 1.0;
   totalWeightedHours += evalBonus;
 
-  // Crediti Formativi Scolastici (CFS): 1 credito ogni 10 ore di competenza maturate (ponderate)
+  // Indice Attività UDA: indice interno basato su ore ponderate; non è un credito scolastico o una certificazione
   const earnedCredits = Math.round((totalWeightedHours / 10) * 10) / 10;
   const plannedHours = uda.hours || 10;
   const potentialCredits = Math.round(((plannedHours * (uda.civicEducation ? 1.25 : 1.15)) / 10) * 10) / 10;
@@ -1383,7 +1383,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <HelpCircle className="w-3.5 h-3.5 text-purple-400" />
-            <span className="hidden sm:inline">Info Crediti CFS</span>
+            <span className="hidden sm:inline">Info indice attività</span>
           </button>
 
           <button
@@ -1401,18 +1401,18 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       {/* TOP KPI BAR (6 STREAMLINED CARDS, ZERO-PILL DISCIPLINE) */}
       {/* ============================================================== */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Card 1: Crediti Formativi */}
+        {/* Card 1: Indice Attività UDA */}
         <div className="neon-card p-3 border-l-4 border-l-purple-400 bg-gradient-to-br from-purple-950/20 to-transparent">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-            <span>Crediti Formativi</span>
-            <span className="text-[10px] font-mono font-bold text-purple-400">CFS</span>
+            <span>Indice Attività UDA</span>
+            <span className="text-[10px] font-mono font-bold text-purple-400">pt</span>
           </div>
           <div className="text-xl sm:text-2xl font-black text-purple-300 mt-1 font-mono flex items-baseline gap-1">
             {totalEarnedCredits.toFixed(1)}
             <span className="text-xs font-normal text-slate-500">/ {totalPotentialCredits.toFixed(1)}</span>
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-            1 CFS ogni 10h cert.
+            indice interno su ore ponderate
           </div>
         </div>
 
@@ -1454,7 +1454,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             {civicHours}h <span className="text-xs text-slate-500 font-normal">/ 33h</span>
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-            {civicCredits.toFixed(1)} CFS · {civicCount} moduli
+            {civicCredits.toFixed(1)} pt · {civicCount} moduli
           </div>
         </div>
 
@@ -1468,7 +1468,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             {practicalHours}h
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-            {practicalCredits.toFixed(1)} CFS · {practicalCount} fasi
+            {practicalCredits.toFixed(1)} pt · {practicalCount} fasi
           </div>
         </div>
 
@@ -1530,7 +1530,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             )}
           </button>
 
-          {/* 3. Riepilogo Avanzamento & CFS */}
+          {/* 3. Riepilogo Avanzamento & pt */}
           <button
             type="button"
             onClick={() => setActiveViewMode('riepilogo')}
@@ -1812,7 +1812,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
                           {/* Credits */}
                           <td className="p-2.5 border-r border-[var(--border)] font-mono text-[11px] text-purple-300 font-bold">
-                            +{creditStats.earnedCredits.toFixed(1)} CFS
+                            +{creditStats.earnedCredits.toFixed(1)} pt
                           </td>
 
                           {/* Quick Shift Stepper */}
@@ -1974,7 +1974,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                           <span className="text-xs text-slate-400">·</span>
                           <span className="text-xs text-slate-300">{u.period}</span>
                           <span className="text-xs text-slate-400">·</span>
-                          <span className="font-mono text-purple-300 font-semibold text-xs">+{creditInfo.earnedCredits.toFixed(1)} CFS</span>
+                          <span className="font-mono text-purple-300 font-semibold text-xs">+{creditInfo.earnedCredits.toFixed(1)} pt</span>
                         </div>
                         <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2">
                           <span>{item.startMonthName} – {item.endMonthName}</span>
@@ -2101,7 +2101,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Target className="w-4 h-4 text-emerald-400" />
-                Riepilogo Avanzamento Curricolare & Ponderazione Attività (D.M. 221/2025)
+                Riepilogo Avanzamento Curricolare & Indice Attività UDA
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 Calcolo didattico: 60% ore di attività nel diario di bordo + 40% verifiche e rubriche collegate a registro.
@@ -2132,7 +2132,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                         <span>·</span>
                         <span>{u.period}</span>
                         <span>·</span>
-                        <span className="text-purple-300 font-mono">+{creditInfo.earnedCredits.toFixed(1)} CFS</span>
+                        <span className="text-purple-300 font-mono">+{creditInfo.earnedCredits.toFixed(1)} pt</span>
                       </div>
                     </div>
 
@@ -2304,7 +2304,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <span>·</span>
                     <span className="text-slate-300">{startMonthName} – {endMonthName} ({u.durationMonths} mesi)</span>
                     <span>·</span>
-                    <span className="font-mono text-purple-300 font-bold">+{creditStats.earnedCredits.toFixed(1)} CFS</span>
+                    <span className="font-mono text-purple-300 font-bold">+{creditStats.earnedCredits.toFixed(1)} pt</span>
                   </div>
 
                   <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
@@ -2503,7 +2503,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <span>·</span>
                     <span className="text-slate-300">Periodo {selectedUdaForDetail.period}</span>
                     <span>·</span>
-                    <span className="text-purple-300 font-mono font-bold">+{creditStats.earnedCredits.toFixed(1)} CFS</span>
+                    <span className="text-purple-300 font-mono font-bold">+{creditStats.earnedCredits.toFixed(1)} pt</span>
                   </div>
 
                   <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
@@ -2880,7 +2880,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       })()}
 
       {/* ============================================================== */}
-      {/* MODAL: INFO CALCOLO CREDITI CFS D.M. 221/2025 */}
+      {/* MODAL: INFO INDICE ATTIVITÀ UDA */}
       {/* ============================================================== */}
       {isCreditsInfoOpen && (
         <div className="fixed inset-0 z-50 bg-[#030712]/85 backdrop-blur-sm flex justify-center items-center p-4">
@@ -2889,7 +2889,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-purple-400" />
                 <h3 className="text-base font-bold text-white">
-                  Criteri Calcolo Crediti Formativi (CFS)
+                  Criteri dell’Indice Attività UDA
                 </h3>
               </div>
               <button
@@ -2903,7 +2903,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
             <div className="space-y-3 text-xs text-slate-300">
               <p>
-                Secondo le linee guida del <b>D.M. 221/2025</b>, le ore dedicate alle attività curricolari vengono ponderate in base alla tipologia didattica:
+                Come indice interno di pianificazione, le ore delle attività possono essere ponderate in base alla tipologia didattica scelta dal docente:
               </p>
 
               <div className="space-y-1.5">
@@ -2922,7 +2922,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
               </div>
 
               <div className="p-2.5 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-400 font-mono">
-                1 CFS = 10 Ore di Competenza Ponderate Certificate
+                1 punto indice = 10 ore ponderate interne
               </div>
             </div>
 

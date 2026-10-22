@@ -1215,7 +1215,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  Item Analysis Formativa per Domanda (D.M. 221/2025)
+                  Item Analysis Formativa per Domanda
                 </h3>
                 <p className="text-xs text-slate-400">
                   Analisi statistica delle risposte: individua immediatamente le domande critiche su cui svolgere il recupero o debriefing didattico.
