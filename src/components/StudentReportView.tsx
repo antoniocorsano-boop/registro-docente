@@ -488,6 +488,15 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
       </div>
 
+      <details className="group">
+        <summary className="neon-card min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-white">Profilo interno di evidenze</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Grafico radar e sintesi diagnostica · disponibile con evidenze sufficienti</p>
+          </div>
+          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="pt-3">
       {/* ============================================================== */}
       {/* GRAFICO A RAGGIO (RADAR CHART): RAGGIUNGIMENTO LIVELLI DI COMPETENZA */}
       {/* ============================================================== */}
@@ -703,6 +712,18 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
       </div>
 
+        </div>
+      </details>
+
+      <details className="group">
+        <summary className="neon-card min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-white">Dossier UDA</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{studentUdaDossier.length} UDA collegate alla classe</p>
+          </div>
+          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="pt-3">
       {/* ============================================================== */}
       {/* SEZIONE: CONTRIBUTO DELLO STUDENTE NELLE SINGOLE UDA */}
       {/* ============================================================== */}
@@ -945,6 +966,18 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         )}
       </div>
 
+        </div>
+      </details>
+
+      <details className="group">
+        <summary className="neon-card min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-white">Elenco valutazioni</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{grades.length} valutazioni registrate</p>
+          </div>
+          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="pt-3">
       {/* Breakdown Grades Table */}
       <div className="neon-card p-4">
         <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
@@ -1010,6 +1043,18 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         )}
       </div>
 
+        </div>
+      </details>
+
+      <details className="group">
+        <summary className="neon-card min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-white">Comportamenti e partecipazione</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{studentBehaviors.length} registrazioni</p>
+          </div>
+          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="pt-3">
       {/* Student Behavior Notes */}
       <div className="neon-card p-4">
         <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
@@ -1037,6 +1082,9 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           </div>
         )}
       </div>
+        </div>
+      </details>
+
     </div>
   );
 };
