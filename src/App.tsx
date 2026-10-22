@@ -37,7 +37,12 @@ import type {
 import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
-import { incrementBackupChanges } from './persistence/backupCheckpoint';
+import {
+  applyBackupReceipt,
+  incrementBackupChanges,
+  prepareBackupCheckpoint,
+  type PreparedBackupCheckpoint
+} from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
 
@@ -217,26 +222,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
-
-  const commitMetaMutation = useCallback((
-    derive: (current: SecureMeta) => SecureMeta,
-    afterCommit?: () => void
-  ): Promise<SecureMeta> => {
-    return mutationCoordinator.enqueue<SecureMeta>({
-      getCommitted: () => metaRef.current,
-      derive,
-      persist: candidate => secureStorage.saveMeta(candidate),
-      publish: candidate => {
-        metaRef.current = candidate;
-        setMeta(candidate);
-      },
-      afterCommit
-    }).catch(error => {
-      console.error('Secure vault metadata save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
-      throw error;
-    });
-  }, [mutationCoordinator, secureStorage]);
 
   const commitSettingsMutation = useCallback((patch: Partial<AppSettings>): Promise<AppSettings> => {
     return mutationCoordinator.enqueue<{ settings: AppSettings; meta: SecureMeta }>({
@@ -718,34 +703,59 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     toast('Ripristina un backup cifrato nella sezione Privacy');
   };
 
-  // Import Encrypted Backup
-  const handleImportEncryptedBackup = async (decryptedData: unknown) => {
-    const currentSnapshot: CompleteSecureAppSnapshot = {
-      appData: appDataRef.current,
-      settings: settingsRef.current,
-      udas: udasRef.current,
-      customTests: testsRef.current,
-      submissions: submissionsRef.current,
-      meta: metaRef.current
-    };
-    const candidate = normalizeBackupPayload(decryptedData, currentSnapshot);
-    const restored = await secureStorage.restoreSnapshotVerified(candidate);
+  // Prepare encrypted backup checkpoint
+  const getCompleteCommittedSnapshot = (): CompleteSecureAppSnapshot => ({
+    appData: appDataRef.current,
+    settings: settingsRef.current,
+    udas: udasRef.current,
+    customTests: testsRef.current,
+    submissions: submissionsRef.current,
+    meta: metaRef.current
+  });
 
-    appDataRef.current = restored.appData;
-    currentClassIdRef.current = restored.appData.currentClassId;
-    settingsRef.current = restored.settings;
-    udasRef.current = restored.udas;
-    testsRef.current = restored.customTests;
-    submissionsRef.current = restored.submissions;
-    metaRef.current = restored.meta;
-    setAppData(restored.appData);
-    setSettings(restored.settings);
-    setUdas(restored.udas);
-    setTests(restored.customTests);
-    setSubmissions(restored.submissions);
-    setMeta(restored.meta);
-    setActiveTab('home');
-    toast('Backup cifrato verificato e ripristinato');
+  const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> => {
+    return mutationCoordinator.enqueueTask(() =>
+      prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString())
+    );
+  };
+
+  const recordEncryptedBackupExport = (
+    checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>
+  ): Promise<void> => {
+    return mutationCoordinator.enqueue<SecureMeta>({
+      getCommitted: () => metaRef.current,
+      derive: current => applyBackupReceipt(current, checkpoint),
+      persist: candidate => secureStorage.saveMeta(candidate),
+      publish: candidate => {
+        metaRef.current = candidate;
+        setMeta(candidate);
+      }
+    }).then(() => undefined);
+  };
+
+  // Import Encrypted Backup
+  const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
+    return mutationCoordinator.enqueueTask(async () => {
+      const previousLogical = getCompleteCommittedSnapshot();
+      const candidate = normalizeBackupPayload(decryptedData, previousLogical);
+      const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
+
+      appDataRef.current = restored.appData;
+      currentClassIdRef.current = restored.appData.currentClassId;
+      settingsRef.current = restored.settings;
+      udasRef.current = restored.udas;
+      testsRef.current = restored.customTests;
+      submissionsRef.current = restored.submissions;
+      metaRef.current = restored.meta;
+      setAppData(restored.appData);
+      setSettings(restored.settings);
+      setUdas(restored.udas);
+      setTests(restored.customTests);
+      setSubmissions(restored.submissions);
+      setMeta(restored.meta);
+      setActiveTab('home');
+      toast('Backup cifrato verificato e ripristinato');
+    });
   };
 
   // Factory Reset / Diritto all'Oblio
@@ -959,20 +969,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           <PrivacyView
             settings={settings}
             classes={appData.classes}
-            backupSnapshot={{
-              appData,
-              settings,
-              udas,
-              customTests: tests,
-              submissions,
-              meta
-            }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
-            onExportEncryptedBackup={() => {
-              const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
-              void commitMetaMutation(() => nextMeta).catch(() => undefined);
-            }}
+            onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
           />
