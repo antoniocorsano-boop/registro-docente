@@ -45,12 +45,13 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     const importSection = sectionBetween('// Import submissions into class grades', '// Save UDAs');
     const deriveStart = importSection.indexOf('void commitAppDataMutation(current => {');
     const afterCommitStart = importSection.indexOf('afterCommit:', deriveStart);
+    const preDeriveSection = importSection.slice(0, deriveStart);
     const deriveSection = importSection.slice(deriveStart, afterCommitStart);
 
     expect(deriveStart).toBeGreaterThanOrEqual(0);
     expect(afterCommitStart).toBeGreaterThan(deriveStart);
-    expect(importSection).not.toContain('const submissionSnapshot = submissionsRef.current;');
-    expect(deriveSection).toContain('submissionsRef.current');
+    expect(preDeriveSection).not.toContain('const submissionSnapshot = submissionsRef.current;');
+    expect(deriveSection).toContain('const submissionSnapshot = submissionsRef.current;');
   });
 
   test('keeps committed refs for settings, UDA, tests and submissions', () => {
