@@ -24,13 +24,17 @@ jobs:
       - name: Install application dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install Playwright Chromium for verification only
-        run: |
-          npm install --no-save --legacy-peer-deps playwright@1.55.0
-          npx playwright install --with-deps chromium
-
       - name: Build exact head
         run: bun run build
+
+      - name: Install isolated Playwright Chromium for verification only
+        shell: bash
+        run: |
+          mkdir -p /tmp/p2-playwright
+          cd /tmp/p2-playwright
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0
+          npx playwright install --with-deps chromium
 
       - name: Start production server
         shell: bash
@@ -49,15 +53,18 @@ jobs:
       - name: Run Chromium verification at 390px and 1280px
         shell: bash
         run: |
-          cat > p2-advanced-browser-check.mjs <<'EOF'
+          mkdir -p browser-artifacts
+          cat > /tmp/p2-playwright/p2-advanced-browser-check.mjs <<'EOF'
           import { chromium } from 'playwright';
           import fs from 'node:fs/promises';
+          import path from 'node:path';
 
           const assert = (condition, message) => {
             if (!condition) throw new Error(message);
           };
 
-          await fs.mkdir('browser-artifacts', { recursive: true });
+          const evidenceDir = path.join(process.env.GITHUB_WORKSPACE, 'browser-artifacts');
+          await fs.mkdir(evidenceDir, { recursive: true });
           const browser = await chromium.launch({ headless: true });
           const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
           const page = await context.newPage();
@@ -92,7 +99,7 @@ jobs:
 
           const assertTechnicalHidden = async (label) => {
             const loc = page.getByText(label, { exact: false }).first();
-            assert(!(await loc.isVisible()), `390/1280 closed: technical label visible: ${label}`);
+            assert(!(await loc.isVisible()), `closed: technical label visible: ${label}`);
           };
 
           const assertTechnicalVisible = async (label) => {
@@ -105,7 +112,7 @@ jobs:
           assert(await page.getByText("Aspetto dell'interfaccia", { exact: true }).isVisible(), '390: teacher-facing appearance label missing');
           let overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
           assert(!overflow, '390: horizontal page overflow detected while advanced settings are closed');
-          await page.screenshot({ path: 'browser-artifacts/p2-advanced-390-closed.png', fullPage: true });
+          await page.screenshot({ path: path.join(evidenceDir, 'p2-advanced-390-closed.png'), fullPage: true });
 
           await summary.click();
           for (const label of technicalTexts) await assertTechnicalVisible(label);
@@ -116,7 +123,7 @@ jobs:
           assert(await page.getByRole('button', { name: /Calcola Affinità Semantica/ }).isVisible(), '390: semantic playground control missing');
           overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
           assert(!overflow, '390: horizontal page overflow detected while advanced settings are open');
-          await page.screenshot({ path: 'browser-artifacts/p2-advanced-390-open.png', fullPage: true });
+          await page.screenshot({ path: path.join(evidenceDir, 'p2-advanced-390-open.png'), fullPage: true });
 
           let dialogText = '';
           page.once('dialog', async dialog => {
@@ -134,13 +141,13 @@ jobs:
           for (const label of technicalTexts) await assertTechnicalHidden(label);
           overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
           assert(!overflow, '1280: horizontal page overflow detected while advanced settings are closed');
-          await page.screenshot({ path: 'browser-artifacts/p2-advanced-1280-closed.png', fullPage: true });
+          await page.screenshot({ path: path.join(evidenceDir, 'p2-advanced-1280-closed.png'), fullPage: true });
 
           await summary.click();
           for (const label of technicalTexts) await assertTechnicalVisible(label);
           overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
           assert(!overflow, '1280: horizontal page overflow detected while advanced settings are open');
-          await page.screenshot({ path: 'browser-artifacts/p2-advanced-1280-open.png', fullPage: true });
+          await page.screenshot({ path: path.join(evidenceDir, 'p2-advanced-1280-open.png'), fullPage: true });
 
           assert(consoleErrors.length === 0, `Browser/page errors: ${consoleErrors.join(' | ')}`);
           console.log('P2-ADVANCED-01 REAL-BROWSER PASS');
@@ -151,6 +158,7 @@ jobs:
           await context.close();
           await browser.close();
           EOF
+          cd /tmp/p2-playwright
           node p2-advanced-browser-check.mjs
 
       - name: Upload browser evidence
