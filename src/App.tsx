@@ -641,10 +641,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       return;
     }
 
-    const submissionSnapshot = submissionsRef.current;
     let importedCount = 0;
 
     void commitAppDataMutation(current => {
+      const submissionSnapshot = submissionsRef.current;
       importedCount = 0;
       const updatedClasses = current.classes.map(cls => {
         const clsGrades = [...(cls.grades || [])];
