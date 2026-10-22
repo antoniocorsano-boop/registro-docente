@@ -296,6 +296,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
         </div>
 
+      </div>
+
+      <details className="group neon-card overflow-hidden">
+        <summary className="min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-[var(--primary)]" /> Approfondimenti analitici
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">Fasce, andamento temporale e confronto con la classe.</p>
+          </div>
+          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="space-y-4 border-t border-[var(--border)] p-4">
         {/* Competence Levels Chart / Progress Distribution */}
         <div className="mt-4 pt-4 border-t border-[var(--border)]">
           <h4 className="text-xs uppercase tracking-wider font-bold text-slate-300 mb-3 flex items-center justify-between">
@@ -345,8 +358,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             )}
           </div>
         </div>
-      </div>
-
       {/* Recharts Timeline Graph Segmented by Evaluation Type */}
       <StudentGradesTimelineChart
         students={students}
@@ -361,6 +372,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         isPrivacyShieldActive={isPrivacyShieldActive}
         useWeighted={useWeighted}
       />
+
+        </div>
+      </details>
 
       {/* Official Export Card */}
 
