@@ -413,7 +413,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             <select
               value={currentStudent.id}
               onChange={e => onSelectStudent(e.target.value)}
-              className="w-full p-2 neon-input text-xs sm:text-sm font-semibold text-white bg-slate-900 cursor-pointer"
+              className="w-full min-h-[44px] p-2 neon-input text-xs sm:text-sm font-semibold text-white bg-slate-900 cursor-pointer"
             >
               {students.map(s => (
                 <option key={s.id} value={s.id}>
@@ -501,11 +501,11 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           </div>
 
           {/* Radar Dimension Switcher */}
-          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 self-start sm:self-auto">
+          <div className="w-full sm:w-auto grid grid-cols-1 sm:grid-cols-2 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 self-start sm:self-auto">
             <button
               type="button"
               onClick={() => setRadarMode('competencies')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+              className={`min-h-[44px] px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
                 radarMode === 'competencies'
                   ? 'bg-cyan-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -516,7 +516,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             <button
               type="button"
               onClick={() => setRadarMode('udas')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+              className={`min-h-[44px] px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
                 radarMode === 'udas'
                   ? 'bg-cyan-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -530,10 +530,10 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         {/* Radar Chart + Diagnostic Synthesis Panel */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
           {/* Radar Chart Area */}
-          <div className="lg:col-span-7 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 pt-4 flex flex-col items-center justify-center relative min-h-[340px]">
+          <div className="lg:col-span-7 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 pt-4 flex flex-col items-center justify-center relative min-h-[300px] sm:min-h-[340px]">
             {hasReliableActiveProfile ? (
               <>
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={280}>
               <RadarChart cx="50%" cy="50%" outerRadius="72%" data={activeRadarData}>
                 <PolarGrid stroke="#334155" strokeDasharray="3 3" />
                 <PolarAngleAxis
