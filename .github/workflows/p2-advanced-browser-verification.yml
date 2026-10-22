@@ -26,7 +26,7 @@ jobs:
 
       - name: Install Playwright Chromium for verification only
         run: |
-          npm install --no-save playwright@1.55.0
+          npm install --no-save --legacy-peer-deps playwright@1.55.0
           npx playwright install --with-deps chromium
 
       - name: Build exact head
@@ -100,7 +100,6 @@ jobs:
             assert(await loc.isVisible(), `open: technical label not visible: ${label}`);
           };
 
-          // 390 px: closed by default, no technical surface leakage.
           assert(!(await details.getAttribute('open')), '390: advanced disclosure is unexpectedly open by default');
           for (const label of technicalTexts) await assertTechnicalHidden(label);
           assert(await page.getByText("Aspetto dell'interfaccia", { exact: true }).isVisible(), '390: teacher-facing appearance label missing');
@@ -108,7 +107,6 @@ jobs:
           assert(!overflow, '390: horizontal page overflow detected while advanced settings are closed');
           await page.screenshot({ path: 'browser-artifacts/p2-advanced-390-closed.png', fullPage: true });
 
-          // 390 px: advanced section opens and keeps all technical capabilities reachable.
           await summary.click();
           for (const label of technicalTexts) await assertTechnicalVisible(label);
           const endpointField = page.locator('label').filter({ hasText: 'URL Endpoint Vettoriale' }).locator('..').locator('input');
@@ -120,7 +118,6 @@ jobs:
           assert(!overflow, '390: horizontal page overflow detected while advanced settings are open');
           await page.screenshot({ path: 'browser-artifacts/p2-advanced-390-open.png', fullPage: true });
 
-          // Save remains functional and teacher-facing.
           let dialogText = '';
           page.once('dialog', async dialog => {
             dialogText = dialog.message();
@@ -130,7 +127,6 @@ jobs:
           await page.waitForTimeout(250);
           assert(dialogText === 'Impostazioni e preferenze salvate con successo!', `Unexpected save dialog: ${dialogText}`);
 
-          // 1280 px: same closed/open behavior and no overflow.
           await summary.click();
           await page.setViewportSize({ width: 1280, height: 900 });
           await page.waitForTimeout(150);
