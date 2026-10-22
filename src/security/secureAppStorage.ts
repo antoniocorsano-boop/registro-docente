@@ -113,6 +113,13 @@ export class SecureAppStorage {
     return this.vault.put('appData', value);
   }
 
+  saveAppDataAndMeta(appData: AppData, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'appData', value: appData },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveSettings(value: AppSettings): Promise<void> {
     return this.vault.put('settings', sanitizePersistedSettings(value));
   }
