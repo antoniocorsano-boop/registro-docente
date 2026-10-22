@@ -36,6 +36,7 @@ import type {
 } from './security/secureAppStorage';
 import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
+import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -244,10 +245,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   }, [mutationCoordinator, secureStorage, toast]);
 
-  const commitUdasMutation = useCallback((candidate: UdaRecord[]): Promise<UdaRecord[]> => {
+  const commitUdasMutation = useCallback((derive: (current: UdaRecord[]) => UdaRecord[]): Promise<UdaRecord[]> => {
     return mutationCoordinator.enqueue<UdaRecord[]>({
       getCommitted: () => udasRef.current,
-      derive: () => candidate,
+      derive,
       persist: next => secureStorage.saveUdas(next),
       publish: next => {
         udasRef.current = next;
@@ -691,7 +692,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   // Save UDAs
   const handleSaveUdas = (newUdas: UdaRecord[]) => {
-    void commitUdasMutation(newUdas).catch(() => undefined);
+    const mutation = createUdaSnapshotMutation(udasRef.current, newUdas);
+    void commitUdasMutation(mutation).catch(() => undefined);
   };
 
   // Save Settings
