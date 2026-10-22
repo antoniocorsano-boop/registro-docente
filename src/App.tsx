@@ -577,7 +577,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-[#f8fafc] flex flex-col pb-16 sm:pb-8">
+    <div className="min-h-screen bg-[#030712] text-[#f8fafc] flex flex-col pb-16 md:pb-8">
       {/* If in Student Portal Mode */}
       {studentMode.isOpen && (
         <StudentPortal
