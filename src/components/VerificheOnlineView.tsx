@@ -34,7 +34,7 @@ interface VerificheOnlineViewProps {
   udas?: UdaRecord[];
   settings?: AppSettings;
   isPrivacyShieldActive?: boolean;
-  onSaveNewTest: (test: OnlineTest) => void;
+  onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => void;
   onImportSubmissionsToRegister: (targetUdaId?: string) => void;
@@ -185,7 +185,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   };
 
   // Save interactive test
-  const handleSaveInteractiveTest = (e: React.FormEvent) => {
+  const handleSaveInteractiveTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editorTitle.trim()) {
       alert('Inserisci il titolo del test.');
@@ -206,7 +206,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       questions: editorQuestions
     };
 
-    onSaveNewTest(newTest);
+    try {
+      await onSaveNewTest(newTest);
+    } catch {
+      return;
+    }
     setSelectedTestId(testId);
     setIsEditingTest(false);
     alert(`Test "${newTest.title}" salvato con successo!`);
@@ -307,7 +311,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         udaId: udas[0]?.id
       };
 
-      onSaveNewTest(newTest);
+      try {
+        await onSaveNewTest(newTest);
+      } catch (saveError) {
+        console.error('Durable test save failed during file import', saveError);
+        return;
+      }
       setSelectedTestId(testId);
       alert(`Successo! Creato il test "${testTitle}" con ${questions.length} domande estratte.`);
     } catch (err) {
@@ -319,7 +328,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     }
   };
 
-  const handleSaveManualTest = (e: React.FormEvent) => {
+  const handleSaveManualTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualTitle.trim() || !manualRawText.trim()) {
       alert('Inserisci sia il titolo del test sia il testo con domande e risposte.');
@@ -368,7 +377,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       questions
     };
 
-    onSaveNewTest(newTest);
+    try {
+      await onSaveNewTest(newTest);
+    } catch {
+      return;
+    }
     setSelectedTestId(testId);
     setManualTitle('');
     setManualRawText('');

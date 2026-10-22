@@ -607,11 +607,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Save new test
-  const handleSaveNewTest = (newTest: OnlineTest) => {
-    void commitTestsMutation(current => ({
+  const handleSaveNewTest = (newTest: OnlineTest): Promise<void> => {
+    return commitTestsMutation(current => ({
       ...current,
       [newTest.id]: newTest
-    })).catch(() => undefined);
+    })).then(() => undefined);
   };
 
   // Delete submission
