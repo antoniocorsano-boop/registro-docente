@@ -12,7 +12,7 @@ function sectionBetween(source: string, start: string, end: string): string {
 }
 
 function expectPersistenceBeforeSuccess(section: string, successMarker: string): void {
-  const awaitIndex = section.indexOf('await commitTestSave(newTest)');
+  const awaitIndex = section.indexOf('await commitTestSaveIntent(() =>');
   const successIndex = section.indexOf(successMarker);
   expect(awaitIndex).toBeGreaterThanOrEqual(0);
   expect(successIndex).toBeGreaterThan(awaitIndex);
@@ -21,7 +21,8 @@ function expectPersistenceBeforeSuccess(section: string, successMarker: string):
 describe('PERSIST-01 online test editor persistence integrity', () => {
   test('the save callback contract is asynchronous end-to-end', () => {
     expect(viewSource).toContain('onSaveNewTest: (test: OnlineTest) => Promise<void>;');
-    expect(viewSource).toContain('const commitTestSave = async (test: OnlineTest): Promise<boolean> =>');
+    expect(viewSource).toContain('const commitTestSaveIntent = async (buildTest: () => OnlineTest): Promise<OnlineTest | null> =>');
+    expect(viewSource).toContain('const test = buildTest();');
     expect(viewSource).toContain('await onSaveNewTest(test);');
     expect(appSource).toContain('const handleSaveNewTest = (newTest: OnlineTest): Promise<void> =>');
     const appHandler = sectionBetween(appSource, '// Save new test', '// Delete submission');
@@ -33,24 +34,27 @@ describe('PERSIST-01 online test editor persistence integrity', () => {
   test('interactive editor waits for durable persistence before closing or reporting success', () => {
     const section = sectionBetween(viewSource, '// Save interactive test', '// Parse questions from DOCX/ZIP text');
     expect(section).toContain('const handleSaveInteractiveTest = async');
-    expectPersistenceBeforeSuccess(section, 'setSelectedTestId(testId)');
+    expectPersistenceBeforeSuccess(section, 'setSelectedTestId(savedTest.id)');
     expectPersistenceBeforeSuccess(section, 'setIsEditingTest(false)');
     expectPersistenceBeforeSuccess(section, 'salvato con successo!');
+    expect(section).toContain('if (!savedTest) return;');
   });
 
-  test('file import waits for durable persistence before selection and success alert', () => {
+  test('file import waits for durable persistence before selection, input reset and success alert', () => {
     const section = sectionBetween(viewSource, 'const handleFileUpload = async', 'const handleSaveManualTest');
-    expectPersistenceBeforeSuccess(section, 'setSelectedTestId(testId)');
+    expectPersistenceBeforeSuccess(section, 'setSelectedTestId(savedTest.id)');
+    expectPersistenceBeforeSuccess(section, "e.target.value = '';");
     expectPersistenceBeforeSuccess(section, 'Successo! Creato il test');
-    expect(section).toContain('if (!(await commitTestSave(newTest))) return;');
+    expect(section).toContain('if (!savedTest) return;');
   });
 
   test('manual editor waits for durable persistence before clearing inputs or reporting success', () => {
     const section = sectionBetween(viewSource, 'const handleSaveManualTest', 'const copyPadletLink');
     expect(section).toContain('const handleSaveManualTest = async');
-    expectPersistenceBeforeSuccess(section, 'setSelectedTestId(testId)');
+    expectPersistenceBeforeSuccess(section, 'setSelectedTestId(savedTest.id)');
     expectPersistenceBeforeSuccess(section, "setManualTitle('')");
     expectPersistenceBeforeSuccess(section, "setManualRawText('')");
     expectPersistenceBeforeSuccess(section, 'creato con');
+    expect(section).toContain('if (!savedTest) return;');
   });
 });
