@@ -615,7 +615,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Errore nella generazione con Gemini');
+        const serverConfigurationMissing =
+          res.status === 500 &&
+          typeof data.error === 'string' &&
+          data.error.includes('non è configurata nel server');
+        throw new Error(serverConfigurationMissing ? 'AI_SERVER_CONFIGURATION_MISSING' : 'AI_GENERATION_FAILED');
       }
 
       if (data.description) {
@@ -637,7 +641,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       }
     } catch (err: any) {
       console.error('AI generation error:', err);
-      showStatus('⚠️ Generazione non riuscita. Riprova o verifica le impostazioni avanzate.');
+      const serverConfigurationMissing = err instanceof Error && err.message === 'AI_SERVER_CONFIGURATION_MISSING';
+      showStatus(
+        serverConfigurationMissing
+          ? "⚠️ Servizio AI non configurato sul server. Contatta l'amministratore."
+          : '⚠️ Generazione non riuscita. Riprova.'
+      );
     } finally {
       setIsGeneratingAi(false);
     }
