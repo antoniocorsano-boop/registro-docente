@@ -605,29 +605,36 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <tr className="bg-slate-100 font-bold text-slate-800">
               <th className="border border-slate-300 p-2">#</th>
               <th className="border border-slate-300 p-2 text-left">Cognome e Nome</th>
-              <th className="border border-slate-300 p-2">Media Q1 (Pond.)</th>
-              <th className="border border-slate-300 p-2">Media Q2 (Pond.)</th>
-              <th className="border border-slate-300 p-2 font-extrabold">Media Ponderata Finale</th>
+              <th className="border border-slate-300 p-2">Media Q1 {useWeighted ? '(Pond.)' : '(Aritm.)'}</th>
+              <th className="border border-slate-300 p-2">Media Q2 {useWeighted ? '(Pond.)' : '(Aritm.)'}</th>
+              <th className="border border-slate-300 p-2 font-extrabold">Media Finale {useWeighted ? 'Ponderata' : 'Aritmetica'}</th>
               <th className="border border-slate-300 p-2">Media Semplice</th>
               <th className="border border-slate-300 p-2">Fascia analitica</th>
               <th className="border border-slate-300 p-2">Indicatore 6/10</th>
             </tr>
           </thead>
           <tbody>
-            {studentMetrics.map((m, idx) => (
-              <tr key={m.student.id} className="even:bg-slate-50">
-                <td className="border border-slate-300 p-1.5">{idx + 1}</td>
-                <td className="border border-slate-300 p-1.5 text-left font-medium">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</td>
-                <td className="border border-slate-300 p-1.5">{formatGrade(m.q1WeightedAvg)}</td>
-                <td className="border border-slate-300 p-1.5">{formatGrade(m.q2WeightedAvg)}</td>
-                <td className="border border-slate-300 p-1.5 font-bold">{formatGrade(m.totalWeightedAvg)}</td>
-                <td className="border border-slate-300 p-1.5 text-slate-600">{formatGrade(m.totalSimpleAvg)}</td>
-                <td className="border border-slate-300 p-1.5">{m.level?.label || '–'}</td>
-                <td className="border border-slate-300 p-1.5 font-semibold">
-                  {m.totalWeightedAvg === null ? 'Non disponibile' : m.totalWeightedAvg >= 6 ? 'Media ≥ 6' : 'Media < 6'}
-                </td>
-              </tr>
-            ))}
+            {studentMetrics.map((m, idx) => {
+              const exportQ1 = useWeighted ? m.q1WeightedAvg : m.q1SimpleAvg;
+              const exportQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
+              const exportTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
+              const exportLevel = getCompetenceLevel(exportTotal);
+
+              return (
+                <tr key={m.student.id} className="even:bg-slate-50">
+                  <td className="border border-slate-300 p-1.5">{idx + 1}</td>
+                  <td className="border border-slate-300 p-1.5 text-left font-medium">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</td>
+                  <td className="border border-slate-300 p-1.5">{formatGrade(exportQ1)}</td>
+                  <td className="border border-slate-300 p-1.5">{formatGrade(exportQ2)}</td>
+                  <td className="border border-slate-300 p-1.5 font-bold">{formatGrade(exportTotal)}</td>
+                  <td className="border border-slate-300 p-1.5 text-slate-600">{formatGrade(m.totalSimpleAvg)}</td>
+                  <td className="border border-slate-300 p-1.5">{exportLevel?.label || '–'}</td>
+                  <td className="border border-slate-300 p-1.5 font-semibold">
+                    {exportTotal === null ? 'Non disponibile' : exportTotal >= 6 ? 'Media ≥ 6' : 'Media < 6'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
