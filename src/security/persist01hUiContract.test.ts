@@ -1,13 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 
 const appSource = await Bun.file('src/App.tsx').text();
+const udaSource = await Bun.file('src/components/UdaGanttView.tsx').text();
+const verificheSource = await Bun.file('src/components/VerificheOnlineView.tsx').text();
 
-function sectionBetween(start: string, end: string): string {
-  const startIndex = appSource.indexOf(start);
-  const endIndex = appSource.indexOf(end, startIndex + start.length);
+function sourceSection(source: string, start: string, end: string): string {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
   expect(startIndex).toBeGreaterThanOrEqual(0);
   expect(endIndex).toBeGreaterThan(startIndex);
-  return appSource.slice(startIndex, endIndex);
+  return source.slice(startIndex, endIndex);
+}
+
+function sectionBetween(start: string, end: string): string {
+  return sourceSection(appSource, start, end);
 }
 
 describe('PERSIST-01H App mutation boundary contract', () => {
@@ -90,5 +96,69 @@ describe('PERSIST-01H App mutation boundary contract', () => {
     expect(importSection).toContain('reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId)');
     expect(importSection).not.toContain('batchId: `online_${uid()}`');
     expect(importSection).not.toContain('void commitAppDataMutation');
+  });
+});
+
+describe('PERSIST-01H pending intent boundaries', () => {
+  test('UDA mutations share one immediate in-flight guard and preserve post-commit success sequencing', () => {
+    expect(udaSource).toContain("import React, { useRef, useState } from 'react';");
+    expect(udaSource).toContain('const [isSavingUda, setIsSavingUda] = useState(false);');
+    expect(udaSource).toContain('const udaSavePendingRef = useRef(false);');
+
+    const boundary = sourceSection(udaSource, 'const commitUdaViewMutation', '// Embedding configuration');
+    expect(boundary).toContain('if (udaSavePendingRef.current) return false;');
+    expect(boundary).toContain('udaSavePendingRef.current = true;');
+    expect(boundary).toContain('setIsSavingUda(true);');
+    expect(boundary).toContain('await onSaveUdas(nextUdas);');
+    expect(boundary).toContain('afterCommit?.();');
+    expect(boundary).toContain('finally');
+    expect(boundary).toContain('udaSavePendingRef.current = false;');
+    expect(boundary).toContain('setIsSavingUda(false);');
+
+    expect(udaSource.match(/commitUdaViewMutation\(/g)?.length ?? 0).toBeGreaterThan(6);
+  });
+
+  test('interactive manual and file-created tests share one save guard before IDs are generated', () => {
+    expect(verificheSource).toContain('const [isSavingTest, setIsSavingTest] = useState(false);');
+    expect(verificheSource).toContain('const testSavePendingRef = useRef(false);');
+    expect(verificheSource).toContain('const commitTestSaveIntent = async (buildTest: () => OnlineTest)');
+
+    const saveBoundary = sourceSection(verificheSource, 'const commitTestSaveIntent', '// Open interactive editor for new test');
+    expect(saveBoundary).toContain('if (testSavePendingRef.current) return null;');
+    expect(saveBoundary).toContain('testSavePendingRef.current = true;');
+    expect(saveBoundary).toContain('setIsSavingTest(true);');
+    expect(saveBoundary).toContain('const test = buildTest();');
+    expect(saveBoundary).toContain('await onSaveNewTest(test);');
+    expect(saveBoundary).toContain('finally');
+    expect(saveBoundary).toContain('testSavePendingRef.current = false;');
+    expect(saveBoundary).toContain('setIsSavingTest(false);');
+
+    const interactive = sourceSection(verificheSource, '// Save interactive test', '// Parse questions from DOCX/ZIP text');
+    expect(interactive).toContain('await commitTestSaveIntent(() =>');
+    expect(interactive.indexOf('await commitTestSaveIntent(() =>')).toBeLessThan(interactive.indexOf('uid()'));
+
+    const fileImport = sourceSection(verificheSource, 'const handleFileUpload', 'const handleSaveManualTest');
+    expect(fileImport).toContain('await commitTestSaveIntent(() =>');
+
+    const manual = sourceSection(verificheSource, 'const handleSaveManualTest', 'const copyPadletLink');
+    expect(manual).toContain('await commitTestSaveIntent(() =>');
+  });
+
+  test('teacher submission delete and register import are Promise-aware and share an in-flight guard', () => {
+    expect(verificheSource).toContain('onDeleteSubmission: (submissionId: string) => Promise<void>;');
+    expect(verificheSource).toContain('onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;');
+    expect(verificheSource).toContain('const [isSubmissionActionPending, setIsSubmissionActionPending] = useState(false);');
+    expect(verificheSource).toContain('const submissionActionPendingRef = useRef(false);');
+    expect(verificheSource).toContain('const commitSubmissionAction = async (action: () => Promise<void>)');
+
+    const actionBoundary = sourceSection(verificheSource, 'const commitSubmissionAction', '// Item analysis for selected test');
+    expect(actionBoundary).toContain('if (submissionActionPendingRef.current) return false;');
+    expect(actionBoundary).toContain('await action();');
+    expect(actionBoundary).toContain('finally');
+    expect(actionBoundary).toContain('submissionActionPendingRef.current = false;');
+
+    expect(verificheSource).toContain('disabled={isSubmissionActionPending}');
+    expect(verificheSource).toContain('await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId))');
+    expect(verificheSource).toContain('await commitSubmissionAction(() => onDeleteSubmission(sub.id))');
   });
 });
