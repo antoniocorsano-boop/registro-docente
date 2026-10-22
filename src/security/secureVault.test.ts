@@ -6,6 +6,7 @@ import type { EncryptedVaultRecord, VaultMetadataV1, VaultRecordKey } from './va
 class MemoryVaultStore implements VaultStore {
   private metadata: VaultMetadataV1 | null = null;
   private readonly records = new Map<VaultRecordKey, EncryptedVaultRecord>();
+  putRecordsCalls = 0;
 
   async getMetadata(): Promise<VaultMetadataV1 | null> {
     return this.metadata;
@@ -21,6 +22,13 @@ class MemoryVaultStore implements VaultStore {
 
   async putRecord(record: EncryptedVaultRecord): Promise<void> {
     this.records.set(record.recordKey as VaultRecordKey, record);
+  }
+
+  async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    this.putRecordsCalls += 1;
+    records.forEach(record => {
+      this.records.set(record.recordKey as VaultRecordKey, record);
+    });
   }
 
   async deleteRecord(key: VaultRecordKey): Promise<void> {
@@ -44,17 +52,38 @@ class BlockingVaultStore extends MemoryVaultStore {
   readonly firstEntered = new Promise<void>(resolve => { this.firstEnteredResolve = resolve; });
   private readonly releaseFirst = new Promise<void>(resolve => { this.releaseFirstResolve = resolve; });
 
-  override async putRecord(record: EncryptedVaultRecord): Promise<void> {
+  private async blockFirstWrite(): Promise<void> {
     this.putCalls += 1;
     if (this.putCalls === 1) {
       this.firstEnteredResolve();
       await this.releaseFirst;
     }
+  }
+
+  override async putRecord(record: EncryptedVaultRecord): Promise<void> {
+    await this.blockFirstWrite();
     await super.putRecord(record);
+  }
+
+  override async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    await this.blockFirstWrite();
+    await super.putRecords(records);
   }
 
   release(): void {
     this.releaseFirstResolve();
+  }
+}
+
+class RejectOnceBatchStore extends MemoryVaultStore {
+  private rejectNext = true;
+
+  override async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    if (this.rejectNext) {
+      this.rejectNext = false;
+      throw new Error('forced batch failure');
+    }
+    await super.putRecords(records);
   }
 }
 
@@ -98,6 +127,15 @@ describe('SEC-1 vault storage boundary', () => {
 
     await store.clearAll();
     expect(await store.getMetadata()).toBeNull();
+  });
+
+  test('pins one IndexedDB transaction for a logical record batch', async () => {
+    const source = await Bun.file('src/security/vaultStore.ts').text();
+
+    expect(source).toContain('putRecords(records: EncryptedVaultRecord[])');
+    expect(source).toContain("db.transaction(RECORDS_STORE, 'readwrite')");
+    expect(source).toContain('return this.putRecords([record])');
+    expect(source).not.toContain('for (const record of records) {\n      await this.putRecord(record)');
   });
 });
 
@@ -155,7 +193,51 @@ describe('SEC-1 SecureVault lifecycle', () => {
     await expect(vault.get<{ theme: string }>('settings')).resolves.toEqual({ theme: 'cyan' });
   });
 
+  test('writes a logical batch through one store batch call', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
 
+    await vault.putMany([
+      { key: 'appData', value: { classes: [], currentClassId: null } },
+      { key: 'meta', value: { changes: 1, lastBackup: null } }
+    ]);
+
+    expect(store.putRecordsCalls).toBe(1);
+    await expect(vault.get('appData')).resolves.toEqual({ classes: [], currentClassId: null });
+    await expect(vault.get('meta')).resolves.toEqual({ changes: 1, lastBackup: null });
+
+    await vault.put('settings', { theme: 'cyan' });
+    await expect(vault.get('settings')).resolves.toEqual({ theme: 'cyan' });
+  });
+
+  test('does not call putRecords when one entry cannot be encrypted', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+
+    await expect(vault.putMany([
+      { key: 'appData', value: { ok: true } },
+      { key: 'meta', value: { invalid: BigInt(1) } }
+    ])).rejects.toThrow();
+
+    expect(store.putRecordsCalls).toBe(0);
+    await expect(vault.get('appData')).resolves.toBeNull();
+  });
+
+  test('a rejected batch does not poison a later vault mutation', async () => {
+    const store = new RejectOnceBatchStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+
+    await expect(vault.putMany([
+      { key: 'appData', value: { first: true } },
+      { key: 'meta', value: { changes: 1, lastBackup: null } }
+    ])).rejects.toThrow('forced batch failure');
+
+    await vault.put('meta', { changes: 2, lastBackup: null });
+    await expect(vault.get('meta')).resolves.toEqual({ changes: 2, lastBackup: null });
+  });
 
   test('serializes record mutations so a later save cannot be overwritten by an earlier slow save', async () => {
     const store = new BlockingVaultStore();
