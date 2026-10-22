@@ -37,6 +37,9 @@ import type {
 import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
+import { incrementBackupChanges } from './persistence/backupCheckpoint';
+import { applySettingsPatch } from './persistence/settingsMutation';
+import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -186,7 +189,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         };
         return {
           appData: derive(navigationAwareAppData),
-          meta: { ...current.meta, changes: (current.meta.changes || 0) + 1 }
+          meta: incrementBackupChanges(current.meta)
         };
       },
       persist: candidate => secureStorage.saveAppDataAndMeta(candidate.appData, candidate.meta),
@@ -235,17 +238,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   }, [mutationCoordinator, secureStorage]);
 
-  const commitSettingsMutation = useCallback((candidate: AppSettings): Promise<AppSettings> => {
-    return mutationCoordinator.enqueue<AppSettings>({
-      getCommitted: () => settingsRef.current,
-      derive: () => candidate,
-      persist: next => secureStorage.saveSettings(next),
-      publish: next => {
-        settingsRef.current = next;
-        setSettings(next);
+  const commitSettingsMutation = useCallback((patch: Partial<AppSettings>): Promise<AppSettings> => {
+    return mutationCoordinator.enqueue<{ settings: AppSettings; meta: SecureMeta }>({
+      getCommitted: () => ({ settings: settingsRef.current, meta: metaRef.current }),
+      derive: current => ({
+        settings: applySettingsPatch(current.settings, patch),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveSettingsAndMeta(candidate.settings, candidate.meta),
+      publish: candidate => {
+        settingsRef.current = candidate.settings;
+        metaRef.current = candidate.meta;
+        setSettings(candidate.settings);
+        setMeta(candidate.meta);
       },
       afterCommit: () => toast('Impostazioni aggiornate')
-    }).catch(error => {
+    }).then(candidate => candidate.settings).catch(error => {
       console.error('Secure settings save failed', error);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
       throw error;
@@ -253,16 +261,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }, [mutationCoordinator, secureStorage, toast]);
 
   const commitUdasMutation = useCallback((derive: (current: UdaRecord[]) => UdaRecord[]): Promise<UdaRecord[]> => {
-    return mutationCoordinator.enqueue<UdaRecord[]>({
-      getCommitted: () => udasRef.current,
-      derive,
-      persist: next => secureStorage.saveUdas(next),
-      publish: next => {
-        udasRef.current = next;
-        setUdas(next);
+    return mutationCoordinator.enqueue<{ udas: UdaRecord[]; meta: SecureMeta }>({
+      getCommitted: () => ({ udas: udasRef.current, meta: metaRef.current }),
+      derive: current => ({
+        udas: derive(current.udas),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveUdasAndMeta(candidate.udas, candidate.meta),
+      publish: candidate => {
+        udasRef.current = candidate.udas;
+        metaRef.current = candidate.meta;
+        setUdas(candidate.udas);
+        setMeta(candidate.meta);
       },
       afterCommit: () => toast('UDA salvate')
-    }).catch(error => {
+    }).then(candidate => candidate.udas).catch(error => {
       console.error('Secure UDA save failed', error);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
       throw error;
@@ -272,16 +285,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const commitTestsMutation = useCallback((
     derive: (current: Record<string, OnlineTest>) => Record<string, OnlineTest>
   ): Promise<Record<string, OnlineTest>> => {
-    return mutationCoordinator.enqueue<Record<string, OnlineTest>>({
-      getCommitted: () => testsRef.current,
-      derive,
-      persist: candidate => secureStorage.saveCustomTests(candidate),
+    return mutationCoordinator.enqueue<{ tests: Record<string, OnlineTest>; meta: SecureMeta }>({
+      getCommitted: () => ({ tests: testsRef.current, meta: metaRef.current }),
+      derive: current => ({
+        tests: derive(current.tests),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveCustomTestsAndMeta(candidate.tests, candidate.meta),
       publish: candidate => {
-        testsRef.current = candidate;
-        setTests(candidate);
+        testsRef.current = candidate.tests;
+        metaRef.current = candidate.meta;
+        setTests(candidate.tests);
+        setMeta(candidate.meta);
       },
       afterCommit: () => toast('Test salvato')
-    }).catch(error => {
+    }).then(candidate => candidate.tests).catch(error => {
       console.error('Secure test save failed', error);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
       throw error;
@@ -293,18 +311,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     options: { successMessage?: string; showFailureAlert?: boolean } = {}
   ): Promise<OnlineSubmission[]> => {
     const { successMessage, showFailureAlert = true } = options;
-    return mutationCoordinator.enqueue<OnlineSubmission[]>({
-      getCommitted: () => submissionsRef.current,
-      derive,
-      persist: candidate => secureStorage.saveSubmissions(candidate),
+    return mutationCoordinator.enqueue<{ submissions: OnlineSubmission[]; meta: SecureMeta }>({
+      getCommitted: () => ({ submissions: submissionsRef.current, meta: metaRef.current }),
+      derive: current => ({
+        submissions: derive(current.submissions),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveSubmissionsAndMeta(candidate.submissions, candidate.meta),
       publish: candidate => {
-        submissionsRef.current = candidate;
-        setSubmissions(candidate);
+        submissionsRef.current = candidate.submissions;
+        metaRef.current = candidate.meta;
+        setSubmissions(candidate.submissions);
+        setMeta(candidate.meta);
       },
       afterCommit: () => {
         if (successMessage) toast(successMessage);
       }
-    }).catch(error => {
+    }).then(candidate => candidate.submissions).catch(error => {
       console.error('Secure submission save failed', error);
       if (showFailureAlert) alert(DURABLE_SAVE_FAILURE_MESSAGE);
       throw error;
@@ -377,9 +400,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Add new class
-  const handleAddClass = () => {
+  const handleAddClass = (): Promise<void> => {
     const name = prompt('Inserisci la denominazione della nuova classe (es. 2ª B):');
-    if (!name || !name.trim()) return;
+    if (!name || !name.trim()) return Promise.resolve();
 
     const newClass: ClassData = {
       id: uid(),
@@ -390,7 +413,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     };
     const navigationVersionAtSave = navigationVersionRef.current;
 
-    void commitAppDataMutation(current => ({
+    return commitAppDataMutation(current => ({
       ...current,
       classes: [...current.classes, newClass],
       currentClassId: newClass.id
@@ -403,19 +426,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           setActiveTab('dati');
         }
       }
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Delete class
-  const handleDeleteClass = (classId: string) => {
-    void commitAppDataMutation(current => ({
+  const handleDeleteClass = (classId: string): Promise<void> => {
+    return commitAppDataMutation(current => ({
       ...current,
       classes: current.classes.filter(c => c.id !== classId),
       currentClassId: current.currentClassId === classId ? null : current.currentClassId
     }), {
       showBackupModal: false,
       successMessage: 'Classe eliminata'
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Save evaluations batch (add new or update existing)
@@ -427,9 +450,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     title: string;
     udaId?: string;
     grades: { studentId: string; value: string; delayed: boolean }[];
-  }) => {
+  }): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
@@ -445,7 +468,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       udaId: batchData.udaId
     }));
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const remainingGrades = (targetClass.grades || []).filter(g => g.batchId !== batchData.batchId);
@@ -464,17 +487,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           setActiveTab('storico');
         }
       }
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Save behavior notes
-  const handleSaveBehaviors = (newRecords: any[]) => {
+  const handleSaveBehaviors = (newRecords: any[]): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
     const dateStr = newRecords[0]?.date || today();
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const remaining = (targetClass.behaviors || []).filter(b => b.date !== dateStr);
@@ -492,7 +515,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           setActiveTab('dashboard');
         }
       }
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Edit batch
@@ -503,11 +526,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Delete batch
-  const handleDeleteBatch = (batchId: string) => {
+  const handleDeleteBatch = (batchId: string): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const updatedClass: ClassData = {
@@ -521,16 +544,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }, {
       showBackupModal: false,
       successMessage: 'Valutazione eliminata'
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Add single student
-  const handleAddStudent = (name: string) => {
+  const handleAddStudent = (name: string): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
     const newStudent: Student = { id: uid(), name };
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const updatedClass: ClassData = {
@@ -544,15 +567,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }, {
       showBackupModal: false,
       successMessage: 'Alunno inserito'
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Remove single student
-  const handleRemoveStudent = (studentId: string) => {
+  const handleRemoveStudent = (studentId: string): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const updatedClass: ClassData = {
@@ -568,15 +591,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }, {
       showBackupModal: false,
       successMessage: 'Alunno rimosso'
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Bulk add students from Excel
-  const handleBulkAddStudents = (newStudents: Student[]) => {
+  const handleBulkAddStudents = (newStudents: Student[]): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const updatedClass: ClassData = {
@@ -589,15 +612,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       };
     }, {
       successMessage: 'Alunni importati'
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Invert student names (Cognome Nome <-> Nome Cognome)
-  const handleInvertNames = () => {
+  const handleInvertNames = (): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return;
+    if (!classId) return Promise.resolve();
 
-    void commitAppDataMutation(current => {
+    return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
       const inverted = targetClass.students.map(s => {
@@ -621,7 +644,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }, {
       showBackupModal: false,
       successMessage: 'Nomi invertiti'
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Save new test
@@ -633,11 +656,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Delete submission
-  const handleDeleteSubmission = (submissionId: string) => {
-    void commitSubmissionsMutation(
+  const handleDeleteSubmission = (submissionId: string): Promise<void> => {
+    return commitSubmissionsMutation(
       current => current.filter(s => s.id !== submissionId),
       { successMessage: 'Consegna eliminata' }
-    ).catch(() => undefined);
+    ).then(() => undefined);
   };
 
   const handleSaveStudentSubmission = useCallback(async (submission: OnlineSubmission) => {
@@ -651,61 +674,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }, [commitSubmissionsMutation]);
 
   // Import submissions into class grades
-  const handleImportSubmissionsToRegister = (targetUdaId?: string) => {
+  const handleImportSubmissionsToRegister = (targetUdaId?: string): Promise<void> => {
     if (submissionsRef.current.length === 0) {
       alert('Nessuna consegna online ricevuta da importare.');
-      return;
+      return Promise.resolve();
     }
 
     let importedCount = 0;
 
-    void commitAppDataMutation(current => {
-      const submissionSnapshot = submissionsRef.current;
-      importedCount = 0;
-      const updatedClasses = current.classes.map(cls => {
-        const clsGrades = [...(cls.grades || [])];
-
-        submissionSnapshot.forEach(sub => {
-          if (cls.name.toLowerCase().includes(sub.class.toLowerCase()) || sub.class.toLowerCase().includes(cls.name.toLowerCase())) {
-            const matchStudent = cls.students.find(st =>
-              st.name.toLowerCase().trim() === sub.name.toLowerCase().trim() ||
-              st.name.toLowerCase().includes(sub.name.toLowerCase()) ||
-              sub.name.toLowerCase().includes(st.name.toLowerCase())
-            );
-
-            if (matchStudent) {
-              const grade10 = sub.total > 0 ? Math.round((sub.score / sub.total) * 10 * 10) / 10 : 0;
-              clsGrades.push({
-                id: uid(),
-                batchId: `online_${uid()}`,
-                studentId: matchStudent.id,
-                date: sub.date.slice(0, 10),
-                type: 'test',
-                period: 'Q1',
-                title: `Flashcard: ${sub.testTitle}`,
-                value: String(grade10),
-                udaId: targetUdaId || sub.testId
-              });
-              importedCount++;
-            }
-          }
-        });
-
-        return {
-          ...cls,
-          grades: clsGrades
-        };
-      });
-
+    return commitAppDataMutation(current => {
+      const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId);
+      importedCount = result.importedCount;
       return {
         ...current,
-        classes: updatedClasses
+        classes: result.classes
       };
     }, {
       afterCommit: () => {
         alert(`Importazione completata con successo! ${importedCount} valutazioni sono state registrate negli elenchi di classe.`);
       }
-    }).catch(() => undefined);
+    }).then(() => undefined);
   };
 
   // Save UDAs
@@ -715,8 +703,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Save Settings
-  const handleUpdateSettings = (newSettings: AppSettings) => {
-    void commitSettingsMutation(newSettings).catch(() => undefined);
+  const handleUpdateSettings = (patch: Partial<AppSettings>): Promise<void> => {
+    return commitSettingsMutation(patch).then(() => undefined);
   };
 
   // Backup actions are routed to the protected Privacy area.
