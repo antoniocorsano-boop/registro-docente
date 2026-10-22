@@ -3,7 +3,7 @@
 **Date:** 2026-10-22  
 **Repository:** `antoniocorsano-boop/registro-docente`  
 **Baseline:** `main@8afb734a184403f03153d493e1ea677f6d1e5abb`  
-**Status:** DESIGN APPROVED / IMPLEMENTATION PLAN PENDING  
+**Status:** APPROACH APPROVED / WRITTEN SPEC PENDING USER REVIEW  
 **Selected approach:** commit-first centralized mutation coordination + atomic multi-record IndexedDB writes
 
 ## 1. Purpose
@@ -154,12 +154,12 @@ The coordinator must serialize user mutations in FIFO order so two rapid operati
 
 A mutation follows this sequence:
 
-1. read the latest committed in-memory state needed by that domain;
-2. derive the candidate next state;
+1. when the mutation reaches the head of the queue, read the latest committed in-memory state needed by that domain;
+2. derive the candidate next state from that current committed state;
 3. persist the candidate through `SecureAppStorage`;
-4. after persistence succeeds, publish the new React state;
+4. after persistence succeeds, publish the new committed state to React;
 5. execute post-commit navigation/toast behavior;
-6. on failure, keep the previous React state and expose a teacher-facing failure.
+6. on failure, keep the previous committed state and expose a teacher-facing failure.
 
 ### 6.2 Location and API
 
@@ -169,11 +169,21 @@ Expected location:
 
 `src/persistence/durableMutationCoordinator.ts`
 
-The module should expose a minimal FIFO helper that accepts an async mutation closure and guarantees that a rejected operation does not poison later operations.
+The module should expose a minimal FIFO helper that accepts an async mutation operation and guarantees that a rejected operation does not poison later operations.
+
+The coordinator must invoke the mutation operation only when that operation reaches the head of the queue. Callers must not enqueue a precomputed candidate state.
 
 It must not import React. `App.tsx` remains responsible for state setters and domain-specific state derivation.
 
-### 6.3 Commit-first versus optimistic UI
+### 6.3 Latest-committed-state rule
+
+Queued operations must not derive candidates from ordinary render closures captured when the user clicked.
+
+`App.tsx` must maintain current committed references for each governed domain, synchronized only after a successful commit. A queued mutation reads those references at execution time, derives its candidate, persists it, then advances both the committed reference and the corresponding React state.
+
+This is required for the FIFO guarantee. Without it, two queued operations could still serialize correctly but both derive from the same stale render snapshot.
+
+### 6.4 Commit-first versus optimistic UI
 
 PERSIST-01 uses **commit-first** semantics for the governed writes.
 
@@ -192,15 +202,17 @@ Optimistic updates with rollback are therefore not the default PERSIST-01 mechan
 
 Class/student/evaluation/behavior mutations use one atomic `saveAppDataAndMeta` commit.
 
-React `appData` and `meta` must be updated only after that commit succeeds.
+React `appData` and `meta` must be updated only after that commit succeeds. Their committed references advance in the same post-commit step.
 
 Any navigation that semantically depends on save success — for example leaving an edit screen after saving an evaluation — must execute after commit success.
 
 ### 7.2 Settings
 
-The candidate settings are sanitized by the existing `SecureAppStorage.saveSettings` boundary. React settings update only after the persisted sanitized operation succeeds.
+`saveSettings` continues to apply the existing persistence sanitization policy, including removal of secrets that are intentionally session-only.
 
-The current theme must not visually switch and then silently revert because of a failed save. A failed settings commit leaves the previous committed settings active.
+The logical candidate settings are published to React only after the sanitized persistence operation succeeds. React state is not required to be byte-for-byte identical to the stored settings record: session-only secret fields may remain in memory while being deliberately absent from persistent storage.
+
+The current theme must not visually switch and then silently revert because of a failed save. A failed settings commit leaves the previous committed logical settings active.
 
 ### 7.3 UDA
 
@@ -234,7 +246,7 @@ Example:
 
 If operation A fails:
 
-- A does not update React state;
+- A does not update committed references or React state;
 - the queue continues;
 - operation B executes against the latest actually committed state;
 - B is not automatically discarded merely because A failed.
@@ -265,9 +277,9 @@ PERSIST-01 does not introduce a persistent error banner or retry queue UI. A sub
 
 The implementation is acceptable only if all of the following hold:
 
-1. **Committed-state invariant** — visible committed React state equals the latest successfully persisted domain state.
+1. **Committed-state invariant** — teacher-visible committed React state corresponds to the latest successfully accepted logical domain state; policy-sanitized persisted fields may differ only where existing security rules intentionally keep data session-only.
 2. **Atomic-pair invariant** — `appData` and `meta` either both change or neither changes.
-3. **Ordering invariant** — governed mutations commit in FIFO order.
+3. **Ordering invariant** — governed mutations commit in FIFO order and derive their candidate from the latest committed state at execution time.
 4. **Failure-isolation invariant** — one failed mutation does not poison later mutations.
 5. **No false-success invariant** — no success toast or post-save navigation occurs before persistence succeeds.
 6. **Vault-format invariant** — existing record keys, encrypted record schema and crypto primitives remain unchanged.
@@ -285,19 +297,20 @@ Add tests that prove the current implementation lacks required atomicity and the
 - multi-record store write commits all records in one transaction;
 - a forced failure during the multi-record transaction leaves all prior records unchanged;
 - `SecureVault.putMany` encrypts all entries before persistence;
-- one rejected batch does not poison the mutation queue.
+- one rejected batch does not poison the Vault mutation queue.
 
 ### 11.2 Application RED contracts
 
 Add focused tests for the application mutation boundary:
 
-- failed `appData + meta` commit does not advance visible state;
+- failed `appData + meta` commit does not advance committed references or visible state;
 - successful commit advances both states together;
-- two rapid mutations execute in FIFO order and the second derives from the first committed result;
+- two rapid mutations execute in FIFO order and the second derives from the first committed result rather than a stale render closure;
 - failed mutation followed by valid mutation leaves the app on the valid committed result;
 - failed save does not emit normal success messaging;
 - post-save navigation occurs only after durable success;
-- settings, UDA, custom tests and submission delete do not publish failed candidates.
+- settings, UDA, custom tests and submission delete do not publish failed candidates;
+- successful settings persistence permits the existing intentional difference between session-only in-memory secrets and sanitized stored settings.
 
 ### 11.3 Regression suite
 
@@ -328,7 +341,7 @@ Expected files, subject to the implementation plan:
 - `src/security/secureVault.ts` — serialized `putMany`;
 - `src/security/secureAppStorage.ts` — atomic domain commit for `appData + meta`;
 - `src/persistence/durableMutationCoordinator.ts` — application FIFO coordinator;
-- `src/App.tsx` — route governed mutations through commit-first semantics;
+- `src/App.tsx` — maintain latest committed references and route governed mutations through commit-first semantics;
 - focused new or extended tests under `src/security/`.
 
 No component redesign is expected.
@@ -372,7 +385,8 @@ PERSIST-01 is engineering-qualified when:
 - all eight invariants are covered by tests or direct evidence;
 - atomic `appData + meta` persistence is proven;
 - all governed React mutation paths are commit-first;
-- FIFO and failure isolation are proven;
+- FIFO and latest-committed-state derivation are proven;
+- failure isolation is proven;
 - no false success/navigation remains on persistence failure;
 - full PREDEPLOY is PASS on the exact head;
 - independent final review is PASS with zero unresolved significant findings;
