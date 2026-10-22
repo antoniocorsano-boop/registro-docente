@@ -114,7 +114,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
   const suffRate = validAvgs.length > 0
     ? Math.round((validAvgs.filter(v => v >= 6.0).length / validAvgs.length) * 100)
-    : 0;
+    : null;
 
   // Level counts based on active calculation
   const levelCounts: Record<string, number> = { AV: 0, IN: 0, BA: 0, PA: 0 };
@@ -124,7 +124,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     }
   });
 
-  const totalAssessedStudents = validAvgs.length || 1;
 
   // Official PDF export using html2pdf
   const handleExportPDF = async () => {
@@ -264,11 +263,17 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
 
           <div className="p-3 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
-            <b className={`text-2xl font-bold block ${suffRate >= 60 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {suffRate}%
+            <b className={`text-2xl font-bold block ${
+              suffRate === null
+                ? 'text-slate-500'
+                : suffRate >= 60
+                  ? 'text-emerald-400'
+                  : 'text-rose-400'
+            }`}>
+              {suffRate === null ? '—' : `${suffRate}%`}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Tasso Sufficienza ({validAvgs.filter(v => v >= 6.0).length}/{validAvgs.length})
+              {suffRate === null ? 'Nessun dato' : `Tasso Sufficienza (${validAvgs.filter(v => v >= 6.0).length}/${validAvgs.length})`}
             </span>
           </div>
 
@@ -301,37 +306,43 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </h4>
 
           <div className="space-y-3">
-            {LEVELS.map(lvl => {
-              const count = levelCounts[lvl.id] || 0;
-              const pct = Math.round((count / totalAssessedStudents) * 100);
+            {validAvgs.length === 0 ? (
+              <div className="p-4 rounded-lg bg-slate-900/50 border border-slate-800 text-center text-xs text-slate-500">
+                Nessun dato disponibile per la distribuzione dei livelli.
+              </div>
+            ) : (
+              LEVELS.map(lvl => {
+                const count = levelCounts[lvl.id] || 0;
+                const pct = Math.round((count / validAvgs.length) * 100);
 
-              return (
-                <div key={lvl.id} className="space-y-1">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-semibold text-slate-200 flex items-center gap-2">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full inline-block"
-                        style={{ backgroundColor: lvl.color }}
+                return (
+                  <div key={lvl.id} className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-slate-200 flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full inline-block"
+                          style={{ backgroundColor: lvl.color }}
+                        />
+                        {lvl.label}
+                      </span>
+                      <span className="text-slate-400 font-mono">
+                        <b>{count}</b> alunni ({pct}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700/60 flex">
+                      <div
+                        className="h-full transition-all duration-500 rounded-full"
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: lvl.color,
+                          boxShadow: `0 0 10px ${lvl.color}66`
+                        }}
                       />
-                      {lvl.label}
-                    </span>
-                    <span className="text-slate-400 font-mono">
-                      <b>{count}</b> alunni ({pct}%)
-                    </span>
+                    </div>
                   </div>
-                  <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700/60 flex">
-                    <div
-                      className="h-full transition-all duration-500 rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        backgroundColor: lvl.color,
-                        boxShadow: `0 0 10px ${lvl.color}66`
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -491,9 +502,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       </td>
 
                       <td className="p-2.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
-                          {m.isAtRisk ? 'A Rischio (PA)' : 'Regolare'}
-                        </span>
+                        {displayTotal === null ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">
+                            Non disponibile
+                          </span>
+                        ) : (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
+                            {m.isAtRisk ? 'A Rischio (PA)' : 'Regolare'}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -551,7 +568,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <td className="border border-slate-300 p-1.5 text-slate-600">{formatGrade(m.totalSimpleAvg)}</td>
                 <td className="border border-slate-300 p-1.5">{m.level?.label || '–'}</td>
                 <td className="border border-slate-300 p-1.5 font-semibold">
-                  {m.totalWeightedAvg !== null && m.totalWeightedAvg >= 6 ? 'Idoneo' : 'A Rischio'}
+                  {m.totalWeightedAvg === null ? 'Non disponibile' : m.totalWeightedAvg >= 6 ? 'Idoneo' : 'A Rischio'}
                 </td>
               </tr>
             ))}
