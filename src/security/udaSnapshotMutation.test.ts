@@ -60,6 +60,32 @@ describe('PERSIST-01 UDA snapshot mutation intent', () => {
     expect(result).toEqual([{ ...b, title: 'B1', dependencies: [] }]);
   });
 
+  test('two dependency removals from the same stale UDA snapshot both survive FIFO application', () => {
+    const item = uda('u', 'U', ['a', 'b']);
+    const base = [item];
+
+    const removeA = createUdaSnapshotMutation(base, [{ ...item, dependencies: ['b'] }]);
+    const removeB = createUdaSnapshotMutation(base, [{ ...item, dependencies: ['a'] }]);
+
+    const result = removeB(removeA(base));
+
+    expect(result[0].dependencies).toEqual([]);
+  });
+
+  test('two lesson removals from the same stale UDA snapshot both survive FIFO application', () => {
+    const lessonA = { id: 'la', date: '2026-10-01', topic: 'A', hours: 1 };
+    const lessonB = { id: 'lb', date: '2026-10-02', topic: 'B', hours: 1 };
+    const item: UdaRecord = { ...uda('u'), lessons: [lessonA, lessonB] };
+    const base = [item];
+
+    const removeA = createUdaSnapshotMutation(base, [{ ...item, lessons: [lessonB] }]);
+    const removeB = createUdaSnapshotMutation(base, [{ ...item, lessons: [lessonA] }]);
+
+    const result = removeB(removeA(base));
+
+    expect(result[0].lessons).toEqual([]);
+  });
+
   test('App converts UDA snapshots into execution-time mutations', async () => {
     const source = await Bun.file('src/App.tsx').text();
 
