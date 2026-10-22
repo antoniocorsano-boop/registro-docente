@@ -1,0 +1,90 @@
+name: P2 Density Apply
+
+on:
+  push:
+    branches:
+      - feat/p2-density-01-progressive-disclosure
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore(p2-density-01): apply approved bounded change'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/p2-density-01-progressive-disclosure
+          fetch-depth: 0
+
+      - name: Apply bounded progressive disclosure
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          analytics_path = Path('src/components/AnalyticsView.tsx')
+          analytics = analytics_path.read_text()
+          assert 'Approfondimenti analitici' not in analytics
+
+          dist_marker = '        {/* Competence Levels Chart / Progress Distribution */}'
+          timeline_marker = '      {/* Recharts Timeline Graph Segmented by Evaluation Type */}'
+          official_marker = '      {/* Official Export Card */}'
+          dist_start = analytics.index(dist_marker)
+          timeline_start = analytics.index(timeline_marker, dist_start)
+          official_start = analytics.index(official_marker, timeline_start)
+          header_close_start = analytics.rfind('      </div>\n\n', dist_start, timeline_start)
+          assert header_close_start > dist_start
+
+          distribution = analytics[dist_start:header_close_start]
+          secondary_charts = analytics[timeline_start:official_start]
+          analytics_disclosure = '''      </div>\n\n      <details className="group neon-card overflow-hidden">\n        <summary className="min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">\n          <div>\n            <h3 className="text-sm font-bold text-white flex items-center gap-2">\n              <BarChart3 className="w-4 h-4 text-[var(--primary)]" /> Approfondimenti analitici\n            </h3>\n            <p className="text-xs text-slate-400 mt-0.5">Fasce, andamento temporale e confronto con la classe.</p>\n          </div>\n          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>\n        </summary>\n        <div className="space-y-4 border-t border-[var(--border)] p-4">\n''' + distribution + secondary_charts + '''        </div>\n      </details>\n\n'''
+          analytics = analytics[:dist_start] + analytics_disclosure + analytics[official_start:]
+          analytics_path.write_text(analytics)
+
+          report_path = Path('src/components/StudentReportView.tsx')
+          report = report_path.read_text()
+          assert '<details' not in report
+
+          radar_marker = '      {/* ============================================================== */}\n      {/* GRAFICO A RAGGIO (RADAR CHART): RAGGIUNGIMENTO LIVELLI DI COMPETENZA */}'
+          uda_marker = '      {/* ============================================================== */}\n      {/* SEZIONE: CONTRIBUTO DELLO STUDENTE NELLE SINGOLE UDA */}'
+          grades_marker = '      {/* Breakdown Grades Table */}'
+          behaviors_marker = '      {/* Student Behavior Notes */}'
+          root_close = '    </div>\n  );\n};'
+
+          radar_start = report.index(radar_marker)
+          uda_start = report.index(uda_marker, radar_start)
+          grades_start = report.index(grades_marker, uda_start)
+          behaviors_start = report.index(behaviors_marker, grades_start)
+          root_close_start = report.rfind(root_close)
+          assert radar_start < uda_start < grades_start < behaviors_start < root_close_start
+
+          prefix = report[:radar_start]
+          radar = report[radar_start:uda_start]
+          uda = report[uda_start:grades_start]
+          grades = report[grades_start:behaviors_start]
+          behaviors = report[behaviors_start:root_close_start]
+          suffix = report[root_close_start:]
+
+          def disclosure(label: str, meta: str, body: str) -> str:
+              return f'''      <details className="group">\n        <summary className="neon-card min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">\n          <div>\n            <h3 className="text-sm font-bold text-white">{label}</h3>\n            <p className="text-xs text-slate-400 mt-0.5">{meta}</p>\n          </div>\n          <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>\n        </summary>\n        <div className="pt-3">\n{body}        </div>\n      </details>\n\n'''
+
+          report = (
+              prefix
+              + disclosure('Profilo interno di evidenze', 'Grafico radar e sintesi diagnostica · disponibile con evidenze sufficienti', radar)
+              + disclosure('Dossier UDA', f'{{studentUdaDossier.length}} UDA collegate alla classe', uda)
+              + disclosure('Elenco valutazioni', f'{{grades.length}} valutazioni registrate', grades)
+              + disclosure('Comportamenti e partecipazione', f'{{studentBehaviors.length}} registrazioni', behaviors)
+              + suffix
+          )
+          report_path.write_text(report)
+          PY
+
+      - name: Commit bounded change and remove executor
+        run: |
+          rm .github/workflows/p2-density-apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/AnalyticsView.tsx src/components/StudentReportView.tsx .github/workflows/p2-density-apply.yml
+          git commit -m "feat(p2-density-01): add progressive disclosure"
+          git push origin HEAD:feat/p2-density-01-progressive-disclosure
