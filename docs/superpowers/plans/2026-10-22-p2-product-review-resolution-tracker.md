@@ -3,15 +3,15 @@
 **Date:** 2026-10-22  
 **Repository:** `antoniocorsano-boop/registro-docente`  
 **Original reviewed baseline:** `main@99ebb78e4bc994eaaf0e234c2f7c6ad213387919`  
-**Current integrated main:** `ded4fca0960ad24072e106b51f8b549de3e58812`  
+**Current integrated main:** `8afb734a184403f03153d493e1ea677f6d1e5abb`  
 **Review mode:** product audit + bounded TDD remediation + exact-head qualification + real-browser verification where relevant  
-**Status:** `P2-PRODUCT-REVIEW = COMPLETE / ALL TRACKED FINDINGS CLOSED`
+**Status:** `P2-PRODUCT-REVIEW = COMPLETE / ALL FINDINGS CLOSED / CLOSURE DOCUMENT MERGED / POST-MERGE QUALIFIED`
 
 ## Purpose
 
-This document is the canonical closure record for the P2 product review started on 2026-10-22. It preserves the original findings, maps each one to the bounded remediation that closed it, records the final cross-cutting closure residue, and pins the final integrated baseline.
+This document is the canonical closure record for the P2 product review started on 2026-10-22. It preserves the original findings, maps each one to the bounded remediation that closed it, records the final cross-cutting closure residue, and pins the final integrated baseline including the separately merged closure document.
 
-The program deliberately avoided a broad redesign. Each finding was resolved through a bounded change with its own test/evidence path, review gate and merge decision. The final PR #16 closed only residual teacher-facing vocabulary/runtime-label issues discovered during closure review. No deploy was required to close this review program.
+The program deliberately avoided a broad redesign. Each finding was resolved through a bounded change with its own test/evidence path, review gate and merge decision. PR #16 closed only residual teacher-facing vocabulary/runtime-label issues discovered during closure review. PR #15 then materialized this closure record from the integrated product baseline and was independently qualified before merge. No deploy was required to close this review program.
 
 ## Final findings tracker
 
@@ -42,6 +42,9 @@ The program deliberately avoided a broad redesign. Each finding was resolved thr
 
 6. **P2-CLOSURE-RESIDUE — bounded closure remediation** — PR #16  
    Qualified head: `62a14dc56f5dbad1c27c662f629262e7d190c8e9`; merge commit: `ded4fca0960ad24072e106b51f8b549de3e58812`.
+
+7. **P2-PRODUCT-REVIEW — final closure document** — PR #15  
+   Qualified documentation head: `83758ffb7ce9dc41155bf02e6d371f028a7dee91`; merge commit: `8afb734a184403f03153d493e1ea677f6d1e5abb`.
 
 ## Closure evidence by front
 
@@ -97,9 +100,20 @@ The program deliberately avoided a broad redesign. Each finding was resolved thr
 - merge commit: `ded4fca0960ad24072e106b51f8b549de3e58812`;
 - post-merge PREDEPLOY #87 / run `39776704600`: PASS on `main@ded4fca0960ad24072e106b51f8b549de3e58812`; typecheck, security tests, build and production-startup smoke all PASS.
 
+### P2-CLOSURE-DOCUMENT
+
+- documentation-only head: `83758ffb7ce9dc41155bf02e6d371f028a7dee91`;
+- PREDEPLOY #88 / run `39777020744`: PASS on the exact head;
+- Codex final review on the same head: completed, 0 findings / 0 unresolved findings;
+- review threads: all resolved;
+- merge commit: `8afb734a184403f03153d493e1ea677f6d1e5abb`;
+- post-merge PREDEPLOY #89 / run `39777649346`: PASS on `main@8afb734a184403f03153d493e1ea677f6d1e5abb`;
+- typecheck, security tests, build and production-startup smoke: PASS;
+- no deploy performed.
+
 ## Final product assessment
 
-The five tracked P2 findings, including the closure residues mapped back to P2-02 and P2-04, are closed on `main@ded4fca0960ad24072e106b51f8b549de3e58812`.
+The five tracked P2 findings, including the closure residues mapped back to P2-02 and P2-04, are closed on `main@8afb734a184403f03153d493e1ea677f6d1e5abb`.
 
 The resulting teacher-facing product now has:
 
@@ -116,15 +130,16 @@ The resulting teacher-facing product now has:
 
 - All findings originally tracked by this P2 review are **CLOSED**.
 - All closure residues discovered during final review are **CLOSED** and mapped to their originating findings rather than creating new scope.
+- The closure document itself is **MERGED** and **POST-MERGE QUALIFIED**.
 - There is **no active P2 remediation front**.
-- Any future product issue must be opened as a new bounded finding/program rather than silently extending this tracker.
+- Any future product issue must be opened as a new bounded/architectural program rather than silently extending this tracker.
 - No deploy is implied by this closure record itself.
 - No production or Google Cloud deploy was required or performed as part of P2 closure.
 
 ## Canonical next action
 
-**NEXT = closure-document review and merge only.**
+**NEXT = select and govern the first post-P2 product program outside this tracker.**
 
-No further P2 product remediation is authorized by this tracker. The P2 product-review program becomes fully closed once this refreshed closure document is independently reviewed and merged separately.
+The post-P2 read-only audit is recorded separately and does not reopen P2.
 
-`P2-PRODUCT-REVIEW = COMPLETE / ALL FINDINGS CLOSED / CLOSURE DOCUMENT PENDING MERGE`
+`P2-PRODUCT-REVIEW = COMPLETE / ALL FINDINGS CLOSED / CLOSURE DOCUMENT MERGED / POST-MERGE QUALIFIED`
