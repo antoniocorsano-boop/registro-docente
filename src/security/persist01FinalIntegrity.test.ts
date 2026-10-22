@@ -29,6 +29,7 @@ class LockAwareBlockingStore implements VaultStore {
   async deleteRecord(key: VaultRecordKey): Promise<void> { this.records.delete(key); }
   async listRecordKeys(): Promise<VaultRecordKey[]> { return [...this.records.keys()]; }
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }
+  seed(record: EncryptedVaultRecord): void { this.records.set(record.recordKey as VaultRecordKey, record); }
   release(): void { this.releaseFirstResolve(); }
 }
 
@@ -58,6 +59,30 @@ describe('PERSIST-01 final integrity hardening', () => {
     expect(await store.getRecord('meta')).toBeNull();
   });
 
+  test('a queued vault delete rechecks unlocked state when execution begins', async () => {
+    const store = new LockAwareBlockingStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const seeded: EncryptedVaultRecord = {
+      recordKey: 'meta',
+      schemaVersion: 1,
+      iv: new Uint8Array(12),
+      ciphertext: new ArrayBuffer(24)
+    };
+    store.seed(seeded);
+
+    const first = vault.put('appData', { value: 1 });
+    await store.firstEntered;
+    const queuedDelete = vault.delete('meta');
+
+    vault.lock();
+    store.release();
+
+    await first;
+    await expect(queuedDelete).rejects.toThrow('bloccato');
+    expect(await store.getRecord('meta')).toEqual(seeded);
+  });
+
   test('class navigation does not overwrite the committed appData ref', async () => {
     const source = await Bun.file('src/App.tsx').text();
     const navigation = sectionBetween(source, '// Synchronize URL query params', '// Add new class');
@@ -67,5 +92,10 @@ describe('PERSIST-01 final integrity hardening', () => {
     expect(navigation).toContain('currentClassIdRef.current');
     expect(navigation).not.toContain('appDataRef.current = nextAppData');
     expect(appCommit).toContain('currentClassId: currentClassIdRef.current');
+  });
+
+  test('IndexedDB batch observes request failures and transaction completion together', async () => {
+    const source = await Bun.file('src/security/vaultStore.ts').text();
+    expect(source).toMatch(/await Promise\.all\(\[\s*done,\s*\.\.\.records\.map/);
   });
 });
