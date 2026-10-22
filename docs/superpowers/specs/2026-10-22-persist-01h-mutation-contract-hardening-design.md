@@ -10,40 +10,40 @@
 
 PERSIST-01H closes the remaining systemic integrity gaps discovered after PERSIST-01 introduced commit-first persistence, FIFO mutation ordering, committed-state refs and atomic `appData + meta` storage.
 
-The follow-up audit showed that the storage core is materially stronger than several UI mutation surfaces. The remaining failures are not independent defects: they arise because the durable mutation contract is not propagated uniformly from the Secure Local Vault up to the teacher-facing controls and because backup/restore semantics are not yet treated as one coherent snapshot protocol.
+The read-only audit showed that the Vault/FIFO core is materially stronger than several UI mutation surfaces. The remaining failures are not independent defects: the durable mutation contract is not propagated uniformly from the Secure Local Vault up to teacher-facing controls, and backup/restore semantics are not yet governed as one coherent snapshot protocol.
 
 The target property is:
 
-> Every user-visible mutation must have one uniform end-to-end contract from intent to durable commit: no success before persistence, no destructive UI transition on failure, no duplicate effect from repeated submission, no stale-state overwrite, and no backup receipt that overstates what was actually exported.
+> Every user-visible mutation has one uniform end-to-end contract from intent to durable commit: no success before persistence, no destructive UI transition on failure, no duplicate effect from a repeated pending action, no stale-state overwrite, and no backup receipt that overstates what was actually exported.
 
 PERSIST-01H is a hardening extension of PERSIST-01, not a new product feature.
 
-## 2. Evidence that motivates this design
+## 2. Evidence and current gate
 
 The exact audited head is `70078d67dc1ae3ee49fbd975a7805cd112c9813d`.
 
-PREDEPLOY #139 / run `39809329706` is PASS on that head, while the subsequent independent Codex review completed with four unresolved findings:
+PREDEPLOY #139 / run `39809329706` is PASS on that head. The following independent Codex review completed with four unresolved findings:
 
-1. P1 — export may mark an older snapshot as current while a save was pending;
+1. P1 — export can mark an older snapshot as current while a save was pending;
 2. P1 — evaluation submission can be invoked twice while persistence is pending;
 3. P2 — settings can report success before durable persistence resolves;
 4. P2 — student add/import can clear input or report success before persistence resolves.
 
-A read-only systematic audit then identified additional instances of the same underlying classes of risk:
+The systematic audit identified additional instances of the same root causes:
 
-- mutation callbacks that still terminate as `void`, preventing the view from awaiting durable completion;
-- submit/action controls without reentrancy guards;
-- backup change tracking that advances for `appData` mutations but not uniformly for settings, UDA, custom tests and submissions;
-- encrypted export built from the current React snapshot instead of an explicit committed checkpoint;
-- full restore using sequential record writes rather than the already available atomic multi-record Vault primitive;
+- durable callbacks that still terminate as `void` at the component boundary;
+- action controls without reentrancy guards;
+- backup change tracking that advances for `appData` but not uniformly for settings, UDA, tests and submissions;
+- encrypted export built from render-time React data instead of an explicit committed checkpoint;
+- full restore using sequential record writes rather than the available atomic multi-record Vault primitive;
 - repeated submissions-to-register import not idempotent;
-- StudentPortal success shown before submission persistence, intentionally still assigned to ONLINE-01.
+- StudentPortal result/confetti shown before submission persistence, explicitly remaining ONLINE-01.
 
-The audit conclusion is that the central Vault/FIFO architecture remains valid; the missing layer is a uniform application mutation contract and coherent snapshot protocol.
+The audit conclusion is therefore **systemic hardening required**, not a sequence of unrelated patches.
 
 ## 3. Scope
 
-PERSIST-01H governs the teacher-facing mutation surfaces already routed through PERSIST-01:
+PERSIST-01H governs these existing mutation surfaces:
 
 - class creation/deletion;
 - evaluation create/edit/delete;
@@ -52,225 +52,231 @@ PERSIST-01H governs the teacher-facing mutation surfaces already routed through 
 - settings save and theme persistence;
 - UDA create/edit/delete/dependency/lesson mutations;
 - custom test create/edit/import;
-- submission delete;
+- submission append/delete at the application persistence boundary;
 - submission-to-register import;
 - encrypted backup checkpoint/export receipt;
 - encrypted restore orchestration.
 
-It also governs the common application contracts required by those paths:
+It also governs the common contracts required by those paths:
 
-- Promise propagation to the invoking UI;
-- in-flight/reentrancy state;
+- Promise propagation to invoking UI;
+- local in-flight/reentrancy state;
 - global backup-change accounting;
-- mutation queue checkpoint/exclusive execution;
+- serialized checkpoint/exclusive tasks;
 - full-snapshot atomic persistence.
 
 ### Out of scope
 
-The following remain outside PERSIST-01H:
+The following remain separate:
 
 - StudentPortal class-selection redesign;
-- StudentPortal result/confetti timing and wording beyond preserving the existing async callback boundary; those remain ONLINE-01;
+- StudentPortal result/confetti timing and wording; these remain ONLINE-01;
 - cloud sync, remote backups or background retry;
-- changes to AES-GCM/PBKDF2/key hierarchy;
-- new IndexedDB stores or version migrations;
-- changes to curriculum, analytics or grading formulas;
-- product redesign unrelated to mutation integrity;
+- AES-GCM/PBKDF2/key hierarchy changes;
+- new IndexedDB stores or database-version migrations;
+- curriculum, analytics or grading-formula changes;
+- broad UI redesign unrelated to mutation truthfulness;
 - deployment or release promotion.
 
 ## 4. Architectural decision
 
-The selected approach is **one shared mutation contract with domain-specific adapters**, not a sequence of local fixes.
+Use **one shared mutation contract with domain-specific adapters**.
 
 The contract has four layers:
 
-1. **Intent layer** — the component creates one user intent and enters a local pending state before invoking persistence.
-2. **Application coordination layer** — the mutation is serialized, derives from the latest committed state and carries global backup metadata with it.
-3. **Vault layer** — all records belonging to one logical commit are written atomically with `putMany`.
-4. **UI completion layer** — success-only UI, input clearing, editor closing, navigation and success messages happen only after the returned Promise resolves.
+1. **Intent layer** — one accepted user action enters a local pending state.
+2. **Application coordination layer** — FIFO execution reads latest committed state and derives the candidate at execution time.
+3. **Vault layer** — all records belonging to one logical commit are persisted atomically with `putMany`.
+4. **UI completion layer** — success message, input clearing, modal/editor closing and post-save navigation occur only after the returned Promise resolves.
 
-This design preserves commit-first semantics and removes the remaining ambiguity between “button clicked”, “operation queued”, “Vault committed” and “UI may declare success”.
+Queue ordering and UI reentrancy are both required: FIFO prevents storage interleaving; it does not make two accepted clicks the same user intent.
 
 ## 5. Canonical mutation lifecycle
 
-Every governed mutating action follows this sequence:
+Every governed action follows:
 
 1. validate local input;
-2. reject or ignore reentrant submission of the same in-flight action;
-3. set local `isSaving` / pending marker;
-4. call a Promise-returning mutation callback;
-5. when its FIFO turn begins, read the latest committed domain state;
-6. derive the candidate from that committed state;
-7. derive the next global backup metadata in the same logical commit;
-8. persist all records belonging to the logical commit atomically;
-9. publish committed refs and React state;
-10. run success-only navigation/toast/reset behavior;
-11. clear local pending state in `finally`.
+2. reject/ignore reentrant submission of the same pending action;
+3. set local pending state;
+4. call a Promise-returning durable callback;
+5. when its FIFO turn begins, read latest committed domain state and `meta`;
+6. derive domain candidate and backup-ledger candidate;
+7. persist the logical commit atomically;
+8. publish committed refs and React state;
+9. run success-only UI effects;
+10. clear pending state in `finally`.
 
-Failure lifecycle:
+On failure:
 
-1. persistence rejects;
-2. no candidate is published;
-3. no success-only UI executes;
-4. draft/input remains available where retry is meaningful;
-5. local pending state is cleared;
-6. later FIFO mutations remain usable.
+- publish none of the candidate state;
+- show no normal success;
+- keep retry-relevant component draft intact;
+- clear pending state;
+- allow later FIFO work to continue.
+
+Browser `prompt()` values are not resumable component drafts; class creation therefore remains allowed to require re-entry after an explicit persistence failure. It must still never show success or navigate as if committed before durable completion.
 
 ## 6. Promise contract at component boundaries
 
-### 6.1 Rule
+Any durable callback whose child can clear input, close an editor/modal, navigate, display success or repeat the same action must return a Promise representing durable completion.
 
-Any callback that causes durable mutation and whose invoking component can clear input, navigate, close an editor, display success or allow repeated invocation must return a Promise representing durable completion.
-
-The child component must await that Promise before success-only effects.
-
-### 6.2 Expected callback shape
-
-Examples:
+Expected shapes include:
 
 ```ts
 onSaveEvaluations(data): Promise<void>
 onSaveBehaviors(records): Promise<void>
 onAddStudent(name): Promise<void>
+onRemoveStudent(id): Promise<void>
 onBulkAddStudents(students): Promise<void>
 onInvertNames(): Promise<void>
-onUpdateSettings(settings): Promise<void>
+onUpdateSettings(intent): Promise<void>
 onDeleteSubmission(id): Promise<void>
 onImportSubmissionsToRegister(udaId?): Promise<void>
 ```
 
-Delete callbacks may remain fire-and-forget only when the child performs no success/destructive local state transition and repeated invocation is impossible after committed publication. For consistency, PERSIST-01H prefers Promise-returning mutation callbacks throughout the governed surfaces.
+For consistency, governed deletion actions also return Promises even when their logical operation is naturally idempotent.
 
 ## 7. In-flight and reentrancy contract
 
-### 7.1 Local ownership
+Pending state is owned by the component/view that owns the user control; PERSIST-01H does not introduce a global spinner framework.
 
-The component that owns the user control owns the pending UI state for that action. PERSIST-01H does not introduce a global spinner or generic loading framework.
+While an action is pending:
 
-### 7.2 Required behavior
-
-While a mutation is pending:
-
-- the same submit/action control is disabled;
+- its submit/action control is disabled;
 - repeated keyboard submit is ignored;
-- a second logical intent requiring the same mutable draft is not accepted;
-- fields may remain readable;
-- fields that would create ambiguity for the pending intent should be disabled until settlement;
-- failure restores the ability to retry without destroying the draft.
+- a second intent that depends on the same mutable draft is not accepted;
+- draft fields may remain readable;
+- fields that would make the pending intent ambiguous are disabled;
+- failure restores retry capability without clearing the draft.
 
-### 7.3 Why a local guard is still required with FIFO
-
-FIFO serialization prevents storage interleaving but does not make repeated user intent idempotent. Two clicks can enqueue two valid operations. Therefore queue ordering and UI reentrancy protection solve different problems and both are required.
+Prefer one minimal pending boundary per view or form rather than many unrelated flags. Examples: `isSavingEvaluation`, `isSavingBehavior`, `isStudentMutationPending`, `isSavingSettings`, `isSavingTest`, `isSavingUda`.
 
 ## 8. Domain rules
 
-### 8.1 Evaluations
+### 8.1 Classes
 
-- `handleSaveEvaluations` returns the durable Promise.
-- `EvaluationsView` owns `isSaving` and disables the submit control while pending.
-- for a new evaluation, the batch identity is stable for the in-flight intent;
-- `editingBatchId` is cleared only after success;
-- navigation to history remains navigation-version guarded after commit.
+Create/delete remain commit-first.
 
-### 8.2 Behaviors
+- success/navigation only after durable commit;
+- Home controls cannot invoke the same class mutation repeatedly while it is pending;
+- class creation may use the existing browser prompt; on failure the teacher may need to re-enter the name, but the class is never falsely displayed as committed.
 
-- save callback returns a Promise;
-- save control is disabled while pending;
-- the editable date/status draft is not discarded on failure;
+### 8.2 Evaluations
+
+- `handleSaveEvaluations` returns the durable Promise;
+- `EvaluationsView` owns a save-pending guard;
+- one accepted new-evaluation intent has one stable `batchId`;
+- `editingBatchId` clears only after success;
+- navigation to history remains post-commit and navigation-version guarded.
+
+### 8.3 Behaviors
+
+- callback returns a Promise;
+- save is disabled while pending;
+- date/status draft remains intact on failure;
 - dashboard navigation remains post-commit and navigation-version guarded.
 
-### 8.3 Students
+### 8.4 Students
 
 Single add:
 
-- do not clear the name field before durable success;
+- keep the typed name until durable success;
 - disable submit while pending;
 - clear only after resolved commit.
 
 Bulk import:
 
-- parsing and durable save are separate states;
-- do not show “import completed” until the durable callback resolves;
-- do not clear the file input until durable success;
+- parsing and durable saving are separate phases;
+- success message and file-input clearing happen only after durable success;
 - persistence failure is not reported as parser failure.
 
 Name inversion:
 
-- return a Promise and disable the action while pending;
-- one click equals one inversion intent.
+- one click equals one inversion intent;
+- callback returns a Promise and the action is disabled while pending.
 
 Delete:
 
-- repeated delete remains logically idempotent, but the row action should not be reinvoked while its commit is pending.
+- row action is disabled while its durable removal is pending.
 
-### 8.4 Settings
+### 8.5 Settings
 
-Settings use a mutation intent derived against latest committed settings rather than blindly replacing committed state with an arbitrary stale full candidate.
+Settings mutations derive against latest committed settings rather than blindly replacing committed state with a stale full snapshot.
 
 Explicit form save:
 
 - returns a Promise;
-- success message appears only after durable completion;
-- form remains available on failure.
+- shows success only after commit;
+- preserves form data on failure.
 
-Theme change:
+Theme selection uses **immediate theme-only persistence**:
 
-- must not persist unrelated unsaved form fields merely because the teacher selected a theme;
-- either persist a theme-only patch against latest committed settings or keep theme as local preview until explicit save;
-- selected implementation must preserve the invariant that unrelated draft fields are not committed implicitly.
+- selecting a theme updates the local form theme;
+- the durable mutation is a patch against latest committed settings affecting only `theme`;
+- unrelated unsaved form fields are never committed merely because a theme button was pressed;
+- the theme control is guarded while its persistence is pending.
 
-### 8.5 UDA
+This preserves the existing immediate-theme behavior without leaking unrelated draft settings into the Vault.
 
-The existing `createUdaSnapshotMutation` delta/rebase model is retained.
+### 8.6 UDA
 
-All UDA actions that can be repeated while the first commit is pending must expose a pending guard at the invoking control or modal. Existing success/reset/close behavior remains after durable resolution only.
+Retain `createUdaSnapshotMutation` and its record/array delta-rebase semantics.
 
-### 8.6 Custom tests
+All mutating UDA actions share a pending boundary while a durable UDA save is in flight. Success/reset/close/detail updates remain post-commit only.
 
-The existing Promise-aware save paths are retained.
+### 8.7 Custom tests
 
-Add an in-flight guard for:
+Retain the Promise-aware save contract already introduced by PERSIST-01.
+
+Add a pending guard for:
 
 - interactive editor save;
-- manual test creation;
-- DOCX/ZIP import save.
+- manual text test creation;
+- DOCX/ZIP parsed-test save.
 
-A new test ID is created once per accepted intent. Repeated submit while pending does not create a second test.
+A new test ID is created once per accepted intent; repeated submit while pending does not create a second test.
 
-### 8.7 Submission deletion
+### 8.8 Submission append/delete
 
-Deletion returns a Promise and may expose row-level pending state. No additional rollback layer is required because commit-first publication remains authoritative.
+Both use the existing committed submissions ref and FIFO coordinator.
 
-### 8.8 Submission-to-register import
+- append/delete participate in global backup-ledger accounting;
+- delete returns a Promise to the invoking teacher UI;
+- StudentPortal may continue to misuse the append Promise until ONLINE-01, but PERSIST-01H must keep the persistence boundary truthful and Promise-returning.
 
-Import must be idempotent without changing persisted schemas.
+### 8.9 Submission-to-register import
 
-Use the existing submission ID to derive a deterministic grade batch identity, conceptually:
+Import becomes idempotent without schema changes.
+
+Derive a deterministic grade batch identity from the existing submission ID:
 
 ```ts
 batchId = `online_${submission.id}`
 ```
 
-Before adding the grade derived from that submission, replace/reconcile any existing grade with the same deterministic batch identity rather than appending a fresh `uid()` batch every time.
+For each matched submission/student pair, reconcile/replace any existing grade with that deterministic batch ID instead of appending a fresh `uid()` batch.
 
-Consequences:
+Therefore:
 
-- repeated import does not duplicate grades;
-- a retry after ambiguous UI interruption is safe;
-- import remains compatible with existing `Grade` shape;
-- no schema migration is required.
+- repeated import cannot duplicate the same submission grade;
+- retry after an interrupted UI flow is safe;
+- existing `Grade` shape and stored schema remain unchanged.
 
-## 9. Global backup change accounting
+## 9. Global backup ledger
 
-### 9.1 Problem
+### 9.1 Rule
 
-`meta.changes` currently advances with `appData` commits but not uniformly with settings, UDA, tests and submissions. Therefore backup status can under-report changes.
+Every governed persisted domain mutation advances `meta.changes` in the **same atomic logical commit** as its data record.
 
-### 9.2 Decision
+This applies to:
 
-Every persisted domain mutation governed by PERSIST-01H must update backup metadata in the same logical durable commit.
+- `appData`;
+- settings;
+- UDA;
+- custom tests;
+- submissions.
 
-For ordinary domain mutations:
+For ordinary data mutation:
 
 ```ts
 nextMeta = {
@@ -279,192 +285,201 @@ nextMeta = {
 }
 ```
 
-The domain record and `meta` are persisted atomically through `SecureVault.putMany`.
+### 9.2 Metadata-only exceptions
 
-This applies to:
+The following do **not** increment `changes`:
 
-- appData;
-- settings;
-- UDA;
-- customTests;
-- submissions.
+- writing the backup receipt itself;
+- navigation-only state;
+- Privacy Shield UI state;
+- auto-lock preference outside the secure snapshot;
+- full restore, which installs the metadata represented by the restored snapshot;
+- factory reset, which clears the Vault entirely.
 
 ### 9.3 Storage API
 
-`SecureAppStorage` should expose type-safe domain+meta operations or an internal generic helper used by type-safe public methods. React components must not call `vault.putMany` directly.
+`SecureAppStorage` exposes type-safe domain+meta operations, or type-safe public methods backed by one internal generic helper. React components never call `vault.putMany` directly.
 
-No record key or schema change is required.
+No record key or persisted schema changes are required.
 
-## 10. Backup checkpoint protocol
+## 10. Serialized task/checkpoint primitive
 
-### 10.1 Requirements
-
-An exported backup must represent an explicit committed checkpoint. The metadata receipt must describe that same checkpoint and must not erase changes committed after the checkpoint was captured.
-
-### 10.2 Coordinator primitive
-
-Extend the durable mutation coordinator with a minimal serialized task/checkpoint primitive, conceptually:
+Extend `durableMutationCoordinator` with a minimal serialized task primitive, conceptually:
 
 ```ts
 enqueueTask<T>(task: () => Promise<T> | T): Promise<T>
 ```
 
-or an equivalent API with these semantics:
+Required semantics:
 
-- the task runs after all previously queued mutations settle;
-- later queued mutations wait until the task returns;
-- a failed task does not poison the queue;
-- the task can read a coherent set of committed refs.
+- task runs after all previously queued mutations settle;
+- later work waits until the task returns;
+- rejection does not poison later work;
+- task may read a coherent set of committed refs.
 
-A bare `whenIdle()` is insufficient because it creates a time-of-check/time-of-use window in which a new mutation can enter between “idle” and snapshot capture.
+A bare `whenIdle()` is explicitly rejected because it permits a time-of-check/time-of-use race between idle resolution and snapshot capture.
 
-### 10.3 Preparing the checkpoint
+## 11. Backup checkpoint protocol
 
-The App prepares the backup checkpoint inside the serialized task and returns an immutable/deep-cloned structure containing:
+### 11.1 Prepare checkpoint
 
-- complete committed snapshot;
-- `includedChanges`, equal to the checkpoint metadata change count.
+App prepares the backup checkpoint inside `enqueueTask` and returns an immutable/deep-cloned object containing:
 
-The Privacy view encrypts and initiates the download from that checkpoint, not from render-time React props.
+- all committed domains;
+- `includedChanges` = current local `meta.changes`;
+- `checkpointAt` timestamp.
 
-### 10.4 Marking the export
+The **snapshot embedded in the backup file is self-consistent** and uses:
 
-After encryption/download initiation succeeds, App records the receipt through the mutation coordinator.
+```ts
+meta: {
+  changes: 0,
+  lastBackup: checkpointAt
+}
+```
 
-Do not blindly reset `changes` to zero. Instead derive:
+This means a later restore of that file correctly represents “this state is exactly the state of this backup” rather than reviving a pre-export outstanding-change count.
+
+The live local `meta` is not changed merely by preparing the checkpoint.
+
+### 11.2 Encrypt/download
+
+`PrivacyView` encrypts and initiates download from the prepared checkpoint, not from render-time `backupSnapshot` props.
+
+The existing `backupSnapshot` prop should therefore no longer be authoritative for export; it may be removed if unused elsewhere.
+
+### 11.3 Mark successful export
+
+Only after encryption and download initiation succeed, App writes the local backup receipt through the coordinator:
 
 ```ts
 changes = Math.max(0, currentMeta.changes - checkpoint.includedChanges)
-lastBackup = exportedAt
+lastBackup = checkpoint.checkpointAt
 ```
 
-This preserves mutations committed after the checkpoint but before the receipt is written.
+This receipt mutation is metadata-only and does not increment `changes`.
 
-If export encryption/download preparation fails, metadata is not advanced.
+If later data mutations committed after checkpoint capture, they increased `currentMeta.changes`; subtracting only `includedChanges` leaves those later changes outstanding.
 
-## 11. Full restore protocol
+If encryption/download preparation fails, the live metadata is unchanged.
 
-### 11.1 Application serialization
+## 12. Full restore protocol
 
-Restore must execute as one exclusive/serialized application task so it cannot interleave with ordinary mutations.
+Restore executes as one serialized application task:
 
-The task starts only after prior queued application mutations have settled. Later mutations wait until restore completes.
+1. wait behind all previously queued application mutations;
+2. normalize/sanitize the candidate backup against current complete state;
+3. write the complete candidate snapshot atomically;
+4. read it back and verify equivalence;
+5. only then publish all committed refs and React domains;
+6. reset navigation to Home and show success;
+7. allow later queued mutations to continue.
 
-### 11.2 Atomic Vault write
-
-`SecureAppStorage.restoreSnapshotVerified` must write the complete sanitized snapshot using one atomic multi-record Vault transaction rather than six sequential `put` operations.
-
-Conceptually the transaction contains:
+`SecureAppStorage.restoreSnapshotVerified` must persist all six records through **one atomic `vault.putMany` transaction**:
 
 - `appData`;
-- `settings`;
-- `udas`;
-- `customTests`;
-- `submissions`;
-- `meta`.
+- settings;
+- UDA;
+- custom tests;
+- submissions;
+- meta.
 
-The existing readback verification remains.
-
-If readback verification fails after an apparently successful atomic write, restore the previous complete snapshot using the same atomic full-snapshot primitive and verify the rollback.
-
-### 11.3 Publication
-
-Only after verified restore succeeds:
-
-- update all committed refs;
-- publish all React domains;
-- reset navigation to Home;
-- show success.
+If readback verification fails after an apparently successful atomic write, restore the previous complete snapshot through the same atomic full-snapshot primitive and verify rollback.
 
 Failure publishes none of the candidate restored state.
 
-## 12. Factory reset
+## 13. Factory reset
 
-The current Vault `clearAll()` behavior remains valid because it locks immediately and serializes against queued Vault mutations.
+Current reset semantics remain valid: `SecureVault.clearAll()` locks immediately and is serialized against Vault mutations; `SecureRegistroRoot` then returns to `SETUP_REQUIRED`.
 
-PERSIST-01H does not redesign reset. Existing failure semantics remain.
+PERSIST-01H does not redesign reset.
 
-## 13. StudentPortal boundary
+## 14. StudentPortal boundary
 
 PERSIST-01H does not absorb ONLINE-01.
 
-The parent callback remains Promise-returning so ONLINE-01 can later make student-facing success truthful. The current hard-coded classes and pre-persistence result/confetti behavior remain explicitly open and must not be falsely closed by PERSIST-01H.
+The submission callback remains Promise-returning so ONLINE-01 can later make the student-facing result truthful. These remain explicitly open after PERSIST-01H:
 
-## 14. Required invariants
+- hard-coded class selector;
+- transition to result/confetti before persistence resolves;
+- success wording before durable submission confirmation.
 
-PERSIST-01H is acceptable only if all of the following hold:
+They must not be accidentally marked closed by PERSIST-01H qualification.
 
-1. **Promise-to-UI invariant** — every governed success/destructive UI transition can observe durable completion.
-2. **Single-intent invariant** — one accepted user action produces at most one logical mutation while it is pending.
-3. **Draft-preservation invariant** — persistence failure does not destroy retry-relevant teacher input.
-4. **No-false-success invariant** — success messaging/navigation occurs only after durable success.
-5. **Latest-committed invariant** — queued mutations derive from latest committed state at execution time.
-6. **FIFO/failure-isolation invariant** — one failure does not reorder or poison later work.
-7. **Global-backup-ledger invariant** — all governed domain commits advance backup change tracking atomically with their data.
-8. **Checkpoint-truth invariant** — backup receipt corresponds to the exact committed checkpoint exported.
-9. **Post-checkpoint preservation invariant** — mutations committed after backup snapshot capture remain counted as outstanding.
-10. **Atomic-restore invariant** — complete restore writes all snapshot records or none within one Vault transaction.
-11. **Restore-isolation invariant** — restore does not interleave with ordinary application mutations.
-12. **Import-idempotency invariant** — re-importing the same online submission does not duplicate a grade.
-13. **Navigation-preservation invariant** — post-commit callbacks cannot overwrite newer user navigation.
-14. **Vault-format invariant** — no record keys, encryption format, database version or key hierarchy change.
-15. **ONLINE-01 separation invariant** — StudentPortal product gaps remain explicitly open unless separately implemented and qualified.
+## 15. Required invariants
 
-## 15. Test strategy
+PERSIST-01H is acceptable only if all hold:
 
-Implementation remains TDD RED → GREEN.
+1. **Promise-to-UI** — governed success/destructive UI can observe durable completion.
+2. **Single-intent** — one accepted pending action produces at most one logical mutation.
+3. **Draft-preservation** — component-owned retry-relevant draft survives persistence failure.
+4. **No-false-success** — success/navigation occurs only after durable success.
+5. **Latest-committed** — queued derivation reads latest committed state at execution time.
+6. **FIFO/failure-isolation** — one failure neither reorders nor poisons later work.
+7. **Global-backup-ledger** — every governed data-domain commit advances backup tracking atomically with its data.
+8. **Checkpoint-truth** — exported payload and receipt refer to the same committed checkpoint.
+9. **Post-checkpoint preservation** — later committed changes remain outstanding after receipt.
+10. **Backup-self-consistency** — exported snapshot metadata describes the exported snapshot itself (`changes=0`, `lastBackup=checkpointAt`).
+11. **Atomic-restore** — full restore writes all snapshot records or none in one Vault transaction.
+12. **Restore-isolation** — restore cannot interleave with ordinary application mutations.
+13. **Import-idempotency** — re-importing one online submission does not duplicate its grade.
+14. **Navigation-preservation** — post-commit callbacks cannot override newer navigation.
+15. **Vault-format** — record keys, encryption format, DB version and key hierarchy remain unchanged.
+16. **ONLINE-01 separation** — StudentPortal product gaps remain explicitly open unless separately implemented.
 
-### 15.1 Contract tests
+## 16. TDD strategy
 
-Add a focused mutation-contract suite that checks common properties across surfaces instead of only isolated string patterns.
+Implementation remains RED → GREEN. The audit matrix becomes the test matrix rather than waiting for review to discover another instance.
 
 Required RED cases include:
 
 - evaluation double-submit while first save is pending;
-- behavior repeat action while pending;
-- single-student input retained on persistence failure;
-- bulk import does not report success or clear file before persistence;
+- behavior repeat save while pending;
+- single-student name retained on persistence failure;
+- bulk import does not report success or clear file before durable success;
+- name inversion cannot be invoked twice while pending;
 - settings failure does not show success;
-- theme change does not commit unrelated unsaved fields;
-- UDA/test creation cannot duplicate from repeated pending submit;
-- submissions import repeated twice produces one deterministic imported batch per submission;
-- settings/UDA/tests/submissions increment `meta.changes` atomically with domain commit;
-- backup checkpoint waits behind prior mutation;
-- mutation after checkpoint remains outstanding after backup receipt;
+- theme change persists only the theme field, not unrelated form draft;
+- UDA creation cannot duplicate from repeated pending submit;
+- interactive/manual/imported test creation cannot duplicate while pending;
+- repeated submissions-to-register import yields one deterministic batch per submission;
+- settings/UDA/tests/submissions each increment `meta.changes` atomically with their domain record;
+- backup checkpoint waits behind a pending mutation;
+- backup file metadata is self-consistent;
+- mutation committed after checkpoint remains outstanding after receipt;
 - full restore uses one atomic multi-record persistence operation;
-- restore does not interleave with queued normal mutation.
+- restore waits behind prior mutation and blocks later mutation until complete.
 
-### 15.2 Existing suites
-
-All existing PERSIST-01 tests remain regression requirements, including:
+Existing PERSIST-01 regression tests remain mandatory, including:
 
 - FIFO coordinator semantics;
-- lock recheck on queued Vault writes/deletes;
+- failure isolation;
+- lock recheck for queued Vault writes/deletes;
 - appData+meta atomic commit;
-- UDA stale-snapshot rebasing;
+- UDA stale-snapshot and array-delta rebasing;
 - Home/navigation preservation;
-- test editor await behavior.
+- test editor await semantics.
 
-### 15.3 Full qualification
+## 17. Browser verification
 
-Final exact head must pass:
+After engineering GREEN, run a focused browser failure-injection pass only for behaviors that source/unit tests cannot establish sufficiently:
 
-- full security/product test suite;
-- TypeScript typecheck;
-- production build;
-- production startup smoke;
-- PREDEPLOY exact-head qualification;
-- independent Codex review with zero unresolved significant findings.
+- evaluation submit pending/failure;
+- student add/import pending/failure;
+- settings save pending/failure;
+- backup export while an earlier write is delayed;
+- restore success/failure transition.
 
-A focused browser failure-injection pass is required after engineering GREEN for the teacher-visible pending/failure flows that cannot be proven adequately by source/runtime tests alone.
+This is not a broad product UX review.
 
-## 16. Expected implementation surface
+## 18. Expected implementation surface
 
 Expected files, subject to the implementation plan:
 
-- `src/persistence/durableMutationCoordinator.ts` — serialized task/checkpoint primitive;
-- `src/security/secureAppStorage.ts` — domain+meta atomic operations and atomic full snapshot write;
-- `src/App.tsx` — Promise propagation, global meta tracking, backup checkpoint/restore orchestration;
+- `src/persistence/durableMutationCoordinator.ts`;
+- `src/security/secureAppStorage.ts`;
+- `src/App.tsx`;
+- `src/components/HomeView.tsx`;
 - `src/components/EvaluationsView.tsx`;
 - `src/components/BehaviorsView.tsx`;
 - `src/components/StudentsManagementView.tsx`;
@@ -474,30 +489,31 @@ Expected files, subject to the implementation plan:
 - `src/components/PrivacyView.tsx`;
 - focused tests under `src/security/` and/or `src/persistence/`.
 
-`StudentPortal.tsx` is not an implementation target for PERSIST-01H except if a type signature must remain compatible; behavioral changes there remain ONLINE-01.
+`StudentPortal.tsx` is not a behavioral implementation target for PERSIST-01H except for any type compatibility required by the unchanged Promise boundary.
 
-## 17. Migration and compatibility
+## 19. Migration and compatibility
 
-No IndexedDB migration or record-schema migration is required.
+No IndexedDB migration or persisted record-schema migration is required.
 
-The design deliberately reuses:
+The design reuses:
 
 - existing record keys;
 - existing `SecureMeta { changes, lastBackup }` shape;
-- deterministic `batchId` derived from existing submission IDs;
-- existing encrypted backup payload shape.
+- existing submission IDs for deterministic imported batch identity;
+- existing encrypted backup payload shape;
+- existing Vault crypto primitives.
 
 Existing encrypted backups remain readable.
 
-## 18. Rollback
+## 20. Rollback and branch isolation
 
-PERSIST-01H is structurally reversible because it introduces no storage migration and no format change.
+PERSIST-01H is structurally reversible because it introduces no storage migration or format change.
 
-The current PERSIST-01 PR #18 remains frozen while this design is reviewed. Implementation must occur on a separate implementation branch derived from the audited head unless a later explicit integration decision says otherwise.
+PR #18 remains frozen on the audited head while this design is reviewed. This spec is kept on the separate branch `docs/persist-01h-mutation-contract-hardening`, branched from `70078d67dc1ae3ee49fbd975a7805cd112c9813d`.
 
-No merge or deploy is authorized by this design.
+Implementation must use a separate implementation branch derived from the approved baseline. No merge or deploy is authorized by this design.
 
-## 19. Stop rules
+## 21. Stop rules
 
 Stop and require a separate decision if implementation would require:
 
@@ -506,22 +522,23 @@ Stop and require a separate decision if implementation would require:
 - distributed/cross-device locking;
 - cloud backup or sync;
 - StudentPortal redesign;
-- crypto/key-management changes;
-- a broad UI redesign unrelated to pending/failure truthfulness.
+- cryptographic/key-management changes;
+- broad UI redesign unrelated to pending/failure truthfulness.
 
-## 20. Completion criteria
+## 22. Completion criteria
 
 PERSIST-01H is engineering-qualified when:
 
-- all 15 invariants have direct test or execution evidence;
-- the four current unresolved Codex findings are resolved by the systemic contract rather than ad hoc bypasses;
-- all additional audit gaps in scope are closed or explicitly disproved with evidence;
-- import of online submissions is idempotent;
-- backup status covers every governed persisted domain;
-- backup export uses a serialized committed checkpoint and preserves post-checkpoint changes;
-- restore is application-serialized and atomically persisted as a complete snapshot;
-- no teacher-facing success/destructive transition precedes durable completion;
+- all 16 invariants have direct test or execution evidence;
+- the four current unresolved Codex findings are resolved through the systemic contract, not ad hoc bypasses;
+- all additional audit gaps in scope are closed or disproved with evidence;
+- submission import is idempotent;
+- backup ledger covers every governed persisted domain;
+- backup export uses a serialized committed checkpoint, produces self-consistent backup metadata and preserves post-checkpoint changes;
+- restore is application-serialized and atomically persisted as one complete snapshot;
+- no governed teacher-facing success/destructive transition precedes durable completion;
 - full PREDEPLOY passes on the exact final head;
 - focused browser failure-injection passes where required;
 - final independent Codex review has zero unresolved significant findings;
+- ONLINE-01 remains separately tracked;
 - no merge or deploy occurs without a separate decision.
