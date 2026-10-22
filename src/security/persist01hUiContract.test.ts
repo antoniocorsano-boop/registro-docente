@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 const appSource = await Bun.file('src/App.tsx').text();
 const udaSource = await Bun.file('src/components/UdaGanttView.tsx').text();
 const verificheSource = await Bun.file('src/components/VerificheOnlineView.tsx').text();
+const privacySource = await Bun.file('src/components/PrivacyView.tsx').text();
 
 function sourceSection(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start);
@@ -160,5 +161,65 @@ describe('PERSIST-01H pending intent boundaries', () => {
     expect(verificheSource).toContain('disabled={isSubmissionActionPending}');
     expect(verificheSource).toContain('await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId))');
     expect(verificheSource).toContain('await commitSubmissionAction(() => onDeleteSubmission(sub.id))');
+  });
+});
+
+describe('PERSIST-01H truthful backup and restore integration', () => {
+  test('backup preparation is serialized and snapshots committed refs only when the task begins', () => {
+    expect(appSource).toContain("import { applyBackupReceipt, incrementBackupChanges, prepareBackupCheckpoint");
+    expect(appSource).toContain("type PreparedBackupCheckpoint");
+    const backup = sectionBetween('// Prepare encrypted backup checkpoint', '// Import Encrypted Backup');
+    expect(backup).toContain('const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> =>');
+    expect(backup).toContain('return mutationCoordinator.enqueueTask(() =>');
+    expect(backup).toContain('appData: appDataRef.current');
+    expect(backup).toContain('settings: settingsRef.current');
+    expect(backup).toContain('udas: udasRef.current');
+    expect(backup).toContain('customTests: testsRef.current');
+    expect(backup).toContain('submissions: submissionsRef.current');
+    expect(backup).toContain('meta: metaRef.current');
+    expect(backup).toContain('prepareBackupCheckpoint');
+    expect(backup).toContain('const markEncryptedBackupExported');
+    expect(backup).toContain('applyBackupReceipt(current, checkpoint)');
+  });
+
+  test('PrivacyView exports only the prepared checkpoint and awaits its receipt before success cleanup', () => {
+    expect(privacySource).not.toContain('backupSnapshot: CompleteSecureAppSnapshot;');
+    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;');
+    expect(privacySource).toContain("onMarkEncryptedBackupExported: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;");
+    const exportFlow = sourceSection(privacySource, 'const handleExportEncrypted', 'const handleImportEncrypted');
+    expect(exportFlow).toContain('const checkpoint = await onPrepareEncryptedBackup();');
+    expect(exportFlow).toContain('createBackupPayload(checkpoint.snapshot)');
+    expect(exportFlow).toContain('await encryptDataWithPassword');
+    expect(exportFlow).toContain('a.click();');
+    expect(exportFlow).toContain('await onMarkEncryptedBackupExported(checkpoint);');
+    expect(exportFlow.indexOf('a.click();')).toBeLessThan(exportFlow.indexOf('await onMarkEncryptedBackupExported(checkpoint);'));
+    expect(exportFlow.indexOf('await onMarkEncryptedBackupExported(checkpoint);')).toBeLessThan(exportFlow.indexOf("setEncryptPassword('');"));
+    expect(exportFlow.indexOf('await onMarkEncryptedBackupExported(checkpoint);')).toBeLessThan(exportFlow.indexOf('esportato con successo'));
+    expect(exportFlow).toContain('downloadCompleted');
+  });
+
+  test('restore is one serialized task with explicit previous logical snapshot and publish-after-verify', () => {
+    const restore = sectionBetween('// Import Encrypted Backup', '// Factory Reset');
+    expect(restore).toContain('const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> =>');
+    expect(restore).toContain('return mutationCoordinator.enqueueTask(async () =>');
+    expect(restore).toContain('const previousLogical: CompleteSecureAppSnapshot = {');
+    expect(restore).toContain('appData: appDataRef.current');
+    expect(restore).toContain('settings: settingsRef.current');
+    expect(restore).toContain('udas: udasRef.current');
+    expect(restore).toContain('customTests: testsRef.current');
+    expect(restore).toContain('submissions: submissionsRef.current');
+    expect(restore).toContain('meta: metaRef.current');
+    expect(restore).toContain('normalizeBackupPayload(decryptedData, previousLogical)');
+    expect(restore).toContain('await secureStorage.restoreSnapshotVerified(candidate, previousLogical)');
+    expect(restore.indexOf('await secureStorage.restoreSnapshotVerified(candidate, previousLogical)')).toBeLessThan(restore.indexOf('appDataRef.current = restored.appData'));
+    expect(restore.indexOf('appDataRef.current = restored.appData')).toBeLessThan(restore.indexOf("setActiveTab('home')"));
+  });
+
+  test('PrivacyView receives checkpoint and receipt callbacks instead of a render-time backup snapshot', () => {
+    const wiring = sectionBetween('{activeTab === \'privacy\'', '</PrivacyView>');
+    expect(wiring).not.toContain('backupSnapshot={{');
+    expect(wiring).toContain('onPrepareEncryptedBackup={prepareEncryptedBackup}');
+    expect(wiring).toContain('onMarkEncryptedBackupExported={markEncryptedBackupExported}');
+    expect(wiring).toContain('onImportEncryptedBackup={handleImportEncryptedBackup}');
   });
 });
