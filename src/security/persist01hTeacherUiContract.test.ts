@@ -64,4 +64,42 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
     expect(text).toContain('await onDeleteClass(classId);');
     expect(text).toContain('disabled={isClassMutationPending}');
   });
+
+  test('UDA mutations share one synchronous in-flight guard around the durable boundary', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    expect(text).toContain("import React, { useRef, useState } from 'react';");
+    expect(text).toContain('const [isSavingUda, setIsSavingUda] = useState(false);');
+    expect(text).toContain('const udaMutationPendingRef = useRef(false);');
+    expect(text).toContain('if (udaMutationPendingRef.current) return false;');
+    expect(text).toContain('udaMutationPendingRef.current = true;');
+    expect(text).toContain('await onSaveUdas(nextUdas);');
+    expect(text).toContain('udaMutationPendingRef.current = false;');
+    expect(text).toContain('setIsSavingUda(false);');
+    expect(text).toContain('disabled={isSavingUda}');
+  });
+
+  test('all test creation paths share one synchronous durable-save guard', async () => {
+    const text = await source('src/components/VerificheOnlineView.tsx');
+    expect(text).toContain("import React, { useRef, useState } from 'react';");
+    expect(text).toContain('const [isSavingTest, setIsSavingTest] = useState(false);');
+    expect(text).toContain('const testSavePendingRef = useRef(false);');
+    expect(text).toContain('const commitTestSave = async (test: OnlineTest): Promise<boolean> =>');
+    expect(text).toContain('if (testSavePendingRef.current) return false;');
+    expect(text).toContain('await onSaveNewTest(test);');
+    expect((text.match(/await commitTestSave\(newTest\)/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(text).toContain('disabled={isSavingTest}');
+  });
+
+  test('teacher submission delete and import share a Promise-aware in-flight guard', async () => {
+    const text = await source('src/components/VerificheOnlineView.tsx');
+    expect(text).toContain('onDeleteSubmission: (submissionId: string) => Promise<void>;');
+    expect(text).toContain('onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;');
+    expect(text).toContain('const [isSubmissionActionPending, setIsSubmissionActionPending] = useState(false);');
+    expect(text).toContain('const submissionActionPendingRef = useRef(false);');
+    expect(text).toContain('const handleDeleteSubmission = async (submissionId: string) =>');
+    expect(text).toContain('await onDeleteSubmission(submissionId);');
+    expect(text).toContain('const handleImportSubmissions = async () =>');
+    expect(text).toContain('await onImportSubmissionsToRegister(currentSelectedTest?.udaId);');
+    expect(text).toContain('disabled={isSubmissionActionPending}');
+  });
 });
