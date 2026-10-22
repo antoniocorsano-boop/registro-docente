@@ -16,6 +16,9 @@ class MemoryVaultStore implements VaultStore {
   async putMetadata(metadata: VaultMetadataV1): Promise<void> { this.metadata = metadata; }
   async getRecord(key: VaultRecordKey): Promise<EncryptedVaultRecord | null> { return this.records.get(key) ?? null; }
   async putRecord(record: EncryptedVaultRecord): Promise<void> { this.records.set(record.recordKey as VaultRecordKey, record); }
+  async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    records.forEach(record => this.records.set(record.recordKey as VaultRecordKey, record));
+  }
   async deleteRecord(key: VaultRecordKey): Promise<void> { this.records.delete(key); }
   async listRecordKeys(): Promise<VaultRecordKey[]> { return [...this.records.keys()]; }
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }
