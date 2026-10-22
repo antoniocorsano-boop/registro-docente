@@ -65,6 +65,8 @@
 **Files:**
 - Modify: `src/persistence/durableMutationCoordinator.ts`
 - Create: `src/security/persist01hCoordinatorContract.test.ts`
+- Regression: `src/security/durableMutationCoordinator.test.ts`
+- Regression: `src/security/persist01FinalIntegrity.test.ts`
 
 **Interfaces:**
 - Consumes: existing `DurableMutationCoordinator.enqueue<T>(mutation): Promise<T>`.
@@ -92,9 +94,7 @@ Do not add a second queue. Both `enqueue` and `enqueueTask` must serialize throu
 
 - [ ] **Step 4: Run focused GREEN plus existing coordinator regressions**
 
-Run:
-- `bun test src/security/persist01hCoordinatorContract.test.ts`
-- `bun test src/security/durableMutationCoordinator.test.ts src/security/persist01FinalIntegrity.test.ts` if the first path exists; otherwise run the existing PERSIST-01 coordinator/final-integrity test files discovered in the repo.
+Run: `bun test src/security/persist01hCoordinatorContract.test.ts src/security/durableMutationCoordinator.test.ts src/security/persist01FinalIntegrity.test.ts`
 
 Expected: PASS.
 
@@ -108,8 +108,9 @@ Commit message: `feat(persist): serialize application checkpoint tasks`
 
 **Files:**
 - Modify: `src/security/secureAppStorage.ts`
-- Test: `src/security/persist01hStorageContract.test.ts`
-- Modify existing secure-storage tests where the verified-restore signature changes.
+- Create: `src/security/persist01hStorageContract.test.ts`
+- Modify: `src/security/secureAppStorage.test.ts`
+- Modify: `src/security/backupRestore.test.ts`
 
 **Interfaces:**
 - Consumes: existing `SecureVault.putMany(entries)`.
@@ -118,12 +119,12 @@ Commit message: `feat(persist): serialize application checkpoint tasks`
   - `saveUdasAndMeta(udas: UdaRecord[], meta: SecureMeta): Promise<void>`
   - `saveCustomTestsAndMeta(tests: Record<string, OnlineTest>, meta: SecureMeta): Promise<void>`
   - `saveSubmissionsAndMeta(submissions: OnlineSubmission[], meta: SecureMeta): Promise<void>`
-  - private or internal `writeCompleteSnapshotAtomic(snapshot: CompleteSecureAppSnapshot): Promise<void>`
+  - private `writeCompleteSnapshotAtomic(snapshot: CompleteSecureAppSnapshot): Promise<void>`
   - `restoreSnapshotVerified(candidate: CompleteSecureAppSnapshot, previousLogical: CompleteSecureAppSnapshot): Promise<CompleteSecureAppSnapshot>`
 
 - [ ] **Step 1: Write RED tests for domain+meta atomicity**
 
-For settings, UDA, tests and submissions assert that each public method calls one batch containing the domain record and `meta`, and that a forced batch failure leaves both prior records unchanged.
+For settings, UDA, tests and submissions assert that each public method issues one batch containing the domain record and `meta`, and that a forced batch failure leaves both prior records unchanged.
 
 - [ ] **Step 2: Write RED tests for full restore atomicity and rollback**
 
@@ -134,7 +135,7 @@ Pin:
 
 - [ ] **Step 3: Run focused RED**
 
-Run: `bun test src/security/persist01hStorageContract.test.ts`
+Run: `bun test src/security/persist01hStorageContract.test.ts src/security/secureAppStorage.test.ts src/security/backupRestore.test.ts`
 
 Expected: FAIL on missing domain+meta methods, sequential full snapshot write, and old restore signature.
 
@@ -144,9 +145,7 @@ Keep `sanitizePersistedSettings` at the storage boundary. Do not expose `vault.p
 
 - [ ] **Step 5: Run focused GREEN and Secure Vault regressions**
 
-Run:
-- `bun test src/security/persist01hStorageContract.test.ts`
-- `bun test src/security/*.test.ts`
+Run: `bun test src/security/persist01hStorageContract.test.ts src/security/secureAppStorage.test.ts src/security/backupRestore.test.ts src/security/secureVault.test.ts`
 
 Expected: PASS before proceeding.
 
@@ -222,11 +221,13 @@ Commit message: `feat(persist): add mutation truth and idempotency helpers`
 **Files:**
 - Modify: `src/App.tsx`
 - Modify: `src/security/durableAppMutationIntegrity.test.ts`
-- Modify/create: `src/security/persist01hUiContract.test.ts`
+- Create/modify: `src/security/persist01hUiContract.test.ts`
 
 **Interfaces:**
 - Consumes Task 1 `enqueueTask`, Task 2 domain+meta storage methods, Task 3 helpers.
-- Produces Promise-returning handlers for classes/evaluations/behaviors/students/settings/submission deletion/import and existing Promise-aware UDA/tests/submission append.
+- Produces Promise-returning handlers for classes/evaluations/behaviors/students/settings/submission deletion/import and preserves existing Promise-aware UDA/tests/submission append.
+- Settings callback contract: `handleUpdateSettings(patch: Partial<AppSettings>): Promise<void>`; its queued derive is `current => applySettingsPatch(current, patch)`.
+- `SettingsView` explicit save will call `diffSettings(settings, formData)` and pass only that patch; theme persistence passes exactly `{ theme: themeId }`.
 - Domain coordinators for settings/UDA/tests/submissions operate on `{ domain, meta }`, derive latest committed state at FIFO execution time, persist domain+meta atomically, then publish both refs/states.
 
 - [ ] **Step 1: Write RED contracts for the global backup ledger**
@@ -235,7 +236,7 @@ Pin in runtime/source contracts that settings, UDA, tests and submissions pair t
 
 - [ ] **Step 2: Write RED contracts for Promise-returning App handlers**
 
-Pin exact handler signatures/behavior so `handleSaveEvaluations`, `handleSaveBehaviors`, student mutations, settings update, submission delete and submission import return durable Promises rather than swallowing them with `void ...catch`.
+Pin exact handler signatures/behavior so `handleAddClass`, `handleDeleteClass`, `handleSaveEvaluations`, `handleSaveBehaviors`, student mutations, `handleUpdateSettings`, submission delete and submission import return durable Promises rather than swallowing them with `void ...catch`.
 
 - [ ] **Step 3: Write RED contract for deterministic submission import**
 
@@ -275,7 +276,7 @@ Commit message: `refactor(persist): propagate durable mutation promises and ledg
 
 **Interfaces:**
 - Consumes Promise-returning callbacks from Task 4.
-- Settings uses Task 3 `diffSettings`; theme sends a theme-only patch.
+- Settings uses Task 3 `diffSettings`; theme sends exactly `{ theme: AppTheme }`.
 - Produces one local pending boundary per form/view; retry-relevant draft survives failure.
 
 - [ ] **Step 1: Write RED for evaluation and behavior reentrancy**
@@ -293,9 +294,9 @@ Pin:
 - [ ] **Step 3: Write RED for settings truthfulness**
 
 Pin:
-- explicit form save awaits Promise before success;
+- explicit form save passes `diffSettings(settings, formData)` and awaits its Promise before success;
 - save failure preserves form data;
-- theme action persists only `{ theme }` against latest committed settings and cannot submit unrelated draft fields;
+- theme action passes only `{ theme: themeId }` and cannot submit unrelated draft fields;
 - theme/save controls are guarded while their respective persistence is pending.
 
 - [ ] **Step 4: Write RED for repeated class actions**
@@ -376,17 +377,17 @@ Commit message: `fix(persist): guard UDA test and submission actions in flight`
 **Files:**
 - Modify: `src/App.tsx`
 - Modify: `src/components/PrivacyView.tsx`
-- Modify: `src/security/secureAppStorage.ts` only if integration reveals a Task 2 signature correction.
+- Modify: `src/security/secureAppStorage.ts` only if integration reveals a Task 2 signature correction backed by a new RED.
 - Test: `src/security/persist01hMutationHelpers.test.ts`
 - Test: `src/security/persist01hUiContract.test.ts`
 - Test: `src/security/persist01hCoordinatorContract.test.ts`
 
 **Interfaces:**
 - Consumes Task 1 `enqueueTask`, Task 2 atomic restore, Task 3 `PreparedBackupCheckpoint`/receipt helpers.
-- Produces App callbacks conceptually:
+- Produces:
   - `prepareEncryptedBackup(): Promise<PreparedBackupCheckpoint>`
-  - `markEncryptedBackupExported(checkpoint): Promise<void>`
-  - `handleImportEncryptedBackup(decryptedData): Promise<void>` serialized through `enqueueTask`.
+  - `markEncryptedBackupExported(checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>): Promise<void>`
+  - `handleImportEncryptedBackup(decryptedData: unknown): Promise<void>` serialized through `enqueueTask`.
 
 - [ ] **Step 1: Write RED for checkpoint ordering**
 
@@ -445,7 +446,7 @@ Run:
 - `bun test src/security/*.test.ts`
 - `bun run lint`
 - `bun run build`
-- production startup smoke using the repository's existing PREDEPLOY command/workflow.
+- production startup smoke using the repository's existing PREDEPLOY workflow.
 
 Expected: all PASS with exact counts recorded; no skipped PERSIST-01/PERSIST-01H integrity suite.
 
