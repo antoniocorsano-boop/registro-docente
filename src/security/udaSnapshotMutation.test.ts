@@ -66,6 +66,6 @@ describe('PERSIST-01 UDA snapshot mutation intent', () => {
     expect(source).toContain("import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';");
     expect(source).toContain('const commitUdasMutation = useCallback((derive: (current: UdaRecord[]) => UdaRecord[])');
     expect(source).toContain('const mutation = createUdaSnapshotMutation(udasRef.current, newUdas);');
-    expect(source).toContain('void commitUdasMutation(mutation)');
+    expect(source).toContain('return commitUdasMutation(mutation).then(() => undefined);');
   });
 });
