@@ -14,9 +14,11 @@ describe('PERSIST-01 durable App mutation integrity', () => {
   test('routes appData and meta through the durable commit boundary', () => {
     expect(appSource).toContain('createDurableMutationCoordinator');
     expect(appSource).toContain('commitAppDataMutation');
+    expect(appSource).toContain('commitMetaMutation');
     expect(appSource).toContain('saveAppDataAndMeta');
     expect(appSource).not.toContain('Promise.all([\n      secureStorage.saveAppData');
     expect(appSource).not.toContain('persistAppData(');
+    expect(appSource).not.toContain('void secureStorage.saveMeta(nextMeta)');
     expect(appSource).toContain('Salvataggio non riuscito. La modifica non è stata applicata.');
   });
 
