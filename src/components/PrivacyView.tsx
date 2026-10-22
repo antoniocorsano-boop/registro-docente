@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
-import type { CompleteSecureAppSnapshot } from '../security/secureAppStorage';
+import type { PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
 import { today } from '../utils';
 import {
   ShieldCheck,
@@ -23,10 +23,10 @@ import {
 interface PrivacyViewProps {
   settings: AppSettings;
   classes: ClassData[];
-  backupSnapshot: CompleteSecureAppSnapshot;
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
-  onExportEncryptedBackup: (encryptedJson: string) => void;
+  onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;
+  onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
 }
@@ -34,10 +34,10 @@ interface PrivacyViewProps {
 export const PrivacyView: React.FC<PrivacyViewProps> = ({
   settings,
   classes,
-  backupSnapshot,
   isPrivacyShieldActive,
   onTogglePrivacyShield,
-  onExportEncryptedBackup,
+  onPrepareEncryptedBackup,
+  onRecordBackupExport,
   onImportEncryptedBackup,
   onFactoryReset
 }) => {
@@ -73,11 +73,12 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     }
 
     setIsEncrypting(true);
+    let downloadInitiated = false;
     try {
-      const payload = createBackupPayload(backupSnapshot);
+      const checkpoint = await onPrepareEncryptedBackup();
+      const payload = createBackupPayload(checkpoint.snapshot);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
 
-      // Download file
       const blob = new Blob([encryptedString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -85,16 +86,21 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       a.download = `Backup_Cifrato_GDPR_${today()}.enc.json`;
       document.body.appendChild(a);
       a.click();
+      downloadInitiated = true;
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      onExportEncryptedBackup(encryptedString);
 
+      await onRecordBackupExport(checkpoint);
       setEncryptPassword('');
       setConfirmPassword('');
       alert('Backup protetto con crittografia AES-256-GCM esportato con successo!');
     } catch (err) {
       console.error(err);
-      alert('Errore durante la cifratura del backup.');
+      if (downloadInitiated) {
+        alert('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
+      } else {
+        alert('Errore durante la preparazione o cifratura del backup.');
+      }
     } finally {
       setIsEncrypting(false);
     }
