@@ -19,7 +19,8 @@ function sectionBetween(start: string, end: string): string {
 
 describe('PERSIST-01H App mutation boundary contract', () => {
   test('settings UDA tests and submissions commit domain plus backup meta atomically', () => {
-    expect(appSource).toContain("import { incrementBackupChanges");
+    expect(appSource).toContain("from './persistence/backupCheckpoint'");
+    expect(appSource).toContain('incrementBackupChanges');
 
     const settings = sectionBetween('const commitSettingsMutation', 'const commitUdasMutation');
     expect(settings).toContain('metaRef.current');
@@ -166,8 +167,11 @@ describe('PERSIST-01H pending intent boundaries', () => {
 
 describe('PERSIST-01H truthful backup and restore integration', () => {
   test('backup preparation is serialized and snapshots committed refs only when the task begins', () => {
-    expect(appSource).toContain("import { applyBackupReceipt, incrementBackupChanges, prepareBackupCheckpoint");
-    expect(appSource).toContain("type PreparedBackupCheckpoint");
+    expect(appSource).toContain("from './persistence/backupCheckpoint'");
+    expect(appSource).toContain('applyBackupReceipt');
+    expect(appSource).toContain('incrementBackupChanges');
+    expect(appSource).toContain('prepareBackupCheckpoint');
+    expect(appSource).toContain('type PreparedBackupCheckpoint');
     const backup = sectionBetween('// Prepare encrypted backup checkpoint', '// Import Encrypted Backup');
     expect(backup).toContain('const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> =>');
     expect(backup).toContain('return mutationCoordinator.enqueueTask(() =>');
