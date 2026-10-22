@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createDurableMutationCoordinator } from '../persistence/durableMutationCoordinator';
 
+// Test-only RED contract for the serialized application task primitive.
 function requireEnqueueTask(coordinator: ReturnType<typeof createDurableMutationCoordinator>) {
   const enqueueTask = (coordinator as unknown as {
     enqueueTask?: <T>(task: () => Promise<T> | T) => Promise<T>;
