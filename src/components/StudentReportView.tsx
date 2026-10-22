@@ -286,11 +286,17 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   const q1Grades = grades.filter(g => g.period === 'Q1');
   const q2Grades = grades.filter(g => g.period === 'Q2');
 
+  const useWeighted = settings?.useWeightedAverage === true;
   const totalWeightedAvg = calcWeightedAvg(grades, weights);
   const totalSimpleAvg = calcAvg(grades);
   const q1WeightedAvg = calcWeightedAvg(q1Grades, weights);
   const q2WeightedAvg = calcWeightedAvg(q2Grades, weights);
-  const level = getCompetenceLevel(totalWeightedAvg);
+  const q1SimpleAvg = calcAvg(q1Grades);
+  const q2SimpleAvg = calcAvg(q2Grades);
+  const activeTotalAvg = useWeighted ? totalWeightedAvg : totalSimpleAvg;
+  const activeQ1Avg = useWeighted ? q1WeightedAvg : q1SimpleAvg;
+  const activeQ2Avg = useWeighted ? q2WeightedAvg : q2SimpleAvg;
+  const level = getCompetenceLevel(activeTotalAvg);
 
   const studentBehaviors = (currentClass.behaviors || [])
     .filter(b => b.studentId === currentStudent.id)
@@ -427,14 +433,14 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         {/* Student KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
-            <b className={`text-2xl font-bold block ${totalWeightedAvg !== null && totalWeightedAvg < 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
-              {formatGrade(totalWeightedAvg)}
+            <b className={`text-2xl font-bold block ${activeTotalAvg !== null && activeTotalAvg < 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {formatGrade(activeTotalAvg)}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Media ponderata configurabile
+              {useWeighted ? 'Media ponderata configurabile' : 'Media aritmetica'}
             </span>
             <span className="text-[10px] text-slate-500 block mt-0.5">
-              Semplice: {formatGrade(totalSimpleAvg)}
+              {useWeighted ? `Semplice: ${formatGrade(totalSimpleAvg)}` : `Ponderata: ${formatGrade(totalWeightedAvg)}`}
             </span>
           </div>
 
@@ -452,12 +458,12 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
 
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
             <div className="text-sm font-bold text-slate-100 flex items-center justify-center gap-2 pt-1 font-mono">
-              <span>Q1: <b>{formatGrade(q1WeightedAvg)}</b></span>
+              <span>Q1: <b>{formatGrade(activeQ1Avg)}</b></span>
               <span>·</span>
-              <span>Q2: <b>{formatGrade(q2WeightedAvg)}</b></span>
+              <span>Q2: <b>{formatGrade(activeQ2Avg)}</b></span>
             </div>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mt-2 block">
-              Medie Quadrimestri (Pond.)
+              Medie periodi ({useWeighted ? 'Pond.' : 'Aritm.'})
             </span>
           </div>
 
