@@ -507,10 +507,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         scoresMap[r.item.id] = Math.round(r.similarity * 100);
       });
       setSemanticScores(scoresMap);
-      showStatus(`⚡ Ricerca semantica completata (${embeddingConfig.modelName || 'Termux/llama-server'})`);
+      showStatus('⚡ Ricerca semantica completata');
     } catch (err: any) {
       console.error('Semantic search error:', err);
-      showStatus(`⚠️ Ricerca semantica non riuscita: ${err.message || 'Verifica llama-server su Termux'}`);
+      showStatus('⚠️ Ricerca semantica non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsSearchingSemantic(false);
     }
@@ -535,10 +535,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         .slice(0, 4)
         .map(r => ({ uda: r.item.uda, score: Math.round(r.similarity * 100) }));
       setSuggestedPredecessors(topSuggestions);
-      showStatus(`✨ Trovate ${topSuggestions.length} UDA correlate tramite embedding locale`);
+      showStatus(`✨ Trovate ${topSuggestions.length} UDA correlate`);
     } catch (err: any) {
       console.error('Suggest dependencies error:', err);
-      showStatus(`⚠️ Analisi propedeuticità non riuscita: ${err.message || 'Controlla llama-server'}`);
+      showStatus('⚠️ Analisi propedeuticità non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsAnalyzingDependenciesSemantic(false);
     }
@@ -569,7 +569,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       showStatus(`📊 Mappatura semantica competenze D.M. 221/2025 calcolata`);
     } catch (err: any) {
       console.error('Competency alignment error:', err);
-      showStatus(`⚠️ Errore mappatura semantica: ${err.message || 'Verifica llama-server'}`);
+      showStatus('⚠️ Mappatura semantica non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsAnalyzingCompetenciesSemantic(false);
     }
@@ -593,7 +593,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     }
 
     setIsGeneratingAi(true);
-    showStatus('🤖 Generazione traccia UDA con Gemini API in corso...');
+    showStatus('🤖 Generazione traccia UDA con assistenza AI in corso...');
 
     try {
       const res = await fetch('/api/gemini/generate-uda-description', {
@@ -615,7 +615,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Errore nella generazione con Gemini');
+        const serverConfigurationMissing =
+          res.status === 500 &&
+          typeof data.error === 'string' &&
+          data.error.includes('non è configurata nel server');
+        throw new Error(serverConfigurationMissing ? 'AI_SERVER_CONFIGURATION_MISSING' : 'AI_GENERATION_FAILED');
       }
 
       if (data.description) {
@@ -633,11 +637,16 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         } else {
           setNewDescription(data.description);
         }
-        showStatus('✨ Descrizione UDA generata con successo con Gemini AI!');
+        showStatus('✨ Descrizione UDA generata con successo con assistenza AI!');
       }
     } catch (err: any) {
       console.error('AI generation error:', err);
-      showStatus(`⚠️ Errore generazione: ${err.message || 'Riprova'}`);
+      const serverConfigurationMissing = err instanceof Error && err.message === 'AI_SERVER_CONFIGURATION_MISSING';
+      showStatus(
+        serverConfigurationMissing
+          ? "⚠️ Servizio AI non configurato sul server. Contatta l'amministratore."
+          : '⚠️ Generazione non riuscita. Riprova.'
+      );
     } finally {
       setIsGeneratingAi(false);
     }
@@ -1639,12 +1648,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     }`}
                     title={
                       isSemanticSearch
-                        ? `Ricerca Semantica Attiva (${embeddingConfig.provider === 'local' ? 'llama.cpp Termux' : 'Gemini Cloud'})`
-                        : 'Attiva la ricerca concettuale vettoriale basata su embedding'
+                        ? 'Ricerca semantica attiva'
+                        : 'Attiva la ricerca concettuale'
                     }
                   >
                     <Cpu className={`w-3 h-3 ${isSearchingSemantic ? 'animate-spin' : ''}`} />
-                    <span>{isSearchingSemantic ? 'Vettori...' : 'Semantica AI'}</span>
+                    <span>{isSearchingSemantic ? 'Ricerca...' : 'Semantica AI'}</span>
                   </button>
                 </div>
 
@@ -1745,7 +1754,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                                           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600'
                                           : 'bg-slate-800 text-slate-300 border-slate-700'
                                       }`}
-                                      title="Punteggio di affinità semantica calcolato dal modello vettoriale"
+                                      title="Punteggio di affinità concettuale"
                                     >
                                       ⚡ {semanticScores[u.id]}%
                                     </span>
@@ -2436,7 +2445,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       onClick={() => handleGenerateUdaDescription(u)}
                       disabled={isGeneratingAi}
                       className="px-2.5 py-1 rounded-lg neon-btn-primary text-[11px] font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-sm"
-                      title="Genera traccia testuale completa dell'UDA con l'API Gemini in base a titolo e durata"
+                      title="Genera traccia testuale completa dell'UDA con assistenza AI in base a titolo e durata"
                     >
                       <Sparkles className={`w-3 h-3 text-cyan-300 ${isGeneratingAi ? 'animate-spin' : ''}`} />
                       <span>{isGeneratingAi ? 'Generazione...' : 'Genera Descrizione UDA'}</span>
@@ -2547,10 +2556,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     onClick={() => handleSuggestDependenciesSemantic(selectedUdaForDetail)}
                     disabled={isAnalyzingDependenciesSemantic}
                     className="self-start sm:self-auto px-2.5 py-1 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                    title="Analizza la similarità concettuale con le altre UDA usando il modello di embedding locale per suggerire propedeuticità coerenti"
+                    title="Analizza le somiglianze concettuali con le altre UDA per suggerire propedeuticità coerenti"
                   >
                     <Cpu className={`w-3.5 h-3.5 text-cyan-400 ${isAnalyzingDependenciesSemantic ? 'animate-spin' : ''}`} />
-                    <span>{isAnalyzingDependenciesSemantic ? 'Analisi vettori...' : '⚡ Suggerisci Propedeuticità con Embedding'}</span>
+                    <span>{isAnalyzingDependenciesSemantic ? 'Analisi...' : '⚡ Suggerisci propedeuticità'}</span>
                   </button>
                 </div>
 
@@ -2560,7 +2569,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <div className="flex items-center justify-between text-xs text-cyan-300 font-semibold">
                       <span className="flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                        UDA Correlate Suggerite tramite Embedding ({embeddingConfig.modelName || 'Termux/llama-server'}):
+                        UDA correlate suggerite:
                       </span>
                       <button
                         type="button"
@@ -2661,7 +2670,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     onClick={() => handleGenerateUdaDescription(selectedUdaForDetail)}
                     disabled={isGeneratingAi}
                     className="self-start sm:self-auto px-3 py-1.5 rounded-lg neon-btn-primary text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-60"
-                    title="Genera traccia testuale completa dell'attività con l'API Gemini basandoti su titolo e durata nel Gantt"
+                    title="Genera traccia testuale completa dell'attività con assistenza AI basandoti su titolo e durata nel Gantt"
                   >
                     <Sparkles className={`w-3.5 h-3.5 text-cyan-300 ${isGeneratingAi ? 'animate-spin' : ''}`} />
                     <span>{isGeneratingAi ? 'Generazione in corso...' : 'Genera Descrizione UDA'}</span>
@@ -2672,7 +2681,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   rows={6}
                   value={selectedUdaForDetail.description || ''}
                   onChange={e => handleUpdateUdaField('description', e.target.value)}
-                  placeholder="Descrivi la motivazione dell'UDA, i contenuti chiave e il percorso formativo (o clicca su 'Genera Descrizione UDA' per creare la traccia completa con Gemini)..."
+                  placeholder="Descrivi la motivazione dell'UDA, i contenuti chiave e il percorso formativo (o clicca su 'Genera Descrizione UDA' per creare la traccia completa con assistenza AI)..."
                   className="w-full p-3 rounded-lg neon-input text-white text-xs sm:text-sm resize-y leading-relaxed font-sans"
                 />
               </div>
@@ -2692,10 +2701,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     onClick={() => handleAnalyzeCompetenciesSemantic(selectedUdaForDetail)}
                     disabled={isAnalyzingCompetenciesSemantic}
                     className="self-start sm:self-auto px-2.5 py-1 rounded bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                    title="Confronta il testo dell'UDA con i descrittori ministeriali D.M. 221/2025 usando l'embedding locale"
+                    title="Confronta il testo dell'UDA con i descrittori ministeriali D.M. 221/2025 tramite analisi semantica"
                   >
                     <Brain className={`w-3.5 h-3.5 text-amber-400 ${isAnalyzingCompetenciesSemantic ? 'animate-spin' : ''}`} />
-                    <span>{isAnalyzingCompetenciesSemantic ? 'Analisi vettoriale...' : '🧠 Mappatura Semantica D.M. 221/2025'}</span>
+                    <span>{isAnalyzingCompetenciesSemantic ? 'Analisi semantica...' : '🧠 Mappatura Semantica D.M. 221/2025'}</span>
                   </button>
                 </div>
 
@@ -3102,15 +3111,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     })}
                     disabled={isGeneratingAi || !newTitle.trim()}
                     className="px-2 py-0.5 rounded text-[10px] font-bold text-cyan-300 bg-cyan-950 border border-cyan-800 hover:bg-cyan-900 disabled:opacity-40 flex items-center gap-1 cursor-pointer transition-all"
-                    title="Genera traccia testuale completa dell'UDA con l'API Gemini"
+                    title="Genera traccia testuale completa dell'UDA con assistenza AI"
                   >
                     <Sparkles className={`w-3 h-3 text-cyan-300 ${isGeneratingAi ? 'animate-spin' : ''}`} />
-                    <span>{isGeneratingAi ? 'Generazione...' : 'Genera con Gemini'}</span>
+                    <span>{isGeneratingAi ? 'Generazione...' : 'Genera con AI'}</span>
                   </button>
                 </div>
                 <textarea
                   rows={3}
-                  placeholder="Inserisci la descrizione oppure clicca su 'Genera con Gemini'..."
+                  placeholder="Inserisci la descrizione oppure clicca su 'Genera con AI'..."
                   value={newDescription}
                   onChange={e => setNewDescription(e.target.value)}
                   className="w-full p-2.5 neon-input text-white text-xs resize-y leading-relaxed font-sans"

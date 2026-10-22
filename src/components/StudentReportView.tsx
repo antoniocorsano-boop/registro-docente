@@ -762,7 +762,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           <div className="p-6 text-center rounded-xl bg-slate-900/40 border border-slate-800 text-slate-400 text-xs">
             <Layers className="w-8 h-8 text-slate-500 mx-auto mb-2" />
             <p className="font-semibold text-slate-300">Nessuna Unità Didattica configurata per questa classe.</p>
-            <p className="text-slate-500 mt-1">Vai alla sezione "UDA & Gantt" per pianificare le unità curricolari.</p>
+            <p className="text-slate-500 mt-1">Vai alla sezione "UDA" per pianificare le unità curricolari.</p>
           </div>
         ) : (
           <div className="space-y-4 pt-1">
