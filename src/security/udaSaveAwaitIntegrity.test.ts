@@ -18,14 +18,16 @@ describe('PERSIST-01 durable UDA success sequencing', () => {
     expect(section).not.toContain('void commitUdasMutation');
   });
 
-  test('UdaGanttView has one asynchronous persistence boundary', async () => {
+  test('UdaGanttView keeps explicit asynchronous persistence boundaries for guarded actions and queued text edits', async () => {
     const source = await Bun.file('src/components/UdaGanttView.tsx').text();
 
     expect(source).toContain('onSaveUdas: (udas: UdaRecord[]) => Promise<void>;');
     expect(source).toContain('const commitUdaViewMutation = async');
+    expect(source).toContain('const queueUdaTextMutation = (nextUdas: UdaRecord[]) =>');
     expect(source).toContain('await onSaveUdas(nextUdas);');
+    expect(source).toContain('.then(() => onSaveUdas(nextUdas));');
     expect(source).toContain('afterCommit?.();');
-    expect((source.match(/onSaveUdas\(/g) || []).length).toBe(1);
+    expect((source.match(/onSaveUdas\(/g) || []).length).toBe(2);
   });
 
   test('new UDA form clears and closes only in the post-commit callback', async () => {
