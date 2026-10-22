@@ -54,6 +54,10 @@ class MemoryVaultStore implements VaultStore {
     this.records.set(record.recordKey as VaultRecordKey, record);
   }
 
+  async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    for (const record of records) await this.putRecord(record);
+  }
+
   async deleteRecord(key: VaultRecordKey): Promise<void> {
     this.records.delete(key);
   }
@@ -263,7 +267,6 @@ describe('SEC-1 verify-before-delete migration', () => {
     expect(await vaultStore.listRecordKeys()).toEqual([]);
   });
 });
-
 
 describe('SEC-1 post-activation legacy cleanup recovery', () => {
   async function createMatchingActiveVault(storage: MemoryLegacyStorage): Promise<SecureVault> {
