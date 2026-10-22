@@ -56,6 +56,12 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(report).toContain('Profilo interno di evidenze');
     expect(report).toContain('Fascia analitica');
     expect(report).toContain('Soglia analitica 6/10');
+    expect(report).toContain('const useWeighted = settings?.useWeightedAverage === true;');
+    expect(report).toContain('const activeTotalAvg = useWeighted ? totalWeightedAvg : totalSimpleAvg;');
+    expect(report).toContain('const activeQ1Avg = useWeighted ? q1WeightedAvg : q1SimpleAvg;');
+    expect(report).toContain('const activeQ2Avg = useWeighted ? q2WeightedAvg : q2SimpleAvg;');
+    expect(report).toContain('const level = getCompetenceLevel(activeTotalAvg);');
+    expect(report).toContain('{formatGrade(activeTotalAvg)}');
     expect(report).not.toContain('({level.id})');
     expect(report).not.toContain('{item.udaLevel.id} ·');
   });
