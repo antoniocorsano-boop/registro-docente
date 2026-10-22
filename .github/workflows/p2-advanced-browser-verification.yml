@@ -1,0 +1,170 @@
+name: P2-ADVANCED-01 Real Browser Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact qualified product head
+        uses: actions/checkout@v4
+        with:
+          ref: 8f41d6d8bf23a75a7a630b4f99218af46044cf5c
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install application dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium for verification only
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Build exact head
+        run: bun run build
+
+      - name: Start production server
+        shell: bash
+        run: |
+          NODE_ENV=production PORT=4173 node server.ts >/tmp/p2-advanced-server.log 2>&1 &
+          echo $! >/tmp/p2-advanced-server.pid
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/p2-advanced-server.log
+          exit 1
+
+      - name: Run Chromium verification at 390px and 1280px
+        shell: bash
+        run: |
+          cat > p2-advanced-browser-check.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs/promises';
+
+          const assert = (condition, message) => {
+            if (!condition) throw new Error(message);
+          };
+
+          await fs.mkdir('browser-artifacts', { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+          const page = await context.newPage();
+          const consoleErrors = [];
+          page.on('console', msg => {
+            if (msg.type() === 'error') consoleErrors.push(msg.text());
+          });
+          page.on('pageerror', err => consoleErrors.push(String(err)));
+
+          await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+
+          const setup = page.getByRole('button', { name: 'Configura archivio protetto' });
+          if (await setup.isVisible().catch(() => false)) {
+            await page.locator('#vault-password').fill('P2AdvancedBrowser-2026!');
+            await setup.click();
+          }
+
+          await page.getByRole('button', { name: 'Menu' }).waitFor({ state: 'visible', timeout: 30000 });
+          await page.getByRole('button', { name: 'Menu' }).click();
+          await page.getByRole('button', { name: 'Impostazioni' }).click();
+          await page.getByRole('heading', { name: /Impostazioni Generali/ }).waitFor({ state: 'visible' });
+
+          const summary = page.locator('summary').filter({ hasText: 'Impostazioni avanzate e integrazioni' });
+          await summary.waitFor({ state: 'visible' });
+          const details = summary.locator('..');
+          const technicalTexts = [
+            'Motore Vettoriale & Embedding Locale',
+            'URL Endpoint Vettoriale',
+            'Nome Modello GGUF / Identificativo',
+            'API Key (Opzionale / per server protetti)'
+          ];
+
+          const assertTechnicalHidden = async (label) => {
+            const loc = page.getByText(label, { exact: false }).first();
+            assert(!(await loc.isVisible()), `390/1280 closed: technical label visible: ${label}`);
+          };
+
+          const assertTechnicalVisible = async (label) => {
+            const loc = page.getByText(label, { exact: false }).first();
+            assert(await loc.isVisible(), `open: technical label not visible: ${label}`);
+          };
+
+          // 390 px: closed by default, no technical surface leakage.
+          assert(!(await details.getAttribute('open')), '390: advanced disclosure is unexpectedly open by default');
+          for (const label of technicalTexts) await assertTechnicalHidden(label);
+          assert(await page.getByText("Aspetto dell'interfaccia", { exact: true }).isVisible(), '390: teacher-facing appearance label missing');
+          let overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+          assert(!overflow, '390: horizontal page overflow detected while advanced settings are closed');
+          await page.screenshot({ path: 'browser-artifacts/p2-advanced-390-closed.png', fullPage: true });
+
+          // 390 px: advanced section opens and keeps all technical capabilities reachable.
+          await summary.click();
+          for (const label of technicalTexts) await assertTechnicalVisible(label);
+          const endpointField = page.locator('label').filter({ hasText: 'URL Endpoint Vettoriale' }).locator('..').locator('input');
+          await endpointField.fill('http://127.0.0.1:8081');
+          assert((await endpointField.inputValue()) === 'http://127.0.0.1:8081', '390: endpoint field is not editable');
+          assert(await page.getByRole('button', { name: /Testa Connessione/ }).isVisible(), '390: connection test control missing');
+          assert(await page.getByRole('button', { name: /Calcola Affinità Semantica/ }).isVisible(), '390: semantic playground control missing');
+          overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+          assert(!overflow, '390: horizontal page overflow detected while advanced settings are open');
+          await page.screenshot({ path: 'browser-artifacts/p2-advanced-390-open.png', fullPage: true });
+
+          // Save remains functional and teacher-facing.
+          let dialogText = '';
+          page.once('dialog', async dialog => {
+            dialogText = dialog.message();
+            await dialog.accept();
+          });
+          await page.getByRole('button', { name: 'Salva profilo e preferenze' }).click();
+          await page.waitForTimeout(250);
+          assert(dialogText === 'Impostazioni e preferenze salvate con successo!', `Unexpected save dialog: ${dialogText}`);
+
+          // 1280 px: same closed/open behavior and no overflow.
+          await summary.click();
+          await page.setViewportSize({ width: 1280, height: 900 });
+          await page.waitForTimeout(150);
+          assert(!(await details.getAttribute('open')), '1280: advanced disclosure did not remain closed');
+          for (const label of technicalTexts) await assertTechnicalHidden(label);
+          overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+          assert(!overflow, '1280: horizontal page overflow detected while advanced settings are closed');
+          await page.screenshot({ path: 'browser-artifacts/p2-advanced-1280-closed.png', fullPage: true });
+
+          await summary.click();
+          for (const label of technicalTexts) await assertTechnicalVisible(label);
+          overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+          assert(!overflow, '1280: horizontal page overflow detected while advanced settings are open');
+          await page.screenshot({ path: 'browser-artifacts/p2-advanced-1280-open.png', fullPage: true });
+
+          assert(consoleErrors.length === 0, `Browser/page errors: ${consoleErrors.join(' | ')}`);
+          console.log('P2-ADVANCED-01 REAL-BROWSER PASS');
+          console.log('Viewport 390x844: closed/open disclosure, controls, save, no overflow PASS');
+          console.log('Viewport 1280x900: closed/open disclosure, no overflow PASS');
+          console.log('Console/page errors: 0');
+
+          await context.close();
+          await browser.close();
+          EOF
+          node p2-advanced-browser-check.mjs
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-advanced-browser-evidence
+          path: browser-artifacts/
+          if-no-files-found: warn
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/p2-advanced-server.log || true
