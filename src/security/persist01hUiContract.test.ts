@@ -123,7 +123,7 @@ describe('PERSIST-01H pending intent boundaries', () => {
     expect(verificheSource).toContain('const testSavePendingRef = useRef(false);');
     expect(verificheSource).toContain('const commitTestSaveIntent = async (buildTest: () => OnlineTest)');
 
-    const saveBoundary = sourceSection(verificheSource, 'const commitTestSaveIntent', '// Open interactive editor for new test');
+    const saveBoundary = sourceSection(verificheSource, 'const commitTestSaveIntent', '// Save interactive test');
     expect(saveBoundary).toContain('if (testSavePendingRef.current) return null;');
     expect(saveBoundary).toContain('testSavePendingRef.current = true;');
     expect(saveBoundary).toContain('setIsSavingTest(true);');
