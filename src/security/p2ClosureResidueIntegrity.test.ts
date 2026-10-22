@@ -11,7 +11,7 @@ describe('P2 closure residue remediation', () => {
     expect(report).not.toContain('UDA & Gantt');
   });
 
-  test('primary UDA workflow hides provider and embedding implementation vocabulary', async () => {
+  test('primary UDA workflow hides provider, model and embedding implementation vocabulary', async () => {
     const uda = await source('components/UdaGanttView.tsx');
 
     for (const technicalLabel of [
@@ -24,6 +24,12 @@ describe('P2 closure residue remediation', () => {
       'Suggerisci Propedeuticità con Embedding',
       'UDA Correlate Suggerite tramite Embedding',
       "embeddingConfig.modelName || 'Termux/llama-server'",
+      'Verifica llama-server su Termux',
+      'tramite embedding locale',
+      'Controlla llama-server',
+      'modello vettoriale',
+      'Gemini API in corso',
+      'con Gemini AI',
     ]) {
       expect(uda).not.toContain(technicalLabel);
     }
@@ -32,5 +38,6 @@ describe('P2 closure residue remediation', () => {
     expect(uda).toContain('Attiva la ricerca concettuale');
     expect(uda).toContain('Suggerisci propedeuticità');
     expect(uda).toContain('UDA correlate suggerite');
+    expect(uda).toContain('Generazione traccia UDA con assistenza AI in corso');
   });
 });
