@@ -2436,7 +2436,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       onClick={() => handleGenerateUdaDescription(u)}
                       disabled={isGeneratingAi}
                       className="px-2.5 py-1 rounded-lg neon-btn-primary text-[11px] font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-sm"
-                      title="Genera traccia testuale completa dell'UDA con l'API Gemini in base a titolo e durata"
+                      title="Genera traccia testuale completa dell'UDA con assistenza AI in base a titolo e durata"
                     >
                       <Sparkles className={`w-3 h-3 text-cyan-300 ${isGeneratingAi ? 'animate-spin' : ''}`} />
                       <span>{isGeneratingAi ? 'Generazione...' : 'Genera Descrizione UDA'}</span>
@@ -2661,7 +2661,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     onClick={() => handleGenerateUdaDescription(selectedUdaForDetail)}
                     disabled={isGeneratingAi}
                     className="self-start sm:self-auto px-3 py-1.5 rounded-lg neon-btn-primary text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-60"
-                    title="Genera traccia testuale completa dell'attività con l'API Gemini basandoti su titolo e durata nel Gantt"
+                    title="Genera traccia testuale completa dell'attività con assistenza AI basandoti su titolo e durata nel Gantt"
                   >
                     <Sparkles className={`w-3.5 h-3.5 text-cyan-300 ${isGeneratingAi ? 'animate-spin' : ''}`} />
                     <span>{isGeneratingAi ? 'Generazione in corso...' : 'Genera Descrizione UDA'}</span>
@@ -2672,7 +2672,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   rows={6}
                   value={selectedUdaForDetail.description || ''}
                   onChange={e => handleUpdateUdaField('description', e.target.value)}
-                  placeholder="Descrivi la motivazione dell'UDA, i contenuti chiave e il percorso formativo (o clicca su 'Genera Descrizione UDA' per creare la traccia completa con Gemini)..."
+                  placeholder="Descrivi la motivazione dell'UDA, i contenuti chiave e il percorso formativo (o clicca su 'Genera Descrizione UDA' per creare la traccia completa con assistenza AI)..."
                   className="w-full p-3 rounded-lg neon-input text-white text-xs sm:text-sm resize-y leading-relaxed font-sans"
                 />
               </div>
@@ -2692,10 +2692,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     onClick={() => handleAnalyzeCompetenciesSemantic(selectedUdaForDetail)}
                     disabled={isAnalyzingCompetenciesSemantic}
                     className="self-start sm:self-auto px-2.5 py-1 rounded bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                    title="Confronta il testo dell'UDA con i descrittori ministeriali D.M. 221/2025 usando l'embedding locale"
+                    title="Confronta il testo dell'UDA con i descrittori ministeriali D.M. 221/2025 tramite analisi semantica"
                   >
                     <Brain className={`w-3.5 h-3.5 text-amber-400 ${isAnalyzingCompetenciesSemantic ? 'animate-spin' : ''}`} />
-                    <span>{isAnalyzingCompetenciesSemantic ? 'Analisi vettoriale...' : '🧠 Mappatura Semantica D.M. 221/2025'}</span>
+                    <span>{isAnalyzingCompetenciesSemantic ? 'Analisi semantica...' : '🧠 Mappatura Semantica D.M. 221/2025'}</span>
                   </button>
                 </div>
 
@@ -3102,15 +3102,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     })}
                     disabled={isGeneratingAi || !newTitle.trim()}
                     className="px-2 py-0.5 rounded text-[10px] font-bold text-cyan-300 bg-cyan-950 border border-cyan-800 hover:bg-cyan-900 disabled:opacity-40 flex items-center gap-1 cursor-pointer transition-all"
-                    title="Genera traccia testuale completa dell'UDA con l'API Gemini"
+                    title="Genera traccia testuale completa dell'UDA con assistenza AI"
                   >
                     <Sparkles className={`w-3 h-3 text-cyan-300 ${isGeneratingAi ? 'animate-spin' : ''}`} />
-                    <span>{isGeneratingAi ? 'Generazione...' : 'Genera con Gemini'}</span>
+                    <span>{isGeneratingAi ? 'Generazione...' : 'Genera con AI'}</span>
                   </button>
                 </div>
                 <textarea
                   rows={3}
-                  placeholder="Inserisci la descrizione oppure clicca su 'Genera con Gemini'..."
+                  placeholder="Inserisci la descrizione oppure clicca su 'Genera con AI'..."
                   value={newDescription}
                   onChange={e => setNewDescription(e.target.value)}
                   className="w-full p-2.5 neon-input text-white text-xs resize-y leading-relaxed font-sans"
