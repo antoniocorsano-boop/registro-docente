@@ -414,7 +414,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Bottom Navigation for mobile */}
       {currentClass && (
-        <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--border)] flex justify-around p-1 shadow-2xl">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--border)] flex justify-around p-1 shadow-2xl">
           <button
             onClick={() => handleNav('dashboard')}
             className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[9px] leading-tight ${
