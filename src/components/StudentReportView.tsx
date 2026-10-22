@@ -116,20 +116,30 @@ function calcStudentCompetencyProfile(
   const stemClassScore = roundScore(stemClassGrades.length > 0 ? calcAvg(stemClassGrades) : null);
 
   // 2. Competenze Digitali & CAD
-  const digiStudentGrades = studentGrades.filter(g =>
-    g.type === 'test' ||
-    g.title.toLowerCase().includes('cad') ||
-    g.title.toLowerCase().includes('digital') ||
-    g.title.toLowerCase().includes('online') ||
-    g.title.toLowerCase().includes('flashcard')
+  const digitalUdaIds = new Set(
+    classUdas
+      .filter(u => {
+        const searchable = `${u.title} ${u.description || ''} ${u.competencies || ''}`.toLowerCase();
+        return (
+          searchable.includes('digital') ||
+          searchable.includes('cad') ||
+          u.lessons?.some(l => l.activityType === 'digitale') === true
+        );
+      })
+      .map(u => u.id)
   );
-  const digiClassGrades = classGrades.filter(g =>
-    g.type === 'test' ||
-    g.title.toLowerCase().includes('cad') ||
-    g.title.toLowerCase().includes('digital') ||
-    g.title.toLowerCase().includes('online') ||
-    g.title.toLowerCase().includes('flashcard')
-  );
+  const isDigitalEvidence = (g: Grade) => {
+    const title = g.title.toLowerCase();
+    return (
+      Boolean(g.udaId && digitalUdaIds.has(g.udaId)) ||
+      title.includes('cad') ||
+      title.includes('digital') ||
+      title.includes('online') ||
+      title.includes('flashcard')
+    );
+  };
+  const digiStudentGrades = studentGrades.filter(isDigitalEvidence);
+  const digiClassGrades = classGrades.filter(isDigitalEvidence);
   const digiStudentScore = roundScore(digiStudentGrades.length > 0 ? calcAvg(digiStudentGrades) : null);
   const digiClassScore = roundScore(digiClassGrades.length > 0 ? calcAvg(digiClassGrades) : null);
 

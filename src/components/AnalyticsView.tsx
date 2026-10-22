@@ -279,7 +279,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
           <div className="p-3 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
             <b className="text-2xl font-bold block text-emerald-400 drop-shadow-sm">
-              {levelCounts.AV}
+              {validAvgs.length === 0 ? '—' : levelCounts.AV}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
               Livello Avanzato (AV)
@@ -288,7 +288,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
           <div className="p-3 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
             <b className={`text-2xl font-bold block ${levelCounts.PA > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-              {levelCounts.PA}
+              {validAvgs.length === 0 ? '—' : levelCounts.PA}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
               Alunni a Rischio (PA)
