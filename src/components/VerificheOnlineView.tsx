@@ -188,47 +188,43 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     });
   };
 
-  const commitTestSave = async (test: OnlineTest): Promise<boolean> => {
-    if (testSavePendingRef.current) return false;
+  const commitTestSaveIntent = async (buildTest: () => OnlineTest): Promise<OnlineTest | null> => {
+    if (testSavePendingRef.current) return null;
     testSavePendingRef.current = true;
     setIsSavingTest(true);
     try {
+      const test = buildTest();
       await onSaveNewTest(test);
-      return true;
+      return test;
     } catch {
-      return false;
+      return null;
     } finally {
       testSavePendingRef.current = false;
       setIsSavingTest(false);
     }
   };
 
-  const handleDeleteSubmission = async (submissionId: string) => {
-    if (submissionActionPendingRef.current) return;
+  const commitSubmissionAction = async (action: () => Promise<void>): Promise<boolean> => {
+    if (submissionActionPendingRef.current) return false;
     submissionActionPendingRef.current = true;
     setIsSubmissionActionPending(true);
     try {
-      await onDeleteSubmission(submissionId);
+      await action();
+      return true;
     } catch {
-      return;
+      return false;
     } finally {
       submissionActionPendingRef.current = false;
       setIsSubmissionActionPending(false);
     }
   };
 
+  const handleDeleteSubmission = async (sub: OnlineSubmission) => {
+    await commitSubmissionAction(() => onDeleteSubmission(sub.id));
+  };
+
   const handleImportSubmissions = async () => {
-    if (submissionActionPendingRef.current) return;
-    submissionActionPendingRef.current = true;
-    setIsSubmissionActionPending(true);
-    try {
-      await onImportSubmissionsToRegister(currentSelectedTest?.udaId);
-    } catch {
-      return;
-    } finally {
-      submissionActionPendingRef.current = false;
-      setIsSubmissionActionPending(false);
-    }
+    await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId));
   };
 
   // Save interactive test
@@ -243,20 +239,21 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       return;
     }
 
-    const testId = editingTestId || `test_${uid()}`;
-    const newTest: OnlineTest = {
-      id: testId,
-      title: editorTitle.trim(),
-      description: editorDescription.trim(),
-      udaId: editorUdaId || undefined,
-      durationMinutes: Number(editorDuration) || 15,
-      questions: editorQuestions
-    };
-
-    if (!(await commitTestSave(newTest))) return;
-    setSelectedTestId(testId);
+    const savedTest = await commitTestSaveIntent(() => {
+      const testId = editingTestId || `test_${uid()}`;
+      return {
+        id: testId,
+        title: editorTitle.trim(),
+        description: editorDescription.trim(),
+        udaId: editorUdaId || undefined,
+        durationMinutes: Number(editorDuration) || 15,
+        questions: editorQuestions
+      };
+    });
+    if (!savedTest) return;
+    setSelectedTestId(savedTest.id);
     setIsEditingTest(false);
-    alert(`Test "${newTest.title}" salvato con successo!`);
+    alert(`Test "${savedTest.title}" salvato con successo!`);
   };
 
   // Parse questions from DOCX/ZIP text
@@ -345,24 +342,22 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         return;
       }
 
-      const testId = `test_auto_${uid()}`;
       const testTitle = `Test: ${file.name.replace(/\.[^/.]+$/, '')}`;
-      const newTest: OnlineTest = {
-        id: testId,
+      const savedTest = await commitTestSaveIntent(() => ({
+        id: `test_auto_${uid()}`,
         title: testTitle,
         questions,
         udaId: udas[0]?.id
-      };
-
-      if (!(await commitTestSave(newTest))) return;
-      setSelectedTestId(testId);
-      alert(`Successo! Creato il test "${testTitle}" con ${questions.length} domande estratte.`);
+      }));
+      if (!savedTest) return;
+      setSelectedTestId(savedTest.id);
+      e.target.value = '';
+      alert(`Successo! Creato il test "${savedTest.title}" con ${questions.length} domande estratte.`);
     } catch (err) {
       console.error('Error parsing file', err);
       alert("Si è verificato un errore durante l'estrazione del file ZIP / DOCX.");
     } finally {
       setIsParsingFile(false);
-      e.target.value = '';
     }
   };
 
@@ -407,19 +402,17 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       return;
     }
 
-    const testId = `test_${uid()}`;
-    const newTest: OnlineTest = {
-      id: testId,
+    const savedTest = await commitTestSaveIntent(() => ({
+      id: `test_${uid()}`,
       title: manualTitle.trim(),
       udaId: manualUdaId || undefined,
       questions
-    };
-
-    if (!(await commitTestSave(newTest))) return;
-    setSelectedTestId(testId);
+    }));
+    if (!savedTest) return;
+    setSelectedTestId(savedTest.id);
     setManualTitle('');
     setManualRawText('');
-    alert(`Test "${newTest.title}" creato con ${questions.length} domande!`);
+    alert(`Test "${savedTest.title}" creato con ${questions.length} domande!`);
   };
 
   const copyPadletLink = () => {
@@ -1434,7 +1427,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                           <td className="p-2.5">
                             <button
                               type="button"
-                              onClick={() => { void handleDeleteSubmission(sub.id); }}
+                              onClick={() => { void handleDeleteSubmission(sub); }}
                               disabled={isSubmissionActionPending}
                               className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40"
                               title="Elimina consegna"
