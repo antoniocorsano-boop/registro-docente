@@ -30,6 +30,10 @@ describe('P2 closure residue remediation', () => {
       'modello vettoriale',
       'Gemini API in corso',
       'con Gemini AI',
+      'API Gemini',
+      'traccia completa con Gemini',
+      "usando l'embedding locale",
+      'Analisi vettoriale...',
     ]) {
       expect(uda).not.toContain(technicalLabel);
     }
@@ -39,5 +43,7 @@ describe('P2 closure residue remediation', () => {
     expect(uda).toContain('Suggerisci propedeuticità');
     expect(uda).toContain('UDA correlate suggerite');
     expect(uda).toContain('Generazione traccia UDA con assistenza AI in corso');
+    expect(uda).toContain('Genera traccia testuale completa dell\'UDA con assistenza AI');
+    expect(uda).toContain('Analisi semantica...');
   });
 });
