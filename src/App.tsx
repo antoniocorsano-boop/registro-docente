@@ -139,6 +139,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   );
 
   const appDataRef = useRef(appData);
+  const currentClassIdRef = useRef(appData.currentClassId);
   const metaRef = useRef(meta);
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
@@ -172,15 +173,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
     return mutationCoordinator.enqueue<{ appData: AppData; meta: SecureMeta }>({
       getCommitted: () => ({ appData: appDataRef.current, meta: metaRef.current }),
-      derive: current => ({
-        appData: derive(current.appData),
-        meta: { ...current.meta, changes: (current.meta.changes || 0) + 1 }
-      }),
+      derive: current => {
+        const navigationAwareAppData = {
+          ...current.appData,
+          currentClassId: currentClassIdRef.current
+        };
+        return {
+          appData: derive(navigationAwareAppData),
+          meta: { ...current.meta, changes: (current.meta.changes || 0) + 1 }
+        };
+      },
       persist: candidate => secureStorage.saveAppDataAndMeta(candidate.appData, candidate.meta),
       publish: candidate => {
         appDataRef.current = candidate.appData;
         metaRef.current = candidate.meta;
-        setAppData(candidate.appData);
+        const visibleCurrentClassId =
+          currentClassIdRef.current && candidate.appData.classes.some(c => c.id === currentClassIdRef.current)
+            ? currentClassIdRef.current
+            : candidate.appData.currentClassId;
+        currentClassIdRef.current = visibleCurrentClassId;
+        setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
       },
       afterCommit: () => {
@@ -322,12 +334,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   // Synchronize URL query params
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      const nextAppData = e.state && e.state.classId
-        ? { ...appDataRef.current, currentClassId: e.state.classId }
-        : { ...appDataRef.current, currentClassId: null };
-      appDataRef.current = nextAppData;
-      setAppData(nextAppData);
-      setActiveTab(e.state?.tab || (e.state?.classId ? 'dashboard' : 'home'));
+      const nextCurrentClassId = e.state?.classId || null;
+      currentClassIdRef.current = nextCurrentClassId;
+      setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
+      setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -335,9 +345,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
-    const nextAppData = { ...appDataRef.current, currentClassId: classId };
-    appDataRef.current = nextAppData;
-    setAppData(nextAppData);
+    currentClassIdRef.current = classId;
+    setAppData(prev => ({ ...prev, currentClassId: classId }));
     setActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -348,9 +357,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   const handleNavigateHome = () => {
-    const nextAppData = { ...appDataRef.current, currentClassId: null };
-    appDataRef.current = nextAppData;
-    setAppData(nextAppData);
+    currentClassIdRef.current = null;
+    setAppData(prev => ({ ...prev, currentClassId: null }));
     setActiveTab('home');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -379,7 +387,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       currentClassId: newClass.id
     }), {
       successMessage: 'Classe creata',
-      afterCommit: () => setActiveTab('dati')
+      afterCommit: () => {
+        currentClassIdRef.current = newClass.id;
+        setAppData(prev => ({ ...prev, currentClassId: newClass.id }));
+        setActiveTab('dati');
+      }
     }).catch(() => undefined);
   };
 
@@ -712,6 +724,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     const restored = await secureStorage.restoreSnapshotVerified(candidate);
 
     appDataRef.current = restored.appData;
+    currentClassIdRef.current = restored.appData.currentClassId;
     settingsRef.current = restored.settings;
     udasRef.current = restored.udas;
     testsRef.current = restored.customTests;
@@ -734,6 +747,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
+      currentClassIdRef.current = null;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
       setMeta(resetMeta);
