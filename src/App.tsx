@@ -127,7 +127,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   );
 
   // 6. Navigation and UI state
-  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
+  const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
+  const navigationVersionRef = useRef(0);
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+  }, []);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -383,6 +388,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       grades: [],
       behaviors: []
     };
+    const navigationVersionAtSave = navigationVersionRef.current;
 
     void commitAppDataMutation(current => ({
       ...current,
@@ -391,9 +397,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }), {
       successMessage: 'Classe creata',
       afterCommit: () => {
-        currentClassIdRef.current = newClass.id;
-        setAppData(prev => ({ ...prev, currentClassId: newClass.id }));
-        setActiveTab('dati');
+        if (navigationVersionRef.current === navigationVersionAtSave) {
+          currentClassIdRef.current = newClass.id;
+          setAppData(prev => ({ ...prev, currentClassId: newClass.id }));
+          setActiveTab('dati');
+        }
       }
     }).catch(() => undefined);
   };
@@ -422,6 +430,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }) => {
     const classId = currentClass?.id;
     if (!classId) return;
+    const navigationVersionAtSave = navigationVersionRef.current;
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
       id: uid(),
@@ -451,7 +460,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }, {
       afterCommit: () => {
         setEditingBatchId(null);
-        setActiveTab('storico');
+        if (navigationVersionRef.current === navigationVersionAtSave) {
+          setActiveTab('storico');
+        }
       }
     }).catch(() => undefined);
   };
@@ -460,6 +471,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const handleSaveBehaviors = (newRecords: any[]) => {
     const classId = currentClass?.id;
     if (!classId) return;
+    const navigationVersionAtSave = navigationVersionRef.current;
     const dateStr = newRecords[0]?.date || today();
 
     void commitAppDataMutation(current => {
@@ -475,7 +487,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
       };
     }, {
-      afterCommit: () => setActiveTab('dashboard')
+      afterCommit: () => {
+        if (navigationVersionRef.current === navigationVersionAtSave) {
+          setActiveTab('dashboard');
+        }
+      }
     }).catch(() => undefined);
   };
 
