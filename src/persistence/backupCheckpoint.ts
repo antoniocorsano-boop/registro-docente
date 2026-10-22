@@ -11,9 +11,14 @@ function cloneSnapshot(snapshot: CompleteSecureAppSnapshot): CompleteSecureAppSn
 }
 
 export function incrementBackupChanges(meta: SecureMeta): SecureMeta {
+  const currentChanges =
+    typeof meta.changes === 'number' && Number.isFinite(meta.changes)
+      ? Math.max(0, meta.changes)
+      : 0;
+
   return {
     ...meta,
-    changes: meta.changes + 1
+    changes: currentChanges + 1
   };
 }
 
