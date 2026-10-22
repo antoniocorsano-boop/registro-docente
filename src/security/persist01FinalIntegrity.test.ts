@@ -86,7 +86,7 @@ describe('PERSIST-01 final integrity hardening', () => {
   test('class navigation does not overwrite the committed appData ref', async () => {
     const source = await Bun.file('src/App.tsx').text();
     const navigation = sectionBetween(source, '// Synchronize URL query params', '// Add new class');
-    const appCommit = sectionBetween(source, 'const commitAppDataMutation', 'const commitMetaMutation');
+    const appCommit = sectionBetween(source, 'const commitAppDataMutation', 'const commitSettingsMutation');
 
     expect(source).toContain('currentClassIdRef');
     expect(navigation).toContain('currentClassIdRef.current');
