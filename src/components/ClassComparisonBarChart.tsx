@@ -112,7 +112,7 @@ export const ClassComparisonBarChart: React.FC<ClassComparisonBarChartProps> = (
         <div>
           <h4 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-[var(--primary)]" />
-            <span>Analisi Comparativa: Studenti vs Media di Sezione (D.M. 221/2025)</span>
+            <span>Analisi comparativa: studenti vs media di sezione</span>
           </h4>
           <p className="text-xs text-slate-400">
             Raffronto puntuale tra la media di ciascun alunno ({useWeighted ? 'Ponderata' : 'Aritmetica'}) e la media generale della classe.
@@ -241,7 +241,7 @@ export const ClassComparisonBarChart: React.FC<ClassComparisonBarChartProps> = (
         </div>
 
         <span className="text-[10px] text-slate-500 italic">
-          Linea tratteggiata ciano = Media di Sezione · Linea verde = Soglia 6.0
+          Linea tratteggiata ciano = Media di Sezione · Linea verde = soglia analitica 6/10
         </span>
       </div>
     </div>

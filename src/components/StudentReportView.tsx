@@ -74,7 +74,7 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
         </div>
         {levelInfo && (
           <div className="flex items-center justify-between">
-            <span className="text-slate-400">Livello D.M. 221:</span>
+            <span className="text-slate-400">Fascia analitica:</span>
             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${levelInfo.badgeClass}`}>
               {levelInfo.label}
             </span>
@@ -85,8 +85,8 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
           <span className="font-mono text-purple-300">{formatGrade(classVal)}</span>
         </div>
         <div className="flex items-center justify-between text-slate-400 text-[11px]">
-          <span>Soglia Base Ministeriale:</span>
-          <span className="font-mono text-amber-400">6.0 (Base)</span>
+          <span>Soglia analitica 6/10:</span>
+          <span className="font-mono text-amber-400">6,0</span>
         </div>
         {data.completedHours !== undefined && (
           <div className="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-800">
@@ -286,11 +286,17 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   const q1Grades = grades.filter(g => g.period === 'Q1');
   const q2Grades = grades.filter(g => g.period === 'Q2');
 
+  const useWeighted = settings?.useWeightedAverage === true;
   const totalWeightedAvg = calcWeightedAvg(grades, weights);
   const totalSimpleAvg = calcAvg(grades);
   const q1WeightedAvg = calcWeightedAvg(q1Grades, weights);
   const q2WeightedAvg = calcWeightedAvg(q2Grades, weights);
-  const level = getCompetenceLevel(totalWeightedAvg);
+  const q1SimpleAvg = calcAvg(q1Grades);
+  const q2SimpleAvg = calcAvg(q2Grades);
+  const activeTotalAvg = useWeighted ? totalWeightedAvg : totalSimpleAvg;
+  const activeQ1Avg = useWeighted ? q1WeightedAvg : q1SimpleAvg;
+  const activeQ2Avg = useWeighted ? q2WeightedAvg : q2SimpleAvg;
+  const level = getCompetenceLevel(activeTotalAvg);
 
   const studentBehaviors = (currentClass.behaviors || [])
     .filter(b => b.studentId === currentStudent.id)
@@ -343,7 +349,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   ) / 10;
 
   // ---------------------------------------------------------------------------
-  // RADAR CHART DATA PREPARATION (D.M. 221/2025)
+  // RADAR CHART DATA PREPARATION — internal evidence profile
   // ---------------------------------------------------------------------------
 
   // 1. Key Competency Dimensions (6 European Axes)
@@ -405,7 +411,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               <UserCheck className="w-5 h-5 text-[var(--primary)]" /> Scheda Alunno & Profilo delle Competenze
             </h3>
             <p className="text-xs text-slate-400">
-              Certificazione curricolare per competenze (D.M. 221/2025), andamento per UDA e quadro sintetico.
+              Profilo interno di evidenze, andamento per UDA e quadro sintetico a supporto della valutazione professionale.
             </p>
           </div>
 
@@ -427,14 +433,14 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         {/* Student KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
-            <b className={`text-2xl font-bold block ${totalWeightedAvg !== null && totalWeightedAvg < 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
-              {formatGrade(totalWeightedAvg)}
+            <b className={`text-2xl font-bold block ${activeTotalAvg !== null && activeTotalAvg < 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {formatGrade(activeTotalAvg)}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Media Ponderata (D.M. 221)
+              {useWeighted ? 'Media ponderata configurabile' : 'Media aritmetica'}
             </span>
             <span className="text-[10px] text-slate-500 block mt-0.5">
-              Semplice: {formatGrade(totalSimpleAvg)}
+              {useWeighted ? `Semplice: ${formatGrade(totalSimpleAvg)}` : `Ponderata: ${formatGrade(totalWeightedAvg)}`}
             </span>
           </div>
 
@@ -452,25 +458,25 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
 
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
             <div className="text-sm font-bold text-slate-100 flex items-center justify-center gap-2 pt-1 font-mono">
-              <span>Q1: <b>{formatGrade(q1WeightedAvg)}</b></span>
+              <span>Q1: <b>{formatGrade(activeQ1Avg)}</b></span>
               <span>·</span>
-              <span>Q2: <b>{formatGrade(q2WeightedAvg)}</b></span>
+              <span>Q2: <b>{formatGrade(activeQ2Avg)}</b></span>
             </div>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mt-2 block">
-              Medie Quadrimestri (Pond.)
+              Medie periodi ({useWeighted ? 'Pond.' : 'Aritm.'})
             </span>
           </div>
 
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center flex flex-col justify-center items-center">
             {level ? (
               <span className={`px-2.5 py-1 rounded text-xs font-bold ${level.badgeClass}`}>
-                {level.label.split(' ')[0]} ({level.id})
+                {level.label}
               </span>
             ) : (
               <span className="text-slate-500 font-bold text-sm">–</span>
             )}
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mt-1.5 block">
-              Livello D.M. 221/2025
+              Fascia analitica
             </span>
           </div>
         </div>
@@ -492,7 +498,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             <div className="flex items-center gap-2">
               <Compass className="w-5 h-5 text-cyan-400 drop-shadow-[0_0_8px_rgba(0,216,214,0.6)]" />
               <h3 className="text-base sm:text-lg font-bold text-white">
-                Grafico a Raggio (Radar) · Profilo di Padronanza D.M. 221/2025
+                Grafico a Raggio (Radar) · Profilo interno di evidenze
               </h3>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -568,7 +574,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                 />
                 {/* 3. Baseline Target Line */}
                 <Radar
-                  name="Soglia Minima Base (6.0)"
+                  name="Soglia analitica 6/10"
                   dataKey="baseThreshold"
                   stroke="#f59e0b"
                   fill="none"
@@ -585,7 +591,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
 
             {/* Quick legend tip */}
             <div className="text-[10px] text-slate-500 text-center mt-1">
-              Scala 0-10: <b className="text-emerald-400">≥8.5 Avanzato</b> · <b className="text-cyan-400">7-8.4 Intermedio</b> · <b className="text-amber-400">6-6.9 Base</b> · <b className="text-rose-400">&lt;6 Prima Acquisizione</b>
+              Scala 0-10: <b className="text-emerald-400">≥8.5 Fascia alta</b> · <b className="text-cyan-400">7-8.4 Fascia medio-alta</b> · <b className="text-amber-400">6-6.9 Fascia base analitica</b> · <b className="text-rose-400">&lt;6 Sotto soglia analitica</b>
             </div>
               </>
             ) : (
@@ -606,7 +612,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                  Livello di Padronanza Globale
+                  Fascia analitica complessiva
                 </span>
                 {level && (
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${level.badgeClass}`}>
@@ -622,7 +628,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             {/* Competency Mastery Breakdown Badges */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 space-y-0.5">
-                <span className="text-[10px] uppercase font-bold text-emerald-400 block">Livello Avanzato</span>
+                <span className="text-[10px] uppercase font-bold text-emerald-400 block">Fascia alta</span>
                 <div className="text-lg font-black font-mono text-emerald-300">
                   {advancedCount} <span className="text-xs font-normal text-slate-400">dimensioni</span>
                 </div>
@@ -630,7 +636,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               </div>
 
               <div className="p-2.5 rounded-lg bg-cyan-950/20 border border-cyan-500/30 space-y-0.5">
-                <span className="text-[10px] uppercase font-bold text-cyan-400 block">Livello Intermedio</span>
+                <span className="text-[10px] uppercase font-bold text-cyan-400 block">Fascia medio-alta</span>
                 <div className="text-lg font-black font-mono text-cyan-300">
                   {intermediateCount} <span className="text-xs font-normal text-slate-400">dimensioni</span>
                 </div>
@@ -638,7 +644,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               </div>
 
               <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/30 space-y-0.5">
-                <span className="text-[10px] uppercase font-bold text-amber-400 block">Livello Base</span>
+                <span className="text-[10px] uppercase font-bold text-amber-400 block">Fascia base analitica</span>
                 <div className="text-lg font-black font-mono text-amber-300">
                   {baseCount} <span className="text-xs font-normal text-slate-400">dimensioni</span>
                 </div>
@@ -646,7 +652,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               </div>
 
               <div className="p-2.5 rounded-lg bg-rose-950/20 border border-rose-500/30 space-y-0.5">
-                <span className="text-[10px] uppercase font-bold text-rose-400 block">Prima Acquisizione</span>
+                <span className="text-[10px] uppercase font-bold text-rose-400 block">Sotto soglia analitica</span>
                 <div className="text-lg font-black font-mono text-rose-300">
                   {underBaseCount} <span className="text-xs font-normal text-slate-400">dimensioni</span>
                 </div>
@@ -711,20 +717,20 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               </h3>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Rendiconto delle attività svolte nel diario, delle valutazioni collegate e delle rubriche di livello D.M. 221/2025.
+              Rendiconto delle attività svolte nel diario, delle valutazioni collegate e delle rubriche interne dell'UDA.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 font-semibold flex items-center gap-1.5">
               <GraduationCap className="w-4 h-4 text-purple-400" />
-              Crediti Maturati: <b className="text-purple-300 font-mono">+{totalStudentUdaCredits.toFixed(1)} CFS</b>
+              Indice Attività UDA: <b className="text-purple-300 font-mono">{totalStudentUdaCredits.toFixed(1)} pt</b>
             </span>
 
             {overallUdaLevel && (
               <span className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${overallUdaLevel.badgeClass}`}>
                 <Award className="w-4 h-4" />
-                <span>Competenza UDA: {overallUdaLevel.id}</span>
+                <span>Fascia UDA: {overallUdaLevel.label}</span>
               </span>
             )}
           </div>
@@ -759,7 +765,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-700/60 flex items-center gap-1">
                           <GraduationCap className="w-3 h-3 text-purple-400" />
-                          +{item.creditStats.earnedCredits.toFixed(1)} CFS
+                          Indice {item.creditStats.earnedCredits.toFixed(1)} pt
                         </span>
                         {u.civicEducation && (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1">
@@ -770,7 +776,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                       <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2">
                         <span>Monte ore: <b>{u.hours}h</b></span>
                         <span>·</span>
-                        <span>Svolte: <b className="text-cyan-300 font-mono">{item.completedHours}h</b> ({item.creditStats.totalWeightedHours}h certificate)</span>
+                        <span>Svolte: <b className="text-cyan-300 font-mono">{item.completedHours}h</b> ({item.creditStats.totalWeightedHours}h ponderate interne)</span>
                         <span>·</span>
                         <span>Traguardo: <i>{u.competencies || 'Competenze tecnologiche applicate'}</i></span>
                       </div>
@@ -785,7 +791,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                             <span className="text-xs font-mono font-black text-white">Media: {formatGrade(item.udaAvg)}</span>
                           </div>
                           <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${item.udaLevel.badgeClass} shadow-sm`}>
-                            {item.udaLevel.id} · {item.udaLevel.label.split(' ')[0]}
+                            {item.udaLevel.label}
                           </span>
                         </div>
                       ) : (
@@ -919,7 +925,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                           <div className="flex items-center justify-between text-purple-300 font-bold">
                             <span className="flex items-center gap-1">
                               <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                              Profilo di Padronanza (D.M. 221/2025):
+                              Fascia analitica UDA:
                             </span>
                             <span className={`px-2 py-0.2 rounded text-[10px] ${item.udaLevel.badgeClass}`}>
                               {item.udaLevel.label}

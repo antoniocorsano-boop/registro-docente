@@ -218,15 +218,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Weighting configuration following D.M. 221/2025 */}
+          {/* Configurable professional weighting criterion */}
           <div className="pt-4 border-t border-[var(--border)]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
               <div>
                 <h4 className="text-xs uppercase tracking-wider font-bold text-slate-200 flex items-center gap-1.5">
-                  <span>⚖️ Pesi Valutazioni per Media Ponderata (D.M. 221/2025)</span>
+                  <span>⚖️ Ponderazione configurabile delle valutazioni</span>
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Definisci il peso percentuale delle diverse prove nel calcolo della media annuale e di quadrimestre.
+                  Criterio professionale configurabile dal docente o dall'istituto; non è una prescrizione ministeriale.
                 </p>
               </div>
 
@@ -246,7 +246,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   }}
                   className="px-2.5 py-1 rounded text-[11px] font-semibold bg-cyan-950/60 text-cyan-300 border border-cyan-800 hover:bg-cyan-900/60 transition-colors"
                 >
-                  ⭐ Standard D.M. 221
+                  ⭐ Preset docente 100/80/50
                 </button>
                 <button
                   type="button"
@@ -272,8 +272,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 { key: 'verifica', label: 'Verifica Scritta', def: 100 },
                 { key: 'orale', label: 'Colloquio Orale', def: 100 },
                 { key: 'disegno', label: 'Disegno / Pratico', def: 100 },
-                { key: 'test', label: 'Test / Quiz', def: 80 },
-                { key: 'osserv', label: 'Osservazione', def: 50 }
+                { key: 'test', label: 'Test / Quiz', def: 100 },
+                { key: 'osserv', label: 'Osservazione', def: 100 }
               ].map(item => {
                 const currentW = (formData.evaluationWeights as any)?.[item.key] ?? item.def;
                 return (
@@ -297,8 +297,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 verifica: 100,
                                 orale: 100,
                                 disegno: 100,
-                                test: 80,
-                                osserv: 50
+                                test: 100,
+                                osserv: 100
                               }),
                               [item.key]: val
                             }
@@ -317,12 +317,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="checkbox"
                 id="check-use-weighted"
-                checked={formData.useWeightedAverage ?? true}
+                checked={formData.useWeightedAverage ?? false}
                 onChange={e => setFormData({ ...formData, useWeightedAverage: e.target.checked })}
                 className="w-4 h-4 rounded border-slate-700 text-[var(--primary)] focus:ring-[var(--primary)]"
               />
               <label htmlFor="check-use-weighted" className="text-xs text-slate-300 cursor-pointer font-medium">
-                Imposta la Media Ponderata come indicatore principale per l'attribuzione dei livelli D.M. 221/2025
+                Usa la media ponderata come indicatore analitico principale (criterio configurabile)
               </label>
             </div>
           </div>

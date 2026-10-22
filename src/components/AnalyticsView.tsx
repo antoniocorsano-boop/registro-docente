@@ -45,7 +45,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   isPrivacyShieldActive = true
 }) => {
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>('ALL');
-  const [useWeighted, setUseWeighted] = useState<boolean>(settings.useWeightedAverage ?? true);
+  const [useWeighted, setUseWeighted] = useState<boolean>(settings.useWeightedAverage ?? false);
   const [isExporting, setIsExporting] = useState(false);
 
   const students = currentClass.students || [];
@@ -70,7 +70,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     const q1SimpleAvg = calcAvg(q1Grades);
     const q2SimpleAvg = calcAvg(q2Grades);
 
-    // Ponderata (D.M. 221/2025)
+    // Ponderata secondo i pesi configurati dal docente/istituto
     const totalWeightedAvg = calcWeightedAvg(sAllGrades, weights);
     const currentWeightedAvg = calcWeightedAvg(sFilteredGrades, weights);
     const q1WeightedAvg = calcWeightedAvg(q1Grades, weights);
@@ -139,7 +139,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       if (typeof html2pdf !== 'undefined') {
         const opt = {
           margin: 10,
-          filename: `Prospetto_Scrutinio_${currentClass.name.replace(/\s+/g, '_')}.pdf`,
+          filename: `Prospetto_Lavoro_${currentClass.name.replace(/\s+/g, '_')}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -164,10 +164,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <div>
             <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)] flex items-center gap-2">
               <Scale className="w-5 h-5 text-[var(--primary)]" />
-              <span>Analisi Soglie & Media Ponderata (D.M. 221/2025)</span>
+              <span>Analisi medie & fasce analitiche</span>
             </h3>
             <p className="text-xs text-slate-400">
-              Calcolo automatico della media ponderata per tipologia di prova conforme alle linee guida ministeriali sulla valutazione formativa e sommativa.
+              Indicatori matematici di supporto alla valutazione professionale; non determinano voti o decisioni di scrutinio.
             </p>
           </div>
 
@@ -178,9 +178,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               onChange={e => setPeriodFilter(e.target.value as any)}
               className="w-full sm:w-auto min-h-[44px] p-1.5 px-3 neon-input text-xs text-white bg-slate-900"
             >
-              <option value="ALL">Proiezione Finale Anno</option>
-              <option value="Q1">Soglia Intermedia (Q1)</option>
-              <option value="Q2">Soglia Finale (Q2)</option>
+              <option value="ALL">Anno completo</option>
+              <option value="Q1">Primo periodo (Q1)</option>
+              <option value="Q2">Secondo periodo (Q2)</option>
             </select>
           </div>
         </div>
@@ -202,7 +202,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  ⚖️ Media Ponderata D.M. 221
+                  ⚖️ Media ponderata configurabile
                 </button>
                 <button
                   type="button"
@@ -222,7 +222,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <Info className="w-3 h-3 text-cyan-400 shrink-0" />
               <span>
                 {useWeighted
-                  ? 'La media ponderata bilancia le verifiche sommative rispetto ai quiz formativi e alle osservazioni.'
+                  ? 'La media ponderata usa esclusivamente i pesi configurati nelle impostazioni dal docente o dall’istituto.'
                   : 'Media puramente aritmetica (tutte le valutazioni concorrono con uguale peso 1:1).'}
               </span>
             </div>
@@ -282,7 +282,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               {validAvgs.length === 0 ? '—' : levelCounts.AV}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Livello Avanzato (AV)
+              Fascia alta (≥ 8,5)
             </span>
           </div>
 
@@ -291,7 +291,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               {validAvgs.length === 0 ? '—' : levelCounts.PA}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Alunni a Rischio (PA)
+              Sotto soglia analitica (&lt; 6)
             </span>
           </div>
         </div>
@@ -299,7 +299,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         {/* Competence Levels Chart / Progress Distribution */}
         <div className="mt-4 pt-4 border-t border-[var(--border)]">
           <h4 className="text-xs uppercase tracking-wider font-bold text-slate-300 mb-3 flex items-center justify-between">
-            <span>Distribuzione Livelli di Competenza (D.M. 221/2025)</span>
+            <span>Fasce analitiche della media</span>
             <span className="text-slate-500 font-normal">
               Calcolati su {useWeighted ? 'Media Ponderata' : 'Media Aritmetica'}
             </span>
@@ -368,10 +368,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       <div className="neon-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <FileText className="w-4 h-4 text-[var(--primary)]" /> Report Scrutinio & Prospetto Valutazioni D.M. 221/2025
+            <FileText className="w-4 h-4 text-[var(--primary)]" /> Prospetto di lavoro docente
           </h3>
           <p className="text-xs text-slate-400">
-            Esporta il tabellone con media ponderata e livelli ministeriali per il verbale del Consiglio di Classe.
+            Esporta un prospetto interno di supporto: non costituisce verbale, voto deliberato o certificazione ufficiale.
           </p>
         </div>
 
@@ -389,17 +389,17 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             className="min-h-[44px] w-full sm:w-auto px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>{isExporting ? 'Generazione...' : 'Esporta PDF Scrutinio'}</span>
+            <span>{isExporting ? 'Generazione...' : 'Esporta PDF di lavoro'}</span>
           </button>
         </div>
       </div>
 
-      {/* Scrutinio Risk Projection Table with Weighted Averages */}
+      {/* Internal analytical table with weighted and arithmetic averages */}
       <div className="neon-card p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400" />
-            <span>Proiezione Scrutinio: Medie Ponderate & Confronto Aritmetico</span>
+            <span>Indicatori di media: ponderata & confronto aritmetico</span>
           </h3>
           <span className="text-xs text-slate-400">
             {useWeighted ? '⭐ Modalità Ponderata Attiva' : 'Modalità Aritmetica'}
@@ -446,13 +446,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                     <span className="text-slate-400">
-                      Livello: <b className="text-slate-200">{m.level ? `${m.level.id} · ${m.level.label.split(' ')[0]}` : '–'}</b>
+                      Fascia analitica: <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
                     </span>
                     {displayTotal === null ? (
                       <span className="px-2 py-1 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">Non disponibile</span>
                     ) : (
                       <span className={`px-2 py-1 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
-                        {m.isAtRisk ? 'A Rischio (PA)' : 'Regolare'}
+                        {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
                       </span>
                     )}
                   </div>
@@ -481,9 +481,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <th className="p-2.5 border-r border-[var(--border)] min-w-[85px]" title="Confronto con media aritmetica semplice">
                   Media Semplice (Δ)
                 </th>
-                <th className="p-2.5 border-r border-[var(--border)] min-w-[130px]">Livello D.M. 221</th>
+                <th className="p-2.5 border-r border-[var(--border)] min-w-[130px]">Fascia analitica</th>
                 <th className="p-2.5 border-r border-[var(--border)] min-w-[75px]">Trend</th>
-                <th className="p-2.5 min-w-[90px]">Esito Previsto</th>
+                <th className="p-2.5 min-w-[90px]">Indicatore 6/10</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
@@ -546,7 +546,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       <td className="p-2.5 border-r border-[var(--border)]">
                         {m.level ? (
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.level.badgeClass}`}>
-                            {m.level.id} - {m.level.label.split(' ')[0]}
+                            {m.level.label}
                           </span>
                         ) : (
                           <span className="text-slate-500">–</span>
@@ -564,7 +564,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                           </span>
                         ) : (
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
-                            {m.isAtRisk ? 'A Rischio (PA)' : 'Regolare'}
+                            {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
                           </span>
                         )}
                       </td>
@@ -585,7 +585,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               {settings.school}
             </h1>
             <h2 className="text-sm font-semibold text-slate-700">
-              Prospetto di Scrutinio & Valutazione Ponderata · D.M. 221/2025
+              Prospetto di lavoro docente · Indicatori di valutazione
             </h2>
             <p className="text-xs text-slate-600 mt-1">
               Classe: <b>{currentClass.name}</b> · Disciplina: <b>{settings.subject}</b> · A.S. <b>{settings.year}</b>
@@ -593,7 +593,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
           <div className="text-right text-[11px] text-slate-600">
             <div>Docente: <b>{settings.teacher}</b></div>
-            <div>Data Scrutinio: <b>{new Date().toLocaleDateString('it-IT')}</b></div>
+            <div>Data elaborazione: <b>{new Date().toLocaleDateString('it-IT')}</b></div>
             <div className="text-[10px] mt-1 text-slate-500">
               Pesi: Scritto {weights.verifica}% · Orale {weights.orale}% · Pratico {weights.disegno}% · Test {weights.test}% · Osserv. {weights.osserv}%
             </div>
@@ -605,35 +605,41 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <tr className="bg-slate-100 font-bold text-slate-800">
               <th className="border border-slate-300 p-2">#</th>
               <th className="border border-slate-300 p-2 text-left">Cognome e Nome</th>
-              <th className="border border-slate-300 p-2">Media Q1 (Pond.)</th>
-              <th className="border border-slate-300 p-2">Media Q2 (Pond.)</th>
-              <th className="border border-slate-300 p-2 font-extrabold">Media Ponderata Finale</th>
+              <th className="border border-slate-300 p-2">Media Q1 {useWeighted ? '(Pond.)' : '(Aritm.)'}</th>
+              <th className="border border-slate-300 p-2">Media Q2 {useWeighted ? '(Pond.)' : '(Aritm.)'}</th>
+              <th className="border border-slate-300 p-2 font-extrabold">Media Finale {useWeighted ? 'Ponderata' : 'Aritmetica'}</th>
               <th className="border border-slate-300 p-2">Media Semplice</th>
-              <th className="border border-slate-300 p-2">Livello Competenza (D.M. 221)</th>
-              <th className="border border-slate-300 p-2">Esito</th>
+              <th className="border border-slate-300 p-2">Fascia analitica</th>
+              <th className="border border-slate-300 p-2">Indicatore 6/10</th>
             </tr>
           </thead>
           <tbody>
-            {studentMetrics.map((m, idx) => (
-              <tr key={m.student.id} className="even:bg-slate-50">
-                <td className="border border-slate-300 p-1.5">{idx + 1}</td>
-                <td className="border border-slate-300 p-1.5 text-left font-medium">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</td>
-                <td className="border border-slate-300 p-1.5">{formatGrade(m.q1WeightedAvg)}</td>
-                <td className="border border-slate-300 p-1.5">{formatGrade(m.q2WeightedAvg)}</td>
-                <td className="border border-slate-300 p-1.5 font-bold">{formatGrade(m.totalWeightedAvg)}</td>
-                <td className="border border-slate-300 p-1.5 text-slate-600">{formatGrade(m.totalSimpleAvg)}</td>
-                <td className="border border-slate-300 p-1.5">{m.level?.label || '–'}</td>
-                <td className="border border-slate-300 p-1.5 font-semibold">
-                  {m.totalWeightedAvg === null ? 'Non disponibile' : m.totalWeightedAvg >= 6 ? 'Idoneo' : 'A Rischio'}
-                </td>
-              </tr>
-            ))}
+            {studentMetrics.map((m, idx) => {
+              const exportQ1 = useWeighted ? m.q1WeightedAvg : m.q1SimpleAvg;
+              const exportQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
+              const exportTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
+              const exportLevel = getCompetenceLevel(exportTotal);
+
+              return (
+                <tr key={m.student.id} className="even:bg-slate-50">
+                  <td className="border border-slate-300 p-1.5">{idx + 1}</td>
+                  <td className="border border-slate-300 p-1.5 text-left font-medium">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</td>
+                  <td className="border border-slate-300 p-1.5">{formatGrade(exportQ1)}</td>
+                  <td className="border border-slate-300 p-1.5">{formatGrade(exportQ2)}</td>
+                  <td className="border border-slate-300 p-1.5 font-bold">{formatGrade(exportTotal)}</td>
+                  <td className="border border-slate-300 p-1.5 text-slate-600">{formatGrade(m.totalSimpleAvg)}</td>
+                  <td className="border border-slate-300 p-1.5">{exportLevel?.label || '–'}</td>
+                  <td className="border border-slate-300 p-1.5 font-semibold">
+                    {exportTotal === null ? 'Non disponibile' : exportTotal >= 6 ? 'Media ≥ 6' : 'Media < 6'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
-        <div className="mt-8 pt-4 border-t border-slate-300 flex justify-between text-xs text-slate-600">
-          <div>Firma del Docente Coordinatore: ____________________________</div>
-          <div>Firma del Dirigente Scolastico: ____________________________</div>
+        <div className="mt-8 pt-4 border-t border-slate-300 text-xs text-slate-600">
+          Documento di lavoro interno del docente. Le medie sono indicatori di supporto e non sostituiscono la valutazione professionale o collegiale.
         </div>
       </div>
     </div>

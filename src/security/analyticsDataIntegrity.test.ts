@@ -35,7 +35,7 @@ describe('ANALYTICS-01 fail-closed data integrity', () => {
 
     expect(analytics).toContain('displayTotal === null ? (');
     expect(analytics).toContain('Non disponibile');
-    expect(analytics).toContain("m.totalWeightedAvg === null ? 'Non disponibile'");
+    expect(analytics).toContain("exportTotal === null ? 'Non disponibile'");
     expect(analytics).not.toContain("m.totalWeightedAvg !== null && m.totalWeightedAvg >= 6 ? 'Idoneo' : 'A Rischio'");
   });
 
