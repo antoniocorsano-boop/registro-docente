@@ -140,6 +140,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   const appDataRef = useRef(appData);
   const metaRef = useRef(meta);
+  const settingsRef = useRef(settings);
+  const udasRef = useRef(udas);
+  const testsRef = useRef(tests);
+  const submissionsRef = useRef(submissions);
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
     mutationCoordinatorRef.current = createDurableMutationCoordinator()
@@ -210,6 +214,82 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       throw error;
     });
   }, [mutationCoordinator, secureStorage]);
+
+  const commitSettingsMutation = useCallback((candidate: AppSettings): Promise<AppSettings> => {
+    return mutationCoordinator.enqueue<AppSettings>({
+      getCommitted: () => settingsRef.current,
+      derive: () => candidate,
+      persist: next => secureStorage.saveSettings(next),
+      publish: next => {
+        settingsRef.current = next;
+        setSettings(next);
+      },
+      afterCommit: () => toast('Impostazioni aggiornate')
+    }).catch(error => {
+      console.error('Secure settings save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitUdasMutation = useCallback((candidate: UdaRecord[]): Promise<UdaRecord[]> => {
+    return mutationCoordinator.enqueue<UdaRecord[]>({
+      getCommitted: () => udasRef.current,
+      derive: () => candidate,
+      persist: next => secureStorage.saveUdas(next),
+      publish: next => {
+        udasRef.current = next;
+        setUdas(next);
+      },
+      afterCommit: () => toast('UDA salvate')
+    }).catch(error => {
+      console.error('Secure UDA save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitTestsMutation = useCallback((
+    derive: (current: Record<string, OnlineTest>) => Record<string, OnlineTest>
+  ): Promise<Record<string, OnlineTest>> => {
+    return mutationCoordinator.enqueue<Record<string, OnlineTest>>({
+      getCommitted: () => testsRef.current,
+      derive,
+      persist: candidate => secureStorage.saveCustomTests(candidate),
+      publish: candidate => {
+        testsRef.current = candidate;
+        setTests(candidate);
+      },
+      afterCommit: () => toast('Test salvato')
+    }).catch(error => {
+      console.error('Secure test save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitSubmissionsMutation = useCallback((
+    derive: (current: OnlineSubmission[]) => OnlineSubmission[],
+    options: { successMessage?: string; showFailureAlert?: boolean } = {}
+  ): Promise<OnlineSubmission[]> => {
+    const { successMessage, showFailureAlert = true } = options;
+    return mutationCoordinator.enqueue<OnlineSubmission[]>({
+      getCommitted: () => submissionsRef.current,
+      derive,
+      persist: candidate => secureStorage.saveSubmissions(candidate),
+      publish: candidate => {
+        submissionsRef.current = candidate;
+        setSubmissions(candidate);
+      },
+      afterCommit: () => {
+        if (successMessage) toast(successMessage);
+      }
+    }).catch(error => {
+      console.error('Secure submission save failed', error);
+      if (showFailureAlert) alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
 
   // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
   const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
@@ -515,43 +595,38 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   // Save new test
   const handleSaveNewTest = (newTest: OnlineTest) => {
-    const updatedTests = { ...tests, [newTest.id]: newTest };
-    setTests(updatedTests);
-    void secureStorage.saveCustomTests(updatedTests)
-      .then(() => toast('Test salvato'))
-      .catch(error => console.error('Secure test save failed', error));
+    void commitTestsMutation(current => ({
+      ...current,
+      [newTest.id]: newTest
+    })).catch(() => undefined);
   };
 
   // Delete submission
   const handleDeleteSubmission = (submissionId: string) => {
-    const updated = submissions.filter(s => s.id !== submissionId);
-    setSubmissions(updated);
-    void secureStorage.saveSubmissions(updated)
-      .then(() => toast('Consegna eliminata'))
-      .catch(error => console.error('Secure submission save failed', error));
+    void commitSubmissionsMutation(
+      current => current.filter(s => s.id !== submissionId),
+      { successMessage: 'Consegna eliminata' }
+    ).catch(() => undefined);
   };
 
   const handleSaveStudentSubmission = useCallback(async (submission: OnlineSubmission) => {
-    const previous = submissions;
-    const updated = [...previous, submission];
-    setSubmissions(updated);
-    try {
-      await secureStorage.saveSubmissions(updated);
-      toast('Consegna salvata nel vault locale');
-    } catch (error) {
-      setSubmissions(previous);
-      throw error;
-    }
-  }, [secureStorage, submissions, toast]);
+    await commitSubmissionsMutation(
+      current => [...current, submission],
+      {
+        successMessage: 'Consegna salvata nel vault locale',
+        showFailureAlert: false
+      }
+    );
+  }, [commitSubmissionsMutation]);
 
   // Import submissions into class grades
   const handleImportSubmissionsToRegister = (targetUdaId?: string) => {
-    if (submissions.length === 0) {
+    if (submissionsRef.current.length === 0) {
       alert('Nessuna consegna online ricevuta da importare.');
       return;
     }
 
-    const submissionSnapshot = submissions;
+    const submissionSnapshot = submissionsRef.current;
     let importedCount = 0;
 
     void commitAppDataMutation(current => {
@@ -604,18 +679,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   // Save UDAs
   const handleSaveUdas = (newUdas: UdaRecord[]) => {
-    setUdas(newUdas);
-    void secureStorage.saveUdas(newUdas)
-      .then(() => toast('UDA salvate'))
-      .catch(error => console.error('Secure UDA save failed', error));
+    void commitUdasMutation(newUdas).catch(() => undefined);
   };
 
   // Save Settings
   const handleUpdateSettings = (newSettings: AppSettings) => {
-    setSettings(newSettings);
-    void secureStorage.saveSettings(newSettings)
-      .then(() => toast('Impostazioni aggiornate'))
-      .catch(error => console.error('Secure settings save failed', error));
+    void commitSettingsMutation(newSettings).catch(() => undefined);
   };
 
   // Backup actions are routed to the protected Privacy area.
@@ -632,17 +701,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   // Import Encrypted Backup
   const handleImportEncryptedBackup = async (decryptedData: unknown) => {
     const currentSnapshot: CompleteSecureAppSnapshot = {
-      appData,
-      settings,
-      udas,
-      customTests: tests,
-      submissions,
-      meta
+      appData: appDataRef.current,
+      settings: settingsRef.current,
+      udas: udasRef.current,
+      customTests: testsRef.current,
+      submissions: submissionsRef.current,
+      meta: metaRef.current
     };
     const candidate = normalizeBackupPayload(decryptedData, currentSnapshot);
     const restored = await secureStorage.restoreSnapshotVerified(candidate);
 
     appDataRef.current = restored.appData;
+    settingsRef.current = restored.settings;
+    udasRef.current = restored.udas;
+    testsRef.current = restored.customTests;
+    submissionsRef.current = restored.submissions;
     metaRef.current = restored.meta;
     setAppData(restored.appData);
     setSettings(restored.settings);
