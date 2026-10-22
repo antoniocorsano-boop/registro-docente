@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ActiveTab,
   AppData,
@@ -28,8 +28,14 @@ import {
   UDA_KEY,
   uid
 } from './utils';
-import type { CompleteSecureAppSnapshot, SecureAppSnapshot, SecureAppStorage } from './security/secureAppStorage';
+import type {
+  CompleteSecureAppSnapshot,
+  SecureAppSnapshot,
+  SecureAppStorage,
+  SecureMeta
+} from './security/secureAppStorage';
 import { normalizeBackupPayload } from './security/backupPayload';
+import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -48,6 +54,7 @@ import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 
+const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
 export interface AppProps {
   initialSnapshot: SecureAppSnapshot;
@@ -127,8 +134,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
 
   // Metadata for backup tracking
-  const [meta, setMeta] = useState<{ changes: number; lastBackup: string | null }>(() =>
+  const [meta, setMeta] = useState<SecureMeta>(() =>
     initialSnapshot.meta || { changes: 0, lastBackup: null }
+  );
+
+  const appDataRef = useRef(appData);
+  const metaRef = useRef(meta);
+  const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
+  const mutationCoordinator = mutationCoordinatorRef.current ?? (
+    mutationCoordinatorRef.current = createDurableMutationCoordinator()
   );
 
   const toast = useCallback((msg: string) => {
@@ -137,6 +151,65 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setSaveIndicatorText('Sincronizzato');
     }, 2800);
   }, []);
+
+  const commitAppDataMutation = useCallback((
+    derive: (current: AppData) => AppData,
+    options: {
+      showBackupModal?: boolean;
+      successMessage?: string;
+      afterCommit?: () => void;
+    } = {}
+  ): Promise<AppData> => {
+    const {
+      showBackupModal = true,
+      successMessage = 'Salvato nel vault locale',
+      afterCommit
+    } = options;
+
+    return mutationCoordinator.enqueue<{ appData: AppData; meta: SecureMeta }>({
+      getCommitted: () => ({ appData: appDataRef.current, meta: metaRef.current }),
+      derive: current => ({
+        appData: derive(current.appData),
+        meta: { ...current.meta, changes: (current.meta.changes || 0) + 1 }
+      }),
+      persist: candidate => secureStorage.saveAppDataAndMeta(candidate.appData, candidate.meta),
+      publish: candidate => {
+        appDataRef.current = candidate.appData;
+        metaRef.current = candidate.meta;
+        setAppData(candidate.appData);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => {
+        if (successMessage) toast(successMessage);
+        if (showBackupModal) setIsBackupModalOpen(true);
+        afterCommit?.();
+      }
+    }).then(candidate => candidate.appData).catch(error => {
+      console.error('Secure vault save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitMetaMutation = useCallback((
+    derive: (current: SecureMeta) => SecureMeta,
+    afterCommit?: () => void
+  ): Promise<SecureMeta> => {
+    return mutationCoordinator.enqueue<SecureMeta>({
+      getCommitted: () => metaRef.current,
+      derive,
+      persist: candidate => secureStorage.saveMeta(candidate),
+      publish: candidate => {
+        metaRef.current = candidate;
+        setMeta(candidate);
+      },
+      afterCommit
+    }).catch(error => {
+      console.error('Secure vault metadata save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage]);
 
   // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
   const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
@@ -148,8 +221,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       return next;
     });
   }, [toast]);
-
-
 
   // 7. Student Portal mode (if query param `?mode=student`)
   const [studentMode, setStudentMode] = useState<{
@@ -171,39 +242,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   // Synchronize URL query params
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      if (e.state && e.state.classId) {
-        setAppData(prev => ({ ...prev, currentClassId: e.state.classId }));
-        setActiveTab(e.state.tab || 'dashboard');
-      } else {
-        setAppData(prev => ({ ...prev, currentClassId: null }));
-        setActiveTab('home');
-      }
+      const nextAppData = e.state && e.state.classId
+        ? { ...appDataRef.current, currentClassId: e.state.classId }
+        : { ...appDataRef.current, currentClassId: null };
+      appDataRef.current = nextAppData;
+      setAppData(nextAppData);
+      setActiveTab(e.state?.tab || (e.state?.classId ? 'dashboard' : 'home'));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Persist sensitive data only through the unlocked Secure Local Vault.
-  const persistAppData = useCallback((newAppData: AppData, showModal = true) => {
-    setAppData(newAppData);
-    const nextMeta = { ...meta, changes: (meta.changes || 0) + 1 };
-    setMeta(nextMeta);
-
-    void Promise.all([
-      secureStorage.saveAppData(newAppData),
-      secureStorage.saveMeta(nextMeta)
-    ]).then(() => {
-      toast('Salvato nel vault locale');
-      if (showModal) setIsBackupModalOpen(true);
-    }).catch((error) => {
-      console.error('Secure vault save failed', error);
-      alert('Attenzione: salvataggio cifrato non riuscito.');
-    });
-  }, [meta, secureStorage, toast]);
-
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
-    setAppData(prev => ({ ...prev, currentClassId: classId }));
+    const nextAppData = { ...appDataRef.current, currentClassId: classId };
+    appDataRef.current = nextAppData;
+    setAppData(nextAppData);
     setActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -214,7 +268,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   const handleNavigateHome = () => {
-    setAppData(prev => ({ ...prev, currentClassId: null }));
+    const nextAppData = { ...appDataRef.current, currentClassId: null };
+    appDataRef.current = nextAppData;
+    setAppData(nextAppData);
     setActiveTab('home');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -237,24 +293,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       behaviors: []
     };
 
-    const nextAppData: AppData = {
-      classes: [...appData.classes, newClass],
+    void commitAppDataMutation(current => ({
+      ...current,
+      classes: [...current.classes, newClass],
       currentClassId: newClass.id
-    };
-
-    persistAppData(nextAppData);
-    setActiveTab('dati');
-    toast('Classe creata');
+    }), {
+      successMessage: 'Classe creata',
+      afterCommit: () => setActiveTab('dati')
+    }).catch(() => undefined);
   };
 
   // Delete class
   const handleDeleteClass = (classId: string) => {
-    const nextAppData: AppData = {
-      classes: appData.classes.filter(c => c.id !== classId),
-      currentClassId: appData.currentClassId === classId ? null : appData.currentClassId
-    };
-    persistAppData(nextAppData, false);
-    toast('Classe eliminata');
+    void commitAppDataMutation(current => ({
+      ...current,
+      classes: current.classes.filter(c => c.id !== classId),
+      currentClassId: current.currentClassId === classId ? null : current.currentClassId
+    }), {
+      showBackupModal: false,
+      successMessage: 'Classe eliminata'
+    }).catch(() => undefined);
   };
 
   // Save evaluations batch (add new or update existing)
@@ -267,10 +325,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     udaId?: string;
     grades: { studentId: string; value: string; delayed: boolean }[];
   }) => {
-    if (!currentClass) return;
-
-    // Filter out existing grades with this batchId if updating
-    const remainingGrades = (currentClass.grades || []).filter(g => g.batchId !== batchData.batchId);
+    const classId = currentClass?.id;
+    if (!classId) return;
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
       id: uid(),
@@ -285,40 +341,47 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       udaId: batchData.udaId
     }));
 
-    const updatedClass: ClassData = {
-      ...currentClass,
-      grades: [...remainingGrades, ...newGrades]
-    };
-
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    setEditingBatchId(null);
-    persistAppData(nextAppData, true);
-    setActiveTab('storico');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const remainingGrades = (targetClass.grades || []).filter(g => g.batchId !== batchData.batchId);
+      const updatedClass: ClassData = {
+        ...targetClass,
+        grades: [...remainingGrades, ...newGrades]
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      afterCommit: () => {
+        setEditingBatchId(null);
+        setActiveTab('storico');
+      }
+    }).catch(() => undefined);
   };
 
   // Save behavior notes
   const handleSaveBehaviors = (newRecords: any[]) => {
-    if (!currentClass) return;
-
+    const classId = currentClass?.id;
+    if (!classId) return;
     const dateStr = newRecords[0]?.date || today();
-    // Replace today's records
-    const remaining = (currentClass.behaviors || []).filter(b => b.date !== dateStr);
-    const updatedClass: ClassData = {
-      ...currentClass,
-      behaviors: [...remaining, ...newRecords]
-    };
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, true);
-    setActiveTab('dashboard');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const remaining = (targetClass.behaviors || []).filter(b => b.date !== dateStr);
+      const updatedClass: ClassData = {
+        ...targetClass,
+        behaviors: [...remaining, ...newRecords]
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      afterCommit: () => setActiveTab('dashboard')
+    }).catch(() => undefined);
   };
 
   // Edit batch
@@ -330,101 +393,124 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   // Delete batch
   const handleDeleteBatch = (batchId: string) => {
-    if (!currentClass) return;
-    const updatedClass: ClassData = {
-      ...currentClass,
-      grades: (currentClass.grades || []).filter(g => g.batchId !== batchId)
-    };
+    const classId = currentClass?.id;
+    if (!classId) return;
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Valutazione eliminata');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        grades: (targetClass.grades || []).filter(g => g.batchId !== batchId)
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Valutazione eliminata'
+    }).catch(() => undefined);
   };
 
   // Add single student
   const handleAddStudent = (name: string) => {
-    if (!currentClass) return;
+    const classId = currentClass?.id;
+    if (!classId) return;
     const newStudent: Student = { id: uid(), name };
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: sortStudents([...currentClass.students, newStudent])
-    };
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Alunno inserito');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: sortStudents([...targetClass.students, newStudent])
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Alunno inserito'
+    }).catch(() => undefined);
   };
 
   // Remove single student
   const handleRemoveStudent = (studentId: string) => {
-    if (!currentClass) return;
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: currentClass.students.filter(s => s.id !== studentId),
-      grades: (currentClass.grades || []).filter(g => g.studentId !== studentId),
-      behaviors: (currentClass.behaviors || []).filter(b => b.studentId !== studentId)
-    };
+    const classId = currentClass?.id;
+    if (!classId) return;
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Alunno rimosso');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: targetClass.students.filter(s => s.id !== studentId),
+        grades: (targetClass.grades || []).filter(g => g.studentId !== studentId),
+        behaviors: (targetClass.behaviors || []).filter(b => b.studentId !== studentId)
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Alunno rimosso'
+    }).catch(() => undefined);
   };
 
   // Bulk add students from Excel
   const handleBulkAddStudents = (newStudents: Student[]) => {
-    if (!currentClass) return;
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: sortStudents([...currentClass.students, ...newStudents])
-    };
+    const classId = currentClass?.id;
+    if (!classId) return;
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, true);
-    toast('Alunni importati');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: sortStudents([...targetClass.students, ...newStudents])
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      successMessage: 'Alunni importati'
+    }).catch(() => undefined);
   };
 
   // Invert student names (Cognome Nome <-> Nome Cognome)
   const handleInvertNames = () => {
-    if (!currentClass) return;
-    const inverted = currentClass.students.map(s => {
-      const parts = s.name.split(/\s+/);
-      if (parts.length > 1) {
-        return {
-          ...s,
-          name: `${parts.pop()} ${parts.join(' ')}`
-        };
-      }
-      return s;
-    });
+    const classId = currentClass?.id;
+    if (!classId) return;
 
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: sortStudents(inverted)
-    };
-
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Nomi invertiti');
+    void commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const inverted = targetClass.students.map(s => {
+        const parts = s.name.split(/\s+/);
+        if (parts.length > 1) {
+          return {
+            ...s,
+            name: `${parts.pop()} ${parts.join(' ')}`
+          };
+        }
+        return s;
+      });
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: sortStudents(inverted)
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Nomi invertiti'
+    }).catch(() => undefined);
   };
 
   // Save new test
@@ -465,51 +551,55 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       return;
     }
 
-    let count = 0;
-    const updatedClasses = appData.classes.map(cls => {
-      let clsGrades = [...(cls.grades || [])];
+    const submissionSnapshot = submissions;
+    let importedCount = 0;
 
-      submissions.forEach(sub => {
-        // Match class name
-        if (cls.name.toLowerCase().includes(sub.class.toLowerCase()) || sub.class.toLowerCase().includes(cls.name.toLowerCase())) {
-          // Match student name
-          const matchStudent = cls.students.find(st =>
-            st.name.toLowerCase().trim() === sub.name.toLowerCase().trim() ||
-            st.name.toLowerCase().includes(sub.name.toLowerCase()) ||
-            sub.name.toLowerCase().includes(st.name.toLowerCase())
-          );
+    void commitAppDataMutation(current => {
+      importedCount = 0;
+      const updatedClasses = current.classes.map(cls => {
+        const clsGrades = [...(cls.grades || [])];
 
-          if (matchStudent) {
-            const grade10 = sub.total > 0 ? Math.round((sub.score / sub.total) * 10 * 10) / 10 : 0;
-            clsGrades.push({
-              id: uid(),
-              batchId: `online_${uid()}`,
-              studentId: matchStudent.id,
-              date: sub.date.slice(0, 10),
-              type: 'test',
-              period: 'Q1',
-              title: `Flashcard: ${sub.testTitle}`,
-              value: String(grade10),
-              udaId: targetUdaId || sub.testId
-            });
-            count++;
+        submissionSnapshot.forEach(sub => {
+          if (cls.name.toLowerCase().includes(sub.class.toLowerCase()) || sub.class.toLowerCase().includes(cls.name.toLowerCase())) {
+            const matchStudent = cls.students.find(st =>
+              st.name.toLowerCase().trim() === sub.name.toLowerCase().trim() ||
+              st.name.toLowerCase().includes(sub.name.toLowerCase()) ||
+              sub.name.toLowerCase().includes(st.name.toLowerCase())
+            );
+
+            if (matchStudent) {
+              const grade10 = sub.total > 0 ? Math.round((sub.score / sub.total) * 10 * 10) / 10 : 0;
+              clsGrades.push({
+                id: uid(),
+                batchId: `online_${uid()}`,
+                studentId: matchStudent.id,
+                date: sub.date.slice(0, 10),
+                type: 'test',
+                period: 'Q1',
+                title: `Flashcard: ${sub.testTitle}`,
+                value: String(grade10),
+                udaId: targetUdaId || sub.testId
+              });
+              importedCount++;
+            }
           }
-        }
+        });
+
+        return {
+          ...cls,
+          grades: clsGrades
+        };
       });
 
       return {
-        ...cls,
-        grades: clsGrades
+        ...current,
+        classes: updatedClasses
       };
-    });
-
-    const nextAppData: AppData = {
-      ...appData,
-      classes: updatedClasses
-    };
-
-    persistAppData(nextAppData, true);
-    alert(`Importazione completata con successo! ${count} valutazioni sono state registrate negli elenchi di classe.`);
+    }, {
+      afterCommit: () => {
+        alert(`Importazione completata con successo! ${importedCount} valutazioni sono state registrate negli elenchi di classe.`);
+      }
+    }).catch(() => undefined);
   };
 
   // Save UDAs
@@ -552,6 +642,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     const candidate = normalizeBackupPayload(decryptedData, currentSnapshot);
     const restored = await secureStorage.restoreSnapshotVerified(candidate);
 
+    appDataRef.current = restored.appData;
+    metaRef.current = restored.meta;
     setAppData(restored.appData);
     setSettings(restored.settings);
     setUdas(restored.udas);
@@ -566,8 +658,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const handleFactoryReset = async () => {
     try {
       await onFactoryReset();
-      setAppData({ classes: [], currentClassId: null });
-      setMeta({ changes: 0, lastBackup: null });
+      const resetAppData: AppData = { classes: [], currentClassId: null };
+      const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
+      appDataRef.current = resetAppData;
+      metaRef.current = resetMeta;
+      setAppData(resetAppData);
+      setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
     } catch (error) {
@@ -610,7 +706,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         isPrivacyShieldActive={isPrivacyShieldActive}
         onTogglePrivacyShield={handleTogglePrivacyShield}
       />
-
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5">
@@ -683,7 +778,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
-
         {/* TAB 7: Storico Prove */}
         {activeTab === 'storico' && currentClass && (
           <HistoryView
@@ -708,7 +802,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
-
 
         {/* TAB 9: Gestione Alunni */}
         {activeTab === 'dati' && currentClass && (
@@ -783,8 +876,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onExportEncryptedBackup={() => {
               const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
-              setMeta(nextMeta);
-              void secureStorage.saveMeta(nextMeta);
+              void commitMetaMutation(() => nextMeta).catch(() => undefined);
             }}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
