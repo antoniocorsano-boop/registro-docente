@@ -88,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-base tracking-tight text-white">
+              <span className="hidden sm:block font-bold text-base tracking-tight text-white">
                 Registro<span className="text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">Docente</span>
               </span>
               <span className="hidden sm:inline-block ml-2 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-[var(--surface-variant)] text-slate-400 border border-[var(--border)]">
