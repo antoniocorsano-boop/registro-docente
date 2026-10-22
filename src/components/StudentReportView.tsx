@@ -104,34 +104,44 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
 function calcStudentCompetencyProfile(
   studentGrades: Grade[],
   classGrades: Grade[],
-  classUdas: UdaRecord[],
-  totalStudentAvg: number | null
+  classUdas: UdaRecord[]
 ) {
-  const fallback = totalStudentAvg !== null ? totalStudentAvg : 6.0;
+  const roundScore = (score: number | null): number | null =>
+    score === null ? null : Math.round(score * 10) / 10;
 
   // 1. STEM & Metodo Tecnologico
   const stemStudentGrades = studentGrades.filter(g => g.type === 'verifica' || g.type === 'test');
   const stemClassGrades = classGrades.filter(g => g.type === 'verifica' || g.type === 'test');
-  const stemStudentScore = (stemStudentGrades.length > 0 ? calcAvg(stemStudentGrades) : null) ?? fallback;
-  const stemClassScore = (stemClassGrades.length > 0 ? calcAvg(stemClassGrades) : null) ?? 6.8;
+  const stemStudentScore = roundScore(stemStudentGrades.length > 0 ? calcAvg(stemStudentGrades) : null);
+  const stemClassScore = roundScore(stemClassGrades.length > 0 ? calcAvg(stemClassGrades) : null);
 
   // 2. Competenze Digitali & CAD
-  const digiStudentGrades = studentGrades.filter(g =>
-    g.type === 'test' ||
-    g.title.toLowerCase().includes('cad') ||
-    g.title.toLowerCase().includes('digital') ||
-    g.title.toLowerCase().includes('online') ||
-    g.title.toLowerCase().includes('flashcard')
+  const digitalUdaIds = new Set(
+    classUdas
+      .filter(u => {
+        const searchable = `${u.title} ${u.description || ''} ${u.competencies || ''}`.toLowerCase();
+        return (
+          searchable.includes('digital') ||
+          searchable.includes('cad') ||
+          u.lessons?.some(l => l.activityType === 'digitale') === true
+        );
+      })
+      .map(u => u.id)
   );
-  const digiClassGrades = classGrades.filter(g =>
-    g.type === 'test' ||
-    g.title.toLowerCase().includes('cad') ||
-    g.title.toLowerCase().includes('digital') ||
-    g.title.toLowerCase().includes('online') ||
-    g.title.toLowerCase().includes('flashcard')
-  );
-  const digiStudentScore = (digiStudentGrades.length > 0 ? calcAvg(digiStudentGrades) : null) ?? Math.max(5.5, fallback * 0.98);
-  const digiClassScore = (digiClassGrades.length > 0 ? calcAvg(digiClassGrades) : null) ?? 7.0;
+  const isDigitalEvidence = (g: Grade) => {
+    const title = g.title.toLowerCase();
+    return (
+      Boolean(g.udaId && digitalUdaIds.has(g.udaId)) ||
+      title.includes('cad') ||
+      title.includes('digital') ||
+      title.includes('online') ||
+      title.includes('flashcard')
+    );
+  };
+  const digiStudentGrades = studentGrades.filter(isDigitalEvidence);
+  const digiClassGrades = classGrades.filter(isDigitalEvidence);
+  const digiStudentScore = roundScore(digiStudentGrades.length > 0 ? calcAvg(digiStudentGrades) : null);
+  const digiClassScore = roundScore(digiClassGrades.length > 0 ? calcAvg(digiClassGrades) : null);
 
   // 3. Educazione Civica & Sostenibilità
   const civicUdaIds = new Set(classUdas.filter(u => u.civicEducation).map(u => u.id));
@@ -147,8 +157,8 @@ function calcStudentCompetencyProfile(
     g.title.toLowerCase().includes('sostenibil') ||
     g.title.toLowerCase().includes('agenda')
   );
-  const civicStudentScore = (civicStudentGrades.length > 0 ? calcAvg(civicStudentGrades) : null) ?? fallback;
-  const civicClassScore = (civicClassGrades.length > 0 ? calcAvg(civicClassGrades) : null) ?? 7.2;
+  const civicStudentScore = roundScore(civicStudentGrades.length > 0 ? calcAvg(civicStudentGrades) : null);
+  const civicClassScore = roundScore(civicClassGrades.length > 0 ? calcAvg(civicClassGrades) : null);
 
   // 4. Linguaggio Grafico & Disegno Tecnico
   const graphStudentGrades = studentGrades.filter(g =>
@@ -163,8 +173,8 @@ function calcStudentCompetencyProfile(
     g.title.toLowerCase().includes('assonometr') ||
     g.title.toLowerCase().includes('proiezion')
   );
-  const graphStudentScore = (graphStudentGrades.length > 0 ? calcAvg(graphStudentGrades) : null) ?? fallback;
-  const graphClassScore = (graphClassGrades.length > 0 ? calcAvg(graphClassGrades) : null) ?? 6.9;
+  const graphStudentScore = roundScore(graphStudentGrades.length > 0 ? calcAvg(graphStudentGrades) : null);
+  const graphClassScore = roundScore(graphClassGrades.length > 0 ? calcAvg(graphClassGrades) : null);
 
   // 5. Compito di Realtà & Spirito di Iniziativa
   const taskStudentGrades = studentGrades.filter(g => {
@@ -175,75 +185,75 @@ function calcStudentCompetencyProfile(
     const t = g.title.toLowerCase();
     return t.includes('compito') || t.includes('realtà') || t.includes('progetto') || t.includes('modello') || t.includes('prototipo');
   });
-  const taskStudentScore = (taskStudentGrades.length > 0 ? calcAvg(taskStudentGrades) : null) ?? Math.min(10, fallback * 1.04);
-  const taskClassScore = (taskClassGrades.length > 0 ? calcAvg(taskClassGrades) : null) ?? 7.1;
+  const taskStudentScore = roundScore(taskStudentGrades.length > 0 ? calcAvg(taskStudentGrades) : null);
+  const taskClassScore = roundScore(taskClassGrades.length > 0 ? calcAvg(taskClassGrades) : null);
 
   // 6. Comunicazione Alfabetica & Orale
   const commStudentGrades = studentGrades.filter(g => g.type === 'orale' || g.title.toLowerCase().includes('colloquio'));
   const commClassGrades = classGrades.filter(g => g.type === 'orale' || g.title.toLowerCase().includes('colloquio'));
-  const commStudentScore = (commStudentGrades.length > 0 ? calcAvg(commStudentGrades) : null) ?? fallback;
-  const commClassScore = (commClassGrades.length > 0 ? calcAvg(commClassGrades) : null) ?? 6.7;
+  const commStudentScore = roundScore(commStudentGrades.length > 0 ? calcAvg(commStudentGrades) : null);
+  const commClassScore = roundScore(commClassGrades.length > 0 ? calcAvg(commClassGrades) : null);
 
   return [
     {
       axis: 'STEM & Metodo',
       fullName: 'Matematica, Scienze e Tecnologia (STEM)',
       icon: '🔬',
-      studentScore: Math.round(stemStudentScore * 10) / 10,
-      classScore: Math.round(stemClassScore * 10) / 10,
+      studentScore: stemStudentScore,
+      classScore: stemClassScore,
       baseThreshold: 6.0,
       evaluatedCount: stemStudentGrades.length,
-      level: getCompetenceLevel(stemStudentScore)
+      level: stemStudentScore !== null ? getCompetenceLevel(stemStudentScore) : null
     },
     {
       axis: 'Digitale & CAD',
       fullName: 'Competenza Digitale, CAD e Simulazioni Online',
       icon: '💻',
-      studentScore: Math.round(digiStudentScore * 10) / 10,
-      classScore: Math.round(digiClassScore * 10) / 10,
+      studentScore: digiStudentScore,
+      classScore: digiClassScore,
       baseThreshold: 6.0,
       evaluatedCount: digiStudentGrades.length,
-      level: getCompetenceLevel(digiStudentScore)
+      level: digiStudentScore !== null ? getCompetenceLevel(digiStudentScore) : null
     },
     {
       axis: 'Educazione Civica',
       fullName: 'Cittadinanza Attiva, Sostenibilità e Agenda 2030',
       icon: '🌿',
-      studentScore: Math.round(civicStudentScore * 10) / 10,
-      classScore: Math.round(civicClassScore * 10) / 10,
+      studentScore: civicStudentScore,
+      classScore: civicClassScore,
       baseThreshold: 6.0,
       evaluatedCount: civicStudentGrades.length,
-      level: getCompetenceLevel(civicStudentScore)
+      level: civicStudentScore !== null ? getCompetenceLevel(civicStudentScore) : null
     },
     {
       axis: 'Grafica & 3D',
       fullName: 'Consapevolezza Culturale, Disegno Tecnico e Spazialità',
       icon: '📐',
-      studentScore: Math.round(graphStudentScore * 10) / 10,
-      classScore: Math.round(graphClassScore * 10) / 10,
+      studentScore: graphStudentScore,
+      classScore: graphClassScore,
       baseThreshold: 6.0,
       evaluatedCount: graphStudentGrades.length,
-      level: getCompetenceLevel(graphStudentScore)
+      level: graphStudentScore !== null ? getCompetenceLevel(graphStudentScore) : null
     },
     {
       axis: 'Compito Realtà',
       fullName: 'Competenza Imprenditoriale e Prodotti Autentici',
       icon: '🎯',
-      studentScore: Math.round(taskStudentScore * 10) / 10,
-      classScore: Math.round(taskClassScore * 10) / 10,
+      studentScore: taskStudentScore,
+      classScore: taskClassScore,
       baseThreshold: 6.0,
       evaluatedCount: taskStudentGrades.length,
-      level: getCompetenceLevel(taskStudentScore)
+      level: taskStudentScore !== null ? getCompetenceLevel(taskStudentScore) : null
     },
     {
       axis: 'Comunicazione',
       fullName: 'Argomentazione Orale e Proprietà del Lessico Tecnico',
       icon: '🗣️',
-      studentScore: Math.round(commStudentScore * 10) / 10,
-      classScore: Math.round(commClassScore * 10) / 10,
+      studentScore: commStudentScore,
+      classScore: commClassScore,
       baseThreshold: 6.0,
       evaluatedCount: commStudentGrades.length,
-      level: getCompetenceLevel(commStudentScore)
+      level: commStudentScore !== null ? getCompetenceLevel(commStudentScore) : null
     }
   ];
 }
@@ -340,17 +350,15 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   const competencyRadarData = calcStudentCompetencyProfile(
     grades,
     currentClass.grades || [],
-    classUdas,
-    totalSimpleAvg
+    classUdas
   );
 
   // 2. Per-UDA Radar Data
   const udaRadarData = studentUdaDossier.map(d => {
     const u = d.uda;
     const udaClassGrades = (currentClass.grades || []).filter(g => g.udaId === u.id);
-    const classAvg = (udaClassGrades.length > 0 ? calcAvg(udaClassGrades) : null) ?? 7.0;
-    const fallbackScore = totalSimpleAvg !== null ? totalSimpleAvg : 6.5;
-    const studentScore = d.udaAvg !== null ? d.udaAvg : fallbackScore;
+    const classAvg = udaClassGrades.length > 0 ? calcAvg(udaClassGrades) : null;
+    const studentScore = d.udaAvg;
 
     const axisLabel = u.title.replace(/^UDA\s*\d+:\s*/i, '');
     const shortLabel = axisLabel.length > 18 ? axisLabel.slice(0, 16) + '…' : axisLabel;
@@ -359,26 +367,33 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       axis: shortLabel,
       fullName: u.title,
       icon: u.civicEducation ? '🌿' : '📚',
-      studentScore: Math.round(studentScore * 10) / 10,
-      classScore: Math.round(classAvg * 10) / 10,
+      studentScore: studentScore !== null ? Math.round(studentScore * 10) / 10 : null,
+      classScore: classAvg !== null ? Math.round(classAvg * 10) / 10 : null,
       baseThreshold: 6.0,
       evaluatedCount: d.udaGrades.length,
-      level: getCompetenceLevel(studentScore),
+      level: studentScore !== null ? getCompetenceLevel(studentScore) : null,
       completedHours: d.completedHours,
       earnedCredits: d.creditStats.earnedCredits
     };
   });
 
-  const activeRadarData = radarMode === 'competencies' ? competencyRadarData : (udaRadarData.length >= 3 ? udaRadarData : competencyRadarData);
+  const evaluatedCompetencyData = competencyRadarData.filter(c => c.studentScore !== null);
+  const hasReliableCompetencyProfile = evaluatedCompetencyData.length >= 3;
+  const evaluatedUdaData = udaRadarData.filter(c => c.studentScore !== null);
+  const hasReliableUdaProfile = evaluatedUdaData.length >= 3;
+  const activeRadarData = radarMode === 'competencies' ? evaluatedCompetencyData : evaluatedUdaData;
+  const hasReliableActiveProfile = radarMode === 'competencies'
+    ? hasReliableCompetencyProfile
+    : hasReliableUdaProfile;
 
   // Diagnostic strengths and areas of growth
-  const sortedStrengths = [...competencyRadarData].sort((a, b) => b.studentScore - a.studentScore);
-  const bestCompetency = sortedStrengths[0];
-  const growthCompetency = sortedStrengths[sortedStrengths.length - 1];
-  const advancedCount = competencyRadarData.filter(c => c.studentScore >= 8.5).length;
-  const intermediateCount = competencyRadarData.filter(c => c.studentScore >= 7.0 && c.studentScore < 8.5).length;
-  const baseCount = competencyRadarData.filter(c => c.studentScore >= 6.0 && c.studentScore < 7.0).length;
-  const underBaseCount = competencyRadarData.filter(c => c.studentScore < 6.0).length;
+  const sortedStrengths = [...evaluatedCompetencyData].sort((a, b) => b.studentScore! - a.studentScore!);
+  const bestCompetency = hasReliableCompetencyProfile ? sortedStrengths[0] : null;
+  const growthCompetency = hasReliableCompetencyProfile ? sortedStrengths[sortedStrengths.length - 1] : null;
+  const advancedCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore >= 8.5).length;
+  const intermediateCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore >= 7.0 && c.studentScore < 8.5).length;
+  const baseCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore >= 6.0 && c.studentScore < 7.0).length;
+  const underBaseCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore < 6.0).length;
 
   return (
     <div className="space-y-4">
@@ -516,6 +531,8 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
           {/* Radar Chart Area */}
           <div className="lg:col-span-7 bg-slate-950/60 rounded-xl border border-slate-800/80 p-3 pt-4 flex flex-col items-center justify-center relative min-h-[340px]">
+            {hasReliableActiveProfile ? (
+              <>
             <ResponsiveContainer width="100%" height={320}>
               <RadarChart cx="50%" cy="50%" outerRadius="72%" data={activeRadarData}>
                 <PolarGrid stroke="#334155" strokeDasharray="3 3" />
@@ -570,10 +587,20 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             <div className="text-[10px] text-slate-500 text-center mt-1">
               Scala 0-10: <b className="text-emerald-400">≥8.5 Avanzato</b> · <b className="text-cyan-400">7-8.4 Intermedio</b> · <b className="text-amber-400">6-6.9 Base</b> · <b className="text-rose-400">&lt;6 Prima Acquisizione</b>
             </div>
+              </>
+            ) : (
+              <div className="min-h-[260px] flex flex-col items-center justify-center text-center px-6">
+                <AlertCircle className="w-7 h-7 text-slate-500 mb-2" />
+                <p className="text-sm font-semibold text-slate-300">Dati insufficienti per costruire un profilo attendibile</p>
+                <p className="text-xs text-slate-500 mt-1">Servono almeno 3 dimensioni con evidenze valutative reali.</p>
+              </div>
+            )}
           </div>
 
           {/* Diagnostic Synthesis Panel */}
           <div className="lg:col-span-5 space-y-3">
+            {hasReliableCompetencyProfile && bestCompetency && growthCompetency ? (
+              <>
             {/* Prevailing Competence Level Card */}
             <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
@@ -659,6 +686,13 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                 </div>
               </div>
             </div>
+              </>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 text-center">
+                <p className="text-sm font-semibold text-slate-300">Dati insufficienti per costruire un profilo attendibile</p>
+                <p className="text-xs text-slate-500 mt-1">Conteggi di livello, punto di forza e area da consolidare saranno disponibili con almeno 3 dimensioni valutate.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
