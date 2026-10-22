@@ -14,7 +14,9 @@ describe('PERSIST-01 durable App mutation integrity', () => {
   test('routes appData and meta through the durable commit boundary', () => {
     expect(appSource).toContain('createDurableMutationCoordinator');
     expect(appSource).toContain('commitAppDataMutation');
-    expect(appSource).toContain('commitMetaMutation');
+    expect(appSource).toContain('recordEncryptedBackupExport');
+    expect(appSource).toContain('applyBackupReceipt');
+    expect(appSource).toContain('secureStorage.saveMeta');
     expect(appSource).toContain('saveAppDataAndMeta');
     expect(appSource).not.toContain('Promise.all([\n      secureStorage.saveAppData');
     expect(appSource).not.toContain('persistAppData(');
