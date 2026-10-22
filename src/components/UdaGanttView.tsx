@@ -507,10 +507,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         scoresMap[r.item.id] = Math.round(r.similarity * 100);
       });
       setSemanticScores(scoresMap);
-      showStatus(`⚡ Ricerca semantica completata (${embeddingConfig.modelName || 'Termux/llama-server'})`);
+      showStatus('⚡ Ricerca semantica completata');
     } catch (err: any) {
       console.error('Semantic search error:', err);
-      showStatus(`⚠️ Ricerca semantica non riuscita: ${err.message || 'Verifica llama-server su Termux'}`);
+      showStatus('⚠️ Ricerca semantica non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsSearchingSemantic(false);
     }
@@ -535,10 +535,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         .slice(0, 4)
         .map(r => ({ uda: r.item.uda, score: Math.round(r.similarity * 100) }));
       setSuggestedPredecessors(topSuggestions);
-      showStatus(`✨ Trovate ${topSuggestions.length} UDA correlate tramite embedding locale`);
+      showStatus(`✨ Trovate ${topSuggestions.length} UDA correlate`);
     } catch (err: any) {
       console.error('Suggest dependencies error:', err);
-      showStatus(`⚠️ Analisi propedeuticità non riuscita: ${err.message || 'Controlla llama-server'}`);
+      showStatus('⚠️ Analisi propedeuticità non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsAnalyzingDependenciesSemantic(false);
     }
@@ -569,7 +569,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       showStatus(`📊 Mappatura semantica competenze D.M. 221/2025 calcolata`);
     } catch (err: any) {
       console.error('Competency alignment error:', err);
-      showStatus(`⚠️ Errore mappatura semantica: ${err.message || 'Verifica llama-server'}`);
+      showStatus('⚠️ Mappatura semantica non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsAnalyzingCompetenciesSemantic(false);
     }
@@ -593,7 +593,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     }
 
     setIsGeneratingAi(true);
-    showStatus('🤖 Generazione traccia UDA con Gemini API in corso...');
+    showStatus('🤖 Generazione traccia UDA con assistenza AI in corso...');
 
     try {
       const res = await fetch('/api/gemini/generate-uda-description', {
@@ -633,11 +633,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         } else {
           setNewDescription(data.description);
         }
-        showStatus('✨ Descrizione UDA generata con successo con Gemini AI!');
+        showStatus('✨ Descrizione UDA generata con successo con assistenza AI!');
       }
     } catch (err: any) {
       console.error('AI generation error:', err);
-      showStatus(`⚠️ Errore generazione: ${err.message || 'Riprova'}`);
+      showStatus('⚠️ Generazione non riuscita. Riprova o verifica le impostazioni avanzate.');
     } finally {
       setIsGeneratingAi(false);
     }
@@ -1639,12 +1639,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     }`}
                     title={
                       isSemanticSearch
-                        ? `Ricerca Semantica Attiva (${embeddingConfig.provider === 'local' ? 'llama.cpp Termux' : 'Gemini Cloud'})`
-                        : 'Attiva la ricerca concettuale vettoriale basata su embedding'
+                        ? 'Ricerca semantica attiva'
+                        : 'Attiva la ricerca concettuale'
                     }
                   >
                     <Cpu className={`w-3 h-3 ${isSearchingSemantic ? 'animate-spin' : ''}`} />
-                    <span>{isSearchingSemantic ? 'Vettori...' : 'Semantica AI'}</span>
+                    <span>{isSearchingSemantic ? 'Ricerca...' : 'Semantica AI'}</span>
                   </button>
                 </div>
 
@@ -1745,7 +1745,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                                           ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600'
                                           : 'bg-slate-800 text-slate-300 border-slate-700'
                                       }`}
-                                      title="Punteggio di affinità semantica calcolato dal modello vettoriale"
+                                      title="Punteggio di affinità concettuale"
                                     >
                                       ⚡ {semanticScores[u.id]}%
                                     </span>
@@ -2547,10 +2547,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     onClick={() => handleSuggestDependenciesSemantic(selectedUdaForDetail)}
                     disabled={isAnalyzingDependenciesSemantic}
                     className="self-start sm:self-auto px-2.5 py-1 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                    title="Analizza la similarità concettuale con le altre UDA usando il modello di embedding locale per suggerire propedeuticità coerenti"
+                    title="Analizza le somiglianze concettuali con le altre UDA per suggerire propedeuticità coerenti"
                   >
                     <Cpu className={`w-3.5 h-3.5 text-cyan-400 ${isAnalyzingDependenciesSemantic ? 'animate-spin' : ''}`} />
-                    <span>{isAnalyzingDependenciesSemantic ? 'Analisi vettori...' : '⚡ Suggerisci Propedeuticità con Embedding'}</span>
+                    <span>{isAnalyzingDependenciesSemantic ? 'Analisi...' : '⚡ Suggerisci propedeuticità'}</span>
                   </button>
                 </div>
 
@@ -2560,7 +2560,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <div className="flex items-center justify-between text-xs text-cyan-300 font-semibold">
                       <span className="flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                        UDA Correlate Suggerite tramite Embedding ({embeddingConfig.modelName || 'Termux/llama-server'}):
+                        UDA correlate suggerite:
                       </span>
                       <button
                         type="button"
