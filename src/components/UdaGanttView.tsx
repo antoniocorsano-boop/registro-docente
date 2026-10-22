@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AppSettings, ClassData, OnlineTest, UdaActivityType, UdaLesson, UdaRecord } from '../types';
 import { MONTHS_LABELS, calcAvg, formatGrade, getCompetenceLevel, today, uid } from '../utils';
 import {
@@ -464,6 +464,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   // Quick toast message inside UdaGanttView
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isSavingUda, setIsSavingUda] = useState(false);
+  const udaMutationPendingRef = useRef(false);
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
@@ -474,12 +476,18 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     nextUdas: UdaRecord[],
     afterCommit?: () => void
   ): Promise<boolean> => {
+    if (udaMutationPendingRef.current) return false;
+    udaMutationPendingRef.current = true;
+    setIsSavingUda(true);
     try {
       await onSaveUdas(nextUdas);
       afterCommit?.();
       return true;
     } catch {
       return false;
+    } finally {
+      udaMutationPendingRef.current = false;
+      setIsSavingUda(false);
     }
   };
 
@@ -3152,6 +3160,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
+                  disabled={isSavingUda}
                   className="flex-1 py-2.5 rounded-lg neon-btn-primary font-semibold cursor-pointer"
                 >
                   Crea UDA
@@ -3159,6 +3168,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
+                  disabled={isSavingUda}
                   className="px-4 py-2.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 cursor-pointer"
                 >
                   Annulla
