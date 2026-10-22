@@ -12,7 +12,7 @@ function sectionBetween(source: string, start: string, end: string): string {
 }
 
 function expectPersistenceBeforeSuccess(section: string, successMarker: string): void {
-  const awaitIndex = section.indexOf('await onSaveNewTest(newTest)');
+  const awaitIndex = section.indexOf('await commitTestSave(newTest)');
   const successIndex = section.indexOf(successMarker);
   expect(awaitIndex).toBeGreaterThanOrEqual(0);
   expect(successIndex).toBeGreaterThan(awaitIndex);
@@ -21,6 +21,8 @@ function expectPersistenceBeforeSuccess(section: string, successMarker: string):
 describe('PERSIST-01 online test editor persistence integrity', () => {
   test('the save callback contract is asynchronous end-to-end', () => {
     expect(viewSource).toContain('onSaveNewTest: (test: OnlineTest) => Promise<void>;');
+    expect(viewSource).toContain('const commitTestSave = async (test: OnlineTest): Promise<boolean> =>');
+    expect(viewSource).toContain('await onSaveNewTest(test);');
     expect(appSource).toContain('const handleSaveNewTest = (newTest: OnlineTest): Promise<void> =>');
     const appHandler = sectionBetween(appSource, '// Save new test', '// Delete submission');
     expect(appHandler).toContain('return commitTestsMutation');
@@ -40,8 +42,7 @@ describe('PERSIST-01 online test editor persistence integrity', () => {
     const section = sectionBetween(viewSource, 'const handleFileUpload = async', 'const handleSaveManualTest');
     expectPersistenceBeforeSuccess(section, 'setSelectedTestId(testId)');
     expectPersistenceBeforeSuccess(section, 'Successo! Creato il test');
-    expect(section).toContain('catch (saveError)');
-    expect(section).toContain('return;');
+    expect(section).toContain('if (!(await commitTestSave(newTest))) return;');
   });
 
   test('manual editor waits for durable persistence before clearing inputs or reporting success', () => {
