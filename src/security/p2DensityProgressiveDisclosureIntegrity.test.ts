@@ -4,8 +4,11 @@ import { readFile } from 'node:fs/promises';
 const source = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 const closedDisclosureContaining = (text: string, label: string) => {
-  const labelIndex = text.indexOf(label);
-  expect(labelIndex).toBeGreaterThanOrEqual(0);
+  const firstDetailsIndex = text.indexOf('<details');
+  expect(firstDetailsIndex).toBeGreaterThanOrEqual(0);
+
+  const labelIndex = text.indexOf(label, firstDetailsIndex);
+  expect(labelIndex).toBeGreaterThan(firstDetailsIndex);
 
   const detailsIndex = text.lastIndexOf('<details', labelIndex);
   const closeIndex = text.indexOf('</details>', labelIndex);
