@@ -8,6 +8,7 @@ export interface DurableMutation<T> {
 
 export interface DurableMutationCoordinator {
   enqueue<T>(mutation: DurableMutation<T>): Promise<T>;
+  enqueueTask<T>(task: () => Promise<T> | T): Promise<T>;
 }
 
 export function createDurableMutationCoordinator(): DurableMutationCoordinator {
@@ -31,6 +32,12 @@ export function createDurableMutationCoordinator(): DurableMutationCoordinator {
         return candidate;
       });
 
+      tail = run.then(() => undefined, () => undefined);
+      return run;
+    },
+
+    enqueueTask<T>(task: () => Promise<T> | T): Promise<T> {
+      const run = tail.then(task, task);
       tail = run.then(() => undefined, () => undefined);
       return run;
     }
