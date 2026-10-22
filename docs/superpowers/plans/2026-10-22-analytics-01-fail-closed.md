@@ -39,9 +39,9 @@
 - Consumes: sorgenti correnti delle due viste.
 - Produces: test che devono fallire sull'head di baseline esclusivamente per i fallback e gli stati sintetici esistenti.
 
-- [ ] Scrivere test per: zero prove; `0/0`; radar sintetico; forza/debolezza fabbricate; `null` classificato nello scrutinio.
-- [ ] Eseguire `bun test src/security/analyticsDataIntegrity.test.ts` e verificare RED pulito.
-- [ ] Commit test-only.
+- [x] Scrivere test per: zero prove; `0/0`; radar sintetico; forza/debolezza fabbricate; `null` classificato nello scrutinio.
+- [x] Eseguire la suite di sicurezza e verificare RED pulito: 75 PASS / 5 FAIL, tutte e sole ANALYTICS-01; typecheck, build e smoke PASS.
+- [x] Commit test-only: `0883241be1e954da707414e78380fa5d764e72af`.
 
 ### Task 2: GREEN — comportamento fail-closed
 
@@ -53,14 +53,14 @@
 - Consumes: contratti RED del Task 1.
 - Produces: UI che preserva assenza/parzialità dei dati senza inventare metriche.
 
-- [ ] Rendere `suffRate` nullable e visualizzare `—` / `Nessun dato` quando non esistono medie valide.
-- [ ] Mostrare stato vuoto per la distribuzione livelli quando non esistono studenti valutati.
-- [ ] Rendere `Non disponibile` lo stato scrutinio/export per media assente.
-- [ ] Rimuovere tutti i fallback numerici dal profilo competenze e calcolare ogni dimensione solo da prove pertinenti.
-- [ ] Mostrare il radar, i conteggi livello e forza/area da consolidare solo con almeno 3 dimensioni valutate.
-- [ ] Mantenere Q1/Q2 e singole dimensioni indipendenti dalla media generale.
+- [x] Rendere `suffRate` nullable e visualizzare `—` / `Nessun dato` quando non esistono medie valide.
+- [x] Mostrare stato vuoto per la distribuzione livelli quando non esistono studenti valutati.
+- [x] Rendere `Non disponibile` lo stato scrutinio/export per media assente.
+- [x] Rimuovere tutti i fallback numerici dal profilo competenze e calcolare ogni dimensione solo da prove pertinenti.
+- [x] Mostrare il radar, i conteggi livello e forza/area da consolidare solo con almeno 3 dimensioni valutate.
+- [x] Mantenere Q1/Q2 e singole dimensioni indipendenti dalla media generale.
 - [ ] Eseguire il test mirato e ottenere GREEN.
-- [ ] Commit implementazione minima.
+- [x] Commit implementazione minima: `e8933eaffece0a1681cf51d3c1b2b80a1104d9c6`.
 
 ### Task 3: Verifica bounded
 
@@ -70,4 +70,4 @@
 - [ ] Eseguire `npx tsc --noEmit`.
 - [ ] Eseguire `npm run build`.
 - [ ] Verificare diff limitato al piano, al nuovo test e alle due viste.
-- [ ] Aprire PR Draft con evidenza RED→GREEN, senza merge e senza deploy.
+- [x] Aprire PR Draft con evidenza RED→GREEN, senza merge e senza deploy: PR #6.
