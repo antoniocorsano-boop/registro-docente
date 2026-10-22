@@ -466,10 +466,34 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSavingUda, setIsSavingUda] = useState(false);
   const udaMutationPendingRef = useRef(false);
+  const udaTextMutationTailRef = useRef<Promise<void>>(Promise.resolve());
+  const udaTextMutationDepthRef = useRef(0);
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3500);
+  };
+
+  const queueUdaTextMutation = (nextUdas: UdaRecord[]) => {
+    udaTextMutationDepthRef.current += 1;
+    udaMutationPendingRef.current = true;
+    setIsSavingUda(true);
+
+    const task = udaTextMutationTailRef.current
+      .catch(() => undefined)
+      .then(() => onSaveUdas(nextUdas));
+
+    udaTextMutationTailRef.current = task.catch(() => undefined);
+
+    const settle = () => {
+      udaTextMutationDepthRef.current = Math.max(0, udaTextMutationDepthRef.current - 1);
+      if (udaTextMutationDepthRef.current === 0) {
+        udaMutationPendingRef.current = false;
+        setIsSavingUda(false);
+      }
+    };
+
+    void task.then(settle, settle);
   };
 
   const commitUdaViewMutation = async (
@@ -486,8 +510,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     } catch {
       return false;
     } finally {
-      udaMutationPendingRef.current = false;
-      setIsSavingUda(false);
+      if (udaTextMutationDepthRef.current === 0) {
+        udaMutationPendingRef.current = false;
+        setIsSavingUda(false);
+      }
     }
   };
 
@@ -1005,7 +1031,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     const updatedUda = { ...selectedUdaForDetail, [field]: value };
     setSelectedUdaForDetail(updatedUda);
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
-    void commitUdaViewMutation(nextUdas);
+    queueUdaTextMutation(nextUdas);
   };
 
   // Update rubric level
@@ -1018,7 +1044,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     const updatedUda = { ...selectedUdaForDetail, rubricLevels: updatedRubric };
     setSelectedUdaForDetail(updatedUda);
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
-    void commitUdaViewMutation(nextUdas);
+    queueUdaTextMutation(nextUdas);
   };
 
   // Filtered and Semantically Ranked UDAs for Gantt
