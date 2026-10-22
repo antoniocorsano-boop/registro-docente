@@ -38,7 +38,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const suffRate = studentAvgs.length > 0
     ? Math.round((studentAvgs.filter(v => v >= 6.0).length / studentAvgs.length) * 100)
-    : 0;
+    : null;
 
   // Group assessments by batchId / date
   const groupsMap: Record<string, { batchId: string; date: string; type: string; title: string; period: string; votes: typeof grades }> = {};
@@ -94,11 +94,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
-            <b className={`text-2xl font-bold block ${suffRate >= 60 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {suffRate}%
+            <b className={`text-2xl font-bold block ${suffRate === null ? 'text-slate-400' : suffRate >= 60 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {suffRate === null ? '—' : `${suffRate}%`}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Tasso Sufficienze
+              {suffRate === null ? 'Nessun dato' : 'Tasso Sufficienze'}
             </span>
           </div>
 
