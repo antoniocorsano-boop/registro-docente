@@ -176,7 +176,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <select
               value={periodFilter}
               onChange={e => setPeriodFilter(e.target.value as any)}
-              className="p-1.5 px-3 neon-input text-xs text-white bg-slate-900"
+              className="w-full sm:w-auto min-h-[44px] p-1.5 px-3 neon-input text-xs text-white bg-slate-900"
             >
               <option value="ALL">Proiezione Finale Anno</option>
               <option value="Q1">Soglia Intermedia (Q1)</option>
@@ -192,11 +192,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <Calculator className="w-3.5 h-3.5 text-[var(--primary)]" /> Algoritmo di Calcolo:
               </span>
-              <div className="inline-flex rounded-lg p-0.5 bg-slate-800 border border-slate-700">
+              <div className="w-full sm:w-auto grid grid-cols-1 sm:grid-cols-2 rounded-lg p-0.5 bg-slate-800 border border-slate-700">
                 <button
                   type="button"
                   onClick={() => setUseWeighted(true)}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  className={`min-h-[44px] px-3 py-1 rounded-md text-xs font-bold transition-all ${
                     useWeighted
                       ? 'neon-btn-primary shadow-sm'
                       : 'text-slate-400 hover:text-white'
@@ -207,7 +207,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setUseWeighted(false)}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                  className={`min-h-[44px] px-3 py-1 rounded-md text-xs font-bold transition-all ${
                     !useWeighted
                       ? 'neon-btn-primary shadow-sm'
                       : 'text-slate-400 hover:text-white'
@@ -375,10 +375,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
           <button
             onClick={() => window.print()}
-            className="px-3.5 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5"
+            className="min-h-[44px] w-full sm:w-auto px-3.5 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5"
           >
             <Printer className="w-3.5 h-3.5" /> Stampa
           </button>
@@ -386,7 +386,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <button
             onClick={handleExportPDF}
             disabled={isExporting}
-            className="px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
+            className="min-h-[44px] w-full sm:w-auto px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{isExporting ? 'Generazione...' : 'Esporta PDF Scrutinio'}</span>
@@ -406,7 +406,63 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </span>
         </div>
 
-        <div className="overflow-x-auto border border-[var(--border)] rounded-lg">
+        {/* Mobile scrutiny cards */}
+        <div className="md:hidden space-y-2">
+          {studentMetrics.length === 0 ? (
+            <div className="p-4 rounded-lg border border-[var(--border)] bg-slate-900/40 text-center text-xs text-slate-500">
+              Nessun alunno presente.
+            </div>
+          ) : (
+            studentMetrics.map(m => {
+              const displayQ1 = useWeighted ? m.q1WeightedAvg : m.q1SimpleAvg;
+              const displayQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
+              const displayTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
+
+              return (
+                <article key={m.student.id} className="rounded-lg border border-[var(--border)] bg-slate-900/45 p-3 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => onOpenStudentReport(m.student.id)}
+                    className="min-h-[44px] w-full text-left flex items-center justify-between gap-3 rounded-md px-2 -mx-2 text-sm font-semibold text-slate-100 hover:text-[var(--primary)] hover:bg-slate-800/70"
+                  >
+                    <span className="truncate">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--primary)] shrink-0">Scheda</span>
+                  </button>
+
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-md bg-slate-950/70 p-2">
+                      <span className="block text-[10px] uppercase text-slate-500">Q1</span>
+                      <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
+                    </div>
+                    <div className="rounded-md bg-slate-950/70 p-2">
+                      <span className="block text-[10px] uppercase text-slate-500">Q2</span>
+                      <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
+                    </div>
+                    <div className="rounded-md bg-slate-950/70 p-2">
+                      <span className="block text-[10px] uppercase text-slate-500">Anno</span>
+                      <b className="font-mono text-sm text-white">{formatGrade(displayTotal)}</b>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-400">
+                      Livello: <b className="text-slate-200">{m.level ? `${m.level.id} · ${m.level.label.split(' ')[0]}` : '–'}</b>
+                    </span>
+                    {displayTotal === null ? (
+                      <span className="px-2 py-1 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">Non disponibile</span>
+                    ) : (
+                      <span className={`px-2 py-1 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
+                        {m.isAtRisk ? 'A Rischio (PA)' : 'Regolare'}
+                      </span>
+                    )}
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto border border-[var(--border)] rounded-lg">
           <table className="w-full text-xs text-center border-collapse">
             <thead>
               <tr className="bg-[var(--surface-variant)] text-slate-400 uppercase tracking-wider text-[10px] font-semibold">

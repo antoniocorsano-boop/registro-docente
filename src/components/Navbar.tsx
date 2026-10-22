@@ -73,7 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsDrawerOpen(true)}
-            className="p-2 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-slate-200 hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all cursor-pointer"
+            className="min-h-[44px] min-w-[44px] p-2 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-slate-200 hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all cursor-pointer"
             title="Apri Menu Navigazione"
             aria-label="Menu"
           >
@@ -104,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={onTogglePrivacyShield}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+            className={`min-h-[44px] min-w-[44px] px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
               isPrivacyShieldActive
                 ? 'bg-purple-950/70 border-purple-500 text-purple-300 shadow-[0_0_12px_rgba(192,132,252,0.35)]'
                 : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500'
@@ -145,9 +145,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           ) : null}
 
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold badge-ok">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block mr-0.5" />
-            {saveIndicatorText}
+          <span
+            aria-label={saveIndicatorText}
+            title={saveIndicatorText}
+            className="inline-flex items-center justify-center gap-1 min-h-[44px] min-w-[44px] sm:min-w-0 sm:px-2.5 rounded-md text-[11px] font-semibold badge-ok"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block sm:mr-0.5" />
+            <span className="hidden sm:inline">{saveIndicatorText}</span>
           </span>
         </div>
       </header>
@@ -271,7 +275,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
           <button
             onClick={onNavigateHome}
-            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-200 text-xs cursor-pointer"
+            className="shrink-0 min-h-[44px] flex items-center gap-1 px-3 py-1 rounded bg-slate-800 text-slate-200 text-xs cursor-pointer"
           >
             <ArrowLeft className="w-3 h-3" /> Cruscotto
           </button>
@@ -514,7 +518,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--border)] flex justify-around p-1 shadow-2xl">
           <button
             onClick={() => handleNav('dashboard')}
-            className={`flex-1 flex flex-col items-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
               activeTab === 'dashboard' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
@@ -523,7 +527,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNav('voti')}
-            className={`flex-1 flex flex-col items-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
               activeTab === 'voti' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
@@ -532,7 +536,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNav('comportamenti')}
-            className={`flex-1 flex flex-col items-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
               activeTab === 'comportamenti' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
@@ -541,7 +545,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNav('tabellone')}
-            className={`flex-1 flex flex-col items-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
               activeTab === 'tabellone' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
@@ -550,7 +554,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNav('analytics')}
-            className={`flex-1 flex flex-col items-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
               activeTab === 'analytics' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
