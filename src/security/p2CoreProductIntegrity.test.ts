@@ -9,8 +9,8 @@ describe('P2-CORE-01 daily workflow safety and trust', () => {
     const root = await source('src/components/SecureRegistroRoot.tsx');
     const navbar = await source('src/components/Navbar.tsx');
 
-    expect(navbar).toContain('sm:hidden fixed bottom-0');
-    expect(root).toContain('fixed bottom-16 sm:bottom-3 right-3 z-50');
+    expect(navbar).toContain('md:hidden fixed bottom-0');
+    expect(root).toContain('fixed bottom-16 md:bottom-3 right-3 z-50');
     expect(root).not.toContain('fixed bottom-3 right-3 z-50');
   });
 

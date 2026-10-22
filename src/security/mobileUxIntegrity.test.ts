@@ -10,7 +10,7 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
 
     expect(navbar).toContain('min-h-[44px] min-w-[44px]');
     expect(navbar).toContain('aria-label={saveIndicatorText}');
-    expect(navbar).toContain('sm:hidden');
+    expect(navbar).toContain('md:hidden fixed bottom-0');
   });
 
   test('narrow header compacts the brand before controls can overflow', async () => {

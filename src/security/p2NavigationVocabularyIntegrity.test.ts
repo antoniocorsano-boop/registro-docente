@@ -74,6 +74,20 @@ describe('P2-NAV-01 navigation and vocabulary consolidation', () => {
     }
   });
 
+  test('primary navigation has no 640-767px breakpoint gap', async () => {
+    const navbar = await source('components/Navbar.tsx');
+    const mobile = between(navbar, '{/* Bottom Navigation for mobile */}', '</nav>');
+    const desktop = between(
+      navbar,
+      '{/* Desktop / Tablet Workflow Hub Bar',
+      '{/* Class active banner for small screens */}',
+    );
+
+    expect(mobile).toContain('md:hidden');
+    expect(mobile).not.toContain('sm:hidden');
+    expect(desktop).toContain('hidden md:flex');
+  });
+
   test('primary desktop and mobile navigation still expose every daily route', async () => {
     const navbar = await source('components/Navbar.tsx');
     const desktop = between(
