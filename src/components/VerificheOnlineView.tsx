@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
@@ -36,8 +36,8 @@ interface VerificheOnlineViewProps {
   isPrivacyShieldActive?: boolean;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
-  onDeleteSubmission: (submissionId: string) => void;
-  onImportSubmissionsToRegister: (targetUdaId?: string) => void;
+  onDeleteSubmission: (submissionId: string) => Promise<void>;
+  onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;
   onSimulateTest: (testId: string, className: string) => void;
 }
 
@@ -58,6 +58,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.name || '3ª A');
   const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
   const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isSavingTest, setIsSavingTest] = useState(false);
+  const testSavePendingRef = useRef(false);
+  const [isSubmissionActionPending, setIsSubmissionActionPending] = useState(false);
+  const submissionActionPendingRef = useRef(false);
 
   // Manual raw text parsing modal or box
   const [manualTitle, setManualTitle] = useState('');
@@ -184,6 +188,49 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     });
   };
 
+  const commitTestSave = async (test: OnlineTest): Promise<boolean> => {
+    if (testSavePendingRef.current) return false;
+    testSavePendingRef.current = true;
+    setIsSavingTest(true);
+    try {
+      await onSaveNewTest(test);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      testSavePendingRef.current = false;
+      setIsSavingTest(false);
+    }
+  };
+
+  const handleDeleteSubmission = async (submissionId: string) => {
+    if (submissionActionPendingRef.current) return;
+    submissionActionPendingRef.current = true;
+    setIsSubmissionActionPending(true);
+    try {
+      await onDeleteSubmission(submissionId);
+    } catch {
+      return;
+    } finally {
+      submissionActionPendingRef.current = false;
+      setIsSubmissionActionPending(false);
+    }
+  };
+
+  const handleImportSubmissions = async () => {
+    if (submissionActionPendingRef.current) return;
+    submissionActionPendingRef.current = true;
+    setIsSubmissionActionPending(true);
+    try {
+      await onImportSubmissionsToRegister(currentSelectedTest?.udaId);
+    } catch {
+      return;
+    } finally {
+      submissionActionPendingRef.current = false;
+      setIsSubmissionActionPending(false);
+    }
+  };
+
   // Save interactive test
   const handleSaveInteractiveTest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,11 +253,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       questions: editorQuestions
     };
 
-    try {
-      await onSaveNewTest(newTest);
-    } catch {
-      return;
-    }
+    if (!(await commitTestSave(newTest))) return;
     setSelectedTestId(testId);
     setIsEditingTest(false);
     alert(`Test "${newTest.title}" salvato con successo!`);
@@ -311,12 +354,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         udaId: udas[0]?.id
       };
 
-      try {
-        await onSaveNewTest(newTest);
-      } catch (saveError) {
-        console.error('Durable test save failed during file import', saveError);
-        return;
-      }
+      if (!(await commitTestSave(newTest))) return;
       setSelectedTestId(testId);
       alert(`Successo! Creato il test "${testTitle}" con ${questions.length} domande estratte.`);
     } catch (err) {
@@ -377,11 +415,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       questions
     };
 
-    try {
-      await onSaveNewTest(newTest);
-    } catch {
-      return;
-    }
+    if (!(await commitTestSave(newTest))) return;
     setSelectedTestId(testId);
     setManualTitle('');
     setManualRawText('');
@@ -627,7 +661,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   accept=".zip,.docx"
                   onChange={handleFileUpload}
                   className="hidden"
-                  disabled={isParsingFile}
+                  disabled={isParsingFile || isSavingTest}
                 />
               </label>
 
@@ -777,6 +811,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   />
                   <button
                     type="submit"
+                    disabled={isSavingTest}
                     className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold"
                   >
                     Genera Test da Testo
@@ -801,6 +836,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="submit"
+                    disabled={isSavingTest}
                     className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
                   >
                     <Check className="w-4 h-4" /> Salva Verifica
@@ -1026,6 +1062,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               <div className="flex gap-3 pt-3 border-t border-[var(--border)]">
                 <button
                   type="submit"
+                  disabled={isSavingTest}
                   className="flex-1 py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
                 >
                   <Check className="w-4 h-4" /> Salva Tutte le Modifiche al Test
@@ -1341,7 +1378,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => onImportSubmissionsToRegister(currentSelectedTest?.udaId)}
+                onClick={handleImportSubmissions}
+                disabled={isSubmissionActionPending}
                 className="px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto"
               >
                 <Download className="w-4 h-4" /> Importa Voti nel Registro
@@ -1396,7 +1434,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                           <td className="p-2.5">
                             <button
                               type="button"
-                              onClick={() => onDeleteSubmission(sub.id)}
+                              onClick={() => { void handleDeleteSubmission(sub.id); }}
+                              disabled={isSubmissionActionPending}
                               className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40"
                               title="Elimina consegna"
                             >
