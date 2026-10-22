@@ -580,6 +580,15 @@ Self-review completed on 2026-10-22:
 - spec coverage: complete;
 - interface/type consistency: checked;
 - every `VaultStore` implementation/test double identified by repository search is included;
-- no placeholder (`TBD`/`TODO`) requirements;
+- no placeholder requirements;
 - no dependency addition required by the plan;
 - `ONLINE-01`, deployment and crypto changes remain explicitly out of scope.
+
+## Execution Handoff
+
+Execution method is intentionally not selected by this document. After human review of the plan, choose either:
+
+- **Subagent-driven** — fresh implementer/reviewer per task, then whole-branch review;
+- **Native** — one implementation session task-by-task, then one independent whole-branch review.
+
+For PERSIST-01, **Native is recommended** because Tasks 1–5 form a tight interface chain (`VaultStore` → `SecureVault` → `SecureAppStorage` → coordinator → `App.tsx`), so keeping one implementation context reduces integration drift; the final exact-head Codex review remains mandatory.
