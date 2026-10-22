@@ -69,10 +69,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div>
             <h2 className="text-xl font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
-              Cruscotto Globale d'Istituto
+              Le mie classi
             </h2>
             <p className="text-xs text-slate-400">
-              Panoramica trasversale delle sezioni e monitoraggio metriche istituzionali.
+              Seleziona una classe e accedi alle attività del registro.
             </p>
           </div>
 
@@ -152,14 +152,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </div>
 
-      {/* Cross-Class Comparative Table Card */}
+      {/* Class comparison table */}
       <div className="neon-card p-4">
         <button
           onClick={() => setIsCrossExpanded(!isCrossExpanded)}
           className="w-full flex items-center justify-between text-left text-sm font-semibold text-[var(--primary)] focus:outline-none"
         >
           <span className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" /> Analisi Comparativa Sezioni (Cross-Class)
+            <TrendingUp className="w-4 h-4" /> Confronto tra classi
           </span>
           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isCrossExpanded ? 'rotate-180' : ''}`} />
         </button>
@@ -244,7 +244,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <div className="neon-card p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <GraduationCap className="w-4 h-4 text-[var(--primary)]" /> Classi Attive
+            <GraduationCap className="w-4 h-4 text-[var(--primary)]" /> Classi
           </h3>
           <span className="text-xs text-slate-400">{classes.length} sezioni registrate</span>
         </div>
@@ -316,7 +316,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     onClick={() => onSelectClass(c.id)}
                     className="w-full py-2 px-3 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5"
                   >
-                    <FolderOpen className="w-3.5 h-3.5" /> Apri Dashboard
+                    <FolderOpen className="w-3.5 h-3.5" /> Apri classe
                   </button>
                 </div>
               );

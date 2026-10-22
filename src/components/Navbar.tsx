@@ -59,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleNav = (tab: ActiveTab) => {
     if (!currentClass && ['dashboard', 'voti', 'comportamenti', 'analytics', 'tabellone', 'storico', 'report', 'dati'].includes(tab)) {
-      alert('Seleziona prima una classe dal Cruscotto d\'Istituto.');
+      alert('Seleziona prima una classe da Classi.');
       return;
     }
     setActiveTab(tab);
@@ -156,100 +156,55 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </header>
 
-      {/* Desktop / Tablet Workflow Hub Bar (Reduced Noise & Clear Visual Hierarchy) */}
+      {/* Desktop / Tablet Workflow Hub Bar — primary class navigation */}
       {currentClass && activeTab !== 'home' && (
         <div className="hidden md:flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-[var(--border)] text-xs overflow-x-auto shadow-sm">
-          <div className="flex items-center gap-2">
-            {/* Domain 1: Valutazione & Registro */}
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800/80">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 hidden lg:inline">Registro:</span>
-              <button
-                onClick={() => handleNav('voti')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'voti' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <ClipboardList className="w-3.5 h-3.5" />
-                <span>Inserisci Voti</span>
-              </button>
-              <button
-                onClick={() => handleNav('tabellone')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'tabellone' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <Table className="w-3.5 h-3.5" />
-                <span>Tabellone</span>
-              </button>
-              <button
-                onClick={() => handleNav('storico')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'storico' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <History className="w-3.5 h-3.5" />
-                <span>Storico Prove</span>
-              </button>
-            </div>
-
-            {/* Domain 2: Progettazione UDA & Verifiche */}
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800/80">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 hidden lg:inline">Competenze:</span>
-              <button
-                onClick={() => handleNav('uda-gantt')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'uda-gantt' ? 'bg-amber-400 text-black font-bold shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-amber-300 hover:text-amber-200 hover:bg-slate-800'
-                }`}
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-                <span>UDA & Gantt</span>
-              </button>
-              <button
-                onClick={() => handleNav('verifiche-online')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'verifiche-online' ? 'bg-pink-500 text-white font-bold shadow-[0_0_8px_rgba(236,72,153,0.5)]' : 'text-pink-300 hover:text-pink-200 hover:bg-slate-800'
-                }`}
-              >
-                <FileQuestion className="w-3.5 h-3.5" />
-                <span>Verifiche Online</span>
-              </button>
-            </div>
-
-            {/* Domain 3: Studenti */}
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800/80">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1 hidden lg:inline">Studenti:</span>
-              <button
-                onClick={() => handleNav('report')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'report' ? 'bg-cyan-400 text-black font-bold shadow-[0_0_8px_rgba(0,216,214,0.5)]' : 'text-cyan-300 hover:text-cyan-200 hover:bg-slate-800'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Scheda Alunno</span>
-              </button>
-              <button
-                onClick={() => handleNav('comportamenti')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'comportamenti' ? 'bg-purple-500 text-white font-bold shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-purple-300 hover:text-purple-200 hover:bg-slate-800'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Note</span>
-              </button>
-            </div>
-
-            {/* Domain 4: Analytics */}
-            <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800/80">
-              <button
-                onClick={() => handleNav('analytics')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'analytics' ? 'bg-emerald-400 text-black font-bold shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'text-emerald-300 hover:text-emerald-200 hover:bg-slate-800'
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span>Analytics</span>
-              </button>
-            </div>
+          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800/80">
+            <button
+              onClick={() => handleNav('dashboard')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'dashboard' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>Riepilogo</span>
+            </button>
+            <button
+              onClick={() => handleNav('voti')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'voti' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              <span>Valutazioni</span>
+            </button>
+            <button
+              onClick={() => handleNav('comportamenti')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'comportamenti' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Comportamento</span>
+            </button>
+            <button
+              onClick={() => handleNav('tabellone')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'tabellone' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>Tabellone</span>
+            </button>
+            <button
+              onClick={() => handleNav('analytics')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'analytics' ? 'bg-[var(--primary)] text-black font-bold shadow-[0_0_8px_var(--primary)]' : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Analisi</span>
+            </button>
           </div>
 
           <button
@@ -257,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3 h-3" />
-            <span>Cruscotto</span>
+            <span>Classi</span>
           </button>
         </div>
       )}
@@ -277,7 +232,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onNavigateHome}
             className="shrink-0 min-h-[44px] flex items-center gap-1 px-3 py-1 rounded bg-slate-800 text-slate-200 text-xs cursor-pointer"
           >
-            <ArrowLeft className="w-3 h-3" /> Cruscotto
+            <ArrowLeft className="w-3 h-3" /> Classi
           </button>
         </div>
       )}
@@ -299,7 +254,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between pb-4 border-b border-[var(--border)] mb-4">
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-[var(--primary)]" />
-            <span className="font-bold text-sm tracking-wide text-white">Menu Principale</span>
+            <span className="font-bold text-sm tracking-wide text-white">Altre funzioni</span>
           </div>
           <button
             onClick={() => setIsDrawerOpen(false)}
@@ -311,7 +266,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <div className="flex-1 overflow-y-auto space-y-1 pr-1 text-sm">
           <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 px-3 pt-1 pb-2">
-            Istituto & Registro
+            Generale
           </div>
 
           <button
@@ -326,70 +281,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <LayoutDashboard className="w-4 h-4 shrink-0 text-[var(--primary)]" />
-            <span>Cruscotto Istituto</span>
+            <span>Classi</span>
           </button>
 
           {currentClass && (
             <>
-              <button
-                onClick={() => handleNav('dashboard')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  activeTab === 'dashboard'
-                    ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <GraduationCap className="w-4 h-4 shrink-0 text-cyan-400" />
-                <span>Dashboard Classe</span>
-              </button>
-
-              <button
-                onClick={() => handleNav('voti')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  activeTab === 'voti'
-                    ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <ClipboardList className="w-4 h-4 shrink-0 text-amber-400" />
-                <span>Inserisci Valutazioni</span>
-              </button>
-
-              <button
-                onClick={() => handleNav('comportamenti')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  activeTab === 'comportamenti'
-                    ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 shrink-0 text-purple-400" />
-                <span>Valutazione Comportamenti</span>
-              </button>
-
-              <button
-                onClick={() => handleNav('analytics')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  activeTab === 'analytics'
-                    ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>Analisi & indicatori</span>
-              </button>
-
-              <button
-                onClick={() => handleNav('tabellone')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  activeTab === 'tabellone'
-                    ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <Table className="w-4 h-4 shrink-0 text-sky-400" />
-                <span>Tabellone Classe</span>
-              </button>
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 px-3 pt-3 pb-1 border-t border-[var(--border)] mt-2">
+                Classe
+              </div>
 
               <button
                 onClick={() => handleNav('storico')}
@@ -400,7 +299,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <History className="w-4 h-4 shrink-0 text-blue-400" />
-                <span>Storico Prove</span>
+                <span>Storico prove</span>
               </button>
 
               <button
@@ -412,7 +311,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <UserCheck className="w-4 h-4 shrink-0 text-teal-400" />
-                <span>Scheda Alunno</span>
+                <span>Scheda alunno</span>
               </button>
 
               <button
@@ -424,13 +323,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Users className="w-4 h-4 shrink-0 text-indigo-400" />
-                <span>Gestione Alunni</span>
+                <span>Gestione alunni</span>
               </button>
             </>
           )}
 
           <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 px-3 pt-3 pb-1 border-t border-[var(--border)] mt-2">
-            Moduli Didattici & Tool
+            Didattica e strumenti
           </div>
 
           <button
@@ -442,7 +341,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <FileQuestion className="w-4 h-4 shrink-0 text-pink-400" />
-            <span>Verifiche Online & Flashcards</span>
+            <span>Verifiche online</span>
           </button>
 
           <button
@@ -454,7 +353,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <CalendarDays className="w-4 h-4 shrink-0 text-orange-400" />
-            <span>Programmazione UDA & Gantt</span>
+            <span>UDA</span>
           </button>
 
           <button
@@ -466,7 +365,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Settings className="w-4 h-4 shrink-0 text-slate-400" />
-            <span>Impostazioni & Tema</span>
+            <span>Impostazioni</span>
           </button>
 
           <button
@@ -478,7 +377,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400" />
-            <span>Privacy First & GDPR</span>
+            <span>Privacy</span>
           </button>
         </div>
 
@@ -515,37 +414,37 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Bottom Navigation for mobile */}
       {currentClass && (
-        <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--border)] flex justify-around p-1 shadow-2xl">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--border)] flex justify-around p-1 shadow-2xl">
           <button
             onClick={() => handleNav('dashboard')}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[9px] leading-tight ${
               activeTab === 'dashboard' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
             <GraduationCap className="w-4 h-4 mb-0.5" />
-            <span>Dashboard</span>
+            <span>Riepilogo</span>
           </button>
           <button
             onClick={() => handleNav('voti')}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[9px] leading-tight ${
               activeTab === 'voti' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
             <ClipboardList className="w-4 h-4 mb-0.5" />
-            <span>Valuta</span>
+            <span>Valutazioni</span>
           </button>
           <button
             onClick={() => handleNav('comportamenti')}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[9px] leading-tight ${
               activeTab === 'comportamenti' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
             <Sparkles className="w-4 h-4 mb-0.5" />
-            <span>Note</span>
+            <span>Comportamento</span>
           </button>
           <button
             onClick={() => handleNav('tabellone')}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[9px] leading-tight ${
               activeTab === 'tabellone' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
@@ -554,12 +453,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             onClick={() => handleNav('analytics')}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[10px] ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1.5 px-1 text-[9px] leading-tight ${
               activeTab === 'analytics' ? 'text-[var(--primary)] font-bold' : 'text-slate-400'
             }`}
           >
             <BarChart3 className="w-4 h-4 mb-0.5" />
-            <span>Analytics</span>
+            <span>Analisi</span>
           </button>
         </nav>
       )}

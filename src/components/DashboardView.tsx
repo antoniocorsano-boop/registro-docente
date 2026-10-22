@@ -128,7 +128,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="p-3 rounded-lg neon-btn-primary text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-2"
           >
             <ClipboardList className="w-4 h-4" />
-            <span>Inserisci Valutazioni</span>
+            <span>Valutazioni</span>
           </button>
 
           <button
@@ -136,7 +136,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="p-3 rounded-lg bg-[var(--surface-variant)] hover:bg-slate-800 text-[var(--primary)] border border-[var(--primary)]/50 text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-2 transition-colors"
           >
             <Sparkles className="w-4 h-4" />
-            <span>Note Comportamento</span>
+            <span>Comportamento</span>
           </button>
 
           <button
@@ -144,7 +144,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="p-3 rounded-lg bg-[var(--surface-variant)] hover:bg-slate-800 text-slate-200 border border-[var(--border)] text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-2 transition-colors"
           >
             <Table className="w-4 h-4 text-sky-400" />
-            <span>Tabellone Classe</span>
+            <span>Tabellone</span>
           </button>
 
           <button
@@ -152,7 +152,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="p-3 rounded-lg bg-[var(--surface-variant)] hover:bg-slate-800 text-slate-200 border border-[var(--border)] text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-2 transition-colors"
           >
             <BarChart3 className="w-4 h-4 text-emerald-400" />
-            <span>Analisi Soglie</span>
+            <span>Analisi</span>
           </button>
         </div>
       </div>
