@@ -114,6 +114,11 @@ jobs:
             const details = detailsFor(summary);
             assert(await details.evaluate(el => el.open === false), `${label}: expected closed disclosure`);
           };
+          const safeClickSummary = async summary => {
+            await summary.evaluate(el => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+            await sleep(80);
+            await summary.click();
+          };
           const clickVisibleButton = async (page, name) => {
             const buttons = page.getByRole('button', { name, exact: true });
             const count = await buttons.count();
@@ -188,10 +193,10 @@ jobs:
               const summary = disclosure(page, label);
               await ensureClosed(summary, `${label} / 1280`);
               assert(!(await page.getByText(deepText, { exact: true }).isVisible()), `${label} / 1280: deep content visible before open`);
-              await summary.click();
+              await safeClickSummary(summary);
               await page.getByText(deepText, { exact: true }).waitFor({ state: 'visible' });
               assert(await detailsFor(summary).evaluate(el => el.open === true), `${label} / 1280: did not open`);
-              await summary.click();
+              await safeClickSummary(summary);
               await ensureClosed(summary, `${label} / 1280 reclose`);
             }
             assert(await pageWidthOk(page), '1280 student report: horizontal page overflow');
@@ -204,10 +209,10 @@ jobs:
               const summary = disclosure(page, label);
               await ensureClosed(summary, `${label} / 390`);
               assert(!(await page.getByText(deepText, { exact: true }).isVisible()), `${label} / 390: deep content visible before open`);
-              await summary.click();
+              await safeClickSummary(summary);
               await page.getByText(deepText, { exact: true }).waitFor({ state: 'visible' });
               assert(await detailsFor(summary).evaluate(el => el.open === true), `${label} / 390: did not open`);
-              await summary.click();
+              await safeClickSummary(summary);
             }
             assert(await pageWidthOk(page), '390 student report: horizontal page overflow');
             await page.screenshot({ path: 'browser-evidence/report-390-closed.png', fullPage: true });
