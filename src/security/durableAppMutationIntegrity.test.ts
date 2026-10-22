@@ -43,15 +43,16 @@ describe('PERSIST-01 durable App mutation integrity', () => {
 
   test('submission import reads the latest committed submissions when queued work begins', () => {
     const importSection = sectionBetween('// Import submissions into class grades', '// Save UDAs');
-    const deriveStart = importSection.indexOf('void commitAppDataMutation(current => {');
+    const deriveStart = importSection.indexOf('return commitAppDataMutation(current => {');
     const afterCommitStart = importSection.indexOf('afterCommit:', deriveStart);
     const preDeriveSection = importSection.slice(0, deriveStart);
     const deriveSection = importSection.slice(deriveStart, afterCommitStart);
+    const executionTimeRead = 'reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId)';
 
     expect(deriveStart).toBeGreaterThanOrEqual(0);
     expect(afterCommitStart).toBeGreaterThan(deriveStart);
-    expect(preDeriveSection).not.toContain('const submissionSnapshot = submissionsRef.current;');
-    expect(deriveSection).toContain('const submissionSnapshot = submissionsRef.current;');
+    expect(preDeriveSection).not.toContain(executionTimeRead);
+    expect(deriveSection).toContain(executionTimeRead);
   });
 
   test('keeps committed refs for settings, UDA, tests and submissions', () => {
