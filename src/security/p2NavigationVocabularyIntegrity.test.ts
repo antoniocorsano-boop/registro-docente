@@ -88,6 +88,13 @@ describe('P2-NAV-01 navigation and vocabulary consolidation', () => {
     expect(desktop).toContain('hidden md:flex');
   });
 
+  test('content keeps bottom-navigation clearance until the desktop breakpoint', async () => {
+    const app = await source('App.tsx');
+
+    expect(app).toContain('pb-16 md:pb-8');
+    expect(app).not.toContain('pb-16 sm:pb-8');
+  });
+
   test('primary desktop and mobile navigation still expose every daily route', async () => {
     const navbar = await source('components/Navbar.tsx');
     const desktop = between(
