@@ -464,7 +464,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center flex flex-col justify-center items-center">
             {level ? (
               <span className={`px-2.5 py-1 rounded text-xs font-bold ${level.badgeClass}`}>
-                {level.label.split(' ')[0]} ({level.id})
+                {level.label}
               </span>
             ) : (
               <span className="text-slate-500 font-bold text-sm">–</span>
@@ -785,7 +785,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                             <span className="text-xs font-mono font-black text-white">Media: {formatGrade(item.udaAvg)}</span>
                           </div>
                           <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${item.udaLevel.badgeClass} shadow-sm`}>
-                            {item.udaLevel.id} · {item.udaLevel.label.split(' ')[0]}
+                            {item.udaLevel.label}
                           </span>
                         </div>
                       ) : (

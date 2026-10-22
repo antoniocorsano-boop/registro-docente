@@ -546,7 +546,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       <td className="p-2.5 border-r border-[var(--border)]">
                         {m.level ? (
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.level.badgeClass}`}>
-                            {m.level.id} - {m.level.label.split(' ')[0]}
+                            {m.level.label}
                           </span>
                         ) : (
                           <span className="text-slate-500">–</span>
