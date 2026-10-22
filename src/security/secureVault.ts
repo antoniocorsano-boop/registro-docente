@@ -132,7 +132,10 @@ export class SecureVault {
 
   async delete(key: VaultRecordKey): Promise<void> {
     this.requireUnlocked();
-    await this.enqueueMutation(() => this.store.deleteRecord(key));
+    await this.enqueueMutation(async () => {
+      this.requireUnlocked();
+      await this.store.deleteRecord(key);
+    });
   }
 
   async clearAll(): Promise<void> {
