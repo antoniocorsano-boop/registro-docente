@@ -691,9 +691,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Save UDAs
-  const handleSaveUdas = (newUdas: UdaRecord[]) => {
+  const handleSaveUdas = (newUdas: UdaRecord[]): Promise<void> => {
     const mutation = createUdaSnapshotMutation(udasRef.current, newUdas);
-    void commitUdasMutation(mutation).catch(() => undefined);
+    return commitUdasMutation(mutation).then(() => undefined);
   };
 
   // Save Settings

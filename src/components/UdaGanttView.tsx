@@ -58,7 +58,7 @@ interface UdaGanttViewProps {
   udas: UdaRecord[];
   settings?: AppSettings;
   tests?: Record<string, OnlineTest>;
-  onSaveUdas: (udas: UdaRecord[]) => void;
+  onSaveUdas: (udas: UdaRecord[]) => Promise<void>;
   onNavigateTab?: (tab: any) => void;
 }
 
@@ -470,6 +470,19 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
+  const commitUdaViewMutation = async (
+    nextUdas: UdaRecord[],
+    afterCommit?: () => void
+  ): Promise<boolean> => {
+    try {
+      await onSaveUdas(nextUdas);
+      afterCommit?.();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Embedding configuration from settings or default
   const embeddingConfig = settings?.embeddingConfig || DEFAULT_EMBEDDING_CONFIG;
 
@@ -626,18 +639,20 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         if (targetUda.id) {
           const updatedUda = { ...targetUda, description: data.description };
           const nextUdas = udas.map(u => (u.id === targetUda.id ? (updatedUda as UdaRecord) : u));
-          onSaveUdas(nextUdas);
-
-          if (selectedUdaForDetail?.id === targetUda.id) {
-            setSelectedUdaForDetail(updatedUda as UdaRecord);
-          }
-          if (ganttSelectedUda?.id === targetUda.id) {
-            setGanttSelectedUda(updatedUda as UdaRecord);
-          }
+          const committed = await commitUdaViewMutation(nextUdas, () => {
+            if (selectedUdaForDetail?.id === targetUda.id) {
+              setSelectedUdaForDetail(updatedUda as UdaRecord);
+            }
+            if (ganttSelectedUda?.id === targetUda.id) {
+              setGanttSelectedUda(updatedUda as UdaRecord);
+            }
+            showStatus('✨ Descrizione UDA generata con successo con assistenza AI!');
+          });
+          if (!committed) return;
         } else {
           setNewDescription(data.description);
+          showStatus('✨ Descrizione UDA generata con successo con assistenza AI!');
         }
-        showStatus('✨ Descrizione UDA generata con successo con assistenza AI!');
       }
     } catch (err: any) {
       console.error('AI generation error:', err);
@@ -729,15 +744,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       };
 
       const nextUdas = udas.map(u => (u.id === parent.id ? updatedParent : u));
-      onSaveUdas(nextUdas);
-
-      if (selectedUdaForDetail?.id === parent.id) {
-        setSelectedUdaForDetail(updatedParent);
-      }
-      if (ganttSelectedUda?.id === parent.id) {
-        setGanttSelectedUda(updatedParent);
-      }
-      showStatus(`Date aggiornate per "${parent.title}"`);
+      void commitUdaViewMutation(nextUdas, () => {
+        if (selectedUdaForDetail?.id === parent.id) {
+          setSelectedUdaForDetail(updatedParent);
+        }
+        if (ganttSelectedUda?.id === parent.id) {
+          setGanttSelectedUda(updatedParent);
+        }
+        showStatus(`Date aggiornate per "${parent.title}"`);
+      });
     }
   };
 
@@ -767,28 +782,28 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       return upd ? { ...u, ...upd } : u;
     });
 
-    onSaveUdas(nextUdas);
-
-    // Update active modal references
-    if (selectedUdaForDetail) {
-      const upd = updatesMap.get(selectedUdaForDetail.id);
-      if (upd) {
-        setSelectedUdaForDetail({ ...selectedUdaForDetail, ...upd });
+    void commitUdaViewMutation(nextUdas, () => {
+      // Update active modal references only after durable persistence.
+      if (selectedUdaForDetail) {
+        const upd = updatesMap.get(selectedUdaForDetail.id);
+        if (upd) {
+          setSelectedUdaForDetail({ ...selectedUdaForDetail, ...upd });
+        }
       }
-    }
-    if (ganttSelectedUda) {
-      const upd = updatesMap.get(ganttSelectedUda.id);
-      if (upd) {
-        setGanttSelectedUda({ ...ganttSelectedUda, ...upd });
+      if (ganttSelectedUda) {
+        const upd = updatesMap.get(ganttSelectedUda.id);
+        if (upd) {
+          setGanttSelectedUda({ ...ganttSelectedUda, ...upd });
+        }
       }
-    }
 
-    setCascadeProposal(null);
-    showStatus(
-      applyToChildren
-        ? `Slittamento a cascata applicato con successo a ${updatesMap.size} UDA`
-        : `Aggiornata solo l'UDA "${parentUda.title}"`
-    );
+      setCascadeProposal(null);
+      showStatus(
+        applyToChildren
+          ? `Slittamento a cascata applicato con successo a ${updatesMap.size} UDA`
+          : `Aggiornata solo l'UDA "${parentUda.title}"`
+      );
+    });
   };
 
   // Automatic level / align all conflicts in 1 click
@@ -811,8 +826,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       }
     });
 
-    onSaveUdas(updatedUdas);
-    showStatus(`Risolti ${allConflicts.length} conflitti di propedeuticità con allineamento temporale`);
+    void commitUdaViewMutation(updatedUdas, () => {
+      showStatus(`Risolti ${allConflicts.length} conflitti di propedeuticità con allineamento temporale`);
+    });
   };
 
   // Toggle dependency on an UDA
@@ -828,9 +844,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       const nextDeps = currentDeps.filter(id => id !== predecessorId);
       const updatedUda = { ...targetUda, dependencies: nextDeps };
       const nextUdas = udas.map(u => (u.id === udaId ? updatedUda : u));
-      onSaveUdas(nextUdas);
-      if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(updatedUda);
-      showStatus('Dipendenza rimossa');
+      void commitUdaViewMutation(nextUdas, () => {
+        if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(updatedUda);
+        showStatus('Dipendenza rimossa');
+      });
     } else {
       // Check for cycles
       if (wouldCauseCircularDependency(udaId, predecessorId, udas)) {
@@ -853,16 +870,18 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           const newDur = Math.min(targetUda.durationMonths || 1, maxDur);
           const alignedUda = { ...updatedUda, startMonth: newStart, durationMonths: newDur };
           nextUdas = udas.map(u => (u.id === udaId ? alignedUda : u));
-          if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(alignedUda);
-          onSaveUdas(nextUdas);
-          showStatus('Dipendenza aggiunta e date allineate');
+          void commitUdaViewMutation(nextUdas, () => {
+            if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(alignedUda);
+            showStatus('Dipendenza aggiunta e date allineate');
+          });
           return;
         }
       }
 
-      onSaveUdas(nextUdas);
-      if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(updatedUda);
-      showStatus('Dipendenza aggiunta con successo');
+      void commitUdaViewMutation(nextUdas, () => {
+        if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(updatedUda);
+        showStatus('Dipendenza aggiunta con successo');
+      });
     }
   };
 
@@ -893,13 +912,14 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       dependencies: newPredecessorId ? [newPredecessorId] : []
     };
 
-    onSaveUdas([...udas, newRecord]);
-    setNewTitle('');
-    setNewDescription('');
-    setNewIsCivic(false);
-    setNewPredecessorId('');
-    setIsModalOpen(false);
-    showStatus(`Nuova UDA "${newRecord.title}" creata con successo`);
+    void commitUdaViewMutation([...udas, newRecord], () => {
+      setNewTitle('');
+      setNewDescription('');
+      setNewIsCivic(false);
+      setNewPredecessorId('');
+      setIsModalOpen(false);
+      showStatus(`Nuova UDA "${newRecord.title}" creata con successo`);
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -918,14 +938,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           dependencies: (u.dependencies || []).filter(depId => depId !== id)
         }));
 
-      onSaveUdas(nextUdas);
-      if (selectedUdaForDetail?.id === id) {
-        setSelectedUdaForDetail(null);
-      }
-      if (ganttSelectedUda?.id === id) {
-        setGanttSelectedUda(null);
-      }
-      showStatus('UDA eliminata');
+      void commitUdaViewMutation(nextUdas, () => {
+        if (selectedUdaForDetail?.id === id) {
+          setSelectedUdaForDetail(null);
+        }
+        if (ganttSelectedUda?.id === id) {
+          setGanttSelectedUda(null);
+        }
+        showStatus('UDA eliminata');
+      });
     }
   };
 
@@ -949,11 +970,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     };
 
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
-    onSaveUdas(nextUdas);
-    setSelectedUdaForDetail(updatedUda);
-    setNewLessonTopic('');
-    setNewLessonNotes('');
-    showStatus('Attività registrata nel diario');
+    void commitUdaViewMutation(nextUdas, () => {
+      setSelectedUdaForDetail(updatedUda);
+      setNewLessonTopic('');
+      setNewLessonNotes('');
+      showStatus('Attività registrata nel diario');
+    });
   };
 
   // Remove lesson from UDA
@@ -964,8 +986,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       lessons: (selectedUdaForDetail.lessons || []).filter(l => l.id !== lessonId)
     };
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
-    onSaveUdas(nextUdas);
-    setSelectedUdaForDetail(updatedUda);
+    void commitUdaViewMutation(nextUdas, () => {
+      setSelectedUdaForDetail(updatedUda);
+    });
   };
 
   // Save changes to detailed UDA dossier
@@ -974,7 +997,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     const updatedUda = { ...selectedUdaForDetail, [field]: value };
     setSelectedUdaForDetail(updatedUda);
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
-    onSaveUdas(nextUdas);
+    void commitUdaViewMutation(nextUdas);
   };
 
   // Update rubric level
@@ -987,7 +1010,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     const updatedUda = { ...selectedUdaForDetail, rubricLevels: updatedRubric };
     setSelectedUdaForDetail(updatedUda);
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
-    onSaveUdas(nextUdas);
+    void commitUdaViewMutation(nextUdas);
   };
 
   // Filtered and Semantically Ranked UDAs for Gantt
