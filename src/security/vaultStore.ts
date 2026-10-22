@@ -110,8 +110,10 @@ export class IndexedDbVaultStore implements VaultStore {
     const done = transactionDone(tx);
     const store = tx.objectStore(RECORDS_STORE);
 
-    await Promise.all(records.map(record => requestToPromise(store.put(record))));
-    await done;
+    await Promise.all([
+      done,
+      ...records.map(record => requestToPromise(store.put(record)))
+    ]);
   }
 
   async deleteRecord(key: VaultRecordKey): Promise<void> {
