@@ -40,4 +40,40 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     expect(importSection).toContain('afterCommit');
     expect(importSection.indexOf('Importazione completata con successo!')).toBeGreaterThan(importSection.indexOf('afterCommit'));
   });
+
+  test('keeps committed refs for settings, UDA, tests and submissions', () => {
+    expect(appSource).toContain('settingsRef');
+    expect(appSource).toContain('udasRef');
+    expect(appSource).toContain('testsRef');
+    expect(appSource).toContain('submissionsRef');
+    expect(appSource).toContain('commitSettingsMutation');
+    expect(appSource).toContain('commitUdasMutation');
+    expect(appSource).toContain('commitTestsMutation');
+    expect(appSource).toContain('commitSubmissionsMutation');
+  });
+
+  test('custom tests and submissions no longer publish before persistence', () => {
+    const testSection = sectionBetween('// Save new test', '// Delete submission');
+    expect(testSection).toContain('commitTestsMutation');
+    expect(testSection).not.toContain('setTests(updatedTests)');
+    expect(testSection).not.toContain('secureStorage.saveCustomTests(updatedTests)');
+
+    const deleteSection = sectionBetween('// Delete submission', '// Import submissions into class grades');
+    expect(deleteSection).toContain('commitSubmissionsMutation');
+    expect(deleteSection).not.toContain('setSubmissions(updated)');
+    expect(deleteSection).not.toContain('setSubmissions(previous)');
+    expect(deleteSection).not.toContain('secureStorage.saveSubmissions(updated)');
+  });
+
+  test('UDA and settings publish only through durable domain helpers', () => {
+    const udaSection = sectionBetween('// Save UDAs', '// Save Settings');
+    expect(udaSection).toContain('commitUdasMutation');
+    expect(udaSection).not.toContain('setUdas(newUdas)');
+    expect(udaSection).not.toContain('secureStorage.saveUdas(newUdas)');
+
+    const settingsSection = sectionBetween('// Save Settings', '// Backup actions are routed');
+    expect(settingsSection).toContain('commitSettingsMutation');
+    expect(settingsSection).not.toContain('setSettings(newSettings)');
+    expect(settingsSection).not.toContain('secureStorage.saveSettings(newSettings)');
+  });
 });
