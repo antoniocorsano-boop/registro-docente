@@ -3,9 +3,10 @@
 **Date:** 2026-10-22  
 **Repository:** `antoniocorsano-boop/registro-docente`  
 **Baseline reviewed:** `main@99ebb78e4bc994eaaf0e234c2f7c6ad213387919`  
+**Current integrated main:** `4c462b20ec4c00e695fd53bb20d5e3d66a0c6db1`  
 **Review mode:** read-only product audit, real browser + source inspection  
 **Viewports reviewed:** mobile `390×844`, desktop `1280×900`  
-**Status:** `P2-PRODUCT-REVIEW = COMPLETE`
+**Status:** `P2-PRODUCT-REVIEW = COMPLETE / RESOLUTION IN PROGRESS`
 
 ## Purpose
 
@@ -29,26 +30,26 @@ No open pull request was present when this product review began.
 
 ## Product assessment
 
-The product is technically stable enough to be judged primarily as a teacher-facing workflow rather than as an engineering prototype. The daily path `Classe → Valutazioni → Tabellone` is already relatively direct. The main remaining problems concern safety of interaction on mobile, information architecture, fail-closed consistency outside Analytics, leakage of technical concepts into teacher-facing UI, and excessive content density in advanced views.
+The product is technically stable enough to be judged primarily as a teacher-facing workflow rather than as an engineering prototype. The daily path `Classe → Valutazioni → Tabellone` is already relatively direct. The main remaining problems concern information architecture, leakage of technical concepts into teacher-facing UI, and excessive content density in advanced views. The first safety/trust defects identified by the review have now been closed through P2-CORE-01.
 
 ## Findings tracker
 
 | ID | Severity | Finding | Evidence | Target state | Status |
 |---|---|---|---|---|---|
-| **P2-01** | **CRITICAL** | Mobile collision between `Blocca Registro` and bottom navigation | At 390 px, the fixed Vault control is `z-50` at the bottom-right while the mobile nav is `z-40`. Their hit areas overlap. A real click on `Tabellone` was intercepted by `Blocca Registro`, locking the Vault. Source surfaces: `src/components/SecureRegistroRoot.tsx`, `src/components/Navbar.tsx`. | Mobile navigation actions must never be occluded or intercepted by Vault controls. Lock/auto-lock controls remain accessible without overlapping the bottom nav. | **OPEN — NEXT** |
-| **P2-02** | **HIGH** | Navigation and nomenclature are fragmented | Same concepts use multiple labels: `Inserisci Voti` / `Inserisci Valutazioni`; `Note` / `Valutazione Comportamenti` / `Note Comportamento`; `Analytics` / `Analisi & indicatori` / `Analisi Soglie`; `Cruscotto` / `Dashboard`. Desktop also duplicates navigation through workflow hub, drawer, and dashboard shortcuts. | One teacher-facing vocabulary and a clearly primary navigation path; secondary navigation must not compete with it. | **OPEN** |
-| **P2-03** | **HIGH** | Dashboard is not fully fail-closed | `DashboardView.tsx` correctly sets `classAvg = null` when no valid averages exist, but sets `suffRate = 0`, allowing a class with no valid data to appear as `0%` sufficiency. This conflicts with ANALYTICS-01 semantics. | No valid averages → `— / Nessun dato`, never a synthetic `0%`. | **OPEN** |
-| **P2-04** | **HIGH** | Technical/internal model leaks into teacher-facing UI | UDA Gantt still labels a table column `Crediti` although VAL-02 redefined the concept as internal `Indice Attività UDA`. Settings expose `Theme Engine`, `Motore Vettoriale`, `Embedding Locale`, Termux, llama.cpp, endpoint/model/API-key configuration in the same primary surface as teacher profile and evaluation preferences. | Teacher-facing surfaces use pedagogical language. Technical/provider configuration is moved behind an explicit advanced/developer section. UDA uses the VAL-02 terminology consistently. | **OPEN** |
+| **P2-01** | **CRITICAL** | Mobile collision between `Blocca Registro` and bottom navigation | At 390 px, the fixed Vault control was `z-50` at the bottom-right while the mobile nav was `z-40`; a real click on `Tabellone` was intercepted by `Blocca Registro`. | Mobile navigation actions must never be occluded or intercepted by Vault controls. | **CLOSED — P2-CORE-01** |
+| **P2-02** | **HIGH** | Navigation and nomenclature are fragmented | Same concepts use multiple labels: `Inserisci Voti` / `Inserisci Valutazioni`; `Note` / `Valutazione Comportamenti` / `Note Comportamento`; `Analytics` / `Analisi & indicatori` / `Analisi Soglie`; `Cruscotto` / `Dashboard`. Desktop also duplicates navigation through workflow hub, drawer, and dashboard shortcuts. | One teacher-facing vocabulary and a clearly primary navigation path; secondary navigation must not compete with it. | **OPEN — NEXT** |
+| **P2-03** | **HIGH** | Dashboard was not fully fail-closed | `DashboardView.tsx` used `suffRate = 0` when no valid averages existed, allowing a class with no valid data to appear as `0%` sufficiency. | No valid averages → `— / Nessun dato`, never a synthetic `0%`. | **CLOSED — P2-CORE-01** |
+| **P2-04** | **HIGH** | Technical/internal model leaks into teacher-facing UI | UDA Gantt exposed `Crediti`; Settings still exposes `Theme Engine`, `Motore Vettoriale`, `Embedding Locale`, Termux, llama.cpp, endpoint/model/API-key configuration in the same primary surface as teacher profile and evaluation preferences. | Teacher-facing surfaces use pedagogical language. Technical/provider configuration is moved behind an explicit advanced/developer section. | **PARTIAL — UDA terminology CLOSED; settings separation OPEN** |
 | **P2-05** | **MEDIUM/HIGH** | Advanced views are excessively dense | At 390 px, Analytics is approximately 4365 px tall, Student Report approximately 4172 px, Settings approximately 2827 px. Responsive containment is correct, but most sections are expanded simultaneously and require long scrolling. | Progressive disclosure: primary decision/action first, deeper charts/dossiers/settings on demand. No loss of data or capability. | **OPEN** |
 
 ## Resolution order
 
 The canonical sequence is:
 
-1. **P2-CORE-01 — daily workflow safety & trust**  
-   Resolve P2-01, P2-03, and the UDA terminology residue from P2-04. This is the next implementation front.
+1. **P2-CORE-01 — daily workflow safety & trust — COMPLETE**  
+   P2-01, P2-03 and the UDA terminology residue from P2-04 are merged and post-merge qualified.
 
-2. **P2-NAV-01 — navigation & vocabulary consolidation**  
+2. **P2-NAV-01 — navigation & vocabulary consolidation — NEXT**  
    Resolve P2-02 without redesigning the whole application. Establish a single vocabulary and define which navigation surface is primary on desktop and mobile.
 
 3. **P2-ADVANCED-01 — teacher-first settings / technical separation**  
@@ -57,51 +58,44 @@ The canonical sequence is:
 4. **P2-DENSITY-01 — progressive disclosure for Analytics and Student Report**  
    Resolve P2-05 by reducing first-screen cognitive load, not by deleting evidence or analytical capability.
 
-## P2-CORE-01 bounded scope
+## P2-CORE-01 closure evidence
 
-The first implementation front must contain only:
+Scope implemented:
 
-- remove the mobile hit-area/z-index collision between Vault controls and bottom navigation;
-- make Dashboard sufficiency fail-closed when there are no valid averages;
-- replace the remaining teacher-visible UDA `Crediti` label with terminology consistent with `Indice Attività UDA`.
+- moved the mobile Vault controls above the bottom navigation without changing the desktop position;
+- made Dashboard sufficiency fail-closed when there are no valid averages;
+- replaced the teacher-visible UDA Gantt label `Crediti` with `Indice attività`.
 
-### Explicitly out of scope for P2-CORE-01
+Qualification evidence:
 
-- navigation redesign;
-- palette/theme redesign;
-- new bottom navigation;
-- changes to grading formulas;
-- changes to Vault cryptography/storage;
-- changes to privacy policy;
-- moving embedding configuration;
-- Analytics/StudentReport progressive disclosure;
-- deploy.
+- implementation PR: **#10 — `P2-CORE-01 — daily workflow safety & trust`**;
+- RED test-only head: `b82c387b89256ab0c559c61071a530695b43d20b`;
+- qualified GREEN head: `71ce7ef187a0e5cb0fc7cc786b2934d7d21ab446`;
+- PREDEPLOY #43 / run `39719061205`: **100 PASS / 0 FAIL**, 366 assertions, 20 files; typecheck, build and production startup smoke PASS;
+- real-browser verification at 390×844 and 320×844: all five bottom-nav targets physically clickable; no Vault interception; no horizontal overflow;
+- disposable zero-data class: Dashboard displayed `— / Nessun dato`, not `0%`;
+- UDA Gantt displayed `INDICE ATTIVITÀ`, not `Crediti`;
+- bounded review: PASS, 0 Critical / 0 Important;
+- merge commit on `main`: `4c462b20ec4c00e695fd53bb20d5e3d66a0c6db1`;
+- post-merge PREDEPLOY #44 / run `39719369024`: **100 PASS / 0 FAIL**, 366 assertions, 20 files; typecheck, build and production startup smoke PASS;
+- no deploy.
 
-## Acceptance criteria for P2-CORE-01
-
-- At 320 px and 390 px, all bottom navigation targets are physically clickable and cannot be intercepted by Vault controls.
-- `Blocca Registro` remains available without covering the bottom navigation.
-- A class with zero valid averages shows an unavailable/no-data state for sufficiency, not `0%`.
-- Teacher-visible UDA tables and summaries do not call the internal activity index `Crediti` or `CFS`.
-- Existing VAL-02 terminology remains intact.
-- Existing privacy, storage, security and responsive contracts remain green.
-- Typecheck, full test suite, production build, startup smoke and real-browser verification pass on the exact final head.
-- Merge and deploy remain separate decisions.
+**P2-CORE-01 = MERGED / POST-MERGE QUALIFIED / REAL-BROWSER VERIFIED.**
 
 ## Evidence notes from the review
 
-### Mobile interaction defect
+### Mobile interaction defect — closed
 
-At `390×844`, the bottom-nav `Tabellone` target occupied approximately `y=795..840`, while the fixed Vault `Blocca Registro` control occupied approximately `y=788.5..822.5`. The areas overlap. The Vault wrapper is `z-50`; the mobile nav is `z-40`. Browser hit-testing at the overlap returned the lock control above the navigation target.
+Original evidence at `390×844`: bottom-nav `Tabellone` occupied approximately `y=795..840`, while the fixed Vault `Blocca Registro` control occupied approximately `y=788.5..822.5`, causing an overlap. After P2-CORE-01, the Vault control terminates at approximately `y=770.5`, while the bottom nav starts at approximately `y=795`; physical hit-testing and clicks succeed at both 390 px and 320 px.
 
-### Product-language observations
+### Product-language observations — still relevant to P2-NAV-01 / P2-ADVANCED-01
 
-Examples observed in the current UI include:
+Examples observed in the reviewed UI include:
 
 - Home: `Cruscotto Globale d'Istituto`, `Analisi Comparativa Sezioni (Cross-Class)`;
 - desktop workflow hub: `Inserisci Voti`, `UDA & Gantt`, `Scheda Alunno`, `Analytics`;
 - drawer/dashboard: `Inserisci Valutazioni`, `Valutazione Comportamenti`, `Analisi & indicatori`, `Analisi Soglie`;
-- UDA: `Cronoprogramma Gantt con Propedeuticità & Slittamento a Cascata`, `Semantica AI`, table column `Crediti`;
+- UDA: `Cronoprogramma Gantt con Propedeuticità & Slittamento a Cascata`, `Semantica AI`;
 - Settings: `Theme Engine`, `Motore Vettoriale & Embedding Locale (Termux / llama.cpp / On-Device)`.
 
 These are not all individually defects; together they indicate that the interface still exposes implementation/analytical vocabulary more strongly than teacher-task vocabulary.
@@ -115,8 +109,8 @@ These are not all individually defects; together they indicate that the interfac
 
 ## Current canonical next action
 
-**NEXT = `P2-CORE-01`**
+**NEXT = `P2-NAV-01 — navigation & vocabulary consolidation`**
 
-State at creation:
+Current state:
 
-`P2-PRODUCT-REVIEW = COMPLETE / TRACKER MATERIALIZED / P2-CORE-01 READY FOR BOUNDED DESIGN`
+`P2-PRODUCT-REVIEW = COMPLETE / P2-CORE-01 CLOSED / P2-NAV-01 READY FOR BOUNDED DESIGN`
