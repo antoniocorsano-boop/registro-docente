@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
@@ -48,6 +48,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const [decryptPassword, setDecryptPassword] = useState('');
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
+  const backupOperationPendingRef = useRef(false);
 
   // Total students & evaluations protected
   let totalStudents = 0;
@@ -71,7 +72,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       alert('La password deve contenere almeno 6 caratteri per garantire adeguata sicurezza.');
       return;
     }
+    if (backupOperationPendingRef.current) return;
 
+    backupOperationPendingRef.current = true;
     setIsEncrypting(true);
     let downloadInitiated = false;
     try {
@@ -102,6 +105,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         alert('Errore durante la preparazione o cifratura del backup.');
       }
     } finally {
+      backupOperationPendingRef.current = false;
       setIsEncrypting(false);
     }
   };
@@ -116,7 +120,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       alert('Inserisci la password di decifratura.');
       return;
     }
+    if (backupOperationPendingRef.current) return;
 
+    backupOperationPendingRef.current = true;
     setIsDecrypting(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -132,8 +138,14 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         console.error(err);
         alert(err.message || 'Password errata o file non valido.');
       } finally {
+        backupOperationPendingRef.current = false;
         setIsDecrypting(false);
       }
+    };
+    reader.onerror = () => {
+      backupOperationPendingRef.current = false;
+      setIsDecrypting(false);
+      alert('Errore durante la lettura del file di backup cifrato.');
     };
     reader.readAsText(selectedEncryptedFile);
   };
@@ -288,7 +300,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <button
               type="submit"
-              disabled={isEncrypting}
+              disabled={isEncrypting || isDecrypting}
               className="w-full py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5 mt-2"
             >
               <KeyRound className="w-3.5 h-3.5" />
@@ -331,7 +343,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <button
               type="submit"
-              disabled={isDecrypting}
+              disabled={isEncrypting || isDecrypting}
               className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 flex items-center justify-center gap-1.5 mt-2 transition-colors"
             >
               <Lock className="w-3.5 h-3.5" />
