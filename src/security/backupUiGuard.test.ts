@@ -10,11 +10,13 @@ describe('SEC-1 secure backup UI boundary', () => {
     expect(app).toContain("const handleImportBackup = () => {\n    setActiveTab('privacy');");
   });
 
-  test('PrivacyView uses the complete secure snapshot and avoids absolute cloud claims', async () => {
+  test('PrivacyView uses a prepared secure checkpoint and avoids absolute cloud claims', async () => {
     const privacy = await Bun.file('src/components/PrivacyView.tsx').text();
 
-    expect(privacy).toContain('backupSnapshot');
-    expect(privacy).toContain('createBackupPayload');
+    expect(privacy).not.toContain('backupSnapshot');
+    expect(privacy).toContain('onPrepareEncryptedBackup');
+    expect(privacy).toContain('onRecordBackupExport');
+    expect(privacy).toContain('createBackupPayload(checkpoint.snapshot)');
     expect(privacy).not.toContain('Zero-Cloud');
     expect(privacy).not.toContain('100% Archiviazione Locale');
     expect(privacy).not.toContain('Nessun dato personale o voto viene mai inviato a server esterni.');
