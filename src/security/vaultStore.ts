@@ -15,6 +15,7 @@ export interface VaultStore {
   putMetadata(metadata: VaultMetadataV1): Promise<void>;
   getRecord(key: VaultRecordKey): Promise<EncryptedVaultRecord | null>;
   putRecord(record: EncryptedVaultRecord): Promise<void>;
+  putRecords(records: EncryptedVaultRecord[]): Promise<void>;
   deleteRecord(key: VaultRecordKey): Promise<void>;
   listRecordKeys(): Promise<VaultRecordKey[]>;
   clearAll(): Promise<void>;
@@ -99,11 +100,17 @@ export class IndexedDbVaultStore implements VaultStore {
     return (result as EncryptedVaultRecord | undefined) ?? null;
   }
 
-  async putRecord(record: EncryptedVaultRecord): Promise<void> {
+  putRecord(record: EncryptedVaultRecord): Promise<void> {
+    return this.putRecords([record]);
+  }
+
+  async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
     const db = await this.openDatabase();
     const tx = db.transaction(RECORDS_STORE, 'readwrite');
     const done = transactionDone(tx);
-    await requestToPromise(tx.objectStore(RECORDS_STORE).put(record));
+    const store = tx.objectStore(RECORDS_STORE);
+
+    await Promise.all(records.map(record => requestToPromise(store.put(record))));
     await done;
   }
 
