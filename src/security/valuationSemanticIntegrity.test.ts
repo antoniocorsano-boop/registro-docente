@@ -41,6 +41,7 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(analytics).toContain('Media < 6');
     expect(analytics).toContain('Media ≥ 6');
     expect(analytics).toContain('Prospetto di lavoro docente');
+    expect(analytics).not.toContain('{m.level.id} -');
     expect(analytics).not.toContain('Firma del Dirigente Scolastico');
     expect(analytics).not.toContain('Firma del Docente Coordinatore');
   });
@@ -55,6 +56,8 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(report).toContain('Profilo interno di evidenze');
     expect(report).toContain('Fascia analitica');
     expect(report).toContain('Soglia analitica 6/10');
+    expect(report).not.toContain('({level.id})');
+    expect(report).not.toContain('{item.udaLevel.id} ·');
   });
 
   test('class matrix exposes a mathematical indicator instead of an automatically proposed scrutiny grade', async () => {
