@@ -189,9 +189,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         appDataRef.current = candidate.appData;
         metaRef.current = candidate.meta;
         const visibleCurrentClassId =
-          currentClassIdRef.current && candidate.appData.classes.some(c => c.id === currentClassIdRef.current)
-            ? currentClassIdRef.current
-            : candidate.appData.currentClassId;
+          currentClassIdRef.current === null
+            ? null
+            : candidate.appData.classes.some(c => c.id === currentClassIdRef.current)
+              ? currentClassIdRef.current
+              : candidate.appData.currentClassId;
         currentClassIdRef.current = visibleCurrentClassId;
         setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
