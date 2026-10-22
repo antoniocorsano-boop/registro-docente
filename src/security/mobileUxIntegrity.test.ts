@@ -13,6 +13,12 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
     expect(navbar).toContain('sm:hidden');
   });
 
+  test('narrow header compacts the brand before controls can overflow', async () => {
+    const navbar = await source('src/components/Navbar.tsx');
+
+    expect(navbar).toContain('className="hidden sm:block font-bold text-base');
+  });
+
   test('analytics primary controls remain usable without horizontal page overflow', async () => {
     const analytics = await source('src/components/AnalyticsView.tsx');
 
