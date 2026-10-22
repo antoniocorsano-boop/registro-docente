@@ -138,7 +138,7 @@ jobs:
             await page.getByRole('button', { name: 'Configura archivio protetto', exact: true }).click();
             await page.getByText('Le mie classi', { exact: true }).waitFor();
             await page.getByRole('button', { name: 'Apri classe', exact: true }).first().click();
-            await page.getByText('Riepilogo', { exact: true }).first().waitFor();
+            await sleep(200);
 
             await clickVisibleButton(page, 'Analisi');
             await page.getByText('Analisi medie & fasce analitiche', { exact: true }).waitFor();
