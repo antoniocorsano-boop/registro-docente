@@ -46,4 +46,18 @@ describe('P2 closure residue remediation', () => {
     expect(uda).toContain('Genera traccia testuale completa dell\'UDA con assistenza AI');
     expect(uda).toContain('Analisi semantica...');
   });
+
+  test('AI generation failure guidance distinguishes server configuration from retryable errors', async () => {
+    const uda = await source('components/UdaGanttView.tsx');
+    const start = uda.indexOf('const handleGenerateUdaDescription');
+    const end = uda.indexOf('// Synchronize master class filter', start);
+    const generation = uda.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(generation).toContain('serverConfigurationMissing');
+    expect(generation).toContain("Servizio AI non configurato sul server. Contatta l'amministratore.");
+    expect(generation).toContain('Generazione non riuscita. Riprova.');
+    expect(generation).not.toContain('Generazione non riuscita. Riprova o verifica le impostazioni avanzate.');
+  });
 });
