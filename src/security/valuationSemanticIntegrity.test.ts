@@ -94,6 +94,16 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(metadata).not.toContain('livelli di competenza D.M. 221/2025');
   });
 
+  test('teacher working-sheet export uses the currently selected analytical mode consistently', async () => {
+    const analytics = await source('src/components/AnalyticsView.tsx');
+
+    expect(analytics).toContain('const exportQ1 = useWeighted ? m.q1WeightedAvg : m.q1SimpleAvg;');
+    expect(analytics).toContain('const exportQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;');
+    expect(analytics).toContain('const exportTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;');
+    expect(analytics).toContain("exportTotal === null ? 'Non disponibile' : exportTotal >= 6 ? 'Media ≥ 6' : 'Media < 6'");
+    expect(analytics).not.toContain("m.totalWeightedAvg === null ? 'Non disponibile' : m.totalWeightedAvg >= 6");
+  });
+
   test('cross-class summary and item analysis keep analytical labels distinct from ministerial status', async () => {
     const home = await source('src/components/HomeView.tsx');
     const online = await source('src/components/VerificheOnlineView.tsx');
