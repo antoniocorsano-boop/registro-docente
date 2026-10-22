@@ -120,8 +120,9 @@ export class SecureVault {
   }
 
   async putMany(entries: readonly VaultWriteEntry[]): Promise<void> {
-    const dek = this.requireUnlocked();
+    this.requireUnlocked();
     await this.enqueueMutation(async () => {
+      const dek = this.requireUnlocked();
       const records = await Promise.all(
         entries.map(entry => encryptJsonRecord(entry.key, entry.schemaVersion ?? 1, entry.value, dek))
       );
