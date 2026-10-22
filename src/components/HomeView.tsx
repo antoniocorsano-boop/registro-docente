@@ -58,7 +58,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const instituteSuffRate = allStudentAverages.length > 0
     ? Math.round((allStudentAverages.filter(v => v >= 6.0).length / allStudentAverages.length) * 100)
-    : 0;
+    : null;
 
   const isBackupStale = !lastBackupDate || unsavedChangesCount >= 10;
 
@@ -96,11 +96,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
-            <b className={`text-2xl font-bold block ${instituteSuffRate >= 60 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {instituteSuffRate}%
+            <b className={`text-2xl font-bold block ${instituteSuffRate === null ? 'text-slate-400' : instituteSuffRate >= 60 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {instituteSuffRate === null ? '—' : `${instituteSuffRate}%`}
             </b>
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-              Sufficienze Totali
+              {instituteSuffRate === null ? 'Nessun dato' : 'Sufficienze Totali'}
             </span>
           </div>
 
@@ -193,12 +193,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                       .map(s => calcAvg((c.grades || []).filter(g => g.studentId === s.id)))
                       .filter((v): v is number => v !== null && !isNaN(v));
 
-                    const cAvg = cAvgs.length > 0 ? cAvgs.reduce((a, b) => a + b, 0) / cAvgs.length : null;
-                    const cSuff = cAvgs.length > 0
+                    const hasClassAverages = cAvgs.length > 0;
+                    const cAvg = hasClassAverages ? cAvgs.reduce((a, b) => a + b, 0) / cAvgs.length : null;
+                    const cSuff = hasClassAverages
                       ? Math.round((cAvgs.filter(v => v >= 6.0).length / cAvgs.length) * 100)
-                      : 0;
-                    const advancedCount = cAvgs.filter(v => v >= 8.5).length;
-                    const atRiskCount = cAvgs.filter(v => v < 6.0).length;
+                      : null;
+                    const advancedCount = hasClassAverages ? cAvgs.filter(v => v >= 8.5).length : null;
+                    const atRiskCount = hasClassAverages ? cAvgs.filter(v => v < 6.0).length : null;
 
                     return (
                       <tr key={c.id} className="hover:bg-slate-800/40 transition-colors">
@@ -216,18 +217,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           <Sparkline grades={c.grades || []} width={65} height={20} />
                         </td>
                         <td className="p-2.5 border-r border-[var(--border)]">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${cSuff >= 60 ? 'badge-ok' : 'badge-bad'}`}>
-                            {cSuff}%
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${cSuff === null ? 'bg-slate-800 text-slate-400' : cSuff >= 60 ? 'badge-ok' : 'badge-bad'}`}>
+                            {cSuff === null ? '—' : `${cSuff}%`}
                           </span>
                         </td>
                         <td className="p-2.5 border-r border-[var(--border)]">
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold badge-info">
-                            {advancedCount}
+                            {advancedCount === null ? '—' : advancedCount}
                           </span>
                         </td>
                         <td className="p-2.5">
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold badge-bad">
-                            {atRiskCount}
+                            {atRiskCount === null ? '—' : atRiskCount}
                           </span>
                         </td>
                       </tr>
