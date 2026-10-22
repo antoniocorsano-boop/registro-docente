@@ -73,4 +73,23 @@ describe('ANALYTICS-01 fail-closed data integrity', () => {
     );
     expect(report).toContain('Dati insufficienti per costruire un profilo attendibile');
   });
+
+  test('class headline level counters stay unavailable when no student has a valid average', async () => {
+    const analytics = await source('src/components/AnalyticsView.tsx');
+
+    expect(analytics).toContain("{validAvgs.length === 0 ? '—' : levelCounts.AV}");
+    expect(analytics).toContain("{validAvgs.length === 0 ? '—' : levelCounts.PA}");
+  });
+
+  test('a generic quiz is not sufficient evidence of digital competence', async () => {
+    const report = await source('src/components/StudentReportView.tsx');
+    const digitalBlock = between(
+      report,
+      '// 2. Competenze Digitali & CAD',
+      '// 3. Educazione Civica & Sostenibilità'
+    );
+
+    expect(digitalBlock).not.toContain("g.type === 'test' ||");
+  });
+
 });
