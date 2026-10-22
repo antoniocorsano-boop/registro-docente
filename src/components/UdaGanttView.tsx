@@ -1688,7 +1688,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     </th>
                     <th className="p-2.5 border-r border-[var(--border)] min-w-[65px]">Classe</th>
                     <th className="p-2.5 border-r border-[var(--border)] min-w-[65px]">Ore</th>
-                    <th className="p-2.5 border-r border-[var(--border)] min-w-[70px]">Crediti</th>
+                    <th className="p-2.5 border-r border-[var(--border)] min-w-[70px]">Indice attività</th>
                     <th className="p-2.5 border-r border-[var(--border)] min-w-[85px]">Sposta</th>
                     {MONTHS_LABELS.map(m => (
                       <th key={m} className="p-2 border-r border-[var(--border)] min-w-[48px] font-mono">

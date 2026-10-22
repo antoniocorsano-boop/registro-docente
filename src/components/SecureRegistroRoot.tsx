@@ -212,7 +212,7 @@ export const SecureRegistroRoot: React.FC = () => {
             secureStorage={storageRef.current}
             onFactoryReset={handleFactoryReset}
           />
-          <div className="fixed bottom-3 right-3 z-50 flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/95 p-2 text-xs text-slate-200 shadow-xl">
+          <div className="fixed bottom-16 sm:bottom-3 right-3 z-50 flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/95 p-2 text-xs text-slate-200 shadow-xl">
             <label htmlFor="vault-auto-lock" className="sr-only">Blocco automatico Registro</label>
             <select
               id="vault-auto-lock"
