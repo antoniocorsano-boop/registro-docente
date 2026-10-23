@@ -129,7 +129,11 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
 
   await openDrawerDestination(page, 'Scheda alunno');
   await expect(page.getByRole('heading', { name: 'Scheda Alunno & Profilo delle Competenze' })).toBeVisible();
-  const reportOptions = await page.locator('select').first().locator('option').allTextContents();
+  const reportSelect = page.locator('select').filter({
+    has: page.locator('option', { hasText: STUDENT_NAME })
+  });
+  await expect(reportSelect).toHaveCount(1);
+  const reportOptions = await reportSelect.locator('option').allTextContents();
   expect(reportOptions).toContain(STUDENT_NAME);
   await expect(page.getByText('8,0', { exact: true }).first()).toBeVisible();
   checkpoints.push('student-report-continuity');
@@ -138,10 +142,14 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })).toBeVisible();
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(UDA_TITLE);
+  const udaClassSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
+  await expect(udaClassSelect).toBeVisible();
+  await udaClassSelect.selectOption({ label: CLASS_NAME });
+  await expect(udaClassSelect).toHaveValue(CLASS_NAME);
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await expect(page.getByText(`Nuova UDA "${UDA_TITLE}" creata con successo`, { exact: true })).toBeVisible();
   await expect(page.getByText(UDA_TITLE, { exact: true }).first()).toBeVisible();
-  checkpoints.push('uda-committed');
+  checkpoints.push('uda-committed-to-synthetic-class');
 
   await page.goto(studentPortalURL(), { waitUntil: 'domcontentloaded' });
   await unlockVault(page);
@@ -211,6 +219,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
       grade: '8',
       behavior: 'Costruttivo 👍',
       udaTitle: UDA_TITLE,
+      udaClassName: CLASS_NAME,
       onlineSubmissionStudent: STUDENT_NAME
     },
     checkpoints,
