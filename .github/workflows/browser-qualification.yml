@@ -1,0 +1,125 @@
+name: Browser Qualification
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  PLAYWRIGHT_VERSION: '1.64.1'
+  PORT: '4173'
+
+jobs:
+  browser-qualification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Candidate SHA: ${CANDIDATE_SHA}"
+          echo "Checkout SHA:  ${actual_sha}"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node for isolated browser toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install application dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Build production application
+        run: bun run build
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .browser-tools browser-evidence
+          cat > .browser-tools/package.json <<'JSON'
+          {
+            "name": "registro-docente-browser-qualification-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .browser-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+
+      - name: Start production server and wait for readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence
+          NODE_ENV=production PORT="${PORT}" bun run start > browser-evidence/server.log 2>&1 &
+          server_pid=$!
+          echo "${server_pid}" > browser-evidence/server.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/" > /dev/null; then
+              echo "Production server ready on attempt ${attempt}."
+              exit 0
+            fi
+
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              echo "Production server exited before readiness."
+              cat browser-evidence/server.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          echo "Production server did not become ready within 30 seconds."
+          cat browser-evidence/server.log
+          exit 1
+
+      - name: Run Chromium qualification smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test browser-qualification.spec.cjs \
+            --reporter=line \
+            --output=../browser-evidence/test-results
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f browser-evidence/server.pid ]]; then
+            server_pid="$(cat browser-evidence/server.pid)"
+            kill "${server_pid}" 2>/dev/null || true
+          fi
+
+      - name: Upload browser qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-qualification-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
