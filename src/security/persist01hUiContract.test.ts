@@ -81,7 +81,7 @@ describe('PERSIST-01H App mutation boundary contract', () => {
     const students = sectionBetween('// Add single student', '// Save new test');
     expect(students).toContain('const handleAddStudent = (name: string): Promise<void> =>');
     expect(students).toContain('const handleRemoveStudent = (studentId: string): Promise<void> =>');
-    expect(students).toContain('const handleBulkAddStudents = (newStudents: Student[]): Promise<void> =>');
+    expect(students).toContain('const handleBulkAddStudents = (newStudents: Student[]): Promise<number> =>');
     expect(students).toContain('const handleInvertNames = (): Promise<void> =>');
     expect(students).not.toContain('void commitAppDataMutation');
 

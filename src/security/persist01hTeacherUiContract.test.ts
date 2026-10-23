@@ -30,7 +30,7 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
     expect(text).toContain('onAddStudent: (name: string) => Promise<void>;');
     expect(text).toContain('onRemoveStudent: (studentId: string) => Promise<void>;');
     expect(text).toContain('onInvertNames: () => Promise<void>;');
-    expect(text).toContain('onBulkAddStudents: (students: Student[]) => Promise<void>;');
+    expect(text).toContain('onBulkAddStudents: (students: Student[]) => Promise<number>;');
     expect(text).toContain('const [isStudentMutationPending, setIsStudentMutationPending] = useState(false);');
     expect(text).toContain('const handleAdd = async (e: React.FormEvent) =>');
     expect(text.indexOf('await onAddStudent(sanitizeName(newStudentName));')).toBeLessThan(text.indexOf("setNewStudentName('');"));
