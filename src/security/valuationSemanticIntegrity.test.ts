@@ -92,6 +92,29 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(uda).toContain('indice interno');
   });
 
+  test('UDA progress metrics distinguish diary hours weighted activity and internal composite progress', async () => {
+    const report = await source('src/components/StudentReportView.tsx');
+    const uda = await source('src/components/UdaGanttView.tsx');
+
+    expect(report).toContain('Monte ore previsto:');
+    expect(report).toContain('Ore registrate nel diario:');
+    expect(report).toContain('Ore ponderate interne (indice attività):');
+    expect(report).toContain('% del monte ore');
+    expect(report).not.toContain('>Svolte: <');
+    expect(report).not.toContain('% svolto');
+
+    expect(uda).toContain('Avanzamento ore nel diario');
+    expect(uda).toContain('Riepilogo avanzamento interno');
+    expect(uda).toContain('Indice di avanzamento didattico (interno)');
+    expect(uda).toContain('Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% verifiche e rubriche collegate');
+    expect(uda).toContain('Non determina voti o livelli');
+    expect(uda).toContain('Contesto curricolare: D.M. 221/2025');
+    expect(uda).toContain('({(hoursRatio * 60).toFixed(0)}/60 pt)');
+    expect(uda).toContain('({(evalRatio * 40).toFixed(0)}/40 pt)');
+    expect(uda).toContain('const targetEvals = 2; // Minimo 2 valutazioni per UDA');
+    expect(uda).toContain('const completionPct = Math.round((hoursRatio * 0.6 + evalRatio * 0.4) * 100);');
+  });
+
   test('navigation and public metadata do not market automatic analytics as D.M. 221 levels', async () => {
     const navbar = await source('src/components/Navbar.tsx');
     const index = await source('index.html');
