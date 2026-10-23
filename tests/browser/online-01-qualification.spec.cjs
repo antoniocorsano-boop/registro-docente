@@ -175,7 +175,7 @@ test('ONLINE-01 pending submit is truthful and non-reentrant — mobile 390x844'
   expect(finalInjection.payloadSizes).toEqual([1]);
 
   await page.getByRole('button', { name: 'Torna al Registro', exact: true }).click();
-  await openTeacherDestination(page, 'Verifiche Online');
+  await openTeacherDestination(page, 'Verifiche online');
   await expect(page.getByText('Consegne Ricevute dagli Alunni (1)', { exact: true })).toBeVisible();
 
   const overflow = await assertNoHorizontalOverflow(page);
@@ -268,7 +268,7 @@ test('ONLINE-01 failure preserves retry identity and classes are register-derive
   expect(afterRetry.payloadSizes).toEqual([1, 1]);
 
   await page.getByRole('button', { name: 'Torna al Registro', exact: true }).click();
-  await openTeacherDestination(page, 'Verifiche Online');
+  await openTeacherDestination(page, 'Verifiche online');
   await expect(page.getByText('Consegne Ricevute dagli Alunni (1)', { exact: true })).toBeVisible();
 
   const overflow = await assertNoHorizontalOverflow(page);
