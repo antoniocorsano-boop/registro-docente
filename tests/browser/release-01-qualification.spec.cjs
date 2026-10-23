@@ -11,6 +11,7 @@ const CLASS_NAME = 'Classe Sintetica RELEASE-01';
 const STUDENT_NAME = 'Studente Sintetico RELEASE-01';
 const EVALUATION_TITLE = 'Valutazione RELEASE-01';
 const UDA_TITLE = 'UDA Sintetica RELEASE-01';
+const ONLINE_TEST_TITLE = "A cosa serve l'energia";
 
 test.setTimeout(120000);
 
@@ -93,11 +94,22 @@ function studentPortalURL() {
 }
 
 async function verifyTeacherSubmissionReceipt(page) {
+  await disablePrivacyShield(page);
   await openDrawerDestination(page, 'Verifiche online');
   const resultsTab = page.getByRole('button', { name: 'Esiti & Item Analysis (1)', exact: true });
   await expect(resultsTab).toBeVisible();
   await resultsTab.click();
   await expect(page.getByRole('heading', { name: 'Consegne Ricevute dagli Alunni (1)', exact: true })).toBeVisible();
+
+  const submissionRow = page.locator('tbody tr')
+    .filter({ has: page.getByText(STUDENT_NAME, { exact: true }) })
+    .filter({ has: page.getByText(CLASS_NAME, { exact: true }) })
+    .filter({ has: page.getByText(ONLINE_TEST_TITLE, { exact: true }) });
+  await expect(submissionRow).toHaveCount(1);
+  await expect(submissionRow).toBeVisible();
+  await expect(submissionRow.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  await expect(submissionRow.getByText(CLASS_NAME, { exact: true })).toBeVisible();
+  await expect(submissionRow.getByText(ONLINE_TEST_TITLE, { exact: true })).toBeVisible();
 }
 
 test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — desktop 1280x900', async ({ browser }) => {
@@ -163,7 +175,13 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   const analyticsDesktop = desktopStudentRegion(page);
   await expect(analyticsDesktop).toHaveCount(1);
   await expect(analyticsDesktop).toBeVisible();
-  await expect(analyticsDesktop.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  const analyticsStudentRow = analyticsDesktop.locator('tbody tr').filter({
+    has: page.getByText(STUDENT_NAME, { exact: true })
+  });
+  await expect(analyticsStudentRow).toHaveCount(1);
+  await expect(analyticsStudentRow).toBeVisible();
+  await expect(analyticsStudentRow.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  await expect(analyticsStudentRow.locator('td').nth(3)).toContainText('8,0');
   checkpoints.push('analytics-continuity');
 
   await openDrawerDestination(page, 'Scheda alunno');
@@ -191,7 +209,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   checkpoints.push('uda-committed-to-synthetic-class');
 
   await page.goto(studentPortalURL(), { waitUntil: 'domcontentloaded' });
-  await unlockVault(page, "A cosa serve l'energia");
+  await unlockVault(page, ONLINE_TEST_TITLE);
   const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
   await expect(classSelect).toHaveValue(CLASS_NAME);
   await page.getByPlaceholder('es. Rossi Maria').fill(STUDENT_NAME);
@@ -201,7 +219,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByRole('heading', { name: 'Flashcard Completata con Successo!' })).toBeVisible();
   await page.getByRole('button', { name: 'Torna al Registro', exact: true }).click();
   await verifyTeacherSubmissionReceipt(page);
-  checkpoints.push('online-submission-committed');
+  checkpoints.push('online-submission-identity-committed');
 
   await page.screenshot({
     path: path.join(evidenceDir, 'release-01-before-reload.png'),
@@ -245,7 +263,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByText(UDA_TITLE, { exact: true }).first()).toBeVisible();
 
   await verifyTeacherSubmissionReceipt(page);
-  checkpoints.push('terminal-persistence-verified');
+  checkpoints.push('terminal-persistence-and-submission-identity-verified');
 
   const overflow = await assertNoHorizontalOverflow(page);
   await page.screenshot({
@@ -268,7 +286,9 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
       behavior: 'Costruttivo 👍',
       udaTitle: UDA_TITLE,
       udaClassName: CLASS_NAME,
-      onlineSubmissionStudent: STUDENT_NAME
+      onlineSubmissionStudent: STUDENT_NAME,
+      onlineSubmissionClass: CLASS_NAME,
+      onlineSubmissionTest: ONLINE_TEST_TITLE
     },
     checkpoints,
     persistence: {
@@ -279,9 +299,11 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
       class: true,
       student: true,
       evaluation: true,
+      analyticsAnnualAverage: '8,0',
       behavior: true,
       uda: true,
-      submission: true
+      submission: true,
+      submissionIdentity: true
     },
     overflow,
     consoleErrors,
