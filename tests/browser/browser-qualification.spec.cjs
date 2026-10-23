@@ -61,6 +61,9 @@ test('exact candidate serves a usable Registro Docente production shell', async 
       path.join(evidenceDir, 'screenshot-error.txt'),
       `${error instanceof Error ? error.stack || error.message : String(error)}\n`
     );
+    if (!qualificationError) {
+      qualificationError = error;
+    }
   }
 
   if (!qualificationError) {
