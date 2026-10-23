@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - qual-base/uda-sem-01-d3c62479
   workflow_dispatch:
 
 permissions:
@@ -11,6 +12,7 @@ permissions:
 
 env:
   CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  HARNESS_SHA: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
   PLAYWRIGHT_VERSION: '1.64.1'
   PORT: '4173'
 
@@ -32,6 +34,7 @@ jobs:
           actual_sha="$(git rev-parse HEAD)"
           echo "Candidate SHA: ${CANDIDATE_SHA}"
           echo "Checkout SHA:  ${actual_sha}"
+          echo "Harness SHA:   ${HARNESS_SHA}"
           test "${actual_sha}" = "${CANDIDATE_SHA}"
 
       - name: Setup Bun
@@ -48,7 +51,7 @@ jobs:
       - name: Build production application
         run: bun run build
 
-      - name: Install isolated Playwright toolchain
+      - name: Install isolated Playwright toolchain and materialize harness
         shell: bash
         run: |
           set -euo pipefail
@@ -64,7 +67,14 @@ jobs:
             --package-lock=false \
             "@playwright/test@${PLAYWRIGHT_VERSION}"
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
-          cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+
+          git fetch --no-tags --depth=1 origin "${HARNESS_SHA}"
+          git show "${HARNESS_SHA}:tests/browser/browser-qualification.spec.cjs" \
+            > .browser-tools/browser-qualification.spec.cjs
+          git show "${HARNESS_SHA}:tests/browser/uda-sem-01-qualification.spec.cjs" \
+            > .browser-tools/uda-sem-01-qualification.spec.cjs
+
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
 
       - name: Start production server and wait for readiness
         shell: bash
@@ -94,7 +104,7 @@ jobs:
           cat browser-evidence/server.log
           exit 1
 
-      - name: Run Chromium qualification smoke
+      - name: Run Chromium qualification
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +112,9 @@ jobs:
           BASE_URL="http://127.0.0.1:${PORT}" \
           EVIDENCE_DIR="../browser-evidence" \
           CANDIDATE_SHA="${CANDIDATE_SHA}" \
-          ./node_modules/.bin/playwright test browser-qualification.spec.cjs \
+          ./node_modules/.bin/playwright test \
+            browser-qualification.spec.cjs \
+            uda-sem-01-qualification.spec.cjs \
             --reporter=line \
             --output=../browser-evidence/test-results
 
