@@ -792,6 +792,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       {studentMode.isOpen && (
         <StudentPortal
           tests={tests}
+          classNames={appData.classes.map(c => c.name)}
           defaultTestId={studentMode.testId}
           defaultClassName={studentMode.className}
           onSaveSubmission={handleSaveStudentSubmission}

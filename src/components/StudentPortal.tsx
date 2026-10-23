@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { OnlineSubmission, OnlineTest } from '../types';
 import { uid } from '../utils';
@@ -6,6 +6,7 @@ import { ArrowRight, CheckCircle2, RotateCcw, XCircle, Award, Lightbulb, AlertCi
 
 interface StudentPortalProps {
   tests: Record<string, OnlineTest>;
+  classNames: string[];
   defaultTestId?: string;
   defaultClassName?: string;
   onSaveSubmission: (submission: OnlineSubmission) => Promise<void>;
@@ -14,6 +15,7 @@ interface StudentPortalProps {
 
 export const StudentPortal: React.FC<StudentPortalProps> = ({
   tests,
+  classNames,
   defaultTestId = 'energia',
   defaultClassName = '3ª A',
   onSaveSubmission,
@@ -27,18 +29,30 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
 
   const [step, setStep] = useState<'login' | 'quiz' | 'result'>('login');
   const [studentName, setStudentName] = useState('');
-  const [selectedClass, setSelectedClass] = useState(defaultClassName);
+  const [selectedClass, setSelectedClass] = useState(
+    classNames.includes(defaultClassName) ? defaultClassName : (classNames[0] || '')
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [userAnswers, setUserAnswers] = useState<{ questionIndex: number; selected: number; isCorrect: boolean }[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const submissionPendingRef = useRef(false);
+  const pendingSubmissionRef = useRef<OnlineSubmission | null>(null);
 
   const startQuiz = () => {
     if (!studentName.trim()) {
       alert('Per favore, inserisci Cognome e Nome prima di iniziare.');
       return;
     }
+    if (!selectedClass) {
+      alert('Nessuna classe disponibile. Avvisa il docente.');
+      return;
+    }
+    pendingSubmissionRef.current = null;
+    setSubmissionError(null);
     setCurrentIndex(0);
     setScore(0);
     setUserAnswers([]);
@@ -64,18 +78,36 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     ]);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentIndex + 1 < currentTest.questions.length) {
       setCurrentIndex(prev => prev + 1);
       setSelectedAnswer(null);
       setIsAnswered(false);
-    } else {
-      // Finished
-      const finalScore = score;
-      const total = currentTest.questions.length;
-      setStep('result');
+      return;
+    }
 
-      // Trigger confetti celebration
+    if (submissionPendingRef.current) return;
+
+    const submission = pendingSubmissionRef.current ?? {
+      id: uid(),
+      testId: currentTest.id,
+      name: studentName.trim(),
+      class: selectedClass,
+      testTitle: currentTest.title,
+      score,
+      total: currentTest.questions.length,
+      date: new Date().toISOString(),
+      answers: userAnswers
+    };
+    pendingSubmissionRef.current = submission;
+    submissionPendingRef.current = true;
+    setIsSubmitting(true);
+    setSubmissionError(null);
+
+    try {
+      await onSaveSubmission(submission);
+      pendingSubmissionRef.current = null;
+      setStep('result');
       try {
         confetti({
           particleCount: 80,
@@ -83,23 +115,12 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           origin: { y: 0.6 }
         });
       } catch (e) {}
-
-      const submission: OnlineSubmission = {
-        id: uid(),
-        testId: currentTest.id,
-        name: studentName.trim(),
-        class: selectedClass,
-        testTitle: currentTest.title,
-        score: finalScore,
-        total: total,
-        date: new Date().toISOString(),
-        answers: userAnswers
-      };
-
-      void onSaveSubmission(submission).catch(error => {
-        console.error('Secure submission save failed', error);
-        alert('La consegna non è stata salvata nel vault locale. Avvisa il docente.');
-      });
+    } catch (error) {
+      console.error('Secure submission save failed', error);
+      setSubmissionError('Consegna non salvata. Riprova o avvisa il docente.');
+    } finally {
+      submissionPendingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -159,18 +180,20 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                 value={selectedClass}
                 onChange={e => setSelectedClass(e.target.value)}
                 className="w-full p-3 neon-input text-sm text-white bg-slate-900"
+                disabled={classNames.length === 0}
               >
-                <option value="3ª A">3ª A</option>
-                <option value="3ª B">3ª B</option>
-                <option value="3ª C">3ª C</option>
-                <option value="3ª D">3ª D</option>
-                <option value="1ª A">1ª A</option>
-                <option value="2ª A">2ª A</option>
+                {classNames.map(className => (
+                  <option key={className} value={className}>{className}</option>
+                ))}
               </select>
+              {classNames.length === 0 && (
+                <p className="mt-2 text-xs text-amber-300">Nessuna classe disponibile. Avvisa il docente.</p>
+              )}
             </div>
 
             <button
               onClick={startQuiz}
+              disabled={!selectedClass}
               className="w-full py-3.5 mt-2 rounded-lg neon-btn-primary flex items-center justify-center gap-2"
             >
               Inizia Flashcard <ArrowRight className="w-4 h-4" />
@@ -253,15 +276,22 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
               </div>
             )}
 
+            {submissionError && (
+              <div role="alert" className="mt-4 p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs text-amber-200">
+                {submissionError}
+              </div>
+            )}
+
             {isAnswered && (
               <button
                 onClick={handleNext}
-                className="w-full py-3.5 mt-4 rounded-lg neon-btn-primary flex items-center justify-center gap-2 animate-pulse"
+                disabled={isSubmitting}
+                className="w-full py-3.5 mt-4 rounded-lg neon-btn-primary flex items-center justify-center gap-2 animate-pulse disabled:opacity-60 disabled:cursor-wait"
               >
                 {currentIndex + 1 < currentTest.questions.length ? (
                   <>Prossima Scheda <ArrowRight className="w-4 h-4" /></>
                 ) : (
-                  <>Completa e Consegna <Award className="w-4 h-4" /></>
+                  isSubmitting ? 'Salvataggio...' : <>Completa e Consegna <Award className="w-4 h-4" /></>
                 )}
               </button>
             )}
@@ -296,6 +326,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             <div className="flex gap-3 justify-center pt-2">
               <button
                 onClick={() => {
+                  pendingSubmissionRef.current = null;
+                  setSubmissionError(null);
                   setStep('login');
                   setStudentName('');
                 }}
