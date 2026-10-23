@@ -162,173 +162,175 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Row 1: Period, Type & UDA */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Periodo Didattico
-            </label>
-            <select
-              value={period}
-              onChange={e => setPeriod(e.target.value as 'Q1' | 'Q2')}
-              className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
-            >
-              <option value="Q1">1° Quadrimestre (Soglia Intermedia)</option>
-              <option value="Q2">2° Quadrimestre (Soglia Finale)</option>
-            </select>
+        <fieldset disabled={isSaving} className="space-y-4 border-0 p-0 m-0 min-w-0">
+          {/* Row 1: Period, Type & UDA */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                Periodo Didattico
+              </label>
+              <select
+                value={period}
+                onChange={e => setPeriod(e.target.value as 'Q1' | 'Q2')}
+                className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
+              >
+                <option value="Q1">1° Quadrimestre (Soglia Intermedia)</option>
+                <option value="Q2">2° Quadrimestre (Soglia Finale)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                Tipologia Prova
+              </label>
+              <select
+                value={type}
+                onChange={e => setType(e.target.value as EvaluationType)}
+                className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
+              >
+                <option value="test">Test / Quiz Formativo</option>
+                <option value="verifica">Verifica Scritta Sommativa</option>
+                <option value="orale">Colloquio Orale</option>
+                <option value="disegno">Disegno Tecnico / Grafica</option>
+                <option value="osserv">Osservazione Sistematica</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                Collega a UDA Curricolare
+              </label>
+              <select
+                value={udaId}
+                onChange={e => setUdaId(e.target.value)}
+                className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
+              >
+                <option value="">-- Nessuna UDA associata --</option>
+                {udas.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.className} · {u.title}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Tipologia Prova
-            </label>
-            <select
-              value={type}
-              onChange={e => setType(e.target.value as EvaluationType)}
-              className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
-            >
-              <option value="test">Test / Quiz Formativo</option>
-              <option value="verifica">Verifica Scritta Sommativa</option>
-              <option value="orale">Colloquio Orale</option>
-              <option value="disegno">Disegno Tecnico / Grafica</option>
-              <option value="osserv">Osservazione Sistematica</option>
-            </select>
+          {/* Row 2: Date & Title */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                Data Svolgimento
+              </label>
+              <input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                Titolo / Argomento Prova
+              </label>
+              <input
+                type="text"
+                placeholder="es. Verifica su Fonti Rinnovabili"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="w-full p-2.5 neon-input text-xs sm:text-sm text-white placeholder-slate-500"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Collega a UDA Curricolare
-            </label>
-            <select
-              value={udaId}
-              onChange={e => setUdaId(e.target.value)}
-              className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
-            >
-              <option value="">-- Nessuna UDA associata --</option>
-              {udas.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.className} · {u.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Row 2: Date & Title */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Data Svolgimento
-            </label>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Titolo / Argomento Prova
-            </label>
-            <input
-              type="text"
-              placeholder="es. Verifica su Fonti Rinnovabili"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              className="w-full p-2.5 neon-input text-xs sm:text-sm text-white placeholder-slate-500"
-            />
-          </div>
-        </div>
-
-        {/* Quick Fill suggestions */}
-        <div className="flex items-center gap-2 flex-wrap pt-1">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
-            Compilazione rapida:
-          </span>
-          {['6', '7', '8', 'A'].map(qv => (
+          {/* Quick Fill suggestions */}
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+              Compilazione rapida:
+            </span>
+            {['6', '7', '8', 'A'].map(qv => (
+              <button
+                key={qv}
+                type="button"
+                onClick={() => handleQuickFill(qv)}
+                className="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono"
+              >
+                Tutti {qv}
+              </button>
+            ))}
             <button
-              key={qv}
               type="button"
-              onClick={() => handleQuickFill(qv)}
-              className="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono"
+              onClick={() => setGradesMap({})}
+              className="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700"
             >
-              Tutti {qv}
+              Svuota
             </button>
-          ))}
+          </div>
+
+          {/* Students Grade Input List */}
+          <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto">
+            {currentClass.students.length === 0 ? (
+              <p className="p-4 text-xs text-slate-400 text-center">
+                Nessun alunno presente in questa classe. Aggiungili dalla sezione "Gestione Alunni".
+              </p>
+            ) : (
+              currentClass.students.map((student, idx) => {
+                const currentRecord = gradesMap[student.id] || { value: '', delayed: false };
+                const isDelayed = currentRecord.delayed;
+
+                return (
+                  <div
+                    key={student.id}
+                    className="p-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
+                      <span className="font-semibold text-slate-200 text-xs sm:text-sm truncate">
+                        {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
+                      </span>
+
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleDelayed(student.id)}
+                        className={`p-1.5 rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
+                          isDelayed
+                            ? 'bg-amber-950/60 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.25)]'
+                            : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
+                        }`}
+                        title="Contrassegna come prova di recupero / svolta in ritardo"
+                      >
+                        <Clock className="w-3 h-3" />
+                        <span>{isDelayed ? 'Ritardo (R)' : 'R'}</span>
+                      </button>
+
+                      <input
+                        type="text"
+                        value={currentRecord.value}
+                        onChange={e => handleInputChange(student.id, e.target.value)}
+                        placeholder="es. 7.5"
+                        className="w-20 sm:w-24 p-1.5 text-center font-bold text-xs sm:text-sm neon-input text-white uppercase placeholder-slate-600"
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Submit Button */}
           <button
-            type="button"
-            onClick={() => setGradesMap({})}
-            className="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700"
+            type="submit"
+            disabled={isSaving}
+            className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
           >
-            Svuota
+            <Save className="w-4 h-4" />
+            <span>{editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
           </button>
-        </div>
-
-        {/* Students Grade Input List */}
-        <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto">
-          {currentClass.students.length === 0 ? (
-            <p className="p-4 text-xs text-slate-400 text-center">
-              Nessun alunno presente in questa classe. Aggiungili dalla sezione "Gestione Alunni".
-            </p>
-          ) : (
-            currentClass.students.map((student, idx) => {
-              const currentRecord = gradesMap[student.id] || { value: '', delayed: false };
-              const isDelayed = currentRecord.delayed;
-
-              return (
-                <div
-                  key={student.id}
-                  className="p-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
-                >
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
-                    <span className="font-semibold text-slate-200 text-xs sm:text-sm truncate">
-                      {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
-                    </span>
-
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => toggleDelayed(student.id)}
-                      className={`p-1.5 rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
-                        isDelayed
-                          ? 'bg-amber-950/60 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.25)]'
-                          : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
-                      }`}
-                      title="Contrassegna come prova di recupero / svolta in ritardo"
-                    >
-                      <Clock className="w-3 h-3" />
-                      <span>{isDelayed ? 'Ritardo (R)' : 'R'}</span>
-                    </button>
-
-                    <input
-                      type="text"
-                      value={currentRecord.value}
-                      onChange={e => handleInputChange(student.id, e.target.value)}
-                      placeholder="es. 7.5"
-                      className="w-20 sm:w-24 p-1.5 text-center font-bold text-xs sm:text-sm neon-input text-white uppercase placeholder-slate-600"
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
-        >
-          <Save className="w-4 h-4" />
-          <span>{editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
-        </button>
+        </fieldset>
       </form>
     </div>
   );
