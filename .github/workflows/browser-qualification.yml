@@ -65,6 +65,7 @@ jobs:
             "@playwright/test@${PLAYWRIGHT_VERSION}"
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+          cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
 
       - name: Start production server and wait for readiness
         shell: bash
@@ -94,7 +95,7 @@ jobs:
           cat browser-evidence/server.log
           exit 1
 
-      - name: Run Chromium qualification smoke
+      - name: Run Chromium qualification
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +103,9 @@ jobs:
           BASE_URL="http://127.0.0.1:${PORT}" \
           EVIDENCE_DIR="../browser-evidence" \
           CANDIDATE_SHA="${CANDIDATE_SHA}" \
-          ./node_modules/.bin/playwright test browser-qualification.spec.cjs \
+          ./node_modules/.bin/playwright test \
+            browser-qualification.spec.cjs \
+            online-01-qualification.spec.cjs \
             --reporter=line \
             --output=../browser-evidence/test-results
 
