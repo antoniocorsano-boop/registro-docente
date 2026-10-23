@@ -580,9 +580,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Bulk add students from Excel
-  const handleBulkAddStudents = (newStudents: Student[]): Promise<void> => {
+  const handleBulkAddStudents = (newStudents: Student[]): Promise<number> => {
     const classId = currentClass?.id;
-    if (!classId) return Promise.resolve();
+    if (!classId) return Promise.resolve(0);
+    let addedCount = 0;
 
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
@@ -594,6 +595,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         existingNames.add(normalizedName);
         return true;
       });
+      addedCount = appendableStudents.length;
       const updatedClass: ClassData = {
         ...targetClass,
         students: sortStudents([...targetClass.students, ...appendableStudents])
@@ -603,8 +605,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
       };
     }, {
-      successMessage: 'Alunni importati'
-    }).then(() => undefined);
+      successMessage: ''
+    }).then(() => addedCount);
   };
 
   // Invert student names (Cognome Nome <-> Nome Cognome)

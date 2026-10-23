@@ -9,7 +9,7 @@ interface StudentsManagementViewProps {
   onAddStudent: (name: string) => Promise<void>;
   onRemoveStudent: (studentId: string) => Promise<void>;
   onInvertNames: () => Promise<void>;
-  onBulkAddStudents: (students: Student[]) => Promise<void>;
+  onBulkAddStudents: (students: Student[]) => Promise<number>;
   isPrivacyShieldActive?: boolean;
 }
 
@@ -100,8 +100,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           if (isStudentMutationPending) return;
           setIsStudentMutationPending(true);
           try {
-            await onBulkAddStudents(imported);
-            alert(`Importazione completata con successo! Aggiunti ${imported.length} nuovi alunni.`);
+            const addedCount = await onBulkAddStudents(imported);
+            if (addedCount > 0) {
+              alert(`Importazione completata con successo! Aggiunti ${addedCount} nuovi alunni.`);
+            } else {
+              alert('Nessun nuovo alunno aggiunto: i nominativi erano già presenti.');
+            }
           } catch {
             return;
           } finally {
