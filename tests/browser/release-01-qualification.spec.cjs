@@ -149,8 +149,13 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   const tabelloneDesktop = desktopStudentRegion(page);
   await expect(tabelloneDesktop).toHaveCount(1);
   await expect(tabelloneDesktop).toBeVisible();
-  await expect(tabelloneDesktop.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
-  await expect(tabelloneDesktop.getByText(EVALUATION_TITLE, { exact: true })).toBeVisible();
+  await expect(tabelloneDesktop.locator(`th[title="${EVALUATION_TITLE}"]`)).toBeVisible();
+  const tabelloneStudentRow = tabelloneDesktop.locator('tbody tr').filter({
+    has: page.getByText(STUDENT_NAME, { exact: true })
+  });
+  await expect(tabelloneStudentRow).toHaveCount(1);
+  await expect(tabelloneStudentRow).toBeVisible();
+  await expect(tabelloneStudentRow.getByText('8', { exact: true })).toBeVisible();
   checkpoints.push('tabellone-continuity');
 
   await primaryWorkflowButton(page, 'Analisi').click();
@@ -223,7 +228,13 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   const terminalTabelloneDesktop = desktopStudentRegion(page);
   await expect(terminalTabelloneDesktop).toHaveCount(1);
   await expect(terminalTabelloneDesktop).toBeVisible();
-  await expect(terminalTabelloneDesktop.getByText(EVALUATION_TITLE, { exact: true })).toBeVisible();
+  await expect(terminalTabelloneDesktop.locator(`th[title="${EVALUATION_TITLE}"]`)).toBeVisible();
+  const terminalStudentRow = terminalTabelloneDesktop.locator('tbody tr').filter({
+    has: page.getByText(STUDENT_NAME, { exact: true })
+  });
+  await expect(terminalStudentRow).toHaveCount(1);
+  await expect(terminalStudentRow).toBeVisible();
+  await expect(terminalStudentRow.getByText('8', { exact: true })).toBeVisible();
 
   await primaryWorkflowButton(page, 'Comportamento').click();
   await expect(page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' })).toBeVisible();
