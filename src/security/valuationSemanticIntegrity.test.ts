@@ -114,6 +114,8 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(uda).toContain('Contesto curricolare: D.M. 221/2025');
     expect(uda).toContain('({(hoursRatio * 60).toFixed(0)}/60 pt)');
     expect(uda).toContain('({(evalRatio * 40).toFixed(0)}/40 pt)');
+    expect(uda).toContain('Quota valutazioni:');
+    expect(uda).not.toContain('Quota verifiche:');
     expect(uda).toContain('const targetEvals = 2; // Minimo 2 valutazioni per UDA');
     expect(uda).toContain('const completionPct = Math.round((hoursRatio * 0.6 + evalRatio * 0.4) * 100);');
   });
