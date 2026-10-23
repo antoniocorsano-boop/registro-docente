@@ -36,7 +36,7 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
     expect(text.indexOf('await onAddStudent(sanitizeName(newStudentName));')).toBeLessThan(text.indexOf("setNewStudentName('');"));
     expect(text).toContain('await onBulkAddStudents(imported);');
     expect(text.indexOf('await onBulkAddStudents(imported);')).toBeLessThan(text.indexOf('Importazione completata con successo!'));
-    expect(text).toContain('disabled={isStudentMutationPending}');
+    expect(text).toContain('disabled={isImporting || isStudentMutationPending}');
   });
 
   test('settings save awaits a top-level diff and theme persists only a theme patch', async () => {
