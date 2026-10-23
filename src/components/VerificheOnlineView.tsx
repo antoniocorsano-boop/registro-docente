@@ -815,259 +815,261 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
           ) : (
             /* Interactive Visual Question-by-Question Form */
             <form onSubmit={handleSaveInteractiveTest} className="neon-card neon-card-highlight p-5 space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
-                <div>
-                  <h3 className="text-base font-bold text-[var(--primary)] flex items-center gap-2">
-                    <Edit3 className="w-5 h-5 text-[var(--primary)]" />
-                    {editingTestId ? 'Modifica Verifica Formativa' : 'Crea Nuova Verifica Formativa'}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Definisci quesiti, opzioni di risposta, soluzioni corrette e spiegazioni didattiche per lo studente.
-                  </p>
+              <fieldset disabled={isSavingTest} className="space-y-5 border-0 p-0 m-0 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
+                  <div>
+                    <h3 className="text-base font-bold text-[var(--primary)] flex items-center gap-2">
+                      <Edit3 className="w-5 h-5 text-[var(--primary)]" />
+                      {editingTestId ? 'Modifica Verifica Formativa' : 'Crea Nuova Verifica Formativa'}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Definisci quesiti, opzioni di risposta, soluzioni corrette e spiegazioni didattiche per lo studente.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="submit"
+                      disabled={isSavingTest}
+                      className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" /> Salva Verifica
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTest(false)}
+                      className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <X className="w-4 h-4" /> Chiudi
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Test Meta Configuration */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      Titolo Verifica / Argomento Lezione
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale"
+                      value={editorTitle}
+                      onChange={e => setEditorTitle(e.target.value)}
+                      className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      Collega a UDA Curricolare
+                    </label>
+                    <select
+                      value={editorUdaId}
+                      onChange={e => setEditorUdaId(e.target.value)}
+                      className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
+                    >
+                      <option value="">-- Nessuna UDA associata --</option>
+                      {udas.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.className} · {u.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      Descrizione / Obiettivi Didattici (Opzionale)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="es. Prova per verificare l'acquisizione dei concetti di rendimento energetico e celle solari."
+                      value={editorDescription}
+                      onChange={e => setEditorDescription(e.target.value)}
+                      className="w-full p-2 neon-input text-xs text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      Tempo Stimato (Minuti)
+                    </label>
+                    <input
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={editorDuration}
+                      onChange={e => setEditorDuration(Number(e.target.value))}
+                      className="w-full p-2 neon-input text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Questions List Header */}
+                <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
+                  <h4 className="font-bold text-slate-200 text-sm flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-cyan-400" />
+                    Quesiti del Test ({editorQuestions.length})
+                  </h4>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAddQuestionToEditor('multiple_choice')}
+                      className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-cyan-400" /> + Domanda Scelta Multipla
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddQuestionToEditor('true_false')}
+                      className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-emerald-400" /> + Vero / Falso
+                    </button>
+                  </div>
+                </div>
+
+                {/* Questions Editor Cards */}
+                <div className="space-y-4">
+                  {editorQuestions.map((q, qIndex) => (
+                    <div
+                      key={qIndex}
+                      className="p-4 rounded-xl bg-[var(--surface-variant)] border border-slate-700 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-[var(--primary)] text-[var(--primary-text)] font-bold text-xs flex items-center justify-center shrink-0">
+                            {qIndex + 1}
+                          </span>
+                          <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">
+                            {q.type === 'true_false' ? 'Vero / Falso' : 'Scelta Multipla'}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQuestionFromEditor(qIndex)}
+                          className="text-slate-500 hover:text-rose-400 p-1 rounded"
+                          title="Elimina domanda"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Question text */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                          Testo del Quesito
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={q.q}
+                          onChange={e => handleUpdateQuestion(qIndex, 'q', e.target.value)}
+                          className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
+                          placeholder="Formula chiaramente la domanda..."
+                        />
+                      </div>
+
+                      {/* Options with radio button for correct answer */}
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-semibold text-slate-400">
+                          Opzioni di Risposta (seleziona il pallino della risposta corretta)
+                        </label>
+
+                        {q.options.map((opt, optIdx) => (
+                          <div key={optIdx} className="flex items-center gap-2">
+                            <label className="flex items-center gap-1.5 cursor-pointer text-xs shrink-0">
+                              <input
+                                type="radio"
+                                name={`correct_${qIndex}`}
+                                checked={q.correct === optIdx}
+                                onChange={() => handleUpdateQuestion(qIndex, 'correct', optIdx)}
+                                className="accent-[var(--primary)] w-4 h-4 cursor-pointer"
+                              />
+                              <span className={q.correct === optIdx ? 'font-bold text-emerald-400' : 'text-slate-400'}>
+                                {String.fromCharCode(65 + optIdx)})
+                              </span>
+                            </label>
+
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={e => {
+                                const newOpts = [...q.options];
+                                newOpts[optIdx] = e.target.value;
+                                handleUpdateQuestion(qIndex, 'options', newOpts);
+                              }}
+                              className={`flex-1 p-2 rounded border text-xs text-white ${
+                                q.correct === optIdx
+                                  ? 'border-emerald-500 bg-emerald-950/30'
+                                  : 'border-slate-700 bg-slate-900'
+                              }`}
+                            />
+
+                            {q.type !== 'true_false' && q.options.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOption(qIndex, optIdx)}
+                                className="text-slate-500 hover:text-rose-400 p-1"
+                                title="Rimuovi opzione"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+
+                        {q.type !== 'true_false' && q.options.length < 5 && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddOption(qIndex)}
+                            className="text-[11px] text-[var(--primary)] hover:underline pt-1 flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" /> Aggiungi ulteriore opzione
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Formative Explanation (Rationale) */}
+                      <div className="pt-2 border-t border-slate-800">
+                        <label className="block text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
+                          <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                          Spiegazione Didattica / Rationale Formativo (visualizzato dopo la risposta dell'alunno)
+                        </label>
+                        <input
+                          type="text"
+                          value={q.explanation || ''}
+                          onChange={e => handleUpdateQuestion(qIndex, 'explanation', e.target.value)}
+                          placeholder="Spiega perché la risposta è corretta o evidenzia il concetto chiave della lezione..."
+                          className="w-full p-2 rounded border border-amber-500/30 bg-amber-950/20 text-xs text-amber-200 placeholder-amber-400/50"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-3 pt-3 border-t border-[var(--border)]">
                   <button
                     type="submit"
                     disabled={isSavingTest}
-                    className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
+                    className="flex-1 py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
                   >
-                    <Check className="w-4 h-4" /> Salva Verifica
+                    <Check className="w-4 h-4" /> Salva Tutte le Modifiche al Test
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsEditingTest(false)}
-                    className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1"
+                    className="px-5 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold"
                   >
-                    <X className="w-4 h-4" /> Chiudi
+                    Annulla
                   </button>
                 </div>
-              </div>
-
-              {/* Test Meta Configuration */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Titolo Verifica / Argomento Lezione
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale"
-                    value={editorTitle}
-                    onChange={e => setEditorTitle(e.target.value)}
-                    className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Collega a UDA Curricolare
-                  </label>
-                  <select
-                    value={editorUdaId}
-                    onChange={e => setEditorUdaId(e.target.value)}
-                    className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
-                  >
-                    <option value="">-- Nessuna UDA associata --</option>
-                    {udas.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.className} · {u.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Descrizione / Obiettivi Didattici (Opzionale)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="es. Prova per verificare l'acquisizione dei concetti di rendimento energetico e celle solari."
-                    value={editorDescription}
-                    onChange={e => setEditorDescription(e.target.value)}
-                    className="w-full p-2 neon-input text-xs text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Tempo Stimato (Minuti)
-                  </label>
-                  <input
-                    type="number"
-                    min={5}
-                    max={120}
-                    value={editorDuration}
-                    onChange={e => setEditorDuration(Number(e.target.value))}
-                    className="w-full p-2 neon-input text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Questions List Header */}
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
-                <h4 className="font-bold text-slate-200 text-sm flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-cyan-400" />
-                  Quesiti del Test ({editorQuestions.length})
-                </h4>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestionToEditor('multiple_choice')}
-                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-cyan-400" /> + Domanda Scelta Multipla
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestionToEditor('true_false')}
-                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-emerald-400" /> + Vero / Falso
-                  </button>
-                </div>
-              </div>
-
-              {/* Questions Editor Cards */}
-              <div className="space-y-4">
-                {editorQuestions.map((q, qIndex) => (
-                  <div
-                    key={qIndex}
-                    className="p-4 rounded-xl bg-[var(--surface-variant)] border border-slate-700 space-y-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-[var(--primary)] text-[var(--primary-text)] font-bold text-xs flex items-center justify-center shrink-0">
-                          {qIndex + 1}
-                        </span>
-                        <span className="text-xs uppercase tracking-wider font-semibold text-slate-400">
-                          {q.type === 'true_false' ? 'Vero / Falso' : 'Scelta Multipla'}
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveQuestionFromEditor(qIndex)}
-                        className="text-slate-500 hover:text-rose-400 p-1 rounded"
-                        title="Elimina domanda"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Question text */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                        Testo del Quesito
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={q.q}
-                        onChange={e => handleUpdateQuestion(qIndex, 'q', e.target.value)}
-                        className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
-                        placeholder="Formula chiaramente la domanda..."
-                      />
-                    </div>
-
-                    {/* Options with radio button for correct answer */}
-                    <div className="space-y-2">
-                      <label className="block text-[11px] font-semibold text-slate-400">
-                        Opzioni di Risposta (seleziona il pallino della risposta corretta)
-                      </label>
-
-                      {q.options.map((opt, optIdx) => (
-                        <div key={optIdx} className="flex items-center gap-2">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs shrink-0">
-                            <input
-                              type="radio"
-                              name={`correct_${qIndex}`}
-                              checked={q.correct === optIdx}
-                              onChange={() => handleUpdateQuestion(qIndex, 'correct', optIdx)}
-                              className="accent-[var(--primary)] w-4 h-4 cursor-pointer"
-                            />
-                            <span className={q.correct === optIdx ? 'font-bold text-emerald-400' : 'text-slate-400'}>
-                              {String.fromCharCode(65 + optIdx)})
-                            </span>
-                          </label>
-
-                          <input
-                            type="text"
-                            value={opt}
-                            onChange={e => {
-                              const newOpts = [...q.options];
-                              newOpts[optIdx] = e.target.value;
-                              handleUpdateQuestion(qIndex, 'options', newOpts);
-                            }}
-                            className={`flex-1 p-2 rounded border text-xs text-white ${
-                              q.correct === optIdx
-                                ? 'border-emerald-500 bg-emerald-950/30'
-                                : 'border-slate-700 bg-slate-900'
-                            }`}
-                          />
-
-                          {q.type !== 'true_false' && q.options.length > 2 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveOption(qIndex, optIdx)}
-                              className="text-slate-500 hover:text-rose-400 p-1"
-                              title="Rimuovi opzione"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-
-                      {q.type !== 'true_false' && q.options.length < 5 && (
-                        <button
-                          type="button"
-                          onClick={() => handleAddOption(qIndex)}
-                          className="text-[11px] text-[var(--primary)] hover:underline pt-1 flex items-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" /> Aggiungi ulteriore opzione
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Formative Explanation (Rationale) */}
-                    <div className="pt-2 border-t border-slate-800">
-                      <label className="block text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
-                        <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                        Spiegazione Didattica / Rationale Formativo (visualizzato dopo la risposta dell'alunno)
-                      </label>
-                      <input
-                        type="text"
-                        value={q.explanation || ''}
-                        onChange={e => handleUpdateQuestion(qIndex, 'explanation', e.target.value)}
-                        placeholder="Spiega perché la risposta è corretta o evidenzia il concetto chiave della lezione..."
-                        className="w-full p-2 rounded border border-amber-500/30 bg-amber-950/20 text-xs text-amber-200 placeholder-amber-400/50"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-3 pt-3 border-t border-[var(--border)]">
-                <button
-                  type="submit"
-                  disabled={isSavingTest}
-                  className="flex-1 py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
-                >
-                  <Check className="w-4 h-4" /> Salva Tutte le Modifiche al Test
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingTest(false)}
-                  className="px-5 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold"
-                >
-                  Annulla
-                </button>
-              </div>
+              </fieldset>
             </form>
           )}
         </div>
