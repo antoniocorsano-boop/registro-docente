@@ -17,9 +17,9 @@
 - Preserve `completionPct = Math.round((hoursRatio * 0.6 + evalRatio * 0.4) * 100)` and `targetEvals = 2`.
 
 ## Review Focus
-- A teacher must not read weighted internal hours as hours actually taught.
+- A teacher must not read internal activity points as hours actually taught.
 - `% del monte ore` must refer only to raw diary hours divided by planned hours.
-- 60/40 copy must say internal/non-prescriptive while formula remains unchanged.
+- 60/40 copy must say internal/non-prescriptive and identify its 40% source as linked evaluations while formula remains unchanged.
 - D.M. 221/2025 must remain curricular context, not formula authority.
 - Mobile copy must remain readable without hover-only explanations.
 
@@ -48,10 +48,10 @@
 - Consumes: canonical vocabulary pinned by Task 1.
 - Produces: clarified teacher-facing copy only.
 
-- [ ] **Step 1:** Replace ambiguous dossier labels with `Monte ore previsto`, `Ore registrate nel diario`, and `% del monte ore`; retain weighted values as explicitly internal.
-- [ ] **Step 2:** Rename raw-hour Gantt progress to `Avanzamento ore nel diario`; rename the 60/40 summary to `Indice di avanzamento didattico (interno)` and add visible compact methodological copy stating 60/40 is an internal planning criterion, not a prescribed assessment rule.
+- [ ] **Step 1:** Replace ambiguous dossier labels with `Monte ore previsto`, `Ore registrate nel diario`, and `% del monte ore`; expose the composite activity value as internal points, never hours.
+- [ ] **Step 2:** Rename raw-hour Gantt progress to `Avanzamento ore nel diario`; rename the 60/40 summary to `Indice di avanzamento didattico (interno)` and add visible compact methodological copy stating 60/40 is an internal planning criterion whose 40% source is linked evaluations, not a prescribed assessment rule.
 - [ ] **Step 3:** Relabel nearby D.M. 221/2025 text as `Contesto curricolare: D.M. 221/2025`.
-- [ ] **Step 4:** Run the focused test, typecheck, build, and full security suite; verify formula and behavior remain unchanged.
+- [ ] **Step 4:** Run the focused test, typecheck, build, and full security suite; verify formulas and behavior remain unchanged and the activity-index point method matches `weighted logged hours + 1 pt per linked evaluation batch`.
 - [ ] **Step 5:** Commit the minimal GREEN.
 
 ### Task 3: Qualification

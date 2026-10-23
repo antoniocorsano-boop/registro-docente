@@ -235,7 +235,7 @@ export function calcUdaCompetenceCredits(
   const totalRawHours = Object.values(breakdown).reduce((a, b) => a + b.rawHours, 0);
   let totalWeightedHours = Object.values(breakdown).reduce((a, b) => a + b.weightedHours, 0);
 
-  // Bonus for registered formal evaluations (validation certification value)
+  // Internal activity-index bonus: 1 point per linked evaluation batch
   const udaGrades = classes.flatMap(c => c.grades || []).filter(g => g.udaId === uda.id);
   const uniqueBatches = new Set(udaGrades.map(g => g.batchId || g.id)).size;
   const evalBonus = uniqueBatches * 1.0;
@@ -1555,17 +1555,17 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Ore Competenza */}
+        {/* Card 2: Punti attività interni */}
         <div className="neon-card p-3 border-l-4 border-l-cyan-400 bg-gradient-to-br from-cyan-950/20 to-transparent">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-            <span>Ore Competenza</span>
+            <span>Punti attività interni</span>
             <Activity className="w-3 h-3 text-cyan-400" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-cyan-300 mt-1 font-mono">
-            {totalWeightedCompetenceHours.toFixed(1)}h
+            {totalWeightedCompetenceHours.toFixed(1)} pt
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-            Pond. media {overallMultiplier}x
+            indice composito interno
           </div>
         </div>
 
@@ -2292,7 +2292,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
                   <div className="flex justify-between text-[11px] text-slate-400 pt-0.5">
                     <span>Quota diario: <b>{doneHours}/{plannedHours}h</b> ({(hoursRatio * 60).toFixed(0)}/60 pt)</span>
-                    <span>Quota verifiche: <b>{creditInfo.evalCount}/{targetEvals}</b> collegate ({(evalRatio * 40).toFixed(0)}/40 pt)</span>
+                    <span>Quota valutazioni: <b>{creditInfo.evalCount}/{targetEvals}</b> collegate ({(evalRatio * 40).toFixed(0)}/40 pt)</span>
                   </div>
                 </div>
               );
@@ -2915,7 +2915,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     </h3>
                   </div>
                   <span className="text-xs text-slate-400 font-mono">
-                    Ore certificate: <b className="text-purple-300">{creditStats.totalWeightedHours}h</b> ({creditStats.totalRawHours}/{selectedUdaForDetail.hours}h)
+                    Indice attività interno: <b className="text-purple-300">{creditStats.totalWeightedHours} pt</b> · Diario: {creditStats.totalRawHours}/{selectedUdaForDetail.hours}h
                   </span>
                 </div>
 
@@ -3062,7 +3062,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
               </div>
 
               <div className="p-2.5 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-400 font-mono">
-                1 punto indice = 10 ore ponderate interne
+                Punteggio interno: ore registrate × coefficiente attività + 1 pt per valutazione collegata (conteggiata una volta per batch).
               </div>
             </div>
 
