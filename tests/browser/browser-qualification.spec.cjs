@@ -18,6 +18,7 @@ test('exact candidate serves a usable Registro Docente production shell', async 
     pageErrors.push(error instanceof Error ? error.message : String(error));
   });
 
+  let result = 'FAIL';
   let status = null;
   let title = '';
   let rootTextLength = 0;
@@ -46,6 +47,7 @@ test('exact candidate serves a usable Registro Docente production shell', async 
 
     rootTextLength = (await root.innerText()).trim().length;
     expect(pageErrors, 'page must not emit uncaught JavaScript errors').toEqual([]);
+    result = 'PASS';
   } finally {
     try {
       await page.screenshot({
@@ -64,6 +66,7 @@ test('exact candidate serves a usable Registro Docente production shell', async 
       JSON.stringify(
         {
           candidateSha: process.env.CANDIDATE_SHA || null,
+          result,
           baseURL,
           status,
           title,
