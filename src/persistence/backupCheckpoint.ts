@@ -10,15 +10,16 @@ function cloneSnapshot(snapshot: CompleteSecureAppSnapshot): CompleteSecureAppSn
   return structuredClone(snapshot);
 }
 
-export function incrementBackupChanges(meta: SecureMeta): SecureMeta {
-  const currentChanges =
-    typeof meta.changes === 'number' && Number.isFinite(meta.changes)
-      ? Math.max(0, meta.changes)
-      : 0;
+function normalizeBackupChanges(changes: unknown): number {
+  return typeof changes === 'number' && Number.isFinite(changes)
+    ? Math.max(0, changes)
+    : 0;
+}
 
+export function incrementBackupChanges(meta: SecureMeta): SecureMeta {
   return {
     ...meta,
-    changes: currentChanges + 1
+    changes: normalizeBackupChanges(meta.changes) + 1
   };
 }
 
@@ -44,8 +45,11 @@ export function applyBackupReceipt(
   current: SecureMeta,
   checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>
 ): SecureMeta {
+  const currentChanges = normalizeBackupChanges(current.changes);
+  const includedChanges = normalizeBackupChanges(checkpoint.includedChanges);
+
   return {
-    changes: Math.max(0, current.changes - checkpoint.includedChanges),
+    changes: Math.max(0, currentChanges - includedChanges),
     lastBackup: checkpoint.checkpointAt
   };
 }
