@@ -117,7 +117,7 @@ describe('PERSIST-01H pending intent boundaries', () => {
     expect(boundary).toContain('await onSaveUdas(nextUdas);');
     expect(boundary).toContain('afterCommit?.();');
     expect(boundary).toContain('finally');
-    expect(boundary).toContain('udaMutationPendingRef.current = false;');
+    expect(boundary).toContain('udaMutationPendingRef.current = udaActionMutationDepthRef.current > 0;');
     expect(boundary).toContain('setIsSavingUda(false);');
 
     expect(udaSource.match(/commitUdaViewMutation\(/g)?.length ?? 0).toBeGreaterThan(6);

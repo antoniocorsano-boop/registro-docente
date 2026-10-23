@@ -76,7 +76,7 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
     expect(text).toContain('udaTextMutationTailRef.current = actionTask.catch(() => undefined);');
     expect(text).toContain('udaMutationPendingRef.current = true;');
     expect(text).toContain('await onSaveUdas(nextUdas);');
-    expect(text).toContain('udaMutationPendingRef.current = false;');
+    expect(text).toContain('udaMutationPendingRef.current = udaActionMutationDepthRef.current > 0;');
     expect(text).toContain('setIsSavingUda(false);');
     expect(text).toContain('disabled={isSavingUda}');
   });
