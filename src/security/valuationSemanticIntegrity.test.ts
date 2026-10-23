@@ -98,7 +98,8 @@ describe('VAL-02 bounded valuation semantics', () => {
 
     expect(report).toContain('Monte ore previsto:');
     expect(report).toContain('Ore registrate nel diario:');
-    expect(report).toContain('Ore ponderate interne (indice attività):');
+    expect(report).toContain('Punti ponderati interni (indice attività):');
+    expect(report).not.toContain('Ore ponderate interne (indice attività):');
     expect(report).toContain('% del monte ore');
     expect(report).not.toContain('>Svolte: <');
     expect(report).not.toContain('% svolto');
@@ -106,7 +107,8 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(uda).toContain('Avanzamento ore nel diario');
     expect(uda).toContain('Riepilogo avanzamento interno');
     expect(uda).toContain('Indice di avanzamento didattico (interno)');
-    expect(uda).toContain('Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% verifiche e rubriche collegate');
+    expect(uda).toContain('Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% valutazioni collegate');
+    expect(uda).not.toContain('40% verifiche e rubriche collegate');
     expect(uda).toContain('Non determina voti o livelli');
     expect(uda).toContain('non una regola di valutazione prescritta');
     expect(uda).toContain('Contesto curricolare: D.M. 221/2025');
