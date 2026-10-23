@@ -34,6 +34,16 @@ describe('PERSIST-01H UDA queued action integrity', () => {
     expect(actionQueue).toContain('udaActionMutationDepthRef.current = Math.max(0, udaActionMutationDepthRef.current - 1);');
   });
 
+  test('queue reseeding uses the latest rendered UDA snapshot instead of an async handler stale closure', async () => {
+    const source = await Bun.file('src/components/UdaGanttView.tsx').text();
+    const boundary = sectionBetween(source, '// Quick toast message inside UdaGanttView', '// Embedding configuration');
+
+    expect(boundary).toContain('const udaLatestSnapshotRef = useRef(udas);');
+    expect(boundary).toContain('udaLatestSnapshotRef.current = udas;');
+    expect(boundary.match(/udaCommittedSnapshotRef\.current = udaLatestSnapshotRef\.current;/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(boundary).not.toContain('udaCommittedSnapshotRef.current = udas;');
+  });
+
   test('relative UDA date controls freeze while an action save is pending', async () => {
     const source = await Bun.file('src/components/UdaGanttView.tsx').text();
 
