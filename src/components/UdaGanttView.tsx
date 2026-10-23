@@ -2244,7 +2244,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 Indice di avanzamento didattico (interno) & Indice Attività UDA
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% verifiche e rubriche collegate. Non determina voti o livelli.
+                Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% verifiche e rubriche collegate. È un criterio interno del prodotto, non una regola di valutazione prescritta. Non determina voti o livelli.
               </p>
             </div>
           </div>
