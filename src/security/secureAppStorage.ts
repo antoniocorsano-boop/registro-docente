@@ -113,36 +113,74 @@ export class SecureAppStorage {
     return this.vault.put('appData', value);
   }
 
+  saveAppDataAndMeta(appData: AppData, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'appData', value: appData },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveSettings(value: AppSettings): Promise<void> {
     return this.vault.put('settings', sanitizePersistedSettings(value));
+  }
+
+  saveSettingsAndMeta(settings: AppSettings, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'settings', value: sanitizePersistedSettings(settings) },
+      { key: 'meta', value: meta }
+    ]);
   }
 
   saveUdas(value: UdaRecord[]): Promise<void> {
     return this.vault.put('udas', value);
   }
 
+  saveUdasAndMeta(udas: UdaRecord[], meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'udas', value: udas },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveCustomTests(value: Record<string, OnlineTest>): Promise<void> {
     return this.vault.put('customTests', value);
+  }
+
+  saveCustomTestsAndMeta(tests: Record<string, OnlineTest>, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'customTests', value: tests },
+      { key: 'meta', value: meta }
+    ]);
   }
 
   saveSubmissions(value: OnlineSubmission[]): Promise<void> {
     return this.vault.put('submissions', value);
   }
 
+  saveSubmissionsAndMeta(submissions: OnlineSubmission[], meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'submissions', value: submissions },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveMeta(value: SecureMeta): Promise<void> {
     return this.vault.put('meta', value);
   }
 
-  private async writeCompleteSnapshot(snapshot: CompleteSecureAppSnapshot): Promise<void> {
-    await this.saveAppData(snapshot.appData);
-    await this.saveSettings(snapshot.settings);
-    await this.saveUdas(snapshot.udas);
-    await this.saveCustomTests(snapshot.customTests);
-    await this.saveSubmissions(snapshot.submissions);
-    await this.saveMeta(snapshot.meta);
+  private writeCompleteSnapshotAtomic(snapshot: CompleteSecureAppSnapshot): Promise<void> {
+    const sanitized = sanitizeCompleteSnapshot(snapshot);
+    return this.vault.putMany([
+      { key: 'appData', value: sanitized.appData },
+      { key: 'settings', value: sanitized.settings },
+      { key: 'udas', value: sanitized.udas },
+      { key: 'customTests', value: sanitized.customTests },
+      { key: 'submissions', value: sanitized.submissions },
+      { key: 'meta', value: sanitized.meta }
+    ]);
   }
 
-  private async restorePreviousSnapshot(snapshot: SecureAppSnapshot): Promise<void> {
+  private async restorePreviousPhysicalSnapshot(snapshot: SecureAppSnapshot): Promise<void> {
     const operations: Array<[VaultRecordKey, unknown]> = [
       ['appData', snapshot.appData],
       ['settings', snapshot.settings],
@@ -163,12 +201,16 @@ export class SecureAppStorage {
     }
   }
 
-  async restoreSnapshotVerified(candidate: CompleteSecureAppSnapshot): Promise<CompleteSecureAppSnapshot> {
-    const previous = await this.loadSnapshot();
+  async restoreSnapshotVerified(
+    candidate: CompleteSecureAppSnapshot,
+    previousLogical?: CompleteSecureAppSnapshot
+  ): Promise<CompleteSecureAppSnapshot> {
+    const previousPhysical = previousLogical ? null : await this.loadSnapshot();
     const sanitizedCandidate = sanitizeCompleteSnapshot(candidate);
+    const sanitizedPrevious = previousLogical ? sanitizeCompleteSnapshot(previousLogical) : null;
 
     try {
-      await this.writeCompleteSnapshot(sanitizedCandidate);
+      await this.writeCompleteSnapshotAtomic(sanitizedCandidate);
       const verified = requireCompleteSnapshot(await this.loadSnapshot());
       if (!snapshotEquals(verified, sanitizedCandidate)) {
         throw new Error('Restore non verificabile: il readback non coincide con lo snapshot candidato.');
@@ -176,10 +218,18 @@ export class SecureAppStorage {
       return verified;
     } catch (restoreError) {
       try {
-        await this.restorePreviousSnapshot(previous);
-        const rollbackReadback = await this.loadSnapshot();
-        if (!snapshotEquals(rollbackReadback, previous)) {
-          throw new Error('Il readback del rollback non coincide con lo snapshot precedente.');
+        if (sanitizedPrevious) {
+          await this.writeCompleteSnapshotAtomic(sanitizedPrevious);
+          const rollbackReadback = requireCompleteSnapshot(await this.loadSnapshot());
+          if (!snapshotEquals(rollbackReadback, sanitizedPrevious)) {
+            throw new Error('Il readback del rollback non coincide con lo snapshot precedente.');
+          }
+        } else if (previousPhysical) {
+          await this.restorePreviousPhysicalSnapshot(previousPhysical);
+          const rollbackReadback = await this.loadSnapshot();
+          if (!snapshotEquals(rollbackReadback, previousPhysical)) {
+            throw new Error('Il readback del rollback non coincide con lo snapshot precedente.');
+          }
         }
       } catch (rollbackError) {
         const detail = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);

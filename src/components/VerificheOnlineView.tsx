@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
@@ -34,10 +34,10 @@ interface VerificheOnlineViewProps {
   udas?: UdaRecord[];
   settings?: AppSettings;
   isPrivacyShieldActive?: boolean;
-  onSaveNewTest: (test: OnlineTest) => void;
+  onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
-  onDeleteSubmission: (submissionId: string) => void;
-  onImportSubmissionsToRegister: (targetUdaId?: string) => void;
+  onDeleteSubmission: (submissionId: string) => Promise<void>;
+  onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;
   onSimulateTest: (testId: string, className: string) => void;
 }
 
@@ -58,6 +58,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.name || '3ª A');
   const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
   const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isSavingTest, setIsSavingTest] = useState(false);
+  const testSavePendingRef = useRef(false);
+  const [isSubmissionActionPending, setIsSubmissionActionPending] = useState(false);
+  const submissionActionPendingRef = useRef(false);
 
   // Manual raw text parsing modal or box
   const [manualTitle, setManualTitle] = useState('');
@@ -100,6 +104,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   // Open interactive editor for existing test
   const handleEditExistingTest = (test: OnlineTest) => {
+    if (isParsingFile || isSavingTest) return;
     setEditingTestId(test.id);
     setEditorTitle(test.title);
     setEditorDescription(test.description || '');
@@ -184,8 +189,47 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     });
   };
 
+  const commitTestSaveIntent = async (buildTest: () => OnlineTest): Promise<OnlineTest | null> => {
+    if (testSavePendingRef.current) return null;
+    testSavePendingRef.current = true;
+    setIsSavingTest(true);
+    try {
+      const test = buildTest();
+      await onSaveNewTest(test);
+      return test;
+    } catch {
+      return null;
+    } finally {
+      testSavePendingRef.current = false;
+      setIsSavingTest(false);
+    }
+  };
+
+  const commitSubmissionAction = async (action: () => Promise<void>): Promise<boolean> => {
+    if (submissionActionPendingRef.current) return false;
+    submissionActionPendingRef.current = true;
+    setIsSubmissionActionPending(true);
+    try {
+      await action();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      submissionActionPendingRef.current = false;
+      setIsSubmissionActionPending(false);
+    }
+  };
+
+  const handleDeleteSubmission = async (sub: OnlineSubmission) => {
+    await commitSubmissionAction(() => onDeleteSubmission(sub.id));
+  };
+
+  const handleImportSubmissions = async () => {
+    await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId));
+  };
+
   // Save interactive test
-  const handleSaveInteractiveTest = (e: React.FormEvent) => {
+  const handleSaveInteractiveTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editorTitle.trim()) {
       alert('Inserisci il titolo del test.');
@@ -196,20 +240,21 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       return;
     }
 
-    const testId = editingTestId || `test_${uid()}`;
-    const newTest: OnlineTest = {
-      id: testId,
-      title: editorTitle.trim(),
-      description: editorDescription.trim(),
-      udaId: editorUdaId || undefined,
-      durationMinutes: Number(editorDuration) || 15,
-      questions: editorQuestions
-    };
-
-    onSaveNewTest(newTest);
-    setSelectedTestId(testId);
+    const savedTest = await commitTestSaveIntent(() => {
+      const testId = editingTestId || `test_${uid()}`;
+      return {
+        id: testId,
+        title: editorTitle.trim(),
+        description: editorDescription.trim(),
+        udaId: editorUdaId || undefined,
+        durationMinutes: Number(editorDuration) || 15,
+        questions: editorQuestions
+      };
+    });
+    if (!savedTest) return;
+    setSelectedTestId(savedTest.id);
     setIsEditingTest(false);
-    alert(`Test "${newTest.title}" salvato con successo!`);
+    alert(`Test "${savedTest.title}" salvato con successo!`);
   };
 
   // Parse questions from DOCX/ZIP text
@@ -298,28 +343,26 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         return;
       }
 
-      const testId = `test_auto_${uid()}`;
       const testTitle = `Test: ${file.name.replace(/\.[^/.]+$/, '')}`;
-      const newTest: OnlineTest = {
-        id: testId,
+      const savedTest = await commitTestSaveIntent(() => ({
+        id: `test_auto_${uid()}`,
         title: testTitle,
         questions,
         udaId: udas[0]?.id
-      };
-
-      onSaveNewTest(newTest);
-      setSelectedTestId(testId);
-      alert(`Successo! Creato il test "${testTitle}" con ${questions.length} domande estratte.`);
+      }));
+      if (!savedTest) return;
+      setSelectedTestId(savedTest.id);
+      alert(`Successo! Creato il test "${savedTest.title}" con ${questions.length} domande estratte.`);
     } catch (err) {
       console.error('Error parsing file', err);
       alert("Si è verificato un errore durante l'estrazione del file ZIP / DOCX.");
     } finally {
-      setIsParsingFile(false);
       e.target.value = '';
+      setIsParsingFile(false);
     }
   };
 
-  const handleSaveManualTest = (e: React.FormEvent) => {
+  const handleSaveManualTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualTitle.trim() || !manualRawText.trim()) {
       alert('Inserisci sia il titolo del test sia il testo con domande e risposte.');
@@ -360,19 +403,17 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       return;
     }
 
-    const testId = `test_${uid()}`;
-    const newTest: OnlineTest = {
-      id: testId,
+    const savedTest = await commitTestSaveIntent(() => ({
+      id: `test_${uid()}`,
       title: manualTitle.trim(),
       udaId: manualUdaId || undefined,
       questions
-    };
-
-    onSaveNewTest(newTest);
-    setSelectedTestId(testId);
+    }));
+    if (!savedTest) return;
+    setSelectedTestId(savedTest.id);
     setManualTitle('');
     setManualRawText('');
-    alert(`Test "${newTest.title}" creato con ${questions.length} domande!`);
+    alert(`Test "${savedTest.title}" creato con ${questions.length} domande!`);
   };
 
   const copyPadletLink = () => {
@@ -443,6 +484,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         <div className="flex flex-wrap gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-slate-800 text-xs font-semibold">
           <button
             type="button"
+            disabled={isSavingTest || isParsingFile}
             onClick={() => { setActiveSubTab('bacheca'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'bacheca'
@@ -455,6 +497,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
+            disabled={isSavingTest || isParsingFile}
             onClick={() => setActiveSubTab('editor')}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'editor'
@@ -467,6 +510,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
+            disabled={isSavingTest || isParsingFile}
             onClick={() => { setActiveSubTab('stampa'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'stampa'
@@ -479,6 +523,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
+            disabled={isSavingTest || isParsingFile}
             onClick={() => { setActiveSubTab('analisi'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'analisi'
@@ -586,6 +631,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </button>
               <button
                 type="button"
+                disabled={isParsingFile || isSavingTest}
                 onClick={() => handleEditExistingTest(currentSelectedTest)}
                 className="py-2.5 px-4 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5"
               >
@@ -614,12 +660,13 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   accept=".zip,.docx"
                   onChange={handleFileUpload}
                   className="hidden"
-                  disabled={isParsingFile}
+                  disabled={isParsingFile || isSavingTest}
                 />
               </label>
 
               <button
                 type="button"
+                disabled={isParsingFile || isSavingTest}
                 onClick={handleStartNewInteractiveTest}
                 className="w-full sm:w-auto px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--surface-variant)] hover:bg-[var(--surface-hover)] text-xs font-semibold text-[var(--primary)] flex items-center justify-center gap-2"
               >
@@ -734,6 +781,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   Oppure incolla rapidamente domande da testo formattato (con tag [CORRETTA])
                 </summary>
                 <form onSubmit={handleSaveManualTest} className="mt-3 space-y-2.5">
+                  <fieldset disabled={isSavingTest} className="space-y-2.5 border-0 p-0 m-0 min-w-0">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -764,16 +812,19 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   />
                   <button
                     type="submit"
+                    disabled={isSavingTest}
                     className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold"
                   >
                     Genera Test da Testo
                   </button>
+                  </fieldset>
                 </form>
               </details>
             </div>
           ) : (
             /* Interactive Visual Question-by-Question Form */
             <form onSubmit={handleSaveInteractiveTest} className="neon-card neon-card-highlight p-5 space-y-5">
+              <fieldset disabled={isSavingTest} className="space-y-5 border-0 p-0 m-0 min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
                 <div>
                   <h3 className="text-base font-bold text-[var(--primary)] flex items-center gap-2">
@@ -788,6 +839,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="submit"
+                    disabled={isSavingTest}
                     className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
                   >
                     <Check className="w-4 h-4" /> Salva Verifica
@@ -1013,6 +1065,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               <div className="flex gap-3 pt-3 border-t border-[var(--border)]">
                 <button
                   type="submit"
+                  disabled={isSavingTest}
                   className="flex-1 py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
                 >
                   <Check className="w-4 h-4" /> Salva Tutte le Modifiche al Test
@@ -1025,6 +1078,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   Annulla
                 </button>
               </div>
+              </fieldset>
             </form>
           )}
         </div>
@@ -1328,7 +1382,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => onImportSubmissionsToRegister(currentSelectedTest?.udaId)}
+                onClick={handleImportSubmissions}
+                disabled={isSubmissionActionPending}
                 className="px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto"
               >
                 <Download className="w-4 h-4" /> Importa Voti nel Registro
@@ -1383,7 +1438,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                           <td className="p-2.5">
                             <button
                               type="button"
-                              onClick={() => onDeleteSubmission(sub.id)}
+                              onClick={() => { void handleDeleteSubmission(sub); }}
+                              disabled={isSubmissionActionPending}
                               className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40"
                               title="Elimina consegna"
                             >

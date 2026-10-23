@@ -11,11 +11,16 @@ import type { EncryptedVaultRecord, VaultMetadataV1, VaultRecordKey } from './va
 class MemoryVaultStore implements VaultStore {
   private metadata: VaultMetadataV1 | null = null;
   private readonly records = new Map<VaultRecordKey, EncryptedVaultRecord>();
+  readonly batchKeys: VaultRecordKey[][] = [];
 
   async getMetadata(): Promise<VaultMetadataV1 | null> { return this.metadata; }
   async putMetadata(metadata: VaultMetadataV1): Promise<void> { this.metadata = metadata; }
   async getRecord(key: VaultRecordKey): Promise<EncryptedVaultRecord | null> { return this.records.get(key) ?? null; }
   async putRecord(record: EncryptedVaultRecord): Promise<void> { this.records.set(record.recordKey as VaultRecordKey, record); }
+  async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    this.batchKeys.push(records.map(record => record.recordKey as VaultRecordKey));
+    records.forEach(record => this.records.set(record.recordKey as VaultRecordKey, record));
+  }
   async deleteRecord(key: VaultRecordKey): Promise<void> { this.records.delete(key); }
   async listRecordKeys(): Promise<VaultRecordKey[]> { return [...this.records.keys()]; }
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }
@@ -72,6 +77,23 @@ describe('SEC-1 secure application storage', () => {
     expect(snapshot.customTests).toEqual({});
     expect(snapshot.submissions).toEqual([]);
     expect(snapshot.meta).toEqual({ changes: 2, lastBackup: null });
+  });
+
+  test('commits appData and meta through one vault batch', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const storage = new SecureAppStorage(vault);
+
+    await storage.saveAppDataAndMeta(
+      { classes: [], currentClassId: null },
+      { changes: 3, lastBackup: null }
+    );
+
+    const snapshot = await storage.loadSnapshot();
+    expect(snapshot.appData).toEqual({ classes: [], currentClassId: null });
+    expect(snapshot.meta).toEqual({ changes: 3, lastBackup: null });
+    expect(store.batchKeys).toEqual([['appData', 'meta']]);
   });
 
   test('strips embedding API keys on settings persistence', async () => {

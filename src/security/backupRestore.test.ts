@@ -43,6 +43,9 @@ class RestoreTestStore implements VaultStore {
     this.records.set(record.recordKey as VaultRecordKey, record);
     if (this.corruptKey) this.writesSinceArm += 1;
   }
+  async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
+    for (const record of records) await this.putRecord(record);
+  }
   async deleteRecord(key: VaultRecordKey): Promise<void> { this.records.delete(key); }
   async listRecordKeys(): Promise<VaultRecordKey[]> { return [...this.records.keys()]; }
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }

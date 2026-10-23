@@ -17,6 +17,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { DEFAULT_EMBEDDING_CONFIG } from '../utils';
+import { diffSettings } from '../persistence/settingsMutation';
 import {
   testEmbeddingConnection,
   cosineSimilarity,
@@ -26,7 +27,7 @@ import {
 
 interface SettingsViewProps {
   settings: AppSettings;
-  onUpdateSettings: (newSettings: AppSettings) => void;
+  onUpdateSettings: (patch: Partial<AppSettings>) => Promise<void>;
   onExportBackup: () => void;
   onImportBackup: () => void;
 }
@@ -38,6 +39,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onImportBackup
 }) => {
   const [formData, setFormData] = useState<AppSettings>(settings);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Embedding testing and playground state
   const [embeddingTestResult, setEmbeddingTestResult] = useState<EmbeddingTestResult | null>(null);
@@ -98,16 +100,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     { id: 'mixed', label: 'Neon Misto (Armonico)', bg: 'linear-gradient(135deg, #38bdf8, #c084fc)', color: '#ffffff' }
   ];
 
-  const handleThemeChange = (themeId: AppTheme) => {
-    const updated = { ...formData, theme: themeId };
-    setFormData(updated);
-    onUpdateSettings(updated);
+  const handleThemeChange = async (themeId: AppTheme) => {
+    if (isSavingSettings) return;
+    const previousTheme = formData.theme;
+    setFormData(prev => ({ ...prev, theme: themeId }));
+    setIsSavingSettings(true);
+    try {
+      await onUpdateSettings({ theme: themeId });
+    } catch {
+      setFormData(prev => ({ ...prev, theme: previousTheme }));
+      return;
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateSettings(formData);
-    alert('Impostazioni e preferenze salvate con successo!');
+    if (isSavingSettings) return;
+    setIsSavingSettings(true);
+    try {
+      await onUpdateSettings(diffSettings(settings, formData));
+      alert('Impostazioni e preferenze salvate con successo!');
+    } catch {
+      return;
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   return (
@@ -201,6 +220,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     key={th.id}
                     type="button"
                     onClick={() => handleThemeChange(th.id)}
+                    disabled={isSavingSettings}
                     className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border ${
                       isSelected ? 'ring-2 ring-white scale-105 shadow-lg' : 'opacity-80 hover:opacity-100'
                     }`}
@@ -729,6 +749,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <button
             type="submit"
+            disabled={isSavingSettings}
             className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold mt-4"
           >
             Salva profilo e preferenze

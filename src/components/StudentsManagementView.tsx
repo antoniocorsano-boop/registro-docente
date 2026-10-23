@@ -6,10 +6,10 @@ import { Users, UserPlus, Upload, RefreshCw, Trash2, FileSpreadsheet } from 'luc
 
 interface StudentsManagementViewProps {
   currentClass: ClassData;
-  onAddStudent: (name: string) => void;
-  onRemoveStudent: (studentId: string) => void;
-  onInvertNames: () => void;
-  onBulkAddStudents: (students: Student[]) => void;
+  onAddStudent: (name: string) => Promise<void>;
+  onRemoveStudent: (studentId: string) => Promise<void>;
+  onInvertNames: () => Promise<void>;
+  onBulkAddStudents: (students: Student[]) => Promise<number>;
   isPrivacyShieldActive?: boolean;
 }
 
@@ -23,12 +23,44 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 }) => {
   const [newStudentName, setNewStudentName] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [isStudentMutationPending, setIsStudentMutationPending] = useState(false);
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudentName.trim()) return;
-    onAddStudent(sanitizeName(newStudentName));
-    setNewStudentName('');
+    if (isImporting || isStudentMutationPending || !newStudentName.trim()) return;
+    setIsStudentMutationPending(true);
+    try {
+      await onAddStudent(sanitizeName(newStudentName));
+      setNewStudentName('');
+    } catch {
+      return;
+    } finally {
+      setIsStudentMutationPending(false);
+    }
+  };
+
+  const handleInvertNames = async () => {
+    if (isImporting || isStudentMutationPending) return;
+    setIsStudentMutationPending(true);
+    try {
+      await onInvertNames();
+    } catch {
+      return;
+    } finally {
+      setIsStudentMutationPending(false);
+    }
+  };
+
+  const handleRemoveStudent = async (studentId: string) => {
+    if (isImporting || isStudentMutationPending) return;
+    setIsStudentMutationPending(true);
+    try {
+      await onRemoveStudent(studentId);
+    } catch {
+      return;
+    } finally {
+      setIsStudentMutationPending(false);
+    }
   };
 
   const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,7 +70,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setIsImporting(true);
     const reader = new FileReader();
 
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
@@ -65,8 +97,20 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         });
 
         if (imported.length > 0) {
-          onBulkAddStudents(imported);
-          alert(`Importazione completata con successo! Aggiunti ${imported.length} nuovi alunni.`);
+          if (isStudentMutationPending) return;
+          setIsStudentMutationPending(true);
+          try {
+            const addedCount = await onBulkAddStudents(imported);
+            if (addedCount > 0) {
+              alert(`Importazione completata con successo! Aggiunti ${addedCount} nuovi alunni.`);
+            } else {
+              alert('Nessun nuovo alunno aggiunto: i nominativi erano già presenti.');
+            }
+          } catch {
+            return;
+          } finally {
+            setIsStudentMutationPending(false);
+          }
         } else {
           alert('Nessun nominativo valido trovato nel file Excel/CSV.');
         }
@@ -74,9 +118,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         console.error('Error importing file', err);
         alert('Errore durante la lettura del file Excel/CSV.');
       } finally {
-        setIsImporting(false);
         e.target.value = '';
+        setIsImporting(false);
       }
+    };
+
+    reader.onerror = () => {
+      setIsImporting(false);
+      alert('Errore durante la lettura del file Excel/CSV.');
     };
 
     reader.readAsArrayBuffer(file);
@@ -102,10 +151,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             placeholder="Cognome e Nome (es. Rossi Maria)"
             value={newStudentName}
             onChange={e => setNewStudentName(e.target.value)}
+            disabled={isImporting || isStudentMutationPending}
             className="flex-1 p-2.5 neon-input text-xs sm:text-sm text-white placeholder-slate-500"
           />
           <button
             type="submit"
+            disabled={isImporting || isStudentMutationPending}
             className="px-4 py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5 shrink-0"
           >
             <UserPlus className="w-4 h-4" /> Aggiungi
@@ -126,7 +177,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 accept=".xls,.xlsx,.csv"
                 onChange={handleExcelImport}
                 className="hidden"
-                disabled={isImporting}
+                disabled={isImporting || isStudentMutationPending}
               />
             </label>
           </div>
@@ -137,7 +188,8 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             </label>
             <button
               type="button"
-              onClick={onInvertNames}
+              onClick={handleInvertNames}
+              disabled={isImporting || isStudentMutationPending}
               className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border border-slate-700 bg-[var(--surface-variant)] hover:bg-slate-800 text-xs font-semibold text-slate-200 transition-colors"
             >
               <RefreshCw className="w-4 h-4 text-cyan-400" /> Inverti Nome / Cognome
@@ -176,9 +228,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                 <button
                   type="button"
+                  disabled={isImporting || isStudentMutationPending}
                   onClick={() => {
                     if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" e tutte le sue valutazioni da questa classe?`)) {
-                      onRemoveStudent(student.id);
+                      void handleRemoveStudent(student.id);
                     }
                   }}
                   className="p-1.5 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"

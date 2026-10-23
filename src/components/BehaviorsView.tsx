@@ -5,7 +5,7 @@ import { Sparkles, Save, CheckCheck } from 'lucide-react';
 
 interface BehaviorsViewProps {
   currentClass: ClassData;
-  onSaveBehaviors: (records: BehaviorRecord[]) => void;
+  onSaveBehaviors: (records: BehaviorRecord[]) => Promise<void>;
   isPrivacyShieldActive?: boolean;
 }
 
@@ -16,6 +16,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
 }) => {
 
   const [selectedDate, setSelectedDate] = useState<string>(today());
+  const [isSaving, setIsSaving] = useState(false);
   const existingRecords = currentClass.behaviors || [];
 
   // Map of studentId -> status
@@ -46,7 +47,8 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
     setStatusMap(next);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSaving) return;
     const newRecords: BehaviorRecord[] = currentClass.students.map(s => ({
       id: uid(),
       studentId: s.id,
@@ -54,7 +56,14 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
       status: statusMap[s.id] || 'Ottimale 🌟'
     }));
 
-    onSaveBehaviors(newRecords);
+    setIsSaving(true);
+    try {
+      await onSaveBehaviors(newRecords);
+    } catch {
+      return;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -75,11 +84,13 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
+            disabled={isSaving}
             className="p-1.5 px-2.5 neon-input text-xs text-white"
           />
         </div>
       </div>
 
+      <fieldset disabled={isSaving} className="border-0 p-0 m-0 min-w-0">
       {/* Bulk action buttons */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -156,8 +167,11 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
         )}
       </div>
 
+      </fieldset>
+
       <button
         onClick={handleSave}
+        disabled={isSaving}
         className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
       >
         <Save className="w-4 h-4" />

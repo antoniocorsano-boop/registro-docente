@@ -15,7 +15,7 @@ interface EvaluationsViewProps {
     title: string;
     udaId?: string;
     grades: { studentId: string; value: string; delayed: boolean }[];
-  }) => void;
+  }) => Promise<void>;
   onCancelEdit: () => void;
   isPrivacyShieldActive?: boolean;
 }
@@ -35,6 +35,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const [title, setTitle] = useState<string>('');
   const [udaId, setUdaId] = useState<string>('');
   const [gradesMap, setGradesMap] = useState<Record<string, { value: string; delayed: boolean }>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (editingBatchId) {
@@ -93,8 +94,9 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     setGradesMap(newMap);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
 
     const staged: { studentId: string; value: string; delayed: boolean }[] = [];
     currentClass.students.forEach(s => {
@@ -117,15 +119,22 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     }
 
     const batchId = editingBatchId || uid();
-    onSaveEvaluations({
-      batchId,
-      period,
-      type,
-      date,
-      title: title.trim() || `${TYPES_LABEL[type]} del ${date}`,
-      udaId: udaId || undefined,
-      grades: staged
-    });
+    setIsSaving(true);
+    try {
+      await onSaveEvaluations({
+        batchId,
+        period,
+        type,
+        date,
+        title: title.trim() || `${TYPES_LABEL[type]} del ${date}`,
+        udaId: udaId || undefined,
+        grades: staged
+      });
+    } catch {
+      return;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -144,6 +153,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           <button
             type="button"
             onClick={onCancelEdit}
+            disabled={isSaving}
             className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1.5"
           >
             <X className="w-3.5 h-3.5" /> Annulla Modifica
@@ -152,6 +162,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <fieldset disabled={isSaving} className="space-y-4 border-0 p-0 m-0 min-w-0">
         {/* Row 1: Period, Type & UDA */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
@@ -313,11 +324,13 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
         {/* Submit Button */}
         <button
           type="submit"
+          disabled={isSaving}
           className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
         >
           <Save className="w-4 h-4" />
           <span>{editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
         </button>
+        </fieldset>
       </form>
     </div>
   );

@@ -18,8 +18,8 @@ import {
 interface HomeViewProps {
   classes: ClassData[];
   onSelectClass: (classId: string) => void;
-  onAddClass: () => void;
-  onDeleteClass: (classId: string) => void;
+  onAddClass: () => Promise<void>;
+  onDeleteClass: (classId: string) => Promise<void>;
   onExportBackup: () => void;
   lastBackupDate: string | null;
   unsavedChangesCount: number;
@@ -35,6 +35,31 @@ export const HomeView: React.FC<HomeViewProps> = ({
   unsavedChangesCount
 }) => {
   const [isCrossExpanded, setIsCrossExpanded] = useState(true);
+  const [isClassMutationPending, setIsClassMutationPending] = useState(false);
+
+  const handleAddClass = async () => {
+    if (isClassMutationPending) return;
+    setIsClassMutationPending(true);
+    try {
+      await onAddClass();
+    } catch {
+      return;
+    } finally {
+      setIsClassMutationPending(false);
+    }
+  };
+
+  const handleDeleteClass = async (classId: string) => {
+    if (isClassMutationPending) return;
+    setIsClassMutationPending(true);
+    try {
+      await onDeleteClass(classId);
+    } catch {
+      return;
+    } finally {
+      setIsClassMutationPending(false);
+    }
+  };
 
   // Calculate Institute-wide aggregate metrics
   let totalStudents = 0;
@@ -77,7 +102,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           <button
-            onClick={onAddClass}
+            onClick={handleAddClass}
+            disabled={isClassMutationPending}
             className="self-start sm:self-auto px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" /> Nuova Classe
@@ -255,7 +281,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <Users className="w-10 h-10 text-slate-600 mx-auto mb-2" />
             <p className="text-sm text-slate-400 mb-3">Nessuna classe presente nel registro.</p>
             <button
-              onClick={onAddClass}
+              onClick={handleAddClass}
               className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold inline-flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" /> Crea la Prima Classe
@@ -284,10 +310,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         {c.name}
                       </h4>
                       <button
+                        disabled={isClassMutationPending}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirm(`Eliminare definitivamente la classe "${c.name}" con tutti i suoi dati?`)) {
-                            onDeleteClass(c.id);
+                            void handleDeleteClass(c.id);
                           }
                         }}
                         className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-slate-800 transition-colors"

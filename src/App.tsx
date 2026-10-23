@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ActiveTab,
   AppData,
@@ -28,8 +28,23 @@ import {
   UDA_KEY,
   uid
 } from './utils';
-import type { CompleteSecureAppSnapshot, SecureAppSnapshot, SecureAppStorage } from './security/secureAppStorage';
+import type {
+  CompleteSecureAppSnapshot,
+  SecureAppSnapshot,
+  SecureAppStorage,
+  SecureMeta
+} from './security/secureAppStorage';
 import { normalizeBackupPayload } from './security/backupPayload';
+import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
+import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
+import {
+  applyBackupReceipt,
+  incrementBackupChanges,
+  prepareBackupCheckpoint,
+  type PreparedBackupCheckpoint
+} from './persistence/backupCheckpoint';
+import { applySettingsPatch } from './persistence/settingsMutation';
+import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -48,6 +63,7 @@ import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 
+const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
 export interface AppProps {
   initialSnapshot: SecureAppSnapshot;
@@ -119,7 +135,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   );
 
   // 6. Navigation and UI state
-  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
+  const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
+  const navigationVersionRef = useRef(0);
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+  }, []);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -127,8 +148,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
 
   // Metadata for backup tracking
-  const [meta, setMeta] = useState<{ changes: number; lastBackup: string | null }>(() =>
+  const [meta, setMeta] = useState<SecureMeta>(() =>
     initialSnapshot.meta || { changes: 0, lastBackup: null }
+  );
+
+  const appDataRef = useRef(appData);
+  const currentClassIdRef = useRef(appData.currentClassId);
+  const metaRef = useRef(meta);
+  const settingsRef = useRef(settings);
+  const udasRef = useRef(udas);
+  const testsRef = useRef(tests);
+  const submissionsRef = useRef(submissions);
+  const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
+  const mutationCoordinator = mutationCoordinatorRef.current ?? (
+    mutationCoordinatorRef.current = createDurableMutationCoordinator()
   );
 
   const toast = useCallback((msg: string) => {
@@ -137,6 +170,154 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setSaveIndicatorText('Sincronizzato');
     }, 2800);
   }, []);
+
+  const commitAppDataMutation = useCallback((
+    derive: (current: AppData) => AppData,
+    options: {
+      showBackupModal?: boolean;
+      successMessage?: string;
+      afterCommit?: () => void;
+    } = {}
+  ): Promise<AppData> => {
+    const {
+      showBackupModal = true,
+      successMessage = 'Salvato nel vault locale',
+      afterCommit
+    } = options;
+
+    return mutationCoordinator.enqueue<{ appData: AppData; meta: SecureMeta }>({
+      getCommitted: () => ({ appData: appDataRef.current, meta: metaRef.current }),
+      derive: current => {
+        const navigationAwareAppData = {
+          ...current.appData,
+          currentClassId: currentClassIdRef.current
+        };
+        return {
+          appData: derive(navigationAwareAppData),
+          meta: incrementBackupChanges(current.meta)
+        };
+      },
+      persist: candidate => secureStorage.saveAppDataAndMeta(candidate.appData, candidate.meta),
+      publish: candidate => {
+        appDataRef.current = candidate.appData;
+        metaRef.current = candidate.meta;
+        const visibleCurrentClassId =
+          currentClassIdRef.current === null
+            ? null
+            : candidate.appData.classes.some(c => c.id === currentClassIdRef.current)
+              ? currentClassIdRef.current
+              : candidate.appData.currentClassId;
+        currentClassIdRef.current = visibleCurrentClassId;
+        setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => {
+        if (successMessage) toast(successMessage);
+        if (showBackupModal) setIsBackupModalOpen(true);
+        afterCommit?.();
+      }
+    }).then(candidate => candidate.appData).catch(error => {
+      console.error('Secure vault save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitSettingsMutation = useCallback((patch: Partial<AppSettings>): Promise<AppSettings> => {
+    return mutationCoordinator.enqueue<{ settings: AppSettings; meta: SecureMeta }>({
+      getCommitted: () => ({ settings: settingsRef.current, meta: metaRef.current }),
+      derive: current => ({
+        settings: applySettingsPatch(current.settings, patch),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveSettingsAndMeta(candidate.settings, candidate.meta),
+      publish: candidate => {
+        settingsRef.current = candidate.settings;
+        metaRef.current = candidate.meta;
+        setSettings(candidate.settings);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast('Impostazioni aggiornate')
+    }).then(candidate => candidate.settings).catch(error => {
+      console.error('Secure settings save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitUdasMutation = useCallback((derive: (current: UdaRecord[]) => UdaRecord[]): Promise<UdaRecord[]> => {
+    return mutationCoordinator.enqueue<{ udas: UdaRecord[]; meta: SecureMeta }>({
+      getCommitted: () => ({ udas: udasRef.current, meta: metaRef.current }),
+      derive: current => ({
+        udas: derive(current.udas),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveUdasAndMeta(candidate.udas, candidate.meta),
+      publish: candidate => {
+        udasRef.current = candidate.udas;
+        metaRef.current = candidate.meta;
+        setUdas(candidate.udas);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast('UDA salvate')
+    }).then(candidate => candidate.udas).catch(error => {
+      console.error('Secure UDA save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitTestsMutation = useCallback((
+    derive: (current: Record<string, OnlineTest>) => Record<string, OnlineTest>
+  ): Promise<Record<string, OnlineTest>> => {
+    return mutationCoordinator.enqueue<{ tests: Record<string, OnlineTest>; meta: SecureMeta }>({
+      getCommitted: () => ({ tests: testsRef.current, meta: metaRef.current }),
+      derive: current => ({
+        tests: derive(current.tests),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveCustomTestsAndMeta(candidate.tests, candidate.meta),
+      publish: candidate => {
+        testsRef.current = candidate.tests;
+        metaRef.current = candidate.meta;
+        setTests(candidate.tests);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast('Test salvato')
+    }).then(candidate => candidate.tests).catch(error => {
+      console.error('Secure test save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitSubmissionsMutation = useCallback((
+    derive: (current: OnlineSubmission[]) => OnlineSubmission[],
+    options: { successMessage?: string; showFailureAlert?: boolean } = {}
+  ): Promise<OnlineSubmission[]> => {
+    const { successMessage, showFailureAlert = true } = options;
+    return mutationCoordinator.enqueue<{ submissions: OnlineSubmission[]; meta: SecureMeta }>({
+      getCommitted: () => ({ submissions: submissionsRef.current, meta: metaRef.current }),
+      derive: current => ({
+        submissions: derive(current.submissions),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveSubmissionsAndMeta(candidate.submissions, candidate.meta),
+      publish: candidate => {
+        submissionsRef.current = candidate.submissions;
+        metaRef.current = candidate.meta;
+        setSubmissions(candidate.submissions);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => {
+        if (successMessage) toast(successMessage);
+      }
+    }).then(candidate => candidate.submissions).catch(error => {
+      console.error('Secure submission save failed', error);
+      if (showFailureAlert) alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
 
   // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
   const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
@@ -148,8 +329,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       return next;
     });
   }, [toast]);
-
-
 
   // 7. Student Portal mode (if query param `?mode=student`)
   const [studentMode, setStudentMode] = useState<{
@@ -171,38 +350,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   // Synchronize URL query params
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      if (e.state && e.state.classId) {
-        setAppData(prev => ({ ...prev, currentClassId: e.state.classId }));
-        setActiveTab(e.state.tab || 'dashboard');
-      } else {
-        setAppData(prev => ({ ...prev, currentClassId: null }));
-        setActiveTab('home');
-      }
+      const nextCurrentClassId = e.state?.classId || null;
+      currentClassIdRef.current = nextCurrentClassId;
+      setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
+      setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Persist sensitive data only through the unlocked Secure Local Vault.
-  const persistAppData = useCallback((newAppData: AppData, showModal = true) => {
-    setAppData(newAppData);
-    const nextMeta = { ...meta, changes: (meta.changes || 0) + 1 };
-    setMeta(nextMeta);
-
-    void Promise.all([
-      secureStorage.saveAppData(newAppData),
-      secureStorage.saveMeta(nextMeta)
-    ]).then(() => {
-      toast('Salvato nel vault locale');
-      if (showModal) setIsBackupModalOpen(true);
-    }).catch((error) => {
-      console.error('Secure vault save failed', error);
-      alert('Attenzione: salvataggio cifrato non riuscito.');
-    });
-  }, [meta, secureStorage, toast]);
-
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
     setActiveTab('dashboard');
     setEditingBatchId(null);
@@ -214,6 +373,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   const handleNavigateHome = () => {
+    currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
     setActiveTab('home');
     setEditingBatchId(null);
@@ -225,9 +385,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Add new class
-  const handleAddClass = () => {
+  const handleAddClass = (): Promise<void> => {
     const name = prompt('Inserisci la denominazione della nuova classe (es. 2ª B):');
-    if (!name || !name.trim()) return;
+    if (!name || !name.trim()) return Promise.resolve();
 
     const newClass: ClassData = {
       id: uid(),
@@ -236,25 +396,34 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       grades: [],
       behaviors: []
     };
+    const navigationVersionAtSave = navigationVersionRef.current;
 
-    const nextAppData: AppData = {
-      classes: [...appData.classes, newClass],
+    return commitAppDataMutation(current => ({
+      ...current,
+      classes: [...current.classes, newClass],
       currentClassId: newClass.id
-    };
-
-    persistAppData(nextAppData);
-    setActiveTab('dati');
-    toast('Classe creata');
+    }), {
+      successMessage: 'Classe creata',
+      afterCommit: () => {
+        if (navigationVersionRef.current === navigationVersionAtSave) {
+          currentClassIdRef.current = newClass.id;
+          setAppData(prev => ({ ...prev, currentClassId: newClass.id }));
+          setActiveTab('dati');
+        }
+      }
+    }).then(() => undefined);
   };
 
   // Delete class
-  const handleDeleteClass = (classId: string) => {
-    const nextAppData: AppData = {
-      classes: appData.classes.filter(c => c.id !== classId),
-      currentClassId: appData.currentClassId === classId ? null : appData.currentClassId
-    };
-    persistAppData(nextAppData, false);
-    toast('Classe eliminata');
+  const handleDeleteClass = (classId: string): Promise<void> => {
+    return commitAppDataMutation(current => ({
+      ...current,
+      classes: current.classes.filter(c => c.id !== classId),
+      currentClassId: current.currentClassId === classId ? null : current.currentClassId
+    }), {
+      showBackupModal: false,
+      successMessage: 'Classe eliminata'
+    }).then(() => undefined);
   };
 
   // Save evaluations batch (add new or update existing)
@@ -266,11 +435,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     title: string;
     udaId?: string;
     grades: { studentId: string; value: string; delayed: boolean }[];
-  }) => {
-    if (!currentClass) return;
-
-    // Filter out existing grades with this batchId if updating
-    const remainingGrades = (currentClass.grades || []).filter(g => g.batchId !== batchData.batchId);
+  }): Promise<void> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve();
+    const navigationVersionAtSave = navigationVersionRef.current;
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
       id: uid(),
@@ -285,40 +453,54 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       udaId: batchData.udaId
     }));
 
-    const updatedClass: ClassData = {
-      ...currentClass,
-      grades: [...remainingGrades, ...newGrades]
-    };
-
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    setEditingBatchId(null);
-    persistAppData(nextAppData, true);
-    setActiveTab('storico');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const remainingGrades = (targetClass.grades || []).filter(g => g.batchId !== batchData.batchId);
+      const updatedClass: ClassData = {
+        ...targetClass,
+        grades: [...remainingGrades, ...newGrades]
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      afterCommit: () => {
+        setEditingBatchId(null);
+        if (navigationVersionRef.current === navigationVersionAtSave) {
+          setActiveTab('storico');
+        }
+      }
+    }).then(() => undefined);
   };
 
   // Save behavior notes
-  const handleSaveBehaviors = (newRecords: any[]) => {
-    if (!currentClass) return;
-
+  const handleSaveBehaviors = (newRecords: any[]): Promise<void> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve();
+    const navigationVersionAtSave = navigationVersionRef.current;
     const dateStr = newRecords[0]?.date || today();
-    // Replace today's records
-    const remaining = (currentClass.behaviors || []).filter(b => b.date !== dateStr);
-    const updatedClass: ClassData = {
-      ...currentClass,
-      behaviors: [...remaining, ...newRecords]
-    };
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, true);
-    setActiveTab('dashboard');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const remaining = (targetClass.behaviors || []).filter(b => b.date !== dateStr);
+      const updatedClass: ClassData = {
+        ...targetClass,
+        behaviors: [...remaining, ...newRecords]
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      afterCommit: () => {
+        if (navigationVersionRef.current === navigationVersionAtSave) {
+          setActiveTab('dashboard');
+        }
+      }
+    }).then(() => undefined);
   };
 
   // Edit batch
@@ -329,203 +511,194 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   };
 
   // Delete batch
-  const handleDeleteBatch = (batchId: string) => {
-    if (!currentClass) return;
-    const updatedClass: ClassData = {
-      ...currentClass,
-      grades: (currentClass.grades || []).filter(g => g.batchId !== batchId)
-    };
+  const handleDeleteBatch = (batchId: string): Promise<void> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve();
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Valutazione eliminata');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        grades: (targetClass.grades || []).filter(g => g.batchId !== batchId)
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Valutazione eliminata'
+    }).then(() => undefined);
   };
 
   // Add single student
-  const handleAddStudent = (name: string) => {
-    if (!currentClass) return;
+  const handleAddStudent = (name: string): Promise<void> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve();
     const newStudent: Student = { id: uid(), name };
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: sortStudents([...currentClass.students, newStudent])
-    };
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Alunno inserito');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: sortStudents([...targetClass.students, newStudent])
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Alunno inserito'
+    }).then(() => undefined);
   };
 
   // Remove single student
-  const handleRemoveStudent = (studentId: string) => {
-    if (!currentClass) return;
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: currentClass.students.filter(s => s.id !== studentId),
-      grades: (currentClass.grades || []).filter(g => g.studentId !== studentId),
-      behaviors: (currentClass.behaviors || []).filter(b => b.studentId !== studentId)
-    };
+  const handleRemoveStudent = (studentId: string): Promise<void> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve();
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Alunno rimosso');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: targetClass.students.filter(s => s.id !== studentId),
+        grades: (targetClass.grades || []).filter(g => g.studentId !== studentId),
+        behaviors: (targetClass.behaviors || []).filter(b => b.studentId !== studentId)
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Alunno rimosso'
+    }).then(() => undefined);
   };
 
   // Bulk add students from Excel
-  const handleBulkAddStudents = (newStudents: Student[]) => {
-    if (!currentClass) return;
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: sortStudents([...currentClass.students, ...newStudents])
-    };
+  const handleBulkAddStudents = (newStudents: Student[]): Promise<number> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve(0);
+    let addedCount = 0;
 
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, true);
-    toast('Alunni importati');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const existingNames = new Set(targetClass.students.map(student => student.name.toLowerCase()));
+      const appendableStudents = newStudents.filter(student => {
+        const normalizedName = student.name.toLowerCase();
+        if (existingNames.has(normalizedName)) return false;
+        existingNames.add(normalizedName);
+        return true;
+      });
+      addedCount = appendableStudents.length;
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: sortStudents([...targetClass.students, ...appendableStudents])
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      successMessage: ''
+    }).then(() => addedCount);
   };
 
   // Invert student names (Cognome Nome <-> Nome Cognome)
-  const handleInvertNames = () => {
-    if (!currentClass) return;
-    const inverted = currentClass.students.map(s => {
-      const parts = s.name.split(/\s+/);
-      if (parts.length > 1) {
-        return {
-          ...s,
-          name: `${parts.pop()} ${parts.join(' ')}`
-        };
-      }
-      return s;
-    });
+  const handleInvertNames = (): Promise<void> => {
+    const classId = currentClass?.id;
+    if (!classId) return Promise.resolve();
 
-    const updatedClass: ClassData = {
-      ...currentClass,
-      students: sortStudents(inverted)
-    };
-
-    const nextAppData: AppData = {
-      ...appData,
-      classes: appData.classes.map(c => (c.id === updatedClass.id ? updatedClass : c))
-    };
-
-    persistAppData(nextAppData, false);
-    toast('Nomi invertiti');
+    return commitAppDataMutation(current => {
+      const targetClass = current.classes.find(c => c.id === classId);
+      if (!targetClass) throw new Error('Classe non più disponibile.');
+      const inverted = targetClass.students.map(s => {
+        const parts = s.name.split(/\s+/);
+        if (parts.length > 1) {
+          return {
+            ...s,
+            name: `${parts.pop()} ${parts.join(' ')}`
+          };
+        }
+        return s;
+      });
+      const updatedClass: ClassData = {
+        ...targetClass,
+        students: sortStudents(inverted)
+      };
+      return {
+        ...current,
+        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+      };
+    }, {
+      showBackupModal: false,
+      successMessage: 'Nomi invertiti'
+    }).then(() => undefined);
   };
 
   // Save new test
-  const handleSaveNewTest = (newTest: OnlineTest) => {
-    const updatedTests = { ...tests, [newTest.id]: newTest };
-    setTests(updatedTests);
-    void secureStorage.saveCustomTests(updatedTests)
-      .then(() => toast('Test salvato'))
-      .catch(error => console.error('Secure test save failed', error));
+  const handleSaveNewTest = (newTest: OnlineTest): Promise<void> => {
+    return commitTestsMutation(current => ({
+      ...current,
+      [newTest.id]: newTest
+    })).then(() => undefined);
   };
 
   // Delete submission
-  const handleDeleteSubmission = (submissionId: string) => {
-    const updated = submissions.filter(s => s.id !== submissionId);
-    setSubmissions(updated);
-    void secureStorage.saveSubmissions(updated)
-      .then(() => toast('Consegna eliminata'))
-      .catch(error => console.error('Secure submission save failed', error));
+  const handleDeleteSubmission = (submissionId: string): Promise<void> => {
+    return commitSubmissionsMutation(
+      current => current.filter(s => s.id !== submissionId),
+      { successMessage: 'Consegna eliminata' }
+    ).then(() => undefined);
   };
 
   const handleSaveStudentSubmission = useCallback(async (submission: OnlineSubmission) => {
-    const previous = submissions;
-    const updated = [...previous, submission];
-    setSubmissions(updated);
-    try {
-      await secureStorage.saveSubmissions(updated);
-      toast('Consegna salvata nel vault locale');
-    } catch (error) {
-      setSubmissions(previous);
-      throw error;
-    }
-  }, [secureStorage, submissions, toast]);
+    await commitSubmissionsMutation(
+      current => [...current, submission],
+      {
+        successMessage: 'Consegna salvata nel vault locale',
+        showFailureAlert: false
+      }
+    );
+  }, [commitSubmissionsMutation]);
 
   // Import submissions into class grades
-  const handleImportSubmissionsToRegister = (targetUdaId?: string) => {
-    if (submissions.length === 0) {
+  const handleImportSubmissionsToRegister = (targetUdaId?: string): Promise<void> => {
+    if (submissionsRef.current.length === 0) {
       alert('Nessuna consegna online ricevuta da importare.');
-      return;
+      return Promise.resolve();
     }
 
-    let count = 0;
-    const updatedClasses = appData.classes.map(cls => {
-      let clsGrades = [...(cls.grades || [])];
+    let importedCount = 0;
 
-      submissions.forEach(sub => {
-        // Match class name
-        if (cls.name.toLowerCase().includes(sub.class.toLowerCase()) || sub.class.toLowerCase().includes(cls.name.toLowerCase())) {
-          // Match student name
-          const matchStudent = cls.students.find(st =>
-            st.name.toLowerCase().trim() === sub.name.toLowerCase().trim() ||
-            st.name.toLowerCase().includes(sub.name.toLowerCase()) ||
-            sub.name.toLowerCase().includes(st.name.toLowerCase())
-          );
-
-          if (matchStudent) {
-            const grade10 = sub.total > 0 ? Math.round((sub.score / sub.total) * 10 * 10) / 10 : 0;
-            clsGrades.push({
-              id: uid(),
-              batchId: `online_${uid()}`,
-              studentId: matchStudent.id,
-              date: sub.date.slice(0, 10),
-              type: 'test',
-              period: 'Q1',
-              title: `Flashcard: ${sub.testTitle}`,
-              value: String(grade10),
-              udaId: targetUdaId || sub.testId
-            });
-            count++;
-          }
-        }
-      });
-
+    return commitAppDataMutation(current => {
+      const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId);
+      importedCount = result.importedCount;
       return {
-        ...cls,
-        grades: clsGrades
+        ...current,
+        classes: result.classes
       };
-    });
-
-    const nextAppData: AppData = {
-      ...appData,
-      classes: updatedClasses
-    };
-
-    persistAppData(nextAppData, true);
-    alert(`Importazione completata con successo! ${count} valutazioni sono state registrate negli elenchi di classe.`);
+    }, {
+      afterCommit: () => {
+        alert(`Importazione completata con successo! ${importedCount} valutazioni sono state registrate negli elenchi di classe.`);
+      }
+    }).then(() => undefined);
   };
 
   // Save UDAs
-  const handleSaveUdas = (newUdas: UdaRecord[]) => {
-    setUdas(newUdas);
-    void secureStorage.saveUdas(newUdas)
-      .then(() => toast('UDA salvate'))
-      .catch(error => console.error('Secure UDA save failed', error));
+  const handleSaveUdas = (newUdas: UdaRecord[]): Promise<void> => {
+    const mutation = createUdaSnapshotMutation(udasRef.current, newUdas);
+    return commitUdasMutation(mutation).then(() => undefined);
   };
 
   // Save Settings
-  const handleUpdateSettings = (newSettings: AppSettings) => {
-    setSettings(newSettings);
-    void secureStorage.saveSettings(newSettings)
-      .then(() => toast('Impostazioni aggiornate'))
-      .catch(error => console.error('Secure settings save failed', error));
+  const handleUpdateSettings = (patch: Partial<AppSettings>): Promise<void> => {
+    return commitSettingsMutation(patch).then(() => undefined);
   };
 
   // Backup actions are routed to the protected Privacy area.
@@ -539,35 +712,72 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     toast('Ripristina un backup cifrato nella sezione Privacy');
   };
 
-  // Import Encrypted Backup
-  const handleImportEncryptedBackup = async (decryptedData: unknown) => {
-    const currentSnapshot: CompleteSecureAppSnapshot = {
-      appData,
-      settings,
-      udas,
-      customTests: tests,
-      submissions,
-      meta
-    };
-    const candidate = normalizeBackupPayload(decryptedData, currentSnapshot);
-    const restored = await secureStorage.restoreSnapshotVerified(candidate);
+  // Prepare encrypted backup checkpoint
+  const getCompleteCommittedSnapshot = (): CompleteSecureAppSnapshot => ({
+    appData: appDataRef.current,
+    settings: settingsRef.current,
+    udas: udasRef.current,
+    customTests: testsRef.current,
+    submissions: submissionsRef.current,
+    meta: metaRef.current
+  });
 
-    setAppData(restored.appData);
-    setSettings(restored.settings);
-    setUdas(restored.udas);
-    setTests(restored.customTests);
-    setSubmissions(restored.submissions);
-    setMeta(restored.meta);
-    setActiveTab('home');
-    toast('Backup cifrato verificato e ripristinato');
+  const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> => {
+    return mutationCoordinator.enqueueTask(() =>
+      prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString())
+    );
+  };
+
+  const recordEncryptedBackupExport = (
+    checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>
+  ): Promise<void> => {
+    return mutationCoordinator.enqueue<SecureMeta>({
+      getCommitted: () => metaRef.current,
+      derive: current => applyBackupReceipt(current, checkpoint),
+      persist: candidate => secureStorage.saveMeta(candidate),
+      publish: candidate => {
+        metaRef.current = candidate;
+        setMeta(candidate);
+      }
+    }).then(() => undefined);
+  };
+
+  // Import Encrypted Backup
+  const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
+    return mutationCoordinator.enqueueTask(async () => {
+      const previousLogical = getCompleteCommittedSnapshot();
+      const candidate = normalizeBackupPayload(decryptedData, previousLogical);
+      const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
+
+      appDataRef.current = restored.appData;
+      currentClassIdRef.current = restored.appData.currentClassId;
+      settingsRef.current = restored.settings;
+      udasRef.current = restored.udas;
+      testsRef.current = restored.customTests;
+      submissionsRef.current = restored.submissions;
+      metaRef.current = restored.meta;
+      setAppData(restored.appData);
+      setSettings(restored.settings);
+      setUdas(restored.udas);
+      setTests(restored.customTests);
+      setSubmissions(restored.submissions);
+      setMeta(restored.meta);
+      setActiveTab('home');
+      toast('Backup cifrato verificato e ripristinato');
+    });
   };
 
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
     try {
       await onFactoryReset();
-      setAppData({ classes: [], currentClassId: null });
-      setMeta({ changes: 0, lastBackup: null });
+      const resetAppData: AppData = { classes: [], currentClassId: null };
+      const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
+      appDataRef.current = resetAppData;
+      currentClassIdRef.current = null;
+      metaRef.current = resetMeta;
+      setAppData(resetAppData);
+      setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
     } catch (error) {
@@ -610,7 +820,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         isPrivacyShieldActive={isPrivacyShieldActive}
         onTogglePrivacyShield={handleTogglePrivacyShield}
       />
-
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5">
@@ -683,7 +892,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
-
         {/* TAB 7: Storico Prove */}
         {activeTab === 'storico' && currentClass && (
           <HistoryView
@@ -708,7 +916,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
-
 
         {/* TAB 9: Gestione Alunni */}
         {activeTab === 'dati' && currentClass && (
@@ -771,21 +978,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           <PrivacyView
             settings={settings}
             classes={appData.classes}
-            backupSnapshot={{
-              appData,
-              settings,
-              udas,
-              customTests: tests,
-              submissions,
-              meta
-            }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
-            onExportEncryptedBackup={() => {
-              const nextMeta = { changes: 0, lastBackup: new Date().toISOString() };
-              setMeta(nextMeta);
-              void secureStorage.saveMeta(nextMeta);
-            }}
+            onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
           />

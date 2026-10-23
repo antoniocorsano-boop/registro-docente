@@ -10,6 +10,12 @@ import {
 import type { VaultStore } from './vaultStore';
 import type { VaultMetadataV1, VaultRecordKey } from './vaultTypes';
 
+export interface VaultWriteEntry {
+  key: VaultRecordKey;
+  value: unknown;
+  schemaVersion?: number;
+}
+
 export class SecureVault {
   private sessionDek: CryptoKey | null = null;
   private mutationTail: Promise<void> = Promise.resolve();
@@ -110,16 +116,26 @@ export class SecureVault {
   }
 
   async put<T>(key: VaultRecordKey, value: T, schemaVersion = 1): Promise<void> {
-    const dek = this.requireUnlocked();
+    await this.putMany([{ key, value, schemaVersion }]);
+  }
+
+  async putMany(entries: readonly VaultWriteEntry[]): Promise<void> {
+    this.requireUnlocked();
     await this.enqueueMutation(async () => {
-      const record = await encryptJsonRecord(key, schemaVersion, value, dek);
-      await this.store.putRecord(record);
+      const dek = this.requireUnlocked();
+      const records = await Promise.all(
+        entries.map(entry => encryptJsonRecord(entry.key, entry.schemaVersion ?? 1, entry.value, dek))
+      );
+      await this.store.putRecords(records);
     });
   }
 
   async delete(key: VaultRecordKey): Promise<void> {
     this.requireUnlocked();
-    await this.enqueueMutation(() => this.store.deleteRecord(key));
+    await this.enqueueMutation(async () => {
+      this.requireUnlocked();
+      await this.store.deleteRecord(key);
+    });
   }
 
   async clearAll(): Promise<void> {

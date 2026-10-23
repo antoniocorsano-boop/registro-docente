@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
-import type { CompleteSecureAppSnapshot } from '../security/secureAppStorage';
+import type { PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
 import { today } from '../utils';
 import {
   ShieldCheck,
@@ -23,10 +23,10 @@ import {
 interface PrivacyViewProps {
   settings: AppSettings;
   classes: ClassData[];
-  backupSnapshot: CompleteSecureAppSnapshot;
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
-  onExportEncryptedBackup: (encryptedJson: string) => void;
+  onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;
+  onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
 }
@@ -34,10 +34,10 @@ interface PrivacyViewProps {
 export const PrivacyView: React.FC<PrivacyViewProps> = ({
   settings,
   classes,
-  backupSnapshot,
   isPrivacyShieldActive,
   onTogglePrivacyShield,
-  onExportEncryptedBackup,
+  onPrepareEncryptedBackup,
+  onRecordBackupExport,
   onImportEncryptedBackup,
   onFactoryReset
 }) => {
@@ -48,6 +48,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const [decryptPassword, setDecryptPassword] = useState('');
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
+  const backupOperationPendingRef = useRef(false);
 
   // Total students & evaluations protected
   let totalStudents = 0;
@@ -71,13 +72,16 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       alert('La password deve contenere almeno 6 caratteri per garantire adeguata sicurezza.');
       return;
     }
+    if (backupOperationPendingRef.current) return;
 
+    backupOperationPendingRef.current = true;
     setIsEncrypting(true);
+    let downloadInitiated = false;
     try {
-      const payload = createBackupPayload(backupSnapshot);
+      const checkpoint = await onPrepareEncryptedBackup();
+      const payload = createBackupPayload(checkpoint.snapshot);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
 
-      // Download file
       const blob = new Blob([encryptedString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -85,17 +89,23 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       a.download = `Backup_Cifrato_GDPR_${today()}.enc.json`;
       document.body.appendChild(a);
       a.click();
+      downloadInitiated = true;
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      onExportEncryptedBackup(encryptedString);
 
+      await onRecordBackupExport(checkpoint);
       setEncryptPassword('');
       setConfirmPassword('');
       alert('Backup protetto con crittografia AES-256-GCM esportato con successo!');
     } catch (err) {
       console.error(err);
-      alert('Errore durante la cifratura del backup.');
+      if (downloadInitiated) {
+        alert('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
+      } else {
+        alert('Errore durante la preparazione o cifratura del backup.');
+      }
     } finally {
+      backupOperationPendingRef.current = false;
       setIsEncrypting(false);
     }
   };
@@ -110,7 +120,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       alert('Inserisci la password di decifratura.');
       return;
     }
+    if (backupOperationPendingRef.current) return;
 
+    backupOperationPendingRef.current = true;
     setIsDecrypting(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -126,8 +138,14 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         console.error(err);
         alert(err.message || 'Password errata o file non valido.');
       } finally {
+        backupOperationPendingRef.current = false;
         setIsDecrypting(false);
       }
+    };
+    reader.onerror = () => {
+      backupOperationPendingRef.current = false;
+      setIsDecrypting(false);
+      alert('Errore durante la lettura del file di backup cifrato.');
     };
     reader.readAsText(selectedEncryptedFile);
   };
@@ -282,7 +300,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <button
               type="submit"
-              disabled={isEncrypting}
+              disabled={isEncrypting || isDecrypting}
               className="w-full py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5 mt-2"
             >
               <KeyRound className="w-3.5 h-3.5" />
@@ -325,7 +343,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <button
               type="submit"
-              disabled={isDecrypting}
+              disabled={isEncrypting || isDecrypting}
               className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 flex items-center justify-center gap-1.5 mt-2 transition-colors"
             >
               <Lock className="w-3.5 h-3.5" />
