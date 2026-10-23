@@ -52,6 +52,7 @@ import {
   cosineSimilarity,
   MINISTERIAL_COMPETENCY_DESCRIPTORS
 } from '../services/embeddingService';
+import { createUdaSnapshotMutation } from '../persistence/udaSnapshotMutation';
 
 interface UdaGanttViewProps {
   classes: ClassData[];
@@ -468,6 +469,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const udaMutationPendingRef = useRef(false);
   const udaTextMutationTailRef = useRef<Promise<void>>(Promise.resolve());
   const udaTextMutationDepthRef = useRef(0);
+  const udaCommittedSnapshotRef = useRef(udas);
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
@@ -475,25 +477,36 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   };
 
   const queueUdaTextMutation = (nextUdas: UdaRecord[]) => {
+    if (udaTextMutationDepthRef.current === 0 && !udaMutationPendingRef.current) {
+      udaCommittedSnapshotRef.current = udas;
+    }
+    const mutation = createUdaSnapshotMutation(udas, nextUdas);
     udaTextMutationDepthRef.current += 1;
-    udaMutationPendingRef.current = true;
     setIsSavingUda(true);
 
     const task = udaTextMutationTailRef.current
       .catch(() => undefined)
+      .then(() => {
+        nextUdas = mutation(udaCommittedSnapshotRef.current);
+      })
       .then(() => onSaveUdas(nextUdas));
 
     udaTextMutationTailRef.current = task.catch(() => undefined);
 
     const settle = () => {
       udaTextMutationDepthRef.current = Math.max(0, udaTextMutationDepthRef.current - 1);
-      if (udaTextMutationDepthRef.current === 0) {
-        udaMutationPendingRef.current = false;
+      if (udaTextMutationDepthRef.current === 0 && !udaMutationPendingRef.current) {
         setIsSavingUda(false);
       }
     };
 
-    void task.then(settle, settle);
+    void task.then(
+      () => {
+        udaCommittedSnapshotRef.current = nextUdas;
+        settle();
+      },
+      settle
+    );
   };
 
   const commitUdaViewMutation = async (
@@ -501,17 +514,31 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     afterCommit?: () => void
   ): Promise<boolean> => {
     if (udaMutationPendingRef.current) return false;
+    if (udaTextMutationDepthRef.current === 0) {
+      udaCommittedSnapshotRef.current = udas;
+    }
+    const mutation = createUdaSnapshotMutation(udas, nextUdas);
     udaMutationPendingRef.current = true;
     setIsSavingUda(true);
+
+    const actionTask = udaTextMutationTailRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        nextUdas = mutation(udaCommittedSnapshotRef.current);
+        await onSaveUdas(nextUdas);
+        udaCommittedSnapshotRef.current = nextUdas;
+      });
+    udaTextMutationTailRef.current = actionTask.catch(() => undefined);
+
     try {
-      await onSaveUdas(nextUdas);
+      await actionTask;
       afterCommit?.();
       return true;
     } catch {
       return false;
     } finally {
+      udaMutationPendingRef.current = false;
       if (udaTextMutationDepthRef.current === 0) {
-        udaMutationPendingRef.current = false;
         setIsSavingUda(false);
       }
     }
