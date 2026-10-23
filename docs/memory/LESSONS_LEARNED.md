@@ -16,3 +16,18 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: specifica `docs/superpowers/specs/2026-10-23-project-memory-browser-qualification-design.md` e cicli browser PERSIST-01H precedenti.
 - Promozione candidata: operating rule — promossa come `OR-004`.
 - Sostituita da: —
+
+### LL-002 — PASS soltanto dopo l'ultima operazione browser
+- Stato: ACTIVE
+- Ciclo/data: MEM-QUAL-01 · 2026-10-23
+- Exact SHA/riferimento: finding Codex sul candidate `7af8ef28fb8aa3357e5cea1de4be0f57b095950b`
+- Obiettivo: garantire che il risultato del browser gate e l'evidenza JSON descrivano lo stesso stato finale osservato.
+- Ha funzionato: la review indipendente ha verificato il contratto sul candidate già qualificato e ha analizzato anche l'ordine temporale tra asserzioni ed evidence capture.
+- È fallito: il test assegnava `PASS` e verificava l'assenza di `pageerror` prima dello screenshot; un errore JavaScript emesso durante la cattura avrebbe potuto produrre un gate verde con `pageErrors` non vuoto nell'artefatto.
+- Causa reale: l'asserzione finale precedeva un'operazione browser ancora capace di produrre eventi rilevanti per il contratto.
+- Regola generalizzabile: in un browser gate fail-closed, il PASS deve essere assegnato solo dopo tutte le operazioni browser che possono ancora fallire o produrre eventi osservati; la generazione dell'evidenza richiesta fa parte del contratto di qualificazione.
+- Recipe: `TR-003 — Stable browser qualification`, aggiornata con screenshot fail-closed e asserzione finale sui `pageerror`.
+- Non ripetere: impostare il risultato a PASS prima dell'ultima operazione browser o trattare l'assenza dell'evidenza richiesta come successo.
+- Evidenza: PR #23, thread Codex P2 su `tests/browser/browser-qualification.spec.cjs`, finding `PRRC_kwDOVR43as8AAAABBBMb6w`.
+- Promozione candidata: recipe; nessuna nuova operating rule, perché il principio è già coperto da `OR-003 — No false PASS`.
+- Sostituita da: —
