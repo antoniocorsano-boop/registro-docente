@@ -92,6 +92,49 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(uda).toContain('indice interno');
   });
 
+  test('UDA progress metrics distinguish diary hours weighted activity and internal composite progress', async () => {
+    const report = await source('src/components/StudentReportView.tsx');
+    const uda = await source('src/components/UdaGanttView.tsx');
+
+    expect(report).toContain('Monte ore previsto:');
+    expect(report).toContain('Ore registrate nel diario:');
+    expect(report).toContain('Punti ponderati interni (indice attività):');
+    expect(report).not.toContain('Ore ponderate interne (indice attività):');
+    expect(report).toContain('% del monte ore');
+    expect(report).not.toContain('>Svolte: <');
+    expect(report).not.toContain('% svolto');
+
+    expect(uda).toContain('Avanzamento ore nel diario');
+    expect(uda).toContain('Riepilogo avanzamento interno');
+    expect(uda).toContain('Indice di avanzamento didattico (interno)');
+    expect(uda).toContain('Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% valutazioni collegate');
+    expect(uda).not.toContain('40% verifiche e rubriche collegate');
+    expect(uda).toContain('Non determina voti o livelli');
+    expect(uda).toContain('non una regola di valutazione prescritta');
+    expect(uda).toContain('Contesto curricolare: D.M. 221/2025');
+    expect(uda).toContain('({(hoursRatio * 60).toFixed(0)}/60 pt)');
+    expect(uda).toContain('({(evalRatio * 40).toFixed(0)}/40 pt)');
+    expect(uda).toContain('Quota valutazioni:');
+    expect(uda).not.toContain('Quota verifiche:');
+    expect(uda).toContain('const targetEvals = 2; // Minimo 2 valutazioni per UDA');
+    expect(uda).toContain('const completionPct = Math.round((hoursRatio * 0.6 + evalRatio * 0.4) * 100);');
+  });
+
+  test('UDA activity index uses internal points and never presents its composite value as certified hours', async () => {
+    const uda = await source('src/components/UdaGanttView.tsx');
+
+    expect(uda).toContain('Punti attività interni');
+    expect(uda).toContain('{totalWeightedCompetenceHours.toFixed(1)} pt');
+    expect(uda).toContain('Indice attività interno:');
+    expect(uda).toContain('{creditStats.totalWeightedHours} pt');
+    expect(uda).toContain('ore registrate × coefficiente attività + 1 pt per valutazione collegata');
+    expect(uda).not.toContain('Ore Competenza');
+    expect(uda).not.toContain('{totalWeightedCompetenceHours.toFixed(1)}h');
+    expect(uda).not.toContain('Ore certificate:');
+    expect(uda).not.toContain('{creditStats.totalWeightedHours}h');
+    expect(uda).not.toContain('1 punto indice = 10 ore ponderate interne');
+  });
+
   test('navigation and public metadata do not market automatic analytics as D.M. 221 levels', async () => {
     const navbar = await source('src/components/Navbar.tsx');
     const index = await source('index.html');
