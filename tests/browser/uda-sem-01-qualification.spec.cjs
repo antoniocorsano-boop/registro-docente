@@ -81,7 +81,7 @@ for (const viewport of viewports) {
     const summaryButton = page.getByRole('button', { name: 'Riepilogo avanzamento interno', exact: true });
     await expect(summaryButton).toBeVisible();
     await summaryButton.click();
-    await expect(page.getByText('Indice di avanzamento didattico (interno)', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Indice di avanzamento didattico \(interno\)/ })).toBeVisible();
 
     const udaText = await page.locator('body').innerText();
     expect(udaText).toContain('Avanzamento ore nel diario');
