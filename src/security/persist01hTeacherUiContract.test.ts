@@ -65,12 +65,15 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
     expect(text).toContain('disabled={isClassMutationPending}');
   });
 
-  test('UDA mutations share one synchronous in-flight guard around the durable boundary', async () => {
+  test('UDA mutations serialize discrete actions around the durable boundary', async () => {
     const text = await source('src/components/UdaGanttView.tsx');
     expect(text).toContain("import React, { useRef, useState } from 'react';");
     expect(text).toContain('const [isSavingUda, setIsSavingUda] = useState(false);');
     expect(text).toContain('const udaMutationPendingRef = useRef(false);');
-    expect(text).toContain('if (udaMutationPendingRef.current) return false;');
+    expect(text).not.toContain('if (udaMutationPendingRef.current) return false;');
+    expect(text).toContain('udaActionMutationDepthRef.current += 1;');
+    expect(text).toContain('const actionTask = udaTextMutationTailRef.current');
+    expect(text).toContain('udaTextMutationTailRef.current = actionTask.catch(() => undefined);');
     expect(text).toContain('udaMutationPendingRef.current = true;');
     expect(text).toContain('await onSaveUdas(nextUdas);');
     expect(text).toContain('udaMutationPendingRef.current = false;');

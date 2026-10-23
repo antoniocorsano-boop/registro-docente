@@ -102,13 +102,16 @@ describe('PERSIST-01H App mutation boundary contract', () => {
 });
 
 describe('PERSIST-01H pending intent boundaries', () => {
-  test('UDA mutations share one immediate in-flight guard and preserve post-commit success sequencing', () => {
+  test('UDA mutations serialize on the shared durable tail and preserve post-commit success sequencing', () => {
     expect(udaSource).toContain("import React, { useRef, useState } from 'react';");
     expect(udaSource).toContain('const [isSavingUda, setIsSavingUda] = useState(false);');
     expect(udaSource).toContain('const udaMutationPendingRef = useRef(false);');
 
     const boundary = sourceSection(udaSource, 'const commitUdaViewMutation', '// Embedding configuration');
-    expect(boundary).toContain('if (udaMutationPendingRef.current) return false;');
+    expect(boundary).not.toContain('if (udaMutationPendingRef.current) return false;');
+    expect(boundary).toContain('udaActionMutationDepthRef.current += 1;');
+    expect(boundary).toContain('const actionTask = udaTextMutationTailRef.current');
+    expect(boundary).toContain('udaTextMutationTailRef.current = actionTask.catch(() => undefined);');
     expect(boundary).toContain('udaMutationPendingRef.current = true;');
     expect(boundary).toContain('setIsSavingUda(true);');
     expect(boundary).toContain('await onSaveUdas(nextUdas);');

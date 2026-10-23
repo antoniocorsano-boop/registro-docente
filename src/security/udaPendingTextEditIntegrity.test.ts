@@ -9,7 +9,7 @@ function sectionBetween(source: string, start: string, end: string): string {
 }
 
 describe('PERSIST-01H UDA pending text-edit integrity', () => {
-  test('text edits queue behind pending persistence while destructive UDA actions keep the reentrancy guard', async () => {
+  test('text edits and discrete UDA actions share serialized persistence without dropping later intent', async () => {
     const source = await Bun.file('src/components/UdaGanttView.tsx').text();
     const boundary = sectionBetween(source, '// Quick toast message inside UdaGanttView', '// Embedding configuration');
     const fieldUpdate = sectionBetween(source, '// Save changes to detailed UDA dossier', '// Update rubric level');
@@ -18,7 +18,10 @@ describe('PERSIST-01H UDA pending text-edit integrity', () => {
     expect(boundary).toContain('udaTextMutationTailRef');
     expect(boundary).toContain('udaTextMutationDepthRef');
     expect(boundary).toContain('queueUdaTextMutation');
-    expect(boundary).toContain('if (udaMutationPendingRef.current) return false;');
+    expect(boundary).not.toContain('if (udaMutationPendingRef.current) return false;');
+    expect(boundary).toContain('udaActionMutationDepthRef');
+    expect(boundary).toContain('const actionTask = udaTextMutationTailRef.current');
+    expect(boundary).toContain('udaTextMutationTailRef.current = actionTask.catch(() => undefined);');
     expect(boundary).toContain('udaTextMutationDepthRef.current === 0');
 
     expect(fieldUpdate).toContain('queueUdaTextMutation(nextUdas);');
