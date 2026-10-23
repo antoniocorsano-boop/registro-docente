@@ -8,5 +8,3 @@ coverage/
 !.env.example
 .aistudio/artifacts/
 public/assets/aistudio/
-
-.worktrees/

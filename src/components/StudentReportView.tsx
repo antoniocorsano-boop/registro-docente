@@ -799,7 +799,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                         <span>·</span>
                         <span>Ore registrate nel diario: <b className="text-cyan-300 font-mono">{item.completedHours}h</b></span>
                         <span>·</span>
-                        <span>Ore ponderate interne (indice attività): <b className="text-purple-300 font-mono">{item.creditStats.totalWeightedHours}h</b></span>
+                        <span>Punti ponderati interni (indice attività): <b className="text-purple-300 font-mono">{item.creditStats.totalWeightedHours} pt</b></span>
                         <span>·</span>
                         <span>Traguardo: <i>{u.competencies || 'Competenze tecnologiche applicate'}</i></span>
                       </div>
