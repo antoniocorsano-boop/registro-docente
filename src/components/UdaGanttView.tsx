@@ -514,7 +514,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   const commitUdaViewMutation = async (
     nextUdas: UdaRecord[],
-    afterCommit?: () => void
+    afterCommit?: () => void,
+    validateAtExecution?: (currentUdas: UdaRecord[]) => boolean
   ): Promise<boolean> => {
     if (udaTextMutationDepthRef.current === 0 && udaActionMutationDepthRef.current === 0) {
       udaCommittedSnapshotRef.current = udaLatestSnapshotRef.current;
@@ -527,6 +528,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     const actionTask = udaTextMutationTailRef.current
       .catch(() => undefined)
       .then(async () => {
+        if (validateAtExecution && !validateAtExecution(udaCommittedSnapshotRef.current)) {
+          throw new Error('UDA_MUTATION_VALIDATION_REJECTED');
+        }
         nextUdas = mutation(udaCommittedSnapshotRef.current);
         await onSaveUdas(nextUdas);
         udaCommittedSnapshotRef.current = nextUdas;
@@ -920,11 +924,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         showStatus('Dipendenza rimossa');
       });
     } else {
-      // Check for cycles
-      if (wouldCauseCircularDependency(udaId, predecessorId, udas)) {
-        alert('Impossibile aggiungere questa propedeuticità: creerebbe una dipendenza ciclica/chiusa tra le UDA.');
-        return;
-      }
+      // Check for cycles both now and again when queued persistence actually executes.
+      const validateDependencyAtExecution = (currentUdas: UdaRecord[]) => {
+        if (wouldCauseCircularDependency(udaId, predecessorId, currentUdas)) {
+          alert('Impossibile aggiungere questa propedeuticità: creerebbe una dipendenza ciclica/chiusa tra le UDA.');
+          return false;
+        }
+        return true;
+      };
+      if (!validateDependencyAtExecution(udas)) return;
 
       const nextDeps = [...currentDeps, predecessorId];
       const updatedUda = { ...targetUda, dependencies: nextDeps };
@@ -955,7 +963,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 : current
             );
             showStatus('Dipendenza aggiunta e date allineate');
-          });
+          }, validateDependencyAtExecution);
           return;
         }
       }
@@ -972,7 +980,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             : current
         );
         showStatus('Dipendenza aggiunta con successo');
-      });
+      }, validateDependencyAtExecution);
     }
   };
 

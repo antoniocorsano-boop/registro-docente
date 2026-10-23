@@ -587,9 +587,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
+      const existingNames = new Set(targetClass.students.map(student => student.name.toLowerCase()));
+      const appendableStudents = newStudents.filter(student => {
+        const normalizedName = student.name.toLowerCase();
+        if (existingNames.has(normalizedName)) return false;
+        existingNames.add(normalizedName);
+        return true;
+      });
       const updatedClass: ClassData = {
         ...targetClass,
-        students: sortStudents([...targetClass.students, ...newStudents])
+        students: sortStudents([...targetClass.students, ...appendableStudents])
       };
       return {
         ...current,

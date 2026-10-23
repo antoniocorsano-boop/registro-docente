@@ -104,6 +104,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   // Open interactive editor for existing test
   const handleEditExistingTest = (test: OnlineTest) => {
+    if (isParsingFile || isSavingTest) return;
     setEditingTestId(test.id);
     setEditorTitle(test.title);
     setEditorDescription(test.description || '');
@@ -630,6 +631,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </button>
               <button
                 type="button"
+                disabled={isParsingFile || isSavingTest}
                 onClick={() => handleEditExistingTest(currentSelectedTest)}
                 className="py-2.5 px-4 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5"
               >
