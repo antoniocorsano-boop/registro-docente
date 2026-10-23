@@ -120,6 +120,21 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(uda).toContain('const completionPct = Math.round((hoursRatio * 0.6 + evalRatio * 0.4) * 100);');
   });
 
+  test('UDA activity index uses internal points and never presents its composite value as certified hours', async () => {
+    const uda = await source('src/components/UdaGanttView.tsx');
+
+    expect(uda).toContain('Punti attività interni');
+    expect(uda).toContain('{totalWeightedCompetenceHours.toFixed(1)} pt');
+    expect(uda).toContain('Indice attività interno:');
+    expect(uda).toContain('{creditStats.totalWeightedHours} pt');
+    expect(uda).toContain('ore registrate × coefficiente attività + 1 pt per valutazione collegata');
+    expect(uda).not.toContain('Ore Competenza');
+    expect(uda).not.toContain('{totalWeightedCompetenceHours.toFixed(1)}h');
+    expect(uda).not.toContain('Ore certificate:');
+    expect(uda).not.toContain('{creditStats.totalWeightedHours}h');
+    expect(uda).not.toContain('1 punto indice = 10 ore ponderate interne');
+  });
+
   test('navigation and public metadata do not market automatic analytics as D.M. 221 levels', async () => {
     const navbar = await source('src/components/Navbar.tsx');
     const index = await source('index.html');
