@@ -111,4 +111,35 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     expect(resetIndex).toBeGreaterThan(outerFinallyIndex);
   });
 
+  test('queued dependency additions revalidate cycles against the latest committed UDA snapshot before persistence', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    const commit = sectionBetween(text, 'const commitUdaViewMutation = async', '  const handleRequestDateChange');
+    const dependency = sectionBetween(text, '// Toggle dependency on an UDA', '// Add new UDA');
+
+    expect(commit).toContain('validateAtExecution?: (currentUdas: UdaRecord[]) => boolean');
+    expect(commit).toContain('if (validateAtExecution && !validateAtExecution(udaCommittedSnapshotRef.current))');
+    expect(dependency).toContain('const validateDependencyAtExecution = (currentUdas: UdaRecord[]) =>');
+    expect(dependency.match(/validateDependencyAtExecution\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  test('bulk student import deduplicates against the latest committed class roster when queued work executes', async () => {
+    const text = await source('src/App.tsx');
+    const bulk = sectionBetween(text, '// Bulk add students from Excel', '// Invert student names');
+
+    expect(bulk).toContain('const existingNames = new Set(targetClass.students.map(student => student.name.toLowerCase()));');
+    expect(bulk).toContain('const appendableStudents = newStudents.filter(student => {');
+    expect(bulk).toContain('if (existingNames.has(normalizedName)) return false;');
+    expect(bulk).toContain('students: sortStudents([...targetClass.students, ...appendableStudents])');
+  });
+
+  test('Bacheca existing-test editor entry is blocked while file parsing owns the save boundary', async () => {
+    const text = await source('src/components/VerificheOnlineView.tsx');
+    const bacheca = sectionBetween(text, '{/* SUB-TAB 1: BACHECA & CONDIVISIONE PADLET */}', '{/* SUB-TAB 2: EDITOR VISUALE TEST & COLLEGAMENTO UDA */}');
+    const marker = 'onClick={() => handleEditExistingTest(currentSelectedTest)}';
+    const markerIndex = bacheca.indexOf(marker);
+    expect(markerIndex).toBeGreaterThan(-1);
+    const buttonWindow = bacheca.slice(Math.max(0, markerIndex - 220), markerIndex + marker.length + 220);
+    expect(buttonWindow).toContain('disabled={isParsingFile || isSavingTest}');
+  });
+
 });
