@@ -66,6 +66,7 @@ jobs:
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
+          cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
 
       - name: Start production server and wait for readiness
         shell: bash
@@ -106,6 +107,7 @@ jobs:
           ./node_modules/.bin/playwright test \
             browser-qualification.spec.cjs \
             online-01-qualification.spec.cjs \
+            release-01-qualification.spec.cjs \
             --reporter=line \
             --output=../browser-evidence/test-results
 
