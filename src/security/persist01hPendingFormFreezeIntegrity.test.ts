@@ -13,11 +13,7 @@ function sectionBetween(text: string, start: string, end: string): string {
 describe('PERSIST-01H pending form freeze integrity', () => {
   test('interactive test editor freezes all mutable controls while durable save is pending', async () => {
     const text = await source('src/components/VerificheOnlineView.tsx');
-    const editor = sectionBetween(
-      text,
-      '/* Interactive Visual Question-by-Question Form */',
-      '/* ============================================================== */\n      {/* SUB-TAB 3:'
-    );
+    const editor = sectionBetween(text, '<form onSubmit={handleSaveInteractiveTest}', '</form>');
 
     expect(editor).toContain('<fieldset disabled={isSavingTest}');
   });
