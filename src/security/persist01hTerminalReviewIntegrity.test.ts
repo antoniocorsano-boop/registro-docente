@@ -62,4 +62,45 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     expect(resetIndex).toBeGreaterThan(outerFinallyIndex);
   });
 
+  test('AI results patch only generated description onto the current visible UDA state', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    const ai = sectionBetween(text, 'const handleGenerateUdaDescription = async', '// Synchronize master class filter');
+
+    expect(ai).toContain('setSelectedUdaForDetail(current =>');
+    expect(ai).toContain('setGanttSelectedUda(current =>');
+    expect(ai).not.toContain('setSelectedUdaForDetail(updatedUda as UdaRecord);');
+    expect(ai).not.toContain('setGanttSelectedUda(updatedUda as UdaRecord);');
+  });
+
+  test('queued dependency callbacks apply their delta to current modal dependencies instead of captured nextDeps', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    const dependency = sectionBetween(text, '// Toggle dependency on an UDA', '// Add new UDA');
+    const callbacks = [...dependency.matchAll(/setSelectedUdaForDetail\(current =>([\s\S]*?)\n\s*\);/g)].map(match => match[1]);
+
+    expect(callbacks.length).toBe(3);
+    callbacks.forEach(callback => {
+      expect(callback).toContain('current.dependencies');
+      expect(callback).not.toContain('dependencies: nextDeps');
+    });
+  });
+
+  test('date and cascade success callbacks patch current modal state instead of restoring captured UDA snapshots', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    const dates = sectionBetween(text, '// Request a date or duration change', '// Automatic level / align all conflicts in 1 click');
+
+    expect(dates).not.toContain('setSelectedUdaForDetail(updatedParent);');
+    expect(dates).not.toContain('setSelectedUdaForDetail({ ...selectedUdaForDetail, ...upd });');
+    expect(dates.match(/setSelectedUdaForDetail\(current =>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  test('DOCX and ZIP import clears the file input after a failed durable save so the same file can be selected again', async () => {
+    const text = await source('src/components/VerificheOnlineView.tsx');
+    const importHandler = sectionBetween(text, 'const handleFileUpload', '  const handleSaveManualTest');
+    const outerFinallyIndex = importHandler.lastIndexOf('} finally {');
+    const resetIndex = importHandler.lastIndexOf("e.target.value = '';");
+
+    expect(outerFinallyIndex).toBeGreaterThan(-1);
+    expect(resetIndex).toBeGreaterThan(outerFinallyIndex);
+  });
+
 });
