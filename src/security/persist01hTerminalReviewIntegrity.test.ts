@@ -62,6 +62,14 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     expect(resetIndex).toBeGreaterThan(outerFinallyIndex);
   });
 
+  test('spreadsheet parsing excludes add, invert, and delete student mutations until import settles', async () => {
+    const text = await source('src/components/StudentsManagementView.tsx');
+
+    expect(text).toContain('if (isImporting || isStudentMutationPending || !newStudentName.trim()) return;');
+    expect(text.match(/if \(isImporting \|\| isStudentMutationPending\) return;/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(text.match(/disabled=\{isImporting \|\| isStudentMutationPending\}/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+  });
+
   test('AI results patch only generated description onto the current visible UDA state', async () => {
     const text = await source('src/components/UdaGanttView.tsx');
     const ai = sectionBetween(text, 'const handleGenerateUdaDescription = async', '// Synchronize master class filter');
