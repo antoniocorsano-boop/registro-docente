@@ -43,6 +43,11 @@ async function disablePrivacyShield(page) {
   }
 }
 
+function primaryWorkflowButton(page, label) {
+  const workflowHub = page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..');
+  return workflowHub.getByRole('button', { name: label, exact: true });
+}
+
 async function openDrawerDestination(page, label) {
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -109,7 +114,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
   checkpoints.push('class-and-student-committed');
 
-  await page.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+  await primaryWorkflowButton(page, 'Valutazioni').click();
   await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
   await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill(EVALUATION_TITLE);
   await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
@@ -118,21 +123,21 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByText(EVALUATION_TITLE, { exact: true })).toBeVisible();
   checkpoints.push('evaluation-committed');
 
-  await page.getByRole('button', { name: 'Comportamento', exact: true }).click();
+  await primaryWorkflowButton(page, 'Comportamento').click();
   await expect(page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' })).toBeVisible();
   await page.getByRole('button', { name: '👍 Tutti Costruttivo', exact: true }).click();
   await page.getByRole('button', { name: 'Salva Registro Comportamenti', exact: true }).click();
   await closePersistenceConfirmation(page);
-  await expect(page.getByRole('button', { name: 'Riepilogo', exact: true })).toBeVisible();
+  await expect(primaryWorkflowButton(page, 'Riepilogo')).toBeVisible();
   checkpoints.push('behavior-committed');
 
-  await page.getByRole('button', { name: 'Tabellone', exact: true }).click();
+  await primaryWorkflowButton(page, 'Tabellone').click();
   await expect(page.getByRole('heading', { name: `Tabellone Classe: ${CLASS_NAME}` })).toBeVisible();
   await expect(page.getByText(STUDENT_NAME, { exact: true }).first()).toBeVisible();
   await expect(page.getByText(EVALUATION_TITLE, { exact: true }).first()).toBeVisible();
   checkpoints.push('tabellone-continuity');
 
-  await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+  await primaryWorkflowButton(page, 'Analisi').click();
   await expect(page.getByRole('heading', { name: 'Analisi medie & fasce analitiche' })).toBeVisible();
   await expect(page.getByText(STUDENT_NAME, { exact: true }).first()).toBeVisible();
   checkpoints.push('analytics-continuity');
@@ -194,11 +199,11 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Tabellone', exact: true }).click();
+  await primaryWorkflowButton(page, 'Tabellone').click();
   await expect(page.getByRole('heading', { name: `Tabellone Classe: ${CLASS_NAME}` })).toBeVisible();
   await expect(page.getByText(EVALUATION_TITLE, { exact: true }).first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Comportamento', exact: true }).click();
+  await primaryWorkflowButton(page, 'Comportamento').click();
   await expect(page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' })).toBeVisible();
   const constructive = page.getByRole('button', { name: 'Costruttivo 👍', exact: true });
   await expect(constructive).toHaveClass(/ring-2/);
