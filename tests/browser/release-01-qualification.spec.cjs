@@ -48,6 +48,12 @@ function primaryWorkflowButton(page, label) {
   return workflowHub.getByRole('button', { name: label, exact: true });
 }
 
+function desktopStudentRegion(page) {
+  return page.locator('div.hidden.md\\:block').filter({
+    has: page.getByText(STUDENT_NAME, { exact: true })
+  });
+}
+
 async function openDrawerDestination(page, label) {
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -133,13 +139,19 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
 
   await primaryWorkflowButton(page, 'Tabellone').click();
   await expect(page.getByRole('heading', { name: `Tabellone Classe: ${CLASS_NAME}` })).toBeVisible();
-  await expect(page.getByText(STUDENT_NAME, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(EVALUATION_TITLE, { exact: true }).first()).toBeVisible();
+  const tabelloneDesktop = desktopStudentRegion(page);
+  await expect(tabelloneDesktop).toHaveCount(1);
+  await expect(tabelloneDesktop).toBeVisible();
+  await expect(tabelloneDesktop.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  await expect(tabelloneDesktop.getByText(EVALUATION_TITLE, { exact: true })).toBeVisible();
   checkpoints.push('tabellone-continuity');
 
   await primaryWorkflowButton(page, 'Analisi').click();
   await expect(page.getByRole('heading', { name: 'Analisi medie & fasce analitiche' })).toBeVisible();
-  await expect(page.getByText(STUDENT_NAME, { exact: true }).first()).toBeVisible();
+  const analyticsDesktop = desktopStudentRegion(page);
+  await expect(analyticsDesktop).toHaveCount(1);
+  await expect(analyticsDesktop).toBeVisible();
+  await expect(analyticsDesktop.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
   checkpoints.push('analytics-continuity');
 
   await openDrawerDestination(page, 'Scheda alunno');
@@ -200,7 +212,10 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
 
   await primaryWorkflowButton(page, 'Tabellone').click();
   await expect(page.getByRole('heading', { name: `Tabellone Classe: ${CLASS_NAME}` })).toBeVisible();
-  await expect(page.getByText(EVALUATION_TITLE, { exact: true }).first()).toBeVisible();
+  const terminalTabelloneDesktop = desktopStudentRegion(page);
+  await expect(terminalTabelloneDesktop).toHaveCount(1);
+  await expect(terminalTabelloneDesktop).toBeVisible();
+  await expect(terminalTabelloneDesktop.getByText(EVALUATION_TITLE, { exact: true })).toBeVisible();
 
   await primaryWorkflowButton(page, 'Comportamento').click();
   await expect(page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' })).toBeVisible();
