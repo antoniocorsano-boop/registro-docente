@@ -32,7 +32,7 @@ async function setupFreshVault(page) {
 
 async function selectThirdA(page) {
   await page.getByText('3ª A - Secondaria I Grado', { exact: true }).first().click();
-  await expect(page.getByText('3ª A - Secondaria I Grado', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Panoramica Sezione: 3ª A - Secondaria I Grado' })).toBeVisible();
 }
 
 async function openDrawerDestination(page, label) {
