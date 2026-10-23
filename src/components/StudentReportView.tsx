@@ -795,9 +795,11 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                         )}
                       </div>
                       <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2">
-                        <span>Monte ore: <b>{u.hours}h</b></span>
+                        <span>Monte ore previsto: <b>{u.hours}h</b></span>
                         <span>·</span>
-                        <span>Svolte: <b className="text-cyan-300 font-mono">{item.completedHours}h</b> ({item.creditStats.totalWeightedHours}h ponderate interne)</span>
+                        <span>Ore registrate nel diario: <b className="text-cyan-300 font-mono">{item.completedHours}h</b></span>
+                        <span>·</span>
+                        <span>Ore ponderate interne (indice attività): <b className="text-purple-300 font-mono">{item.creditStats.totalWeightedHours}h</b></span>
                         <span>·</span>
                         <span>Traguardo: <i>{u.competencies || 'Competenze tecnologiche applicate'}</i></span>
                       </div>
@@ -831,10 +833,10 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                       <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
                         <span className="font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
                           <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                          Attività & Fasi Completate ({item.lessons.length} lezioni · {item.completedHours}h)
+                          Attività registrate nel diario ({item.lessons.length} lezioni · {item.completedHours}h)
                         </span>
                         <span className="text-[10px] text-cyan-300 font-mono">
-                          {u.hours > 0 ? `${Math.min(100, Math.round((item.completedHours / u.hours) * 100))}% svolto` : ''}
+                          {u.hours > 0 ? `${Math.min(100, Math.round((item.completedHours / u.hours) * 100))}% del monte ore` : ''}
                         </span>
                       </div>
 

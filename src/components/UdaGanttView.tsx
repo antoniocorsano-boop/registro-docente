@@ -1572,14 +1572,14 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         {/* Card 3: Avanzamento Gantt */}
         <div className="neon-card p-3 border-l-4 border-l-emerald-400">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-            <span>Avanzamento Gantt</span>
+            <span>Avanzamento ore nel diario</span>
             <Clock className="w-3 h-3 text-emerald-400" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1 font-mono">
             {totalDoneHours} <span className="text-xs text-slate-500 font-normal">/ {totalPlannedHours}h</span>
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5">
-            {totalPlannedHours > 0 ? `${Math.round((totalDoneHours / totalPlannedHours) * 100)}% svolto` : '0%'}
+            {totalPlannedHours > 0 ? `${Math.round((totalDoneHours / totalPlannedHours) * 100)}% del monte ore` : '0%'}
           </div>
         </div>
 
@@ -1680,7 +1680,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             }`}
           >
             <Target className="w-4 h-4 text-emerald-400" />
-            <span>Riepilogo Avanzamento (60% + 40%)</span>
+            <span>Riepilogo avanzamento interno</span>
           </button>
 
           {/* 4. Tutte le Viste */}
@@ -1699,7 +1699,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 text-xs text-slate-400 pr-1">
-          <span>D.M. 221/2025</span>
+          <span>Contesto curricolare: D.M. 221/2025</span>
         </div>
       </div>
 
@@ -2241,10 +2241,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Target className="w-4 h-4 text-emerald-400" />
-                Riepilogo Avanzamento Curricolare & Indice Attività UDA
+                Indice di avanzamento didattico (interno) & Indice Attività UDA
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Calcolo didattico: 60% ore di attività nel diario di bordo + 40% verifiche e rubriche collegate a registro.
+                Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% verifiche e rubriche collegate. Non determina voti o livelli.
               </p>
             </div>
           </div>
@@ -2278,7 +2278,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
                     <div className="text-right">
                       <span className="text-xl font-black font-mono text-cyan-300">{completionPct}%</span>
-                      <span className="text-[10px] text-slate-400 block">Completamento</span>
+                      <span className="text-[10px] text-slate-400 block">Indice interno</span>
                     </div>
                   </div>
 
@@ -2291,8 +2291,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   </div>
 
                   <div className="flex justify-between text-[11px] text-slate-400 pt-0.5">
-                    <span>Diario: <b>{doneHours}/{plannedHours}h</b> svolte ({(hoursRatio * 60).toFixed(0)}%)</span>
-                    <span>Valutazioni: <b>{creditInfo.evalCount}/{targetEvals}</b> registrate ({(evalRatio * 40).toFixed(0)}%)</span>
+                    <span>Quota diario: <b>{doneHours}/{plannedHours}h</b> ({(hoursRatio * 60).toFixed(0)}/60 pt)</span>
+                    <span>Quota verifiche: <b>{creditInfo.evalCount}/{targetEvals}</b> collegate ({(evalRatio * 40).toFixed(0)}/40 pt)</span>
                   </div>
                 </div>
               );
