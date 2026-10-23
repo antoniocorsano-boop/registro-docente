@@ -29,6 +29,13 @@ async function unlockVault(page) {
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
+async function closePersistenceConfirmation(page) {
+  const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  await expect(heading).toBeVisible();
+  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(heading).toBeHidden();
+}
+
 async function disablePrivacyShield(page) {
   const activeShield = page.getByRole('button', { name: /LIM Shield Attivo/ });
   if (await activeShield.isVisible().catch(() => false)) {
@@ -93,6 +100,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
   await disablePrivacyShield(page);
 
   const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
@@ -106,6 +114,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill(EVALUATION_TITLE);
   await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
   await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+  await closePersistenceConfirmation(page);
   await expect(page.getByText(EVALUATION_TITLE, { exact: true })).toBeVisible();
   checkpoints.push('evaluation-committed');
 
@@ -113,6 +122,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' })).toBeVisible();
   await page.getByRole('button', { name: '👍 Tutti Costruttivo', exact: true }).click();
   await page.getByRole('button', { name: 'Salva Registro Comportamenti', exact: true }).click();
+  await closePersistenceConfirmation(page);
   await expect(page.getByRole('button', { name: 'Riepilogo', exact: true })).toBeVisible();
   checkpoints.push('behavior-committed');
 
