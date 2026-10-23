@@ -176,7 +176,10 @@ test('ONLINE-01 pending submit is truthful and non-reentrant — mobile 390x844'
 
   await page.getByRole('button', { name: 'Torna al Registro', exact: true }).click();
   await openTeacherDestination(page, 'Verifiche online');
-  await expect(page.getByText('Consegne Ricevute dagli Alunni (1)', { exact: true })).toBeVisible();
+  const resultsTab = page.getByRole('button', { name: 'Esiti & Item Analysis (1)', exact: true });
+  await expect(resultsTab).toBeVisible();
+  await resultsTab.click();
+  await expect(page.getByRole('heading', { name: 'Consegne Ricevute dagli Alunni (1)', exact: true })).toBeVisible();
 
   const overflow = await assertNoHorizontalOverflow(page);
   await page.screenshot({
@@ -269,7 +272,10 @@ test('ONLINE-01 failure preserves retry identity and classes are register-derive
 
   await page.getByRole('button', { name: 'Torna al Registro', exact: true }).click();
   await openTeacherDestination(page, 'Verifiche online');
-  await expect(page.getByText('Consegne Ricevute dagli Alunni (1)', { exact: true })).toBeVisible();
+  const resultsTab = page.getByRole('button', { name: 'Esiti & Item Analysis (1)', exact: true });
+  await expect(resultsTab).toBeVisible();
+  await resultsTab.click();
+  await expect(page.getByRole('heading', { name: 'Consegne Ricevute dagli Alunni (1)', exact: true })).toBeVisible();
 
   const overflow = await assertNoHorizontalOverflow(page);
   await page.screenshot({
