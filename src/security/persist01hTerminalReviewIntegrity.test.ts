@@ -43,4 +43,23 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     expect(removeLesson).not.toContain('setSelectedUdaForDetail(updatedUda);');
   });
 
+  test('dependency updates rebase modal dependency and date fields onto the latest visible UDA state', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    const dependency = sectionBetween(text, '// Toggle dependency on an UDA', '// Add new UDA');
+
+    expect(dependency).not.toContain('setSelectedUdaForDetail(updatedUda);');
+    expect(dependency).not.toContain('setSelectedUdaForDetail(alignedUda);');
+    expect(dependency.match(/setSelectedUdaForDetail\(current =>/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+  });
+
+  test('spreadsheet import clears the file input after a failed durable save so the same file can be selected again', async () => {
+    const text = await source('src/components/StudentsManagementView.tsx');
+    const importHandler = sectionBetween(text, 'const handleExcelImport', '  return (');
+    const outerFinallyIndex = importHandler.lastIndexOf('} finally {');
+    const resetIndex = importHandler.lastIndexOf("e.target.value = '';");
+
+    expect(outerFinallyIndex).toBeGreaterThan(-1);
+    expect(resetIndex).toBeGreaterThan(outerFinallyIndex);
+  });
+
 });
