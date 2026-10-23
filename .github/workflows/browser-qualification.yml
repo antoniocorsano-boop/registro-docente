@@ -6,13 +6,18 @@ on:
       - main
       - qual-base/uda-sem-01-d3c62479
   workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact historical candidate SHA to qualify
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 env:
-  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  HARNESS_SHA: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
+  CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.sha }}
+  HARNESS_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
   PLAYWRIGHT_VERSION: '1.64.1'
   PORT: '4173'
 
