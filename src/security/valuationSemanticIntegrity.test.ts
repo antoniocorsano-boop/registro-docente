@@ -108,6 +108,7 @@ describe('VAL-02 bounded valuation semantics', () => {
     expect(uda).toContain('Indice di avanzamento didattico (interno)');
     expect(uda).toContain('Indicatore interno di pianificazione: 60% copertura delle ore registrate nel diario + 40% verifiche e rubriche collegate');
     expect(uda).toContain('Non determina voti o livelli');
+    expect(uda).toContain('non una regola di valutazione prescritta');
     expect(uda).toContain('Contesto curricolare: D.M. 221/2025');
     expect(uda).toContain('({(hoursRatio * 60).toFixed(0)}/60 pt)');
     expect(uda).toContain('({(evalRatio * 40).toFixed(0)}/40 pt)');
