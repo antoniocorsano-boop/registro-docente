@@ -142,4 +142,20 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     expect(buttonWindow).toContain('disabled={isParsingFile || isSavingTest}');
   });
 
+  test('spreadsheet import reports the committed append count instead of the stale parsed count', async () => {
+    const app = await source('src/App.tsx');
+    const view = await source('src/components/StudentsManagementView.tsx');
+    const bulk = sectionBetween(app, '// Bulk add students from Excel', '// Invert student names');
+    const importHandler = sectionBetween(view, 'const handleExcelImport', '  return (');
+
+    expect(bulk).toContain('const handleBulkAddStudents = (newStudents: Student[]): Promise<number> =>');
+    expect(bulk).toContain('let addedCount = 0;');
+    expect(bulk).toContain('addedCount = appendableStudents.length;');
+    expect(bulk).toContain('.then(() => addedCount);');
+    expect(view).toContain('onBulkAddStudents: (students: Student[]) => Promise<number>;');
+    expect(importHandler).toContain('const addedCount = await onBulkAddStudents(imported);');
+    expect(importHandler).toContain('Aggiunti ${addedCount} nuovi alunni.');
+    expect(importHandler).not.toContain('Aggiunti ${imported.length} nuovi alunni.');
+  });
+
 });
