@@ -13,7 +13,7 @@ describe('PERSIST-01H UDA queued action integrity', () => {
     const source = await Bun.file('src/components/UdaGanttView.tsx').text();
     const boundary = sectionBetween(source, '// Quick toast message inside UdaGanttView', '// Embedding configuration');
     const textQueue = sectionBetween(boundary, 'const queueUdaTextMutation', 'const commitUdaViewMutation');
-    const actionQueue = sectionBetween(boundary, 'const commitUdaViewMutation', '// Embedding configuration');
+    const actionQueue = boundary.slice(boundary.indexOf('const commitUdaViewMutation'));
 
     expect(source).toContain("import { createUdaSnapshotMutation } from '../persistence/udaSnapshotMutation';");
     expect(boundary).toContain('udaCommittedSnapshotRef');
