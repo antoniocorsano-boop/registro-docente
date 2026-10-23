@@ -22,11 +22,11 @@ async function setupFreshVault(page, targetURL = baseURL) {
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
-async function unlockVault(page) {
+async function unlockVault(page, expectedHeading = 'Le mie classi') {
   await expect(page.getByRole('heading', { name: 'Sblocca Registro' })).toBeVisible();
   await page.locator('#vault-password').fill(vaultPassword);
   await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: expectedHeading })).toBeVisible();
 }
 
 async function closePersistenceConfirmation(page) {
@@ -167,8 +167,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   checkpoints.push('uda-committed-to-synthetic-class');
 
   await page.goto(studentPortalURL(), { waitUntil: 'domcontentloaded' });
-  await unlockVault(page);
-  await expect(page.getByRole('heading', { name: "A cosa serve l'energia" })).toBeVisible();
+  await unlockVault(page, "A cosa serve l'energia");
   const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
   await expect(classSelect).toHaveValue(CLASS_NAME);
   await page.getByPlaceholder('es. Rossi Maria').fill(STUDENT_NAME);
