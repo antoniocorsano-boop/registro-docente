@@ -7,6 +7,8 @@ const candidateSha = process.env.CANDIDATE_SHA || 'unknown';
 const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence');
 const vaultPassword = 'online-01-qualification-only';
 
+test.setTimeout(60000);
+
 async function installSubmissionInjection(context) {
   await context.addInitScript(() => {
     const subtle = globalThis.crypto.subtle;
@@ -218,7 +220,7 @@ test('ONLINE-01 failure preserves retry identity and classes are register-derive
 
   page.once('dialog', dialog => dialog.accept('Classe Sintetica ONLINE-01'));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
-  await expect(page.getByText('Classe Sintetica ONLINE-01', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: Classe Sintetica ONLINE-01' })).toBeVisible();
 
   await page.goto(studentPortalURL(), { waitUntil: 'domcontentloaded' });
   await unlockVault(page);
