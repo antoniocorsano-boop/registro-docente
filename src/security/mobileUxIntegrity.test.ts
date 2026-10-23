@@ -49,4 +49,17 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
     expect(report).toContain('min-h-[300px] sm:min-h-[340px]');
     expect(report).toContain('height={280}');
   });
+
+  test('tabellone provides dedicated teacher-first mobile cards while preserving the desktop matrix', async () => {
+    const matrix = await source('src/components/MatrixView.tsx');
+
+    expect(matrix).toContain('Mobile student cards');
+    expect(matrix).toContain('className="md:hidden space-y-3"');
+    expect(matrix).toContain('className="hidden md:block overflow-x-auto');
+    expect(matrix).toContain('min-h-[44px]');
+    expect(matrix).toContain('Voti recenti');
+    expect(matrix).toContain('Medie per tipologia');
+    expect(matrix).toContain('Medie periodo');
+    expect(matrix).toContain('onClick={() => onOpenStudentReport(s.id)}');
+  });
 });
