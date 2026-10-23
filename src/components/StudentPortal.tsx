@@ -134,7 +134,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     : 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#030712] overflow-y-auto p-4 sm:p-6 flex justify-center items-start">
+    <div className="fixed inset-0 z-[60] bg-[#030712] overflow-y-auto p-4 sm:p-6 flex justify-center items-start">
       <div className="w-full max-w-lg mt-6 sm:mt-12 neon-card neon-card-highlight p-6">
         <div className="flex justify-between items-center mb-4">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold badge-info">
