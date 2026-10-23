@@ -86,3 +86,10 @@ describe('ONLINE-01 durable submission result boundary', () => {
     expect(portalSource).toContain("isSubmitting ? 'Salvataggio...' :");
   });
 });
+
+describe('ONLINE-01 StudentPortal modal isolation', () => {
+  test('student portal stays above teacher drawer and vault controls', () => {
+    expect(portalSource).toContain('fixed inset-0 z-[60]');
+    expect(portalSource).not.toContain('fixed inset-0 z-50');
+  });
+});
