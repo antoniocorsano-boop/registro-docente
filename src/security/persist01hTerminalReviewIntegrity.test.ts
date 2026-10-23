@@ -30,7 +30,6 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     const bacheca = sectionBetween(text, '{/* SUB-TAB 1: BACHECA & CONDIVISIONE PADLET */}', '{/* SUB-TAB 2: EDITOR VISUALE TEST & COLLEGAMENTO UDA */}');
 
     expect(tabs.match(/disabled=\{isSavingTest \|\| isParsingFile\}/g)?.length ?? 0).toBe(4);
-    const startEditor = sectionBetween(bacheca, 'onClick={handleStartNewInteractiveTest}', '</button>');
-    expect(startEditor).toContain('disabled={isParsingFile || isSavingTest}');
+    expect(bacheca).toContain('disabled={isParsingFile || isSavingTest}\n                onClick={handleStartNewInteractiveTest}');
   });
 });

@@ -1034,7 +1034,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
     const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
     void commitUdaViewMutation(nextUdas, () => {
-      setSelectedUdaForDetail(updatedUda);
+      setSelectedUdaForDetail(current =>
+        current?.id === updatedUda.id
+          ? { ...current, lessons: [...(current.lessons || []), newLesson] }
+          : current
+      );
       setNewLessonTopic('');
       setNewLessonNotes('');
       showStatus('Attività registrata nel diario');

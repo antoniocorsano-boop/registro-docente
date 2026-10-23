@@ -43,7 +43,7 @@ describe('PERSIST-01H pending form freeze integrity', () => {
   test('test-editor sub-navigation cannot close the retry draft while a save is pending', async () => {
     const text = await source('src/components/VerificheOnlineView.tsx');
     const navigation = sectionBetween(text, '{/* Tab pills */}', '{/* SUB-TAB 1: BACHECA & CONDIVISIONE PADLET */}');
-    const frozenTabCount = navigation.match(/disabled=\{isSavingTest\}/g)?.length ?? 0;
+    const frozenTabCount = navigation.match(/disabled=\{isSavingTest \|\| isParsingFile\}/g)?.length ?? 0;
 
     expect(frozenTabCount).toBeGreaterThanOrEqual(4);
   });

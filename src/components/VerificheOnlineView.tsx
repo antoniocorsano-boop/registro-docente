@@ -483,7 +483,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         <div className="flex flex-wrap gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-slate-800 text-xs font-semibold">
           <button
             type="button"
-            disabled={isSavingTest}
+            disabled={isSavingTest || isParsingFile}
             onClick={() => { setActiveSubTab('bacheca'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'bacheca'
@@ -496,7 +496,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
-            disabled={isSavingTest}
+            disabled={isSavingTest || isParsingFile}
             onClick={() => setActiveSubTab('editor')}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'editor'
@@ -509,7 +509,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
-            disabled={isSavingTest}
+            disabled={isSavingTest || isParsingFile}
             onClick={() => { setActiveSubTab('stampa'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'stampa'
@@ -522,7 +522,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
-            disabled={isSavingTest}
+            disabled={isSavingTest || isParsingFile}
             onClick={() => { setActiveSubTab('analisi'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'analisi'
@@ -664,6 +664,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
               <button
                 type="button"
+                disabled={isParsingFile || isSavingTest}
                 onClick={handleStartNewInteractiveTest}
                 className="w-full sm:w-auto px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--surface-variant)] hover:bg-[var(--surface-hover)] text-xs font-semibold text-[var(--primary)] flex items-center justify-center gap-2"
               >
