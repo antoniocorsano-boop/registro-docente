@@ -54,6 +54,13 @@ function desktopStudentRegion(page) {
   });
 }
 
+async function selectSyntheticClassFromHome(page) {
+  const classHeading = page.getByRole('heading', { name: CLASS_NAME, exact: true, level: 4 });
+  await expect(classHeading).toBeVisible();
+  await classHeading.click();
+  await expect(primaryWorkflowButton(page, 'Riepilogo')).toBeVisible();
+}
+
 async function openDrawerDestination(page, label) {
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -198,13 +205,14 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await unlockVault(page);
-  await expect(page.getByText(CLASS_NAME, { exact: true }).first()).toBeVisible();
-  checkpoints.push('reload-unlock');
+  await selectSyntheticClassFromHome(page);
+  checkpoints.push('reload-unlock-and-class-reselected');
 
   await page.getByRole('button', { name: 'Blocca Registro', exact: true }).click();
   await unlockVault(page);
+  await selectSyntheticClassFromHome(page);
   await disablePrivacyShield(page);
-  checkpoints.push('manual-lock-unlock');
+  checkpoints.push('manual-lock-unlock-and-class-reselected');
 
   await openDrawerDestination(page, 'Gestione alunni');
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
@@ -255,6 +263,8 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
     persistence: {
       reloadUnlock: true,
       manualLockUnlock: true,
+      classReselectedAfterReload: true,
+      classReselectedAfterManualLock: true,
       class: true,
       student: true,
       evaluation: true,
