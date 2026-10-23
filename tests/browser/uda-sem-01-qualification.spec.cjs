@@ -78,7 +78,10 @@ for (const viewport of viewports) {
     });
 
     await openDrawerDestination(page, 'UDA');
-    await expect(page.getByText('Riepilogo avanzamento interno', { exact: true })).toBeVisible();
+    const summaryButton = page.getByRole('button', { name: 'Riepilogo avanzamento interno', exact: true });
+    await expect(summaryButton).toBeVisible();
+    await summaryButton.click();
+    await expect(page.getByText('Indice di avanzamento didattico (interno)', { exact: true }).first()).toBeVisible();
 
     const udaText = await page.locator('body').innerText();
     expect(udaText).toContain('Avanzamento ore nel diario');
