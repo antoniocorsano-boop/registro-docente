@@ -181,8 +181,129 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         </button>
       </div>
 
-      {/* Table Container */}
-      <div className="overflow-x-auto border border-[var(--border)] rounded-lg bg-[var(--surface)] max-w-full">
+      {/* Mobile student cards */}
+      <div className="md:hidden space-y-3">
+        {students.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-400 border border-[var(--border)] rounded-lg bg-[var(--surface)]">
+            Nessun alunno presente in questa classe.
+          </div>
+        ) : (
+          students.map(s => {
+            const sGrades = filteredGrades.filter(g => g.studentId === s.id);
+            const sAllGrades = allGrades.filter(g => g.studentId === s.id);
+            const mobileGrades = viewMode === 'avg' ? sAllGrades : sGrades;
+            const mobileAvg = calcAvg(mobileGrades);
+            const proposed = computeProposed(mobileGrades);
+            const q1Avg = calcAvg(sAllGrades.filter(g => g.period === 'Q1'));
+            const q2Avg = calcAvg(sAllGrades.filter(g => g.period === 'Q2'));
+            const totalAvg = calcAvg(sAllGrades);
+            const level = getCompetenceLevel(proposed.avg ?? totalAvg);
+
+            return (
+              <article key={s.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => onOpenStudentReport(s.id)}
+                  className="w-full min-h-[44px] flex items-center justify-between gap-3 text-left rounded-lg px-2 -mx-0.5 hover:bg-slate-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                >
+                  <span className="font-bold text-slate-100 truncate">
+                    {formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive)}
+                  </span>
+                  <span className="text-[11px] font-semibold text-[var(--primary)] shrink-0">Scheda</span>
+                </button>
+
+                <div className={`grid gap-2 ${showProposedGrade ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className="rounded-lg bg-slate-950/60 border border-slate-800 p-2 min-w-0">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Media</div>
+                    <div className={`text-base font-black ${mobileAvg !== null && mobileAvg < 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {formatGrade(mobileAvg)}
+                    </div>
+                  </div>
+                  {showProposedGrade && (
+                    <div className="rounded-lg bg-purple-950/30 border border-purple-500/30 p-2 min-w-0">
+                      <div className="text-[10px] uppercase tracking-wide text-purple-300">Indicatore</div>
+                      <div className="text-sm font-black text-purple-200">{formatGrade(proposed.avg)}</div>
+                      <div className="text-[9px] text-slate-400">{proposed.avg === null ? 'Non disponibile' : proposed.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}</div>
+                    </div>
+                  )}
+                  <div className="rounded-lg bg-slate-950/60 border border-slate-800 p-2 min-w-0">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Trend</div>
+                    <div className="pt-1">
+                      <Sparkline grades={mobileGrades} width={72} height={20} />
+                    </div>
+                  </div>
+                </div>
+
+                {viewMode === 'cron' && (
+                  <details className="rounded-lg border border-slate-800 bg-slate-950/40">
+                    <summary className="min-h-[44px] flex cursor-pointer items-center justify-between px-3 text-xs font-semibold text-slate-200">
+                      <span>Voti recenti</span>
+                      <span className="text-slate-500">{sGrades.length}</span>
+                    </summary>
+                    <div className="border-t border-slate-800 px-3 py-2 space-y-2">
+                      {sGrades.length === 0 ? (
+                        <p className="text-xs text-slate-500">Nessuna prova nel periodo.</p>
+                      ) : (
+                        [...sGrades].sort((a, b) => b.date.localeCompare(a.date)).map(g => (
+                          <div key={g.id} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="min-w-0">
+                              <div className="text-slate-300 truncate">{g.title || TYPES_LABEL[g.type] || g.type}</div>
+                              <div className="text-[10px] text-slate-500">{g.date} · {TYPES_LABEL[g.type] || g.type}</div>
+                            </div>
+                            <span className={`font-mono font-bold shrink-0 ${parseGrade(g.value) !== null && (parseGrade(g.value) as number) < 6 ? 'text-rose-400' : 'text-slate-100'}`}>
+                              {g.value}{g.delayed ? ' R' : ''}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </details>
+                )}
+
+                {viewMode === 'type' && (
+                  <details className="rounded-lg border border-slate-800 bg-slate-950/40">
+                    <summary className="min-h-[44px] flex cursor-pointer items-center px-3 text-xs font-semibold text-slate-200">
+                      Medie per tipologia
+                    </summary>
+                    <div className="border-t border-slate-800 px-3 py-2 space-y-2">
+                      {typesList.map(t => {
+                        const typedGrades = sGrades.filter(g => g.type === t);
+                        const typedAvg = calcAvg(typedGrades);
+                        return (
+                          <div key={t} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="text-slate-400">{TYPES_LABEL[t]}</span>
+                            <span className="font-mono text-slate-100">{formatGrade(typedAvg)} <span className="text-slate-500">({typedGrades.length})</span></span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                )}
+
+                {viewMode === 'avg' && (
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
+                    <div className="text-xs font-semibold text-slate-200">Medie periodo</div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div><div className="text-[10px] text-slate-500">Q1</div><div className="font-mono text-sm text-slate-100">{formatGrade(q1Avg)}</div></div>
+                      <div><div className="text-[10px] text-slate-500">Q2</div><div className="font-mono text-sm text-slate-100">{formatGrade(q2Avg)}</div></div>
+                      <div><div className="text-[10px] text-slate-500">Anno</div><div className="font-mono text-sm font-bold text-slate-100">{formatGrade(totalAvg)}</div></div>
+                    </div>
+                    {level && (
+                      <div className="pt-1 flex items-center justify-between gap-2 text-xs">
+                        <span className="text-slate-500">Fascia analitica</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${level.badgeClass}`}>{level.label}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop table matrix */}
+      <div className="hidden md:block overflow-x-auto border border-[var(--border)] rounded-lg bg-[var(--surface)] max-w-full">
         {students.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400">
             Nessun alunno presente in questa classe.
