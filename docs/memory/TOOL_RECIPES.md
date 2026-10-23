@@ -38,8 +38,10 @@ Procedure operative riutilizzabili. Ogni recipe deve indicare quando è valida e
   5. Attendere readiness HTTP con timeout finito.
   6. Installare Chromium tramite il Playwright pinning previsto dal workflow.
   7. Eseguire il browser smoke sul server di produzione reale.
-  8. Conservare screenshot, JSON di evidenza, log server e risultati Playwright con `if: always()`.
-- Smoke minimo: HTTP 200, titolo Registro Docente, `#root` visibile e non vuoto, nessun `pageerror` non gestito.
+  8. Catturare lo screenshot prima dell'asserzione finale sui `pageerror`; l'impossibilità di produrre lo screenshot è FAIL.
+  9. Eseguire l'asserzione finale sui `pageerror` dopo l'ultima operazione browser e assegnare `PASS` solo dopo che questa asserzione è riuscita.
+  10. Conservare screenshot, JSON di evidenza, log server e risultati Playwright con `if: always()`; il JSON deve restare scrivibile anche su failure e riportare `result: FAIL`.
+- Smoke minimo: HTTP 200, titolo Registro Docente, `#root` visibile e non vuoto, screenshot disponibile, nessun `pageerror` non gestito dopo l'ultima operazione browser.
 - Dati: solo sintetici; nessun secret richiesto.
 - Evidenza minima: exact SHA + build + readiness + Playwright PASS + artifact upload tentato.
 - Regole collegate: OR-001, OR-003, OR-004, OR-005.
