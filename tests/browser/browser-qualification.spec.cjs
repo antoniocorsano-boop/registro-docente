@@ -22,6 +22,7 @@ test('exact candidate serves a usable Registro Docente production shell', async 
   let status = null;
   let title = '';
   let rootTextLength = 0;
+  let qualificationError = null;
 
   try {
     const response = await page.goto(baseURL, {
@@ -46,36 +47,49 @@ test('exact candidate serves a usable Registro Docente production shell', async 
       .toBeGreaterThan(0);
 
     rootTextLength = (await root.innerText()).trim().length;
-    expect(pageErrors, 'page must not emit uncaught JavaScript errors').toEqual([]);
-    result = 'PASS';
-  } finally {
-    try {
-      await page.screenshot({
-        path: path.join(evidenceDir, 'home.png'),
-        fullPage: true
-      });
-    } catch (error) {
-      fs.writeFileSync(
-        path.join(evidenceDir, 'screenshot-error.txt'),
-        `${error instanceof Error ? error.stack || error.message : String(error)}\n`
-      );
-    }
+  } catch (error) {
+    qualificationError = error;
+  }
 
+  try {
+    await page.screenshot({
+      path: path.join(evidenceDir, 'home.png'),
+      fullPage: true
+    });
+  } catch (error) {
     fs.writeFileSync(
-      path.join(evidenceDir, 'qualification.json'),
-      JSON.stringify(
-        {
-          candidateSha: process.env.CANDIDATE_SHA || null,
-          result,
-          baseURL,
-          status,
-          title,
-          rootTextLength,
-          pageErrors
-        },
-        null,
-        2
-      ) + '\n'
+      path.join(evidenceDir, 'screenshot-error.txt'),
+      `${error instanceof Error ? error.stack || error.message : String(error)}\n`
     );
+  }
+
+  if (!qualificationError) {
+    try {
+      expect(pageErrors, 'page must not emit uncaught JavaScript errors').toEqual([]);
+      result = 'PASS';
+    } catch (error) {
+      qualificationError = error;
+    }
+  }
+
+  fs.writeFileSync(
+    path.join(evidenceDir, 'qualification.json'),
+    JSON.stringify(
+      {
+        candidateSha: process.env.CANDIDATE_SHA || null,
+        result,
+        baseURL,
+        status,
+        title,
+        rootTextLength,
+        pageErrors
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  if (qualificationError) {
+    throw qualificationError;
   }
 });
