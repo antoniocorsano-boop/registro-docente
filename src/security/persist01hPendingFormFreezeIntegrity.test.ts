@@ -24,4 +24,26 @@ describe('PERSIST-01H pending form freeze integrity', () => {
 
     expect(form).toContain('<fieldset disabled={isSaving}');
   });
+
+  test('behavior status controls freeze while durable save is pending', async () => {
+    const text = await source('src/components/BehaviorsView.tsx');
+    const statusControls = sectionBetween(text, '{/* Bulk action buttons */}', '<button\n        onClick={handleSave}');
+
+    expect(statusControls).toContain('<fieldset disabled={isSaving}');
+  });
+
+  test('manual test form freezes title UDA and raw text while durable save is pending', async () => {
+    const text = await source('src/components/VerificheOnlineView.tsx');
+    const manualForm = sectionBetween(text, '<form onSubmit={handleSaveManualTest}', '</form>');
+
+    expect(manualForm).toContain('<fieldset disabled={isSavingTest}');
+  });
+
+  test('test-editor sub-navigation cannot close the retry draft while a save is pending', async () => {
+    const text = await source('src/components/VerificheOnlineView.tsx');
+    const navigation = sectionBetween(text, '{/* Tab pills */}', '{/* SUB-TAB 1: BACHECA & CONDIVISIONE PADLET */}');
+    const frozenTabCount = navigation.match(/disabled=\{isSavingTest\}/g)?.length ?? 0;
+
+    expect(frozenTabCount).toBeGreaterThanOrEqual(4);
+  });
 });
