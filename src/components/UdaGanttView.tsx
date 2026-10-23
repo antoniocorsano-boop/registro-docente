@@ -471,6 +471,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const udaTextMutationTailRef = useRef<Promise<void>>(Promise.resolve());
   const udaTextMutationDepthRef = useRef(0);
   const udaCommittedSnapshotRef = useRef(udas);
+  const udaLatestSnapshotRef = useRef(udas);
+  udaLatestSnapshotRef.current = udas;
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
@@ -479,7 +481,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   const queueUdaTextMutation = (nextUdas: UdaRecord[]) => {
     if (udaTextMutationDepthRef.current === 0 && !udaMutationPendingRef.current) {
-      udaCommittedSnapshotRef.current = udas;
+      udaCommittedSnapshotRef.current = udaLatestSnapshotRef.current;
     }
     const mutation = createUdaSnapshotMutation(udas, nextUdas);
     udaTextMutationDepthRef.current += 1;
@@ -515,7 +517,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     afterCommit?: () => void
   ): Promise<boolean> => {
     if (udaTextMutationDepthRef.current === 0 && udaActionMutationDepthRef.current === 0) {
-      udaCommittedSnapshotRef.current = udas;
+      udaCommittedSnapshotRef.current = udaLatestSnapshotRef.current;
     }
     const mutation = createUdaSnapshotMutation(udas, nextUdas);
     udaActionMutationDepthRef.current += 1;
