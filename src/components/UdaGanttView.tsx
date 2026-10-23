@@ -908,7 +908,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       const updatedUda = { ...targetUda, dependencies: nextDeps };
       const nextUdas = udas.map(u => (u.id === udaId ? updatedUda : u));
       void commitUdaViewMutation(nextUdas, () => {
-        if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(updatedUda);
+        setSelectedUdaForDetail(current =>
+          current?.id === udaId ? { ...current, dependencies: nextDeps } : current
+        );
         showStatus('Dipendenza rimossa');
       });
     } else {
@@ -934,7 +936,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           const alignedUda = { ...updatedUda, startMonth: newStart, durationMonths: newDur };
           nextUdas = udas.map(u => (u.id === udaId ? alignedUda : u));
           void commitUdaViewMutation(nextUdas, () => {
-            if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(alignedUda);
+            setSelectedUdaForDetail(current =>
+              current?.id === udaId
+                ? { ...current, dependencies: nextDeps, startMonth: newStart, durationMonths: newDur }
+                : current
+            );
             showStatus('Dipendenza aggiunta e date allineate');
           });
           return;
@@ -942,7 +948,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       }
 
       void commitUdaViewMutation(nextUdas, () => {
-        if (selectedUdaForDetail?.id === udaId) setSelectedUdaForDetail(updatedUda);
+        setSelectedUdaForDetail(current =>
+          current?.id === udaId ? { ...current, dependencies: nextDeps } : current
+        );
         showStatus('Dipendenza aggiunta con successo');
       });
     }

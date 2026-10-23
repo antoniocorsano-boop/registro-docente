@@ -102,7 +102,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           try {
             await onBulkAddStudents(imported);
             alert(`Importazione completata con successo! Aggiunti ${imported.length} nuovi alunni.`);
-            e.target.value = '';
           } catch {
             return;
           } finally {
@@ -115,6 +114,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         console.error('Error importing file', err);
         alert('Errore durante la lettura del file Excel/CSV.');
       } finally {
+        e.target.value = '';
         setIsImporting(false);
       }
     };
