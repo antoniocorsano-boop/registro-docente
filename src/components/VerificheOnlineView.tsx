@@ -351,12 +351,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       }));
       if (!savedTest) return;
       setSelectedTestId(savedTest.id);
-      e.target.value = '';
       alert(`Successo! Creato il test "${savedTest.title}" con ${questions.length} domande estratte.`);
     } catch (err) {
       console.error('Error parsing file', err);
       alert("Si è verificato un errore durante l'estrazione del file ZIP / DOCX.");
     } finally {
+      e.target.value = '';
       setIsParsingFile(false);
     }
   };

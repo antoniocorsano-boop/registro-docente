@@ -703,12 +703,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           const updatedUda = { ...targetUda, description: data.description };
           const nextUdas = udas.map(u => (u.id === targetUda.id ? (updatedUda as UdaRecord) : u));
           const committed = await commitUdaViewMutation(nextUdas, () => {
-            if (selectedUdaForDetail?.id === targetUda.id) {
-              setSelectedUdaForDetail(updatedUda as UdaRecord);
-            }
-            if (ganttSelectedUda?.id === targetUda.id) {
-              setGanttSelectedUda(updatedUda as UdaRecord);
-            }
+            setSelectedUdaForDetail(current =>
+              current && current.id === targetUda.id ? { ...current, description: data.description } : current
+            );
+            setGanttSelectedUda(current =>
+              current && current.id === targetUda.id ? { ...current, description: data.description } : current
+            );
             showStatus('✨ Descrizione UDA generata con successo con assistenza AI!');
           });
           if (!committed) return;
@@ -808,12 +808,16 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
       const nextUdas = udas.map(u => (u.id === parent.id ? updatedParent : u));
       void commitUdaViewMutation(nextUdas, () => {
-        if (selectedUdaForDetail?.id === parent.id) {
-          setSelectedUdaForDetail(updatedParent);
-        }
-        if (ganttSelectedUda?.id === parent.id) {
-          setGanttSelectedUda(updatedParent);
-        }
+        setSelectedUdaForDetail(current =>
+          current?.id === parent.id
+            ? { ...current, startMonth: clampedStart, durationMonths: clampedDuration }
+            : current
+        );
+        setGanttSelectedUda(current =>
+          current?.id === parent.id
+            ? { ...current, startMonth: clampedStart, durationMonths: clampedDuration }
+            : current
+        );
         showStatus(`Date aggiornate per "${parent.title}"`);
       });
     }
@@ -846,19 +850,17 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     });
 
     void commitUdaViewMutation(nextUdas, () => {
-      // Update active modal references only after durable persistence.
-      if (selectedUdaForDetail) {
-        const upd = updatesMap.get(selectedUdaForDetail.id);
-        if (upd) {
-          setSelectedUdaForDetail({ ...selectedUdaForDetail, ...upd });
-        }
-      }
-      if (ganttSelectedUda) {
-        const upd = updatesMap.get(ganttSelectedUda.id);
-        if (upd) {
-          setGanttSelectedUda({ ...ganttSelectedUda, ...upd });
-        }
-      }
+      // Update active modal references only after durable persistence, rebased on live UI state.
+      setSelectedUdaForDetail(current => {
+        if (!current) return current;
+        const upd = updatesMap.get(current.id);
+        return upd ? { ...current, ...upd } : current;
+      });
+      setGanttSelectedUda(current => {
+        if (!current) return current;
+        const upd = updatesMap.get(current.id);
+        return upd ? { ...current, ...upd } : current;
+      });
 
       setCascadeProposal(null);
       showStatus(
@@ -909,7 +911,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       const nextUdas = udas.map(u => (u.id === udaId ? updatedUda : u));
       void commitUdaViewMutation(nextUdas, () => {
         setSelectedUdaForDetail(current =>
-          current?.id === udaId ? { ...current, dependencies: nextDeps } : current
+          current?.id === udaId
+            ? { ...current, dependencies: (current.dependencies || []).filter(id => id !== predecessorId) }
+            : current
         );
         showStatus('Dipendenza rimossa');
       });
@@ -938,7 +942,14 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           void commitUdaViewMutation(nextUdas, () => {
             setSelectedUdaForDetail(current =>
               current?.id === udaId
-                ? { ...current, dependencies: nextDeps, startMonth: newStart, durationMonths: newDur }
+                ? {
+                    ...current,
+                    dependencies: (current.dependencies || []).includes(predecessorId)
+                      ? (current.dependencies || [])
+                      : [...(current.dependencies || []), predecessorId],
+                    startMonth: newStart,
+                    durationMonths: newDur
+                  }
                 : current
             );
             showStatus('Dipendenza aggiunta e date allineate');
@@ -949,7 +960,14 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
       void commitUdaViewMutation(nextUdas, () => {
         setSelectedUdaForDetail(current =>
-          current?.id === udaId ? { ...current, dependencies: nextDeps } : current
+          current?.id === udaId
+            ? {
+                ...current,
+                dependencies: (current.dependencies || []).includes(predecessorId)
+                  ? (current.dependencies || [])
+                  : [...(current.dependencies || []), predecessorId]
+              }
+            : current
         );
         showStatus('Dipendenza aggiunta con successo');
       });
