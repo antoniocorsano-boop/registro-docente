@@ -32,4 +32,15 @@ describe('PERSIST-01H terminal review intent integrity', () => {
     expect(tabs.match(/disabled=\{isSavingTest \|\| isParsingFile\}/g)?.length ?? 0).toBe(4);
     expect(bacheca).toContain('disabled={isParsingFile || isSavingTest}\n                onClick={handleStartNewInteractiveTest}');
   });
+
+  test('lesson removal rebases onto the latest visible UDA modal state instead of restoring a stale snapshot', async () => {
+    const text = await source('src/components/UdaGanttView.tsx');
+    const removeLesson = sectionBetween(text, '// Remove lesson from UDA', '// Save changes to detailed UDA dossier');
+
+    expect(removeLesson).toContain('setSelectedUdaForDetail(current =>');
+    expect(removeLesson).toContain("current?.id === updatedUda.id");
+    expect(removeLesson).toContain("lessons: (current.lessons || []).filter(l => l.id !== lessonId)");
+    expect(removeLesson).not.toContain('setSelectedUdaForDetail(updatedUda);');
+  });
+
 });
