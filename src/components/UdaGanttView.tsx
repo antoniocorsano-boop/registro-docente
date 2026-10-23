@@ -467,6 +467,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSavingUda, setIsSavingUda] = useState(false);
   const udaMutationPendingRef = useRef(false);
+  const udaActionMutationDepthRef = useRef(0);
   const udaTextMutationTailRef = useRef<Promise<void>>(Promise.resolve());
   const udaTextMutationDepthRef = useRef(0);
   const udaCommittedSnapshotRef = useRef(udas);
@@ -513,11 +514,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     nextUdas: UdaRecord[],
     afterCommit?: () => void
   ): Promise<boolean> => {
-    if (udaMutationPendingRef.current) return false;
-    if (udaTextMutationDepthRef.current === 0) {
+    if (udaTextMutationDepthRef.current === 0 && udaActionMutationDepthRef.current === 0) {
       udaCommittedSnapshotRef.current = udas;
     }
     const mutation = createUdaSnapshotMutation(udas, nextUdas);
+    udaActionMutationDepthRef.current += 1;
     udaMutationPendingRef.current = true;
     setIsSavingUda(true);
 
@@ -537,8 +538,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     } catch {
       return false;
     } finally {
-      udaMutationPendingRef.current = false;
-      if (udaTextMutationDepthRef.current === 0) {
+      udaActionMutationDepthRef.current = Math.max(0, udaActionMutationDepthRef.current - 1);
+      udaMutationPendingRef.current = udaActionMutationDepthRef.current > 0;
+      if (udaTextMutationDepthRef.current === 0 && udaActionMutationDepthRef.current === 0) {
         setIsSavingUda(false);
       }
     }
@@ -1881,6 +1883,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                                 {conflictInfo.hasConflict && (
                                   <button
                                     type="button"
+                                    disabled={isSavingUda}
                                     onClick={() => handleRequestDateChange(u.id, conflictInfo.conflictingPredecessors[0].requiredStartMonth, u.durationMonths)}
                                     className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-950 text-amber-300 border border-amber-600 flex items-center gap-1 hover:bg-amber-900 transition-colors cursor-pointer"
                                     title="Conflitto temporale: inizia prima che il predecessore termini. Clicca per allineare."
@@ -1914,7 +1917,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleRequestDateChange(u.id, start - 1, duration)}
-                                disabled={start <= 0}
+                                disabled={start <= 0 || isSavingUda}
                                 className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer"
                                 title="Anticipa inizio di 1 mese"
                               >
@@ -1926,7 +1929,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleRequestDateChange(u.id, start + 1, duration)}
-                                disabled={start + duration >= 10}
+                                disabled={start + duration >= 10 || isSavingUda}
                                 className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer"
                                 title="Posticipa inizio di 1 mese (suggerisce slittamento a cascata)"
                               >
@@ -2427,7 +2430,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRequestDateChange(u.id, (u.startMonth || 0) - 1, u.durationMonths)}
-                      disabled={(u.startMonth || 0) <= 0}
+                      disabled={(u.startMonth || 0) <= 0 || isSavingUda}
                       className="p-1 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-30"
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
@@ -2436,7 +2439,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRequestDateChange(u.id, (u.startMonth || 0) + 1, u.durationMonths)}
-                      disabled={(u.startMonth || 0) + u.durationMonths >= 10}
+                      disabled={(u.startMonth || 0) + u.durationMonths >= 10 || isSavingUda}
                       className="p-1 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-30"
                     >
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -2448,7 +2451,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRequestDateChange(u.id, u.startMonth, u.durationMonths - 1)}
-                      disabled={u.durationMonths <= 1}
+                      disabled={u.durationMonths <= 1 || isSavingUda}
                       className="p-1 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-30 font-bold"
                     >
                       -
@@ -2457,7 +2460,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRequestDateChange(u.id, u.startMonth, u.durationMonths + 1)}
-                      disabled={(u.startMonth || 0) + u.durationMonths >= 10}
+                      disabled={(u.startMonth || 0) + u.durationMonths >= 10 || isSavingUda}
                       className="p-1 rounded hover:bg-slate-800 text-slate-300 disabled:opacity-30 font-bold"
                     >
                       +

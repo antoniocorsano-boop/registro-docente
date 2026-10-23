@@ -483,6 +483,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         <div className="flex flex-wrap gap-1.5 bg-slate-900/80 p-1 rounded-lg border border-slate-800 text-xs font-semibold">
           <button
             type="button"
+            disabled={isSavingTest}
             onClick={() => { setActiveSubTab('bacheca'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'bacheca'
@@ -495,6 +496,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
+            disabled={isSavingTest}
             onClick={() => setActiveSubTab('editor')}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'editor'
@@ -507,6 +509,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
+            disabled={isSavingTest}
             onClick={() => { setActiveSubTab('stampa'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'stampa'
@@ -519,6 +522,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           <button
             type="button"
+            disabled={isSavingTest}
             onClick={() => { setActiveSubTab('analisi'); setIsEditingTest(false); }}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'analisi'
@@ -774,6 +778,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   Oppure incolla rapidamente domande da testo formattato (con tag [CORRETTA])
                 </summary>
                 <form onSubmit={handleSaveManualTest} className="mt-3 space-y-2.5">
+                  <fieldset disabled={isSavingTest} className="space-y-2.5 border-0 p-0 m-0 min-w-0">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -809,6 +814,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   >
                     Genera Test da Testo
                   </button>
+                  </fieldset>
                 </form>
               </details>
             </div>

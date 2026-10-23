@@ -90,6 +90,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
         </div>
       </div>
 
+      <fieldset disabled={isSaving} className="border-0 p-0 m-0 min-w-0">
       {/* Bulk action buttons */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -165,6 +166,8 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
           })
         )}
       </div>
+
+      </fieldset>
 
       <button
         onClick={handleSave}
