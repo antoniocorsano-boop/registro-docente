@@ -27,7 +27,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isStudentMutationPending || !newStudentName.trim()) return;
+    if (isImporting || isStudentMutationPending || !newStudentName.trim()) return;
     setIsStudentMutationPending(true);
     try {
       await onAddStudent(sanitizeName(newStudentName));
@@ -40,7 +40,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   };
 
   const handleInvertNames = async () => {
-    if (isStudentMutationPending) return;
+    if (isImporting || isStudentMutationPending) return;
     setIsStudentMutationPending(true);
     try {
       await onInvertNames();
@@ -52,7 +52,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   };
 
   const handleRemoveStudent = async (studentId: string) => {
-    if (isStudentMutationPending) return;
+    if (isImporting || isStudentMutationPending) return;
     setIsStudentMutationPending(true);
     try {
       await onRemoveStudent(studentId);
@@ -147,12 +147,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             placeholder="Cognome e Nome (es. Rossi Maria)"
             value={newStudentName}
             onChange={e => setNewStudentName(e.target.value)}
-            disabled={isStudentMutationPending}
+            disabled={isImporting || isStudentMutationPending}
             className="flex-1 p-2.5 neon-input text-xs sm:text-sm text-white placeholder-slate-500"
           />
           <button
             type="submit"
-            disabled={isStudentMutationPending}
+            disabled={isImporting || isStudentMutationPending}
             className="px-4 py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5 shrink-0"
           >
             <UserPlus className="w-4 h-4" /> Aggiungi
@@ -185,7 +185,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <button
               type="button"
               onClick={handleInvertNames}
-              disabled={isStudentMutationPending}
+              disabled={isImporting || isStudentMutationPending}
               className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border border-slate-700 bg-[var(--surface-variant)] hover:bg-slate-800 text-xs font-semibold text-slate-200 transition-colors"
             >
               <RefreshCw className="w-4 h-4 text-cyan-400" /> Inverti Nome / Cognome
@@ -224,7 +224,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                 <button
                   type="button"
-                  disabled={isStudentMutationPending}
+                  disabled={isImporting || isStudentMutationPending}
                   onClick={() => {
                     if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" e tutte le sue valutazioni da questa classe?`)) {
                       void handleRemoveStudent(student.id);
