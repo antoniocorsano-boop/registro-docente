@@ -1,0 +1,52 @@
+name: UXQA01 release test materializer
+
+on:
+  push:
+    branches:
+      - feat/ux-qa-01-autonomous-navigation
+
+permissions:
+  contents: write
+
+jobs:
+  patch-release-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ux-qa-01-autonomous-navigation
+          fetch-depth: 0
+      - name: Align RELEASE-01 with compact class card affordance
+        shell: python
+        run: |
+          from pathlib import Path
+          target = Path('tests/browser/release-01-qualification.spec.cjs')
+          text = target.read_text()
+          old = """async function selectSyntheticClassFromHome(page) {
+            const classHeading = page.getByRole('heading', { name: CLASS_NAME, exact: true, level: 4 });
+            await expect(classHeading).toBeVisible();
+            await classHeading.click();
+            await expect(primaryWorkflowButton(page, 'Riepilogo')).toBeVisible();
+          }
+          """
+          new = """async function selectSyntheticClassFromHome(page) {
+            const classButton = page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true });
+            await expect(classButton).toBeVisible();
+            await classButton.click();
+            await expect(primaryWorkflowButton(page, 'Riepilogo')).toBeVisible();
+          }
+          """
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one RELEASE-01 class selector, found {text.count(old)}')
+          target.write_text(text.replace(old, new))
+      - name: Commit test-only alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/browser/release-01-qualification.spec.cjs
+          git commit -m "test: align RELEASE-01 with compact class cards"
+          git push origin HEAD:feat/ux-qa-01-autonomous-navigation
