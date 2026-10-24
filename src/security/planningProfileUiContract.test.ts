@@ -34,8 +34,10 @@ describe('EDU-PLAN-01B teacher planning profile contract', () => {
 
     expect(editor).toContain('Programmazione didattica');
     expect(editor).toContain('Monte ore disciplinare definito dall\'istituzione scolastica');
-    expect(editor).toContain('2 h/settimana');
-    expect(editor).toContain('66 h/anno');
+    expect(editor).toContain('national.nationalWeeklyHours');
+    expect(editor).toContain('h/settimana');
+    expect(editor).toContain('national.nationalAnnualHours');
+    expect(editor).toContain('h/anno');
     expect(editor).toContain('reservePercent');
     expect(editor).toContain('assessmentPeriods');
     expect(editor).toContain('weeklySlots');
