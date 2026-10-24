@@ -213,4 +213,9 @@ describe('EDU-PLAN-01A planning domain', () => {
       programmableHours: 3.4
     });
   });
+
+  test('requires the governed Arena planning-context consumer before any binding can exist', async () => {
+    const moduleUrl = new URL('../planning/arenaPlanningContext.ts', import.meta.url);
+    expect(await Bun.file(moduleUrl).exists()).toBe(true);
+  });
 });
