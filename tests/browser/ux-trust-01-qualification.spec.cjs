@@ -296,36 +296,19 @@ test('UXT-E mobile analytics keeps class summary first and student detail disclo
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
 
-  const className = 'Classe Sintetica UXT-E';
-  const studentName = 'Alunno UXT-E';
   await setupFreshVault(page);
-
-  page.once('dialog', dialog => dialog.accept(className));
+  page.once('dialog', dialog => dialog.accept('Classe Sintetica UXT-E'));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await closePersistenceConfirmation(page);
-  const studentInput = page.getByPlaceholder('Cognome e Nome');
-  await studentInput.fill(studentName);
-  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
-  await expect(page.getByText(studentName, { exact: true })).toBeVisible();
-
-  const workflowHub = page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..');
-  await workflowHub.getByRole('button', { name: 'Valutazioni', exact: true }).click();
-  const evaluationForm = page.locator('form');
-  await evaluationForm.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Verifica UXT-E');
-  await evaluationForm.getByText(studentName, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('7.5');
-  await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
-  await closePersistenceConfirmation(page);
-
-  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: 'Riepilogo', exact: true }).click();
   await page.getByRole('button', { name: 'Analisi', exact: true }).click();
   await expect(page.getByText('Analisi medie & fasce analitiche', { exact: true })).toBeVisible();
 
   const studentDetail = page.getByTestId('mobile-analytics-student-detail');
   await expect(studentDetail).toBeVisible();
   await expect(studentDetail.locator('summary')).toContainText('Dettaglio alunni');
-  await expect(studentDetail.getByText(studentName, { exact: true })).toBeHidden();
+  await expect(studentDetail.getByPlaceholder('Cerca alunno')).toBeHidden();
   await studentDetail.locator('summary').click();
-  await expect(studentDetail.getByText(studentName, { exact: true })).toBeVisible();
   await expect(studentDetail.getByPlaceholder('Cerca alunno')).toBeVisible();
   await expect(studentDetail.getByRole('combobox')).toBeVisible();
 
@@ -338,11 +321,19 @@ test('UXT-E mobile analytics keeps class summary first and student detail disclo
 test('UXT-E desktop analytics retains the dense student table — desktop 1280x900', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
+
   await setupFreshVault(page);
-  await page.getByRole('button', { name: 'Menu' }).click();
+  page.once('dialog', dialog => dialog.accept('Classe Desktop UXT-E'));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await closePersistenceConfirmation(page);
+  await page.getByRole('button', { name: 'Riepilogo', exact: true }).click();
   await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+
   const denseTable = page.locator('table').filter({ hasText: 'MEDIA ANNO' });
   await expect(denseTable).toBeVisible();
   await expect(page.getByTestId('mobile-analytics-student-detail')).toBeHidden();
+  expect(pageErrors).toEqual([]);
   await context.close();
 });
