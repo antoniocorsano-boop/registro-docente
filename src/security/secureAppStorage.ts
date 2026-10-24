@@ -47,6 +47,7 @@ export interface CompleteSecureAppSnapshot {
   udas: UdaRecord[];
   customTests: Record<string, OnlineTest>;
   submissions: OnlineSubmission[];
+  planning: PlanningStateV1;
   meta: SecureMeta;
 }
 
@@ -56,6 +57,7 @@ const SNAPSHOT_KEYS = [
   'udas',
   'customTests',
   'submissions',
+  'planning',
   'meta'
 ] as const;
 
@@ -66,22 +68,8 @@ function sanitizeCompleteSnapshot(snapshot: CompleteSecureAppSnapshot): Complete
   };
 }
 
-function comparableCompleteSnapshot(snapshot: SecureAppSnapshot | CompleteSecureAppSnapshot) {
-  return {
-    appData: snapshot.appData,
-    settings: snapshot.settings,
-    udas: snapshot.udas,
-    customTests: snapshot.customTests,
-    submissions: snapshot.submissions,
-    meta: snapshot.meta
-  };
-}
-
-function snapshotEquals(
-  left: SecureAppSnapshot | CompleteSecureAppSnapshot,
-  right: SecureAppSnapshot | CompleteSecureAppSnapshot
-): boolean {
-  return JSON.stringify(comparableCompleteSnapshot(left)) === JSON.stringify(comparableCompleteSnapshot(right));
+function snapshotEquals(left: SecureAppSnapshot, right: SecureAppSnapshot): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot {
@@ -204,6 +192,7 @@ export class SecureAppStorage {
       { key: 'udas', value: sanitized.udas },
       { key: 'customTests', value: sanitized.customTests },
       { key: 'submissions', value: sanitized.submissions },
+      { key: 'planning', value: sanitized.planning },
       { key: 'meta', value: sanitized.meta }
     ]);
   }
@@ -215,6 +204,7 @@ export class SecureAppStorage {
       ['udas', snapshot.udas],
       ['customTests', snapshot.customTests],
       ['submissions', snapshot.submissions],
+      ['planning', snapshot.planning],
       ['meta', snapshot.meta]
     ];
 
