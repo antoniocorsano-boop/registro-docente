@@ -56,7 +56,8 @@ describe('LIB-01A private-library teacher surface', () => {
     expect(card).toContain('Collega');
     expect(card).toContain('Scollega');
     expect(card).toContain('Elimina');
-    expect(card).toContain('Funzioni contestuali disponibili con il copilota');
+    expect(card).toContain('Che cosa vuoi farne?');
+    expect(card).toContain('isSelected &&');
   });
 
   test('App renders the library with durable handlers and pending/error state', async () => {

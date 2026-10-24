@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
+import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
+import {
+  dispatchLibraryContextAction,
+  resolveLibraryContextActions
+} from '../library/contextualCoreAdapter';
 
 interface LibrarySourceCardProps {
   source: LibrarySource;
@@ -34,6 +39,12 @@ const STATUS_LABELS: Record<LibrarySource['status'], string> = {
   failed: 'Da riprovare'
 };
 
+const PRIVACY_LABELS: Record<LibrarySource['privacy'], string> = {
+  unknown: 'Privacy da verificare',
+  'teacher-professional': 'Materiale professionale del docente',
+  'student-personal': 'Può contenere dati personali di studenti'
+};
+
 export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   source,
   udas,
@@ -46,7 +57,51 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   onDelete
 }) => {
   const [targetUdaId, setTargetUdaId] = useState('');
+  const [contextActions, setContextActions] = useState<readonly ResolvedAction[]>([]);
+  const [isContextLoading, setIsContextLoading] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [contextLinkOpen, setContextLinkOpen] = useState(false);
+  const [contextTargetUdaId, setContextTargetUdaId] = useState('');
+  const [contextLinkConfirmationPending, setContextLinkConfirmationPending] = useState(false);
   const excerpt = source.extractedText || source.payload.text;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isSelected) {
+      setContextActions([]);
+      setIsContextLoading(false);
+      setContextError(null);
+      setReviewOpen(false);
+      setContextLinkOpen(false);
+      setContextTargetUdaId('');
+      setContextLinkConfirmationPending(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsContextLoading(true);
+    setContextError(null);
+    void resolveLibraryContextActions(source)
+      .then(actions => {
+        if (!cancelled) setContextActions(actions);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setContextActions([]);
+          setContextError('Le azioni contestuali non sono disponibili in questo momento. La fonte resta invariata.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsContextLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSelected, source.id, source.kind, source.status, source.privacy, source.links.length]);
 
   const handleRename = async () => {
     const title = prompt('Nuovo titolo della fonte:', source.title)?.trim();
@@ -74,6 +129,59 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       await onDelete(source.id);
     } catch {
       // The source remains visible because publication happens only after persistence.
+    }
+  };
+
+  const handleContextAction = (actionId: string) => {
+    setContextError(null);
+    if (actionId === 'review-source') {
+      setReviewOpen(true);
+      setContextLinkOpen(false);
+      setContextLinkConfirmationPending(false);
+      return;
+    }
+    if (actionId === 'link-source-to-uda') {
+      setContextLinkOpen(true);
+      setReviewOpen(false);
+      setContextLinkConfirmationPending(false);
+    }
+  };
+
+  const requestContextualLinkConfirmation = async () => {
+    if (!contextTargetUdaId) return;
+    setContextError(null);
+    const result = await dispatchLibraryContextAction({
+      source,
+      actionId: 'link-source-to-uda',
+      executor: async () => undefined
+    });
+
+    if (result.status === 'HUMAN_CONFIRMATION_REQUIRED') {
+      setContextLinkConfirmationPending(true);
+      return;
+    }
+    setContextError('Il collegamento non è autorizzato nel contesto corrente.');
+  };
+
+  const confirmContextualLink = async () => {
+    if (!contextTargetUdaId) return;
+    setContextError(null);
+    try {
+      const result = await dispatchLibraryContextAction({
+        source,
+        actionId: 'link-source-to-uda',
+        humanConfirmed: true,
+        executor: () => onLink(source.id, { targetType: 'uda', targetId: contextTargetUdaId })
+      });
+      if (result.status !== 'EXECUTED') {
+        setContextError('Il collegamento non è stato applicato.');
+        return;
+      }
+      setContextTargetUdaId('');
+      setContextLinkConfirmationPending(false);
+      setContextLinkOpen(false);
+    } catch {
+      setContextError('Salvataggio del collegamento non riuscito. Puoi riprovare senza riselezionare la fonte.');
     }
   };
 
@@ -209,9 +317,93 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       </div>
 
       {isSelected && (
-        <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-2 text-sm text-cyan-100">
-          <strong className="block">Funzioni contestuali disponibili con il copilota</strong>
-          <span className="text-cyan-200/80">La fonte resta selezionata senza modificare UDA o lezioni.</span>
+        <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-3 text-sm text-cyan-100 space-y-3">
+          <div>
+            <strong className="block">Che cosa vuoi farne?</strong>
+            <span className="text-cyan-200/80">Vedi solo le azioni ammesse per questa fonte. La selezione non modifica UDA o lezioni.</span>
+          </div>
+
+          {isContextLoading && <p role="status" className="text-xs text-cyan-200/80">Valuto le azioni disponibili…</p>}
+          {contextError && <p role="alert" className="text-xs text-amber-200">{contextError}</p>}
+
+          {!isContextLoading && contextActions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {contextActions.map(action => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => handleContextAction(action.id)}
+                  disabled={isPending}
+                  className="min-h-[44px] px-3 rounded-lg border border-cyan-700/70 bg-cyan-950/50 text-cyan-100 text-sm font-medium disabled:opacity-50"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {reviewOpen && (
+            <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 px-3 py-2 text-xs text-slate-300 space-y-1">
+              <p><strong className="text-slate-100">Contesto locale</strong></p>
+              <p>{KIND_LABELS[source.kind]} · {STATUS_LABELS[source.status]}</p>
+              <p>{PRIVACY_LABELS[source.privacy]}</p>
+              <p>{source.links.length === 0 ? 'Nessun collegamento didattico.' : `${source.links.length} collegamento/i didattico/i.`}</p>
+            </div>
+          )}
+
+          {contextLinkOpen && (
+            <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
+              <label className="block text-xs text-slate-300" htmlFor={`context-link-${source.id}`}>
+                UDA di destinazione
+              </label>
+              <select
+                id={`context-link-${source.id}`}
+                value={contextTargetUdaId}
+                onChange={event => {
+                  setContextTargetUdaId(event.target.value);
+                  setContextLinkConfirmationPending(false);
+                }}
+                disabled={isPending || udas.length === 0}
+                className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+              >
+                <option value="">Seleziona UDA</option>
+                {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}
+              </select>
+
+              {!contextLinkConfirmationPending ? (
+                <button
+                  type="button"
+                  onClick={() => void requestContextualLinkConfirmation()}
+                  disabled={isPending || !contextTargetUdaId}
+                  className="min-h-[44px] px-3 rounded-md border border-cyan-700 text-sm text-cyan-100 disabled:opacity-50"
+                >
+                  Continua
+                </button>
+              ) : (
+                <div className="rounded-md border border-amber-700/60 bg-amber-950/20 p-3 space-y-2">
+                  <p className="text-xs text-amber-100">Confermi il collegamento della fonte alla UDA selezionata?</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void confirmContextualLink()}
+                      disabled={isPending}
+                      className="min-h-[44px] px-3 rounded-md bg-[var(--primary)] text-slate-950 font-semibold text-sm disabled:opacity-50"
+                    >
+                      Conferma collegamento
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContextLinkConfirmationPending(false)}
+                      disabled={isPending}
+                      className="min-h-[44px] px-3 rounded-md border border-slate-700 text-slate-200 text-sm disabled:opacity-50"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </article>

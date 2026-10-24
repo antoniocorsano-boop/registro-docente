@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "registro.contextual-copilot-core-vendor/v1",
+  "package": {
+    "name": "@trama/contextual-copilot-core",
+    "version": "0.1.0"
+  },
+  "source": {
+    "repository": "antoniocorsano-boop/trama-ecosistema",
+    "commit": "4de1de1daf2a68ebee4d52b0140420b45ae1ef3e",
+    "distributionCommit": "85a01142d90c30da9b4fbbc339a92d1457bb04b3",
+    "path": "shared/contextual-copilot-core"
+  },
+  "consumerMode": "vendored-file-package",
+  "networkRequiredAtBuild": false,
+  "externalRegistryRequired": false,
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "a37ec9048412795ca9e2c652ed037d90367b4e457aaa544675b916559bdd1265"
+    },
+    {
+      "path": "index.d.ts",
+      "sha256": "54d1f6ea53452a149bf3520c1898769867e95482319582062bd3a81854a24c1e"
+    },
+    {
+      "path": "package.json",
+      "sha256": "837990406769ea59dae3e83bf6c7492c02483fc797ab77cf8a3347220c4a57bd"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "cfea27bae938ac2a686b769dc529fac7a778a4fe4a05bc7fe9c7a4c584b5808c"
+    }
+  ]
+}
