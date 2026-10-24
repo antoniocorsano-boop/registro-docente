@@ -24,4 +24,20 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(controls).toContain('aria-label="Blocca Registro"');
     expect(controls).not.toContain('fixed bottom-16 md:bottom-3');
   });
+
+  test('UXT-A reuses one mobile touch-target contract on audited high-impact operational controls', async () => {
+    const evaluations = await source('components/EvaluationsView.tsx');
+    const behaviors = await source('components/BehaviorsView.tsx');
+    const history = await source('components/HistoryView.tsx');
+
+    for (const view of [evaluations, behaviors, history]) {
+      expect(view).toContain("import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';");
+      expect(view).toContain('MOBILE_TOUCH_TARGET_CLASS');
+    }
+
+    expect(evaluations).toContain('MOBILE_TOUCH_TARGET_CLASS} px-2 py-0.5');
+    expect(evaluations).toContain('MOBILE_TOUCH_TARGET_CLASS} p-1.5');
+    expect(behaviors).toContain('MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1');
+    expect(history).toContain('MOBILE_TOUCH_TARGET_CLASS} p-2');
+  });
 });
