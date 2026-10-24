@@ -13,4 +13,15 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(root).toContain('<VaultControls');
     expect(root).not.toContain('fixed bottom-16 md:bottom-3 right-3 z-50 flex items-center gap-2');
   });
+
+  test('UXT-A uses separate compact mobile and desktop Vault presentations with touch-safe mobile controls', async () => {
+    const controls = await source('components/VaultControls.tsx');
+
+    expect(controls).toContain('md:hidden');
+    expect(controls).toContain('hidden md:flex');
+    expect(controls).toContain('min-h-11');
+    expect(controls).toContain('min-w-11');
+    expect(controls).toContain('aria-label="Blocca Registro"');
+    expect(controls).not.toContain('fixed bottom-16 md:bottom-3');
+  });
 });
