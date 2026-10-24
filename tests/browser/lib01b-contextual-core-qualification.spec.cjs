@@ -107,12 +107,14 @@ test('LIB-01B progressively reveals shared Core actions and gates contextual UDA
   await expect(card.getByRole('button', { name: 'Prepara materiale', exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Sintetizza la fonte', exact: true })).toHaveCount(0);
 
+  // LIB-01C adds an explicit teaching-context selection before the existing shared-Core LINK action.
+  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
+
   await card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }).click();
   await expect(card.getByText('Contesto locale', { exact: true })).toBeVisible();
   await expect(card.getByText('Privacy da verificare', { exact: true })).toBeVisible();
 
   await card.getByRole('button', { name: 'Collega a una UDA', exact: true }).click();
-  await card.getByLabel('UDA di destinazione').selectOption({ label: UDA_TITLE });
   await card.getByRole('button', { name: 'Continua', exact: true }).click();
   await expect(card.getByText('Confermi il collegamento della fonte alla UDA selezionata?', { exact: true })).toBeVisible();
 

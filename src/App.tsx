@@ -1138,6 +1138,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           <LibraryView
             library={library}
             udas={udas}
+            currentClassName={currentClass?.name ?? null}
             onAddSource={handleAddLibrarySource}
             onUpdateSource={handleUpdateLibrarySource}
             onLinkSource={handleLinkLibrarySource}
