@@ -153,3 +153,81 @@ test('UXT-B encrypted backup shortcut and sufficiency denominator are truthful â
   expect(pageErrors).toEqual([]);
   await context.close();
 });
+
+test('UXT-C strong competency profile stays relative while below-threshold evidence is absolute â€” desktop 1280x900', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
+
+  const className = 'Classe Sintetica UXT-C';
+  const strongStudent = 'Profilo Forte UXT-C';
+  const weakStudent = 'Profilo Sotto Soglia UXT-C';
+
+  await setupFreshVault(page);
+
+  page.once('dialog', dialog => dialog.accept(className));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
+
+  const activeShield = page.getByRole('button', { name: /LIM Shield Attivo/ });
+  await expect(activeShield).toBeVisible();
+  await activeShield.click();
+
+  const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
+  await studentInput.fill(strongStudent);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(strongStudent, { exact: true })).toBeVisible();
+  await studentInput.fill(weakStudent);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(weakStudent, { exact: true })).toBeVisible();
+
+  const workflowHub = page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..');
+  await workflowHub.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+
+  const evaluationForm = page.locator('form');
+  const typeSelect = evaluationForm.locator('label').filter({ hasText: 'Tipologia Prova' }).locator('..').locator('select');
+  await typeSelect.selectOption('test');
+  await evaluationForm.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('CAD avanzato UXT-C');
+  await evaluationForm.getByText(strongStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('9.4');
+  await evaluationForm.getByText(weakStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('5.4');
+  await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+  await closePersistenceConfirmation(page);
+  await expect(page.getByText('CAD avanzato UXT-C', { exact: true })).toBeVisible();
+
+  await typeSelect.selectOption('orale');
+  await evaluationForm.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Colloquio tecnico UXT-C');
+  await evaluationForm.getByText(strongStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('9.1');
+  await evaluationForm.getByText(weakStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('7.2');
+  await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+  await closePersistenceConfirmation(page);
+  await expect(page.getByText('Colloquio tecnico UXT-C', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: 'Scheda alunno', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Scheda Alunno & Profilo delle Competenze' })).toBeVisible();
+
+  const reportSelect = page.locator('select').filter({
+    has: page.locator('option', { hasText: strongStudent })
+  });
+  await expect(reportSelect).toHaveCount(1);
+  await reportSelect.selectOption({ label: strongStudent });
+
+  const evidenceSummary = page.locator('summary').filter({ hasText: 'Profilo interno di evidenze' });
+  await expect(evidenceSummary).toBeVisible();
+  await evidenceSummary.click();
+
+  await expect(page.getByText('Area da Consolidare:', { exact: true })).toBeHidden();
+  await expect(page.getByText('Area di crescita relativa:', { exact: true })).toBeVisible();
+  await expect(page.getByText('3/6 con evidenze', { exact: true })).toBeVisible();
+
+  await reportSelect.selectOption({ label: weakStudent });
+  await expect(page.getByText('Area da Consolidare:', { exact: true })).toBeVisible();
+  await expect(page.getByText('Area di crescita relativa:', { exact: true })).toBeHidden();
+  await expect(page.getByText('3/6 con evidenze', { exact: true })).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
