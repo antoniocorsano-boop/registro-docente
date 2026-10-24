@@ -90,3 +90,66 @@ test('UXT-A desktop Vault controls preserve auto-lock and manual lock semantics 
   expect(pageErrors).toEqual([]);
   await context.close();
 });
+
+
+test('UXT-B encrypted backup shortcut and sufficiency denominator are truthful — desktop 1280x900', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
+
+  const className = 'Classe Sintetica UXT-B';
+  const studentA = 'Studente Valutato UXT-B';
+  const studentB = 'Studente Non Valutato UXT-B';
+  const evaluationTitle = 'Valutazione Sintetica UXT-B';
+
+  await setupFreshVault(page);
+
+  page.once('dialog', dialog => dialog.accept(className));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
+
+  const activeShield = page.getByRole('button', { name: /LIM Shield Attivo/ });
+  await expect(activeShield).toBeVisible();
+  await activeShield.click();
+
+  const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
+  await studentInput.fill(studentA);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(studentA, { exact: true })).toBeVisible();
+  await studentInput.fill(studentB);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(studentB, { exact: true })).toBeVisible();
+
+  const workflowHub = page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..');
+  await workflowHub.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+  await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill(evaluationTitle);
+
+  const studentARow = page.getByText(studentA, { exact: true }).locator('..').locator('..');
+  await studentARow.locator('input[type="text"]').fill('8');
+  await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+  await closePersistenceConfirmation(page);
+  await expect(page.getByText(evaluationTitle, { exact: true })).toBeVisible();
+
+  const workflowHubAfterSave = page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..');
+  await workflowHubAfterSave.getByRole('button', { name: 'Riepilogo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${className}` })).toBeVisible();
+  await expect(page.getByText('2 alunni iscritti', { exact: true })).toBeVisible();
+
+  const sufficiencyCard = page.getByText('Tasso Sufficienze', { exact: true }).locator('..');
+  await expect(sufficiencyCard.getByText('100%', { exact: true })).toBeVisible();
+  await expect(sufficiencyCard.getByText('1 su 1 con media disponibile', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Classi', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  await expect(page.getByText(/Ultimo backup cifrato:/)).toBeVisible();
+  const encryptedBackupShortcut = page.getByRole('button', { name: 'Esporta backup cifrato', exact: true });
+  await expect(encryptedBackupShortcut).toBeVisible();
+  await encryptedBackupShortcut.click();
+  await expect(page.getByRole('heading', { name: /Privacy First & Protezione dei dati/ })).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
