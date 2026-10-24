@@ -230,7 +230,7 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
       resolve();
     });
   });
-  await page.getByRole('button', { name: 'Ripristina Backup Cifrato', exact: true }).click();
+  await page.getByRole('button', { name: 'Decifra e Ripristina Registro', exact: true }).click();
   await restoreDialogHandled;
   expect(restoreMessage).toContain('ripristinato con successo');
   await openLibrary(page);
