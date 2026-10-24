@@ -281,7 +281,7 @@ test('UXT-D active UDA without formal evidence stays watch while an ended gap is
 
   await expect(activeCard.getByText('DA MONITORARE', { exact: true })).toBeVisible();
   await expect(activeCard.getByText(/GAP CRITICO/)).toHaveCount(0);
-  await expect(activeCard.getByText(/Pianifica|collega.*evidenz/i)).toBeVisible();
+  await expect(activeCard.getByText('Prossimo passo: Monitora la copertura e collega evidenze coerenti man mano che emergono.', { exact: true })).toBeVisible();
 
   await expect(endedCard.getByText(/CRITIC/)).toBeVisible();
 
