@@ -1,0 +1,20 @@
+{
+  "schema": "registro.ux-qa-progressive-disclosure/v1",
+  "viewports": [
+    { "width": 390, "height": 844 },
+    { "width": 1280, "height": 900 }
+  ],
+  "invariants": [
+    { "id": "UXPD-001", "severity": "P1", "message": "Programmazione apre una vista riepilogativa read-first senza form completo dominante" },
+    { "id": "UXPD-002", "severity": "P1", "message": "Programmazione usa sezioni Profilo, Calendario e normativa, Organizzazione con una sola sezione in modifica" },
+    { "id": "UXPD-003", "severity": "P1", "message": "Workspace UDA usa viste esplicite UDA, Avanzamento, Pianificazione, Analisi con UDA default" },
+    { "id": "UXPD-004", "severity": "P1", "message": "KPI, Gantt/dipendenze e gap analysis non dominano simultaneamente la vista UDA iniziale" },
+    { "id": "UXPD-005", "severity": "P2", "message": "Biblioteca usa un titolo umano come label primaria e filename tecnico secondario" },
+    { "id": "UXPD-006", "severity": "P2", "message": "Impostazioni mostra prima profilo e identità e dischiude i gruppi avanzati" },
+    { "id": "UXPD-007", "severity": "P2", "message": "Privacy è summary-first con dettagli tecnici dischiusi" },
+    { "id": "UXPD-008", "severity": "P2", "message": "Nuova Valutazione mostra prima i campi essenziali e non fa dominare opzioni avanzate e compilazione rapida" },
+    { "id": "UXPD-009", "severity": "P2", "message": "Azioni distruttive di classe non competono con Apri classe sulla card primaria" },
+    { "id": "UXPD-010", "severity": "P1", "message": "Nodi auditati mobile senza overflow e con selector/controlli primari almeno 44x44" },
+    { "id": "UXPD-011", "severity": "P0", "message": "Pageerror fail-closed fino all'ultima operazione di evidence UXPD" }
+  ]
+}
