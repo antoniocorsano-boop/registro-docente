@@ -1,0 +1,21 @@
+name: LIB-01B Lockfile Materializer
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Materialize lockfile only
+        run: bun install --lockfile-only
+      - name: Show deterministic bun.lock delta
+        run: git diff -- bun.lock
