@@ -48,15 +48,26 @@ async function createSyntheticUda(page) {
 
 async function addSyntheticLesson(page) {
   await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
-  const dossierButton = page.getByRole('button', { name: 'Dossier & Rubrica', exact: true }).first();
+  await expect(page.getByRole('heading', { name: /Gap Analysis Competenze & Verifiche Oggettive/ })).toBeVisible();
+
+  // Scope the setup to the exact synthetic UDA. Using the first dossier can mutate an unrelated pre-existing UDA.
+  const udaCard = page
+    .getByText(UDA_TITLE, { exact: true })
+    .last()
+    .locator('xpath=ancestor::div[contains(@class,"rounded-xl") and contains(@class,"border")][1]');
+  const dossierButton = udaCard.getByRole('button', { name: 'Dossier & Rubrica', exact: true });
   await expect(dossierButton).toBeVisible();
   await dossierButton.click();
+
   const topicInput = page.getByPlaceholder('Argomento o fase operativa svolta...');
   await expect(topicInput).toBeVisible();
   const form = topicInput.locator('xpath=ancestor::form');
   await topicInput.fill(LESSON_TOPIC);
   await form.locator('select').selectOption('laboratorio');
   await form.locator('button[type="submit"]').click();
+
+  // This receipt is emitted only from the post-commit callback.
+  await expect(page.getByText('Attività registrata nel diario', { exact: true })).toBeVisible();
   await expect(page.getByText(LESSON_TOPIC, { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
 }
