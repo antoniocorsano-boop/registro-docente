@@ -7,6 +7,7 @@ export type VaultRecordKey =
   | 'customTests'
   | 'submissions'
   | 'planning'
+  | 'library'
   | 'meta';
 
 export interface VaultKdfParametersV1 {
