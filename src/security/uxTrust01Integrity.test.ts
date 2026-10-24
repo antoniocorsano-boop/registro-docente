@@ -70,4 +70,57 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(dashboard).toContain("suffRate === null ? 'Nessun dato' : 'Tasso Sufficienze'");
   });
 
+  test('UXT-C exposes evidence coverage and distinguishes absolute consolidation from relative growth', async () => {
+    const semanticsUrl = new URL('../analytics/competencySemantics.ts', import.meta.url);
+    let semanticsSource: string | null = null;
+    try {
+      semanticsSource = await readFile(semanticsUrl, 'utf8');
+    } catch {
+      semanticsSource = null;
+    }
+
+    expect(semanticsSource).not.toBeNull();
+    if (semanticsSource === null) return;
+
+    const semantics = await import(semanticsUrl.href);
+    const coverage = semantics.getCompetencyEvidenceCoverage(3, 6);
+    expect(coverage).toEqual({
+      evaluatedCount: 3,
+      totalCount: 6,
+      label: '3/6 con evidenze',
+      reliable: true,
+    });
+
+    const strong = semantics.getGrowthRecommendation(
+      [
+        { label: 'STEM', score: 9.4 },
+        { label: 'Digitale', score: 9.1 },
+        { label: 'Comunicazione', score: 9.0 },
+      ],
+      6,
+    );
+    expect(strong.kind).toBe('relative');
+    expect(strong.item).toEqual({ label: 'Comunicazione', score: 9.0 });
+
+    const weak = semantics.getGrowthRecommendation(
+      [
+        { label: 'STEM', score: 5.4 },
+        { label: 'Digitale', score: 7.1 },
+        { label: 'Comunicazione', score: 7.4 },
+      ],
+      6,
+    );
+    expect(weak.kind).toBe('absolute');
+    expect(weak.item).toEqual({ label: 'STEM', score: 5.4 });
+
+    const report = await source('components/StudentReportView.tsx');
+    expect(report).toContain('const evaluatedCompetencyData = competencyRadarData.filter(c => c.studentScore !== null);');
+    expect(report).toContain('getCompetencyEvidenceCoverage');
+    expect(report).toContain('getGrowthRecommendation');
+    expect(report).toContain('competencyEvidenceCoverage.label');
+    expect(report).toContain('Area di crescita relativa:');
+    expect(report).toContain('Area da Consolidare:');
+    expect(report).toContain('Dati insufficienti per costruire un profilo attendibile');
+  });
+
 });
