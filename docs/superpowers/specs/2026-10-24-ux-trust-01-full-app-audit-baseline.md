@@ -64,15 +64,17 @@ The audit does **not** support a full redesign.
 
 ## Findings
 
-### P1 — UXTRUST-F01 — Global mobile Vault bar obstructs primary work
+### P2 — UXTRUST-F01 — Global mobile Vault bar consumes persistent task viewport
 
-**Evidence:** every class-level mobile surface has three persistent layers: sticky header (~65 px), fixed bottom navigation (~53 px) and the fixed Vault control (~302×53 px at approximately y=727 on 390×844). The Vault control sits directly above the bottom navigation and overlays ordinary document content while scrolling.
+**Evidence:** every class-level mobile surface has three persistent layers: sticky header (~65 px), fixed bottom navigation (~53 px) and the fixed Vault control (~302×53 px at approximately y=727 on 390×844). The Vault control sits directly above the bottom navigation and visually covers ordinary content while it passes underneath during scrolling.
 
-Observed interference includes Valutazioni, Comportamento, Tabellone, Analisi, Scheda alunno, Gestione alunni, Verifiche online, UDA, Impostazioni and Privacy.
+Observed interference includes Valutazioni, Comportamento, Tabellone, Analisi, Scheda alunno, Gestione alunni, Verifiche online, UDA, Impostazioni and Privacy. The screenshots establish persistent viewport occupation and transient visual overlap, but they do **not** establish that a primary action is permanently unreachable after scrolling.
+
+**Existing mitigation:** `App.tsx` already reserves substantial mobile bottom clearance (`pb-36 md:pb-20`), introduced by the prior mobile UX work. Therefore this finding is **not** a missing-bottom-padding defect and must not be remediated by simply adding more generic page padding.
 
 **Root source:** `SecureRegistroRoot.tsx` renders the auto-lock selector + `Blocca Registro` as `fixed bottom-16 md:bottom-3 right-3 z-50` for the whole READY application.
 
-**Required outcome:** security controls remain immediately available without covering task content. Mobile must reserve layout space or use a compact/contextual affordance instead of a floating 302 px toolbar over primary work.
+**Required outcome:** security controls remain immediately available while consuming less working viewport and without visually sitting over the active task. Candidate remedies may compact/contextualize the Vault affordance or integrate it into an existing safe shell region, but must preserve the existing bottom-clearance contract and prove the improvement with viewport-level browser evidence.
 
 ### P1 — UXTRUST-F02 — Backup language contradicts the actual encrypted-backup contract
 
@@ -89,17 +91,18 @@ This is a trust/security UX contradiction even though the actual handlers route 
 
 **Required outcome:** one vocabulary and one canonical place for backup: `Backup cifrato` / `.enc.json`, with Home/Settings/drawer linking to Privacy instead of implying plaintext JSON export.
 
-### P1 — UXTRUST-F03 — UDA gap severity incorrectly becomes critical whenever no formal test exists
+### P1 — UXTRUST-F03 — UDA gap severity is both over-promoted and calendar-frozen
 
 The UI can show `GAP CRITICI` for an UDA that is still active months before its estimated end date while simultaneously saying `Pianificazione in corso` / `Nessuna verifica sommativa ancora registrata`.
 
-**Causal source:** `UdaGanttView.tsx` computes:
+Two causal defects participate in the time-sensitive classification:
 
-`hasCriticalGap = gapCount > 0 && (isEnded || isEndingNow || formalTestSessions.length === 0)`
+1. `hasCriticalGap = gapCount > 0 && (isEnded || isEndingNow || formalTestSessions.length === 0)` — absence of any formal test alone promotes an otherwise future/open UDA to critical;
+2. `currentSchoolMonthIndex = 1` is hard-coded to October, and `isEnded`, `isEndingNow` and `isUpcoming` all derive from it. The value happens to match the October 2026 audit date but would remain October later in the school year.
 
-Therefore *absence of any formal test* alone promotes an otherwise future/open UDA to critical.
+**Required outcome:** derive the school-month position from the actual/current school calendar and keep time-sensitive states distinct: `da pianificare` → `in scadenza` → `critico/scaduto`. Lack of a test during an active future UDA must not itself be critical.
 
-**Required outcome:** time-sensitive states must be distinct: `da pianificare` → `in scadenza` → `critico/scaduto`. Lack of a test during an active future UDA must not itself be critical.
+**Acceptance cases for UXT-D:** at minimum verify an upcoming UDA, an active UDA well before its end, an UDA ending in the current school month, and an already ended UDA; repeat the cases with and without formal evidence so time and evidence independently affect severity.
 
 ### P1 — UXTRUST-F04 — Gap remediation can incentivize creating a grade instead of planning evidence
 
@@ -153,11 +156,13 @@ The mobile Analytics document measured roughly 3061 px high with the synthetic 8
 
 **Required outcome:** preserve the class summary first, then use progressive disclosure/search/sort to reveal individual student analytics rather than rendering every analytical card at full prominence.
 
-### P2 — UXTRUST-F11 — UDA exposes two similar internal point scales without enough conceptual separation
+### P2 — UXTRUST-F11 — UDA exposes two related composite point scales without enough conceptual separation
 
-The live UDA view shows both an `Indice Attività UDA` (derived as weighted activity hours / 10) and `Punti attività interni` / weighted hours. Example values such as 1.6 pt and 16.3 pt represent related quantities on different scales and are easy to confuse.
+The live UDA view exposes an `Indice Attività UDA` and a larger `Punti attività interni`/composite activity quantity. They are related but are **not** simply raw weighted lesson hours on two scales.
 
-**Required outcome:** one primary teacher-facing progress concept. If both values remain, one must be secondary/explanatory and named in a way that makes the mathematical relationship obvious. Neither may resemble certified credits/hours.
+The current calculation first sums weighted lesson hours, then adds an **evaluation-batch bonus of 1 point per distinct linked evaluation batch**. This composite is rounded to one decimal place as `totalWeightedHours`; the teacher-facing activity index (`earnedCredits` in the current internal API) is then the same composite divided by 10 and rounded to one decimal place. Thus examples such as 1.6 pt and 16.3 pt may encode the same composite evidence at two scales, including evaluation contributions.
+
+**Required outcome:** preserve the evaluation-batch contribution unless a separately approved semantic change explicitly removes it. Expose one primary teacher-facing progress concept. If both values remain, the secondary quantity must be explanatory and named so the mathematical relationship and evaluation contribution are clear. Neither may resemble certified credits/hours.
 
 ### P2 — UXTRUST-F12 — Sufficiency KPI denominator is not visible in the label
 
@@ -176,29 +181,29 @@ Privacy Shield and save/sync state are technically exposed with titles/labels, b
 | Surface | Health | Main concern |
 | --- | --- | --- |
 | Home / Classi | WATCH | legacy JSON backup copy, tiny destructive action, dense comparison |
-| Riepilogo | GOOD/WATCH | clear hierarchy; sufficiency denominator and Vault overlay |
-| Valutazioni | REWORK | Vault obstruction + small row/quick-entry controls |
-| Comportamento | REWORK | very small status chips + Vault obstruction |
-| Tabellone | WATCH | good mobile cards; analytical duplication + Vault obstruction |
-| Analisi | WATCH | trustworthy fail-closed math; mobile density + Vault obstruction |
+| Riepilogo | GOOD/WATCH | clear hierarchy; sufficiency denominator and persistent Vault viewport occupation |
+| Valutazioni | REWORK | persistent Vault viewport occupation + small row/quick-entry controls |
+| Comportamento | REWORK | very small status chips + persistent Vault viewport occupation |
+| Tabellone | WATCH | good mobile cards; analytical duplication + persistent Vault viewport occupation |
+| Analisi | WATCH | trustworthy fail-closed math; mobile density + persistent Vault viewport occupation |
 | Storico | GOOD/WATCH | clean flow; small edit/delete hit targets |
 | Scheda alunno | REWORK | semantic radar/growth issues + deep mobile density |
-| Gestione alunni | WATCH | small destructive hit targets + Vault obstruction |
-| Verifiche online | WATCH | dense multi-tool surface + Vault obstruction |
-| UDA | REWORK | gap severity, remediation semantics, dual point scales, tiny controls |
+| Gestione alunni | WATCH | small destructive hit targets + persistent Vault viewport occupation |
+| Verifiche online | WATCH | dense multi-tool surface + persistent Vault viewport occupation |
+| UDA | REWORK | gap severity/calendar, remediation semantics, composite point scales, tiny controls |
 | Impostazioni | REWORK | backup vocabulary contradiction + small numeric controls |
-| Privacy | GOOD/WATCH | strongest security explanation; Vault overlay obscures its own content |
+| Privacy | GOOD/WATCH | strongest security explanation; fixed Vault controls compete with their own content viewport |
 | Student Portal | GOOD | viewport isolation verified; full-page stitching artifact is not a product defect |
 
 ## Program boundary
 
-This audit does not authorize implementation yet. `UX-TRUST-01` should remain bounded to teacher-facing trust and mobile usability. It must not reopen persistence architecture, replace the visual identity, change grading mathematics without an explicit semantic requirement, or introduce new infrastructure.
+This audit does not authorize implementation yet. `UX-TRUST-01` should remain bounded to teacher-facing trust and mobile usability. It must not reopen persistence architecture, replace the visual identity, change grading mathematics without an explicit semantic requirement, remove the existing evaluation contribution to the UDA activity index by accident, or introduce new infrastructure.
 
 ## Remediation strategy options
 
 ### Option A — Patch-by-screen
 
-Fix each visible defect where it appears: move the Vault bar, resize controls, rewrite labels, adjust UDA and radar copy.
+Fix each visible defect where it appears: compact the Vault affordance, resize controls, rewrite labels, adjust UDA and radar copy.
 
 - advantage: smallest individual diffs;
 - disadvantage: repeats responsive and semantic logic across many components and risks drift;
@@ -208,11 +213,12 @@ Fix each visible defect where it appears: move the Vault bar, resize controls, r
 
 Create a small shared layer for the repeated problems, then apply it across screens:
 
-1. one mobile-safe `VaultControls`/security affordance with reserved layout contract;
+1. one mobile-safe `VaultControls`/security affordance that preserves the existing bottom-clearance contract while reducing persistent viewport occupation;
 2. shared minimum-touch control primitives or utility contract for compact buttons/chips;
 3. one canonical `Backup cifrato` navigation/copy contract;
-4. shared semantic helpers for `gap severity`, `competency evidence coverage`, and `growth recommendation`;
-5. targeted responsive cards/progressive disclosure where current tables or long analytical lists remain dense.
+4. shared semantic helpers for `gap severity/current school-month position`, `competency evidence coverage`, and `growth recommendation`;
+5. a preserved, explicitly documented UDA activity-index formula including the linked-evaluation bonus while simplifying teacher-facing presentation;
+6. targeted responsive cards/progressive disclosure where current tables or long analytical lists remain dense.
 
 - advantage: fixes systemic causes instead of symptoms while keeping the existing product architecture and visual identity;
 - disadvantage: slightly broader initial design work;
@@ -230,10 +236,10 @@ Rework header, bottom navigation, security state and screen hierarchy as a new m
 
 Adopt **Option B** and split implementation into independently qualifiable slices:
 
-- `UXT-A` — mobile shell/Vault obstruction + shared touch contract;
+- `UXT-A` — mobile Vault viewport occupation + shared touch contract, preserving existing `pb-36` clearance;
 - `UXT-B` — trust vocabulary: encrypted backup + KPI denominator;
 - `UXT-C` — analytical semantics: radar coverage + growth-area rule;
-- `UXT-D` — UDA semantics: severity states, evidence-planning actions, point-scale simplification;
+- `UXT-D` — UDA semantics: real school-month severity states, evidence-planning actions, preserved composite/evaluation-bonus formula, point-scale simplification;
 - `UXT-E` — targeted mobile presentation: assessments/tables/long analytics progressive disclosure;
 - `UXT-F` — full mobile/desktop regression + live browser qualification.
 
