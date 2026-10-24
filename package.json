@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:security": "bun test src/security/*.test.ts",
+    "test:security": "bun test src/security/arenaPlanningContextConsumer.test.ts && bun test src/security/*.test.ts",
     "test": "bun run test:security"
   },
   "dependencies": {
