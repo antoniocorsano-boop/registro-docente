@@ -16,11 +16,12 @@ UXT-A through UXT-F are technically qualified on the exact candidate above.
 - Real-browser qualification: PASS
 - Independent Codex review: PASS
 - Unresolved Important/Critical findings: 0
-- Merge: NOT AUTHORIZED / NOT PERFORMED
+- Human integration decision: APPROVED / EXECUTED
+- Audit baseline PR #29: MERGED
+- Application PR #30: MERGED
 - Deploy/publication: NOT AUTHORIZED / NOT PERFORMED
-- Human integration decision: OPEN
 
-This receipt is stored on the separate documentation branch `docs/ux-trust-01-qualification-receipt`, created directly from the qualified candidate SHA. The receipt commit is documentation-only and is not a replacement candidate. The qualified application candidate remains exactly `1f98efb6638a5ef43d3da94f671fae2ca5a6b614`; no qualification evidence is transferred to the receipt commit.
+This receipt was authored on the separate documentation branch `docs/ux-trust-01-qualification-receipt`, created directly from the qualified candidate SHA. The receipt commit is documentation-only and is not a replacement candidate. The qualified application candidate remains exactly `1f98efb6638a5ef43d3da94f671fae2ca5a6b614`; no qualification evidence is transferred to the receipt commit or to a later integration SHA.
 
 ## UXT-F scope
 
@@ -116,14 +117,52 @@ Final Codex state:
 - new UXT-F review threads: 0
 - earlier UXT-A P1 thread: resolved
 
+## Human integration decision and execution
+
+The separate human integration decision was approved on 2026-10-24 after the exact-candidate qualification above.
+
+Integration sequence:
+
+1. Audit baseline PR #29 was moved from Draft to Ready and merged into `main` from exact head `58ad8ea3e9195b830c6fc1d87d49f6099214c0cc`.
+   - merge commit: `c1fce98f977c27e6fdf711c53202435128e33c9d`
+2. PR #30 was retargeted from `docs/ux-trust-01-audit-baseline` to `main` without changing its head.
+   - retained exact head: `1f98efb6638a5ef43d3da94f671fae2ca5a6b614`
+   - mergeability after retarget: clean
+3. PR #30 was moved from Draft to Ready and merged with `expected_head_sha` pinned to the qualified exact candidate.
+   - application merge commit: `7491ed86941ca677b49ce15bb413affe45971cdd`
+
+Tree identity was verified after merge:
+
+- qualified candidate tree: `cce9c8ae9f9b8c161aa65b79cb77420911ca195c`
+- application merge tree: `cce9c8ae9f9b8c161aa65b79cb77420911ca195c`
+
+The merge therefore introduced no byte-level change relative to the qualified application candidate. This identity check does not relabel the merge commit as the exact candidate and does not transfer the Browser #72 receipt to a new SHA.
+
+## Post-integration verification
+
+PREDEPLOY Security Qualification #321 started automatically on the application merge through the `push` event.
+
+- run ID: `40075547236`
+- integration SHA: `7491ed86941ca677b49ce15bb413affe45971cdd`
+- integration tree: `cce9c8ae9f9b8c161aa65b79cb77420911ca195c`
+- conclusion: PASS
+
+No separate post-merge Browser Qualification is claimed here. Canonical browser evidence remains Browser #72 on exact candidate `1f98efb6638a5ef43d3da94f671fae2ca5a6b614`; the application merge is additionally protected by verified tree identity.
+
 ## Final boundary
 
 Canonical technical state:
 
-`UX-TRUST-01 Option B / UXT-A→F = ENGINEERING QUALIFIED / REAL-BROWSER QUALIFIED / INDEPENDENT REVIEW PASS`
+`UX-TRUST-01 Option B / UXT-A→F = ENGINEERING QUALIFIED / REAL-BROWSER QUALIFIED / INDEPENDENT REVIEW PASS / INTEGRATED`
 
-Exact application checkpoint:
+Exact qualified application checkpoint:
 
 `1f98efb6638a5ef43d3da94f671fae2ca5a6b614`
 
-The work stops at the human integration decision. This receipt does not authorize marking PR #30 ready, merging, deploying, publishing, or mutating production/canonical data.
+Integrated application commit:
+
+`7491ed86941ca677b49ce15bb413affe45971cdd`
+
+Receipt integration path: PR #33, documentation-only. The receipt does not create a new application candidate and does not inherit or transfer application qualification.
+
+No deploy, publication, production-data mutation, persistence/security redesign, grading change, or Student Portal change is authorized by this receipt.
