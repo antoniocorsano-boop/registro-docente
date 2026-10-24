@@ -133,6 +133,35 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
   });
 
+  test('rejects restored image payloads that would trigger a remote request', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{
+            id: 'image-remote',
+            kind: 'image',
+            title: 'Immagine',
+            capturedAt: '2026-10-24T10:00:00.000Z',
+            payload: {
+              mimeType: 'image/png',
+              dataUrl: 'https://tracker.example/pixel.png'
+            },
+            status: 'captured',
+            privacy: 'unknown',
+            links: []
+          }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
+  });
+
   test('normalizes legacy classes/settings backup while preserving old datasets and resetting planning', () => {
     const current = currentSnapshot();
     const legacy = {
