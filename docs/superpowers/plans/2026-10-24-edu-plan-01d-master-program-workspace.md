@@ -4,7 +4,7 @@
 
 **Goal:** Turn a teaching profile, accepted Arena context and private teaching resources into a teacher-approved, versioned annual master program with explainable UDA, real-date capacity and protected reserve.
 
-**Architecture:** `PlanningSupportMap` is a non-authoritative planning layer linking Arena requirement refs to private-resource chunks and optional extensions. The master-program engine remains deterministic: validation, budget, ordering, provenance and approval do not require AI. Optional local semantic similarity may suggest mappings, but a teacher confirmation is required before a mapping contributes to planning. The contextual generative copilot is deferred to Tranche F.
+**Architecture:** `PlanningSupportMap` is a non-authoritative planning layer linking Arena requirement refs to private-resource chunks and optional extensions. The master-program engine remains deterministic: validation, budget, ordering, provenance and approval do not require AI. Optional local semantic similarity may suggest mappings, but teacher confirmation is required before a mapping contributes to planning. Resource-edition checks produce review warnings only; Arena remains authoritative. The generative copilot is deferred to Tranche F.
 
 **Tech Stack:** TypeScript/Bun, React, existing `embeddingService` for local-only suggestion mode, persisted `PlanningStateV1`.
 
@@ -15,20 +15,21 @@
 - Never label `PlanningSupportMap` states as Arena `COVERAGE/GAP` authority conclusions.
 - Arena requirement refs remain immutable provenance references inside approved master versions.
 - Optional book/guide content has zero planned hours until explicitly selected by the teacher.
+- Book-edition age/regime checks are warnings, never claims that a book is “wrong” or non-compliant.
 - Default reserve remains 15% unless the profile explicitly overrides it.
 - Master approval is an explicit teacher action and creates an immutable `MasterProgramVersion` snapshot.
-- UDA count is not fixed; the UI encourages consolidation and warns on fragmentation, but does not enforce an arbitrary number.
-- UDA must include learning experiences and evidence/assessment strategies, not only a generated description.
+- UDA count is not fixed; the UI encourages consolidation and warns on fragmentation but does not enforce an arbitrary number.
+- UDA include learning experiences and evidence/assessment strategies, not only a description.
 - Educazione civica contributions are transversal and tracked separately from ordinary discipline-budget semantics.
 - No approved master version is silently rewritten when Arena/resources/profile change.
 
 ## Review Focus
 
-- Arena requirement loses resource support → remains a planning warning, not an authoritative curriculum `GAP` assertion.
-- Optional extension selected while reserve would be consumed below configured threshold → requires explicit teacher override/confirmation.
-- Arena context becomes newer after master approval → approved version preserves old provenance and reports update available.
-- Master draft references a deleted private resource → approval is blocked with actionable source-missing error.
-- Same UDA depends on itself or creates cycle → approval is blocked.
+- Arena requirement has no linked resource → planning warning only, never authoritative Arena `GAP`.
+- Textbook predates the selected new-regime cohort → visible “verifica allineamento” warning, not hard rejection.
+- Optional extension would consume protected reserve → explicit teacher decision required.
+- Newer Arena context after master approval → old version provenance preserved and update reported.
+- Master draft references deleted private resource or has dependency cycle → approval blocked with actionable error.
 
 ---
 
@@ -36,6 +37,7 @@
 
 **Create**
 - `src/planning/supportMap.ts`
+- `src/planning/resourceCompatibility.ts`
 - `src/planning/masterProgram.ts`
 - `src/planning/masterProgramValidation.ts`
 - `src/planning/udaPlanning.ts`
@@ -44,6 +46,7 @@
 - `src/components/planning/MasterUdaEditor.tsx`
 - `src/components/planning/PlanningBudgetSummary.tsx`
 - `src/security/planningSupportMap.test.ts`
+- `src/security/resourceCompatibility.test.ts`
 - `src/security/masterProgram.test.ts`
 - `src/security/masterProgramUiContract.test.ts`
 
@@ -54,11 +57,13 @@
 
 ### Task 1: Define non-authoritative planning support mappings
 
-**Files:** `src/planning/supportMap.ts`, `src/planning/types.ts`, `src/security/planningSupportMap.test.ts`
-
 **Interfaces:**
 ```ts
-export type PlanningSupportStatus = 'supported' | 'partially_supported' | 'unsupported' | 'optional_extension';
+export type PlanningSupportStatus =
+  | 'supported'
+  | 'partially_supported'
+  | 'unsupported'
+  | 'optional_extension';
 
 export function createPlanningSupportMap(input: {
   arenaContext: ArenaPlanningContext;
@@ -71,33 +76,38 @@ export function confirmPlanningSupportMapping(
 ): PlanningSupportMap;
 ```
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: Write failing tests**: all Arena requirements remain visible with no resources; `unsupported` means “no teaching resource linked”, not Arena `GAP`; optional editorial chunks can exist without Arena refs and carry no hours.
+- [ ] **Step 2: Run** `bun test src/security/planningSupportMap.test.ts` → FAIL.
+- [ ] **Step 3: Implement mapping/decision functions** storing Arena refs, resource/chunk refs, provenance, teacher-confirmation state and suggestion confidence separately.
+- [ ] **Step 4: Re-run** → PASS.
+- [ ] **Step 5: Commit** `feat: add planning support map`.
 
-Assert all Arena requirements begin visible even without resources; `unsupported` means “no teaching resource currently linked”, not Arena `GAP`; optional editorial chunks can exist without Arena requirement refs and carry no planned hours.
+### Task 2: Add resource-edition/regime review warnings
 
-- [ ] **Step 2: Run focused test**
+**Interfaces:**
+```ts
+export type ResourceCompatibilityStatus =
+  | 'no_signal'
+  | 'review_recommended'
+  | 'teacher_confirmed';
 
-Run: `bun test src/security/planningSupportMap.test.ts`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement map/decision functions**
-
-Each mapping stores Arena requirement ref, resource/chunk refs, source provenance, teacher confirmation state and optional suggestion confidence separately.
-
-- [ ] **Step 4: Run test**
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/planning/supportMap.ts src/planning/types.ts src/security/planningSupportMap.test.ts
-git commit -m "feat: add planning support map"
+export function assessResourceCompatibility(input: {
+  resource: PrivateTeachingResource;
+  profile: TeachingProfile;
+  arenaContext: ArenaPlanningContext;
+}): ResourceCompatibilityAssessment;
 ```
 
-### Task 2: Add optional local semantic mapping suggestions
+- [ ] **Step 1: Write failing tests**
 
-**Files:** `src/planning/supportMap.ts`, `src/security/planningSupportMap.test.ts`
+For a Grade I 2026/27 context explicitly governed by the new 2025 regime, a textbook edition whose publication metadata predates that transition yields `review_recommended`; missing publication year yields `no_signal`; teacher confirmation can mark the warning reviewed without changing Arena authority.
+
+- [ ] **Step 2: Run** `bun test src/security/resourceCompatibility.test.ts` → FAIL.
+- [ ] **Step 3: Implement heuristic warning only**; never infer legal non-compliance and never block use solely because of publication year.
+- [ ] **Step 4: Re-run** → PASS.
+- [ ] **Step 5: Commit** `feat: flag teaching resource alignment review`.
+
+### Task 3: Add optional local semantic mapping suggestions
 
 **Interfaces:**
 ```ts
@@ -108,35 +118,26 @@ export async function suggestPlanningSupportMappings(input: {
 }): Promise<PlanningSupportSuggestion[]>;
 ```
 
-- [ ] **Step 1: Write failing suggestion tests with a fake embedder boundary**
+- [ ] **Step 1: Write failing tests with an injected fake embedder**; suggestions never become confirmed mappings; low similarity produces no suggestion; source refs survive ranking.
+- [ ] **Step 2: Run focused test** → FAIL.
+- [ ] **Step 3: Implement local-only suggestion path**; if provider is remote/unavailable return `[]`, keeping manual mapping fully usable. Do not silently send private chunks to Gemini.
+- [ ] **Step 4: Re-run** → PASS.
+- [ ] **Step 5: Commit** `feat: suggest local planning mappings`.
 
-Assert suggestions never become confirmed mappings; low similarity produces no suggestion; source refs/chunk refs survive ranking.
-
-- [ ] **Step 2: Run focused test and confirm RED**
-
-- [ ] **Step 3: Implement local-only suggestion path**
-
-If configured provider is not local or local embeddings are unavailable, return `[]` and keep manual mapping fully usable. Do not trigger Gemini remote from this automatic background operation.
-
-- [ ] **Step 4: Run tests**
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/planning/supportMap.ts src/security/planningSupportMap.test.ts
-git commit -m "feat: suggest local planning mappings"
-```
-
-### Task 3: Build master UDA and immutable versioning engine
-
-**Files:** `src/planning/udaPlanning.ts`, `src/planning/masterProgram.ts`, `src/planning/masterProgramValidation.ts`, `src/security/masterProgram.test.ts`
+### Task 4: Build master UDA and immutable versioning engine
 
 **Interfaces:**
 ```ts
-export function createMasterProgramDraft(profileId: string, arenaContextId: string): MasterProgram;
-export function validateMasterProgramDraft(state: PlanningStateV1, program: MasterProgram): string[];
+export function createMasterProgramDraft(
+  profileId: string,
+  arenaContextId: string
+): MasterProgram;
+
+export function validateMasterProgramDraft(
+  state: PlanningStateV1,
+  program: MasterProgram
+): string[];
+
 export function approveMasterProgramVersion(input: {
   state: PlanningStateV1;
   masterProgramId: string;
@@ -144,71 +145,37 @@ export function approveMasterProgramVersion(input: {
 }): { state: PlanningStateV1; version: MasterProgramVersion };
 ```
 
-UDA planning records must include: title, planned hours, window start/end, dependencies, Arena requirement refs, resource refs, `learningExperiences[]`, `evidenceStrategies[]`, classification `essential | consolidation | optional_extension`, and `transversalContributions[]`.
+UDA planning records include title, planned hours, start/end window, dependencies, Arena requirement refs, resource refs, `learningExperiences[]`, `evidenceStrategies[]`, `essential | consolidation | optional_extension`, and `transversalContributions[]`.
 
-- [ ] **Step 1: Write failing master-program tests**
+- [ ] **Step 1: Write failing tests** for missing refs, cycles, reserve overflow, optional-extension budget, first/other assessment-period date fit, immutable version snapshot and re-approval creating a new version.
+- [ ] **Step 2: Run** `bun test src/security/masterProgram.test.ts` → FAIL.
+- [ ] **Step 3: Implement pure draft/validation/version functions** using `calculateEffectiveCapacity()` from Tranche A. Structural invalidity blocks approval; pedagogical warnings remain teacher-reviewable.
+- [ ] **Step 4: Re-run** → PASS.
+- [ ] **Step 5: Commit** `feat: add versioned master programs`.
 
-Cover missing Arena refs, missing resource refs, dependency cycles, reserve overflow, optional extension budget, first-period date fit, immutable version snapshot and re-approval creating a new version rather than editing prior version.
-
-- [ ] **Step 2: Run focused test**
-
-Run: `bun test src/security/masterProgram.test.ts`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement pure draft/validation/version functions**
-
-Use `calculateEffectiveCapacity()` from Tranche A. Approval fails if required planning references are structurally invalid; warnings that are pedagogical choices remain reviewable rather than hard failures.
-
-- [ ] **Step 4: Run tests**
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/planning/udaPlanning.ts src/planning/masterProgram.ts src/planning/masterProgramValidation.ts src/security/masterProgram.test.ts
-git commit -m "feat: add versioned master programs"
-```
-
-### Task 4: Build the double-map and annual-program UI
-
-**Files:** planning components listed above plus `PlanningProfileView.tsx`, `App.tsx`, `src/security/masterProgramUiContract.test.ts`
+### Task 5: Build double-map and annual-program UI
 
 **Interfaces:**
-- `PlanningSupportMapView` shows Arena requirement → private resource support, partial/none, source refs and confirmation controls.
-- `MasterProgramWorkspace` shows ordered UDA, capacity/reserve and approval status.
-- `MasterUdaEditor` edits one draft UDA only; it does not edit approved version snapshots.
+- `PlanningSupportMapView` shows Arena requirement → private-resource support, partial/none, source refs and confirmation controls.
+- `MasterProgramWorkspace` shows ordered UDA, capacity/reserve, resource-alignment warnings and approval status.
+- `MasterUdaEditor` edits draft UDA only, never approved version snapshots.
 
-- [ ] **Step 1: Write failing UI/source-contract tests**
-
-Assert visible words/regions for Arena source, book/guide source, support state, optional extension, planned/effective/reserve hours and explicit “Approva programmazione madre”. Assert no `COVERAGE`/`GAP` authority copy is used for resource support.
-
-- [ ] **Step 2: Run focused UI test**
-
-- [ ] **Step 3: Implement progressive workflow**
-
-Within `Programmazione didattica`: Profilo → Fonti → Mappa → Programmazione madre. Preserve teacher orientation on mobile rather than rendering a desktop Gantt table squeezed to phone width.
-
-- [ ] **Step 4: Wire all saves through `commitPlanningMutation`**
-
-Pending approval/save actions are disabled; success appears only post-commit.
-
-- [ ] **Step 5: Run focused tests/type/build**
+- [ ] **Step 1: Write failing UI contract tests** requiring visible Arena source, book/guide provenance, support state, optional extension, resource-alignment warning, planned/effective/reserve hours and explicit “Approva programmazione madre”. Assert no Arena-authority `COVERAGE/GAP` copy is used for resource support.
+- [ ] **Step 2: Run** `bun test src/security/masterProgramUiContract.test.ts` → FAIL.
+- [ ] **Step 3: Implement workflow** `Profilo → Fonti → Mappa → Programmazione madre`, with mobile-specific layout rather than a squeezed desktop Gantt.
+- [ ] **Step 4: Wire saves/approval through `commitPlanningMutation`**; pending actions disabled and success post-commit only.
+- [ ] **Step 5: Run**
 
 ```bash
-bun test src/security/planningSupportMap.test.ts src/security/masterProgram.test.ts src/security/masterProgramUiContract.test.ts
+bun test src/security/planningSupportMap.test.ts src/security/resourceCompatibility.test.ts src/security/masterProgram.test.ts src/security/masterProgramUiContract.test.ts
 bun run lint
 bun run build
 ```
+
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/components/planning src/App.tsx src/security/masterProgramUiContract.test.ts
-git commit -m "feat: add master program workspace"
-```
+- [ ] **Step 6: Commit** `feat: add master program workspace`.
 
 ## Tranche exit gate
 
-Browser qualification must prove one synthetic Technology level can: inspect Arena provenance; link book/guide support; identify unsupported and optional material without authority confusion; create a small set of UDA; maintain configured reserve; add learning experiences/evidence strategies; record a transversal civic contribution; approve master v1; reload/unlock and recover the immutable approved version.
+Browser qualification proves one synthetic Technology level can inspect Arena provenance; see an old-edition review warning without false prohibition; link book/guide support; distinguish unsupported vs optional material without authority confusion; create a small set of UDA; preserve reserve; add learning experiences/evidence strategies and a transversal civic contribution; approve master v1; reload/unlock and recover the immutable approved version.
