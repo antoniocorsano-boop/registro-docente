@@ -392,7 +392,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--surface-variant)] hover:bg-slate-800 text-slate-200 border border-[var(--border)] font-medium"
           >
             <Download className="w-3.5 h-3.5 text-[var(--primary)]" />
-            <span>Esporta Backup JSON</span>
+            <span>Esporta backup cifrato</span>
           </button>
 
           <button
@@ -403,7 +403,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--surface-variant)] hover:bg-slate-800 text-slate-200 border border-[var(--border)] font-medium"
           >
             <Upload className="w-3.5 h-3.5 text-slate-300" />
-            <span>Ripristina da JSON</span>
+            <span>Ripristina backup cifrato</span>
           </button>
 
           <div className="text-[10px] text-slate-500 text-center pt-1 font-mono">
