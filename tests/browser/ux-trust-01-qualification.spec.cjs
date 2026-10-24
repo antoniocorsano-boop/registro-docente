@@ -197,10 +197,15 @@ test('UXT-C strong competency profile stays relative while below-threshold evide
   await closePersistenceConfirmation(page);
   await expect(page.getByText('CAD avanzato UXT-C', { exact: true })).toBeVisible();
 
-  await typeSelect.selectOption('orale');
-  await evaluationForm.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Colloquio tecnico UXT-C');
-  await evaluationForm.getByText(strongStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('9.1');
-  await evaluationForm.getByText(weakStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('7.2');
+  const workflowHubAfterFirstEvaluation = page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..');
+  await workflowHubAfterFirstEvaluation.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+  const secondEvaluationForm = page.locator('form');
+  const secondTypeSelect = secondEvaluationForm.locator('label').filter({ hasText: 'Tipologia Prova' }).locator('..').locator('select');
+  await secondTypeSelect.selectOption('orale');
+  await secondEvaluationForm.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Colloquio tecnico UXT-C');
+  await secondEvaluationForm.getByText(strongStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('9.1');
+  await secondEvaluationForm.getByText(weakStudent, { exact: true }).locator('..').locator('..').locator('input[type="text"]').fill('7.2');
   await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
   await closePersistenceConfirmation(page);
   await expect(page.getByText('Colloquio tecnico UXT-C', { exact: true })).toBeVisible();
