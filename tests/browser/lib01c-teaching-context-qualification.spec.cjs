@@ -181,36 +181,84 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
 
   await card.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
   const linkedOverrideRow = card.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
-  await expect(linkedOverrideRow).toContainText(OVERRIDE_UDA_TITLE);
+  await expect(linkedOverrideRow.getByText(OVERRIDE_UDA_TITLE, { exact: true })).toBeVisible();
+  await expect(linkedOverrideRow.getByText(LESSON_TOPIC, { exact: true })).toHaveCount(0);
 
-  const desktopShot = path.join(evidenceDir, 'lib01c-contextual-core-desktop.png');
-  await page.screenshot({ path: desktopShot, fullPage: true });
+  trackContextualRequests = false;
+  await reloadAndUnlock(page);
+  await openLibrary(page);
+  const reloadedCard = await sourceCard(page, SOURCE_TITLE);
+  await reloadedCard.getByText('Gestisci', { exact: true }).click();
+  const reloadedOverrideRow = reloadedCard.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(reloadedOverrideRow.getByText(OVERRIDE_UDA_TITLE, { exact: true })).toBeVisible();
+
+  await page.screenshot({ path: path.join(evidenceDir, 'lib01c-teaching-context-desktop.png'), fullPage: true });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'lib01c-teaching-context-desktop.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      viewport: { width: 1280, height: 900 },
+      checks: [
+        'deterministic-context-proposed',
+        'proposal-explained',
+        'teacher-can-change-context',
+        'teacher-override-used-by-review',
+        'human-confirmation-before-link',
+        'teacher-override-persists-after-reload',
+        'generative-actions-unavailable',
+        'no-contextual-external-network'
+      ],
+      contextualExternalRequests,
+      pageErrors
+    }, null, 2) + '\n'
+  );
+
   expect(contextualExternalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
 
-test('LIB-01C falls back to manual context when no deterministic suggestion exists and stays touch-safe — mobile 390x844', async ({ page }) => {
+test('LIB-01C falls back to manual context when no deterministic suggestion exists and stays touch-safe — mobile 390x844', async ({ browser }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
-  await page.setViewportSize({ width: 390, height: 844 });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
 
   await setupFreshVault(page);
+  await createSyntheticUda(page, UDA_TITLE);
   await openLibrary(page);
   await addSyntheticSource(page, MANUAL_SOURCE_TITLE);
+
   const card = await sourceCard(page, MANUAL_SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-
-  await expect(card.getByText('Scegli dove usarla', { exact: true })).toBeVisible();
   await expect(card.getByText('Contesto proposto', { exact: true })).toHaveCount(0);
-  await assertAtLeast44(card.getByLabel('UDA corrente'), 'UDA selector');
-  await assertAtLeast44(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }), 'review action');
-  await assertAtLeast44(card.getByRole('button', { name: 'Collega a una UDA', exact: true }), 'link action');
+  await expect(card.getByText('Scegli dove usarla', { exact: true })).toBeVisible();
+
+  const udaSelect = card.getByLabel('UDA corrente');
+  await assertAtLeast44(udaSelect, 'mobile UDA context select');
+  await udaSelect.selectOption({ label: UDA_TITLE });
+  await assertAtLeast44(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }), 'mobile review action');
+  await assertAtLeast44(card.getByRole('button', { name: 'Collega a una UDA', exact: true }), 'mobile link action');
+  await expect(card.getByRole('button', { name: 'Prepara materiale', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Sintetizza la fonte', exact: true })).toHaveCount(0);
 
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth
   }));
   expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.innerWidth + 1);
+
+  await page.screenshot({ path: path.join(evidenceDir, 'lib01c-teaching-context-mobile.png'), fullPage: true });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'lib01c-teaching-context-mobile.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      viewport: { width: 390, height: 844 },
+      overflow,
+      pageErrors
+    }, null, 2) + '\n'
+  );
+
   expect(pageErrors).toEqual([]);
+  await context.close();
 });
