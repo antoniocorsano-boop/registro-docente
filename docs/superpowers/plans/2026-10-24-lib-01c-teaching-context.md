@@ -1,10 +1,10 @@
-# LIB-01C Teaching Context Implementation Plan
+# LIB-01C Deterministic Teaching Context Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Collegare una fonte della Biblioteca privata a un contesto didattico esplicito UDA/lezione e far transitare quel contesto minimizzato nel TRAMA Contextual Copilot Core prima di ogni write reversibile.
+**Goal:** Evolvere la PR #41 dal contratto manual-only a una proposta deterministica e spiegabile di UDA/lezione che il docente può sempre cambiare prima del collegamento.
 
-**Architecture:** Il contesto resta transitorio e locale alla card della Biblioteca. L'adapter valida UDA/lezione contro i dati già disponibili, costruisce il `ContextSnapshot` minimizzato e usa il Core condiviso già vendorizzato; la UI usa il contesto validato per scegliere il target verticale `uda` o `lesson` dopo il gate umano.
+**Architecture:** Il resolver verticale `teachingContext.ts` usa soltanto contesto esplicito, classe corrente, data/periodo e ultima scelta esplicita della sessione. La UI distingue suggerimento e selezione finale; il Contextual Copilot Core continua a ricevere solo il contesto minimizzato e a governare il `LINK` con conferma umana.
 
 **Tech Stack:** React 19, TypeScript 7, Bun 1.4.4, `@trama/contextual-copilot-core@0.1.0`, Playwright 1.64.1.
 
@@ -12,120 +12,200 @@
 
 ## Global Constraints
 
-- Baseline obbligatoria: `ab1e23c1014dc96231aa92cfe8cf6e39a47c50a0`.
-- Nessuna inferenza automatica di UDA/lezione.
-- Nessun testo, titolo, URL, immagine, estratto o nota della fonte nel `ContextSnapshot`.
-- Nessun topic/notes della lezione nel `ContextSnapshot`.
-- `unknown` resta fail-closed come `STUDENT_PERSONAL`; il contesto didattico aggiunge `CURRICOLO`.
+- Baseline di integrazione: `main@ab1e23c1014dc96231aa92cfe8cf6e39a47c50a0`; branch esistente PR #41.
+- Nessuna AI, embedding, semantic search o similarità testuale per proporre il contesto.
+- Nessuna scelta arbitraria in caso di candidati equivalenti.
+- Il docente può sempre cambiare la proposta prima della mutazione.
+- Nessun contenuto fonte/UDA/lezione nel `ContextSnapshot` oltre ai metadati strutturali già ammessi.
+- `unknown -> STUDENT_PERSONAL`; teaching context valido aggiunge `CURRICOLO`.
 - `remoteProviderAllowed = false`; `generativeMode = none`.
-- Nessun nuovo dominio persistente materiali/attività.
-- RED causale prima del GREEN; exact-SHA per ogni qualifica.
-- Dati browser solo sintetici.
+- Nessun nuovo dominio persistente materiali/attività e nessuno store globale del contesto.
+- RED causale prima di ogni GREEN comportamentale; exact-SHA per la qualifica.
+- Dati browser esclusivamente sintetici; nessuna rete esterna nel journey governato.
 - Nessun merge/deploy automatico.
 
 ## Review Focus
 
-- `lessonId` appartenente a una UDA diversa deve essere rifiutato e non comparire nel snapshot.
-- Cambio UDA deve azzerare la lezione precedente per evitare target stale.
-- UDA senza lezioni deve restare collegabile come UDA senza UI bloccata.
-- Fonte `unknown` + contesto curricolare deve restare non autorizzata a provider remoto.
-- Failure di persistenza dopo conferma deve conservare contesto e possibilità di retry senza falso successo.
+- Più lezioni odierne o più UDA attive non devono produrre un tie-break nascosto; test in Task 1.
+- `lastExplicitChoice` stale, cross-class o lesson↔UDA incoerente deve essere ignorato; test in Task 1.
+- Cambio della proposta verso una selezione manuale deve annullare qualunque conferma `LINK` precedente; test in Task 2.
+- Un target eliminato tra proposta e dispatch deve fallire chiuso e non mutare; test in Task 2.
+- Failure di persistenza dopo conferma deve preservare la selezione finale per retry senza falso successo; browser test in Task 3.
 
 ---
 
-### Task 1: Context contract and adapter
+### Task 1: Deterministic teaching-context suggestion resolver
 
 **Files:**
-- Create: `src/library/teachingContext.ts`
-- Modify: `src/library/contextualCoreAdapter.ts`
-- Test: `src/security/lib01cTeachingContextContract.test.ts`
+- Modify: `src/library/teachingContext.ts`
+- Modify: `src/security/lib01cTeachingContextContract.test.ts`
 
 **Interfaces:**
-- Produces: `LibraryTeachingContext`, `resolveLibraryTeachingContext(udas, context)`, `buildLibraryContextSnapshot(source, teachingContext?)`, context-aware resolve/dispatch.
-- Consumes: `UdaRecord`, `UdaLesson`, existing shared Core package.
+- Consumes: `UdaRecord[]`, current class name, optional explicit origin, optional last explicit choice, injected local date.
+- Produces:
+  - `TeachingContextSuggestionReason`
+  - `TeachingContextSuggestion`
+  - `suggestLibraryTeachingContext(input): TeachingContextSuggestion | null`
+  - existing `resolveLibraryTeachingContext(udas, context)` remains the structural validator.
 
-- [ ] **Step 1: Write the failing contract tests**
+- [ ] **Step 1: Write failing behavior tests for the new suggestion contract**
 
-Assert that a valid UDA+lesson adds only structural `uda`/`lesson` entities; invalid lesson ownership fails closed; `CURRICOLO` is added without weakening source privacy; dispatch still requires human confirmation.
+Add real behavior tests that prove these hand-derived outcomes:
+- valid explicit origin wins over all other signals;
+- exactly one lesson today in current class -> `current-class-today-lesson`;
+- no unique lesson today + exactly one active UDA -> `current-class-active-uda`;
+- multiple equivalent candidates -> `null`;
+- July/August do not derive active UDA;
+- valid same-class session last choice -> `session-last-choice` only after stronger signals fail;
+- stale/cross-class/foreign lesson last choice -> `null`;
+- invalid explicit origin falls through rather than being “repaired”.
 
-- [ ] **Step 2: Run PREDEPLOY test-only candidate and verify causal RED**
+Production mutation each test must catch: wrong priority, arbitrary first-item selection, wrong school-month mapping, missing ownership/class validation, or hidden fallback.
 
-Expected: only new LIB-01C contract assertions fail for missing teaching-context behavior; bootstrap/typecheck/build must not be the cause.
+- [ ] **Step 2: Run PREDEPLOY on the test-only SHA and verify causal RED**
 
-- [ ] **Step 3: Implement minimal teaching-context helper and adapter extension**
+Expected: existing suite remains green except the new suggestion tests, which fail because `suggestLibraryTeachingContext`/types do not exist or do not satisfy the new contract. Typecheck/build/startup must not be the root cause.
 
-Signatures:
+- [ ] **Step 3: Implement the minimal deterministic resolver**
+
+Exact API:
 
 ```ts
-export interface LibraryTeachingContext { udaId: string; lessonId?: string }
-export function resolveLibraryTeachingContext(udas: UdaRecord[], context: LibraryTeachingContext | null): ResolvedLibraryTeachingContext | null
-export function buildLibraryContextSnapshot(source: LibrarySource, teachingContext?: ResolvedLibraryTeachingContext | null): ContextSnapshot
+export type TeachingContextSuggestionReason =
+  | 'explicit-origin'
+  | 'current-class-today-lesson'
+  | 'current-class-active-uda'
+  | 'session-last-choice';
+
+export interface TeachingContextSuggestion {
+  context: LibraryTeachingContext;
+  reason: TeachingContextSuggestionReason;
+}
+
+export interface SuggestLibraryTeachingContextInput {
+  udas: UdaRecord[];
+  currentClassName?: string | null;
+  explicitContext?: LibraryTeachingContext | null;
+  lastExplicitChoice?: LibraryTeachingContext | null;
+  today: string;
+}
+
+export function suggestLibraryTeachingContext(
+  input: SuggestLibraryTeachingContextInput
+): TeachingContextSuggestion | null;
 ```
 
-Extend `resolveLibraryContextActions` and `dispatchLibraryContextAction` with the optional resolved context.
+Use `resolveLibraryTeachingContext` for structural validation. Do not inspect titles, descriptions, topics, notes or source content.
 
-- [ ] **Step 4: Run full security suite**
+- [ ] **Step 4: Run full security suite and PREDEPLOY**
 
 Expected: all tests PASS.
 
 - [ ] **Step 5: Commit**
 
-Commit message: `feat: add LIB-01C teaching context contract`.
+Commit message: `feat: suggest deterministic LIB-01C teaching context`.
 
-### Task 2: Progressive-disclosure teaching context UI
+### Task 2: Proposal UX and teacher override
 
 **Files:**
+- Modify: `src/App.tsx`
+- Modify: `src/components/LibraryView.tsx`
 - Modify: `src/components/LibrarySourceCard.tsx`
-- Test: `src/security/lib01cTeachingContextContract.test.ts`
+- Modify: `src/security/lib01cTeachingContextContract.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 `LibraryTeachingContext` / resolver.
-- Produces: transient UDA/lesson selection, contextual review, target selection for `onLink`.
+- Consumes Task 1 `suggestLibraryTeachingContext` and existing `resolveLibraryTeachingContext`.
+- `App` supplies the current class name already derived from `appData.currentClassId`.
+- `LibraryView` carries only current class metadata and session-local last explicit choice; it does not persist a new domain object.
+- `LibrarySourceCard` receives optional current class name, optional explicit context, and callbacks/state needed for session last choice.
 
-- [ ] **Step 1: Extend failing UI contract tests**
+- [ ] **Step 1: Write failing UI/behavior contract tests**
 
-Assert `Contesto di lavoro`, UDA select, conditional lesson select, activity summary, use of context-aware adapter, lesson-target link, UDA fallback, and reset of lesson on UDA change.
+Prove observable behavior, not source-string presence:
+- opening `Usa` with a unique current-class candidate initializes the selected context from the suggestion;
+- suggestion displays a deterministic explanation and a `Cambia` control;
+- `Cambia` allows selecting another UDA/lesson and the final selection replaces the suggestion;
+- manual selection is remembered only as session state for subsequent sources;
+- no suggestion -> manual chooser starts unselected;
+- changing UDA resets lesson and any pending link confirmation;
+- target removed/stale before dispatch -> no write;
+- `ContextSnapshot` and Core dispatch use the final teacher selection, not the original suggestion.
 
-- [ ] **Step 2: Verify RED**
+- [ ] **Step 2: Verify RED on exact test-only SHA**
 
-Expected: new UI assertions fail while Task 1 tests stay green.
+Expected: new LIB-01C proposal/override tests fail while Task 1 resolver tests and prior LIB-01A/B/C manual-context tests remain green.
 
-- [ ] **Step 3: Implement minimal UI**
+- [ ] **Step 3: Implement minimal signal plumbing and proposal UX**
 
-Keep manual `Gestisci -> Collega a UDA` unchanged. In the contextual panel require an explicit UDA before contextual link; optional lesson refines target. Use the Core confirmation gate before `onLink`.
+Required behavior:
+- pass `currentClass?.name ?? null` from `App` to `LibraryView`;
+- keep `lastExplicitChoice` in `LibraryView` component state only;
+- compute suggestion when a source becomes selected using injected/current local `YYYY-MM-DD` at the UI boundary;
+- initialize card selection from suggestion only when the teacher has not already overridden that selected source;
+- render `Contesto proposto` + reason copy when suggestion exists;
+- render `Cambia` always before mutation; if no suggestion render `Scegli dove usarla`;
+- any explicit teacher selection becomes the final context and updates session last choice;
+- preserve existing Core human-confirmation gate and `onLink` persistence path.
 
-- [ ] **Step 4: Run full security suite**
+Do not add persistence for the suggestion or last choice.
 
-Expected: all tests PASS.
+- [ ] **Step 4: Run full security suite, typecheck and PREDEPLOY**
+
+Expected: all PASS.
 
 - [ ] **Step 5: Commit**
 
-Commit message: `feat: connect library actions to teaching context`.
+Commit message: `feat: let teachers override suggested library context`.
 
-### Task 3: Permanent browser qualification
+### Task 3: Permanent browser qualification for suggestion + override
 
 **Files:**
-- Create: `tests/browser/lib01c-teaching-context-qualification.spec.cjs`
-- Modify: `.github/workflows/browser-qualification.yml`
+- Modify: `tests/browser/lib01c-teaching-context-qualification.spec.cjs`
+- Modify only if needed for registration: `.github/workflows/browser-qualification.yml`
 
 **Interfaces:**
-- Consumes: Task 2 UI.
-- Produces: permanent desktop/mobile evidence for LIB-01C.
+- Consumes Task 2 UI and existing synthetic vault/browser helpers.
+- Produces permanent desktop/mobile evidence for suggestion, override and fail-closed ambiguity.
 
-- [ ] **Step 1: Add browser test to permanent workflow before relying on it**
+- [ ] **Step 1: Update browser test first so it fails against the manual-only UI**
 
-Desktop synthetic journey: create UDA with lesson/activity, create source, reload, `Usa`, select UDA+lesson, verify activity, review, request link, verify no mutation, confirm, verify lesson link survives reload; then create a second source and verify UDA-only fallback. Network guard begins at contextual journey and requires zero external requests.
+Desktop synthetic journey:
+- create current class + one active UDA/lesson candidate and a source;
+- `Usa` must show a proposed context and reason without manual preselection;
+- click `Cambia`, choose a different valid UDA/lesson;
+- `Continua` must show confirmation without persistence;
+- `Conferma collegamento` must persist the teacher override, not the initial suggestion;
+- reload and verify the final link;
+- force an ambiguous fixture and verify no context is preselected;
+- persistence failure path preserves the final selection for retry;
+- network guard begins with the contextual journey and records zero external requests.
 
-Mobile: verify context controls/actions >=44x44, no overflow, no pageerror.
+Mobile 390x844:
+- proposal, `Cambia` and chooser are usable;
+- relevant controls >=44x44;
+- no horizontal overflow and zero page errors.
 
-- [ ] **Step 2: Run PREDEPLOY and Browser Qualification on the same exact SHA**
+- [ ] **Step 2: Run Browser Qualification and observe causal RED before product/browser helper fixes**
 
-Expected: PREDEPLOY full PASS and Browser full PASS; exact checkout must match candidate.
+Expected: new suggestion assertions fail against the current manual-only behavior; unrelated browser gates stay green.
 
-- [ ] **Step 3: Review final diff and update PR receipt**
+- [ ] **Step 3: Make only test-fixture corrections that are necessary to express the approved behavior**
 
-Check that only intended files changed; no provider activation, no generated material domain, no weakened browser/security gate.
+Do not weaken selectors into broad false positives and do not add network allowlists.
 
-- [ ] **Step 4: Stop at human integration decision**
+- [ ] **Step 4: Qualify one exact candidate**
+
+On the same SHA require:
+- PREDEPLOY full PASS;
+- Browser Qualification full PASS;
+- exact checkout equality;
+- desktop + mobile LIB-01C PASS;
+- zero external requests during governed journey.
+
+- [ ] **Step 5: Review final diff and update PR #41 receipt**
+
+PR body must supersede the manual-only qualification, identify new RED/GREEN exact SHAs and final receipts, and state `READY FOR HUMAN INTEGRATION DECISION · NO MERGE · NO DEPLOY` only if all gates are green.
+
+- [ ] **Step 6: Stop at human integration decision**
 
 No merge or deploy.
