@@ -2,6 +2,15 @@ import { describe, expect, test } from 'bun:test';
 import type { CompleteSecureAppSnapshot } from './secureAppStorage';
 import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
 
+const emptyPlanning = {
+  schemaVersion: 1 as const,
+  profiles: [],
+  arenaContexts: [],
+  resources: [],
+  masterPrograms: [],
+  classInstances: []
+};
+
 function currentSnapshot(): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -9,25 +18,26 @@ function currentSnapshot(): CompleteSecureAppSnapshot {
     udas: [{ id: 'uda-current', title: 'Current', startMonth: 0, durationMonths: 1, hours: 1 } as any],
     customTests: {},
     submissions: [],
+    planning: { ...emptyPlanning, profiles: [{ id: 'profile-current' } as any] },
     meta: { changes: 4, lastBackup: null }
   };
 }
 
 describe('SEC-1 backup application payload', () => {
-  test('exports all six secure datasets in a versioned payload', () => {
+  test('exports all seven secure datasets in a versioned v3 payload', () => {
     const snapshot = currentSnapshot();
     const payload = createBackupPayload(snapshot, '2026-10-21T12:00:00.000Z');
 
     expect(payload.app).toBe('registro-docente');
-    expect(payload.backupDataVersion).toBe(2);
+    expect(payload.backupDataVersion).toBe(3);
     expect(payload.exportedAt).toBe('2026-10-21T12:00:00.000Z');
     expect(payload.snapshot).toEqual(snapshot);
     expect(Object.keys(payload.snapshot).sort()).toEqual([
-      'appData', 'customTests', 'meta', 'settings', 'submissions', 'udas'
+      'appData', 'customTests', 'meta', 'planning', 'settings', 'submissions', 'udas'
     ]);
   });
 
-  test('accepts a complete v2 payload and rejects unsupported versions', () => {
+  test('accepts a complete v3 payload and rejects unsupported versions', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 
@@ -35,7 +45,7 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload({ ...payload, backupDataVersion: 99 }, current)).toThrow(/versione/i);
   });
 
-  test('normalizes legacy classes/settings backup while preserving datasets it never contained', () => {
+  test('normalizes legacy classes/settings backup while preserving old datasets and resetting planning', () => {
     const current = currentSnapshot();
     const legacy = {
       app: 'registro-docente',
@@ -51,10 +61,11 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.udas).toEqual(current.udas);
     expect(normalized.customTests).toEqual(current.customTests);
     expect(normalized.submissions).toEqual(current.submissions);
+    expect(normalized.planning).toEqual(emptyPlanning);
     expect(normalized.meta).toEqual(current.meta);
   });
 
-  test('rejects foreign or structurally incomplete v2 payloads', () => {
+  test('rejects foreign or structurally incomplete v3 payloads', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 
