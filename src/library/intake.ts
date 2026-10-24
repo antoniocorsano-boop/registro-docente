@@ -47,7 +47,7 @@ export function createTextSource(input: {
     capturedAt: requireValue(input.capturedAt, 'Data di acquisizione'),
     payload: { text },
     status: 'ready',
-    privacy: 'teacher-professional',
+    privacy: 'unknown',
     links: []
   };
 }
@@ -81,7 +81,7 @@ export function createWebSource(input: {
     payload: capturedText ? { text: capturedText } : {},
     extractedText: capturedText || undefined,
     status: 'ready',
-    privacy: 'teacher-professional',
+    privacy: 'unknown',
     links: []
   };
 }
