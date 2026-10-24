@@ -259,9 +259,11 @@ test('EDU-PLAN-01B previews Arena handoff read-only and persists only after expl
   await expect(page.getByRole('heading', { name: 'Programmazione didattica' })).toBeVisible();
 
   await page.getByLabel('Coorte').fill('2026-2027:secondaria:classe-i');
+  await page.getByRole('button', { name: 'Calendario e normativa', exact: true }).click();
   await page.getByLabel('Regime normativo Arena').fill('Regime 2025');
   await page.getByLabel('Inizio lezioni').fill('2026-09-14');
   await page.getByLabel('Fine lezioni').fill('2027-06-08');
+  await page.getByRole('button', { name: 'Organizzazione', exact: true }).click();
   await page.getByRole('button', { name: '+ Aggiungi periodo', exact: true }).click();
   const period = page.locator('[data-field="assessmentPeriods"]');
   await period.locator('input[type="date"]').nth(0).fill('2026-09-14');
