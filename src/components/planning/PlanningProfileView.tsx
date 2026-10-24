@@ -1,13 +1,25 @@
 import React, { useState } from 'react';
-import type { TeachingProfile } from '../../planning/types';
+import type {
+  ArenaPlanningContext,
+  ArenaPlanningContextPreview,
+  TeachingProfile
+} from '../../planning/types';
+import { ArenaPlanningContextPanel } from './ArenaPlanningContextPanel';
 import { PlanningProfileEditor } from './PlanningProfileEditor';
 
 interface PlanningProfileViewProps {
   profiles: TeachingProfile[];
+  arenaContexts: ArenaPlanningContext[];
   onSaveProfile: (profile: TeachingProfile) => Promise<void>;
+  onAcceptArenaContext: (context: ArenaPlanningContextPreview) => Promise<void>;
 }
 
-export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({ profiles, onSaveProfile }) => {
+export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
+  profiles,
+  arenaContexts,
+  onSaveProfile,
+  onAcceptArenaContext
+}) => {
   const [selectedId, setSelectedId] = useState<string | null>(profiles[0]?.id ?? null);
   const selected = profiles.find(profile => profile.id === selectedId);
 
@@ -25,6 +37,13 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({ profil
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-6">
         <PlanningProfileEditor profile={selected} onSave={onSaveProfile} />
       </div>
+      {selected && (
+        <ArenaPlanningContextPanel
+          profile={selected}
+          acceptedContexts={arenaContexts}
+          onAccept={onAcceptArenaContext}
+        />
+      )}
     </section>
   );
 };
