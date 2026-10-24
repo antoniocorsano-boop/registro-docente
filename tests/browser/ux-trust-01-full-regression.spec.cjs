@@ -103,6 +103,7 @@ for (const viewport of [
 
     const suffix = viewport.width < 768 ? 'MOBILE' : 'DESKTOP';
     const className = `Classe Sintetica UXT-F ${suffix}`;
+    const studentName = `Studente Sintetico UXT-F ${suffix}`;
     const visited = { className, items: [] };
 
     await setupFreshVault(page);
@@ -112,6 +113,10 @@ for (const viewport of [
     await page.getByRole('button', { name: /Nuova Classe/ }).click();
     await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
     await closePersistenceConfirmation(page);
+
+    await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(studentName);
+    await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+    await expect(page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)')).toHaveValue('');
     await checkpoint(page, visited.items, 'Gestione alunni', page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` }));
 
     await primaryWorkflowButton(page, 'Riepilogo').click();
@@ -176,6 +181,7 @@ for (const viewport of [
         candidateSha,
         viewport,
         className,
+        studentName,
         syntheticOnly: true,
         visited: visited.items,
         pageErrors,
