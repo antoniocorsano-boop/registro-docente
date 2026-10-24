@@ -79,6 +79,7 @@ import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
+import { LibraryView } from './components/LibraryView';
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -1129,6 +1130,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             arenaContexts={planning.arenaContexts}
             onSaveProfile={handleSaveTeachingProfile}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
+          />
+        )}
+
+        {/* Biblioteca privata del docente */}
+        {activeTab === 'biblioteca' && (
+          <LibraryView
+            library={library}
+            udas={udas}
+            onAddSource={handleAddLibrarySource}
+            onUpdateSource={handleUpdateLibrarySource}
+            onLinkSource={handleLinkLibrarySource}
+            onUnlinkSource={handleUnlinkLibrarySource}
+            onDeleteSource={handleDeleteLibrarySource}
+            isPending={isLibraryMutationPending}
+            errorMessage={libraryMutationError}
           />
         )}
 
