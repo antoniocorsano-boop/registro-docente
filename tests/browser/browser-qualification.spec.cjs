@@ -31,11 +31,18 @@ async function closePersistenceConfirmation(page) {
   await expect(heading).toBeHidden();
 }
 
+async function disablePrivacyShield(page) {
+  const shield = page.locator('button[title^="Privacy Shield"]').first();
+  await expect(shield).toBeVisible();
+  await shield.click();
+}
+
 async function createSyntheticClassAndStudent(page) {
   page.once('dialog', dialog => dialog.accept(UX_CLASS_NAME));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${UX_CLASS_NAME}` })).toBeVisible();
   await closePersistenceConfirmation(page);
+  await disablePrivacyShield(page);
 
   const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
   await studentInput.fill(UX_STUDENT_NAME);
