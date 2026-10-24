@@ -45,3 +45,18 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: storia `40f16bd...` → `482c62a...`, con tree finale uguale al released tree `ba5ba02d...`.
 - Promozione candidata: operating rule — promossa come `OR-009`.
 - Sostituita da: —
+
+### LL-004 — Integrare PR impilate senza perdere il confine di qualificazione
+- Stato: ACTIVE
+- Ciclo/data: UX-TRUST-01 · 2026-10-24
+- Exact SHA/riferimento: candidate qualificato `1f98efb6638a5ef43d3da94f671fae2ca5a6b614`; application merge `7491ed86941ca677b49ce15bb413affe45971cdd`; receipt merge `76c837470485bfcf9eaddb7e14aeff68a15a26ef`.
+- Obiettivo: integrare una PR applicativa qualificata costruita sopra una PR baseline separata senza cambiare il candidate né attribuire evidenza a SHA non verificati.
+- Ha funzionato: prima è stata integrata la baseline #29; poi #30 è stata retargettata a `main` mantenendo invariato l'exact head qualificato; il merge è stato eseguito con `expected_head_sha` pinning e il tree dell'application merge è risultato identico al tree del candidate qualificato. I gate post-integrazione hanno confermato il nuovo stato del repository.
+- È fallito: il receipt preparato prima della decisione umana era diventato semanticamente obsoleto dopo l'integrazione e avrebbe registrato ancora `NOT AUTHORIZED / OPEN` se fosse stato mergiato senza correzione.
+- Causa reale: nelle integrazioni impilate esistono due rischi indipendenti — drift del codice tra qualification e merge, e drift documentale tra decisione registrata e decisione effettivamente eseguita.
+- Regola generalizzabile: per integrare una PR qualificata impilata, integrare prima la base, retargettare la PR figlia senza cambiare head, pinning del merge all'exact qualified SHA, verificare la tree identity quando applicabile e aggiornare i receipt dopo la decisione umana senza trasferire la qualification a nuovi SHA.
+- Recipe: candidata una futura recipe di integrazione stacked/exact-SHA; non ancora promossa.
+- Non ripetere: rebase/cherry-pick non necessario di un candidate già qualificato, merge senza head pinning, oppure merge di un receipt che conserva uno stato decisionale ormai falso.
+- Evidenza: PR #29 → merge `c1fce98f977c27e6fdf711c53202435128e33c9d`; PR #30 exact head `1f98efb...` → merge `7491ed...`; tree condiviso `cce9c8ae9f9b8c161aa65b79cb77420911ca195c`; PREDEPLOY #321 PASS; PR #33 receipt aggiornato e merge `76c837...`; PREDEPLOY #324 PASS.
+- Promozione candidata: recipe.
+- Sostituita da: —
