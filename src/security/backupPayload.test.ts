@@ -100,7 +100,7 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.meta).toEqual(current.meta);
   });
 
-  test('rejects foreign or structurally incomplete v3 payloads', () => {
+  test('rejects foreign or structurally incomplete v4 payloads', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 

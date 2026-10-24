@@ -60,7 +60,21 @@ const emptyPlanning = {
   classInstances: []
 };
 
-const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+function libraryFor(label: string) {
+  return {
+    schemaVersion: 1 as const,
+    sources: [{
+      id: `source-${label}`,
+      kind: 'text' as const,
+      title: `Fonte ${label}`,
+      capturedAt: '2026-10-24T10:00:00.000Z',
+      payload: { text: `contenuto-${label}` },
+      status: 'ready' as const,
+      privacy: 'teacher-professional' as const,
+      links: []
+    }]
+  };
+}
 
 function snapshot(label: string): CompleteSecureAppSnapshot {
   return {
@@ -84,7 +98,7 @@ function snapshot(label: string): CompleteSecureAppSnapshot {
     customTests: {},
     submissions: [],
     planning: emptyPlanning,
-    library: emptyLibrary,
+    library: libraryFor(label),
     meta: { changes: label === 'old' ? 3 : 0, lastBackup: null }
   };
 }
@@ -99,6 +113,7 @@ describe('SEC-1 verified vault backup restore', () => {
     const restored = await storage.restoreSnapshotVerified(snapshot('new'));
 
     expect(restored.settings.school).toBe('IC new');
+    expect(restored.library.sources[0]?.id).toBe('source-new');
     expect(restored.settings.embeddingConfig?.apiKey).toBeUndefined();
     expect(restored.planning).toEqual(emptyPlanning);
     expect((await storage.loadSnapshot()).settings?.school).toBe('IC new');
