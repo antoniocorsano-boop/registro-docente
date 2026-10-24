@@ -67,7 +67,7 @@ The integrated RELEASE-01 journey verified with synthetic-only data:
 
 `Classi → Valutazioni → Comportamento → Tabellone → Analisi → Scheda alunno → UDA → Verifiche online → reload/unlock → manual lock/unlock → persistence verification`.
 
-The terminal receipt proved persistence of the same synthetic class, student, grade `8`, behavior, UDA and online submission, including explicit submission identity and Analytics annual average `8,0` after reload and lock/unlock.
+Before reload, the journey explicitly observed the synthetic student's Analytics annual average as `8,0`. After reload and lock/unlock, the terminal checks reverified persistence of the synthetic class, student, grade `8`, behavior, UDA and online submission, including explicit student/class/test submission identity. The terminal phase did not revisit Analytics, so this receipt does not claim that the `8,0` Analytics rendering itself was re-observed after reload.
 
 ## Post-merge main qualification
 
