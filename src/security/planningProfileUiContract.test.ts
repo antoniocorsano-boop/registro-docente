@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { getFirstCycleNormativeReference } from '../planning/normative/italianFirstCycle';
 
-// RED contract for the teacher-facing planning profile introduced by EDU-PLAN-01B.
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('EDU-PLAN-01B teacher planning profile contract', () => {
@@ -44,6 +43,14 @@ describe('EDU-PLAN-01B teacher planning profile contract', () => {
     expect(editor).toContain('closureDates');
   });
 
+  test('requires an explicit normative regime on the teacher profile before Arena can be matched', () => {
+    const editor = read('../components/planning/PlanningProfileEditor.tsx');
+
+    expect(editor).toContain('Regime normativo Arena');
+    expect(editor).toContain('normativeRegime');
+    expect(editor).toContain('Nessuna associazione Arena viene dedotta automaticamente');
+  });
+
   test('wires Programmazione under teaching tools and persists only validated profiles', () => {
     const navbar = read('../components/Navbar.tsx');
     const app = read('../App.tsx');
@@ -54,5 +61,23 @@ describe('EDU-PLAN-01B teacher planning profile contract', () => {
     expect(app).toContain('PlanningProfileView');
     expect(app).toContain('validateTeachingProfile');
     expect(app).toContain('commitPlanningMutation');
+  });
+
+  test('keeps Arena handoff in preview until an explicit teacher acceptance and exposes authority separately from vigency', () => {
+    const panel = read('../components/planning/ArenaPlanningContextPanel.tsx');
+    const view = read('../components/planning/PlanningProfileView.tsx');
+    const app = read('../App.tsx');
+
+    expect(panel).toContain('Contesto Arena');
+    expect(panel).toContain('Solo anteprima');
+    expect(panel).toContain('Stato di autorità');
+    expect(panel).toContain('Vigenza');
+    expect(panel).toContain('Fingerprint master');
+    expect(panel).toContain('Commit sorgente');
+    expect(panel).toContain('Accetta e collega al profilo');
+    expect(panel).toContain('previewArenaPlanningContext');
+    expect(view).toContain('ArenaPlanningContextPanel');
+    expect(app).toContain('bindAcceptedArenaPlanningContext');
+    expect(app).toContain('handleAcceptArenaPlanningContext');
   });
 });
