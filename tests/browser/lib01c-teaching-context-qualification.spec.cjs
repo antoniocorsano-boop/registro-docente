@@ -47,7 +47,7 @@ async function createSyntheticUda(page) {
 }
 
 async function addSyntheticLesson(page) {
-  await page.getByRole('button', { name: 'Gap Analysis Competenze', exact: true }).click();
+  await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
   const dossierButton = page.getByRole('button', { name: 'Dossier & Rubrica', exact: true }).first();
   await expect(dossierButton).toBeVisible();
   await dossierButton.click();
