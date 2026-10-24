@@ -53,6 +53,22 @@ const OTHER_UDA: UdaRecord = {
   ]
 };
 
+const OTHER_CLASS_UDA: UdaRecord = {
+  ...UDA,
+  id: 'uda-3e',
+  title: 'Energia 3E',
+  className: '3E',
+  lessons: [
+    {
+      id: 'lesson-3e',
+      date: '2026-10-24',
+      topic: 'Energia 3E',
+      hours: 1,
+      activityType: 'teoria'
+    }
+  ]
+};
+
 async function loadTeachingContextModule() {
   try {
     const module = await import('../library/teachingContext');
@@ -60,6 +76,23 @@ async function loadTeachingContextModule() {
   } catch (error) {
     return { module: null, error };
   }
+}
+
+type SuggestInput = {
+  udas: UdaRecord[];
+  currentClassName?: string | null;
+  explicitContext?: { udaId: string; lessonId?: string } | null;
+  lastExplicitChoice?: { udaId: string; lessonId?: string } | null;
+  today: string;
+};
+
+type Suggestion = {
+  context: { udaId: string; lessonId?: string };
+  reason: 'explicit-origin' | 'current-class-today-lesson' | 'current-class-active-uda' | 'session-last-choice';
+};
+
+function suggestionFunction(module: unknown): ((input: SuggestInput) => Suggestion | null) | undefined {
+  return (module as { suggestLibraryTeachingContext?: (input: SuggestInput) => Suggestion | null }).suggestLibraryTeachingContext;
 }
 
 describe('LIB-01C teaching context contract', () => {
@@ -95,6 +128,149 @@ describe('LIB-01C teaching context contract', () => {
       udaId: 'uda-lib01c',
       className: '3C',
       period: 'Q1'
+    });
+  });
+
+  test('suggestion priority prefers a valid explicit origin over class and time signals', async () => {
+    const loaded = await loadTeachingContextModule();
+    expect(loaded.error).toBeNull();
+    expect(loaded.module).not.toBeNull();
+    if (!loaded.module) return;
+
+    const suggest = suggestionFunction(loaded.module);
+    expect(typeof suggest).toBe('function');
+    if (!suggest) return;
+
+    expect(suggest({
+      udas: [UDA, OTHER_CLASS_UDA],
+      currentClassName: '3C',
+      explicitContext: { udaId: OTHER_CLASS_UDA.id, lessonId: 'lesson-3e' },
+      today: '2026-10-24'
+    })).toEqual({
+      context: { udaId: 'uda-3e', lessonId: 'lesson-3e' },
+      reason: 'explicit-origin'
+    });
+  });
+
+  test('suggests the only lesson scheduled today for the current class', async () => {
+    const loaded = await loadTeachingContextModule();
+    expect(loaded.module).not.toBeNull();
+    if (!loaded.module) return;
+    const suggest = suggestionFunction(loaded.module);
+    expect(typeof suggest).toBe('function');
+    if (!suggest) return;
+
+    expect(suggest({
+      udas: [UDA, OTHER_CLASS_UDA],
+      currentClassName: '3C',
+      today: '2026-10-24'
+    })).toEqual({
+      context: { udaId: 'uda-lib01c', lessonId: 'lesson-lib01c' },
+      reason: 'current-class-today-lesson'
+    });
+  });
+
+  test('falls back to the only active UDA for the current class when today has no unique lesson', async () => {
+    const loaded = await loadTeachingContextModule();
+    if (!loaded.module) return;
+    const suggest = suggestionFunction(loaded.module);
+    expect(typeof suggest).toBe('function');
+    if (!suggest) return;
+
+    const activeWithoutTodayLesson: UdaRecord = {
+      ...UDA,
+      lessons: [{ ...UDA.lessons![0], date: '2026-10-23' }]
+    };
+
+    expect(suggest({
+      udas: [activeWithoutTodayLesson, OTHER_CLASS_UDA],
+      currentClassName: '3C',
+      today: '2026-10-24'
+    })).toEqual({
+      context: { udaId: 'uda-lib01c' },
+      reason: 'current-class-active-uda'
+    });
+  });
+
+  test('never breaks ambiguity by array order and does not derive active UDA in July or August', async () => {
+    const loaded = await loadTeachingContextModule();
+    if (!loaded.module) return;
+    const suggest = suggestionFunction(loaded.module);
+    expect(typeof suggest).toBe('function');
+    if (!suggest) return;
+
+    const second3C: UdaRecord = {
+      ...UDA,
+      id: 'uda-second-3c',
+      title: 'Seconda UDA 3C',
+      lessons: [{ ...UDA.lessons![0], id: 'lesson-second', date: '2026-10-24' }]
+    };
+
+    expect(suggest({
+      udas: [UDA, second3C],
+      currentClassName: '3C',
+      today: '2026-10-24'
+    })).toBeNull();
+
+    expect(suggest({
+      udas: [UDA],
+      currentClassName: '3C',
+      today: '2027-07-15'
+    })).toBeNull();
+    expect(suggest({
+      udas: [UDA],
+      currentClassName: '3C',
+      today: '2027-08-15'
+    })).toBeNull();
+  });
+
+  test('uses only a still-valid same-class last explicit choice after stronger signals fail', async () => {
+    const loaded = await loadTeachingContextModule();
+    if (!loaded.module) return;
+    const suggest = suggestionFunction(loaded.module);
+    expect(typeof suggest).toBe('function');
+    if (!suggest) return;
+
+    expect(suggest({
+      udas: [UDA, OTHER_CLASS_UDA],
+      currentClassName: '3C',
+      lastExplicitChoice: { udaId: UDA.id, lessonId: 'lesson-lib01c' },
+      today: '2027-07-15'
+    })).toEqual({
+      context: { udaId: 'uda-lib01c', lessonId: 'lesson-lib01c' },
+      reason: 'session-last-choice'
+    });
+
+    expect(suggest({
+      udas: [UDA, OTHER_CLASS_UDA],
+      currentClassName: '3C',
+      lastExplicitChoice: { udaId: OTHER_CLASS_UDA.id, lessonId: 'lesson-3e' },
+      today: '2027-07-15'
+    })).toBeNull();
+
+    expect(suggest({
+      udas: [UDA, OTHER_UDA],
+      currentClassName: '3C',
+      lastExplicitChoice: { udaId: UDA.id, lessonId: 'lesson-other' },
+      today: '2027-07-15'
+    })).toBeNull();
+  });
+
+  test('invalid explicit origin falls through to deterministic class signals instead of being repaired', async () => {
+    const loaded = await loadTeachingContextModule();
+    if (!loaded.module) return;
+    const suggest = suggestionFunction(loaded.module);
+    expect(typeof suggest).toBe('function');
+    if (!suggest) return;
+
+    expect(suggest({
+      udas: [UDA, OTHER_UDA],
+      currentClassName: '3C',
+      explicitContext: { udaId: UDA.id, lessonId: 'lesson-other' },
+      today: '2026-10-24'
+    })).toEqual({
+      context: { udaId: 'uda-lib01c', lessonId: 'lesson-lib01c' },
+      reason: 'current-class-today-lesson'
     });
   });
 
