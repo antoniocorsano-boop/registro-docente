@@ -53,6 +53,15 @@ const settings = (school: string): AppSettings => ({
 
 const meta = (changes: number): SecureMeta => ({ changes, lastBackup: null });
 
+const emptyPlanning = {
+  schemaVersion: 1 as const,
+  profiles: [],
+  arenaContexts: [],
+  resources: [],
+  masterPrograms: [],
+  classInstances: []
+};
+
 function complete(label: string): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -60,6 +69,7 @@ function complete(label: string): CompleteSecureAppSnapshot {
     udas: [{ id: `uda-${label}`, title: label, className: '3ª A', hours: 1, period: 'Q1', startMonth: 0, durationMonths: 1, civicEducation: false, lessons: [], dependencies: [] } as UdaRecord],
     customTests: { [`test-${label}`]: { id: `test-${label}`, title: label, questions: [] } as OnlineTest },
     submissions: [{ id: `sub-${label}`, testId: `test-${label}`, name: 'Rossi Mario', class: '3ª A', testTitle: label, score: 1, total: 1, date: '2026-10-22T10:00:00.000Z' } as OnlineSubmission],
+    planning: emptyPlanning,
     meta: meta(label === 'old' ? 3 : 0)
   };
 }
@@ -111,7 +121,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     ]);
   });
 
-  test('verified restore writes the six-record candidate atomically', async () => {
+  test('verified restore writes the seven-record candidate atomically', async () => {
     const store = new AtomicRecordingStore();
     const vault = new SecureVault(store);
     await vault.initializeActive('password');
@@ -123,7 +133,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     const restored = await storage.restoreSnapshotVerified(candidate, previous);
 
     expect(restored.settings.school).toBe('IC new');
-    expect(store.batchKeys).toEqual([['appData', 'settings', 'udas', 'customTests', 'submissions', 'meta']]);
+    expect(store.batchKeys).toEqual([['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta']]);
   });
 
   test('readback mismatch restores the explicit previous logical snapshot atomically even from a fresh physical vault', async () => {
@@ -140,8 +150,8 @@ describe('PERSIST-01H atomic storage contracts', () => {
     expect(afterFailure.settings?.school).toBe('IC old');
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(store.batchKeys).toEqual([
-      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'meta'],
-      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'meta']
+      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta'],
+      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta']
     ]);
   });
 });
