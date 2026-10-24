@@ -30,8 +30,8 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
   test('scrutiny provides a dedicated mobile presentation instead of shrinking the desktop table', async () => {
     const analytics = await source('src/components/AnalyticsView.tsx');
 
-    expect(analytics).toContain('Mobile scrutiny cards');
-    expect(analytics).toContain('className="md:hidden space-y-2"');
+    expect(analytics).toContain('data-testid="mobile-analytics-student-detail"');
+    expect(analytics).toContain('className="md:hidden group rounded-lg');
     expect(analytics).toContain('className="hidden md:block overflow-x-auto');
     expect(analytics).toContain('onClick={() => onOpenStudentReport(m.student.id)}');
   });
