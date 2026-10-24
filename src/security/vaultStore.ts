@@ -39,7 +39,7 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 function isVaultRecordKey(value: IDBValidKey): value is VaultRecordKey {
   return (
     typeof value === 'string' &&
-    ['appData', 'settings', 'udas', 'customTests', 'submissions', 'meta'].includes(value)
+    ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta'].includes(value)
   );
 }
 
