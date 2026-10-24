@@ -79,6 +79,60 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
   });
 
+  test('rejects malformed optional library fields during v4 restore', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{
+            id: 'web-1',
+            kind: 'web',
+            title: 'Fonte',
+            capturedAt: '2026-10-24T10:00:00.000Z',
+            sourceUrl: 'https://example.org/resource',
+            payload: { text: 42 },
+            status: 'ready',
+            privacy: 'unknown',
+            links: []
+          }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
+  });
+
+  test('rejects non-http source URLs during v4 restore', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{
+            id: 'web-unsafe',
+            kind: 'web',
+            title: 'Fonte',
+            capturedAt: '2026-10-24T10:00:00.000Z',
+            sourceUrl: 'javascript:alert(1)',
+            payload: {},
+            status: 'ready',
+            privacy: 'unknown',
+            links: []
+          }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
+  });
+
   test('normalizes legacy classes/settings backup while preserving old datasets and resetting planning', () => {
     const current = currentSnapshot();
     const legacy = {
