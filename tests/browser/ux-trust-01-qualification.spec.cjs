@@ -236,3 +236,55 @@ test('UXT-C strong competency profile stays relative while below-threshold evide
   expect(pageErrors).toEqual([]);
   await context.close();
 });
+
+test('UXT-D active UDA without formal evidence stays watch while an ended gap is critical — desktop 1280x900', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
+
+  const className = 'Classe Sintetica UXT-D';
+  const activeUdaTitle = 'UDA Attiva UXT-D';
+  const endedUdaTitle = 'UDA Conclusa UXT-D';
+
+  await setupFreshVault(page);
+
+  page.once('dialog', dialog => dialog.accept(className));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
+
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: 'UDA', exact: true }).click();
+
+  const createUda = async ({ title, startMonth, duration }) => {
+    await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })).toBeVisible();
+    await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
+    const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
+    await classSelect.selectOption({ label: className });
+    await page.locator('label').filter({ hasText: 'Mese Inizio' }).locator('..').locator('select').selectOption(String(startMonth));
+    const durationInput = page.locator('label').filter({ hasText: 'Durata Mesi' }).locator('..').locator('input[type="number"]');
+    await durationInput.fill(String(duration));
+    await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
+    await expect(page.getByText(`Nuova UDA "${title}" creata con successo`, { exact: true })).toBeVisible();
+  };
+
+  await createUda({ title: activeUdaTitle, startMonth: 1, duration: 3 });
+  await createUda({ title: endedUdaTitle, startMonth: 0, duration: 1 });
+
+  await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
+  await expect(page.getByRole('heading', { name: /Gap Analysis Competenze & Verifiche Oggettive/ })).toBeVisible();
+
+  const activeCard = page.getByText(activeUdaTitle, { exact: true }).last().locator('xpath=ancestor::div[contains(@class,"rounded-xl") and contains(@class,"border")][1]');
+  const endedCard = page.getByText(endedUdaTitle, { exact: true }).last().locator('xpath=ancestor::div[contains(@class,"rounded-xl") and contains(@class,"border")][1]');
+
+  await expect(activeCard.getByText('DA MONITORARE', { exact: true })).toBeVisible();
+  await expect(activeCard.getByText(/GAP CRITICO/)).toHaveCount(0);
+  await expect(activeCard.getByText(/Pianifica|collega.*evidenz/i)).toBeVisible();
+
+  await expect(endedCard.getByText(/CRITIC/)).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
