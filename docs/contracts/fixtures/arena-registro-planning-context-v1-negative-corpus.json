@@ -1,0 +1,133 @@
+{
+  "contract": "ARENA_REGISTRO_PLANNING_CONTEXT_V1",
+  "corpusVersion": 1,
+  "base": {
+    "contract": "ARENA_REGISTRO_PLANNING_CONTEXT_V1",
+    "contractVersion": 1,
+    "sourceProduct": "ARENA",
+    "targetProduct": "REGISTRO_DOCENTE",
+    "importMode": "PREVIEW_ONLY",
+    "acceptanceRequired": true,
+    "automaticWriteAllowed": false,
+    "instituteName": "Istituto Comprensivo Sintetico",
+    "schoolYear": "2026/27",
+    "sourceSchoolYear": "2026-2027",
+    "schoolOrder": "secondaria",
+    "subjectCode": "tecnologia",
+    "gradeLevel": 1,
+    "cohortRef": "2026-2027:secondaria:classe-i",
+    "cohortRefKind": "DERIVED_APPLICABILITY_KEY",
+    "normativeRegime": "Regime 2025",
+    "applicabilityStatus": "APPLICABLE",
+    "authorityState": "PROVISIONAL_COMPLETE",
+    "vigencyStatus": "NON_VIGENTE",
+    "authorityReceiptRef": null,
+    "masterId": "CAN-CURR-MASTER-00",
+    "masterVersion": "1.3",
+    "structuralFingerprint": {
+      "scope": "MASTER",
+      "algorithm": "fnv1a",
+      "version": 1,
+      "hash": "b355be71"
+    },
+    "provenance": {
+      "repository": "antoniocorsano-boop/CurManLight_arena",
+      "sourceCommit": "7d34344ede0ae5dcd2c0224c83f5a46d40fad825",
+      "sourceDocumentId": "synthetic-document-id",
+      "sourceRevisionId": "synthetic-revision-id"
+    },
+    "curricoloItems": [
+      {
+        "id": "secondaria-di-primo-grado-tecnologia-classe-i",
+        "kind": "ANNUALITA_DISCIPLINARE",
+        "schoolStage": "Secondaria di primo grado",
+        "gradeLabel": "Classe I",
+        "sourceSection": "7.3.8",
+        "text": "Contenuto sintetico per la conformità del contratto."
+      }
+    ],
+    "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+  },
+  "cases": [
+    {
+      "id": "unexpected-top-level-property",
+      "mutations": [{ "op": "set", "path": ["unexpected"], "value": true }]
+    },
+    {
+      "id": "fingerprint-algorithm-mismatch",
+      "mutations": [{ "op": "set", "path": ["structuralFingerprint", "algorithm"], "value": "sha256" }]
+    },
+    {
+      "id": "fingerprint-version-mismatch",
+      "mutations": [{ "op": "set", "path": ["structuralFingerprint", "version"], "value": 2 }]
+    },
+    {
+      "id": "fingerprint-hash-invalid-format",
+      "mutations": [{ "op": "set", "path": ["structuralFingerprint", "hash"], "value": "B355BE71" }]
+    },
+    {
+      "id": "fingerprint-unexpected-property",
+      "mutations": [{ "op": "set", "path": ["structuralFingerprint", "unexpected"], "value": true }]
+    },
+    {
+      "id": "provenance-repository-mismatch",
+      "mutations": [{ "op": "set", "path": ["provenance", "repository"], "value": "example/other" }]
+    },
+    {
+      "id": "provenance-source-commit-invalid",
+      "mutations": [{ "op": "set", "path": ["provenance", "sourceCommit"], "value": "not-a-sha" }]
+    },
+    {
+      "id": "provenance-unexpected-property",
+      "mutations": [{ "op": "set", "path": ["provenance", "unexpected"], "value": true }]
+    },
+    {
+      "id": "curricolo-kind-mismatch",
+      "mutations": [{ "op": "set", "path": ["curricoloItems", "0", "kind"], "value": "OTHER" }]
+    },
+    {
+      "id": "curricolo-unexpected-property",
+      "mutations": [{ "op": "set", "path": ["curricoloItems", "0", "unexpected"], "value": true }]
+    },
+    {
+      "id": "curricolo-school-stage-missing",
+      "mutations": [{ "op": "delete", "path": ["curricoloItems", "0", "schoolStage"] }]
+    },
+    {
+      "id": "curricolo-grade-label-missing",
+      "mutations": [{ "op": "delete", "path": ["curricoloItems", "0", "gradeLabel"] }]
+    },
+    {
+      "id": "institute-name-empty",
+      "mutations": [{ "op": "set", "path": ["instituteName"], "value": "" }]
+    },
+    {
+      "id": "source-school-year-empty",
+      "mutations": [{ "op": "set", "path": ["sourceSchoolYear"], "value": "" }]
+    },
+    {
+      "id": "vigente-receipt-null",
+      "mutations": [
+        { "op": "set", "path": ["authorityState"], "value": "APPROVED" },
+        { "op": "set", "path": ["vigencyStatus"], "value": "VIGENTE" },
+        { "op": "set", "path": ["authorityReceiptRef"], "value": null }
+      ]
+    },
+    {
+      "id": "vigente-receipt-empty",
+      "mutations": [
+        { "op": "set", "path": ["authorityState"], "value": "APPROVED" },
+        { "op": "set", "path": ["vigencyStatus"], "value": "VIGENTE" },
+        { "op": "set", "path": ["authorityReceiptRef"], "value": "" }
+      ]
+    },
+    {
+      "id": "vigente-receipt-missing",
+      "mutations": [
+        { "op": "set", "path": ["authorityState"], "value": "APPROVED" },
+        { "op": "set", "path": ["vigencyStatus"], "value": "VIGENTE" },
+        { "op": "delete", "path": ["authorityReceiptRef"] }
+      ]
+    }
+  ]
+}
