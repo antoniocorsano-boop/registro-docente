@@ -90,6 +90,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
       </div>
 
       <fieldset disabled={isSaving} className="border-0 p-0 m-0 min-w-0">
+      {/* Bulk action buttons */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           Assegna a tutti:
@@ -117,6 +118,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
         </button>
       </div>
 
+      {/* Student rows */}
       <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[55vh] overflow-y-auto mb-4">
         {currentClass.students.length === 0 ? (
           <p className="p-4 text-xs text-slate-400 text-center">
