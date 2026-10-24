@@ -51,6 +51,15 @@ class RestoreTestStore implements VaultStore {
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }
 }
 
+const emptyPlanning = {
+  schemaVersion: 1 as const,
+  profiles: [],
+  arenaContexts: [],
+  resources: [],
+  masterPrograms: [],
+  classInstances: []
+};
+
 function snapshot(label: string): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -72,6 +81,7 @@ function snapshot(label: string): CompleteSecureAppSnapshot {
     udas: [],
     customTests: {},
     submissions: [],
+    planning: emptyPlanning,
     meta: { changes: label === 'old' ? 3 : 0, lastBackup: null }
   };
 }
@@ -87,6 +97,7 @@ describe('SEC-1 verified vault backup restore', () => {
 
     expect(restored.settings.school).toBe('IC new');
     expect(restored.settings.embeddingConfig?.apiKey).toBeUndefined();
+    expect(restored.planning).toEqual(emptyPlanning);
     expect((await storage.loadSnapshot()).settings?.school).toBe('IC new');
   });
 
@@ -98,12 +109,13 @@ describe('SEC-1 verified vault backup restore', () => {
     const previous = snapshot('old');
 
     await storage.restoreSnapshotVerified(previous);
-    store.armOneReadCorruption('appData', 6);
+    store.armOneReadCorruption('appData', 7);
 
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
     const afterFailure = await storage.loadSnapshot();
     expect(afterFailure.settings?.school).toBe('IC old');
+    expect(afterFailure.planning).toEqual(emptyPlanning);
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(afterFailure.settings?.embeddingConfig?.apiKey).toBeUndefined();
   });
@@ -114,7 +126,7 @@ describe('SEC-1 verified vault backup restore', () => {
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
 
-    store.armOneReadCorruption('appData', 6);
+    store.armOneReadCorruption('appData', 7);
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
     expect(await storage.loadSnapshot()).toEqual({
