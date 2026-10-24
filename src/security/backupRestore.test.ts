@@ -123,6 +123,7 @@ describe('SEC-1 verified vault backup restore', () => {
       udas: null,
       customTests: null,
       submissions: null,
+      planning: null,
       meta: null
     });
   });
