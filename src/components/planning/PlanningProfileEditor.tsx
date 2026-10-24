@@ -25,6 +25,7 @@ const createDraftProfile = (): TeachingProfile => {
     gradeLevel: 1,
     cohortRef: '2026-grade-1',
     subjectCode,
+    normativeRegime: '',
     normativeReference: getFirstCycleNormativeReference({ schoolOrder, subjectCode, schoolYear }),
     reservePercent: 15,
     assessmentPeriods: [],
@@ -155,6 +156,19 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({ pr
         <label className="text-sm text-slate-300">Margine di programmazione (%)
           <input name="reservePercent" type="number" min="0" max="50" value={draft.reservePercent} onChange={e => setDraft(current => ({ ...current, reservePercent: Number(e.target.value) }))} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
         </label>
+      </div>
+
+      <div className="rounded-lg border border-violet-900/60 bg-violet-950/20 p-4">
+        <label className="block text-sm text-slate-200">Regime normativo Arena
+          <input
+            name="normativeRegime"
+            value={draft.normativeRegime ?? ''}
+            onChange={e => setDraft(current => ({ ...current, normativeRegime: e.target.value }))}
+            placeholder="Es. Regime 2025"
+            className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2"
+          />
+        </label>
+        <p className="mt-2 text-xs text-slate-400">Nessuna associazione Arena viene dedotta automaticamente. Il regime viene usato solo per verificare un handoff esplicitamente caricato dal docente.</p>
       </div>
 
       <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-4">
