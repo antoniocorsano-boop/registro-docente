@@ -11,6 +11,8 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+
 function currentSnapshot(): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -19,30 +21,145 @@ function currentSnapshot(): CompleteSecureAppSnapshot {
     customTests: {},
     submissions: [],
     planning: { ...emptyPlanning, profiles: [{ id: 'profile-current' } as any] },
+    library: emptyLibrary,
     meta: { changes: 4, lastBackup: null }
   };
 }
 
 describe('SEC-1 backup application payload', () => {
-  test('exports all seven secure datasets in a versioned v3 payload', () => {
+  test('exports all eight secure datasets in a versioned v4 payload', () => {
     const snapshot = currentSnapshot();
     const payload = createBackupPayload(snapshot, '2026-10-21T12:00:00.000Z');
 
     expect(payload.app).toBe('registro-docente');
-    expect(payload.backupDataVersion).toBe(3);
+    expect(payload.backupDataVersion).toBe(4);
     expect(payload.exportedAt).toBe('2026-10-21T12:00:00.000Z');
     expect(payload.snapshot).toEqual(snapshot);
     expect(Object.keys(payload.snapshot).sort()).toEqual([
-      'appData', 'customTests', 'meta', 'planning', 'settings', 'submissions', 'udas'
+      'appData', 'customTests', 'library', 'meta', 'planning', 'settings', 'submissions', 'udas'
     ]);
   });
 
-  test('accepts a complete v3 payload and rejects unsupported versions', () => {
+  test('accepts a complete v4 payload and keeps unsupported versions fail-closed', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 
     expect(normalizeBackupPayload(payload, current)).toEqual(current);
     expect(() => normalizeBackupPayload({ ...payload, backupDataVersion: 99 }, current)).toThrow(/versione/i);
+  });
+
+  test('normalizes a valid v3 payload with an empty private library', () => {
+    const current = currentSnapshot();
+    const { library: _library, ...snapshotV3 } = current;
+    const normalized = normalizeBackupPayload({
+      app: 'registro-docente',
+      backupDataVersion: 3,
+      exportedAt: '2026-10-20T10:00:00.000Z',
+      snapshot: snapshotV3
+    }, current);
+
+    expect(normalized.library).toEqual(emptyLibrary);
+    expect(normalized.planning).toEqual(current.planning);
+  });
+
+  test('rejects a v4 payload whose library is structurally invalid', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{ id: 'broken' }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
+  });
+
+  test('rejects malformed optional library fields during v4 restore', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{
+            id: 'web-1',
+            kind: 'web',
+            title: 'Fonte',
+            capturedAt: '2026-10-24T10:00:00.000Z',
+            sourceUrl: 'https://example.org/resource',
+            payload: { text: 42 },
+            status: 'ready',
+            privacy: 'unknown',
+            links: []
+          }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
+  });
+
+  test('rejects non-http source URLs during v4 restore', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{
+            id: 'web-unsafe',
+            kind: 'web',
+            title: 'Fonte',
+            capturedAt: '2026-10-24T10:00:00.000Z',
+            sourceUrl: 'javascript:alert(1)',
+            payload: {},
+            status: 'ready',
+            privacy: 'unknown',
+            links: []
+          }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
+  });
+
+  test('rejects restored image payloads that would trigger a remote request', () => {
+    const current = currentSnapshot();
+    const payload = createBackupPayload(current);
+    const corrupted = {
+      ...payload,
+      snapshot: {
+        ...payload.snapshot,
+        library: {
+          schemaVersion: 1,
+          sources: [{
+            id: 'image-remote',
+            kind: 'image',
+            title: 'Immagine',
+            capturedAt: '2026-10-24T10:00:00.000Z',
+            payload: {
+              mimeType: 'image/png',
+              dataUrl: 'https://tracker.example/pixel.png'
+            },
+            status: 'captured',
+            privacy: 'unknown',
+            links: []
+          }]
+        }
+      }
+    };
+
+    expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
   });
 
   test('normalizes legacy classes/settings backup while preserving old datasets and resetting planning', () => {
@@ -62,10 +179,11 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.customTests).toEqual(current.customTests);
     expect(normalized.submissions).toEqual(current.submissions);
     expect(normalized.planning).toEqual(emptyPlanning);
+    expect(normalized.library).toEqual(emptyLibrary);
     expect(normalized.meta).toEqual(current.meta);
   });
 
-  test('rejects foreign or structurally incomplete v3 payloads', () => {
+  test('rejects foreign or structurally incomplete v4 payloads', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 

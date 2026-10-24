@@ -15,6 +15,16 @@ import type { ArenaPlanningContextPreview, PlanningStateV1, TeachingProfile } fr
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
+import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
+import { createEmptyLibraryState } from './library/emptyLibraryState';
+import {
+  addLibrarySource,
+  linkLibrarySource,
+  removeLibrarySource,
+  unlinkLibrarySource,
+  updateLibrarySource,
+  type LibrarySourcePatch
+} from './library/libraryState';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -42,6 +52,7 @@ import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
+import { persistLibraryMutation } from './persistence/libraryMutation';
 import {
   applyBackupReceipt,
   incrementBackupChanges,
@@ -68,6 +79,7 @@ import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
+import { LibraryView } from './components/LibraryView';
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -145,6 +157,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.planning || createEmptyPlanningState()
   );
 
+  // 5c. Private teacher library (local-first, no provider side effects)
+  const [library, setLibrary] = useState<LibraryStateV1>(() =>
+    initialSnapshot.library || createEmptyLibraryState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -157,6 +174,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
+  const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
+  const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
 
   // Metadata for backup tracking
   const [meta, setMeta] = useState<SecureMeta>(() =>
@@ -169,8 +188,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
+  const libraryRef = useRef(library);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
+  const libraryMutationPendingCountRef = useRef(0);
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
     mutationCoordinatorRef.current = createDurableMutationCoordinator()
@@ -302,6 +323,69 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitLibraryMutation = useCallback((
+    derive: (current: LibraryStateV1) => LibraryStateV1
+  ): Promise<LibraryStateV1> => {
+    libraryMutationPendingCountRef.current += 1;
+    setIsLibraryMutationPending(true);
+    setLibraryMutationError(null);
+
+    return mutationCoordinator.enqueueTask(async () => {
+      const candidate = await persistLibraryMutation(
+        { library: libraryRef.current, meta: metaRef.current },
+        derive,
+        (nextLibrary, nextMeta) => secureStorage.saveLibraryAndMeta(nextLibrary, nextMeta)
+      );
+
+      libraryRef.current = candidate.library;
+      metaRef.current = candidate.meta;
+      setLibrary(candidate.library);
+      setMeta(candidate.meta);
+      toast('Biblioteca aggiornata');
+      return candidate.library;
+    }).catch(error => {
+      console.error('Secure library save failed', error);
+      const message = error instanceof Error ? error.message : 'Salvataggio biblioteca non riuscito.';
+      setLibraryMutationError(message);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    }).finally(() => {
+      libraryMutationPendingCountRef.current = Math.max(0, libraryMutationPendingCountRef.current - 1);
+      if (libraryMutationPendingCountRef.current === 0) {
+        setIsLibraryMutationPending(false);
+      }
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleAddLibrarySource = useCallback((source: LibrarySource): Promise<void> =>
+    commitLibraryMutation(current => addLibrarySource(current, source)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleUpdateLibrarySource = useCallback((
+    sourceId: string,
+    patch: LibrarySourcePatch
+  ): Promise<void> =>
+    commitLibraryMutation(current => updateLibrarySource(current, sourceId, patch)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleLinkLibrarySource = useCallback((
+    sourceId: string,
+    link: LibrarySourceLink
+  ): Promise<void> =>
+    commitLibraryMutation(current => linkLibrarySource(current, sourceId, link)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleUnlinkLibrarySource = useCallback((
+    sourceId: string,
+    link: LibrarySourceLink
+  ): Promise<void> =>
+    commitLibraryMutation(current => unlinkLibrarySource(current, sourceId, link)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleDeleteLibrarySource = useCallback((sourceId: string): Promise<void> =>
+    commitLibraryMutation(current => removeLibrarySource(current, sourceId)).then(() => undefined),
+  [commitLibraryMutation]);
 
   const handleSaveTeachingProfile = useCallback((profile: TeachingProfile): Promise<void> => {
     const errors = validateTeachingProfile(profile);
@@ -796,6 +880,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     customTests: testsRef.current,
     submissions: submissionsRef.current,
     planning: planningRef.current,
+    library: libraryRef.current,
     meta: metaRef.current
   });
 
@@ -832,6 +917,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       testsRef.current = restored.customTests;
       submissionsRef.current = restored.submissions;
       planningRef.current = restored.planning;
+      libraryRef.current = restored.library;
       metaRef.current = restored.meta;
       setAppData(restored.appData);
       setSettings(restored.settings);
@@ -839,6 +925,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setTests(restored.customTests);
       setSubmissions(restored.submissions);
       setPlanning(restored.planning);
+      setLibrary(restored.library);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
@@ -851,13 +938,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
+      const resetLibrary = createEmptyLibraryState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       planningRef.current = resetPlanning;
+      libraryRef.current = resetLibrary;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
       setPlanning(resetPlanning);
+      setLibrary(resetLibrary);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
@@ -1040,6 +1130,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             arenaContexts={planning.arenaContexts}
             onSaveProfile={handleSaveTeachingProfile}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
+          />
+        )}
+
+        {/* Biblioteca privata del docente */}
+        {activeTab === 'biblioteca' && (
+          <LibraryView
+            library={library}
+            udas={udas}
+            onAddSource={handleAddLibrarySource}
+            onUpdateSource={handleUpdateLibrarySource}
+            onLinkSource={handleLinkLibrarySource}
+            onUnlinkSource={handleUnlinkLibrarySource}
+            onDeleteSource={handleDeleteLibrarySource}
+            isPending={isLibraryMutationPending}
+            errorMessage={libraryMutationError}
           />
         )}
 

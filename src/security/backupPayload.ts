@@ -1,10 +1,13 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
 import { createEmptyPlanningState } from '../planning/emptyPlanningState';
+import { createEmptyLibraryState } from '../library/emptyLibraryState';
 import type { PlanningStateV1 } from '../planning/types';
+import type { LibraryStateV1 } from '../library/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 
 export const BACKUP_DATA_VERSION_V2 = 2;
 export const BACKUP_DATA_VERSION_V3 = 3;
+export const BACKUP_DATA_VERSION_V4 = 4;
 
 interface SecureBackupSnapshotV2 {
   appData: AppData;
@@ -13,6 +16,10 @@ interface SecureBackupSnapshotV2 {
   customTests: Record<string, OnlineTest>;
   submissions: OnlineSubmission[];
   meta: SecureMeta;
+}
+
+interface SecureBackupSnapshotV3 extends SecureBackupSnapshotV2 {
+  planning: PlanningStateV1;
 }
 
 export interface SecureBackupPayloadV2 {
@@ -26,11 +33,34 @@ export interface SecureBackupPayloadV3 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V3;
   exportedAt: string;
+  snapshot: SecureBackupSnapshotV3;
+}
+
+export interface SecureBackupPayloadV4 {
+  app: 'registro-docente';
+  backupDataVersion: typeof BACKUP_DATA_VERSION_V4;
+  exportedAt: string;
   snapshot: CompleteSecureAppSnapshot;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
+}
+
+function isOptionalHttpUrl(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== 'string') return false;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function isPlanningStateV1(value: unknown): value is PlanningStateV1 {
@@ -53,19 +83,80 @@ function isSnapshotV2(value: unknown): value is SecureBackupSnapshotV2 {
     && isRecord(value.meta);
 }
 
-function isSnapshotV3(value: unknown): value is CompleteSecureAppSnapshot {
+function isSnapshotV3(value: unknown): value is SecureBackupSnapshotV3 {
   return isSnapshotV2(value)
     && isRecord(value)
     && isPlanningStateV1(value.planning);
 }
 
+const LIBRARY_KINDS = new Set(['image', 'file', 'web', 'text', 'note', 'concept', 'internal']);
+const LIBRARY_STATUSES = new Set(['captured', 'ready', 'needs-review', 'restricted', 'failed']);
+const LIBRARY_PRIVACY = new Set(['unknown', 'teacher-professional', 'student-personal']);
+const LIBRARY_LINK_TARGETS = new Set(['uda', 'lesson', 'activity']);
+
+function isLibraryPayload(value: unknown, kind: unknown): boolean {
+  if (!isRecord(value)
+    || !isOptionalString(value.mimeType)
+    || !isOptionalString(value.text)
+    || !isOptionalString(value.dataUrl)) {
+    return false;
+  }
+
+  const dataUrl = value.dataUrl;
+  if (dataUrl !== undefined) {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return false;
+    if (kind === 'image' && !dataUrl.startsWith('data:image/')) return false;
+  }
+
+  return true;
+}
+
+function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
+  if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.sources)) return false;
+
+  return value.sources.every(source => {
+    if (!isRecord(source)) return false;
+    if (
+      typeof source.id !== 'string'
+      || !source.id.trim()
+      || typeof source.title !== 'string'
+      || !source.title.trim()
+      || typeof source.capturedAt !== 'string'
+      || !source.capturedAt.trim()
+    ) {
+      return false;
+    }
+    if (!LIBRARY_KINDS.has(String(source.kind))) return false;
+    if (!LIBRARY_STATUSES.has(String(source.status))) return false;
+    if (!LIBRARY_PRIVACY.has(String(source.privacy))) return false;
+    if (!isOptionalString(source.origin)) return false;
+    if (!isOptionalHttpUrl(source.sourceUrl)) return false;
+    if (!isOptionalString(source.extractedText)) return false;
+    if (!isOptionalString(source.notes)) return false;
+    if (!isLibraryPayload(source.payload, source.kind) || !Array.isArray(source.links)) return false;
+
+    return source.links.every(link => (
+      isRecord(link)
+      && LIBRARY_LINK_TARGETS.has(String(link.targetType))
+      && typeof link.targetId === 'string'
+      && Boolean(link.targetId.trim())
+    ));
+  });
+}
+
+function isSnapshotV4(value: unknown): value is CompleteSecureAppSnapshot {
+  return isSnapshotV3(value)
+    && isRecord(value)
+    && isLibraryStateV1(value.library);
+}
+
 export function createBackupPayload(
   snapshot: CompleteSecureAppSnapshot,
   exportedAt = new Date().toISOString()
-): SecureBackupPayloadV3 {
+): SecureBackupPayloadV4 {
   return {
     app: 'registro-docente',
-    backupDataVersion: BACKUP_DATA_VERSION_V3,
+    backupDataVersion: BACKUP_DATA_VERSION_V4,
     exportedAt,
     snapshot
   };
@@ -84,11 +175,21 @@ export function normalizeBackupPayload(
   }
 
   if (payload.backupDataVersion !== undefined) {
+    if (payload.backupDataVersion === BACKUP_DATA_VERSION_V4) {
+      if (!isSnapshotV4(payload.snapshot)) {
+        throw new Error('Il backup v4 non contiene uno snapshot completo con una biblioteca privata valida.');
+      }
+      return payload.snapshot;
+    }
+
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V3) {
       if (!isSnapshotV3(payload.snapshot)) {
         throw new Error('Il backup v3 non contiene uno snapshot completo dei dati del Registro.');
       }
-      return payload.snapshot;
+      return {
+        ...payload.snapshot,
+        library: createEmptyLibraryState()
+      };
     }
 
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V2) {
@@ -97,7 +198,8 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
-        planning: createEmptyPlanningState()
+        planning: createEmptyPlanningState(),
+        library: createEmptyLibraryState()
       };
     }
 
@@ -130,6 +232,7 @@ export function normalizeBackupPayload(
       ? payload.submissions as OnlineSubmission[]
       : current.submissions,
     planning: createEmptyPlanningState(),
+    library: createEmptyLibraryState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
 }

@@ -9,6 +9,8 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+
 const settings = {
   school: 'IC Test',
   year: '2026/27',
@@ -28,6 +30,7 @@ const sixDatasetSnapshot = {
 
 const completePlanningSnapshot = {
   ...sixDatasetSnapshot,
+  library: emptyLibrary,
   planning: {
     ...emptyPlanning,
     profiles: [{ id: 'profile-current' }]
@@ -39,14 +42,14 @@ async function loadBackupModule() {
   return import(modulePath);
 }
 
-describe('EDU-PLAN-01A backup v3 planning compatibility', () => {
-  test('exports planning in application backup data version 3', async () => {
+describe('EDU-PLAN-01A planning backup compatibility', () => {
+  test('exports planning in application backup data version 4', async () => {
     const backup = await loadBackupModule();
 
-    expect(backup.BACKUP_DATA_VERSION_V3).toBe(3);
+    expect(backup.BACKUP_DATA_VERSION_V4).toBe(4);
     const payload = backup.createBackupPayload(completePlanningSnapshot as any, '2026-10-24T10:00:00.000Z');
 
-    expect(payload.backupDataVersion).toBe(3);
+    expect(payload.backupDataVersion).toBe(4);
     expect(payload.snapshot.planning).toEqual(completePlanningSnapshot.planning);
   });
 
@@ -61,7 +64,8 @@ describe('EDU-PLAN-01A backup v3 planning compatibility', () => {
 
     expect(restored).toEqual({
       ...sixDatasetSnapshot,
-      planning: emptyPlanning
+      planning: emptyPlanning,
+      library: emptyLibrary
     });
   });
 
@@ -78,6 +82,7 @@ describe('EDU-PLAN-01A backup v3 planning compatibility', () => {
 
     expect(restored.planning).toEqual(emptyPlanning);
     expect(restored.planning).not.toEqual(completePlanningSnapshot.planning);
+    expect(restored.library).toEqual(emptyLibrary);
   });
 
   test('keeps unsupported application backup versions fail-closed', async () => {

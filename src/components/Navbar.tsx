@@ -19,6 +19,7 @@ import {
   Upload,
   ArrowLeft,
   BookOpen,
+  Library,
   ShieldCheck,
   Eye,
   EyeOff
@@ -331,6 +332,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 px-3 pt-3 pb-1 border-t border-[var(--border)] mt-2">
             Didattica e strumenti
           </div>
+
+          <button
+            onClick={() => handleNav('biblioteca')}
+            className={`w-full min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+              activeTab === 'biblioteca'
+                ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
+                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+          >
+            <Library className="w-4 h-4 shrink-0 text-amber-300" />
+            <span>Biblioteca privata</span>
+          </button>
 
           <button
             onClick={() => handleNav('verifiche-online')}

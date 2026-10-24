@@ -62,6 +62,8 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+
 function complete(label: string): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -70,6 +72,7 @@ function complete(label: string): CompleteSecureAppSnapshot {
     customTests: { [`test-${label}`]: { id: `test-${label}`, title: label, questions: [] } as OnlineTest },
     submissions: [{ id: `sub-${label}`, testId: `test-${label}`, name: 'Rossi Mario', class: '3ª A', testTitle: label, score: 1, total: 1, date: '2026-10-22T10:00:00.000Z' } as OnlineSubmission],
     planning: emptyPlanning,
+    library: emptyLibrary,
     meta: meta(label === 'old' ? 3 : 0)
   };
 }
@@ -121,7 +124,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     ]);
   });
 
-  test('verified restore writes the seven-record candidate atomically', async () => {
+  test('verified restore writes the eight-record candidate atomically', async () => {
     const store = new AtomicRecordingStore();
     const vault = new SecureVault(store);
     await vault.initializeActive('password');
@@ -133,7 +136,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     const restored = await storage.restoreSnapshotVerified(candidate, previous);
 
     expect(restored.settings.school).toBe('IC new');
-    expect(store.batchKeys).toEqual([['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta']]);
+    expect(store.batchKeys).toEqual([['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'library', 'meta']]);
   });
 
   test('readback mismatch restores the explicit previous logical snapshot atomically even from a fresh physical vault', async () => {
@@ -150,8 +153,8 @@ describe('PERSIST-01H atomic storage contracts', () => {
     expect(afterFailure.settings?.school).toBe('IC old');
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(store.batchKeys).toEqual([
-      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta'],
-      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'meta']
+      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'library', 'meta'],
+      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'library', 'meta']
     ]);
   });
 });

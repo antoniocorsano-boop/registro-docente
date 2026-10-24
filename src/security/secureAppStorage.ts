@@ -5,6 +5,7 @@ import type {
   OnlineTest,
   UdaRecord
 } from '../types';
+import type { LibraryStateV1 } from '../library/types';
 import type { PlanningStateV1 } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
@@ -38,6 +39,7 @@ export interface SecureAppSnapshot {
   customTests: Record<string, OnlineTest> | null;
   submissions: OnlineSubmission[] | null;
   planning: PlanningStateV1 | null;
+  library: LibraryStateV1 | null;
   meta: SecureMeta | null;
 }
 
@@ -48,6 +50,7 @@ export interface CompleteSecureAppSnapshot {
   customTests: Record<string, OnlineTest>;
   submissions: OnlineSubmission[];
   planning: PlanningStateV1;
+  library: LibraryStateV1;
   meta: SecureMeta;
 }
 
@@ -58,6 +61,7 @@ const SNAPSHOT_KEYS = [
   'customTests',
   'submissions',
   'planning',
+  'library',
   'meta'
 ] as const;
 
@@ -101,17 +105,18 @@ export class SecureAppStorage {
   constructor(private readonly vault: SecureVault) {}
 
   async loadSnapshot(): Promise<SecureAppSnapshot> {
-    const [appData, settings, udas, customTests, submissions, planning, meta] = await Promise.all([
+    const [appData, settings, udas, customTests, submissions, planning, library, meta] = await Promise.all([
       this.vault.get<AppData>('appData'),
       this.vault.get<AppSettings>('settings'),
       this.vault.get<UdaRecord[]>('udas'),
       this.vault.get<Record<string, OnlineTest>>('customTests'),
       this.vault.get<OnlineSubmission[]>('submissions'),
       this.vault.get<PlanningStateV1>('planning'),
+      this.vault.get<LibraryStateV1>('library'),
       this.vault.get<SecureMeta>('meta')
     ]);
 
-    return { appData, settings, udas, customTests, submissions, planning, meta };
+    return { appData, settings, udas, customTests, submissions, planning, library, meta };
   }
 
   saveAppData(value: AppData): Promise<void> {
@@ -180,6 +185,17 @@ export class SecureAppStorage {
     ]);
   }
 
+  saveLibrary(value: LibraryStateV1): Promise<void> {
+    return this.vault.put('library', value);
+  }
+
+  saveLibraryAndMeta(library: LibraryStateV1, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'library', value: library },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveMeta(value: SecureMeta): Promise<void> {
     return this.vault.put('meta', value);
   }
@@ -193,6 +209,7 @@ export class SecureAppStorage {
       { key: 'customTests', value: sanitized.customTests },
       { key: 'submissions', value: sanitized.submissions },
       { key: 'planning', value: sanitized.planning },
+      { key: 'library', value: sanitized.library },
       { key: 'meta', value: sanitized.meta }
     ]);
   }
@@ -205,6 +222,7 @@ export class SecureAppStorage {
       ['customTests', snapshot.customTests],
       ['submissions', snapshot.submissions],
       ['planning', snapshot.planning],
+      ['library', snapshot.library],
       ['meta', snapshot.meta]
     ];
 

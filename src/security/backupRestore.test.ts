@@ -60,6 +60,22 @@ const emptyPlanning = {
   classInstances: []
 };
 
+function libraryFor(label: string) {
+  return {
+    schemaVersion: 1 as const,
+    sources: [{
+      id: `source-${label}`,
+      kind: 'text' as const,
+      title: `Fonte ${label}`,
+      capturedAt: '2026-10-24T10:00:00.000Z',
+      payload: { text: `contenuto-${label}` },
+      status: 'ready' as const,
+      privacy: 'teacher-professional' as const,
+      links: []
+    }]
+  };
+}
+
 function snapshot(label: string): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -82,6 +98,7 @@ function snapshot(label: string): CompleteSecureAppSnapshot {
     customTests: {},
     submissions: [],
     planning: emptyPlanning,
+    library: libraryFor(label),
     meta: { changes: label === 'old' ? 3 : 0, lastBackup: null }
   };
 }
@@ -96,6 +113,7 @@ describe('SEC-1 verified vault backup restore', () => {
     const restored = await storage.restoreSnapshotVerified(snapshot('new'));
 
     expect(restored.settings.school).toBe('IC new');
+    expect(restored.library.sources[0]?.id).toBe('source-new');
     expect(restored.settings.embeddingConfig?.apiKey).toBeUndefined();
     expect(restored.planning).toEqual(emptyPlanning);
     expect((await storage.loadSnapshot()).settings?.school).toBe('IC new');
@@ -109,7 +127,7 @@ describe('SEC-1 verified vault backup restore', () => {
     const previous = snapshot('old');
 
     await storage.restoreSnapshotVerified(previous);
-    store.armOneReadCorruption('appData', 7);
+    store.armOneReadCorruption('appData', 8);
 
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
@@ -126,7 +144,7 @@ describe('SEC-1 verified vault backup restore', () => {
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
 
-    store.armOneReadCorruption('appData', 7);
+    store.armOneReadCorruption('appData', 8);
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
     expect(await storage.loadSnapshot()).toEqual({
@@ -136,6 +154,7 @@ describe('SEC-1 verified vault backup restore', () => {
       customTests: null,
       submissions: null,
       planning: null,
+      library: null,
       meta: null
     });
   });
