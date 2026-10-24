@@ -31,3 +31,17 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: PR #23, thread Codex P2 su `tests/browser/browser-qualification.spec.cjs`, finding `PRRC_kwDOVR43as8AAAABBBMb6w`.
 - Promozione candidata: recipe; nessuna nuova operating rule, perché il principio è già coperto da `OR-003 — No false PASS`.
 - Sostituita da: —
+
+### LL-003 — Creare e verificare il branch prima di ogni contents mutation
+- Stato: ACTIVE
+- Ciclo/data: POST-P2-CLOSE · 2026-10-24
+- Exact SHA/riferimento: add accidentale `40f16bd901c83491638109c9cc85b1e143412e3e`; compensazione `482c62a7811655112ce91c613241e70e67464bc3`; tree ripristinato `ba5ba02d12d2920d8aa50167546516835a6cede0`.
+- Obiettivo: materializzare documentazione di chiusura su un branch isolato senza mutare `main` prima della review.
+- Ha funzionato: il file accidentale è stato rimosso immediatamente e il commit compensativo ha ripristinato esattamente il tree della release prima di proseguire.
+- È fallito: una `create_file` è stata invocata prima di verificare l'esistenza del branch target; il retry è stato poi indirizzato erroneamente a `main`, producendo un commit placeholder non desiderato.
+- Causa reale: sequenza operativa sbagliata — mutation dei contenuti prima del gate `branch exists + exact base verified`.
+- Regola generalizzabile: per qualsiasi contents mutation destinata a un branch non-default, creare il branch, verificarne l'exact base SHA e passare sempre il branch esplicito alla mutation; non usare `main` come fallback operativo.
+- Non ripetere: tentare `create_file`/`update_file`/`delete_file` finché il branch target non è stato creato e verificato.
+- Evidenza: storia `40f16bd...` → `482c62a...`, con tree finale uguale al released tree `ba5ba02d...`.
+- Promozione candidata: operating rule — promossa come `OR-009`.
+- Sostituita da: —
