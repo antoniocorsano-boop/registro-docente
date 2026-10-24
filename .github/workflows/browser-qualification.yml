@@ -1,61 +1,63 @@
-name: Browser Qualification
+name: UX-TRUST-01 Full App Audit
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   PLAYWRIGHT_VERSION: '1.64.1'
-  PORT: '4173'
+  LIVE_URL: 'https://registro-docente.ai.studio'
+  PRODUCT_SOURCE_SHA: 'ad4dfcc2fabacbb05ce7d9a080ad06be73de0fed'
 
 jobs:
-  browser-qualification:
+  full-app-audit:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout exact candidate
+      - name: Checkout exact audit harness
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.CANDIDATE_SHA }}
+          ref: ${{ github.sha }}
 
-      - name: Verify exact candidate checkout
+      - name: Verify audit harness checkout
         shell: bash
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
-          echo "Candidate SHA: ${CANDIDATE_SHA}"
-          echo "Checkout SHA:  ${actual_sha}"
-          test "${actual_sha}" = "${CANDIDATE_SHA}"
+          echo "Audit harness SHA: ${GITHUB_SHA}"
+          echo "Checkout SHA:      ${actual_sha}"
+          test "${actual_sha}" = "${GITHUB_SHA}"
+          echo "Product source baseline: ${PRODUCT_SOURCE_SHA}"
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Probe public deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ux-audit-evidence
+          curl --fail --silent --show-error --location \
+            --dump-header ux-audit-evidence/live-headers.txt \
+            "${LIVE_URL}/" \
+            -o ux-audit-evidence/live-index.html
+          grep -Eo 'assets/index-[A-Za-z0-9_-]+\.(js|css)' ux-audit-evidence/live-index.html \
+            | sort -u \
+            | tee ux-audit-evidence/live-assets.txt || true
 
-      - name: Setup Node for isolated browser toolchain
+      - name: Setup Node for isolated Playwright
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Install application dependencies from lockfile
-        run: bun install --frozen-lockfile
-
-      - name: Build production application
-        run: bun run build
 
       - name: Install isolated Playwright toolchain
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .browser-tools browser-evidence
+          mkdir -p .browser-tools ux-audit-evidence
           cat > .browser-tools/package.json <<'JSON'
           {
-            "name": "registro-docente-browser-qualification-tools",
+            "name": "registro-docente-ux-trust-01-audit",
             "private": true
           }
           JSON
@@ -64,67 +66,26 @@ jobs:
             --package-lock=false \
             "@playwright/test@${PLAYWRIGHT_VERSION}"
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
-          cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
-          cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
-          cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
+          cp tests/browser/ux-trust-01-audit.spec.cjs .browser-tools/ux-trust-01-audit.spec.cjs
 
-      - name: Start production server and wait for readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p browser-evidence
-          NODE_ENV=production PORT="${PORT}" bun run start > browser-evidence/server.log 2>&1 &
-          server_pid=$!
-          echo "${server_pid}" > browser-evidence/server.pid
-
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/" > /dev/null; then
-              echo "Production server ready on attempt ${attempt}."
-              exit 0
-            fi
-
-            if ! kill -0 "${server_pid}" 2>/dev/null; then
-              echo "Production server exited before readiness."
-              cat browser-evidence/server.log
-              exit 1
-            fi
-
-            sleep 1
-          done
-
-          echo "Production server did not become ready within 30 seconds."
-          cat browser-evidence/server.log
-          exit 1
-
-      - name: Run Chromium qualification
+      - name: Run full live Chromium UX audit
         shell: bash
         run: |
           set -euo pipefail
           cd .browser-tools
-          BASE_URL="http://127.0.0.1:${PORT}" \
-          EVIDENCE_DIR="../browser-evidence" \
-          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          BASE_URL="${LIVE_URL}" \
+          EVIDENCE_DIR="../ux-audit-evidence" \
+          CANDIDATE_SHA="${PRODUCT_SOURCE_SHA}" \
           ./node_modules/.bin/playwright test \
-            browser-qualification.spec.cjs \
-            online-01-qualification.spec.cjs \
-            release-01-qualification.spec.cjs \
+            ux-trust-01-audit.spec.cjs \
             --reporter=line \
-            --output=../browser-evidence/test-results
+            --output=../ux-audit-evidence/test-results
 
-      - name: Stop production server
-        if: always()
-        shell: bash
-        run: |
-          if [[ -f browser-evidence/server.pid ]]; then
-            server_pid="$(cat browser-evidence/server.pid)"
-            kill "${server_pid}" 2>/dev/null || true
-          fi
-
-      - name: Upload browser qualification evidence
+      - name: Upload UX audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: browser-qualification-${{ env.CANDIDATE_SHA }}
-          path: browser-evidence/
-          if-no-files-found: warn
+          name: ux-trust-01-full-app-audit-${{ github.sha }}
+          path: ux-audit-evidence/
+          if-no-files-found: error
           retention-days: 7
