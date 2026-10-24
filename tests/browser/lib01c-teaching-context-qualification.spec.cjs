@@ -47,7 +47,10 @@ async function createSyntheticUda(page) {
 }
 
 async function addSyntheticLesson(page) {
-  await page.getByRole('button', { name: 'Dossier & Rubrica', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Gap Analysis Competenze', exact: true }).click();
+  const dossierButton = page.getByRole('button', { name: 'Dossier & Rubrica', exact: true }).first();
+  await expect(dossierButton).toBeVisible();
+  await dossierButton.click();
   const topicInput = page.getByPlaceholder('Argomento o fase operativa svolta...');
   await expect(topicInput).toBeVisible();
   const form = topicInput.locator('xpath=ancestor::form');
