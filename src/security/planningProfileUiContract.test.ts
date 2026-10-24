@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { getFirstCycleNormativeReference } from '../planning/normative/italianFirstCycle';
 
+// RED contract for the teacher-facing planning profile introduced by EDU-PLAN-01B.
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 describe('EDU-PLAN-01B teacher planning profile contract', () => {
