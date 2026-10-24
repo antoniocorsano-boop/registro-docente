@@ -328,15 +328,14 @@ describe('LIB-01C teaching context contract', () => {
     expect(serialized).not.toContain(UDA.lessons![0].notes!);
   });
 
-  test('progressively discloses explicit UDA/lesson context and derives the vertical link target from it', () => {
+  test('wires deterministic suggestion and teacher override into the governed vertical link target', () => {
     const cardSource = readFileSync(new URL('../components/LibrarySourceCard.tsx', import.meta.url), 'utf8');
 
     expect(cardSource).toContain('resolveLibraryTeachingContext');
-    expect(cardSource).toContain('Contesto di lavoro');
-    expect(cardSource).toContain('UDA corrente');
-    expect(cardSource).toContain('Lezione corrente');
-    expect(cardSource).toContain('Tipo di attività');
+    expect(cardSource).toContain('suggestLibraryTeachingContext');
+    expect(cardSource).toContain('onExplicitTeachingContextChange');
     expect(cardSource).toContain("setContextLessonId('')");
+    expect(cardSource).toContain('setContextLinkConfirmationPending(false)');
     expect(cardSource).toContain('resolveLibraryContextActions(source, resolvedTeachingContext)');
     expect(cardSource).toContain('teachingContext: resolvedTeachingContext');
     expect(cardSource).toContain("targetType: 'lesson'");
