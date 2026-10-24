@@ -11,6 +11,10 @@ import {
   Student,
   UdaRecord
 } from './types';
+import type { ArenaPlanningContextPreview, PlanningStateV1, TeachingProfile } from './planning/types';
+import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
+import { validateTeachingProfile } from './planning/validation';
+import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -37,6 +41,7 @@ import type {
 import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
+import { applyPlanningMutation } from './persistence/planningMutation';
 import {
   applyBackupReceipt,
   incrementBackupChanges,
@@ -62,6 +67,7 @@ import { SettingsView } from './components/SettingsView';
 import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
+import { PlanningProfileView } from './components/planning/PlanningProfileView';
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -134,6 +140,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.udas || INITIAL_UDAS
   );
 
+  // 5b. Annual planning domain (separate from legacy UDA/Gantt until migration is qualified)
+  const [planning, setPlanning] = useState<PlanningStateV1>(() =>
+    initialSnapshot.planning || createEmptyPlanningState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -157,6 +168,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const metaRef = useRef(meta);
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
+  const planningRef = useRef(planning);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
@@ -266,6 +278,70 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitPlanningMutation = useCallback((
+    derive: (current: PlanningStateV1) => PlanningStateV1
+  ): Promise<PlanningStateV1> => {
+    return mutationCoordinator.enqueue<{ planning: PlanningStateV1; meta: SecureMeta }>({
+      getCommitted: () => ({ planning: planningRef.current, meta: metaRef.current }),
+      derive: current => ({
+        planning: applyPlanningMutation(current.planning, derive),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.savePlanningAndMeta(candidate.planning, candidate.meta),
+      publish: candidate => {
+        planningRef.current = candidate.planning;
+        metaRef.current = candidate.meta;
+        setPlanning(candidate.planning);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast('Programmazione salvata')
+    }).then(candidate => candidate.planning).catch(error => {
+      console.error('Secure planning save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleSaveTeachingProfile = useCallback((profile: TeachingProfile): Promise<void> => {
+    const errors = validateTeachingProfile(profile);
+    if (errors.length > 0) {
+      return Promise.reject(new Error(`Profilo di programmazione non valido: ${errors.join(', ')}`));
+    }
+
+    return commitPlanningMutation(current => ({
+      ...current,
+      profiles: [...current.profiles.filter(existing => existing.id !== profile.id), profile]
+    })).then(() => undefined);
+  }, [commitPlanningMutation]);
+
+  const handleAcceptArenaPlanningContext = useCallback((context: ArenaPlanningContextPreview): Promise<void> => {
+    return commitPlanningMutation(current => {
+      const profile = current.profiles.find(existing => existing.id === context.profileId);
+      if (!profile) {
+        throw new Error('Profilo di programmazione non più disponibile.');
+      }
+      const expectedSchoolOrder = profile.schoolOrder === 'primary' ? 'primaria' : 'secondaria';
+      if (
+        profile.schoolYear !== context.schoolYear ||
+        expectedSchoolOrder !== context.schoolOrder ||
+        profile.subjectCode !== context.subjectCode ||
+        profile.gradeLevel !== context.gradeLevel ||
+        profile.cohortRef !== context.cohortRef ||
+        profile.normativeRegime !== context.regimeRef
+      ) {
+        throw new Error('ARENA_CONTEXT_PROFILE_CHANGED_REVIEW_REQUIRED');
+      }
+
+      return {
+        ...current,
+        arenaContexts: bindAcceptedArenaPlanningContext(current.arenaContexts, context, {
+          accepted: true,
+          acceptedAt: new Date().toISOString()
+        })
+      };
+    }).then(() => undefined);
+  }, [commitPlanningMutation]);
 
   const commitTestsMutation = useCallback((
     derive: (current: Record<string, OnlineTest>) => Record<string, OnlineTest>
@@ -719,6 +795,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     udas: udasRef.current,
     customTests: testsRef.current,
     submissions: submissionsRef.current,
+    planning: planningRef.current,
     meta: metaRef.current
   });
 
@@ -748,19 +825,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const previousLogical = getCompleteCommittedSnapshot();
       const candidate = normalizeBackupPayload(decryptedData, previousLogical);
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
-
       appDataRef.current = restored.appData;
       currentClassIdRef.current = restored.appData.currentClassId;
       settingsRef.current = restored.settings;
       udasRef.current = restored.udas;
       testsRef.current = restored.customTests;
       submissionsRef.current = restored.submissions;
+      planningRef.current = restored.planning;
       metaRef.current = restored.meta;
       setAppData(restored.appData);
       setSettings(restored.settings);
       setUdas(restored.udas);
       setTests(restored.customTests);
       setSubmissions(restored.submissions);
+      setPlanning(restored.planning);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
@@ -772,11 +850,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     try {
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
+      const resetPlanning = createEmptyPlanningState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
+      planningRef.current = resetPlanning;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
+      setPlanning(resetPlanning);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
@@ -952,7 +1033,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
-        {/* TAB 11: Programmazione UDA & Gantt */}
+        {/* TAB 11: Programmazione didattica annuale */}
+        {activeTab === 'programmazione' && (
+          <PlanningProfileView
+            profiles={planning.profiles}
+            arenaContexts={planning.arenaContexts}
+            onSaveProfile={handleSaveTeachingProfile}
+            onAcceptArenaContext={handleAcceptArenaPlanningContext}
+          />
+        )}
+
+        {/* TAB 12: Programmazione UDA & Gantt legacy */}
         {activeTab === 'uda-gantt' && (
           <UdaGanttView
             classes={appData.classes}

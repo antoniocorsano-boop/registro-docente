@@ -151,6 +151,7 @@ export type ActiveTab =
   | 'dati'
   | 'verifiche-online'
   | 'uda-gantt'
+  | 'programmazione'
   | 'impostazioni'
   | 'privacy';
 

@@ -1,11 +1,30 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
+import { createEmptyPlanningState } from '../planning/emptyPlanningState';
+import type { PlanningStateV1 } from '../planning/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 
 export const BACKUP_DATA_VERSION_V2 = 2;
+export const BACKUP_DATA_VERSION_V3 = 3;
+
+interface SecureBackupSnapshotV2 {
+  appData: AppData;
+  settings: AppSettings;
+  udas: UdaRecord[];
+  customTests: Record<string, OnlineTest>;
+  submissions: OnlineSubmission[];
+  meta: SecureMeta;
+}
 
 export interface SecureBackupPayloadV2 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V2;
+  exportedAt: string;
+  snapshot: SecureBackupSnapshotV2;
+}
+
+export interface SecureBackupPayloadV3 {
+  app: 'registro-docente';
+  backupDataVersion: typeof BACKUP_DATA_VERSION_V3;
   exportedAt: string;
   snapshot: CompleteSecureAppSnapshot;
 }
@@ -14,7 +33,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isCompleteSnapshot(value: unknown): value is CompleteSecureAppSnapshot {
+function isPlanningStateV1(value: unknown): value is PlanningStateV1 {
+  if (!isRecord(value) || value.schemaVersion !== 1) return false;
+  return Array.isArray(value.profiles)
+    && Array.isArray(value.arenaContexts)
+    && Array.isArray(value.resources)
+    && Array.isArray(value.masterPrograms)
+    && Array.isArray(value.classInstances);
+}
+
+function isSnapshotV2(value: unknown): value is SecureBackupSnapshotV2 {
   if (!isRecord(value)) return false;
   return isRecord(value.appData)
     && Array.isArray((value.appData as Record<string, unknown>).classes)
@@ -25,13 +53,19 @@ function isCompleteSnapshot(value: unknown): value is CompleteSecureAppSnapshot 
     && isRecord(value.meta);
 }
 
+function isSnapshotV3(value: unknown): value is CompleteSecureAppSnapshot {
+  return isSnapshotV2(value)
+    && isRecord(value)
+    && isPlanningStateV1(value.planning);
+}
+
 export function createBackupPayload(
   snapshot: CompleteSecureAppSnapshot,
   exportedAt = new Date().toISOString()
-): SecureBackupPayloadV2 {
+): SecureBackupPayloadV3 {
   return {
     app: 'registro-docente',
-    backupDataVersion: BACKUP_DATA_VERSION_V2,
+    backupDataVersion: BACKUP_DATA_VERSION_V3,
     exportedAt,
     snapshot
   };
@@ -50,13 +84,24 @@ export function normalizeBackupPayload(
   }
 
   if (payload.backupDataVersion !== undefined) {
-    if (payload.backupDataVersion !== BACKUP_DATA_VERSION_V2) {
-      throw new Error(`Versione dati backup non supportata: ${String(payload.backupDataVersion)}.`);
+    if (payload.backupDataVersion === BACKUP_DATA_VERSION_V3) {
+      if (!isSnapshotV3(payload.snapshot)) {
+        throw new Error('Il backup v3 non contiene uno snapshot completo dei dati del Registro.');
+      }
+      return payload.snapshot;
     }
-    if (!isCompleteSnapshot(payload.snapshot)) {
-      throw new Error('Il backup v2 non contiene uno snapshot completo dei dati del Registro.');
+
+    if (payload.backupDataVersion === BACKUP_DATA_VERSION_V2) {
+      if (!isSnapshotV2(payload.snapshot)) {
+        throw new Error('Il backup v2 non contiene uno snapshot completo dei dati del Registro.');
+      }
+      return {
+        ...payload.snapshot,
+        planning: createEmptyPlanningState()
+      };
     }
-    return payload.snapshot;
+
+    throw new Error(`Versione dati backup non supportata: ${String(payload.backupDataVersion)}.`);
   }
 
   const legacyData = isRecord(payload.data) ? payload.data : null;
@@ -84,6 +129,7 @@ export function normalizeBackupPayload(
     submissions: Array.isArray(payload.submissions)
       ? payload.submissions as OnlineSubmission[]
       : current.submissions,
+    planning: createEmptyPlanningState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
 }
