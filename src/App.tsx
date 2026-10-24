@@ -15,8 +15,16 @@ import type { ArenaPlanningContextPreview, PlanningStateV1, TeachingProfile } fr
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
-import type { LibraryStateV1 } from './library/types';
+import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
+import {
+  addLibrarySource,
+  linkLibrarySource,
+  removeLibrarySource,
+  unlinkLibrarySource,
+  updateLibrarySource,
+  type LibrarySourcePatch
+} from './library/libraryState';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -44,6 +52,7 @@ import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
+import { persistLibraryMutation } from './persistence/libraryMutation';
 import {
   applyBackupReceipt,
   incrementBackupChanges,
@@ -164,6 +173,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
+  const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
+  const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
 
   // Metadata for backup tracking
   const [meta, setMeta] = useState<SecureMeta>(() =>
@@ -179,6 +190,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const libraryRef = useRef(library);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
+  const libraryMutationPendingCountRef = useRef(0);
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
     mutationCoordinatorRef.current = createDurableMutationCoordinator()
@@ -310,6 +322,69 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitLibraryMutation = useCallback((
+    derive: (current: LibraryStateV1) => LibraryStateV1
+  ): Promise<LibraryStateV1> => {
+    libraryMutationPendingCountRef.current += 1;
+    setIsLibraryMutationPending(true);
+    setLibraryMutationError(null);
+
+    return mutationCoordinator.enqueueTask(async () => {
+      const candidate = await persistLibraryMutation(
+        { library: libraryRef.current, meta: metaRef.current },
+        derive,
+        (nextLibrary, nextMeta) => secureStorage.saveLibraryAndMeta(nextLibrary, nextMeta)
+      );
+
+      libraryRef.current = candidate.library;
+      metaRef.current = candidate.meta;
+      setLibrary(candidate.library);
+      setMeta(candidate.meta);
+      toast('Biblioteca aggiornata');
+      return candidate.library;
+    }).catch(error => {
+      console.error('Secure library save failed', error);
+      const message = error instanceof Error ? error.message : 'Salvataggio biblioteca non riuscito.';
+      setLibraryMutationError(message);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    }).finally(() => {
+      libraryMutationPendingCountRef.current = Math.max(0, libraryMutationPendingCountRef.current - 1);
+      if (libraryMutationPendingCountRef.current === 0) {
+        setIsLibraryMutationPending(false);
+      }
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleAddLibrarySource = useCallback((source: LibrarySource): Promise<void> =>
+    commitLibraryMutation(current => addLibrarySource(current, source)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleUpdateLibrarySource = useCallback((
+    sourceId: string,
+    patch: LibrarySourcePatch
+  ): Promise<void> =>
+    commitLibraryMutation(current => updateLibrarySource(current, sourceId, patch)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleLinkLibrarySource = useCallback((
+    sourceId: string,
+    link: LibrarySourceLink
+  ): Promise<void> =>
+    commitLibraryMutation(current => linkLibrarySource(current, sourceId, link)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleUnlinkLibrarySource = useCallback((
+    sourceId: string,
+    link: LibrarySourceLink
+  ): Promise<void> =>
+    commitLibraryMutation(current => unlinkLibrarySource(current, sourceId, link)).then(() => undefined),
+  [commitLibraryMutation]);
+
+  const handleDeleteLibrarySource = useCallback((sourceId: string): Promise<void> =>
+    commitLibraryMutation(current => removeLibrarySource(current, sourceId)).then(() => undefined),
+  [commitLibraryMutation]);
 
   const handleSaveTeachingProfile = useCallback((profile: TeachingProfile): Promise<void> => {
     const errors = validateTeachingProfile(profile);

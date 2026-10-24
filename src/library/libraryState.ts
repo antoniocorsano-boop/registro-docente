@@ -1,6 +1,6 @@
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './types';
 
-type LibrarySourcePatch = Partial<Pick<
+export type LibrarySourcePatch = Partial<Pick<
   LibrarySource,
   'title' | 'notes' | 'status' | 'privacy' | 'extractedText'
 >>;
