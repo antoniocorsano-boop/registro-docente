@@ -345,6 +345,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
+            onClick={() => handleNav('programmazione')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+              activeTab === 'programmazione'
+                ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
+                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 shrink-0 text-cyan-400" />
+            <span>Programmazione didattica</span>
+          </button>
+
+          <button
             onClick={() => handleNav('uda-gantt')}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
               activeTab === 'uda-gantt'

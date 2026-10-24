@@ -11,7 +11,8 @@ import {
   Student,
   UdaRecord
 } from './types';
-import type { PlanningStateV1 } from './planning/types';
+import type { PlanningStateV1, TeachingProfile } from './planning/types';
+import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import {
   calcAvg,
@@ -65,6 +66,7 @@ import { SettingsView } from './components/SettingsView';
 import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
+import { PlanningProfileView } from './components/planning/PlanningProfileView';
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -299,6 +301,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleSaveTeachingProfile = useCallback((profile: TeachingProfile): Promise<void> => {
+    const errors = validateTeachingProfile(profile);
+    if (errors.length > 0) {
+      return Promise.reject(new Error(`Profilo di programmazione non valido: ${errors.join(', ')}`));
+    }
+
+    return commitPlanningMutation(current => ({
+      ...current,
+      profiles: [...current.profiles.filter(existing => existing.id !== profile.id), profile]
+    })).then(() => undefined);
+  }, [commitPlanningMutation]);
 
   const commitTestsMutation = useCallback((
     derive: (current: Record<string, OnlineTest>) => Record<string, OnlineTest>
@@ -991,7 +1005,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
-        {/* TAB 11: Programmazione UDA & Gantt */}
+        {/* TAB 11: Programmazione didattica annuale */}
+        {activeTab === 'programmazione' && (
+          <PlanningProfileView
+            profiles={planning.profiles}
+            onSaveProfile={handleSaveTeachingProfile}
+          />
+        )}
+
+        {/* TAB 12: Programmazione UDA & Gantt legacy */}
         {activeTab === 'uda-gantt' && (
           <UdaGanttView
             classes={appData.classes}
