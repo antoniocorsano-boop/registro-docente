@@ -55,6 +55,7 @@ export interface TeachingProfile {
   gradeLevel: number;
   cohortRef: string;
   subjectCode: string;
+  normativeRegime?: string;
   normativeReference: NormativeReference;
   localAllocation?: LocalTeachingAllocation;
   reservePercent: number;
@@ -62,21 +63,62 @@ export interface TeachingProfile {
   calendar: TeachingCalendar;
 }
 
-export interface ArenaPlanningContext {
+export interface ArenaMasterFingerprint {
+  scope: 'MASTER';
+  algorithm: string;
+  version: number;
+  hash: string;
+}
+
+export interface ArenaPlanningProvenance {
+  repository: string;
+  sourceCommit: string;
+  sourceDocumentId: string;
+  sourceRevisionId: string;
+}
+
+export interface ArenaCurricoloItem {
   id: string;
-  curriculumVersionRef: string;
-  authorityState: 'APPROVED' | 'PROVISIONAL_COMPLETE';
-  vigencyStatus: 'VIGENTE' | 'NON_VIGENTE';
-  structuralFingerprint?: string;
+  kind: string;
+  schoolStage: string;
+  gradeLabel: string;
+  sourceSection: string;
+  text: string;
+}
+
+export interface ArenaPlanningContextPreview {
+  profileId: string;
+  contract: 'ARENA_REGISTRO_PLANNING_CONTEXT_V1';
+  contractVersion: 1;
+  sourceProduct: 'ARENA';
+  targetProduct: 'REGISTRO_DOCENTE';
+  importMode: 'PREVIEW_ONLY';
+  acceptanceRequired: true;
+  automaticWriteAllowed: false;
   institutionRef: string;
   schoolYear: string;
+  sourceSchoolYear: string;
+  schoolOrder: 'primaria' | 'secondaria';
   subjectCode: string;
   gradeLevel: number;
   cohortRef: string;
+  cohortRefKind: 'DERIVED_APPLICABILITY_KEY';
   applicabilityStatus: 'APPLICABLE' | 'TRANSITIONAL';
   regimeRef: string;
-  requirementRefs: string[];
-  provenanceRefs: string[];
+  authorityState: 'APPROVED' | 'PROVISIONAL_COMPLETE';
+  vigencyStatus: 'VIGENTE' | 'NON_VIGENTE';
+  authorityReceiptRef: string | null;
+  masterId: string;
+  masterVersion: string;
+  structuralFingerprint: ArenaMasterFingerprint;
+  provenance: ArenaPlanningProvenance;
+  curricoloItems: ArenaCurricoloItem[];
+  privacyClass: 'PROFESSIONAL_NON_PERSONAL';
+}
+
+export interface ArenaPlanningContext extends ArenaPlanningContextPreview {
+  id: string;
+  acceptedAt: string;
 }
 
 export interface PrivateTeachingResource {
