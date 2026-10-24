@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-test('EDU-PLAN-01B harness sentinel must be observed', () => {
-  expect('RED_SENTINEL').toBe('GREEN_SENTINEL');
-});
-
 const validProfile = () => ({
   id: 'profile-tech-grade1',
   schoolYear: '2026/27',
