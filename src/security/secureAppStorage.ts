@@ -5,6 +5,7 @@ import type {
   OnlineTest,
   UdaRecord
 } from '../types';
+import type { PlanningStateV1 } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
 import { SecureVault } from './secureVault';
@@ -36,6 +37,7 @@ export interface SecureAppSnapshot {
   udas: UdaRecord[] | null;
   customTests: Record<string, OnlineTest> | null;
   submissions: OnlineSubmission[] | null;
+  planning: PlanningStateV1 | null;
   meta: SecureMeta | null;
 }
 
@@ -64,8 +66,22 @@ function sanitizeCompleteSnapshot(snapshot: CompleteSecureAppSnapshot): Complete
   };
 }
 
-function snapshotEquals(left: SecureAppSnapshot, right: SecureAppSnapshot): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+function comparableCompleteSnapshot(snapshot: SecureAppSnapshot | CompleteSecureAppSnapshot) {
+  return {
+    appData: snapshot.appData,
+    settings: snapshot.settings,
+    udas: snapshot.udas,
+    customTests: snapshot.customTests,
+    submissions: snapshot.submissions,
+    meta: snapshot.meta
+  };
+}
+
+function snapshotEquals(
+  left: SecureAppSnapshot | CompleteSecureAppSnapshot,
+  right: SecureAppSnapshot | CompleteSecureAppSnapshot
+): boolean {
+  return JSON.stringify(comparableCompleteSnapshot(left)) === JSON.stringify(comparableCompleteSnapshot(right));
 }
 
 function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot {
@@ -97,16 +113,17 @@ export class SecureAppStorage {
   constructor(private readonly vault: SecureVault) {}
 
   async loadSnapshot(): Promise<SecureAppSnapshot> {
-    const [appData, settings, udas, customTests, submissions, meta] = await Promise.all([
+    const [appData, settings, udas, customTests, submissions, planning, meta] = await Promise.all([
       this.vault.get<AppData>('appData'),
       this.vault.get<AppSettings>('settings'),
       this.vault.get<UdaRecord[]>('udas'),
       this.vault.get<Record<string, OnlineTest>>('customTests'),
       this.vault.get<OnlineSubmission[]>('submissions'),
+      this.vault.get<PlanningStateV1>('planning'),
       this.vault.get<SecureMeta>('meta')
     ]);
 
-    return { appData, settings, udas, customTests, submissions, meta };
+    return { appData, settings, udas, customTests, submissions, planning, meta };
   }
 
   saveAppData(value: AppData): Promise<void> {
@@ -160,6 +177,17 @@ export class SecureAppStorage {
   saveSubmissionsAndMeta(submissions: OnlineSubmission[], meta: SecureMeta): Promise<void> {
     return this.vault.putMany([
       { key: 'submissions', value: submissions },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
+  savePlanning(value: PlanningStateV1): Promise<void> {
+    return this.vault.put('planning', value);
+  }
+
+  savePlanningAndMeta(planning: PlanningStateV1, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'planning', value: planning },
       { key: 'meta', value: meta }
     ]);
   }
