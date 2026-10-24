@@ -3,6 +3,7 @@ import { FilePlus2, Link2, Search, X } from 'lucide-react';
 import type { UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
+import type { LibraryTeachingContext } from '../library/teachingContext';
 import { searchLibrarySources } from '../library/libraryState';
 import { createFileSource, createTextSource, createWebSource } from '../library/intake';
 import { uid } from '../utils';
@@ -11,6 +12,7 @@ import { LibrarySourceCard } from './LibrarySourceCard';
 interface LibraryViewProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
+  currentClassName?: string | null;
   isPending: boolean;
   errorMessage: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -27,6 +29,7 @@ type TextCaptureKind = Extract<LibrarySourceKind, 'text' | 'note' | 'concept'>;
 export const LibraryView: React.FC<LibraryViewProps> = ({
   library,
   udas,
+  currentClassName = null,
   isPending,
   errorMessage,
   onAddSource,
@@ -46,6 +49,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [textValue, setTextValue] = useState('');
   const [textKind, setTextKind] = useState<TextCaptureKind>('text');
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [lastExplicitTeachingContext, setLastExplicitTeachingContext] = useState<LibraryTeachingContext | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
 
   const sources = useMemo(() => {
@@ -272,6 +276,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               key={source.id}
               source={source}
               udas={udas}
+              currentClassName={currentClassName}
+              lastExplicitTeachingContext={lastExplicitTeachingContext}
+              onExplicitTeachingContextChange={setLastExplicitTeachingContext}
               isPending={isPending}
               isSelected={selectedSourceId === source.id}
               onUse={setSelectedSourceId}

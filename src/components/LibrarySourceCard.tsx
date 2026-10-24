@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { UdaActivityType, UdaRecord } from '../types';
@@ -8,11 +8,20 @@ import {
   dispatchLibraryContextAction,
   resolveLibraryContextActions
 } from '../library/contextualCoreAdapter';
-import { resolveLibraryTeachingContext } from '../library/teachingContext';
+import {
+  resolveLibraryTeachingContext,
+  suggestLibraryTeachingContext,
+  type LibraryTeachingContext,
+  type TeachingContextSuggestion,
+  type TeachingContextSuggestionReason
+} from '../library/teachingContext';
 
 interface LibrarySourceCardProps {
   source: LibrarySource;
   udas: UdaRecord[];
+  currentClassName?: string | null;
+  lastExplicitTeachingContext?: LibraryTeachingContext | null;
+  onExplicitTeachingContextChange: (context: LibraryTeachingContext) => void;
   isPending: boolean;
   isSelected: boolean;
   onUse: (sourceId: string) => void;
@@ -54,9 +63,26 @@ const ACTIVITY_LABELS: Record<UdaActivityType, string> = {
   civica: 'Educazione civica'
 };
 
+const SUGGESTION_COPY: Record<TeachingContextSuggestionReason, string> = {
+  'explicit-origin': 'Ti propongo questo contesto perché è quello da cui sei arrivato.',
+  'current-class-today-lesson': 'Ti propongo questa lezione perché appartiene alla classe corrente ed è prevista oggi.',
+  'current-class-active-uda': "Ti propongo questa UDA perché è l'unica attiva per la classe corrente in questo periodo.",
+  'session-last-choice': "Ti propongo l'ultimo contesto che hai scelto in questa sessione."
+};
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   source,
   udas,
+  currentClassName = null,
+  lastExplicitTeachingContext = null,
+  onExplicitTeachingContextChange,
   isPending,
   isSelected,
   onUse,
@@ -68,6 +94,9 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [targetUdaId, setTargetUdaId] = useState('');
   const [contextUdaId, setContextUdaId] = useState('');
   const [contextLessonId, setContextLessonId] = useState('');
+  const [contextSuggestion, setContextSuggestion] = useState<TeachingContextSuggestion | null>(null);
+  const [contextChooserOpen, setContextChooserOpen] = useState(false);
+  const initializedSourceIdRef = useRef<string | null>(null);
   const [contextActions, setContextActions] = useState<readonly ResolvedAction[]>([]);
   const [isContextLoading, setIsContextLoading] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
@@ -88,6 +117,31 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         }
       : null
   );
+
+  useEffect(() => {
+    if (!isSelected) {
+      initializedSourceIdRef.current = null;
+      setContextSuggestion(null);
+      setContextChooserOpen(false);
+      return;
+    }
+    if (initializedSourceIdRef.current === source.id) return;
+
+    const suggestion = suggestLibraryTeachingContext({
+      udas,
+      currentClassName,
+      lastExplicitChoice: lastExplicitTeachingContext,
+      today: localDateKey()
+    });
+    initializedSourceIdRef.current = source.id;
+    setContextSuggestion(suggestion);
+    setContextChooserOpen(!suggestion);
+    setContextUdaId(suggestion?.context.udaId ?? '');
+    setContextLessonId(suggestion?.context.lessonId ?? '');
+    setContextLinkOpen(false);
+    setContextLinkConfirmationPending(false);
+    setReviewOpen(false);
+  }, [isSelected, source.id, udas, currentClassName, lastExplicitTeachingContext]);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +216,32 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       await onDelete(source.id);
     } catch {
       // The source remains visible because publication happens only after persistence.
+    }
+  };
+
+  const selectExplicitUda = (udaId: string) => {
+    setContextUdaId(udaId);
+    setContextLessonId('');
+    setContextSuggestion(null);
+    setContextChooserOpen(true);
+    setContextLinkOpen(false);
+    setContextLinkConfirmationPending(false);
+    setReviewOpen(false);
+    if (udaId) onExplicitTeachingContextChange({ udaId });
+  };
+
+  const selectExplicitLesson = (lessonId: string) => {
+    setContextLessonId(lessonId);
+    setContextSuggestion(null);
+    setContextChooserOpen(true);
+    setContextLinkOpen(false);
+    setContextLinkConfirmationPending(false);
+    setReviewOpen(false);
+    if (contextUdaId) {
+      onExplicitTeachingContextChange({
+        udaId: contextUdaId,
+        ...(lessonId ? { lessonId } : {})
+      });
     }
   };
 
@@ -376,55 +456,72 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
           </div>
 
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
-            <strong className="block text-sm text-slate-100">Contesto di lavoro</strong>
-            <label className="block text-xs text-slate-300" htmlFor={`context-uda-${source.id}`}>
-              UDA corrente
-            </label>
-            <select
-              id={`context-uda-${source.id}`}
-              value={contextUdaId}
-              onChange={event => {
-                setContextUdaId(event.target.value);
-                setContextLessonId('');
-                setContextLinkOpen(false);
-                setContextLinkConfirmationPending(false);
-                setReviewOpen(false);
-              }}
-              disabled={isPending || udas.length === 0}
-              className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
-            >
-              <option value="">Seleziona UDA</option>
-              {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}
-            </select>
+            {contextSuggestion ? (
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <strong className="block text-sm text-slate-100">Contesto proposto</strong>
+                  <p className="mt-1 text-sm text-cyan-100">
+                    {selectedContextLesson
+                      ? `Lezione · ${selectedContextLesson.topic}`
+                      : `UDA · ${selectedContextUda?.title ?? contextSuggestion.context.udaId}`}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">{SUGGESTION_COPY[contextSuggestion.reason]}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setContextChooserOpen(true)}
+                  disabled={isPending}
+                  className="min-h-[44px] px-3 rounded-md border border-cyan-700 text-sm text-cyan-100 disabled:opacity-50"
+                >
+                  Cambia
+                </button>
+              </div>
+            ) : (
+              <strong className="block text-sm text-slate-100">Scegli dove usarla</strong>
+            )}
 
-            {selectedContextUda && contextLessons.length > 0 && (
+            {(contextChooserOpen || !contextSuggestion) && (
               <>
-                <label className="block text-xs text-slate-300" htmlFor={`context-lesson-${source.id}`}>
-                  Lezione corrente
+                <label className="block text-xs text-slate-300" htmlFor={`context-uda-${source.id}`}>
+                  UDA corrente
                 </label>
                 <select
-                  id={`context-lesson-${source.id}`}
-                  value={contextLessonId}
-                  onChange={event => {
-                    setContextLessonId(event.target.value);
-                    setContextLinkOpen(false);
-                    setContextLinkConfirmationPending(false);
-                    setReviewOpen(false);
-                  }}
-                  disabled={isPending}
+                  id={`context-uda-${source.id}`}
+                  value={contextUdaId}
+                  onChange={event => selectExplicitUda(event.target.value)}
+                  disabled={isPending || udas.length === 0}
                   className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
                 >
-                  <option value="">Intera UDA</option>
-                  {contextLessons.map(lesson => (
-                    <option key={lesson.id} value={lesson.id}>{lesson.topic}</option>
-                  ))}
+                  <option value="">Seleziona UDA</option>
+                  {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}
                 </select>
+
+                {selectedContextUda && contextLessons.length > 0 && (
+                  <>
+                    <label className="block text-xs text-slate-300" htmlFor={`context-lesson-${source.id}`}>
+                      Lezione corrente
+                    </label>
+                    <select
+                      id={`context-lesson-${source.id}`}
+                      value={contextLessonId}
+                      onChange={event => selectExplicitLesson(event.target.value)}
+                      disabled={isPending}
+                      className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                    >
+                      <option value="">Intera UDA</option>
+                      {contextLessons.map(lesson => (
+                        <option key={lesson.id} value={lesson.id}>{lesson.topic}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+
+                {!contextUdaId && (
+                  <p className="text-xs text-slate-400">Seleziona un’UDA per usare la fonte nel contesto didattico.</p>
+                )}
               </>
             )}
 
-            {!contextUdaId && (
-              <p className="text-xs text-slate-400">Seleziona un’UDA per usare la fonte nel contesto didattico.</p>
-            )}
             {selectedContextLesson?.activityType && (
               <p className="text-xs text-slate-300">
                 Tipo di attività: <strong className="text-slate-100">{ACTIVITY_LABELS[selectedContextLesson.activityType]}</strong>
