@@ -92,8 +92,7 @@ export function searchLibrarySources(state: LibraryStateV1, query: string): Libr
       ...source.links.map(link => link.targetId)
     ]
       .filter((value): value is string => typeof value === 'string')
-      .join('
-')
+      .join(String.fromCharCode(10))
       .toLocaleLowerCase('it');
 
     return searchable.includes(normalized);
