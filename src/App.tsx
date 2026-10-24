@@ -11,7 +11,8 @@ import {
   Student,
   UdaRecord
 } from './types';
-import type { PlanningStateV1, TeachingProfile } from './planning/types';
+import type { ArenaPlanningContextPreview, PlanningStateV1, TeachingProfile } from './planning/types';
+import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import {
@@ -312,6 +313,34 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       ...current,
       profiles: [...current.profiles.filter(existing => existing.id !== profile.id), profile]
     })).then(() => undefined);
+  }, [commitPlanningMutation]);
+
+  const handleAcceptArenaPlanningContext = useCallback((context: ArenaPlanningContextPreview): Promise<void> => {
+    return commitPlanningMutation(current => {
+      const profile = current.profiles.find(existing => existing.id === context.profileId);
+      if (!profile) {
+        throw new Error('Profilo di programmazione non più disponibile.');
+      }
+      const expectedSchoolOrder = profile.schoolOrder === 'primary' ? 'primaria' : 'secondaria';
+      if (
+        profile.schoolYear !== context.schoolYear ||
+        expectedSchoolOrder !== context.schoolOrder ||
+        profile.subjectCode !== context.subjectCode ||
+        profile.gradeLevel !== context.gradeLevel ||
+        profile.cohortRef !== context.cohortRef ||
+        profile.normativeRegime !== context.regimeRef
+      ) {
+        throw new Error('ARENA_CONTEXT_PROFILE_CHANGED_REVIEW_REQUIRED');
+      }
+
+      return {
+        ...current,
+        arenaContexts: bindAcceptedArenaPlanningContext(current.arenaContexts, context, {
+          accepted: true,
+          acceptedAt: new Date().toISOString()
+        })
+      };
+    }).then(() => undefined);
   }, [commitPlanningMutation]);
 
   const commitTestsMutation = useCallback((
@@ -796,7 +825,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const previousLogical = getCompleteCommittedSnapshot();
       const candidate = normalizeBackupPayload(decryptedData, previousLogical);
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
-
       appDataRef.current = restored.appData;
       currentClassIdRef.current = restored.appData.currentClassId;
       settingsRef.current = restored.settings;
@@ -1009,7 +1037,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         {activeTab === 'programmazione' && (
           <PlanningProfileView
             profiles={planning.profiles}
+            arenaContexts={planning.arenaContexts}
             onSaveProfile={handleSaveTeachingProfile}
+            onAcceptArenaContext={handleAcceptArenaPlanningContext}
           />
         )}
 
