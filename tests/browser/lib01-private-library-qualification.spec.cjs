@@ -95,6 +95,14 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
+
+async function ensureManagementOpen(card) {
+  const details = card.locator('details');
+  if (!(await details.evaluate(element => element.open))) {
+    await card.getByText('Gestisci', { exact: true }).click();
+  }
+}
+
 async function assertAtLeast44(locator, label) {
   await expect(locator, `${label} visible`).toBeVisible();
   const box = await locator.boundingBox();
@@ -143,7 +151,7 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
 
   // 4. Link and unlink to an existing synthetic UDA.
   const textCard = await sourceCard(page, TEXT_TITLE);
-  await textCard.getByText('Gestisci', { exact: true }).click();
+  await ensureManagementOpen(textCard);
   await textCard.getByLabel('Collega a UDA').selectOption({ label: UDA_TITLE });
   await textCard.getByRole('button', { name: 'Collega', exact: true }).click();
   await expect(textCard.getByRole('button', { name: 'Scollega', exact: true })).toBeVisible();
@@ -151,7 +159,7 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await expect(page.getByRole('heading', { name: TEXT_TITLE, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Recenti', exact: true }).click();
   const linkedTextCard = await sourceCard(page, TEXT_TITLE);
-  await linkedTextCard.getByText('Gestisci', { exact: true }).click();
+  await ensureManagementOpen(linkedTextCard);
   await linkedTextCard.getByRole('button', { name: 'Scollega', exact: true }).click();
   await expect(linkedTextCard.getByRole('button', { name: 'Scollega', exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Collegate', exact: true }).click();

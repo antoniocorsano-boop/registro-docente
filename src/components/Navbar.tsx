@@ -335,7 +335,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={() => handleNav('biblioteca')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+            className={`w-full min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
               activeTab === 'biblioteca'
                 ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold'
                 : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
