@@ -752,6 +752,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     udas: udasRef.current,
     customTests: testsRef.current,
     submissions: submissionsRef.current,
+    planning: planningRef.current,
     meta: metaRef.current
   });
 
@@ -788,12 +789,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       udasRef.current = restored.udas;
       testsRef.current = restored.customTests;
       submissionsRef.current = restored.submissions;
+      planningRef.current = restored.planning;
       metaRef.current = restored.meta;
       setAppData(restored.appData);
       setSettings(restored.settings);
       setUdas(restored.udas);
       setTests(restored.customTests);
       setSubmissions(restored.submissions);
+      setPlanning(restored.planning);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
