@@ -186,4 +186,18 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(uda).toContain('totalWeightedHours += evalBonus;');
   });
 
+  test('UXT-E gives mobile analytics progressive disclosure without changing the desktop dense table', async () => {
+    const analytics = await source('components/AnalyticsView.tsx');
+    const comparison = await source('components/ClassComparisonBarChart.tsx');
+
+    expect(analytics).toContain("const [studentSearch, setStudentSearch] = useState('');");
+    expect(analytics).toContain("const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>('register');");
+    expect(analytics).toContain('data-testid="mobile-analytics-student-detail"');
+    expect(analytics).toContain('Dettaglio alunni');
+    expect(analytics).toContain('Cerca alunno');
+    expect(analytics).toContain('Ordine registro');
+    expect(analytics).toContain('hidden md:block overflow-x-auto');
+    expect(comparison).toContain('min-w-0 overflow-hidden');
+  });
+
 });
