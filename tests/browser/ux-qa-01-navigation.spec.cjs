@@ -38,7 +38,7 @@ async function closePersistenceConfirmation(page) {
 
 async function openDrawerItem(page, label) {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  const item = page.getByRole('button', { name: label, exact: true });
+  const item = page.locator('aside').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
 }
