@@ -102,9 +102,10 @@ function isLibraryPayload(value: unknown, kind: unknown): boolean {
     return false;
   }
 
-  if (value.dataUrl !== undefined) {
-    if (!value.dataUrl.startsWith('data:')) return false;
-    if (kind === 'image' && !value.dataUrl.startsWith('data:image/')) return false;
+  const dataUrl = value.dataUrl;
+  if (dataUrl !== undefined) {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return false;
+    if (kind === 'image' && !dataUrl.startsWith('data:image/')) return false;
   }
 
   return true;
