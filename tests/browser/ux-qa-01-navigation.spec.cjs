@@ -233,7 +233,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
     if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) await returnHome(page);
   }
 
-  await openDrawerItem(page, 'Programmazione');
+  await openDrawerItem(page, 'Programmazione didattica');
   await expect(page.getByRole('heading', { name: 'Programmazione didattica', exact: true })).toBeVisible();
   navigationGraph.push({ from: 'home.classes', to: 'planning', action: 'Programmazione' });
   await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => null);
