@@ -47,6 +47,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
+}
+
+function isOptionalHttpUrl(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== 'string') return false;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function isPlanningStateV1(value: unknown): value is PlanningStateV1 {
   if (!isRecord(value) || value.schemaVersion !== 1) return false;
   return Array.isArray(value.profiles)
@@ -78,23 +94,42 @@ const LIBRARY_STATUSES = new Set(['captured', 'ready', 'needs-review', 'restrict
 const LIBRARY_PRIVACY = new Set(['unknown', 'teacher-professional', 'student-personal']);
 const LIBRARY_LINK_TARGETS = new Set(['uda', 'lesson', 'activity']);
 
+function isLibraryPayload(value: unknown): boolean {
+  return isRecord(value)
+    && isOptionalString(value.mimeType)
+    && isOptionalString(value.text)
+    && isOptionalString(value.dataUrl);
+}
+
 function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
   if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.sources)) return false;
 
   return value.sources.every(source => {
     if (!isRecord(source)) return false;
-    if (typeof source.id !== 'string' || typeof source.title !== 'string' || typeof source.capturedAt !== 'string') {
+    if (
+      typeof source.id !== 'string'
+      || !source.id.trim()
+      || typeof source.title !== 'string'
+      || !source.title.trim()
+      || typeof source.capturedAt !== 'string'
+      || !source.capturedAt.trim()
+    ) {
       return false;
     }
     if (!LIBRARY_KINDS.has(String(source.kind))) return false;
     if (!LIBRARY_STATUSES.has(String(source.status))) return false;
     if (!LIBRARY_PRIVACY.has(String(source.privacy))) return false;
-    if (!isRecord(source.payload) || !Array.isArray(source.links)) return false;
+    if (!isOptionalString(source.origin)) return false;
+    if (!isOptionalHttpUrl(source.sourceUrl)) return false;
+    if (!isOptionalString(source.extractedText)) return false;
+    if (!isOptionalString(source.notes)) return false;
+    if (!isLibraryPayload(source.payload) || !Array.isArray(source.links)) return false;
 
     return source.links.every(link => (
       isRecord(link)
       && LIBRARY_LINK_TARGETS.has(String(link.targetType))
       && typeof link.targetId === 'string'
+      && Boolean(link.targetId.trim())
     ));
   });
 }
