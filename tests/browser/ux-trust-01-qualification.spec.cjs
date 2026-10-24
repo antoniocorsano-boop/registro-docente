@@ -142,7 +142,7 @@ test('UXT-B encrypted backup shortcut and sufficiency denominator are truthful â
   await expect(sufficiencyCard.getByText('100%', { exact: true })).toBeVisible();
   await expect(sufficiencyCard.getByText('1 su 1 con media disponibile', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('..').getByRole('button', { name: 'Classi', exact: true }).click();
+  await page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('xpath=../..').getByRole('button', { name: 'Classi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   await expect(page.getByText(/Ultimo backup cifrato:/)).toBeVisible();
   const encryptedBackupShortcut = page.getByRole('button', { name: 'Esporta backup cifrato', exact: true });
