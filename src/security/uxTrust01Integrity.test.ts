@@ -70,4 +70,46 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(dashboard).toContain("suffRate === null ? 'Nessun dato' : 'Tasso Sufficienze'");
   });
 
+  test('UXT-C distinguishes evidence coverage from absolute and relative growth semantics', async () => {
+    const semanticsPath = '../analytics/competencySemantics.ts';
+    const semantics = await import(semanticsPath).catch(() => null);
+
+    expect(semantics).not.toBeNull();
+    if (!semantics) return;
+
+    expect(semantics.getCompetencyEvidenceCoverage(3, 6)).toEqual({
+      evaluatedCount: 3,
+      totalCount: 6,
+      label: '3/6 con evidenze',
+      reliable: true,
+    });
+    expect(semantics.getCompetencyEvidenceCoverage(2, 6).reliable).toBe(false);
+
+    expect(semantics.getGrowthRecommendation([
+      { label: 'Digitale', score: 9.4 },
+      { label: 'Grafica', score: 9.1 },
+      { label: 'STEM', score: 9.0 },
+    ], 6)).toEqual({ kind: 'relative', item: { label: 'STEM', score: 9.0 } });
+
+    expect(semantics.getGrowthRecommendation([
+      { label: 'Digitale', score: 9.2 },
+      { label: 'Grafica', score: 8.4 },
+      { label: 'STEM', score: 5.8 },
+    ], 6)).toEqual({ kind: 'absolute', item: { label: 'STEM', score: 5.8 } });
+
+    expect(semantics.getGrowthRecommendation([], 6)).toEqual({ kind: 'none', item: null });
+  });
+
+  test('UXT-C makes 6-dimension evidence coverage explicit and never turns a strong relative minimum into an absolute weakness', async () => {
+    const report = await source('components/StudentReportView.tsx');
+
+    expect(report).toContain("from '../analytics/competencySemantics';");
+    expect(report).toContain('getCompetencyEvidenceCoverage');
+    expect(report).toContain('getGrowthRecommendation');
+    expect(report).toContain('competencyEvidenceCoverage.label');
+    expect(report).toContain("growthRecommendation.kind === 'absolute'");
+    expect(report).toContain('Dimensione relativamente meno forte');
+    expect(report).not.toContain('const growthCompetency = hasReliableCompetencyProfile ? sortedStrengths[sortedStrengths.length - 1] : null;');
+    expect(report).toContain('const hasReliableCompetencyProfile = evaluatedCompetencyData.length >= 3;');
+  });
 });
