@@ -41,3 +41,8 @@ Regole stabili del progetto. Applicare tutte le voci `ACTIVE` pertinenti.
 - Stato: ACTIVE
 - Regola: aggiornare la memoria episodica solo per integrazioni, incidenti, failure importanti, cambi di architettura/processo o scoperte riutilizzabili. I micro-fix senza apprendimento generalizzabile non richiedono una Memory Capsule.
 - Origine: MEM-QUAL-01.
+
+## OR-009 — Branch-before-write for repository contents mutations
+- Stato: ACTIVE
+- Regola: prima di qualsiasi `create_file`/`update_file`/`delete_file` destinata a un branch non-default, creare il branch, verificarne l'exact base SHA e passare esplicitamente quel branch alla mutation. Non usare `main` come fallback quando il branch target manca o una mutation fallisce.
+- Origine: LL-003.
