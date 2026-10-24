@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 import type { LibrarySource } from '../library/types';
 import type { UdaRecord } from '../types';
@@ -149,5 +150,21 @@ describe('LIB-01C teaching context contract', () => {
     expect(serialized).not.toContain(UDA.title);
     expect(serialized).not.toContain(UDA.lessons![0].topic);
     expect(serialized).not.toContain(UDA.lessons![0].notes!);
+  });
+
+  test('progressively discloses explicit UDA/lesson context and derives the vertical link target from it', () => {
+    const cardSource = readFileSync(new URL('../components/LibrarySourceCard.tsx', import.meta.url), 'utf8');
+
+    expect(cardSource).toContain('resolveLibraryTeachingContext');
+    expect(cardSource).toContain('Contesto di lavoro');
+    expect(cardSource).toContain('UDA corrente');
+    expect(cardSource).toContain('Lezione corrente');
+    expect(cardSource).toContain('Tipo di attività');
+    expect(cardSource).toContain("setContextLessonId('')");
+    expect(cardSource).toContain('resolveLibraryContextActions(source, resolvedTeachingContext)');
+    expect(cardSource).toContain('teachingContext: resolvedTeachingContext');
+    expect(cardSource).toContain("targetType: 'lesson'");
+    expect(cardSource).toContain("targetType: 'uda'");
+    expect(cardSource).not.toContain('UDA di destinazione');
   });
 });
