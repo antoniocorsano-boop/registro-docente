@@ -9,6 +9,8 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+
 const settings = {
   school: 'IC Test',
   year: '2026/27',
@@ -28,6 +30,7 @@ const sixDatasetSnapshot = {
 
 const completePlanningSnapshot = {
   ...sixDatasetSnapshot,
+  library: emptyLibrary,
   planning: {
     ...emptyPlanning,
     profiles: [{ id: 'profile-current' }]
@@ -61,7 +64,8 @@ describe('EDU-PLAN-01A backup v3 planning compatibility', () => {
 
     expect(restored).toEqual({
       ...sixDatasetSnapshot,
-      planning: emptyPlanning
+      planning: emptyPlanning,
+      library: emptyLibrary
     });
   });
 
@@ -78,6 +82,7 @@ describe('EDU-PLAN-01A backup v3 planning compatibility', () => {
 
     expect(restored.planning).toEqual(emptyPlanning);
     expect(restored.planning).not.toEqual(completePlanningSnapshot.planning);
+    expect(restored.library).toEqual(emptyLibrary);
   });
 
   test('keeps unsupported application backup versions fail-closed', async () => {

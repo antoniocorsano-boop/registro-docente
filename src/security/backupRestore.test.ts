@@ -60,6 +60,8 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+
 function snapshot(label: string): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -82,6 +84,7 @@ function snapshot(label: string): CompleteSecureAppSnapshot {
     customTests: {},
     submissions: [],
     planning: emptyPlanning,
+    library: emptyLibrary,
     meta: { changes: label === 'old' ? 3 : 0, lastBackup: null }
   };
 }
@@ -109,7 +112,7 @@ describe('SEC-1 verified vault backup restore', () => {
     const previous = snapshot('old');
 
     await storage.restoreSnapshotVerified(previous);
-    store.armOneReadCorruption('appData', 7);
+    store.armOneReadCorruption('appData', 8);
 
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
@@ -126,7 +129,7 @@ describe('SEC-1 verified vault backup restore', () => {
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
 
-    store.armOneReadCorruption('appData', 7);
+    store.armOneReadCorruption('appData', 8);
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
     expect(await storage.loadSnapshot()).toEqual({
@@ -136,6 +139,7 @@ describe('SEC-1 verified vault backup restore', () => {
       customTests: null,
       submissions: null,
       planning: null,
+      library: null,
       meta: null
     });
   });

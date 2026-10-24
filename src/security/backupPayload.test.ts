@@ -11,6 +11,8 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+
 function currentSnapshot(): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
@@ -19,6 +21,7 @@ function currentSnapshot(): CompleteSecureAppSnapshot {
     customTests: {},
     submissions: [],
     planning: { ...emptyPlanning, profiles: [{ id: 'profile-current' } as any] },
+    library: emptyLibrary,
     meta: { changes: 4, lastBackup: null }
   };
 }
@@ -31,7 +34,8 @@ describe('SEC-1 backup application payload', () => {
     expect(payload.app).toBe('registro-docente');
     expect(payload.backupDataVersion).toBe(3);
     expect(payload.exportedAt).toBe('2026-10-21T12:00:00.000Z');
-    expect(payload.snapshot).toEqual(snapshot);
+    const { library: _library, ...snapshotV3 } = snapshot;
+    expect(payload.snapshot).toEqual(snapshotV3);
     expect(Object.keys(payload.snapshot).sort()).toEqual([
       'appData', 'customTests', 'meta', 'planning', 'settings', 'submissions', 'udas'
     ]);
@@ -62,6 +66,7 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.customTests).toEqual(current.customTests);
     expect(normalized.submissions).toEqual(current.submissions);
     expect(normalized.planning).toEqual(emptyPlanning);
+    expect(normalized.library).toEqual(emptyLibrary);
     expect(normalized.meta).toEqual(current.meta);
   });
 

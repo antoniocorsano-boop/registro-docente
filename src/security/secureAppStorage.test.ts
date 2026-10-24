@@ -66,7 +66,7 @@ describe('SEC-1 vault bootstrap decision', () => {
 });
 
 describe('SEC-1 secure application storage', () => {
-  test('persists and loads all seven logical datasets through the vault', async () => {
+  test('persists and loads all eight logical datasets through the vault', async () => {
     const vault = new SecureVault(new MemoryVaultStore());
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
@@ -77,6 +77,7 @@ describe('SEC-1 secure application storage', () => {
     await storage.saveCustomTests({});
     await storage.saveSubmissions([]);
     await storage.savePlanning(emptyPlanning);
+    await storage.saveLibrary({ schemaVersion: 1, sources: [] });
     await storage.saveMeta({ changes: 2, lastBackup: null });
 
     const snapshot = await storage.loadSnapshot();
@@ -87,6 +88,7 @@ describe('SEC-1 secure application storage', () => {
     expect(snapshot.customTests).toEqual({});
     expect(snapshot.submissions).toEqual([]);
     expect(snapshot.planning).toEqual(emptyPlanning);
+    expect(snapshot.library).toEqual({ schemaVersion: 1, sources: [] });
     expect(snapshot.meta).toEqual({ changes: 2, lastBackup: null });
   });
 
@@ -105,6 +107,24 @@ describe('SEC-1 secure application storage', () => {
     expect(snapshot.appData).toEqual({ classes: [], currentClassId: null });
     expect(snapshot.meta).toEqual({ changes: 3, lastBackup: null });
     expect(store.batchKeys).toEqual([['appData', 'meta']]);
+  });
+
+
+  test('commits library and meta through one vault batch', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const storage = new SecureAppStorage(vault);
+
+    await storage.saveLibraryAndMeta(
+      { schemaVersion: 1, sources: [] },
+      { changes: 4, lastBackup: null }
+    );
+
+    const snapshot = await storage.loadSnapshot();
+    expect(snapshot.library).toEqual({ schemaVersion: 1, sources: [] });
+    expect(snapshot.meta).toEqual({ changes: 4, lastBackup: null });
+    expect(store.batchKeys).toEqual([['library', 'meta']]);
   });
 
   test('strips embedding API keys on settings persistence', async () => {

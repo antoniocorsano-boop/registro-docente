@@ -1,5 +1,6 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
 import { createEmptyPlanningState } from '../planning/emptyPlanningState';
+import { createEmptyLibraryState } from '../library/emptyLibraryState';
 import type { PlanningStateV1 } from '../planning/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 
@@ -15,6 +16,10 @@ interface SecureBackupSnapshotV2 {
   meta: SecureMeta;
 }
 
+interface SecureBackupSnapshotV3 extends SecureBackupSnapshotV2 {
+  planning: PlanningStateV1;
+}
+
 export interface SecureBackupPayloadV2 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V2;
@@ -26,7 +31,7 @@ export interface SecureBackupPayloadV3 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V3;
   exportedAt: string;
-  snapshot: CompleteSecureAppSnapshot;
+  snapshot: SecureBackupSnapshotV3;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,7 +58,7 @@ function isSnapshotV2(value: unknown): value is SecureBackupSnapshotV2 {
     && isRecord(value.meta);
 }
 
-function isSnapshotV3(value: unknown): value is CompleteSecureAppSnapshot {
+function isSnapshotV3(value: unknown): value is SecureBackupSnapshotV3 {
   return isSnapshotV2(value)
     && isRecord(value)
     && isPlanningStateV1(value.planning);
@@ -63,11 +68,12 @@ export function createBackupPayload(
   snapshot: CompleteSecureAppSnapshot,
   exportedAt = new Date().toISOString()
 ): SecureBackupPayloadV3 {
+  const { library: _library, ...snapshotV3 } = snapshot;
   return {
     app: 'registro-docente',
     backupDataVersion: BACKUP_DATA_VERSION_V3,
     exportedAt,
-    snapshot
+    snapshot: snapshotV3
   };
 }
 
@@ -88,7 +94,10 @@ export function normalizeBackupPayload(
       if (!isSnapshotV3(payload.snapshot)) {
         throw new Error('Il backup v3 non contiene uno snapshot completo dei dati del Registro.');
       }
-      return payload.snapshot;
+      return {
+        ...payload.snapshot,
+        library: createEmptyLibraryState()
+      };
     }
 
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V2) {
@@ -97,7 +106,8 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
-        planning: createEmptyPlanningState()
+        planning: createEmptyPlanningState(),
+        library: createEmptyLibraryState()
       };
     }
 
@@ -130,6 +140,7 @@ export function normalizeBackupPayload(
       ? payload.submissions as OnlineSubmission[]
       : current.submissions,
     planning: createEmptyPlanningState(),
+    library: createEmptyLibraryState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
 }

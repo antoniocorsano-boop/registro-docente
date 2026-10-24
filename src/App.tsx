@@ -15,6 +15,8 @@ import type { ArenaPlanningContextPreview, PlanningStateV1, TeachingProfile } fr
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
+import type { LibraryStateV1 } from './library/types';
+import { createEmptyLibraryState } from './library/emptyLibraryState';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -145,6 +147,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.planning || createEmptyPlanningState()
   );
 
+  // 5c. Private teacher library (local-first, no provider side effects)
+  const [library, setLibrary] = useState<LibraryStateV1>(() =>
+    initialSnapshot.library || createEmptyLibraryState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -169,6 +176,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
+  const libraryRef = useRef(library);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
@@ -796,6 +804,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     customTests: testsRef.current,
     submissions: submissionsRef.current,
     planning: planningRef.current,
+    library: libraryRef.current,
     meta: metaRef.current
   });
 
@@ -832,6 +841,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       testsRef.current = restored.customTests;
       submissionsRef.current = restored.submissions;
       planningRef.current = restored.planning;
+      libraryRef.current = restored.library;
       metaRef.current = restored.meta;
       setAppData(restored.appData);
       setSettings(restored.settings);
@@ -839,6 +849,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setTests(restored.customTests);
       setSubmissions(restored.submissions);
       setPlanning(restored.planning);
+      setLibrary(restored.library);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
@@ -851,13 +862,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
+      const resetLibrary = createEmptyLibraryState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       planningRef.current = resetPlanning;
+      libraryRef.current = resetLibrary;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
       setPlanning(resetPlanning);
+      setLibrary(resetLibrary);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
