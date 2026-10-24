@@ -245,3 +245,102 @@ test('UXT-A preserves full desktop Vault controls — desktop 1280x900', async (
   expect(pageErrors).toEqual([]);
   await context.close();
 });
+
+test('EDU-PLAN-01B previews Arena handoff read-only and persists only after explicit acceptance', async ({ browser }) => {
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error)));
+
+  await setupFreshUxVault(page);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('button', { name: 'Programmazione didattica', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Programmazione didattica' })).toBeVisible();
+
+  await page.getByLabel('Coorte').fill('2026-2027:secondaria:classe-i');
+  await page.getByLabel('Regime normativo Arena').fill('Regime 2025');
+  await page.getByLabel('Inizio lezioni').fill('2026-09-14');
+  await page.getByLabel('Fine lezioni').fill('2027-06-08');
+  await page.getByRole('button', { name: '+ Aggiungi periodo', exact: true }).click();
+  const period = page.locator('[data-field="assessmentPeriods"]');
+  await period.locator('input[type="date"]').nth(0).fill('2026-09-14');
+  await period.locator('input[type="date"]').nth(1).fill('2027-06-08');
+  await page.getByRole('button', { name: 'Salva profilo', exact: true }).click();
+  await expect(page.getByText('Profilo salvato', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Contesto Arena' })).toBeVisible();
+
+  const payload = {
+    contract: 'ARENA_REGISTRO_PLANNING_CONTEXT_V1',
+    contractVersion: 1,
+    sourceProduct: 'ARENA',
+    targetProduct: 'REGISTRO_DOCENTE',
+    importMode: 'PREVIEW_ONLY',
+    acceptanceRequired: true,
+    automaticWriteAllowed: false,
+    instituteName: 'Istituto Comprensivo Statale “Lorenzo Milani”',
+    schoolYear: '2026/27',
+    sourceSchoolYear: '2026-2027',
+    schoolOrder: 'secondaria',
+    subjectCode: 'tecnologia',
+    gradeLevel: 1,
+    cohortRef: '2026-2027:secondaria:classe-i',
+    cohortRefKind: 'DERIVED_APPLICABILITY_KEY',
+    normativeRegime: 'Regime 2025',
+    applicabilityStatus: 'APPLICABLE',
+    authorityState: 'PROVISIONAL_COMPLETE',
+    vigencyStatus: 'NON_VIGENTE',
+    authorityReceiptRef: null,
+    masterId: 'CAN-CURR-MASTER-00',
+    masterVersion: '1.3',
+    structuralFingerprint: { scope: 'MASTER', algorithm: 'fnv1a', version: 1, hash: 'b355be71' },
+    provenance: {
+      repository: 'antoniocorsano-boop/CurManLight_arena',
+      sourceCommit: '7d34344ede0ae5dcd2c0224c83f5a46d40fad825',
+      sourceDocumentId: 'synthetic-browser-source-document',
+      sourceRevisionId: 'synthetic-browser-source-revision'
+    },
+    curricoloItems: [{
+      id: 'secondaria-di-primo-grado-tecnologia-classe-i',
+      kind: 'ANNUALITA_DISCIPLINARE',
+      schoolStage: 'Secondaria di primo grado',
+      gradeLabel: 'Classe I',
+      sourceSection: '7.3.8',
+      text: 'Contenuto sintetico browser per la qualifica del solo handoff.'
+    }],
+    privacyClass: 'PROFESSIONAL_NON_PERSONAL'
+  };
+
+  await page.getByLabel('Handoff Arena (.json)').setInputFiles({
+    name: 'arena-registro-planning-context.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(payload), 'utf8')
+  });
+
+  await expect(page.getByText('Solo anteprima', { exact: true })).toBeVisible();
+  await expect(page.getByText('PROVISIONAL_COMPLETE', { exact: true })).toBeVisible();
+  await expect(page.getByText('NON_VIGENTE', { exact: true })).toBeVisible();
+  await expect(page.getByText('b355be71', { exact: true })).toBeVisible();
+  await expect(page.getByText(payload.provenance.sourceCommit, { exact: true })).toBeVisible();
+  await expect(page.getByText(/Ultimo contesto accettato:/)).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Accetta e collega al profilo', exact: true }).click();
+  await expect(page.getByText(/Ultimo contesto accettato: master 1\.3/)).toBeVisible();
+  await expect(page.getByText('Contesto Arena collegato al profilo dopo conferma del docente.', { exact: true })).toBeVisible();
+
+  await page.screenshot({ path: path.join(evidenceDir, 'edu-plan-01b-arena-handoff.png'), fullPage: true });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'edu-plan-01b-arena-handoff.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      contract: payload.contract,
+      authorityState: payload.authorityState,
+      vigencyStatus: payload.vigencyStatus,
+      explicitAcceptanceObserved: true,
+      pageErrors
+    }, null, 2) + '\n'
+  );
+
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
