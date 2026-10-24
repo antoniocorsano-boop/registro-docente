@@ -1,0 +1,18 @@
+{
+  "schema": "registro.ux-qa-navigation/v1",
+  "viewports": [
+    { "width": 390, "height": 844 },
+    { "width": 1280, "height": 900 }
+  ],
+  "invariants": [
+    { "id": "UXNAV-001", "severity": "P0", "message": "Ingresso neutro senza classe attiva" },
+    { "id": "UXNAV-002", "severity": "P0", "message": "Navigazione di classe visibile solo con classe attiva" },
+    { "id": "UXNAV-003", "severity": "P0", "message": "Back dalla classe ritorna a Home e rimuove il contesto classe" },
+    { "id": "UXNAV-004", "severity": "P0", "message": "Back tra viste di classe ripristina la vista precedente e preserva la classe" },
+    { "id": "UXNAV-005", "severity": "P1", "message": "Home teacher-first con Classi come vista iniziale" },
+    { "id": "UXNAV-006", "severity": "P1", "message": "Sintesi e Confronto sono progressivamente dischiusi" },
+    { "id": "UXNAV-007", "severity": "P1", "message": "Class card compatte e categorialmente distinguibili" },
+    { "id": "UXNAV-008", "severity": "P1", "message": "Mobile senza overflow e con target primari almeno 44x44" },
+    { "id": "UXNAV-009", "severity": "P0", "message": "Pageerror fail-closed fino alla fine della raccolta evidence" }
+  ]
+}
