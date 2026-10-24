@@ -130,6 +130,12 @@ Canonical state:
 
 ## Documentation integration boundary
 
-This receipt is documentation-only and lives on the UXT-DEPLOY-01 documentation branch / PR #34.
+Human documentation integration decision on 2026-10-24:
 
-Its technical correctness does not itself authorize merging PR #34. Documentation integration remains a separate human decision under the repository governance rules.
+`APPROVED`
+
+This receipt is documentation-only and is the approved documentation candidate for PR #34. Integration must be performed with `expected_head_sha` pinned to the exact documentation head after final gates are green.
+
+The authoritative execution record for the documentation merge is PR #34 metadata and its merge commit. The merge commit is intentionally not self-embedded in this pre-merge receipt, avoiding a self-referential documentation mutation.
+
+No additional deploy, publication, application change or production-data mutation is authorized by this documentation integration decision.
