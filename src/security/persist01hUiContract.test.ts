@@ -212,8 +212,12 @@ describe('PERSIST-01H truthful backup and restore integration', () => {
     expect(restore).toContain('const previousLogical = getCompleteCommittedSnapshot();');
     expect(restore).toContain('normalizeBackupPayload(decryptedData, previousLogical)');
     expect(restore).toContain('await secureStorage.restoreSnapshotVerified(candidate, previousLogical)');
-    expect(restore.indexOf('await secureStorage.restoreSnapshotVerified(candidate, previousLogical)')).toBeLessThan(restore.indexOf('appDataRef.current = restored.appData'));
-    expect(restore.indexOf('appDataRef.current = restored.appData')).toBeLessThan(restore.indexOf("setActiveTab('home')"));
+    expect(restore).toContain('const restoredVisibleAppData = { ...restored.appData, currentClassId: null };');
+    expect(restore).toContain('currentClassIdRef.current = null;');
+    expect(restore).toContain('setAppData(restoredVisibleAppData);');
+    expect(restore.indexOf('await secureStorage.restoreSnapshotVerified(candidate, previousLogical)')).toBeLessThan(restore.indexOf('const restoredVisibleAppData = { ...restored.appData, currentClassId: null };'));
+    expect(restore.indexOf('const restoredVisibleAppData = { ...restored.appData, currentClassId: null };')).toBeLessThan(restore.indexOf('appDataRef.current = restoredVisibleAppData'));
+    expect(restore.indexOf('appDataRef.current = restoredVisibleAppData')).toBeLessThan(restore.indexOf("setActiveTab('home')"));
   });
 
   test('PrivacyView receives checkpoint and receipt callbacks instead of a render-time backup snapshot', () => {

@@ -121,7 +121,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           grades: c.grades || [],
           behaviors: c.behaviors || []
         })),
-        currentClassId: persisted.currentClassId || null
+        // Navigation context is session-only: never reactivate a persisted class on entry.
+        currentClassId: null
       };
     }
     return {
@@ -192,6 +193,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
+
+  const handleNavigateTab = useCallback((tab: ActiveTab) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+    const classId = currentClassIdRef.current;
+    try {
+      const state = { classId, tab };
+      const params = new URLSearchParams();
+      if (classId) params.set('class', classId);
+      if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
+      const query = params.toString();
+      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+    } catch (e) {}
+  }, []);
+
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
     mutationCoordinatorRef.current = createDurableMutationCoordinator()
@@ -910,8 +926,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const previousLogical = getCompleteCommittedSnapshot();
       const candidate = normalizeBackupPayload(decryptedData, previousLogical);
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
-      appDataRef.current = restored.appData;
-      currentClassIdRef.current = restored.appData.currentClassId;
+      const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
+      appDataRef.current = restoredVisibleAppData;
+      currentClassIdRef.current = null;
       settingsRef.current = restored.settings;
       udasRef.current = restored.udas;
       testsRef.current = restored.customTests;
@@ -919,7 +936,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       planningRef.current = restored.planning;
       libraryRef.current = restored.library;
       metaRef.current = restored.meta;
-      setAppData(restored.appData);
+      setAppData(restoredVisibleAppData);
       setSettings(restored.settings);
       setUdas(restored.udas);
       setTests(restored.customTests);
@@ -979,7 +996,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       {/* Main Navbar & Navigation Drawer */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleNavigateTab}
         currentClass={currentClass}
         classes={appData.classes}
         onSelectClass={handleSelectClass}
@@ -1012,7 +1029,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         {activeTab === 'dashboard' && currentClass && (
           <DashboardView
             currentClass={currentClass}
-            onNavigateTab={setActiveTab}
+            onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
           />
         )}
@@ -1157,7 +1174,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             settings={settings}
             tests={tests}
             onSaveUdas={handleSaveUdas}
-            onNavigateTab={setActiveTab}
+            onNavigateTab={handleNavigateTab}
           />
         )}
 
