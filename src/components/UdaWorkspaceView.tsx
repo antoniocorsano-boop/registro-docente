@@ -138,7 +138,7 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                 {classes.map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
               </select>
             </label>
-            <button type="button" onClick={openCreate} className="min-h-[44px] rounded-xl bg-cyan-400 px-5 py-2 font-semibold text-slate-950">+ Nuova UDA</button>
+            <button type="button" aria-label="Nuova UDA" onClick={openCreate} className="min-h-[44px] rounded-xl bg-cyan-400 px-5 py-2 font-semibold text-slate-950">+ Nuova UDA</button>
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-slate-800 pt-4">
