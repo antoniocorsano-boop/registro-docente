@@ -40,4 +40,33 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(behaviors).toContain('MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1');
     expect(history).toContain('MOBILE_TOUCH_TARGET_CLASS} p-2');
   });
+
+  test('UXT-B uses one encrypted-backup vocabulary on every teacher-facing shortcut', async () => {
+    const home = await source('components/HomeView.tsx');
+    const navbar = await source('components/Navbar.tsx');
+    const settings = await source('components/SettingsView.tsx');
+    const app = await source('App.tsx');
+
+    for (const view of [home, navbar, settings]) {
+      expect(view).not.toContain('Esporta Backup JSON');
+      expect(view).not.toContain('Ultimo backup JSON');
+      expect(view).not.toContain('Esporta File Backup (.json)');
+      expect(view).not.toContain('Ripristina Registro da File JSON');
+      expect(view).not.toContain('Ripristina da JSON');
+      expect(view).toContain('backup cifrato');
+    }
+
+    expect(app).toContain("const handleExportBackup = () => {\n    setActiveTab('privacy');");
+    expect(app).toContain("const handleImportBackup = () => {\n    setActiveTab('privacy');");
+  });
+
+  test('UXT-B exposes the sufficiency numerator and valid-average denominator without changing the rate formula', async () => {
+    const dashboard = await source('components/DashboardView.tsx');
+
+    expect(dashboard).toContain('const validAverageCount = studentAvgs.length;');
+    expect(dashboard).toContain('const sufficientStudentCount = studentAvgs.filter(v => v >= 6.0).length;');
+    expect(dashboard).toContain('(sufficientStudentCount / validAverageCount) * 100');
+    expect(dashboard).toContain('con media disponibile');
+    expect(dashboard).toContain("suffRate === null ? 'Nessun dato' : 'Tasso Sufficienze'");
+  });
 });
