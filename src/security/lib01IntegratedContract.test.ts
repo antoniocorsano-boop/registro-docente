@@ -93,7 +93,7 @@ describe('LIB-01A integrated persistence, backup and sequencing contract', () =>
     const reloaded = await storage.loadSnapshot();
 
     expect(reloaded.library?.sources[0]?.payload).toEqual({ text: 'contenuto energy' });
-    expect(reloaded.library?.sources[0]?.privacy).toBe('teacher-professional');
+    expect(reloaded.library?.sources[0]?.privacy).toBe('unknown');
     expect(reloaded.library?.sources[0]?.links).toEqual([
       { targetType: 'uda', targetId: 'uda-energy' }
     ]);
