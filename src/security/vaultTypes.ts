@@ -6,6 +6,7 @@ export type VaultRecordKey =
   | 'udas'
   | 'customTests'
   | 'submissions'
+  | 'planning'
   | 'meta';
 
 export interface VaultKdfParametersV1 {
