@@ -54,6 +54,13 @@ async function openDrawerItem(page, label) {
   await item.click();
 }
 
+async function selectSyntheticClass(page) {
+  const classButton = page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true });
+  await expect(classButton).toBeVisible();
+  await classButton.click();
+  await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}` })).toBeVisible();
+}
+
 async function createSyntheticUda(page, title, className = null) {
   await openDrawerItem(page, 'UDA');
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
@@ -143,6 +150,7 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
   await addSyntheticSource(page, SOURCE_TITLE);
 
   await reloadAndUnlock(page);
+  await selectSyntheticClass(page);
   await openLibrary(page);
   const card = await sourceCard(page, SOURCE_TITLE);
   trackContextualRequests = true;

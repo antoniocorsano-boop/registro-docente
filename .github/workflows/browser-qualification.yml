@@ -72,6 +72,8 @@ jobs:
           cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
           cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
           cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
+          cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
+          cp tests/browser/ux-qa-01-review-regressions.spec.cjs .browser-tools/ux-qa-01-review-regressions.spec.cjs
 
       - name: Start production server and wait for readiness
         shell: bash
@@ -118,8 +120,20 @@ jobs:
             release-01-qualification.spec.cjs \
             ux-trust-01-qualification.spec.cjs \
             ux-trust-01-full-regression.spec.cjs \
+            ux-qa-01-navigation.spec.cjs \
+            ux-qa-01-review-regressions.spec.cjs \
             --reporter=line \
             --output=../browser-evidence/test-results
+
+      - name: Analyze UX navigation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          bun scripts/ux-qa/analyze.mjs \
+            browser-evidence/ux-qa-01-evidence.json \
+            ux/qa/navigation-contract.v1.json \
+            browser-evidence
 
       - name: Stop production server
         if: always()

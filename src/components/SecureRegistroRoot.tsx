@@ -108,6 +108,23 @@ export const SecureRegistroRoot: React.FC = () => {
   const loadReadySnapshot = useCallback(async () => {
     const { storage } = getRuntime();
     const nextSnapshot = await storage.loadSnapshot();
+
+    // Teacher navigation starts from a neutral Home on every vault bootstrap.
+    // Replace, rather than push, the current entry so Back cannot restore a
+    // class/tab state that was active before reload or lock/unlock.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') !== 'student') {
+      params.delete('class');
+      params.delete('tab');
+      const query = params.toString();
+      const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+      try {
+        window.history.replaceState(null, '', nextUrl);
+      } catch (error) {
+        console.warn('Unable to normalize neutral navigation history', error);
+      }
+    }
+
     setSnapshot(nextSnapshot);
     setGateState('READY');
   }, [getRuntime]);

@@ -56,9 +56,9 @@ function desktopStudentRegion(page) {
 }
 
 async function selectSyntheticClassFromHome(page) {
-  const classHeading = page.getByRole('heading', { name: CLASS_NAME, exact: true, level: 4 });
-  await expect(classHeading).toBeVisible();
-  await classHeading.click();
+  const classButton = page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true });
+  await expect(classButton).toBeVisible();
+  await classButton.click();
   await expect(primaryWorkflowButton(page, 'Riepilogo')).toBeVisible();
 }
 
