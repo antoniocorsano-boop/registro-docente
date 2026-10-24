@@ -11,6 +11,8 @@ import {
   Student,
   UdaRecord
 } from './types';
+import type { PlanningStateV1 } from './planning/types';
+import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -37,6 +39,7 @@ import type {
 import { normalizeBackupPayload } from './security/backupPayload';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
+import { applyPlanningMutation } from './persistence/planningMutation';
 import {
   applyBackupReceipt,
   incrementBackupChanges,
@@ -134,6 +137,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.udas || INITIAL_UDAS
   );
 
+  // 5b. Annual planning domain (separate from legacy UDA/Gantt until migration is qualified)
+  const [planning, setPlanning] = useState<PlanningStateV1>(() =>
+    initialSnapshot.planning || createEmptyPlanningState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -157,6 +165,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const metaRef = useRef(meta);
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
+  const planningRef = useRef(planning);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
@@ -262,6 +271,30 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       afterCommit: () => toast('UDA salvate')
     }).then(candidate => candidate.udas).catch(error => {
       console.error('Secure UDA save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const commitPlanningMutation = useCallback((
+    derive: (current: PlanningStateV1) => PlanningStateV1
+  ): Promise<PlanningStateV1> => {
+    return mutationCoordinator.enqueue<{ planning: PlanningStateV1; meta: SecureMeta }>({
+      getCommitted: () => ({ planning: planningRef.current, meta: metaRef.current }),
+      derive: current => ({
+        planning: applyPlanningMutation(current.planning, derive),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.savePlanningAndMeta(candidate.planning, candidate.meta),
+      publish: candidate => {
+        planningRef.current = candidate.planning;
+        metaRef.current = candidate.meta;
+        setPlanning(candidate.planning);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast('Programmazione salvata')
+    }).then(candidate => candidate.planning).catch(error => {
+      console.error('Secure planning save failed', error);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
       throw error;
     });
@@ -772,11 +805,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     try {
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
+      const resetPlanning = createEmptyPlanningState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
+      planningRef.current = resetPlanning;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
+      setPlanning(resetPlanning);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
