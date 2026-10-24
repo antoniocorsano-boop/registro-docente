@@ -192,7 +192,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
     await main.getByText(CLASS_B, { exact: true }).last().click();
   }
   await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_B}` })).toBeVisible();
-  await page.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'Valutazioni', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
   navigationGraph.push({ from: 'class.dashboard', to: 'class.evaluations', action: 'Valutazioni' });
 
