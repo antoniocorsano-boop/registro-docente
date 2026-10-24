@@ -94,11 +94,20 @@ const LIBRARY_STATUSES = new Set(['captured', 'ready', 'needs-review', 'restrict
 const LIBRARY_PRIVACY = new Set(['unknown', 'teacher-professional', 'student-personal']);
 const LIBRARY_LINK_TARGETS = new Set(['uda', 'lesson', 'activity']);
 
-function isLibraryPayload(value: unknown): boolean {
-  return isRecord(value)
-    && isOptionalString(value.mimeType)
-    && isOptionalString(value.text)
-    && isOptionalString(value.dataUrl);
+function isLibraryPayload(value: unknown, kind: unknown): boolean {
+  if (!isRecord(value)
+    || !isOptionalString(value.mimeType)
+    || !isOptionalString(value.text)
+    || !isOptionalString(value.dataUrl)) {
+    return false;
+  }
+
+  if (value.dataUrl !== undefined) {
+    if (!value.dataUrl.startsWith('data:')) return false;
+    if (kind === 'image' && !value.dataUrl.startsWith('data:image/')) return false;
+  }
+
+  return true;
 }
 
 function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
@@ -123,7 +132,7 @@ function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
     if (!isOptionalHttpUrl(source.sourceUrl)) return false;
     if (!isOptionalString(source.extractedText)) return false;
     if (!isOptionalString(source.notes)) return false;
-    if (!isLibraryPayload(source.payload) || !Array.isArray(source.links)) return false;
+    if (!isLibraryPayload(source.payload, source.kind) || !Array.isArray(source.links)) return false;
 
     return source.links.every(link => (
       isRecord(link)
