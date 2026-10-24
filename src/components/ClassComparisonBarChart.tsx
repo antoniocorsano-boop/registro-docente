@@ -106,7 +106,7 @@ export const ClassComparisonBarChart: React.FC<ClassComparisonBarChartProps> = (
   };
 
   return (
-    <div className="neon-card p-4 sm:p-5 mt-4">
+    <div className="neon-card min-w-0 overflow-hidden p-4 sm:p-5 mt-4">
       {/* Header and Summary stats */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
         <div>

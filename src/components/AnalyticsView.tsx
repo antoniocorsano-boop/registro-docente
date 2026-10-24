@@ -47,6 +47,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>('ALL');
   const [useWeighted, setUseWeighted] = useState<boolean>(settings.useWeightedAverage ?? false);
   const [isExporting, setIsExporting] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>('register');
 
   const students = currentClass.students || [];
   const allGrades = currentClass.grades || [];
@@ -124,6 +126,31 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     }
   });
 
+
+  const normalizedStudentSearch = studentSearch.trim().toLocaleLowerCase('it');
+  const mobileStudentMetrics = studentMetrics
+    .filter(m =>
+      formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)
+        .toLocaleLowerCase('it')
+        .includes(normalizedStudentSearch)
+    )
+    .slice();
+
+  if (studentSort === 'name') {
+    mobileStudentMetrics.sort((a, b) =>
+      formatStudentNameWithPrivacy(a.student.name, isPrivacyShieldActive).localeCompare(
+        formatStudentNameWithPrivacy(b.student.name, isPrivacyShieldActive),
+        'it'
+      )
+    );
+  } else if (studentSort === 'average') {
+    mobileStudentMetrics.sort((a, b) => {
+      if (a.activeTotalAvg === null && b.activeTotalAvg === null) return 0;
+      if (a.activeTotalAvg === null) return 1;
+      if (b.activeTotalAvg === null) return -1;
+      return b.activeTotalAvg - a.activeTotalAvg;
+    });
+  }
 
   // Official PDF export using html2pdf
   const handleExportPDF = async () => {
@@ -420,61 +447,101 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </span>
         </div>
 
-        {/* Mobile scrutiny cards */}
-        <div className="md:hidden space-y-2">
-          {studentMetrics.length === 0 ? (
-            <div className="p-4 rounded-lg border border-[var(--border)] bg-slate-900/40 text-center text-xs text-slate-500">
-              Nessun alunno presente.
+        {/* Mobile student detail: secondary to the class summary */}
+        <details
+          data-testid="mobile-analytics-student-detail"
+          className="md:hidden group rounded-lg border border-[var(--border)] bg-slate-900/30 overflow-hidden min-w-0"
+        >
+          <summary className="min-h-[56px] cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="block text-sm font-semibold text-slate-100">Dettaglio alunni</span>
+              <span className="block text-[11px] text-slate-400">Cerca, ordina e apri la scheda individuale.</span>
             </div>
-          ) : (
-            studentMetrics.map(m => {
-              const displayQ1 = useWeighted ? m.q1WeightedAvg : m.q1SimpleAvg;
-              const displayQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
-              const displayTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
+            <span aria-hidden="true" className="shrink-0 text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
+          </summary>
 
-              return (
-                <article key={m.student.id} className="rounded-lg border border-[var(--border)] bg-slate-900/45 p-3 space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => onOpenStudentReport(m.student.id)}
-                    className="min-h-[44px] w-full text-left flex items-center justify-between gap-3 rounded-md px-2 -mx-2 text-sm font-semibold text-slate-100 hover:text-[var(--primary)] hover:bg-slate-800/70"
-                  >
-                    <span className="truncate">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-[var(--primary)] shrink-0">Scheda</span>
-                  </button>
+          <div className="border-t border-[var(--border)] p-3 space-y-3 min-w-0">
+            <div className="grid grid-cols-1 gap-2 min-w-0">
+              <label className="min-w-0">
+                <span className="sr-only">Cerca alunno</span>
+                <input
+                  type="search"
+                  value={studentSearch}
+                  onChange={e => setStudentSearch(e.target.value)}
+                  placeholder="Cerca alunno"
+                  className="w-full min-h-[44px] p-2.5 neon-input text-sm text-white bg-slate-900"
+                />
+              </label>
+              <label className="min-w-0">
+                <span className="sr-only">Ordina alunni</span>
+                <select
+                  value={studentSort}
+                  onChange={e => setStudentSort(e.target.value as 'register' | 'name' | 'average')}
+                  className="w-full min-h-[44px] p-2.5 neon-input text-sm text-white bg-slate-900"
+                >
+                  <option value="register">Ordine registro</option>
+                  <option value="name">Nome</option>
+                  <option value="average">Media anno</option>
+                </select>
+              </label>
+            </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-md bg-slate-950/70 p-2">
-                      <span className="block text-[10px] uppercase text-slate-500">Q1</span>
-                      <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
-                    </div>
-                    <div className="rounded-md bg-slate-950/70 p-2">
-                      <span className="block text-[10px] uppercase text-slate-500">Q2</span>
-                      <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
-                    </div>
-                    <div className="rounded-md bg-slate-950/70 p-2">
-                      <span className="block text-[10px] uppercase text-slate-500">Anno</span>
-                      <b className="font-mono text-sm text-white">{formatGrade(displayTotal)}</b>
-                    </div>
-                  </div>
+            <div className="space-y-2 min-w-0">
+              {mobileStudentMetrics.length === 0 ? (
+                <div className="p-4 rounded-lg border border-[var(--border)] bg-slate-900/40 text-center text-xs text-slate-500">
+                  {studentMetrics.length === 0 ? 'Nessun alunno presente.' : 'Nessun alunno corrisponde alla ricerca.'}
+                </div>
+              ) : (
+                mobileStudentMetrics.map(m => {
+                  const displayQ1 = useWeighted ? m.q1WeightedAvg : m.q1SimpleAvg;
+                  const displayQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
+                  const displayTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="text-slate-400">
-                      Fascia analitica: <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
-                    </span>
-                    {displayTotal === null ? (
-                      <span className="px-2 py-1 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">Non disponibile</span>
-                    ) : (
-                      <span className={`px-2 py-1 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
-                        {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
-                      </span>
-                    )}
-                  </div>
-                </article>
-              );
-            })
-          )}
-        </div>
+                  return (
+                    <article key={m.student.id} className="min-w-0 rounded-lg border border-[var(--border)] bg-slate-900/45 p-3 space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => onOpenStudentReport(m.student.id)}
+                        className="min-h-[44px] w-full min-w-0 text-left flex items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-slate-100 hover:text-[var(--primary)] hover:bg-slate-800/70"
+                      >
+                        <span className="min-w-0 truncate">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</span>
+                        <span className="text-[10px] uppercase tracking-wider text-[var(--primary)] shrink-0">Scheda</span>
+                      </button>
+
+                      <div className="grid grid-cols-3 gap-2 text-center min-w-0">
+                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
+                          <span className="block text-[10px] uppercase text-slate-500">Q1</span>
+                          <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
+                        </div>
+                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
+                          <span className="block text-[10px] uppercase text-slate-500">Q2</span>
+                          <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
+                        </div>
+                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
+                          <span className="block text-[10px] uppercase text-slate-500">Anno</span>
+                          <b className="font-mono text-sm text-white">{formatGrade(displayTotal)}</b>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+                        <span className="text-slate-400 min-w-0">
+                          Fascia analitica: <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
+                        </span>
+                        {displayTotal === null ? (
+                          <span className="px-2 py-1 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">Non disponibile</span>
+                        ) : (
+                          <span className={`px-2 py-1 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
+                            {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
+                          </span>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </details>
 
         <div className="hidden md:block overflow-x-auto border border-[var(--border)] rounded-lg">
           <table className="w-full text-xs text-center border-collapse">
