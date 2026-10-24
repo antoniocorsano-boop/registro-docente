@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BehaviorRecord, ClassData } from '../types';
 import { BEHAVIOR_OPTIONS, today, uid, formatStudentNameWithPrivacy } from '../utils';
 import { Sparkles, Save, CheckCheck } from 'lucide-react';
+import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
 
 interface BehaviorsViewProps {
   currentClass: ClassData;
@@ -19,11 +20,9 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const existingRecords = currentClass.behaviors || [];
 
-  // Map of studentId -> status
   const [statusMap, setStatusMap] = useState<Record<string, 'Ottimale 🌟' | 'Costruttivo 👍' | 'Distratto ⚠️' | 'Disattento ❌'>>(() => {
     const init: Record<string, any> = {};
     currentClass.students.forEach(s => {
-      // Find today's record or most recent record
       const match = [...existingRecords]
         .reverse()
         .find(b => b.studentId === s.id && b.date === selectedDate);
@@ -85,7 +84,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
             disabled={isSaving}
-            className="p-1.5 px-2.5 neon-input text-xs text-white"
+            className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 px-2.5 neon-input text-xs text-white`}
           />
         </div>
       </div>
@@ -99,21 +98,21 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
         <button
           type="button"
           onClick={() => setAll('Ottimale 🌟')}
-          className="px-2.5 py-1 rounded text-xs badge-ok hover:brightness-110 transition-all font-semibold"
+          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-ok hover:brightness-110 transition-all font-semibold`}
         >
           🌟 Tutti Ottimale
         </button>
         <button
           type="button"
           onClick={() => setAll('Costruttivo 👍')}
-          className="px-2.5 py-1 rounded text-xs badge-info hover:brightness-110 transition-all font-semibold"
+          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-info hover:brightness-110 transition-all font-semibold`}
         >
           👍 Tutti Costruttivo
         </button>
         <button
           type="button"
           onClick={() => setAll('Distratto ⚠️')}
-          className="px-2.5 py-1 rounded text-xs badge-warn hover:brightness-110 transition-all font-semibold"
+          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-warn hover:brightness-110 transition-all font-semibold`}
         >
           ⚠️ Tutti Distratto
         </button>
@@ -139,7 +138,6 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
                   <span className="font-semibold text-slate-200 text-xs sm:text-sm">
                     {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
                   </span>
-
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -150,7 +148,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
                         key={opt.label}
                         type="button"
                         onClick={() => handleSelectStatus(student.id, opt.label as any)}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all border ${
+                        className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs font-semibold transition-all border ${
                           isSelected
                             ? `${opt.colorClass} border-[var(--primary)] ring-2 ring-[var(--primary)]/30 shadow-[0_0_8px_var(--primary)] scale-105`
                             : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'

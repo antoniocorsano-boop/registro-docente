@@ -2,6 +2,7 @@ import React from 'react';
 import { ClassData, EvaluationType } from '../types';
 import { calcAvg, formatGrade, TYPES_LABEL } from '../utils';
 import { History, Calendar, Trash2, Edit3, ClipboardCheck } from 'lucide-react';
+import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
 
 interface HistoryViewProps {
   currentClass: ClassData;
@@ -18,7 +19,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 }) => {
   const grades = currentClass.grades || [];
 
-  // Group by batchId or composite key
   const groupsMap: Record<string, { batchId: string; date: string; type: EvaluationType; title: string; period: string; votes: typeof grades }> = {};
   grades.forEach(g => {
     const key = g.batchId || `${g.date}_${g.type}_${g.title}`;
@@ -51,7 +51,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
         <button
           onClick={onNewEvaluation}
-          className="self-start sm:self-auto px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
+          className={`${MOBILE_TOUCH_TARGET_CLASS} self-start sm:self-auto px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5`}
         >
           <ClipboardCheck className="w-4 h-4" /> + Nuova Valutazione
         </button>
@@ -63,7 +63,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           <p className="text-sm text-slate-400 mb-3">Nessuna prova presente in archivio per questa classe.</p>
           <button
             onClick={onNewEvaluation}
-            className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold"
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold`}
           >
             Crea la Prima Valutazione
           </button>
@@ -115,7 +115,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   <div className="flex items-center gap-1.5 pl-2 border-l border-slate-700">
                     <button
                       onClick={() => onEditBatch(batch.batchId)}
-                      className="p-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-[var(--primary)] transition-colors"
+                      className={`${MOBILE_TOUCH_TARGET_CLASS} p-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-[var(--primary)] transition-colors`}
                       title="Modifica valutazione"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -126,7 +126,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                           onDeleteBatch(batch.batchId);
                         }
                       }}
-                      className="p-2 rounded-md bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition-colors"
+                      className={`${MOBILE_TOUCH_TARGET_CLASS} p-2 rounded-md bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition-colors`}
                       title="Elimina prova"
                     >
                       <Trash2 className="w-4 h-4" />

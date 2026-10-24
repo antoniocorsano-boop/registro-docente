@@ -39,6 +39,7 @@ describe('SEC-1 application vault wiring', () => {
 
   test('wires configurable inactivity auto-lock and an explicit manual lock action', async () => {
     const rootSource = await Bun.file('src/components/SecureRegistroRoot.tsx').text();
+    const controlsSource = await Bun.file('src/components/VaultControls.tsx').text();
 
     expect(rootSource).toContain('AUTO_LOCK_STORAGE_KEY');
     expect(rootSource).toContain('15 * 60_000');
@@ -46,7 +47,8 @@ describe('SEC-1 application vault wiring', () => {
     expect(rootSource).toContain("'pointerdown'");
     expect(rootSource).toContain("'keydown'");
     expect(rootSource).toContain("setGateState('LOCKED')");
-    expect(rootSource).toContain('Mai durante la lezione');
-    expect(rootSource).toContain('Blocca Registro');
+    expect(rootSource).toContain('<VaultControls');
+    expect(controlsSource).toContain('Mai durante la lezione');
+    expect(controlsSource).toContain('Blocca Registro');
   });
 });

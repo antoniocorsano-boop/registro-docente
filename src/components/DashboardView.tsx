@@ -36,8 +36,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     ? studentAvgs.reduce((a, b) => a + b, 0) / studentAvgs.length
     : null;
 
-  const suffRate = studentAvgs.length > 0
-    ? Math.round((studentAvgs.filter(v => v >= 6.0).length / studentAvgs.length) * 100)
+  const validAverageCount = studentAvgs.length;
+  const sufficientStudentCount = studentAvgs.filter(v => v >= 6.0).length;
+
+  const suffRate = validAverageCount > 0
+    ? Math.round((sufficientStudentCount / validAverageCount) * 100)
     : null;
 
   // Group assessments by batchId / date
@@ -100,6 +103,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
               {suffRate === null ? 'Nessun dato' : 'Tasso Sufficienze'}
             </span>
+            {suffRate !== null && (
+              <span className="mt-1 block text-[10px] text-slate-500">
+                {sufficientStudentCount} su {validAverageCount} con media disponibile
+              </span>
+            )}
           </div>
 
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">

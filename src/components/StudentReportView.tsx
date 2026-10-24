@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppSettings, ClassData, EvaluationType, UdaRecord, Grade } from '../types';
+import { getCompetencyEvidenceCoverage, getGrowthRecommendation } from '../analytics/competencySemantics';
 import {
   calcAvg,
   calcWeightedAvg,
@@ -384,7 +385,11 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   });
 
   const evaluatedCompetencyData = competencyRadarData.filter(c => c.studentScore !== null);
-  const hasReliableCompetencyProfile = evaluatedCompetencyData.length >= 3;
+  const competencyEvidenceCoverage = getCompetencyEvidenceCoverage(
+    evaluatedCompetencyData.length,
+    competencyRadarData.length
+  );
+  const hasReliableCompetencyProfile = competencyEvidenceCoverage.reliable;
   const evaluatedUdaData = udaRadarData.filter(c => c.studentScore !== null);
   const hasReliableUdaProfile = evaluatedUdaData.length >= 3;
   const activeRadarData = radarMode === 'competencies' ? evaluatedCompetencyData : evaluatedUdaData;
@@ -395,7 +400,13 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   // Diagnostic strengths and areas of growth
   const sortedStrengths = [...evaluatedCompetencyData].sort((a, b) => b.studentScore! - a.studentScore!);
   const bestCompetency = hasReliableCompetencyProfile ? sortedStrengths[0] : null;
-  const growthCompetency = hasReliableCompetencyProfile ? sortedStrengths[sortedStrengths.length - 1] : null;
+  const growthRecommendation = getGrowthRecommendation(
+    evaluatedCompetencyData.map(c => ({ label: c.axis, score: c.studentScore! })),
+    6.0
+  );
+  const growthCompetency = growthRecommendation.item
+    ? evaluatedCompetencyData.find(c => c.axis === growthRecommendation.item!.label) ?? null
+    : null;
   const advancedCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore >= 8.5).length;
   const intermediateCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore >= 7.0 && c.studentScore < 8.5).length;
   const baseCount = evaluatedCompetencyData.filter(c => c.studentScore !== null && c.studentScore >= 6.0 && c.studentScore < 7.0).length;
@@ -542,6 +553,15 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           </div>
         </div>
 
+        {radarMode === 'competencies' && (
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            <span className="px-2.5 py-1 rounded-full border border-cyan-500/30 bg-cyan-950/20 font-semibold text-cyan-300">
+              {competencyEvidenceCoverage.label}
+            </span>
+            <span>Il radar mostra solo dimensioni con evidenze valutative disponibili.</span>
+          </div>
+        )}
+
         {/* Radar Chart + Diagnostic Synthesis Panel */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
           {/* Radar Chart Area */}
@@ -686,20 +706,37 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-800/80 flex items-start gap-2">
-                <TrendingUp className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">
-                    Area da Consolidare:
-                  </span>
-                  <span className="font-semibold text-white">
-                    {growthCompetency.icon} {growthCompetency.fullName}
-                  </span>
-                  <span className="text-slate-400 block text-[11px] mt-0.5">
-                    Punteggio: <b className="text-amber-300 font-mono">{growthCompetency.studentScore}/10</b> · Attività mirate di rinforzo consigliate
-                  </span>
+              {growthRecommendation.kind === 'absolute' ? (
+                <div className="pt-2 border-t border-slate-800/80 flex items-start gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">
+                      Area da Consolidare:
+                    </span>
+                    <span className="font-semibold text-white">
+                      {growthCompetency.icon} {growthCompetency.fullName}
+                    </span>
+                    <span className="text-slate-400 block text-[11px] mt-0.5">
+                      Punteggio: <b className="text-amber-300 font-mono">{growthCompetency.studentScore}/10</b> · Sotto la soglia analitica 6/10; attività mirate di rinforzo consigliate
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : growthRecommendation.kind === 'relative' ? (
+                <div className="pt-2 border-t border-slate-800/80 flex items-start gap-2">
+                  <TrendingUp className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-cyan-400 block tracking-wider">
+                      Area di crescita relativa:
+                    </span>
+                    <span className="font-semibold text-white">
+                      {growthCompetency.icon} {growthCompetency.fullName}
+                    </span>
+                    <span className="text-slate-400 block text-[11px] mt-0.5">
+                      Punteggio: <b className="text-cyan-300 font-mono">{growthCompetency.studentScore}/10</b> · Dimensione relativamente meno forte tra quelle con evidenze, ma non sotto la soglia analitica
+                    </span>
+                  </div>
+                </div>
+              ) : null}
             </div>
               </>
             ) : (

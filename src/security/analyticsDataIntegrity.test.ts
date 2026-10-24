@@ -58,18 +58,20 @@ describe('ANALYTICS-01 fail-closed data integrity', () => {
 
   test('radar synthesis, level counts and strengths require at least three evidenced dimensions', async () => {
     const report = await source('src/components/StudentReportView.tsx');
+    const semantics = await source('src/analytics/competencySemantics.ts');
 
     expect(report).toContain(
       'const evaluatedCompetencyData = competencyRadarData.filter(c => c.studentScore !== null);'
     );
+    expect(semantics).toContain('reliable: evaluatedCount >= 3');
     expect(report).toContain(
-      'const hasReliableCompetencyProfile = evaluatedCompetencyData.length >= 3;'
+      'const hasReliableCompetencyProfile = competencyEvidenceCoverage.reliable;'
     );
     expect(report).toContain(
       'const bestCompetency = hasReliableCompetencyProfile ? sortedStrengths[0] : null;'
     );
     expect(report).toContain(
-      'const growthCompetency = hasReliableCompetencyProfile ? sortedStrengths[sortedStrengths.length - 1] : null;'
+      '{hasReliableCompetencyProfile && bestCompetency && growthCompetency ? ('
     );
     expect(report).toContain('Dati insufficienti per costruire un profilo attendibile');
   });

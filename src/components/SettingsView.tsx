@@ -765,7 +765,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Download className="w-4 h-4 text-[var(--primary)]" /> Gestione Dati & Sicurezza Locale
           </h3>
           <p className="text-xs text-slate-400">
-            Tutti i tuoi registri risiedono nella memoria sicura del tuo browser. Esporta regolarmente un file JSON di backup o ripristina un salvataggio precedente.
+            Tutti i tuoi registri risiedono nella memoria sicura del tuo browser. Esporta regolarmente un backup cifrato (.enc.json) o ripristina un backup cifrato precedente.
           </p>
         </div>
 
@@ -776,7 +776,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="p-3 rounded-lg bg-[var(--surface-variant)] hover:bg-slate-800 text-slate-200 border border-[var(--border)] text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
           >
             <Download className="w-4 h-4 text-[var(--primary)]" />
-            <span>Esporta File Backup (.json)</span>
+            <span>Esporta backup cifrato (.enc.json)</span>
           </button>
 
           <button
@@ -785,7 +785,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="p-3 rounded-lg bg-[var(--surface-variant)] hover:bg-slate-800 text-slate-200 border border-[var(--border)] text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
           >
             <Upload className="w-4 h-4 text-cyan-400" />
-            <span>Ripristina Registro da File JSON</span>
+            <span>Ripristina backup cifrato</span>
           </button>
         </div>
       </div>

@@ -160,7 +160,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="flex items-center gap-2">
             <AlertTriangle className={`w-4 h-4 shrink-0 ${isBackupStale ? 'text-amber-400' : 'text-emerald-400'}`} />
             <span>
-              Ultimo backup JSON:{' '}
+              Ultimo backup cifrato:{' '}
               <b>
                 {lastBackupDate
                   ? new Date(lastBackupDate).toLocaleDateString('it-IT', { hour: '2-digit', minute: '2-digit' })
@@ -173,7 +173,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             onClick={onExportBackup}
             className="px-3 py-1.5 rounded bg-[var(--surface-variant)] hover:bg-slate-800 border border-[var(--border)] text-white text-xs font-semibold flex items-center gap-1.5 shrink-0"
           >
-            <Download className="w-3.5 h-3.5 text-[var(--primary)]" /> Esporta Backup JSON
+            <Download className="w-3.5 h-3.5 text-[var(--primary)]" /> Esporta backup cifrato
           </button>
         </div>
       </div>
