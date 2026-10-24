@@ -2,32 +2,35 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Establish a governed, visible, fail-closed Arena → Registro Docente curriculum handoff without repurposing the existing Docente OS-targeted `CurriculumSnapshot v1`.
+**Goal:** Let the teacher configure a real first-cycle planning profile and bind it to a governed, visible, fail-closed Arena curriculum context without repurposing the Docente OS-targeted `CurriculumSnapshot v1`.
 
-**Architecture:** This tranche is intentionally cross-repository. Arena first defines and validates `ARENA_REGISTRO_PLANNING_CONTEXT_V1`; Registro Docente then implements a narrow validator/adapter into its `ArenaPlanningContext` domain and a teacher-facing authority panel. Initial transport is explicit JSON import/export, not hidden runtime sync; runtime transport can replace the carrier later without changing the contract.
+**Architecture:** The Registro screen first creates the local planning profile from Tranche A: school year, order, grade, discipline, ordinance hours, local allocation, assessment periods and school/class calendar. Arena then defines a dedicated `ARENA_REGISTRO_PLANNING_CONTEXT_V1` consumer profile, which Registro validates and binds only when school year/discipline/grade/cohort/regime match. Transport starts as explicit JSON import/export; runtime sync can later replace the carrier without changing the authority contract.
 
-**Tech Stack:** Arena JSON Schema/Node validation patterns, TypeScript/Bun in Registro Docente, React UI, Secure Local Vault planning record from Tranche A.
+**Tech Stack:** Arena JSON Schema/Node validation patterns, TypeScript/Bun, React, Secure Local Vault planning record from Tranche A.
 
 **Spec:** `docs/superpowers/specs/2026-10-24-edu-plan-01-consolidation-amendment-v1.1.md`
 
 ## Global Constraints
 
 - Arena remains the only curriculum authority.
-- Do not mutate `CURRICULUM_SNAPSHOT_V1.schema.json` or change its `targetProduct = DOCENTE_OS` downstream contract.
-- New identifiers use `CURRICOLO` vocabulary where they are not legacy compatibility identifiers.
-- Contract must expose curriculum version, authority state, vigency, structural fingerprint, institution, school year, discipline, grade/cohort, applicability status/regime and planning requirement references.
-- `PROVISIONAL_COMPLETE` must remain visibly non-vigente; Registro Docente must never relabel it as approved.
+- Do not mutate `CURRICULUM_SNAPSHOT_V1.schema.json` or change its `targetProduct = DOCENTE_OS` policy.
+- New contract identifiers use `CURRICOLO` vocabulary except immutable legacy identifiers.
+- Profile configuration distinguishes national reference, local allocation and effective calendar capacity.
+- Primary discipline hours are shown as locally defined where no national discipline-hour value exists.
+- Assessment periods are configurable and use stable arbitrary IDs, not `Q1 | Q2`.
+- Arena contract exposes curriculum version, authority state, vigency, fingerprint, institution, school year, discipline, grade/cohort, applicability/regime and planning requirement refs.
+- `PROVISIONAL_COMPLETE` is always visibly non-vigente; Registro never relabels it as approved.
 - Grade II/III cannot receive invented fingerprints merely because static Arena readability cases exist.
-- Import is preview/read-only, requires teacher acceptance, and permits no automatic curriculum write.
-- Registro Docente stores the accepted snapshot/context and provenance; it never writes back to Arena in this tranche.
+- Import is preview/read-only, requires teacher acceptance and permits no automatic curriculum write.
+- Replacing the Arena reference never silently rewrites an approved master program.
 
 ## Review Focus
 
-- Valid schema but `PROVISIONAL_COMPLETE` presented as “approvato” → must be impossible in adapter/UI.
-- Grade/cohort/regime mismatch against the selected teaching profile → reject import, do not silently attach.
-- Fingerprint or required provenance missing → reject even if human-readable curriculum text is present.
-- Static Grade II/III Arena case without governed materialized fingerprint → reject as non-importable context.
-- Re-import of newer Arena context after a master program exists → store as update-available; do not rewrite an approved program automatically.
+- Lower-secondary Technology profile → shows 2 h/week and 66 h/year national reference while preserving editable local allocation.
+- Primary discipline profile → says local/institutional allocation required rather than inventing a national value.
+- Valid Arena schema but `PROVISIONAL_COMPLETE` presented as approved → impossible.
+- Grade/cohort/regime mismatch → rejected before persistence.
+- Newer Arena context imported after a master program exists → update available only, no automatic master rewrite.
 
 ---
 
@@ -40,200 +43,109 @@
 - `docs/contracts/fixtures/arena-registro-planning-context-tech-grade1.json`
 - `docs/architecture/ARENA_REGISTRO_PLANNING_HANDOFF_V1.md`
 - `scripts/validate-registro-planning-context.mjs`
-- `tests/arena-registro-planning-context.test.mjs` or the repository's current equivalent contract-test location.
+- contract test in the repository's current test location.
 
 ### Registro Docente repository
 
 **Create**
 - `src/planning/arena/arenaPlanningContract.ts`
 - `src/planning/arena/arenaPlanningAdapter.ts`
-- `src/components/planning/ArenaAuthorityPanel.tsx`
 - `src/components/planning/PlanningProfileView.tsx`
+- `src/components/planning/PlanningProfileEditor.tsx`
+- `src/components/planning/ArenaAuthorityPanel.tsx`
+- `src/security/planningProfileUiContract.test.ts`
 - `src/security/arenaPlanningImport.test.ts`
 - `src/security/arenaAuthorityUiContract.test.ts`
 
 **Modify**
 - `src/planning/types.ts`
-- `src/types.ts` — add `ActiveTab` entry `programmazione` only in this tranche.
+- `src/types.ts` — add `ActiveTab` value `programmazione`.
 - `src/components/Navbar.tsx` — add “Programmazione didattica” under “Didattica e strumenti”.
-- `src/App.tsx` — render planning profile view and persist accepted Arena context via `commitPlanningMutation`.
+- `src/App.tsx` — render/persist profiles and accepted Arena context through `commitPlanningMutation`.
 
-### Task 1: Define the Arena→Registro contract in Arena
-
-**Files:** Arena files listed above.
+### Task 1: Build teacher-facing planning-profile configuration
 
 **Interfaces:**
-- Produces JSON contract `ARENA_REGISTRO_PLANNING_CONTEXT_V1`, `contractVersion: 1`.
-- Required downstream policy: `targetProduct: "REGISTRO_DOCENTE"`, `importMode: "PREVIEW_ONLY"`, `acceptanceRequired: true`, `automaticWriteAllowed: false`.
-
-- [ ] **Step 1: Write the failing Arena contract test**
-
-Test that a Grade I Technology fixture must carry:
-- source `curriculumVersionRef` and current fingerprint;
-- `authorityState` in `APPROVED | PROVISIONAL_COMPLETE`;
-- `vigencyStatus` in `VIGENTE | NON_VIGENTE`;
-- institution, schoolYear, discipline, grade/cohort;
-- explicit `applicabilityStatus` and `regimeRef`;
-- planning `requirements[]` with stable references and provenance;
-- Registro Docente downstream policy constants.
-
-Also assert `PROVISIONAL_COMPLETE + VIGENTE` is invalid.
-
-- [ ] **Step 2: Run Arena contract test**
-
-Run the repository's focused Node/Bun contract-test command for the new file.
-Expected: FAIL because schema/validator do not exist.
-
-- [ ] **Step 3: Implement schema and validator**
-
-Do not copy the Docente OS downstream policy. Reuse canonical reference/fingerprint semantics while creating a distinct consumer profile.
-
-- [ ] **Step 4: Materialize only a governed Grade I Technology fixture**
-
-The fixture must derive from a real current Arena source/fingerprint. Do not generate Grade II/III fingerprints if Arena has not materialized them.
-
-- [ ] **Step 5: Run Arena contract/governance tests**
-
-Expected: PASS with legacy `CurriculumSnapshot v1` unchanged.
-
-- [ ] **Step 6: Commit in Arena**
-
-```bash
-git add docs/contracts docs/architecture scripts tests
-git commit -m "feat: add Registro Docente planning handoff contract"
+- `PlanningProfileEditor` consumes a draft `TeachingProfile`, ordinance lookup and `calculateEffectiveCapacity()`.
+- App action:
+```ts
+saveTeachingProfile(profile: TeachingProfile): Promise<void>;
 ```
 
-**Human checkpoint:** do not implement the Registro consumer until the new Arena contract/profile has passed Arena review and is explicitly accepted as the handoff boundary.
+- [ ] **Step 1: Write failing profile UI/domain tests**
 
-### Task 2: Validate the Arena contract in Registro Docente
+Pin fields: school year, school order, grade, subject, cohort ref, national hours/provenance, optional local hours, reserve %, assessment periods, regional-calendar reference, institution adjustments, weekly class slots and local closure/exception dates.
 
-**Files:**
-- Create: `src/planning/arena/arenaPlanningContract.ts`
-- Create: `src/security/arenaPlanningImport.test.ts`
+Assert Technology lower-secondary shows `2 h/settimana · 66 h/anno`; primary shows “Monte ore disciplinare definito dall'istituzione scolastica”.
+
+- [ ] **Step 2: Run** `bun test src/security/planningProfileUiContract.test.ts` → expected FAIL.
+- [ ] **Step 3: Add `programmazione` navigation and `PlanningProfileEditor`** under existing “Didattica e strumenti”.
+- [ ] **Step 4: Validate before `commitPlanningMutation`**; invalid period overlap/calendar/reserve never reaches storage.
+- [ ] **Step 5: Run focused tests/type/build** → PASS.
+- [ ] **Step 6: Commit** `feat: add teaching planning profile`.
+
+### Task 2: Define the Arena→Registro contract in Arena
 
 **Interfaces:**
-- Produces:
+- Produces `ARENA_REGISTRO_PLANNING_CONTEXT_V1`, `contractVersion: 1`.
+- Required policy: `targetProduct: "REGISTRO_DOCENTE"`, `importMode: "PREVIEW_ONLY"`, `acceptanceRequired: true`, `automaticWriteAllowed: false`.
+
+- [ ] **Step 1: Write failing Arena schema/validator tests**
+
+Require `curriculumVersionRef`, current structural fingerprint, authority state, vigency status, institution, school year, discipline, grade/cohort, `applicabilityStatus`, `regimeRef`, stable `requirements[]` and provenance. Reject `PROVISIONAL_COMPLETE + VIGENTE`.
+
+- [ ] **Step 2: Run focused Arena test** → expected FAIL.
+- [ ] **Step 3: Implement schema/validator without changing `CurriculumSnapshot v1`**.
+- [ ] **Step 4: Materialize only a real governed Grade I Technology fixture**; do not invent Grade II/III fingerprints.
+- [ ] **Step 5: Run Arena contract/governance suite** → PASS.
+- [ ] **Step 6: Commit in Arena** `feat: add Registro Docente planning handoff contract`.
+
+**Human checkpoint:** the Registro consumer does not proceed until this handoff boundary passes Arena review and is explicitly accepted.
+
+### Task 3: Validate and bind Arena context in Registro Docente
+
+**Interfaces:**
 ```ts
 export function parseArenaPlanningContext(input: unknown): ArenaPlanningContext;
-export class ArenaPlanningContextError extends Error {}
-```
-
-- [ ] **Step 1: Add failing parser tests**
-
-Use copied test fixtures in the test body or a dedicated test fixture directory. Assert acceptance of the exact governed Grade I shape and rejection of wrong targetProduct, missing fingerprint, invalid authority/vigency combination and missing cohort/regime.
-
-- [ ] **Step 2: Run focused test**
-
-Run: `bun test src/security/arenaPlanningImport.test.ts`
-Expected: FAIL because parser does not exist.
-
-- [ ] **Step 3: Implement fail-closed parser**
-
-Do not accept arbitrary Arena export JSON or `ARENA_ATLAS_CURRICULUM_EXPORT_V1`; only the dedicated planning context contract/version is accepted.
-
-- [ ] **Step 4: Re-run focused test**
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/planning/arena/arenaPlanningContract.ts src/security/arenaPlanningImport.test.ts
-git commit -m "feat: validate Arena planning context"
-```
-
-### Task 3: Bind accepted Arena context to the selected teaching profile
-
-**Files:**
-- Create: `src/planning/arena/arenaPlanningAdapter.ts`
-- Modify: `src/planning/types.ts`
-- Modify: `src/security/arenaPlanningImport.test.ts`
-
-**Interfaces:**
-- Produces:
-```ts
 export function bindArenaContextToProfile(
   context: ArenaPlanningContext,
   profile: TeachingProfile
 ): ArenaProfileBindingResult;
 ```
-- `ArenaProfileBindingResult` is either `{ status: 'bound'; context: ArenaPlanningContext }` or `{ status: 'rejected'; reasons: string[] }`.
 
-- [ ] **Step 1: Add failing binding tests**
+- [ ] **Step 1: Write failing parser/binding tests**
 
-Pin school year, school order, grade/cohort and subject matching. A 2026/27 Grade I Technology context with 2025 regime must not bind to a Grade II profile; a Grade II profile must not be silently retrofitted to 2025.
+Accept only the dedicated contract/version. Reject Atlas exports, Docente OS snapshot payloads, missing fingerprint/provenance, invalid authority/vigency combination and schoolYear/subject/grade/cohort mismatch. A 2026/27 Grade I 2025-regime context cannot bind to Grade II; Grade II cannot be silently retrofitted to 2025.
 
-- [ ] **Step 2: Run test and confirm RED**
+- [ ] **Step 2: Run** `bun test src/security/arenaPlanningImport.test.ts` → FAIL.
+- [ ] **Step 3: Implement fail-closed parser and binding adapter**.
+- [ ] **Step 4: Re-run** → PASS.
+- [ ] **Step 5: Commit** `feat: validate and bind Arena planning context`.
 
-- [ ] **Step 3: Implement exact matching/transition checks**
-
-The adapter may read regime metadata from Arena; it must not derive a more authoritative regime than Arena supplied.
-
-- [ ] **Step 4: Run test**
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/planning/arena/arenaPlanningAdapter.ts src/planning/types.ts src/security/arenaPlanningImport.test.ts
-git commit -m "feat: bind Arena context to teaching profile"
-```
-
-### Task 4: Make Arena provenance and authority state visible in the planning UI
-
-**Files:**
-- Create: `src/components/planning/ArenaAuthorityPanel.tsx`
-- Create: `src/components/planning/PlanningProfileView.tsx`
-- Create: `src/security/arenaAuthorityUiContract.test.ts`
-- Modify: `src/types.ts`
-- Modify: `src/components/Navbar.tsx`
-- Modify: `src/App.tsx`
+### Task 4: Make Arena provenance/authority permanently visible
 
 **Interfaces:**
-- `ArenaAuthorityPanel` consumes `ArenaPlanningContext | null` and never transforms its authority state.
-- `PlanningProfileView` consumes `PlanningStateV1`, classes, `onUpdatePlanning`, and exposes explicit JSON import + teacher acceptance.
+- `ArenaAuthorityPanel` renders the accepted context verbatim enough to expose source, version, regime, authority/vigency and provenance.
+- `PlanningProfileView` exposes `Importa riferimento Arena` → preview → `Accetta riferimento Arena`.
 
-- [ ] **Step 1: Write failing source/UI contract tests**
+- [ ] **Step 1: Write failing UI contract tests**
 
-Assert source contains visible labels for `Arena`, curriculum version, regime, authority/vigency state and provenance action; assert `PROVISIONAL_COMPLETE` renders copy containing `provvisorio`/`non vigente`, never `approvato`.
+Require visible `Arena`, curriculum version, regime, authority/vigency and provenance action. `PROVISIONAL_COMPLETE` must render copy containing `provvisorio` and `non vigente`, never `approvato`.
 
-- [ ] **Step 2: Run focused tests**
-
-Run: `bun test src/security/arenaAuthorityUiContract.test.ts`
-Expected: FAIL.
-
-- [ ] **Step 3: Add `programmazione` navigation and profile screen**
-
-Place it under existing “Didattica e strumenti”. Import is explicit and previews contract/profile match before a separate “Accetta riferimento Arena” action persists it.
-
-- [ ] **Step 4: Persist acceptance via `commitPlanningMutation`**
-
-Re-importing a distinct `curriculumVersionRef` stores the new context as available/current reference but does not mutate existing approved master versions.
-
-- [ ] **Step 5: Run test/type/build**
+- [ ] **Step 2: Run** `bun test src/security/arenaAuthorityUiContract.test.ts` → FAIL.
+- [ ] **Step 3: Implement import preview + explicit teacher acceptance**.
+- [ ] **Step 4: Re-import of a distinct curriculum version records an update-available reference; approved master versions are untouched**.
+- [ ] **Step 5: Run tests/type/build**
 
 ```bash
-bun test src/security/arenaPlanningImport.test.ts src/security/arenaAuthorityUiContract.test.ts
+bun test src/security/planningProfileUiContract.test.ts src/security/arenaPlanningImport.test.ts src/security/arenaAuthorityUiContract.test.ts
 bun run lint
 bun run build
 ```
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/components/planning src/types.ts src/components/Navbar.tsx src/App.tsx src/security
-git commit -m "feat: show governed Arena curriculum context"
-```
+- [ ] **Step 6: Commit** `feat: show governed Arena curriculum context`.
 
 ## Tranche exit gate
 
-Browser qualification with synthetic/non-personal data must prove:
-- Programmazione didattica is reachable from “Didattica e strumenti”.
-- Accepted Arena source/version/status is always visible on the planning screen.
-- PROVISIONAL_COMPLETE appears non-vigente.
-- mismatched grade/cohort JSON cannot be accepted;
-- refresh + vault lock/unlock preserves the accepted context;
-- no Arena write-back endpoint/action exists;
-- existing UDA and student workflows remain unaffected.
+Browser qualification with synthetic/non-personal data proves: planning profile setup; correct national/local-hour distinction; configurable periods/calendar; Programmazione reachable from tools; Arena source/version/status always visible; provisional state non-vigente; mismatched cohort JSON rejected; refresh/lock/unlock persistence; no Arena write-back; existing UDA/student workflows unaffected.
