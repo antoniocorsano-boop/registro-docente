@@ -1,0 +1,111 @@
+name: UXT-DEPLOY-01 Live Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SHA: '76c837470485bfcf9eaddb7e14aeff68a15a26ef'
+  PUBLIC_URL: 'https://registro-docente.ai.studio'
+  PLAYWRIGHT_VERSION: '1.64.1'
+
+jobs:
+  live-verification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Verify exact released source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected release SHA: ${RELEASE_SHA}"
+          echo "Checkout SHA:         ${actual_sha}"
+          test "${actual_sha}" = "${RELEASE_SHA}"
+
+      - name: Setup Node for isolated browser toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .browser-tools live-evidence
+          cat > .browser-tools/package.json <<'JSON'
+          {
+            "name": "registro-docente-uxt-live-verification-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .browser-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
+
+      - name: Probe public target and capture asset fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p live-evidence
+          curl --fail --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 \
+            "${PUBLIC_URL}/" \
+            -D live-evidence/public-headers.txt \
+            -o live-evidence/public-index.html
+          printf 'public_url=%s\nrelease_sha=%s\n' "${PUBLIC_URL}" "${RELEASE_SHA}" > live-evidence/release-metadata.txt
+          grep -Eo 'assets/[^"[:space:]]+\.(js|css)' live-evidence/public-index.html \
+            | sort -u \
+            > live-evidence/asset-fingerprints.txt || true
+          test -s live-evidence/public-index.html
+          cat live-evidence/asset-fingerprints.txt
+
+      - name: Run live UXT-F Chromium inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="${PUBLIC_URL}" \
+          EVIDENCE_DIR="../live-evidence" \
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ux-trust-01-full-regression.spec.cjs \
+            --reporter=line \
+            --output=../live-evidence/test-results
+
+      - name: Verify required live evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s live-evidence/ux-trust-01-uxt-f-mobile.png
+          test -s live-evidence/ux-trust-01-uxt-f-desktop.png
+          test -s live-evidence/ux-trust-01-uxt-f-mobile.json
+          test -s live-evidence/ux-trust-01-uxt-f-desktop.json
+          grep -q '"result": "PASS"' live-evidence/ux-trust-01-uxt-f-mobile.json
+          grep -q '"result": "PASS"' live-evidence/ux-trust-01-uxt-f-desktop.json
+          grep -q '"pageErrors": \[\]' live-evidence/ux-trust-01-uxt-f-mobile.json
+          grep -q '"pageErrors": \[\]' live-evidence/ux-trust-01-uxt-f-desktop.json
+          grep -q '"consoleErrors": \[\]' live-evidence/ux-trust-01-uxt-f-mobile.json
+          grep -q '"consoleErrors": \[\]' live-evidence/ux-trust-01-uxt-f-desktop.json
+
+      - name: Upload live verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uxt-deploy-01-live-${{ env.RELEASE_SHA }}
+          path: live-evidence/
+          if-no-files-found: error
+          retention-days: 7
