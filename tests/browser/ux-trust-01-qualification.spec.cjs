@@ -301,7 +301,7 @@ test('UXT-E mobile analytics keeps class summary first and student detail disclo
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await closePersistenceConfirmation(page);
   await page.getByRole('button', { name: 'Riepilogo', exact: true }).click();
-  await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Analisi', exact: true }).click();
   await expect(page.getByText('Analisi medie & fasce analitiche', { exact: true })).toBeVisible();
 
   const studentDetail = page.getByTestId('mobile-analytics-student-detail');
@@ -329,7 +329,7 @@ test('UXT-E desktop analytics retains the dense student table — desktop 1280x9
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await closePersistenceConfirmation(page);
   await page.getByRole('button', { name: 'Riepilogo', exact: true }).click();
-  await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Analisi', exact: true }).click();
 
   const denseTable = page.locator('table').filter({ hasText: 'MEDIA ANNO' });
   await expect(denseTable).toBeVisible();
