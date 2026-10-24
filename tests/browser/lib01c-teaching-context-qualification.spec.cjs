@@ -54,10 +54,15 @@ async function openDrawerItem(page, label) {
   await item.click();
 }
 
-async function createSyntheticUda(page, title) {
+async function createSyntheticUda(page, title, className = null) {
   await openDrawerItem(page, 'UDA');
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
+  if (className) {
+    const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
+    await expect(classSelect).toBeVisible();
+    await classSelect.selectOption({ label: className });
+  }
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
 }
@@ -131,9 +136,9 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
 
   await setupFreshVault(page);
   await createSyntheticClass(page);
-  await createSyntheticUda(page, UDA_TITLE);
+  await createSyntheticUda(page, UDA_TITLE, CLASS_NAME);
   await addSyntheticLesson(page);
-  await createSyntheticUda(page, OVERRIDE_UDA_TITLE);
+  await createSyntheticUda(page, OVERRIDE_UDA_TITLE, CLASS_NAME);
   await openLibrary(page);
   await addSyntheticSource(page, SOURCE_TITLE);
 
