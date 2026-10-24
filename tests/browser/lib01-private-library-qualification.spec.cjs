@@ -194,8 +194,8 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   // 7. Encrypted backup restores a deleted library source.
   await openDrawerItem(page, 'Privacy');
   await expect(page.getByRole('heading', { name: /Privacy First & Protezione dei dati/ })).toBeVisible();
-  await page.getByLabel('Password di Protezione').fill(backupPassword);
-  await page.getByLabel('Conferma Password').fill(backupPassword);
+  await page.getByPlaceholder('Inserisci password sicura (min. 6 caratteri)').fill(backupPassword);
+  await page.getByPlaceholder('Ripeti la password').fill(backupPassword);
   let exportMessage = '';
   const exportDialogHandled = new Promise(resolve => {
     page.once('dialog', async dialog => {
@@ -220,8 +220,8 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await expect(page.getByRole('heading', { name: TEXT_TITLE, exact: true })).toHaveCount(0);
 
   await openDrawerItem(page, 'Privacy');
-  await page.getByLabel('Seleziona File Cifrato').setInputFiles(backupPath);
-  await page.getByLabel('Password di Decifratura').fill(backupPassword);
+  await page.locator('input[type="file"][accept=".json"]').setInputFiles(backupPath);
+  await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill(backupPassword);
   let restoreMessage = '';
   const restoreDialogHandled = new Promise(resolve => {
     page.once('dialog', async dialog => {
