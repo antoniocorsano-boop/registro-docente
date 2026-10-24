@@ -15,6 +15,9 @@ export type ArenaPlanningContextError =
   | 'IMPORT_MODE_NOT_PREVIEW_ONLY'
   | 'ACCEPTANCE_NOT_REQUIRED'
   | 'AUTOMATIC_WRITE_FORBIDDEN'
+  | 'UNEXPECTED_PROPERTY'
+  | 'INSTITUTE_NAME_REQUIRED'
+  | 'SOURCE_SCHOOL_YEAR_REQUIRED'
   | 'SCHOOL_YEAR_MISMATCH'
   | 'SCHOOL_ORDER_MISMATCH'
   | 'SUBJECT_MISMATCH'
@@ -39,39 +42,74 @@ export type ArenaPlanningContextPreviewResult =
 
 type UnknownRecord = Record<string, unknown>;
 
+const ROOT_KEYS = new Set([
+  'contract',
+  'contractVersion',
+  'sourceProduct',
+  'targetProduct',
+  'importMode',
+  'acceptanceRequired',
+  'automaticWriteAllowed',
+  'instituteName',
+  'schoolYear',
+  'sourceSchoolYear',
+  'schoolOrder',
+  'subjectCode',
+  'gradeLevel',
+  'cohortRef',
+  'cohortRefKind',
+  'normativeRegime',
+  'applicabilityStatus',
+  'authorityState',
+  'vigencyStatus',
+  'authorityReceiptRef',
+  'masterId',
+  'masterVersion',
+  'structuralFingerprint',
+  'provenance',
+  'curricoloItems',
+  'privacyClass'
+]);
+const FINGERPRINT_KEYS = new Set(['scope', 'algorithm', 'version', 'hash']);
+const PROVENANCE_KEYS = new Set(['repository', 'sourceCommit', 'sourceDocumentId', 'sourceRevisionId']);
+const CURRICOLO_ITEM_KEYS = new Set(['id', 'kind', 'schoolStage', 'gradeLabel', 'sourceSection', 'text']);
+
 const nonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const hasOnlyKeys = (value: UnknownRecord, allowed: Set<string>): boolean =>
+  Object.keys(value).every(key => allowed.has(key));
+
 const expectedArenaSchoolOrder = (profile: TeachingProfile): 'primaria' | 'secondaria' =>
   profile.schoolOrder === 'primary' ? 'primaria' : 'secondaria';
 
 function readFingerprint(value: unknown): ArenaMasterFingerprint | null {
-  if (!isRecord(value)) return null;
+  if (!isRecord(value) || !hasOnlyKeys(value, FINGERPRINT_KEYS)) return null;
   if (value.scope !== 'MASTER') return null;
-  if (!nonEmptyString(value.algorithm)) return null;
-  if (typeof value.version !== 'number' || !Number.isFinite(value.version)) return null;
-  if (!nonEmptyString(value.hash)) return null;
+  if (value.algorithm !== 'fnv1a') return null;
+  if (value.version !== 1) return null;
+  if (typeof value.hash !== 'string' || !/^[0-9a-f]{8}$/.test(value.hash)) return null;
 
   return {
     scope: 'MASTER',
-    algorithm: value.algorithm,
-    version: value.version,
+    algorithm: 'fnv1a',
+    version: 1,
     hash: value.hash
   };
 }
 
 function readProvenance(value: unknown): ArenaPlanningProvenance | null {
-  if (!isRecord(value)) return null;
-  if (!nonEmptyString(value.repository)) return null;
-  if (!nonEmptyString(value.sourceCommit)) return null;
+  if (!isRecord(value) || !hasOnlyKeys(value, PROVENANCE_KEYS)) return null;
+  if (value.repository !== 'antoniocorsano-boop/CurManLight_arena') return null;
+  if (typeof value.sourceCommit !== 'string' || !/^[0-9a-f]{40}$/.test(value.sourceCommit)) return null;
   if (!nonEmptyString(value.sourceDocumentId)) return null;
   if (!nonEmptyString(value.sourceRevisionId)) return null;
 
   return {
-    repository: value.repository,
+    repository: 'antoniocorsano-boop/CurManLight_arena',
     sourceCommit: value.sourceCommit,
     sourceDocumentId: value.sourceDocumentId,
     sourceRevisionId: value.sourceRevisionId
@@ -83,9 +121,9 @@ function readCurricoloItems(value: unknown): ArenaCurricoloItem[] | null {
 
   const items: ArenaCurricoloItem[] = [];
   for (const candidate of value) {
-    if (!isRecord(candidate)) return null;
+    if (!isRecord(candidate) || !hasOnlyKeys(candidate, CURRICOLO_ITEM_KEYS)) return null;
     if (!nonEmptyString(candidate.id)) return null;
-    if (!nonEmptyString(candidate.kind)) return null;
+    if (candidate.kind !== 'ANNUALITA_DISCIPLINARE') return null;
     if (!nonEmptyString(candidate.schoolStage)) return null;
     if (!nonEmptyString(candidate.gradeLabel)) return null;
     if (!nonEmptyString(candidate.sourceSection)) return null;
@@ -93,7 +131,7 @@ function readCurricoloItems(value: unknown): ArenaCurricoloItem[] | null {
 
     items.push({
       id: candidate.id,
-      kind: candidate.kind,
+      kind: 'ANNUALITA_DISCIPLINARE',
       schoolStage: candidate.schoolStage,
       gradeLabel: candidate.gradeLabel,
       sourceSection: candidate.sourceSection,
@@ -113,6 +151,7 @@ export function previewArenaPlanningContext(
   if (!isRecord(payload)) {
     return { ok: false, errors: ['CONTRACT_MISMATCH'] };
   }
+  if (!hasOnlyKeys(payload, ROOT_KEYS)) errors.push('UNEXPECTED_PROPERTY');
 
   if (payload.contract !== 'ARENA_REGISTRO_PLANNING_CONTEXT_V1') errors.push('CONTRACT_MISMATCH');
   if (payload.contractVersion !== 1) errors.push('CONTRACT_VERSION_MISMATCH');
@@ -121,11 +160,15 @@ export function previewArenaPlanningContext(
   if (payload.importMode !== 'PREVIEW_ONLY') errors.push('IMPORT_MODE_NOT_PREVIEW_ONLY');
   if (payload.acceptanceRequired !== true) errors.push('ACCEPTANCE_NOT_REQUIRED');
   if (payload.automaticWriteAllowed !== false) errors.push('AUTOMATIC_WRITE_FORBIDDEN');
+  if (!nonEmptyString(payload.instituteName)) errors.push('INSTITUTE_NAME_REQUIRED');
+  if (!nonEmptyString(payload.sourceSchoolYear)) errors.push('SOURCE_SCHOOL_YEAR_REQUIRED');
 
   if (payload.schoolYear !== profile.schoolYear) errors.push('SCHOOL_YEAR_MISMATCH');
   if (payload.schoolOrder !== expectedArenaSchoolOrder(profile)) errors.push('SCHOOL_ORDER_MISMATCH');
   if (payload.subjectCode !== profile.subjectCode) errors.push('SUBJECT_MISMATCH');
-  if (payload.gradeLevel !== profile.gradeLevel) errors.push('GRADE_LEVEL_MISMATCH');
+  if (!Number.isInteger(payload.gradeLevel) || (payload.gradeLevel as number) < 1 || (payload.gradeLevel as number) > 5 || payload.gradeLevel !== profile.gradeLevel) {
+    errors.push('GRADE_LEVEL_MISMATCH');
+  }
   if (payload.cohortRef !== profile.cohortRef) errors.push('COHORT_MISMATCH');
   if (payload.cohortRefKind !== 'DERIVED_APPLICABILITY_KEY') errors.push('COHORT_KIND_MISMATCH');
   if (!nonEmptyString(profile.normativeRegime) || payload.normativeRegime !== profile.normativeRegime) {
@@ -147,6 +190,14 @@ export function previewArenaPlanningContext(
   if (
     payload.vigencyStatus === 'VIGENTE' &&
     (payload.authorityState !== 'APPROVED' || !nonEmptyString(payload.authorityReceiptRef))
+  ) {
+    errors.push('VIGENTE_AUTHORITY_EVIDENCE_REQUIRED');
+  }
+  if (
+    payload.vigencyStatus !== 'VIGENTE' &&
+    payload.authorityReceiptRef !== undefined &&
+    payload.authorityReceiptRef !== null &&
+    typeof payload.authorityReceiptRef !== 'string'
   ) {
     errors.push('VIGENTE_AUTHORITY_EVIDENCE_REQUIRED');
   }
