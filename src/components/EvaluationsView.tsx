@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ClassData, EvaluationType, Grade, UdaRecord } from '../types';
 import { normalizeGrade, today, TYPES_LABEL, uid, formatStudentNameWithPrivacy } from '../utils';
 import { Save, X, Calendar, BookOpen, Layers, Check, Clock } from 'lucide-react';
+import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
 
 interface EvaluationsViewProps {
   currentClass: ClassData;
@@ -57,7 +58,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
         setGradesMap(newMap);
       }
     } else {
-      // Clear or initialize
       setTitle('');
       setDate(today());
       setUdaId('');
@@ -154,7 +154,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
             type="button"
             onClick={onCancelEdit}
             disabled={isSaving}
-            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1.5`}
           >
             <X className="w-3.5 h-3.5" /> Annulla Modifica
           </button>
@@ -163,7 +163,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <fieldset disabled={isSaving} className="space-y-4 border-0 p-0 m-0 min-w-0">
-        {/* Row 1: Period, Type & UDA */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
@@ -215,7 +214,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </div>
         </div>
 
-        {/* Row 2: Date & Title */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
@@ -244,7 +242,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </div>
         </div>
 
-        {/* Quick Fill suggestions */}
         <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
             Compilazione rapida:
@@ -254,7 +251,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               key={qv}
               type="button"
               onClick={() => handleQuickFill(qv)}
-              className="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono"
+              className={`${MOBILE_TOUCH_TARGET_CLASS} px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-mono`}
             >
               Tutti {qv}
             </button>
@@ -262,13 +259,12 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           <button
             type="button"
             onClick={() => setGradesMap({})}
-            className="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700"
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700`}
           >
             Svuota
           </button>
         </div>
 
-        {/* Students Grade Input List */}
         <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto">
           {currentClass.students.length === 0 ? (
             <p className="p-4 text-xs text-slate-400 text-center">
@@ -289,14 +285,13 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
                     <span className="font-semibold text-slate-200 text-xs sm:text-sm truncate">
                       {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
                     </span>
-
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => toggleDelayed(student.id)}
-                      className={`p-1.5 rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
+                      className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
                         isDelayed
                           ? 'bg-amber-950/60 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                           : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
@@ -321,7 +316,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           )}
         </div>
 
-        {/* Submit Button */}
         <button
           type="submit"
           disabled={isSaving}
