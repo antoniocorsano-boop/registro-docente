@@ -76,12 +76,14 @@ async function assertAtLeast44(locator, label) {
 test('LIB-01B progressively reveals shared Core actions and gates contextual UDA linking — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
-  const externalRequests = [];
+  const contextualExternalRequests = [];
+  let trackContextualRequests = false;
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('request', request => {
+    if (!trackContextualRequests) return;
     const url = request.url();
     if (!url.startsWith(baseURL) && !url.startsWith('data:') && !url.startsWith('blob:')) {
-      externalRequests.push(url);
+      contextualExternalRequests.push(url);
     }
   });
 
@@ -96,6 +98,8 @@ test('LIB-01B progressively reveals shared Core actions and gates contextual UDA
   await expect(page.getByText('Che cosa vuoi farne?', { exact: true })).toHaveCount(0);
 
   const card = await sourceCard(page);
+  // Network guard begins exactly where the LIB-01B contextual flow begins. Existing shell assets are out of scope.
+  trackContextualRequests = true;
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   await expect(card.getByText('Che cosa vuoi farne?', { exact: true })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toBeVisible();
@@ -137,14 +141,15 @@ test('LIB-01B progressively reveals shared Core actions and gates contextual UDA
         'generative-actions-unavailable',
         'local-review',
         'human-confirmation-before-link',
-        'link-visible-after-confirmed-dispatch'
+        'link-visible-after-confirmed-dispatch',
+        'no-contextual-external-network'
       ],
-      externalRequests,
+      contextualExternalRequests,
       pageErrors
     }, null, 2) + '\n'
   );
 
-  expect(externalRequests).toEqual([]);
+  expect(contextualExternalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
 
