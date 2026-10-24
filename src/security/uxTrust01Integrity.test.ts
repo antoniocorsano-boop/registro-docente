@@ -123,4 +123,67 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(report).toContain('Dati insufficienti per costruire un profilo attendibile');
   });
 
+  test('UXT-D derives UDA gap severity from the real school calendar and prioritizes evidence planning', async () => {
+    const semanticsUrl = new URL('../analytics/udaSemantics.ts', import.meta.url);
+    let semanticsSource: string | null = null;
+    try {
+      semanticsSource = await readFile(semanticsUrl, 'utf8');
+    } catch {
+      semanticsSource = null;
+    }
+
+    expect(semanticsSource).not.toBeNull();
+    if (semanticsSource === null) return;
+
+    const semantics = await import(semanticsUrl.href);
+
+    const monthCases = [
+      { date: new Date('2026-09-15T12:00:00Z'), expected: 0 },
+      { date: new Date('2026-11-15T12:00:00Z'), expected: 2 },
+      { date: new Date('2027-02-15T12:00:00Z'), expected: 5 },
+      { date: new Date('2027-06-15T12:00:00Z'), expected: 9 },
+    ];
+    for (const { date, expected } of monthCases) {
+      expect(semantics.getSchoolMonthIndex(date)).toBe(expected);
+    }
+
+    const severityCases = [
+      {
+        input: { currentMonthIndex: 1, startMonthIndex: 3, endMonthIndex: 4, gapCount: 2, formalEvidenceCount: 0 },
+        expected: 'planning',
+      },
+      {
+        input: { currentMonthIndex: 2, startMonthIndex: 1, endMonthIndex: 4, gapCount: 2, formalEvidenceCount: 0 },
+        expected: 'watch',
+      },
+      {
+        input: { currentMonthIndex: 4, startMonthIndex: 1, endMonthIndex: 4, gapCount: 1, formalEvidenceCount: 0 },
+        expected: 'due',
+      },
+      {
+        input: { currentMonthIndex: 5, startMonthIndex: 1, endMonthIndex: 4, gapCount: 1, formalEvidenceCount: 0 },
+        expected: 'critical',
+      },
+      {
+        input: { currentMonthIndex: 2, startMonthIndex: 1, endMonthIndex: 4, gapCount: 0, formalEvidenceCount: 2 },
+        expected: 'clear',
+      },
+    ];
+    for (const { input, expected } of severityCases) {
+      expect(semantics.getUdaGapSeverity(input)).toBe(expected);
+    }
+
+    expect(semantics.getUdaRemediationCopy('planning').toLowerCase()).toContain('pianifica');
+    expect(semantics.getUdaRemediationCopy('watch').toLowerCase()).toContain('evidenz');
+    expect(semantics.getUdaRemediationCopy('due').toLowerCase()).not.toContain('voto');
+
+    const uda = await source('components/UdaGanttView.tsx');
+    expect(uda).toContain('getSchoolMonthIndex');
+    expect(uda).toContain('getUdaGapSeverity');
+    expect(uda).toContain('getUdaRemediationCopy');
+    expect(uda).not.toContain('const currentSchoolMonthIndex = 1;');
+    expect(uda).toContain('const evalBonus = uniqueBatches * 1.0;');
+    expect(uda).toContain('totalWeightedHours += evalBonus;');
+  });
+
 });
