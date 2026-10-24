@@ -267,7 +267,7 @@ test('EDU-PLAN-01B previews Arena handoff read-only and persists only after expl
   await period.locator('input[type="date"]').nth(0).fill('2026-09-14');
   await period.locator('input[type="date"]').nth(1).fill('2027-06-08');
   await page.getByRole('button', { name: 'Salva profilo', exact: true }).click();
-  await expect(page.getByText('Profilo salvato', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Profilo salvato')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Contesto Arena' })).toBeVisible();
 
   const payload = {
