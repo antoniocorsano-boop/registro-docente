@@ -53,6 +53,7 @@ import {
   MINISTERIAL_COMPETENCY_DESCRIPTORS
 } from '../services/embeddingService';
 import { createUdaSnapshotMutation } from '../persistence/udaSnapshotMutation';
+import { getSchoolMonthIndex, getUdaGapSeverity, getUdaRemediationCopy } from '../analytics/udaSemantics';
 
 interface UdaGanttViewProps {
   classes: ClassData[];
@@ -1195,7 +1196,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const overallMultiplier = totalDoneHours > 0 ? (totalWeightedCompetenceHours / totalDoneHours).toFixed(2) : '1.20';
 
   // Gap Analysis Data
-  const currentSchoolMonthIndex = 1; // Ottobre
+  const currentSchoolMonthIndex = getSchoolMonthIndex(new Date());
 
   const gapAnalysisData = udas.map(u => {
     const startM = u.startMonth || 0;
@@ -1331,7 +1332,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         isEvaluated: hasStemFormalTest,
         evidence: stemEvidence,
         gapNote: 'Richiede almeno una verifica scritta o test oggettivo sui principi scientifici e tecnologici trattati.',
-        recommendedAction: 'Crea o importa una verifica scritta o test online a registro.',
+        recommendedAction: 'Pianifica la prova attesa o collega un\'evidenza coerente già disponibile.',
         actionType: 'test' as const
       },
       {
@@ -1342,7 +1343,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         isEvaluated: hasDigitalFormalTest,
         evidence: digitalEvidence,
         gapNote: 'Nessun test online interattivo o prova con strumenti digitali registrata per questa UDA.',
-        recommendedAction: 'Somministra il test interattivo o importa le risposte degli studenti dal portale.',
+        recommendedAction: 'Pianifica o collega un\'evidenza digitale coerente con l\'UDA.',
         actionType: 'test' as const
       },
       {
@@ -1353,7 +1354,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         isEvaluated: hasCivicFormalTest,
         evidence: civicEvidence,
         gapNote: 'Il modulo di Educazione Civica previsto non ha ancora una valutazione formale specifica a registro.',
-        recommendedAction: 'Registra una valutazione dedicata con focus sulle competenze di cittadinanza attiva.',
+        recommendedAction: 'Pianifica o collega un\'evidenza dedicata alle competenze di cittadinanza.',
         actionType: 'voti' as const
       },
       {
@@ -1364,7 +1365,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         isEvaluated: hasGraphicsFormalTest,
         evidence: graphicsEvidence,
         gapNote: 'Prevista produzione grafica/disegno, ma nessuna tavola o prova pratica risulta inserita a registro.',
-        recommendedAction: 'Inserisci le valutazioni della prova di disegno tecnico nel registro voti.',
+        recommendedAction: 'Collega una tavola o prova pratica già disponibile, oppure pianifica la raccolta dell\'evidenza.',
         actionType: 'voti' as const
       },
       {
@@ -1375,7 +1376,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         isEvaluated: hasTaskFormalTest,
         evidence: taskEvidence,
         gapNote: 'Il compito di realtà autentico previsto non risulta formalmente valutato con rubrica a registro.',
-        recommendedAction: 'Valuta il prodotto autentico / presentazione con la rubrica a 4 livelli.',
+        recommendedAction: 'Collega il prodotto autentico o la rubrica già disponibile, oppure pianifica l\'evidenza attesa.',
         actionType: 'voti' as const
       },
       {
@@ -1386,7 +1387,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         isEvaluated: hasCommFormalTest,
         evidence: commEvidence,
         gapNote: 'Prevista argomentazione orale, ma nessun colloquio orale formale risulta registrato.',
-        recommendedAction: 'Registra un colloquio orale per verificare la padronanza del lessico disciplinare.',
+        recommendedAction: 'Collega un\'evidenza orale già disponibile, oppure pianifica il momento di osservazione.',
         actionType: 'voti' as const
       }
     ].filter(c => c.isTargeted);
@@ -1396,8 +1397,16 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     const gapCount = totalTargeted - totalEvaluated;
     const coveragePct = totalTargeted > 0 ? Math.round((totalEvaluated / totalTargeted) * 100) : 100;
 
-    const hasCriticalGap = gapCount > 0 && (isEnded || isEndingNow || formalTestSessions.length === 0);
-    const hasAnyGap = gapCount > 0 || formalTestSessions.length === 0;
+    const gapSeverity = getUdaGapSeverity({
+      currentMonthIndex: currentSchoolMonthIndex,
+      startMonthIndex: startM,
+      endMonthIndex: endM,
+      gapCount,
+      formalEvidenceCount: formalTestSessions.length
+    });
+    const remediationCopy = getUdaRemediationCopy(gapSeverity);
+    const hasCriticalGap = gapSeverity === 'critical';
+    const hasAnyGap = gapSeverity !== 'clear';
 
     return {
       uda: u,
@@ -1419,6 +1428,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       totalEvaluated,
       gapCount,
       coveragePct,
+      gapSeverity,
+      remediationCopy,
       hasCriticalGap,
       hasAnyGap
     };
@@ -1827,7 +1838,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     </th>
                     <th className="p-2.5 border-r border-[var(--border)] min-w-[65px]">Classe</th>
                     <th className="p-2.5 border-r border-[var(--border)] min-w-[65px]">Ore</th>
-                    <th className="p-2.5 border-r border-[var(--border)] min-w-[70px]">Indice attività</th>
+                    <th title="Punti interni: ore ponderate più contributo dei batch di valutazione collegati" className="p-2.5 border-r border-[var(--border)] min-w-[70px]">Indice attività</th>
                     <th className="p-2.5 border-r border-[var(--border)] min-w-[85px]">Sposta</th>
                     {MONTHS_LABELS.map(m => (
                       <th key={m} className="p-2 border-r border-[var(--border)] min-w-[48px] font-mono">
@@ -1951,7 +1962,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                           </td>
 
                           {/* Credits */}
-                          <td className="p-2.5 border-r border-[var(--border)] font-mono text-[11px] text-purple-300 font-bold">
+                          <td title="Indice interno di attività, non ore certificate" className="p-2.5 border-r border-[var(--border)] font-mono text-[11px] text-purple-300 font-bold">
                             +{creditStats.earnedCredits.toFixed(1)} pt
                           </td>
 
@@ -2124,15 +2135,25 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        {item.hasCriticalGap ? (
+                        {item.gapSeverity === 'critical' ? (
                           <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-950 text-rose-300 border border-rose-500 flex items-center gap-1">
                             <AlertTriangle className="w-3.5 h-3.5" />
-                            <span>{item.gapCount} GAP CRITICO/I</span>
+                            <span>CRITICO · {item.gapCount} GAP</span>
                           </span>
-                        ) : item.hasAnyGap ? (
+                        ) : item.gapSeverity === 'due' ? (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-orange-950 text-orange-300 border border-orange-500 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>IN SCADENZA</span>
+                          </span>
+                        ) : item.gapSeverity === 'planning' ? (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-950 text-sky-300 border border-sky-500 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>DA PIANIFICARE</span>
+                          </span>
+                        ) : item.gapSeverity === 'watch' ? (
                           <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-950 text-amber-300 border border-amber-500 flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            <span>{item.gapCount} DA VALUTARE</span>
+                            <span>DA MONITORARE</span>
                           </span>
                         ) : (
                           <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-500 flex items-center gap-1">
@@ -2148,6 +2169,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       <Calendar className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-slate-200">{item.timelineMessage}</p>
+                        {item.hasAnyGap && (
+                          <p className="text-[11px] text-cyan-300 mt-1">Prossimo passo: {item.remediationCopy}</p>
+                        )}
                         {item.formalTestSessions.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-400">
                             <span>Verifiche registrate:</span>
@@ -2186,7 +2210,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                               )}
                             </div>
                             <p className="text-[11px] text-slate-400 mt-1">
-                              {comp.isEvaluated ? comp.evidence : comp.gapNote}
+                              {comp.isEvaluated ? comp.evidence : comp.recommendedAction}
                             </p>
                           </div>
 
@@ -2199,7 +2223,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                                 className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                               >
                                 <Zap className="w-3 h-3" />
-                                <span>{comp.actionType === 'test' ? 'Crea Test Online' : 'Nuovo Voto a Registro'}</span>
+                                <span>{comp.actionType === 'test' ? 'Pianifica / collega prova' : 'Collega evidenza'}</span>
                               </button>
                             </div>
                           )}
