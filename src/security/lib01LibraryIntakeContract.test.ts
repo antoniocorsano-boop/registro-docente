@@ -17,7 +17,7 @@ describe('LIB-01A governed private source intake', () => {
     expect(intake.MAX_LIBRARY_SOURCE_BYTES).toBe(8 * 1024 * 1024);
   });
 
-  test('normalizes teacher text and web sources without provider traffic', async () => {
+  test('keeps teacher text and web sources privacy-unknown until policy review', async () => {
     const { createTextSource, createWebSource } = await import(INTAKE_MODULE);
 
     expect(() => createTextSource({
@@ -28,7 +28,7 @@ describe('LIB-01A governed private source intake', () => {
       id: 'txt-1', title: 'Idea', text: 'Energia dal vento', capturedAt: '2026-10-24T10:00:00.000Z'
     });
     expect(text.status).toBe('ready');
-    expect(text.privacy).toBe('teacher-professional');
+    expect(text.privacy).toBe('unknown');
     expect(text.payload.text).toBe('Energia dal vento');
 
     expect(() => createWebSource({
@@ -39,5 +39,6 @@ describe('LIB-01A governed private source intake', () => {
       id: 'web-1', title: 'Articolo', url: 'https://example.org/a b?x=1', capturedAt: '2026-10-24T10:00:00.000Z'
     });
     expect(web.sourceUrl).toBe('https://example.org/a%20b?x=1');
+    expect(web.privacy).toBe('unknown');
   });
 });
