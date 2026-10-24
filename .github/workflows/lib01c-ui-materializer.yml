@@ -1,0 +1,135 @@
+name: LIB-01C UI materializer
+
+on:
+  push:
+    branches:
+      - feat/lib-01c-teaching-context
+    paths:
+      - .github/workflows/lib01c-ui-materializer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/lib-01c-teaching-context
+          fetch-depth: 0
+
+      - name: Apply deterministic proposal UI patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"expected fragment not found in {path}: {old[:100]!r}")
+              if text.count(old) != 1:
+                  raise SystemExit(f"fragment not unique in {path}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # App: expose only the already-derived current class name to the Library surface.
+          replace_once(
+              'src/App.tsx',
+              """          <LibraryView\n            library={library}\n            udas={udas}\n""",
+              """          <LibraryView\n            library={library}\n            udas={udas}\n            currentClassName={currentClass?.name ?? null}\n"""
+          )
+
+          # LibraryView: keep last explicit teacher choice in session memory only.
+          replace_once(
+              'src/components/LibraryView.tsx',
+              """import type { LibrarySourcePatch } from '../library/libraryState';\n""",
+              """import type { LibrarySourcePatch } from '../library/libraryState';\nimport type { LibraryTeachingContext } from '../library/teachingContext';\n"""
+          )
+          replace_once(
+              'src/components/LibraryView.tsx',
+              """  udas: UdaRecord[];\n  isPending: boolean;\n""",
+              """  udas: UdaRecord[];\n  currentClassName?: string | null;\n  isPending: boolean;\n"""
+          )
+          replace_once(
+              'src/components/LibraryView.tsx',
+              """  library,\n  udas,\n  isPending,\n""",
+              """  library,\n  udas,\n  currentClassName = null,\n  isPending,\n"""
+          )
+          replace_once(
+              'src/components/LibraryView.tsx',
+              """  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);\n  const [captureError, setCaptureError] = useState<string | null>(null);\n""",
+              """  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);\n  const [lastExplicitTeachingContext, setLastExplicitTeachingContext] = useState<LibraryTeachingContext | null>(null);\n  const [captureError, setCaptureError] = useState<string | null>(null);\n"""
+          )
+          replace_once(
+              'src/components/LibraryView.tsx',
+              """              source={source}\n              udas={udas}\n              isPending={isPending}\n""",
+              """              source={source}\n              udas={udas}\n              currentClassName={currentClassName}\n              lastExplicitTeachingContext={lastExplicitTeachingContext}\n              onExplicitTeachingContextChange={setLastExplicitTeachingContext}\n              isPending={isPending}\n"""
+          )
+
+          card = Path('src/components/LibrarySourceCard.tsx')
+          text = card.read_text()
+          replacements = [
+              (
+                  "import React, { useEffect, useState } from 'react';",
+                  "import React, { useEffect, useRef, useState } from 'react';"
+              ),
+              (
+                  "import { resolveLibraryTeachingContext } from '../library/teachingContext';",
+                  """import {\n  resolveLibraryTeachingContext,\n  suggestLibraryTeachingContext,\n  type LibraryTeachingContext,\n  type TeachingContextSuggestion,\n  type TeachingContextSuggestionReason\n} from '../library/teachingContext';"""
+              ),
+              (
+                  """  source: LibrarySource;\n  udas: UdaRecord[];\n  isPending: boolean;\n""",
+                  """  source: LibrarySource;\n  udas: UdaRecord[];\n  currentClassName?: string | null;\n  lastExplicitTeachingContext?: LibraryTeachingContext | null;\n  onExplicitTeachingContextChange: (context: LibraryTeachingContext) => void;\n  isPending: boolean;\n"""
+              ),
+              (
+                  """  source,\n  udas,\n  isPending,\n""",
+                  """  source,\n  udas,\n  currentClassName = null,\n  lastExplicitTeachingContext = null,\n  onExplicitTeachingContextChange,\n  isPending,\n"""
+              ),
+              (
+                  """  const [contextUdaId, setContextUdaId] = useState('');\n  const [contextLessonId, setContextLessonId] = useState('');\n  const [contextActions, setContextActions] = useState<readonly ResolvedAction[]>([]);\n""",
+                  """  const [contextUdaId, setContextUdaId] = useState('');\n  const [contextLessonId, setContextLessonId] = useState('');\n  const [contextSuggestion, setContextSuggestion] = useState<TeachingContextSuggestion | null>(null);\n  const [contextChooserOpen, setContextChooserOpen] = useState(false);\n  const initializedSourceIdRef = useRef<string | null>(null);\n  const [contextActions, setContextActions] = useState<readonly ResolvedAction[]>([]);\n"""
+              )
+          ]
+          for old, new in replacements:
+              if old not in text or text.count(old) != 1:
+                  raise SystemExit(f'card replacement missing/non-unique: {old[:120]!r}')
+              text = text.replace(old, new, 1)
+
+          marker = """const ACTIVITY_LABELS: Record<UdaActivityType, string> = {\n  teoria: 'Teoria',\n  laboratorio: 'Laboratorio',\n  compito_realta: 'Compito di realtà',\n  digitale: 'Attività digitale',\n  civica: 'Educazione civica'\n};\n"""
+          addition = marker + """\nconst SUGGESTION_COPY: Record<TeachingContextSuggestionReason, string> = {\n  'explicit-origin': 'Ti propongo questo contesto perché è quello da cui sei arrivato.',\n  'current-class-today-lesson': 'Ti propongo questa lezione perché appartiene alla classe corrente ed è prevista oggi.',\n  'current-class-active-uda': \"Ti propongo questa UDA perché è l'unica attiva per la classe corrente in questo periodo.\",\n  'session-last-choice': \"Ti propongo l'ultimo contesto che hai scelto in questa sessione.\"\n};\n\nfunction localDateKey(date = new Date()): string {\n  const year = date.getFullYear();\n  const month = String(date.getMonth() + 1).padStart(2, '0');\n  const day = String(date.getDate()).padStart(2, '0');\n  return `${year}-${month}-${day}`;\n}\n"""
+          if marker not in text or text.count(marker) != 1:
+              raise SystemExit('activity label marker missing/non-unique')
+          text = text.replace(marker, addition, 1)
+
+          effect_marker = """  useEffect(() => {\n    let cancelled = false;\n\n    if (!isSelected) {\n"""
+          init_effect = """  useEffect(() => {\n    if (!isSelected) {\n      initializedSourceIdRef.current = null;\n      setContextSuggestion(null);\n      setContextChooserOpen(false);\n      return;\n    }\n    if (initializedSourceIdRef.current === source.id) return;\n\n    const suggestion = suggestLibraryTeachingContext({\n      udas,\n      currentClassName,\n      lastExplicitChoice: lastExplicitTeachingContext,\n      today: localDateKey()\n    });\n    initializedSourceIdRef.current = source.id;\n    setContextSuggestion(suggestion);\n    setContextChooserOpen(!suggestion);\n    setContextUdaId(suggestion?.context.udaId ?? '');\n    setContextLessonId(suggestion?.context.lessonId ?? '');\n    setContextLinkOpen(false);\n    setContextLinkConfirmationPending(false);\n    setReviewOpen(false);\n  }, [isSelected, source.id, udas, currentClassName, lastExplicitTeachingContext]);\n\n""" + effect_marker
+          if effect_marker not in text or text.count(effect_marker) != 1:
+              raise SystemExit('main effect marker missing/non-unique')
+          text = text.replace(effect_marker, init_effect, 1)
+
+          handler_marker = """  const handleContextAction = (actionId: string) => {\n"""
+          handlers = """  const selectExplicitUda = (udaId: string) => {\n    setContextUdaId(udaId);\n    setContextLessonId('');\n    setContextSuggestion(null);\n    setContextChooserOpen(true);\n    setContextLinkOpen(false);\n    setContextLinkConfirmationPending(false);\n    setReviewOpen(false);\n    if (udaId) onExplicitTeachingContextChange({ udaId });\n  };\n\n  const selectExplicitLesson = (lessonId: string) => {\n    setContextLessonId(lessonId);\n    setContextSuggestion(null);\n    setContextChooserOpen(true);\n    setContextLinkOpen(false);\n    setContextLinkConfirmationPending(false);\n    setReviewOpen(false);\n    if (contextUdaId) {\n      onExplicitTeachingContextChange({\n        udaId: contextUdaId,\n        ...(lessonId ? { lessonId } : {})\n      });\n    }\n  };\n\n""" + handler_marker
+          if handler_marker not in text or text.count(handler_marker) != 1:
+              raise SystemExit('handler marker missing/non-unique')
+          text = text.replace(handler_marker, handlers, 1)
+
+          old_context = """          <div className=\"rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2\">\n            <strong className=\"block text-sm text-slate-100\">Contesto di lavoro</strong>\n            <label className=\"block text-xs text-slate-300\" htmlFor={`context-uda-${source.id}`}>\n              UDA corrente\n            </label>\n            <select\n              id={`context-uda-${source.id}`}\n              value={contextUdaId}\n              onChange={event => {\n                setContextUdaId(event.target.value);\n                setContextLessonId('');\n                setContextLinkOpen(false);\n                setContextLinkConfirmationPending(false);\n                setReviewOpen(false);\n              }}\n              disabled={isPending || udas.length === 0}\n              className=\"min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100\"\n            >\n              <option value=\"\">Seleziona UDA</option>\n              {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}\n            </select>\n\n            {selectedContextUda && contextLessons.length > 0 && (\n              <>\n                <label className=\"block text-xs text-slate-300\" htmlFor={`context-lesson-${source.id}`}>\n                  Lezione corrente\n                </label>\n                <select\n                  id={`context-lesson-${source.id}`}\n                  value={contextLessonId}\n                  onChange={event => {\n                    setContextLessonId(event.target.value);\n                    setContextLinkOpen(false);\n                    setContextLinkConfirmationPending(false);\n                    setReviewOpen(false);\n                  }}\n                  disabled={isPending}\n                  className=\"min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100\"\n                >\n                  <option value=\"\">Intera UDA</option>\n                  {contextLessons.map(lesson => (\n                    <option key={lesson.id} value={lesson.id}>{lesson.topic}</option>\n                  ))}\n                </select>\n              </>\n            )}\n\n            {!contextUdaId && (\n              <p className=\"text-xs text-slate-400\">Seleziona un’UDA per usare la fonte nel contesto didattico.</p>\n            )}\n            {selectedContextLesson?.activityType && (\n              <p className=\"text-xs text-slate-300\">\n                Tipo di attività: <strong className=\"text-slate-100\">{ACTIVITY_LABELS[selectedContextLesson.activityType]}</strong>\n              </p>\n            )}\n          </div>\n"""
+          new_context = """          <div className=\"rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2\">\n            {contextSuggestion ? (\n              <div className=\"flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3\">\n                <div className=\"min-w-0\">\n                  <strong className=\"block text-sm text-slate-100\">Contesto proposto</strong>\n                  <p className=\"mt-1 text-sm text-cyan-100\">\n                    {selectedContextLesson\n                      ? `Lezione · ${selectedContextLesson.topic}`\n                      : `UDA · ${selectedContextUda?.title ?? contextSuggestion.context.udaId}`}\n                  </p>\n                  <p className=\"mt-1 text-xs text-slate-400\">{SUGGESTION_COPY[contextSuggestion.reason]}</p>\n                </div>\n                <button\n                  type=\"button\"\n                  onClick={() => setContextChooserOpen(true)}\n                  disabled={isPending}\n                  className=\"min-h-[44px] px-3 rounded-md border border-cyan-700 text-sm text-cyan-100 disabled:opacity-50\"\n                >\n                  Cambia\n                </button>\n              </div>\n            ) : (\n              <strong className=\"block text-sm text-slate-100\">Scegli dove usarla</strong>\n            )}\n\n            {(contextChooserOpen || !contextSuggestion) && (\n              <>\n                <label className=\"block text-xs text-slate-300\" htmlFor={`context-uda-${source.id}`}>\n                  UDA corrente\n                </label>\n                <select\n                  id={`context-uda-${source.id}`}\n                  value={contextUdaId}\n                  onChange={event => selectExplicitUda(event.target.value)}\n                  disabled={isPending || udas.length === 0}\n                  className=\"min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100\"\n                >\n                  <option value=\"\">Seleziona UDA</option>\n                  {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}\n                </select>\n\n                {selectedContextUda && contextLessons.length > 0 && (\n                  <>\n                    <label className=\"block text-xs text-slate-300\" htmlFor={`context-lesson-${source.id}`}>\n                      Lezione corrente\n                    </label>\n                    <select\n                      id={`context-lesson-${source.id}`}\n                      value={contextLessonId}\n                      onChange={event => selectExplicitLesson(event.target.value)}\n                      disabled={isPending}\n                      className=\"min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100\"\n                    >\n                      <option value=\"\">Intera UDA</option>\n                      {contextLessons.map(lesson => (\n                        <option key={lesson.id} value={lesson.id}>{lesson.topic}</option>\n                      ))}\n                    </select>\n                  </>\n                )}\n\n                {!contextUdaId && (\n                  <p className=\"text-xs text-slate-400\">Seleziona un’UDA per usare la fonte nel contesto didattico.</p>\n                )}\n              </>\n            )}\n\n            {selectedContextLesson?.activityType && (\n              <p className=\"text-xs text-slate-300\">\n                Tipo di attività: <strong className=\"text-slate-100\">{ACTIVITY_LABELS[selectedContextLesson.activityType]}</strong>\n              </p>\n            )}\n          </div>\n"""
+          if old_context not in text or text.count(old_context) != 1:
+              raise SystemExit('context UI block missing/non-unique')
+          text = text.replace(old_context, new_context, 1)
+          card.write_text(text)
+          PY
+
+          rm .github/workflows/lib01c-ui-materializer.yml
+
+      - name: Commit materialized product patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/LibraryView.tsx src/components/LibrarySourceCard.tsx .github/workflows/lib01c-ui-materializer.yml
+          git commit -m "feat: let teachers override suggested library context"
+          git push origin HEAD:feat/lib-01c-teaching-context
