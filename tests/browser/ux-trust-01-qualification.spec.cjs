@@ -24,6 +24,8 @@ async function closePersistenceConfirmation(page) {
 test('UXT-A compact Vault stays touch-safe above mobile workflow navigation — 390x844', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
 
   await setupFreshVault(page);
 
@@ -58,12 +60,15 @@ test('UXT-A compact Vault stays touch-safe above mobile workflow navigation — 
   expect(clusterBox.y + clusterBox.height).toBeLessThanOrEqual(navBox.y + 1);
 
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
+  expect(pageErrors).toEqual([]);
   await context.close();
 });
 
 test('UXT-A desktop Vault controls preserve auto-lock and manual lock semantics — 1280x900', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
 
   await setupFreshVault(page);
 
@@ -82,5 +87,6 @@ test('UXT-A desktop Vault controls preserve auto-lock and manual lock semantics 
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   await expect(page.locator('#vault-auto-lock-desktop')).toHaveValue('30');
 
+  expect(pageErrors).toEqual([]);
   await context.close();
 });
