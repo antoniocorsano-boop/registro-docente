@@ -154,8 +154,8 @@ test('LIB-01C binds a private source to explicit UDA/lesson context and persists
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
 
   await card.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toBeVisible();
-  await expect(card.getByText(LESSON_TOPIC, { exact: true })).toBeVisible();
+  const linkedLessonRow = card.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(linkedLessonRow.getByText(LESSON_TOPIC, { exact: true })).toBeVisible();
 
   // Shell reload is outside the contextual Core network boundary.
   trackContextualRequests = false;
@@ -166,8 +166,8 @@ test('LIB-01C binds a private source to explicit UDA/lesson context and persists
   const reloadedCard = await sourceCard(page, SOURCE_TITLE);
   await expect(reloadedCard.getByText('Contesto di lavoro', { exact: true })).toHaveCount(0);
   await reloadedCard.getByText('Gestisci', { exact: true }).click();
-  await expect(reloadedCard.getByText(LESSON_TOPIC, { exact: true })).toBeVisible();
-  await expect(reloadedCard.getByRole('button', { name: 'Scollega', exact: true })).toBeVisible();
+  const reloadedLessonRow = reloadedCard.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(reloadedLessonRow.getByText(LESSON_TOPIC, { exact: true })).toBeVisible();
 
   // A second source proves the UDA-only fallback without fabricating a lesson target.
   await addSyntheticSource(page, UDA_ONLY_SOURCE_TITLE);
@@ -183,8 +183,8 @@ test('LIB-01C binds a private source to explicit UDA/lesson context and persists
   await expect(udaOnlyCard.getByText('Confermi il collegamento della fonte alla UDA selezionata?', { exact: true })).toBeVisible();
   await udaOnlyCard.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
   await udaOnlyCard.getByText('Gestisci', { exact: true }).click();
-  await expect(udaOnlyCard.getByText(UDA_TITLE, { exact: true })).toBeVisible();
-  await expect(udaOnlyCard.getByRole('button', { name: 'Scollega', exact: true })).toBeVisible();
+  const udaLinkRow = udaOnlyCard.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(udaLinkRow.getByText(UDA_TITLE, { exact: true })).toBeVisible();
 
   await page.screenshot({
     path: path.join(evidenceDir, 'lib01c-teaching-context-desktop.png'),
