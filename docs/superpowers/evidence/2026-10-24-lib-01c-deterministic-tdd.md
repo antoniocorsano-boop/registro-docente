@@ -17,8 +17,10 @@ Baseline: `main@ab1e23c1014dc96231aa92cfe8cf6e39a47c50a0`.
 - Primo GREEN UI materializzato: `9ddca2fa34975845634b80ac768c624aedce6504`. Il commit automatico non è una ricevuta di qualifica: GitHub ha classificato i workflow PR associati come `action_required` senza job.
 - Primo exact SHA umano con UI: `17b9d5e1ff2d162cf2e186eb15ccce8b16184260`.
 - PREDEPLOY #454 / run `40109611447`: FAILURE per un solo test source-level legacy ancora legato al copy manual-only `Contesto di lavoro`; typecheck PASS, 303/304 security tests PASS, build PASS e startup smoke PASS. Il finding è test drift, non regressione prodotto.
-- Correzione successiva: solo il contratto source-level viene riallineato agli invarianti architetturali della nuova UX (`suggestLibraryTeachingContext`, override esplicito, reset del gate, ContextSnapshot/dispatch finale). Nessun file prodotto viene modificato da questa correzione.
+- Browser #200 / run `40109611475`: FAILURE con 21/22 PASS. L'unico FAIL desktop non vede `Contesto proposto`; il mobile e tutti gli altri journey sono PASS.
+- Diagnosi Browser #200: il fixture creava correttamente una classe corrente ma le UDA sintetiche senza assegnarle a quella classe. Il resolver fail-closed restituiva quindi correttamente nessun candidato. La correzione è esclusivamente fixture-side e usa il selettore `Classe` già canonico nei browser test del repository; nessun file prodotto viene modificato.
+- PREDEPLOY #457 / run `40109795700` sul successivo candidato umano `aa4ffc1fc55b7c679f8175af4125a96ce739faed`: SUCCESS, 304/304 test PASS, 1815 assertion, 61 file; typecheck, build e startup smoke PASS.
 
-La qualifica finale deve avvenire su un successivo exact SHA con PREDEPLOY e Browser entrambi realmente eseguiti e verdi.
+La qualifica finale richiede un exact SHA successivo alla correzione fixture con PREDEPLOY e Browser entrambi verdi sullo stesso commit.
 
 Nessun merge o deploy è autorizzato da questo documento.
