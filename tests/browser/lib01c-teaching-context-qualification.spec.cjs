@@ -143,6 +143,9 @@ test('LIB-01C binds a private source to explicit UDA/lesson context and persists
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toBeVisible();
   await expect(card.getByText(LESSON_TOPIC, { exact: true })).toBeVisible();
 
+  // Shell reload is outside the contextual Core network boundary.
+  trackContextualRequests = false;
+
   // Durable link survives lock/unlock while the transient teaching-context selection does not.
   await reloadAndUnlock(page);
   await openLibrary(page);
@@ -155,6 +158,7 @@ test('LIB-01C binds a private source to explicit UDA/lesson context and persists
   // A second source proves the UDA-only fallback without fabricating a lesson target.
   await addSyntheticSource(page, UDA_ONLY_SOURCE_TITLE);
   const udaOnlyCard = await sourceCard(page, UDA_ONLY_SOURCE_TITLE);
+  trackContextualRequests = true;
   await udaOnlyCard.getByRole('button', { name: 'Usa', exact: true }).click();
   await udaOnlyCard.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
   await expect(udaOnlyCard.getByLabel('Lezione corrente')).toBeVisible();
