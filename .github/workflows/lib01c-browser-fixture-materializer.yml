@@ -1,0 +1,46 @@
+name: LIB-01C browser fixture materializer
+
+on:
+  push:
+    branches:
+      - feat/lib-01c-teaching-context
+    paths:
+      - .github/workflows/lib01c-browser-fixture-materializer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/lib-01c-teaching-context
+          fetch-depth: 0
+
+      - name: Scope synthetic UDAs to the current class
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/browser/lib01c-teaching-context-qualification.spec.cjs')
+          text = p.read_text()
+          old = """async function createSyntheticUda(page, title) {\n  await openDrawerItem(page, 'UDA');\n  await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();\n  await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);\n  await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();\n  await expect(page.getByText(title, { exact: true }).first()).toBeVisible();\n}\n"""
+          new = """async function createSyntheticUda(page, title, className = null) {\n  await openDrawerItem(page, 'UDA');\n  await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();\n  await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);\n  if (className) {\n    const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');\n    await expect(classSelect).toBeVisible();\n    await classSelect.selectOption({ label: className });\n  }\n  await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();\n  await expect(page.getByText(title, { exact: true }).first()).toBeVisible();\n}\n"""
+          if text.count(old) != 1:
+              raise SystemExit(f'helper block count={text.count(old)}')
+          text = text.replace(old, new, 1)
+          text = text.replace("await createSyntheticUda(page, UDA_TITLE);\n  await addSyntheticLesson(page);\n  await createSyntheticUda(page, OVERRIDE_UDA_TITLE);", "await createSyntheticUda(page, UDA_TITLE, CLASS_NAME);\n  await addSyntheticLesson(page);\n  await createSyntheticUda(page, OVERRIDE_UDA_TITLE, CLASS_NAME);", 1)
+          p.write_text(text)
+          PY
+          rm .github/workflows/lib01c-browser-fixture-materializer.yml
+
+      - name: Commit test-only fixture correction
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/browser/lib01c-teaching-context-qualification.spec.cjs .github/workflows/lib01c-browser-fixture-materializer.yml
+          git commit -m "test: scope LIB-01C suggested-context fixture to current class"
+          git push origin HEAD:feat/lib-01c-teaching-context
