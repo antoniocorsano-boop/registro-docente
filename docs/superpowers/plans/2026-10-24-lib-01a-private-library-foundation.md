@@ -16,6 +16,7 @@
 - No canonical UDA/lesson mutation occurs while capturing, linking, searching, or previewing a source.
 - Preserve existing durable-write semantics: no success before persistence commits; failure keeps retry state available.
 - Preserve fail-closed data-flow policy; `STUDENT_PERSONAL` and `SECRET` remain denied for remote providers.
+- Fail-closed intake: arbitrary teacher-provided text, notes, concepts and web sources start with privacy `unknown`; local capture alone never upgrades them to `teacher-professional`.
 - No new package dependency in LIB-01A.
 - Do not build a Registro-specific copilot/action resolver in this plan.
 - Library entry is available from the secondary drawer under `Didattica e strumenti`; do not add it to the primary class workflow bar.
@@ -283,7 +284,7 @@ Cover:
 
 - empty text is rejected;
 - malformed URL is rejected;
-- a text source defaults to `teacher-professional` and `ready`;
+- text, note, concept and web sources default privacy to `unknown` and remain local until policy review authorizes any less restrictive classification; text/note/concept sources use status `ready`;
 - file/image capture stores MIME type and a `dataUrl` locally;
 - file/image capture defaults privacy to `unknown` and status to `captured`;
 - input above `MAX_LIBRARY_SOURCE_BYTES` is rejected before a source object is returned;
