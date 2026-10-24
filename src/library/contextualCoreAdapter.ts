@@ -2,6 +2,7 @@ import {
   createActionRegistry,
   createContextualCopilotCore,
   createFailClosedPolicyEngine,
+  type ContextEntity,
   type ContextSnapshot,
   type ContextualAction,
   type ResolvedAction
@@ -71,7 +72,7 @@ export function buildLibraryContextSnapshot(
   source: LibrarySource,
   teachingContext: ResolvedLibraryTeachingContext | null = null
 ): ContextSnapshot {
-  const entities: ContextSnapshot['entities'] = [
+  const entities: ContextEntity[] = [
     {
       type: 'library-source',
       id: source.id,
