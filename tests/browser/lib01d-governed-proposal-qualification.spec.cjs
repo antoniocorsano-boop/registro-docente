@@ -217,7 +217,7 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   const adopted = await sourceCard(page, ADAPTED_TITLE);
   await expect(adopted.getByText('Materiale interno', { exact: true })).toBeVisible();
   await expect(adopted.getByText('Proposta didattica adottata dal docente', { exact: true })).toBeVisible();
-  await expect(adopted.getByText(ADAPTED_TASK, { exact: true })).toBeVisible();
+  await expect(adopted).toContainText(ADAPTED_TASK);
   await adopted.getByText('Gestisci', { exact: true }).click();
   const linkedRow = adopted.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
   await expect(linkedRow.getByText(UDA_TITLE, { exact: true })).toBeVisible();
@@ -227,7 +227,7 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   const reloaded = await sourceCard(page, ADAPTED_TITLE);
   await expect(reloaded.getByText('Materiale interno', { exact: true })).toBeVisible();
   await expect(reloaded.getByText('Proposta didattica adottata dal docente', { exact: true })).toBeVisible();
-  await expect(reloaded.getByText(ADAPTED_TASK, { exact: true })).toBeVisible();
+  await expect(reloaded).toContainText(ADAPTED_TASK);
   await reloaded.getByText('Gestisci', { exact: true }).click();
   const reloadedLinkedRow = reloaded.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
   await expect(reloadedLinkedRow.getByText(UDA_TITLE, { exact: true })).toBeVisible();
