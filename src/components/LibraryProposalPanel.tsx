@@ -3,7 +3,6 @@ import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { LibrarySource } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
-import { buildCapturedWebTextPatch } from '../library/intake';
 import type { ResolvedLibraryTeachingContext } from '../library/teachingContext';
 import {
   buildLibraryProposalRequest,
@@ -63,12 +62,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   const [isAdopting, setIsAdopting] = useState(false);
   const [adoptionError, setAdoptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [webCaptureOpen, setWebCaptureOpen] = useState(false);
-  const [webCapturedText, setWebCapturedText] = useState('');
-  const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const adoptionSourceIdRef = useRef<string | null>(null);
-  const webNeedsContent = source.kind === 'web' && !source.extractedText && !source.payload.text;
 
   useEffect(() => {
     requestControllerRef.current?.abort();
@@ -87,15 +82,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   }, [source.id, source.privacy, teachingContext.udaId, teachingContext.lessonId]);
 
   useEffect(() => {
-    if (webNeedsContent) return;
-    setWebCaptureOpen(false);
-    setWebCapturedText('');
-    setWebCaptureError(null);
-  }, [source.id, webNeedsContent]);
-
-  useEffect(() => {
     let cancelled = false;
-    if (webNeedsContent || source.privacy !== 'teacher-professional') {
+    if (source.privacy !== 'teacher-professional') {
       setProviderMetadata(null);
       setProviderMetadataStatus('idle');
       return () => {
@@ -122,11 +110,11 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [source.id, source.privacy, providerMetadataAttempt, webNeedsContent]);
+  }, [source.id, source.privacy, providerMetadataAttempt]);
 
   useEffect(() => {
     let cancelled = false;
-    if (webNeedsContent || !remoteConsent || source.privacy !== 'teacher-professional') {
+    if (!remoteConsent || source.privacy !== 'teacher-professional') {
       setRemoteActions([]);
       setIsRemoteLoading(false);
       return () => {
@@ -153,29 +141,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [remoteConsent, source, teachingContext, webNeedsContent]);
+  }, [remoteConsent, source, teachingContext]);
 
   useEffect(() => () => {
     requestControllerRef.current?.abort();
   }, []);
 
   const prepareAction = remoteActions.find(action => action.id === 'prepare-from-source');
-
-  const saveCapturedWebText = async () => {
-    setWebCaptureError(null);
-    try {
-      const patch = buildCapturedWebTextPatch(source, webCapturedText);
-      await onUpdate(source.id, patch);
-      setWebCaptureOpen(false);
-      setWebCapturedText('');
-    } catch (reason) {
-      setWebCaptureError(
-        reason instanceof Error && reason.message
-          ? reason.message
-          : 'Salvataggio del contenuto non riuscito. Puoi riprovare senza perdere il testo.'
-      );
-    }
-  };
 
   const classifyAsProfessional = async () => {
     setError(null);
@@ -272,70 +244,6 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       setIsAdopting(false);
     }
   };
-
-  if (webNeedsContent) {
-    return (
-      <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/20 p-3 space-y-3">
-        <div>
-          <strong className="block text-sm text-cyan-100">Contenuto web non ancora acquisito</strong>
-          <p className="mt-1 text-xs text-cyan-200/80">
-            L’indirizzo è salvato, ma il Registro non scarica automaticamente la pagina. Aggiungi il testo o un estratto quando vuoi usarlo per una proposta didattica.
-          </p>
-        </div>
-
-        {!webCaptureOpen ? (
-          <button
-            type="button"
-            onClick={() => {
-              setWebCaptureError(null);
-              setWebCaptureOpen(true);
-            }}
-            disabled={isPending}
-            className="min-h-[44px] px-3 rounded-md border border-cyan-700 text-sm text-cyan-100 disabled:opacity-50"
-          >
-            Aggiungi testo della pagina
-          </button>
-        ) : (
-          <div className="space-y-2">
-            <label className="block text-xs text-cyan-100" htmlFor={`web-captured-text-${source.id}`}>
-              Testo della pagina
-            </label>
-            <textarea
-              id={`web-captured-text-${source.id}`}
-              value={webCapturedText}
-              onChange={event => setWebCapturedText(event.target.value)}
-              disabled={isPending}
-              rows={5}
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void saveCapturedWebText()}
-                disabled={isPending || !webCapturedText.trim()}
-                className="min-h-[44px] px-3 rounded-md bg-cyan-200 text-cyan-950 font-semibold text-sm disabled:opacity-50"
-              >
-                Salva contenuto
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setWebCaptureOpen(false);
-                  setWebCaptureError(null);
-                }}
-                disabled={isPending}
-                className="min-h-[44px] px-3 rounded-md border border-slate-700 text-slate-200 text-sm disabled:opacity-50"
-              >
-                Annulla
-              </button>
-            </div>
-          </div>
-        )}
-
-        {webCaptureError && <p role="alert" className="text-xs text-amber-200">{webCaptureError}</p>}
-      </div>
-    );
-  }
 
   if (source.privacy === 'unknown') {
     return (
