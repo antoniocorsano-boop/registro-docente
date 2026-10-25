@@ -1,0 +1,38 @@
+name: LIB-06A Lock Derivation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  derive:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Derive lockfile without installing packages
+        run: bun install --lockfile-only
+
+      - name: Show exact lockfile delta
+        run: git diff -- bun.lock
+
+      - name: Stage derived lock artifact
+        run: |
+          mkdir -p .lib06a-lock
+          cp bun.lock .lib06a-lock/bun.lock
+
+      - name: Upload derived lock artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lib-06a-derived-lock
+          path: .lib06a-lock/bun.lock
+          if-no-files-found: error
