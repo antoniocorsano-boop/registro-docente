@@ -2,10 +2,12 @@ import React, { useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'lucide-react';
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
+import type { PlanningStateV1 } from '../planning/types';
 import type { LibrarySource, LibraryStateV1 } from '../library/types';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import { resolveLibraryCopilotRequest } from '../library/contextualCoreAdapter';
+import { resolvePlanningContextForLibraryRelevance } from '../library/relevancePresentation';
 import {
   resolveLibraryTeachingContext,
   suggestLibraryTeachingContext
@@ -14,6 +16,7 @@ import {
 interface LibraryCopilotComposerProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
+  planning: PlanningStateV1;
   currentClassName?: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
   isPending?: boolean;
@@ -38,6 +41,7 @@ const ACTION_HELP: Record<string, string> = {
 export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   library,
   udas,
+  planning,
   currentClassName = null,
   onAddSource,
   isPending = false
@@ -67,13 +71,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     teachingSuggestion?.context ?? null
   ), [udas, teachingSuggestion]);
 
+  const resolvedPlanningContext = useMemo(() => resolvePlanningContextForLibraryRelevance(
+    resolvedTeachingContext,
+    planning
+  ), [resolvedTeachingContext, planning]);
+
   const selectedSource = useMemo(
     () => library.sources.find(source => source.id === selectedSourceId) ?? null,
     [library.sources, selectedSourceId]
   );
 
   const contextLabel = resolvedTeachingContext
-    ? `${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}`
+    ? `${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
     : currentClassName
       ? `${currentClassName} · contesto UDA non univoco`
       : 'Nessuna classe selezionata';
@@ -153,6 +162,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       const nextResolution = await resolveLibraryCopilotRequest({
         source: selectedSource,
         teachingContext: resolvedTeachingContext,
+        planningContext: resolvedPlanningContext,
         message: message.trim()
       });
       setResolution(nextResolution);
