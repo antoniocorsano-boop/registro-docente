@@ -2,9 +2,12 @@ import {
   createActionRegistry,
   createContextualCopilotCore,
   createFailClosedPolicyEngine,
+  type CapabilityId,
   type ContextEntity,
   type ContextSnapshot,
   type ContextualAction,
+  type CopilotRequest,
+  type CopilotRequestResolution,
   type ResolvedAction
 } from '@trama/contextual-copilot-core';
 import type { LibrarySource } from './types';
@@ -48,6 +51,13 @@ const LIBRARY_CONTEXT_ACTIONS: ContextualAction[] = [
     requiresSemanticSearch: false
   }
 ];
+
+const LIBRARY_COPILOT_ALLOWED_CAPABILITIES: readonly CapabilityId[] = Object.freeze([
+  'REVIEW',
+  'LINK',
+  'PREPARE',
+  'SUMMARIZE'
+]);
 
 const actionRegistry = createActionRegistry(LIBRARY_CONTEXT_ACTIONS);
 const policyEngine = createFailClosedPolicyEngine({ generativeMode: 'none' });
@@ -123,6 +133,30 @@ export function buildLibraryContextSnapshot(
     },
     state: source.status
   };
+}
+
+export interface LibraryCopilotRequestInput {
+  source: LibrarySource;
+  teachingContext?: ResolvedLibraryTeachingContext | null;
+  message: string;
+}
+
+export function buildLibraryCopilotRequest({
+  source,
+  teachingContext = null,
+  message
+}: LibraryCopilotRequestInput): CopilotRequest {
+  return {
+    context: buildLibraryContextSnapshot(source, teachingContext),
+    message,
+    allowedCapabilities: LIBRARY_COPILOT_ALLOWED_CAPABILITIES
+  };
+}
+
+export function resolveLibraryCopilotRequest(
+  input: LibraryCopilotRequestInput
+): Promise<CopilotRequestResolution> {
+  return libraryContextualCore.resolveRequest(buildLibraryCopilotRequest(input));
 }
 
 export function buildLibraryRemoteProposalSnapshot(
