@@ -139,9 +139,13 @@ function isAlreadyLinked(
 
 function planningGradeMatches(
   className: string,
-  planningContext: LibraryPlanningContextResolution | null | undefined
+  planningContext: LibraryPlanningContextResolution | null | undefined,
+  teachingContext: ResolvedLibraryTeachingContext | null | undefined
 ): boolean {
-  return planningContext?.status === 'resolved'
+  if (planningContext?.status !== 'resolved' || !teachingContext) return false;
+
+  const teachingGrade = resolveClassGradeLevel(teachingContext.className);
+  return teachingGrade === planningContext.profile.gradeLevel
     && resolveClassGradeLevel(className) === planningContext.profile.gradeLevel;
 }
 
@@ -172,7 +176,7 @@ function contextualScore(
     score += 30;
     signals.push('CURRENT_CLASS');
   }
-  if (planningGradeMatches(candidate.className, planningContext)) {
+  if (planningGradeMatches(candidate.className, planningContext, teachingContext)) {
     score += 15;
     signals.push('PLANNING_GRADE_MATCH');
   }
@@ -197,8 +201,10 @@ export function resolveLibraryRelevance({
 }: ResolveLibraryRelevanceInput): LibraryRelevanceResolution {
   const sourceTitle = tokenize(source.title);
   const sourceContent = sourceContentTokens(source);
+  const effectiveTeachingContext = teachingContext
+    ?? (planningContext?.status === 'resolved' ? planningContext.teachingContext : null);
 
-  if (sourceTitle.size === 0 && sourceContent.size === 0 && !teachingContext) {
+  if (sourceTitle.size === 0 && sourceContent.size === 0 && !effectiveTeachingContext) {
     return {
       status: 'unavailable',
       reason: 'SOURCE_AND_CONTEXT_UNAVAILABLE',
@@ -220,7 +226,7 @@ export function resolveLibraryRelevance({
         candidate,
         'uda',
         candidate.id,
-        teachingContext,
+        effectiveTeachingContext,
         planningContext
       );
       const score = lexical.score + contextual.score;
@@ -250,7 +256,7 @@ export function resolveLibraryRelevance({
         candidate,
         'lesson',
         lesson.id,
-        teachingContext,
+        effectiveTeachingContext,
         planningContext
       );
       const score = lexical.score + contextual.score;
