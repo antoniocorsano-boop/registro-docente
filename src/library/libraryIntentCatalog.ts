@@ -15,6 +15,7 @@ export const LIBRARY_INTENT_CATALOG = Object.freeze([
     actionId: 'link-source-to-uda',
     examples: Object.freeze([
       'collega questa fonte alla UDA',
+      'collega questa fonte al lavoro didattico corrente',
       'associa questo materiale alla UDA corrente',
       'aggiungi questa risorsa al percorso didattico',
       'lega questo documento alla programmazione della classe',
