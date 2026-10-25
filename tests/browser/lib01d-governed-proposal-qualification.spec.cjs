@@ -138,7 +138,31 @@ function proposalForRequest(body) {
   };
 }
 
+function receiptForRequest(index) {
+  return {
+    requestId: `browser-lib01d-${index}`,
+    provider: 'browser-fixture',
+    model: 'browser-fixture-v1',
+    durationMs: 10,
+    promptTokens: 100,
+    outputTokens: 50,
+    totalTokens: 150,
+    attemptCount: 1
+  };
+}
+
 async function installProposalRoute(page, capturedBodies) {
+  await page.route('**/api/copilot/library-proposal/provider', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        available: true,
+        provider: 'Browser Provider',
+        model: 'browser-fixture-v1'
+      })
+    });
+  });
   await page.route('**/api/copilot/library-proposal', async route => {
     const request = route.request();
     const body = request.postDataJSON();
@@ -151,7 +175,10 @@ async function installProposalRoute(page, capturedBodies) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ proposal: proposalForRequest(body) })
+      body: JSON.stringify({
+        proposal: proposalForRequest(body),
+        receipt: receiptForRequest(capturedBodies.length)
+      })
     });
   });
 }
