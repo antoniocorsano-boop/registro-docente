@@ -99,6 +99,12 @@ async function buildFixture(page) {
   await openLibrary(page);
 }
 
+function exactUdaCandidate(page, relevanceRegion, title) {
+  return relevanceRegion
+    .locator('[data-relevance-candidate="true"]')
+    .filter({ has: page.getByText(title, { exact: true }) });
+}
+
 test('LIB-03C reveals ranked destinations progressively and keeps linking human-governed — desktop', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
@@ -127,17 +133,17 @@ test('LIB-03C reveals ranked destinations progressively and keeps linking human-
   await expect(relevanceRegion.getByText(UDA_TITLES[3], { exact: true })).toBeVisible();
   expect(await relevanceRegion.locator('[data-relevance-candidate="true"]').count()).toBeGreaterThan(3);
 
-  const secondCandidate = relevanceRegion.locator('[data-relevance-candidate="true"]').filter({ hasText: UDA_TITLES[1] });
+  const secondCandidate = exactUdaCandidate(page, relevanceRegion, UDA_TITLES[1]);
   await secondCandidate.getByRole('button', { name: 'Ignora', exact: true }).click();
   await expect(relevanceRegion.getByText(UDA_TITLES[1], { exact: true })).toHaveCount(0);
 
-  const prepareCandidate = relevanceRegion.locator('[data-relevance-candidate="true"]').filter({ hasText: UDA_TITLES[2] });
+  const prepareCandidate = exactUdaCandidate(page, relevanceRegion, UDA_TITLES[2]);
   await prepareCandidate.getByRole('button', { name: 'Usa per preparare', exact: true }).click();
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
   await expect(card.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
 
   await relevanceRegion.getByRole('button', { name: 'Aggiorna suggerimenti', exact: true }).click();
-  const topCandidate = relevanceRegion.locator('[data-relevance-candidate="true"]').filter({ hasText: UDA_TITLES[0] });
+  const topCandidate = exactUdaCandidate(page, relevanceRegion, UDA_TITLES[0]);
   await topCandidate.getByRole('button', { name: 'Collega', exact: true }).click();
   await expect(topCandidate.getByText('Confermi il collegamento a questa destinazione?', { exact: true })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
