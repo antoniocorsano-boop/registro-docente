@@ -1,4 +1,5 @@
 import type { UdaActivityType, UdaRecord } from '../types';
+import { isLocallyReadableTextMime } from './intake.ts';
 import type { LibrarySource, LibrarySourceKind } from './types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
 
@@ -192,8 +193,10 @@ function sourceContent(source: LibrarySource): Pick<LibraryProposalRequestV1['so
   if (source.kind === 'file') {
     const mimeType = source.payload.mimeType?.toLowerCase();
     if (!mimeType) throw new Error('Formato file non supportato.');
+    if (isLocallyReadableTextMime(mimeType) && localText) {
+      return { text: localText, mimeType };
+    }
     if (mimeType.startsWith('text/')) {
-      if (localText) return { text: localText, mimeType };
       if (source.payload.dataUrl) return decodeDataUrl(source.payload.dataUrl, mimeType);
       throw new Error('Contenuto file non disponibile nella fonte.');
     }
