@@ -70,6 +70,8 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
   await page.getByRole('button', { name: 'URL', exact: true }).click();
   await page.getByLabel('Titolo').fill(WEB_TITLE);
   await page.getByLabel('URL').fill(WEB_URL);
+  await expect(page.getByLabel('Testo o estratto della pagina')).toBeVisible();
+  await expect(page.getByText("Se non lo aggiungi ora, conserveremo l'URL come fonte da completare.", { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Salva URL', exact: true }).click();
 
   let card = await sourceCard(page, WEB_TITLE);
@@ -82,6 +84,8 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
 
   await expect(card.getByText('Contenuto web non ancora acquisito', { exact: true })).toBeVisible();
   await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toBeVisible();
 
   await card.getByRole('button', { name: 'Aggiungi testo della pagina', exact: true }).click();
   await card.getByLabel('Testo della pagina').fill(CAPTURED_TEXT);
@@ -107,8 +111,10 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
       candidateSha: process.env.CANDIDATE_SHA || null,
       viewport: { width: 1280, height: 900 },
       checks: [
+        'url-form-offers-optional-captured-text',
         'url-only-needs-review',
         'incomplete-source-blocks-remote-preparation',
+        'incomplete-source-keeps-local-review-and-link-actions',
         'explicit-local-text-completion',
         'durable-ready-after-reload'
       ],
