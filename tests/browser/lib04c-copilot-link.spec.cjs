@@ -61,7 +61,7 @@ async function selectSyntheticClass(page) {
   await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}` })).toBeVisible();
 }
 
-async function createSyntheticUda(page, title, className = null) {
+async function createSyntheticUda(page, title, className = null, { activeForSchoolYear = false } = {}) {
   await openDrawerItem(page, 'UDA');
   await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
@@ -70,6 +70,11 @@ async function createSyntheticUda(page, title, className = null) {
     const classSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Classe', exact: true });
     await expect(classSelect).toBeVisible();
     await classSelect.selectOption({ label: className });
+  }
+  if (activeForSchoolYear) {
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Mese Inizio').selectOption('0');
+    await dialog.getByLabel('Durata Mesi').fill('10');
   }
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
@@ -247,7 +252,7 @@ test('LIB-04C LINK confirmation is touch-safe and cancel remains non-mutating â€
 
   await setupFreshVault(page);
   await createSyntheticClass(page);
-  await createSyntheticUda(page, UDA_TITLE, CLASS_NAME);
+  await createSyntheticUda(page, UDA_TITLE, CLASS_NAME, { activeForSchoolYear: true });
   await reloadAndUnlock(page);
   await selectSyntheticClass(page);
 
