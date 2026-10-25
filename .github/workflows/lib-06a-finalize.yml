@@ -1,0 +1,306 @@
+name: LIB-06A Final Wiring
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/lib-06a-local-intent-discovery'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Apply bounded LIB-06A wiring
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if new in text:
+                  return False
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected exactly one replacement target, got {text.count(old)}')
+              p.write_text(text.replace(old, new, 1))
+              return True
+
+          changed = False
+
+          changed |= replace_once(
+              'src/library/contextualCoreAdapter.ts',
+              """const LIBRARY_COPILOT_ALLOWED_CAPABILITIES: readonly CapabilityId[] = Object.freeze([\n  'REVIEW',\n  'LINK',\n  'PREPARE',\n  'SUMMARIZE'\n]);""",
+              """const LIBRARY_COPILOT_ALLOWED_CAPABILITIES: readonly CapabilityId[] = Object.freeze([\n  'REVIEW',\n  'LINK',\n  'PREPARE'\n]);"""
+          )
+
+          changed |= replace_once(
+              'src/security/lib04bCopilotRequestContract.test.ts',
+              "expect([...request.allowedCapabilities].sort()).toEqual(['LINK', 'PREPARE', 'REVIEW', 'SUMMARIZE']);",
+              "expect([...request.allowedCapabilities].sort()).toEqual(['LINK', 'PREPARE', 'REVIEW']);"
+          )
+
+          historical = Path('src/security/lib04bCopilotRequestContract.test.ts')
+          text = historical.read_text()
+          if "delegates free text to the shared local IntentPort" not in text:
+              pattern = re.compile(
+                  r"  test\('delegates unresolved intent to Core fallback without inventing a local parser'.*?\n  \}\);\n\n(?=  test\('student-personal privacy cannot be widened by conversational input')",
+                  re.S,
+              )
+              replacement = """  test('delegates free text to the shared local IntentPort without inventing a local parser', async () => {
+            const adapter = await import('../library/contextualCoreAdapter') as typeof import('../library/contextualCoreAdapter') & {
+              resolveLibraryCopilotRequest?: (input: {
+                source: LibrarySource;
+                message: string;
+              }) => Promise<{
+                status: string;
+                reason: string;
+                actions: readonly { id: string }[];
+              }>;
+            };
+            if (typeof adapter.resolveLibraryCopilotRequest !== 'function') {
+              throw new Error('resolveLibraryCopilotRequest is required by LIB-04B');
+            }
+
+            const resolution = await adapter.resolveLibraryCopilotRequest({
+              source: makeSource(),
+              message: 'rivedi questa fonte nel contesto della programmazione'
+            });
+
+            expect(resolution.status).toBe('RESOLVED');
+            expect(resolution.reason).toBe('INTENT_RESOLVED');
+            expect(resolution.actions.map(action => action.id)).toEqual(['review-source']);
+          });
+
+"""
+              updated, count = pattern.subn(replacement, text)
+              if count != 1:
+                  raise SystemExit(f'historical request contract: expected one block, got {count}')
+              historical.write_text(updated)
+              changed = True
+
+          changed |= replace_once(
+              'src/components/LibraryCopilotComposer.tsx',
+              "import { dispatchLibraryContextAction, resolveLibraryCopilotRequest } from '../library/contextualCoreAdapter';",
+              """import {
+            discoverLibraryCopilotIntent,
+            dispatchLibraryContextAction,
+            resolveLibraryCopilotRequest
+          } from '../library/contextualCoreAdapter';"""
+          )
+
+          changed |= replace_once(
+              'src/components/LibraryCopilotComposer.tsx',
+              """  useEffect(() => {
+            setIsPrepareOpen(false);
+          }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);""",
+              """  useEffect(() => {
+            setIsPrepareOpen(false);
+            setResolution(null);
+            setIsLinkConfirmationOpen(false);
+            setLinkError(null);
+            setLinkSuccess(null);
+          }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);"""
+          )
+
+          composer = Path('src/components/LibraryCopilotComposer.tsx')
+          text = composer.read_text()
+          if "const discovery = await discoverLibraryCopilotIntent(input);" not in text:
+              old = """  const handleResolve = async (event: React.FormEvent) => {
+            event.preventDefault();
+            if (!selectedSource || !message.trim() || isResolving) return;
+
+            setIsResolving(true);
+            setErrorMessage(null);
+            setResolution(null);
+            try {
+              const nextResolution = await resolveLibraryCopilotRequest({
+                source: selectedSource,
+                teachingContext: resolvedTeachingContext,
+                planningContext: resolvedPlanningContext,
+                message: message.trim()
+              });
+              setResolution(nextResolution);
+            } catch (error) {
+              setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
+            } finally {
+              setIsResolving(false);
+            }
+          };"""
+              new = """  const handleResolve = async (event: React.FormEvent) => {
+            event.preventDefault();
+            if (!selectedSource || !message.trim() || isResolving) return;
+
+            setIsResolving(true);
+            setErrorMessage(null);
+            setResolution(null);
+            setIsPrepareOpen(false);
+            setIsLinkConfirmationOpen(false);
+            setLinkError(null);
+            setLinkSuccess(null);
+
+            const input = {
+              source: selectedSource,
+              teachingContext: resolvedTeachingContext,
+              planningContext: resolvedPlanningContext,
+              message: message.trim()
+            };
+
+            try {
+              const discovery = await discoverLibraryCopilotIntent(input);
+              const intent = discovery.intents[0] ?? null;
+
+              if (intent?.actionId === 'prepare-from-source') {
+                if (!resolvedTeachingContext || !proposalUda) {
+                  setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
+                  return;
+                }
+                setIsPrepareOpen(true);
+                return;
+              }
+
+              const nextResolution = await resolveLibraryCopilotRequest(input);
+              setResolution(nextResolution);
+            } catch (error) {
+              setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
+            } finally {
+              setIsResolving(false);
+            }
+          };"""
+              if text.count(old) != 1:
+                  raise SystemExit(f'Composer handleResolve: expected one old block, got {text.count(old)}')
+              composer.write_text(text.replace(old, new, 1))
+              changed = True
+
+          changed |= replace_once(
+              'src/components/LibraryCopilotComposer.tsx',
+              """                setMessage(event.target.value);
+                setResolution(null);""",
+              """                setMessage(event.target.value);
+                setResolution(null);
+                setIsPrepareOpen(false);"""
+          )
+
+          changed |= replace_once(
+              'src/components/LibraryCopilotComposer.tsx',
+              """            <div className=\"text-xs font-semibold uppercase tracking-wide text-slate-400\">Possibilità autorizzate</div>
+            {resolution.reason === 'INTENT_PORT_UNAVAILABLE' && (""",
+              """            <div className=\"text-xs font-semibold uppercase tracking-wide text-slate-400\">Possibilità autorizzate</div>
+            {resolution.reason === 'NO_INTENT_MATCH' && (
+              <p className=\"text-xs leading-relaxed text-slate-400\">
+                Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione. Prova a riformulare indicando che cosa vuoi fare con la fonte.
+              </p>
+            )}
+            {resolution.reason === 'INTENT_PORT_UNAVAILABLE' && ("""
+          )
+
+          contract = Path('src/security/lib06aLocalIntentDiscoveryContract.test.ts')
+          text = contract.read_text()
+          marker = "    expect(composer).toContain('humanConfirmed: true');\n"
+          addition = """    expect(composer.indexOf('await discoverLibraryCopilotIntent(input)'))
+              .toBeLessThan(composer.indexOf('await resolveLibraryCopilotRequest(input)'));
+            expect(composer).toContain('if (!resolvedTeachingContext || !proposalUda)');
+            expect(composer).toContain("resolution.reason === 'NO_INTENT_MATCH'");
+"""
+          if addition.strip() not in text:
+              if text.count(marker) != 1:
+                  raise SystemExit('LIB-06A Composer assertion marker not found uniquely')
+              contract.write_text(text.replace(marker, marker + addition, 1))
+              changed = True
+
+          browser = Path('tests/browser/lib04b-copilot-composer.spec.cjs')
+          text = browser.read_text()
+          replacements = [
+              (
+                  "test('LIB-04B captures durably and presents only Core-authorized fallback actions — desktop', async ({ page }) => {",
+                  "test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop', async ({ page }) => {"
+              ),
+              (
+                  "await composer.getByLabel('Che cosa vuoi farne?').fill('Aiutami a usare questa fonte in una attività didattica.');",
+                  "await composer.getByLabel('Che cosa vuoi farne?').fill('rivedi questa fonte nel contesto della programmazione');"
+              ),
+              (
+                  "await expect(composer.getByText('L’interpretazione automatica dell’intento non è attiva.', { exact: false })).toBeVisible();",
+                  "await expect(composer.getByText('L’interpretazione automatica dell’intento non è attiva.', { exact: false })).toHaveCount(0);"
+              ),
+              (
+                  "await expect(composer.getByText('Collega a una UDA', { exact: true })).toBeVisible();",
+                  "await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);"
+              ),
+              (
+                  "await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(1);",
+                  "await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);"
+              ),
+          ]
+          for old, new in replacements:
+              if new in text:
+                  continue
+              if text.count(old) != 1:
+                  raise SystemExit(f'Browser LIB-04B replacement target not unique: {old[:60]!r}')
+              text = text.replace(old, new, 1)
+              changed = True
+
+          no_match_marker = "  await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);\n"
+          no_match_block = """
+
+            await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
+            await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+            await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
+            await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toHaveCount(0);
+            await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
+            await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
+            await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
+"""
+          if no_match_block.strip() not in text:
+              if text.count(no_match_marker) != 1:
+                  raise SystemExit(f'Browser LIB-04B no-match insertion marker count={text.count(no_match_marker)}')
+              text = text.replace(no_match_marker, no_match_marker + no_match_block, 1)
+              changed = True
+          browser.write_text(text)
+
+          if not changed:
+              print('LIB-06A final wiring already materialized; no changes.')
+
+      - name: Verify bounded mutation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git status --short | awk '{print $2}' | sort)"
+          if [[ -z "$files" ]]; then
+            echo "No product/test changes to commit."
+            exit 0
+          fi
+          expected="$(printf '%s\n' \
+            'src/components/LibraryCopilotComposer.tsx' \
+            'src/library/contextualCoreAdapter.ts' \
+            'src/security/lib04bCopilotRequestContract.test.ts' \
+            'src/security/lib06aLocalIntentDiscoveryContract.test.ts' \
+            'tests/browser/lib04b-copilot-composer.spec.cjs' | sort)"
+          test "$files" = "$expected"
+
+      - name: Commit bounded wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            src/components/LibraryCopilotComposer.tsx \
+            src/library/contextualCoreAdapter.ts \
+            src/security/lib04bCopilotRequestContract.test.ts \
+            src/security/lib06aLocalIntentDiscoveryContract.test.ts \
+            tests/browser/lib04b-copilot-composer.spec.cjs
+          git commit -m "feat: route library copilot through local intent discovery"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
