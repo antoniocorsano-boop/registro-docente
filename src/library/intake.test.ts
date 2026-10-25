@@ -29,7 +29,7 @@ afterAll(() => {
 });
 
 describe('LIB-01A private source intake', () => {
-  test('rejects empty text and normalizes text sources as teacher-professional ready material', () => {
+  test('rejects empty text and keeps text sources privacy-unknown until teacher review', () => {
     expect(() => createTextSource({ id: 'a', title: 'Idea', text: '  ', capturedAt: '2026-10-24T10:00:00.000Z' })).toThrow();
 
     const source = createTextSource({
@@ -39,7 +39,7 @@ describe('LIB-01A private source intake', () => {
     expect(source.title).toBe('Idea');
     expect(source.payload.text).toBe('Energia eolica');
     expect(source.status).toBe('ready');
-    expect(source.privacy).toBe('teacher-professional');
+    expect(source.privacy).toBe('unknown');
   });
 
   test('rejects malformed URLs and preserves their normalized form without fetching them', () => {
