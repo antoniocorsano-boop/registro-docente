@@ -32,8 +32,10 @@ export interface TeachingProposalProviderCallResult {
 export type TeachingProposalProviderErrorCode =
   | 'not-configured'
   | 'rate-limited'
+  | 'timeout'
   | 'blocked'
   | 'unavailable'
+  | 'output-invalid'
   | 'provider-error';
 
 export class TeachingProposalProviderError extends Error {
