@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { LibraryPlanningContextResolution } from '../library/planningContextBridge';
 import type { LibrarySource } from '../library/types';
 
 const SOURCE_BRIDGE = new URL('../library/copilotSourceBridge.ts', import.meta.url);
@@ -18,6 +19,87 @@ const makeSource = (privacy: LibrarySource['privacy'] = 'teacher-professional'):
   privacy,
   links: [],
   notes: 'NOTA_PRIVATA_LIB04B'
+});
+
+const makePlanningContext = (): LibraryPlanningContextResolution => ({
+  status: 'resolved',
+  reason: 'RESOLVED',
+  teachingContext: {
+    udaId: 'uda-3a',
+    className: '3A',
+    period: 'Q1'
+  },
+  profile: {
+    id: 'profile-tecnologia-3',
+    schoolYear: '2026-2027',
+    schoolOrder: 'lower_secondary',
+    gradeLevel: 3,
+    cohortRef: 'grade-3',
+    subjectCode: 'TECNOLOGIA',
+    normativeRegime: 'regime-2026',
+    normativeReference: {
+      id: 'norm-1',
+      sourceRef: 'fonte-normativa',
+      version: '1',
+      nationalHoursDefined: false
+    },
+    reservePercent: 10,
+    assessmentPeriods: [],
+    calendar: {
+      startDate: '2026-09-01',
+      endDate: '2027-06-30',
+      closureDates: [],
+      weeklySlots: []
+    }
+  },
+  arenaContext: {
+    id: 'arena-context-3',
+    profileId: 'profile-tecnologia-3',
+    contract: 'ARENA_REGISTRO_PLANNING_CONTEXT_V1',
+    contractVersion: 1,
+    sourceProduct: 'ARENA',
+    targetProduct: 'REGISTRO_DOCENTE',
+    importMode: 'PREVIEW_ONLY',
+    acceptanceRequired: true,
+    automaticWriteAllowed: false,
+    institutionRef: 'istituto-sintetico',
+    schoolYear: '2026-2027',
+    sourceSchoolYear: '2026-2027',
+    schoolOrder: 'secondaria',
+    subjectCode: 'TECNOLOGIA',
+    gradeLevel: 3,
+    cohortRef: 'grade-3',
+    cohortRefKind: 'DERIVED_APPLICABILITY_KEY',
+    applicabilityStatus: 'APPLICABLE',
+    regimeRef: 'regime-2026',
+    authorityState: 'APPROVED',
+    vigencyStatus: 'VIGENTE',
+    authorityReceiptRef: null,
+    masterId: 'master-3',
+    masterVersion: '1',
+    structuralFingerprint: {
+      scope: 'MASTER',
+      algorithm: 'sha256',
+      version: 1,
+      hash: 'fingerprint-3'
+    },
+    provenance: {
+      repository: 'fixture',
+      sourceCommit: 'commit-fixture',
+      sourceDocumentId: 'doc-fixture',
+      sourceRevisionId: 'rev-fixture'
+    },
+    curricoloItems: [{
+      id: 'curricolo-private-marker',
+      kind: 'conoscenza',
+      schoolStage: 'secondaria',
+      gradeLabel: '3',
+      sourceSection: 'fixture',
+      text: 'TESTO_CURRICOLO_COMPLETO_NON_DEVE_ENTRARE_NEL_CONTEXT_SNAPSHOT'
+    }],
+    privacyClass: 'PROFESSIONAL_NON_PERSONAL',
+    acceptedAt: '2026-10-25T15:00:00.000Z'
+  }
 });
 
 describe('LIB-04B shared CopilotRequest consumer contract', () => {
@@ -63,6 +145,39 @@ describe('LIB-04B shared CopilotRequest consumer contract', () => {
     ]) {
       expect(serializedContext).not.toContain(forbidden);
     }
+  });
+
+  test('carries only minimized resolved Planning Context metadata into the shared request', async () => {
+    const adapter = await import('../library/contextualCoreAdapter') as typeof import('../library/contextualCoreAdapter') & {
+      buildLibraryCopilotRequest?: (input: {
+        source: LibrarySource;
+        message: string;
+        planningContext: LibraryPlanningContextResolution;
+      }) => {
+        context: { entities: readonly Record<string, unknown>[] };
+      };
+    };
+    if (typeof adapter.buildLibraryCopilotRequest !== 'function') {
+      throw new Error('buildLibraryCopilotRequest is required by LIB-04B');
+    }
+
+    const request = adapter.buildLibraryCopilotRequest({
+      source: makeSource(),
+      message: 'Usa il contesto di programmazione già approvato',
+      planningContext: makePlanningContext()
+    });
+
+    expect(request.context.entities).toContainEqual({
+      type: 'planning-profile',
+      id: 'profile-tecnologia-3',
+      schoolYear: '2026-2027',
+      subjectCode: 'TECNOLOGIA',
+      gradeLevel: 3,
+      arenaContextId: 'arena-context-3'
+    });
+    expect(JSON.stringify(request.context)).not.toContain(
+      'TESTO_CURRICOLO_COMPLETO_NON_DEVE_ENTRARE_NEL_CONTEXT_SNAPSHOT'
+    );
   });
 
   test('delegates unresolved intent to Core fallback without inventing a local parser', async () => {
@@ -194,7 +309,7 @@ describe('LIB-04B progressive teacher composer', () => {
       .toBeLessThan(composer.indexOf('setSelectedSourceId(createdSource.id)'));
   });
 
-  test('reuses the qualified teaching-context resolver and keeps the mobile panel closable and touch-safe', async () => {
+  test('reuses qualified teaching and planning context bridges and stays touch-safe', async () => {
     if (!(await Bun.file(COMPOSER).exists())) {
       expect(false).toBe(true);
       return;
@@ -203,6 +318,8 @@ describe('LIB-04B progressive teacher composer', () => {
     const composer = await Bun.file(COMPOSER).text();
     expect(composer).toContain('suggestLibraryTeachingContext');
     expect(composer).toContain('resolveLibraryTeachingContext');
+    expect(composer).toContain('resolvePlanningContextForLibraryRelevance');
+    expect(composer).toContain('planningContext: resolvedPlanningContext');
     expect(composer).toContain('Copilota');
     expect(composer).toContain('min-h-[44px]');
     expect(composer).toContain('min-w-[44px]');
@@ -216,6 +333,7 @@ describe('LIB-04B progressive teacher composer', () => {
     expect(app).toContain('<LibraryCopilotComposer');
     expect(app).toContain('library={library}');
     expect(app).toContain('udas={udas}');
+    expect(app).toContain('planning={planning}');
     expect(app).toContain('currentClassName={currentClass?.name ?? null}');
     expect(app).toContain('onAddSource={handleAddLibrarySource}');
   });
