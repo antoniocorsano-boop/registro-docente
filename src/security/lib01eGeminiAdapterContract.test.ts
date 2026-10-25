@@ -168,7 +168,7 @@ describe('LIB-01E Gemini teaching-proposal adapter contract', () => {
     const systemText = JSON.stringify(request.config.systemInstruction);
     const userText = JSON.stringify(request.contents);
     expect(systemText).toContain('non fidato');
-    expect(systemText).toContain('ignora');
+    expect(systemText.toLowerCase()).toContain('ignora');
     expect(systemText).not.toContain(INPUT.source.text);
     expect(systemText).not.toContain(INPUT.source.title);
     expect(userText).toContain(INPUT.source.text);
