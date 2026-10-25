@@ -69,7 +69,7 @@ test('LIB-04B captures durably and presents only Core-authorized fallback action
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
-  await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(1);
 
   await reloadAndUnlock(page);
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();

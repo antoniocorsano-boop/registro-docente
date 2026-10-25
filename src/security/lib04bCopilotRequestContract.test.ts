@@ -291,7 +291,8 @@ describe('LIB-04B progressive teacher composer', () => {
     expect(composer).toContain('resolveLibraryCopilotRequest');
     expect(composer).toContain('createCopilotLibrarySource');
     expect(composer).toContain('slice(0, 4)');
-    expect(composer).not.toContain('dispatchLibraryContextAction');
+    expect(composer).not.toContain("actionId: 'prepare-from-source'");
+    expect(composer).not.toContain("actionId: 'summarize-source'");
     expect(composer).not.toContain('requestTeachingProposal');
     expect(composer).not.toContain('/api/');
   });
