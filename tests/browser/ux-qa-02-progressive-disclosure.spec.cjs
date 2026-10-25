@@ -111,14 +111,25 @@ test('UX-QA-02 records progressive-disclosure evidence across mature teacher sur
   // P2: a destructive action must not compete with the primary class action.
   const classCard = page.locator('[data-uxqa-class-card]').filter({ hasText: CLASS_NAME }).first();
   await expect(classCard).toBeVisible();
-  const deleteClassVisible = await visible(classCard.getByRole('button', { name: `Elimina classe ${CLASS_NAME}`, exact: true }));
+  const manageClassButton = classCard.getByRole('button', { name: `Gestisci classe ${CLASS_NAME}`, exact: true });
+  const deleteClassButton = classCard.getByRole('button', { name: `Elimina classe ${CLASS_NAME}`, exact: true });
+  const deleteClassVisibleBeforeDisclosure = await visible(deleteClassButton);
+  await expect(manageClassButton).toBeVisible();
+  expect(deleteClassVisibleBeforeDisclosure).toBe(false);
+  await manageClassButton.click();
+  await expect(deleteClassButton).toBeVisible();
+  page.once('dialog', dialog => dialog.dismiss());
+  await deleteClassButton.click();
+  await expect(classCard).toBeVisible();
+  await manageClassButton.click();
+  await expect(deleteClassButton).toHaveCount(0);
   const homeShot = await capture(page, 'ux-qa-02-home-class-card-desktop.png');
   observations.push(observation(
     'UXPD-009',
-    deleteClassVisible ? 'FAIL' : 'PASS',
+    'PASS',
     'home.classes',
     'Destructive class maintenance is disclosed behind a secondary management action',
-    deleteClassVisible ? 'Delete control is directly visible on the primary class card' : 'No destructive control competes with Apri classe',
+    'Class deletion is available only after the explicit class-management disclosure',
     [homeShot]
   ));
 
