@@ -10,6 +10,7 @@ import {
   type CopilotRequestResolution,
   type ResolvedAction
 } from '@trama/contextual-copilot-core';
+import type { LibraryPlanningContextResolution } from './planningContextBridge';
 import type { LibrarySource } from './types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
 
@@ -79,18 +80,22 @@ const libraryRemoteProposalCore = createContextualCopilotCore({
 
 function libraryDataClasses(
   source: LibrarySource,
-  teachingContext: ResolvedLibraryTeachingContext | null
+  teachingContext: ResolvedLibraryTeachingContext | null,
+  planningContext: LibraryPlanningContextResolution | null = null
 ): ContextSnapshot['privacy']['dataClasses'] {
   const sourceClass = source.privacy === 'teacher-professional'
     ? 'TEACHER_PROFESSIONAL'
     : 'STUDENT_PERSONAL';
 
-  return teachingContext ? [sourceClass, 'CURRICOLO'] : [sourceClass];
+  return teachingContext || planningContext?.status === 'resolved'
+    ? [sourceClass, 'CURRICOLO']
+    : [sourceClass];
 }
 
 export function buildLibraryContextSnapshot(
   source: LibrarySource,
-  teachingContext: ResolvedLibraryTeachingContext | null = null
+  teachingContext: ResolvedLibraryTeachingContext | null = null,
+  planningContext: LibraryPlanningContextResolution | null = null
 ): ContextSnapshot {
   const entities: ContextEntity[] = [
     {
@@ -121,6 +126,19 @@ export function buildLibraryContextSnapshot(
     }
   }
 
+  if (planningContext?.status === 'resolved') {
+    entities.push({
+      type: 'planning-profile',
+      id: planningContext.profile.id,
+      schoolYear: planningContext.profile.schoolYear,
+      subjectCode: planningContext.profile.subjectCode,
+      gradeLevel: planningContext.profile.gradeLevel,
+      ...(planningContext.arenaContext
+        ? { arenaContextId: planningContext.arenaContext.id }
+        : {})
+    });
+  }
+
   return {
     appId: 'registro-docente',
     surface: teachingContext ? 'LIBRARY_SOURCE_TEACHING_CONTEXT' : 'LIBRARY_SOURCE',
@@ -128,7 +146,7 @@ export function buildLibraryContextSnapshot(
     capabilities: ['REVIEW', 'LINK', 'PREPARE', 'SUMMARIZE'],
     permissions: ['library:read', 'library:propose', 'library:link'],
     privacy: {
-      dataClasses: libraryDataClasses(source, teachingContext),
+      dataClasses: libraryDataClasses(source, teachingContext, planningContext),
       remoteProviderAllowed: false
     },
     state: source.status
@@ -138,16 +156,18 @@ export function buildLibraryContextSnapshot(
 export interface LibraryCopilotRequestInput {
   source: LibrarySource;
   teachingContext?: ResolvedLibraryTeachingContext | null;
+  planningContext?: LibraryPlanningContextResolution | null;
   message: string;
 }
 
 export function buildLibraryCopilotRequest({
   source,
   teachingContext = null,
+  planningContext = null,
   message
 }: LibraryCopilotRequestInput): CopilotRequest {
   return {
-    context: buildLibraryContextSnapshot(source, teachingContext),
+    context: buildLibraryContextSnapshot(source, teachingContext, planningContext),
     message,
     allowedCapabilities: LIBRARY_COPILOT_ALLOWED_CAPABILITIES
   };
