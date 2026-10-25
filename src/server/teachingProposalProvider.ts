@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import type { LibraryProposalRequestV1 } from '../library/teachingProposal';
+import type { LibraryProposalRequestV1 } from '../library/teachingProposal.ts';
 
 export interface TeachingProposalProviderInput {
   source: LibraryProposalRequestV1['source'];
