@@ -163,6 +163,10 @@ function errorEnvelope(code, retriable, index) {
   };
 }
 
+function isExpectedSyntheticHttpFailureConsoleError(message) {
+  return /^Failed to load resource: the server responded with a status of (429|503|504) \(/.test(message);
+}
+
 function assertGovernedRequest(body) {
   const serialized = JSON.stringify(body);
   expect(serialized).not.toContain(STUDENT_NAME);
@@ -349,12 +353,13 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
         'adapted-adoption-survives-reload'
       ],
       pageErrors,
-      consoleErrors
+      expectedSyntheticHttpConsoleErrors: consoleErrors.filter(isExpectedSyntheticHttpFailureConsoleError),
+      unexpectedConsoleErrors: consoleErrors.filter(message => !isExpectedSyntheticHttpFailureConsoleError(message))
     }, null, 2) + '\n'
   );
 
   expect(pageErrors).toEqual([]);
-  expect(consoleErrors).toEqual([]);
+  expect(consoleErrors.filter(message => !isExpectedSyntheticHttpFailureConsoleError(message))).toEqual([]);
 });
 
 test('LIB-01E pending result is discarded after teaching-context change — mobile 390x844', async ({ browser }) => {
