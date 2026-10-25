@@ -1,17 +1,30 @@
 import { evaluateDataFlow } from '../security/dataClassification.ts';
 import {
   parseTeachingProposalContent,
+  type LibraryProposalErrorCode,
   type LibraryProposalRequestV1,
+  type TeachingProposalRuntimeReceiptWire,
   type TeachingProposalV1
 } from '../library/teachingProposal.ts';
-import type {
-  TeachingProposalProvider,
-  TeachingProposalProviderInput
+import {
+  TeachingProposalProviderError,
+  type TeachingProposalProvider,
+  type TeachingProposalProviderInput
 } from './teachingProposalProvider.ts';
+import {
+  TeachingProposalRuntimeError,
+  type TeachingProposalRuntime
+} from './teachingProposalRuntime.ts';
 
 export interface LibraryProposalHandlerResult {
   status: number;
   body: Record<string, unknown>;
+}
+
+export interface LibraryProposalHandlerOptions {
+  now?: () => string;
+  signal?: AbortSignal;
+  requestId?: string;
 }
 
 const SOURCE_KINDS = new Set([
@@ -30,7 +43,7 @@ const ACTIVITY_TYPES = new Set([
   'digitale',
   'civica'
 ]);
-const MAX_INLINE_BYTES = 8 * 1024 * 1024;
+const LEGACY_MAX_INLINE_BYTES = 8 * 1024 * 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -45,51 +58,87 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function isSafeBase64(value: unknown): value is string {
-  if (!isNonEmptyString(value) || !/^[A-Za-z0-9+/=\r\n]+$/.test(value)) return false;
+function base64DecodedBytes(value: string): number {
   const compact = value.replace(/\s+/g, '');
-  const estimatedBytes = Math.floor((compact.length * 3) / 4);
-  return estimatedBytes <= MAX_INLINE_BYTES;
+  const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
 }
 
-function validateSource(value: unknown): LibraryProposalRequestV1['source'] | null {
-  if (!isRecord(value)) return null;
-  if (!hasOnlyKeys(value, ['id', 'kind', 'title', 'text', 'mimeType', 'dataBase64'])) return null;
-  if (!isNonEmptyString(value.id) || !isNonEmptyString(value.kind) || !SOURCE_KINDS.has(value.kind)) return null;
-  if (!isNonEmptyString(value.title)) return null;
+function isBase64Syntax(value: unknown): value is string {
+  return isNonEmptyString(value) && /^[A-Za-z0-9+/=\r\n]+$/.test(value);
+}
+
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+type SourceValidation =
+  | { ok: true; value: LibraryProposalRequestV1['source'] }
+  | { ok: false; reason: 'invalid' | 'too-large' };
+
+function validateSource(
+  value: unknown,
+  limits: { maxTextBytes: number; maxInlineBytes: number }
+): SourceValidation {
+  if (!isRecord(value)) return { ok: false, reason: 'invalid' };
+  if (!hasOnlyKeys(value, ['id', 'kind', 'title', 'text', 'mimeType', 'dataBase64'])) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (!isNonEmptyString(value.id) || !isNonEmptyString(value.kind) || !SOURCE_KINDS.has(value.kind)) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (!isNonEmptyString(value.title)) return { ok: false, reason: 'invalid' };
 
   const text = value.text;
   const mimeType = value.mimeType;
   const dataBase64 = value.dataBase64;
-  if (text !== undefined && !isNonEmptyString(text)) return null;
-  if (mimeType !== undefined && !isNonEmptyString(mimeType)) return null;
-  if (dataBase64 !== undefined && !isSafeBase64(dataBase64)) return null;
+  if (text !== undefined && !isNonEmptyString(text)) return { ok: false, reason: 'invalid' };
+  if (isNonEmptyString(text) && utf8Bytes(text) > limits.maxTextBytes) {
+    return { ok: false, reason: 'too-large' };
+  }
+  if (mimeType !== undefined && !isNonEmptyString(mimeType)) return { ok: false, reason: 'invalid' };
+  if (dataBase64 !== undefined && !isBase64Syntax(dataBase64)) return { ok: false, reason: 'invalid' };
+  if (isBase64Syntax(dataBase64) && base64DecodedBytes(dataBase64) > limits.maxInlineBytes) {
+    return { ok: false, reason: 'too-large' };
+  }
 
   if (value.kind === 'web' || value.kind === 'text' || value.kind === 'note' || value.kind === 'concept' || value.kind === 'internal') {
-    if (!isNonEmptyString(text) || mimeType !== undefined || dataBase64 !== undefined) return null;
+    if (!isNonEmptyString(text) || mimeType !== undefined || dataBase64 !== undefined) {
+      return { ok: false, reason: 'invalid' };
+    }
   } else if (value.kind === 'image') {
-    if (!isNonEmptyString(mimeType) || !mimeType.toLowerCase().startsWith('image/') || !isSafeBase64(dataBase64) || text !== undefined) {
-      return null;
+    if (
+      !isNonEmptyString(mimeType) ||
+      !mimeType.toLowerCase().startsWith('image/') ||
+      !isBase64Syntax(dataBase64) ||
+      text !== undefined
+    ) {
+      return { ok: false, reason: 'invalid' };
     }
   } else if (value.kind === 'file') {
-    if (!isNonEmptyString(mimeType)) return null;
+    if (!isNonEmptyString(mimeType)) return { ok: false, reason: 'invalid' };
     const normalizedMime = mimeType.toLowerCase();
     if (normalizedMime === 'application/pdf') {
-      if (!isSafeBase64(dataBase64) || text !== undefined) return null;
+      if (!isBase64Syntax(dataBase64) || text !== undefined) return { ok: false, reason: 'invalid' };
     } else if (normalizedMime.startsWith('text/')) {
-      if (!isNonEmptyString(text) && !isSafeBase64(dataBase64)) return null;
+      if (!isNonEmptyString(text) && !isBase64Syntax(dataBase64)) {
+        return { ok: false, reason: 'invalid' };
+      }
     } else {
-      return null;
+      return { ok: false, reason: 'invalid' };
     }
   }
 
   return {
-    id: value.id.trim(),
-    kind: value.kind as LibraryProposalRequestV1['source']['kind'],
-    title: value.title.trim(),
-    ...(isNonEmptyString(text) ? { text: text.trim() } : {}),
-    ...(isNonEmptyString(mimeType) ? { mimeType: mimeType.toLowerCase() } : {}),
-    ...(isSafeBase64(dataBase64) ? { dataBase64: dataBase64.replace(/\s+/g, '') } : {})
+    ok: true,
+    value: {
+      id: value.id.trim(),
+      kind: value.kind as LibraryProposalRequestV1['source']['kind'],
+      title: value.title.trim(),
+      ...(isNonEmptyString(text) ? { text: text.trim() } : {}),
+      ...(isNonEmptyString(mimeType) ? { mimeType: mimeType.toLowerCase() } : {}),
+      ...(isBase64Syntax(dataBase64) ? { dataBase64: dataBase64.replace(/\s+/g, '') } : {})
+    }
   };
 }
 
@@ -118,9 +167,9 @@ function validateContext(value: unknown): LibraryProposalRequestV1['context'] | 
   }
   if (lessonId !== undefined && !isNonEmptyString(lessonId)) return null;
   if (lessonTopic !== undefined && !isNonEmptyString(lessonTopic)) return null;
-  if (activityType !== undefined && (
-    !isNonEmptyString(activityType) || !ACTIVITY_TYPES.has(activityType)
-  )) return null;
+  if (activityType !== undefined && (!isNonEmptyString(activityType) || !ACTIVITY_TYPES.has(activityType))) {
+    return null;
+  }
 
   return {
     udaId: udaId.trim(),
@@ -135,8 +184,15 @@ function validateContext(value: unknown): LibraryProposalRequestV1['context'] | 
   };
 }
 
-function validateRequest(value: unknown): LibraryProposalRequestV1 | null {
-  if (!isRecord(value)) return null;
+type RequestValidation =
+  | { ok: true; value: LibraryProposalRequestV1 }
+  | { ok: false; reason: 'invalid' | 'too-large' };
+
+function validateRequest(
+  value: unknown,
+  limits: { maxTextBytes: number; maxInlineBytes: number }
+): RequestValidation {
+  if (!isRecord(value)) return { ok: false, reason: 'invalid' };
   if (!hasOnlyKeys(value, [
     'schemaVersion',
     'action',
@@ -144,21 +200,29 @@ function validateRequest(value: unknown): LibraryProposalRequestV1 | null {
     'explicitTeacherOptIn',
     'source',
     'context'
-  ])) return null;
-  if (value.schemaVersion !== 1 || value.action !== 'prepare-activity') return null;
-  if (value.classification !== 'TEACHER_PROFESSIONAL' || value.explicitTeacherOptIn !== true) return null;
+  ])) return { ok: false, reason: 'invalid' };
+  if (value.schemaVersion !== 1 || value.action !== 'prepare-activity') {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (value.classification !== 'TEACHER_PROFESSIONAL' || value.explicitTeacherOptIn !== true) {
+    return { ok: false, reason: 'invalid' };
+  }
 
-  const source = validateSource(value.source);
+  const source = validateSource(value.source, limits);
+  if (!source.ok) return source;
   const context = validateContext(value.context);
-  if (!source || !context) return null;
+  if (!context) return { ok: false, reason: 'invalid' };
 
   return {
-    schemaVersion: 1,
-    action: 'prepare-activity',
-    classification: 'TEACHER_PROFESSIONAL',
-    explicitTeacherOptIn: true,
-    source,
-    context
+    ok: true,
+    value: {
+      schemaVersion: 1,
+      action: 'prepare-activity',
+      classification: 'TEACHER_PROFESSIONAL',
+      explicitTeacherOptIn: true,
+      source: source.value,
+      context
+    }
   };
 }
 
@@ -172,10 +236,71 @@ function policyAllowsRemote(value: unknown): boolean {
     ) === 'ALLOW';
 }
 
-export async function handleLibraryProposalRequest(
+function isGovernedRuntime(value: TeachingProposalProvider | TeachingProposalRuntime): value is TeachingProposalRuntime {
+  return 'config' in value && isRecord(value.config) && typeof value.generate === 'function';
+}
+
+function stableError(
+  code: LibraryProposalErrorCode,
+  status: number,
+  message: string,
+  retriable: boolean,
+  requestId?: string
+): LibraryProposalHandlerResult {
+  return {
+    status,
+    body: {
+      error: {
+        code,
+        message,
+        retriable,
+        ...(requestId ? { requestId } : {})
+      }
+    }
+  };
+}
+
+function mapRuntimeError(error: unknown, requestId?: string): LibraryProposalHandlerResult {
+  if (error instanceof TeachingProposalRuntimeError) {
+    if (error.code === 'timeout') {
+      return stableError('PROVIDER_TIMEOUT', 504, 'Il servizio remoto non ha risposto entro il tempo previsto.', true, requestId);
+    }
+    return stableError('PROVIDER_ERROR', 502, 'La richiesta al servizio remoto è stata interrotta.', false, requestId);
+  }
+
+  if (error instanceof TeachingProposalProviderError) {
+    switch (error.code) {
+      case 'not-configured':
+        return stableError('PROVIDER_NOT_CONFIGURED', 503, 'Il servizio remoto non è configurato.', false, requestId);
+      case 'rate-limited':
+        return stableError('PROVIDER_RATE_LIMITED', 429, 'Il servizio remoto ha raggiunto temporaneamente il proprio limite.', true, requestId);
+      case 'timeout':
+        return stableError('PROVIDER_TIMEOUT', 504, 'Il servizio remoto non ha risposto entro il tempo previsto.', true, requestId);
+      case 'blocked':
+        return stableError('PROVIDER_BLOCKED', 422, 'Il servizio remoto non può produrre una proposta per questa richiesta.', false, requestId);
+      case 'unavailable':
+        return stableError('PROVIDER_UNAVAILABLE', 503, 'Il servizio remoto è temporaneamente non disponibile.', true, requestId);
+      case 'output-invalid':
+        return stableError('PROVIDER_OUTPUT_INVALID', 502, 'Il servizio remoto ha restituito una proposta non valida.', false, requestId);
+      default:
+        return stableError('PROVIDER_ERROR', 502, 'Il servizio remoto non ha completato la richiesta.', false, requestId);
+    }
+  }
+
+  return stableError('PROVIDER_ERROR', 502, 'Il servizio remoto non ha completato la richiesta.', false, requestId);
+}
+
+function legacyLimits() {
+  return {
+    maxTextBytes: Number.POSITIVE_INFINITY,
+    maxInlineBytes: LEGACY_MAX_INLINE_BYTES
+  };
+}
+
+async function handleLegacyProvider(
   body: unknown,
   provider: TeachingProposalProvider,
-  now: () => string = () => new Date().toISOString()
+  now: () => string
 ): Promise<LibraryProposalHandlerResult> {
   if (!policyAllowsRemote(body)) {
     return {
@@ -184,14 +309,15 @@ export async function handleLibraryProposalRequest(
     };
   }
 
-  const request = validateRequest(body);
-  if (!request) {
+  const validated = validateRequest(body, legacyLimits());
+  if (!validated.ok) {
     return {
       status: 400,
       body: { error: 'Richiesta di proposta didattica non valida.' }
     };
   }
 
+  const request = validated.value;
   const providerInput: TeachingProposalProviderInput = {
     source: request.source,
     context: request.context
@@ -238,8 +364,97 @@ export async function handleLibraryProposalRequest(
     }
   };
 
+  return { status: 200, body: { proposal } };
+}
+
+export async function handleLibraryProposalRequest(
+  body: unknown,
+  executor: TeachingProposalProvider | TeachingProposalRuntime,
+  nowOrOptions: (() => string) | LibraryProposalHandlerOptions = () => new Date().toISOString()
+): Promise<LibraryProposalHandlerResult> {
+  if (!isGovernedRuntime(executor)) {
+    const now = typeof nowOrOptions === 'function'
+      ? nowOrOptions
+      : nowOrOptions.now ?? (() => new Date().toISOString());
+    return handleLegacyProvider(body, executor, now);
+  }
+
+  const options = typeof nowOrOptions === 'function' ? { now: nowOrOptions } : nowOrOptions;
+  const now = options.now ?? (() => new Date().toISOString());
+
+  if (!policyAllowsRemote(body)) {
+    return stableError(
+      'REMOTE_POLICY_DENIED',
+      403,
+      'La policy non consente l’invio di questa fonte al servizio remoto.',
+      false
+    );
+  }
+
+  const validated = validateRequest(body, executor.config);
+  if (!validated.ok) {
+    if (validated.reason === 'too-large') {
+      return stableError(
+        'SOURCE_TOO_LARGE',
+        413,
+        'La fonte supera il limite previsto per questa richiesta.',
+        false
+      );
+    }
+    return stableError('REQUEST_INVALID', 400, 'La richiesta di proposta didattica non è valida.', false);
+  }
+
+  const request = validated.value;
+  const providerInput: TeachingProposalProviderInput = {
+    source: request.source,
+    context: request.context
+  };
+
+  let runtimeResult: { output: unknown; receipt: TeachingProposalRuntimeReceiptWire };
+  try {
+    runtimeResult = await executor.generate(providerInput, {
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.requestId ? { requestId: options.requestId } : {})
+    });
+  } catch (error) {
+    return mapRuntimeError(error, options.requestId);
+  }
+
+  let content;
+  try {
+    content = parseTeachingProposalContent(runtimeResult.output);
+  } catch {
+    return stableError(
+      'PROVIDER_OUTPUT_INVALID',
+      502,
+      'Il servizio remoto ha restituito una proposta non valida.',
+      false,
+      runtimeResult.receipt.requestId
+    );
+  }
+
+  const proposal: TeachingProposalV1 = {
+    schemaVersion: 1,
+    kind: 'activity',
+    ...content,
+    sourceId: request.source.id,
+    context: {
+      udaId: request.context.udaId,
+      ...(request.context.lessonId ? { lessonId: request.context.lessonId } : {})
+    },
+    provenance: {
+      mode: 'remote',
+      provider: runtimeResult.receipt.provider,
+      model: runtimeResult.receipt.model,
+      generatedAt: now()
+    }
+  };
+
   return {
     status: 200,
-    body: { proposal }
+    body: {
+      proposal,
+      receipt: runtimeResult.receipt
+    }
   };
 }
