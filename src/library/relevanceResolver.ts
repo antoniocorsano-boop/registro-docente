@@ -1,4 +1,6 @@
 import type { UdaRecord } from '../types';
+import { resolveClassGradeLevel, type LibraryPlanningContextResolution } from './planningContextBridge';
+import type { ResolvedLibraryTeachingContext } from './teachingContext';
 import type { LibrarySource } from './types';
 
 export type LibraryRelevanceSignal =
@@ -21,6 +23,8 @@ export interface LibraryRelevanceCandidate {
 export interface ResolveLibraryRelevanceInput {
   source: LibrarySource;
   udas: UdaRecord[];
+  teachingContext?: ResolvedLibraryTeachingContext | null;
+  planningContext?: LibraryPlanningContextResolution | null;
 }
 
 export type LibraryRelevanceResolution =
@@ -125,6 +129,57 @@ function lessonSupportTokens(candidate: UdaRecord, notes: string | undefined): S
   ].filter((value): value is string => typeof value === 'string').join(' '));
 }
 
+function isAlreadyLinked(
+  source: LibrarySource,
+  targetType: 'uda' | 'lesson',
+  targetId: string
+): boolean {
+  return source.links.some(link => link.targetType === targetType && link.targetId === targetId);
+}
+
+function planningGradeMatches(
+  className: string,
+  planningContext: LibraryPlanningContextResolution | null | undefined
+): boolean {
+  return planningContext?.status === 'resolved'
+    && resolveClassGradeLevel(className) === planningContext.profile.gradeLevel;
+}
+
+function contextualScore(
+  candidate: UdaRecord,
+  targetType: 'uda' | 'lesson',
+  targetId: string,
+  teachingContext: ResolvedLibraryTeachingContext | null | undefined,
+  planningContext: LibraryPlanningContextResolution | null | undefined
+): Pick<LibraryRelevanceCandidate, 'score' | 'signals'> {
+  let score = 0;
+  const signals: LibraryRelevanceSignal[] = [];
+
+  const isCurrentUda = teachingContext?.udaId === candidate.id;
+  const isCurrentLesson = targetType === 'lesson'
+    && isCurrentUda
+    && teachingContext?.lessonId === targetId;
+
+  if (isCurrentLesson) {
+    score += 100;
+    signals.push('CURRENT_LESSON');
+  }
+  if (isCurrentUda) {
+    score += 80;
+    signals.push('CURRENT_UDA');
+  }
+  if (teachingContext?.className === candidate.className) {
+    score += 30;
+    signals.push('CURRENT_CLASS');
+  }
+  if (planningGradeMatches(candidate.className, planningContext)) {
+    score += 15;
+    signals.push('PLANNING_GRADE_MATCH');
+  }
+
+  return { score, signals };
+}
+
 function compareCandidates(
   left: LibraryRelevanceCandidate,
   right: LibraryRelevanceCandidate
@@ -136,12 +191,14 @@ function compareCandidates(
 
 export function resolveLibraryRelevance({
   source,
-  udas
+  udas,
+  teachingContext,
+  planningContext
 }: ResolveLibraryRelevanceInput): LibraryRelevanceResolution {
   const sourceTitle = tokenize(source.title);
   const sourceContent = sourceContentTokens(source);
 
-  if (sourceTitle.size === 0 && sourceContent.size === 0) {
+  if (sourceTitle.size === 0 && sourceContent.size === 0 && !teachingContext) {
     return {
       status: 'unavailable',
       reason: 'SOURCE_AND_CONTEXT_UNAVAILABLE',
@@ -152,36 +209,60 @@ export function resolveLibraryRelevance({
   const candidates: LibraryRelevanceCandidate[] = [];
 
   for (const candidate of udas) {
-    const udaMatch = lexicalScore(
-      sourceTitle,
-      sourceContent,
-      tokenize(candidate.title),
-      udaSupportTokens(candidate)
-    );
+    if (!isAlreadyLinked(source, 'uda', candidate.id)) {
+      const lexical = lexicalScore(
+        sourceTitle,
+        sourceContent,
+        tokenize(candidate.title),
+        udaSupportTokens(candidate)
+      );
+      const contextual = contextualScore(
+        candidate,
+        'uda',
+        candidate.id,
+        teachingContext,
+        planningContext
+      );
+      const score = lexical.score + contextual.score;
 
-    if (udaMatch.score > 0) {
-      candidates.push({
-        targetType: 'uda',
-        targetId: candidate.id,
-        udaId: candidate.id,
-        ...udaMatch
-      });
+      if (score > 0) {
+        candidates.push({
+          targetType: 'uda',
+          targetId: candidate.id,
+          udaId: candidate.id,
+          score,
+          signals: [...contextual.signals, ...lexical.signals],
+          matchedTerms: lexical.matchedTerms
+        });
+      }
     }
 
     for (const lesson of candidate.lessons ?? []) {
-      const lessonMatch = lexicalScore(
+      if (isAlreadyLinked(source, 'lesson', lesson.id)) continue;
+
+      const lexical = lexicalScore(
         sourceTitle,
         sourceContent,
         tokenize(lesson.topic),
         lessonSupportTokens(candidate, lesson.notes)
       );
+      const contextual = contextualScore(
+        candidate,
+        'lesson',
+        lesson.id,
+        teachingContext,
+        planningContext
+      );
+      const score = lexical.score + contextual.score;
 
-      if (lessonMatch.score > 0) {
+      if (score > 0) {
         candidates.push({
           targetType: 'lesson',
           targetId: lesson.id,
           udaId: candidate.id,
-          ...lessonMatch
+          score,
+          signals: [...contextual.signals, ...lexical.signals],
+          matchedTerms: lexical.matchedTerms
         });
       }
     }
