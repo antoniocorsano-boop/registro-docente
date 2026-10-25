@@ -38,6 +38,7 @@ const PROTECTED_REMOTE_CLASSES = new Set(['STUDENT_PERSONAL', 'STUDENT_SENSITIVE
 const HUMAN_CONFIRMATION_RISKS = new Set(['WRITE_REVERSIBLE', 'WRITE_EXTERNAL']);
 const SEMANTIC_MODES = new Set(['local', 'remote']);
 const GENERATIVE_MODES = new Set(['none', 'local', 'remote']);
+const POLICY_PHASES = new Set(['DISCOVER', 'RESOLVE', 'DISPATCH']);
 
 function invariant(condition, message) {
   if (!condition) throw new TypeError(message);
@@ -154,9 +155,10 @@ export function createFailClosedPolicyEngine(options = {}) {
   invariant(typeof externalWriteAllowed === 'boolean', 'externalWriteAllowed must be boolean');
 
   return Object.freeze({
-    async evaluate({ context, action }) {
+    async evaluate({ context, action, phase = 'RESOLVE' }) {
       validateContextSnapshot(context);
       validateAction(action);
+      invariant(POLICY_PHASES.has(phase), 'phase must be DISCOVER, RESOLVE or DISPATCH');
 
       if (!context.capabilities.includes(action.capability)) {
         return { allowed: false, reason: 'CAPABILITY_NOT_DECLARED', humanConfirmationRequired: false };
@@ -166,11 +168,11 @@ export function createFailClosedPolicyEngine(options = {}) {
         return { allowed: false, reason: 'INSTITUTIONAL_DECISION_REQUIRES_VERTICAL_AUTHORITY', humanConfirmationRequired: true };
       }
 
-      if (action.risk === 'WRITE_EXTERNAL' && !externalWriteAllowed) {
+      if (action.risk === 'WRITE_EXTERNAL' && (phase === 'DISCOVER' || !externalWriteAllowed)) {
         return { allowed: false, reason: 'EXTERNAL_WRITE_NOT_AUTHORIZED', humanConfirmationRequired: true };
       }
 
-      if (action.requiresGenerativeAI) {
+      if (phase !== 'DISCOVER' && action.requiresGenerativeAI) {
         if (generativeMode === 'none') {
           return { allowed: false, reason: 'GENERATIVE_PROVIDER_UNAVAILABLE', humanConfirmationRequired: false };
         }
@@ -204,6 +206,18 @@ function scoreMapFromRanked(ranked, allowedIds) {
   return scores;
 }
 
+function createIntentActionCandidate(action) {
+  return Object.freeze({
+    id: action.id,
+    capability: action.capability,
+    label: action.label,
+    priority: action.priority,
+    risk: action.risk,
+    requiresGenerativeAI: action.requiresGenerativeAI,
+    requiresSemanticSearch: action.requiresSemanticSearch,
+  });
+}
+
 export function createContextualCopilotCore({ registry, policyEngine, semanticPort = null, intentPort = null, generativeMode = 'none' }) {
   invariant(registry && typeof registry.list === 'function' && typeof registry.get === 'function', 'registry must implement list() and get()');
   invariant(policyEngine && typeof policyEngine.evaluate === 'function', 'policyEngine.evaluate is required');
@@ -216,6 +230,9 @@ export function createContextualCopilotCore({ registry, policyEngine, semanticPo
     invariant(typeof intentPort === 'object', 'intentPort must be an object or null');
     invariant(SEMANTIC_MODES.has(intentPort.mode), 'intentPort.mode must be local or remote');
     invariant(typeof intentPort.resolve === 'function', 'intentPort.resolve must be a function');
+    if (intentPort.discover !== undefined) {
+      invariant(typeof intentPort.discover === 'function', 'intentPort.discover must be a function when present');
+    }
   }
 
   function coreRiskGuard(action) {
@@ -223,6 +240,28 @@ export function createContextualCopilotCore({ registry, policyEngine, semanticPo
       return {
         allowed: false,
         reason: 'INSTITUTIONAL_DECISION_REQUIRES_VERTICAL_AUTHORITY',
+        humanConfirmationRequired: true,
+      };
+    }
+    return {
+      allowed: true,
+      reason: 'ALLOWED',
+      humanConfirmationRequired: HUMAN_CONFIRMATION_RISKS.has(action.risk),
+    };
+  }
+
+  function coreDiscoveryRiskGuard(action) {
+    if (action.risk === 'INSTITUTIONAL_DECISION') {
+      return {
+        allowed: false,
+        reason: 'INSTITUTIONAL_DECISION_REQUIRES_VERTICAL_AUTHORITY',
+        humanConfirmationRequired: true,
+      };
+    }
+    if (action.risk === 'WRITE_EXTERNAL') {
+      return {
+        allowed: false,
+        reason: 'EXTERNAL_WRITE_NOT_AUTHORIZED',
         humanConfirmationRequired: true,
       };
     }
@@ -258,6 +297,22 @@ export function createContextualCopilotCore({ registry, policyEngine, semanticPo
     if (!privacyGuard.allowed) return privacyGuard;
     try {
       const decision = await policyEngine.evaluate({ context, action, phase });
+      invariant(decision && typeof decision.allowed === 'boolean', 'Policy decision must include allowed');
+      return {
+        allowed: decision.allowed,
+        reason: nonEmptyString(decision.reason) ? decision.reason : (decision.allowed ? 'ALLOWED' : 'DENIED'),
+        humanConfirmationRequired: riskGuard.humanConfirmationRequired || Boolean(decision.humanConfirmationRequired),
+      };
+    } catch {
+      return { allowed: false, reason: 'POLICY_EVALUATION_FAILED', humanConfirmationRequired: riskGuard.humanConfirmationRequired };
+    }
+  }
+
+  async function evaluateDiscovery(context, action) {
+    const riskGuard = coreDiscoveryRiskGuard(action);
+    if (!riskGuard.allowed) return riskGuard;
+    try {
+      const decision = await policyEngine.evaluate({ context, action, phase: 'DISCOVER' });
       invariant(decision && typeof decision.allowed === 'boolean', 'Policy decision must include allowed');
       return {
         allowed: decision.allowed,
@@ -372,9 +427,63 @@ export function createContextualCopilotCore({ registry, policyEngine, semanticPo
     return Object.freeze({ status: 'RESOLVED', reason: 'INTENT_RESOLVED', actions: matched });
   }
 
+  async function discoverRequestIntent(rawRequest) {
+    const request = validateCopilotRequest(rawRequest);
+    const allowedCapabilities = new Set(request.allowedCapabilities);
+    const candidates = [];
+
+    for (const action of registry.list()) {
+      if (!request.context.capabilities.includes(action.capability)) continue;
+      if (!allowedCapabilities.has(action.capability)) continue;
+      const policy = await evaluateDiscovery(request.context, action);
+      if (!policy.allowed) continue;
+      candidates.push(createIntentActionCandidate(action));
+    }
+
+    const frozenCandidates = Object.freeze(candidates);
+    if (frozenCandidates.length === 0) {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'NO_DISCOVERABLE_ACTIONS', intents: Object.freeze([]) });
+    }
+
+    const intent = intentAccess(request.context);
+    if (!intent.allowed) {
+      return Object.freeze({ status: 'UNRESOLVED', reason: intent.reason, intents: Object.freeze([]) });
+    }
+    if (typeof intentPort.discover !== 'function') {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'INTENT_DISCOVERY_UNAVAILABLE', intents: Object.freeze([]) });
+    }
+
+    let ranked;
+    try {
+      ranked = await intentPort.discover({
+        context: request.context,
+        message: request.message,
+        actions: frozenCandidates,
+      });
+    } catch {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'INTENT_DISCOVERY_FAILED', intents: Object.freeze([]) });
+    }
+
+    const candidateIds = new Set(frozenCandidates.map((action) => action.id));
+    const scores = scoreMapFromRanked(ranked, candidateIds);
+    if (scores.size === 0) {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'NO_INTENT_MATCH', intents: Object.freeze([]) });
+    }
+
+    const intents = Object.freeze(
+      frozenCandidates
+        .filter((action) => scores.has(action.id))
+        .sort((a, b) => scores.get(b.id) - scores.get(a.id) || b.priority - a.priority || a.id.localeCompare(b.id))
+        .map((action) => Object.freeze({ actionId: action.id, capability: action.capability })),
+    );
+
+    return Object.freeze({ status: 'DISCOVERED', reason: 'INTENT_DISCOVERED', intents });
+  }
+
   return Object.freeze({
     resolveActions,
     resolveRequest,
+    discoverRequestIntent,
 
     async dispatch({ context: rawContext, actionId, executor, humanConfirmed = false }) {
       const context = validateContextSnapshot(rawContext);

@@ -13,6 +13,8 @@ export type DataClass =
   | 'PUBLIC_APP' | 'TEACHER_PROFESSIONAL' | 'CURRICOLO'
   | 'STUDENT_PERSONAL' | 'STUDENT_SENSITIVE' | 'INSTITUTIONAL';
 
+export type PolicyPhase = 'DISCOVER' | 'RESOLVE' | 'DISPATCH';
+
 export interface ContextEntity {
   type: string;
   id: string;
@@ -50,6 +52,16 @@ export interface ContextualAction {
   requiresSemanticSearch: boolean;
 }
 
+export interface IntentActionCandidate {
+  id: string;
+  capability: CapabilityId;
+  label: string;
+  priority: number;
+  risk: ActionRisk;
+  requiresGenerativeAI: boolean;
+  requiresSemanticSearch: boolean;
+}
+
 export interface PolicyDecision {
   allowed: boolean;
   reason: string;
@@ -60,7 +72,7 @@ export interface PolicyEngine {
   evaluate(input: {
     context: ContextSnapshot;
     action: ContextualAction;
-    phase?: 'RESOLVE' | 'DISPATCH';
+    phase?: PolicyPhase;
   }): PolicyDecision | Promise<PolicyDecision>;
 }
 
@@ -97,6 +109,11 @@ export interface IntentPort {
     message: string;
     actions: readonly ResolvedAction[];
   }): Promise<readonly IntentMatch[]>;
+  discover?(input: {
+    context: ContextSnapshot;
+    message: string;
+    actions: readonly IntentActionCandidate[];
+  }): Promise<readonly IntentMatch[]>;
 }
 
 export interface CopilotRequestResolution {
@@ -112,6 +129,25 @@ export interface CopilotRequestResolution {
   actions: readonly ResolvedAction[];
 }
 
+export interface DiscoveredIntent {
+  actionId: string;
+  capability: CapabilityId;
+}
+
+export interface CopilotIntentDiscovery {
+  status: 'DISCOVERED' | 'UNRESOLVED';
+  reason:
+    | 'INTENT_DISCOVERED'
+    | 'NO_DISCOVERABLE_ACTIONS'
+    | 'INTENT_PORT_UNAVAILABLE'
+    | 'INTENT_DISCOVERY_UNAVAILABLE'
+    | 'REMOTE_PROVIDER_NOT_AUTHORIZED'
+    | 'PROTECTED_DATA_REMOTE_DENIED'
+    | 'INTENT_DISCOVERY_FAILED'
+    | 'NO_INTENT_MATCH';
+  intents: readonly DiscoveredIntent[];
+}
+
 export interface ActionRegistry {
   list(): readonly ContextualAction[];
   get(actionId: string): ContextualAction | null;
@@ -120,6 +156,7 @@ export interface ActionRegistry {
 export interface ContextualCopilotCore {
   resolveActions(context: ContextSnapshot): Promise<readonly ResolvedAction[]>;
   resolveRequest(request: CopilotRequest): Promise<CopilotRequestResolution>;
+  discoverRequestIntent(request: CopilotRequest): Promise<CopilotIntentDiscovery>;
   dispatch<TOutput>(input: {
     context: ContextSnapshot;
     actionId: string;

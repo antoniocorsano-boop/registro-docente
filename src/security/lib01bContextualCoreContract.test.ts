@@ -9,13 +9,13 @@ const PROVENANCE = new URL('../../vendor/contextual-copilot-core.provenance.json
 const ADAPTER = new URL('../library/contextualCoreAdapter.ts', import.meta.url);
 const CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
 
-const EXPECTED_SOURCE_COMMIT = '404db9ebf12fe669181f4d503110b04221684212';
-const EXPECTED_DISTRIBUTION_COMMIT = '8c47c34048acc943a1f4a2067b29629eb880e7ef';
+const EXPECTED_SOURCE_COMMIT = 'a40e715a87d674db69364b50fa23f39a4b565ac4';
+const EXPECTED_DISTRIBUTION_COMMIT = 'f5549b8a9cbbcd40752f8aa85183b3db23faf0ce';
 const EXPECTED_HASHES: Record<string, string> = {
-  'README.md': '07f33f65d1c018099707eafde5615e7a06a575a3e4f43e6bb29cf1c18b53f2c7',
-  'index.d.ts': 'fc283715c43c9400dabfd29e4a4aad2bac41aa60d234f31a4ea65845b4bc4b7d',
-  'package.json': '5b826626dc93339fde1c469588ee9fc2f756ab248ecfae1689a0398bcd7e8af4',
-  'src/index.js': '6926b47ba62a87a7c954560a8680d90dc423d1586960ffcbab42aeea4098968d'
+  'README.md': 'b512324bc498b2fc436037700784d3f6f6415ad062e95b257663033c310ff7a7',
+  'index.d.ts': '10a3bedccdc7eb5c48e2f478d4b083fa3afaa787786346c606774e84d6448079',
+  'package.json': '06464e314190f743e66b47395e2b86049e3c1a7d803e4c8cbad118034049d138',
+  'src/index.js': '02ed409b30fdb0b76ab8923ae82986eda9ae63be0faa4af30a853978347178cb'
 };
 
 const makeSource = (privacy: LibrarySource['privacy'] = 'unknown'): LibrarySource => ({
@@ -43,7 +43,7 @@ describe('LIB-01B shared Contextual Copilot Core integration', () => {
     expect(await Bun.file(PROVENANCE).exists()).toBe(true);
     const provenance = await Bun.file(PROVENANCE).json();
     expect(provenance.schemaVersion).toBe('registro.contextual-copilot-core-vendor/v1');
-    expect(provenance.package).toEqual({ name: '@trama/contextual-copilot-core', version: '0.2.0' });
+    expect(provenance.package).toEqual({ name: '@trama/contextual-copilot-core', version: '0.3.0' });
     expect(provenance.source).toEqual({
       repository: 'antoniocorsano-boop/trama-ecosistema',
       commit: EXPECTED_SOURCE_COMMIT,
