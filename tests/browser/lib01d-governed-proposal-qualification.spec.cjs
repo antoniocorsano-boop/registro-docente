@@ -151,7 +151,7 @@ async function installProposalRoute(page, capturedBodies) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(proposalForRequest(body))
+      body: JSON.stringify({ proposal: proposalForRequest(body) })
     });
   });
 }
