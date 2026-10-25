@@ -66,7 +66,7 @@ async function createSyntheticUda(page, title, className = null) {
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
   if (className) {
-    const classSelect = page.getByLabel('Classe', { exact: true });
+    const classSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Classe', exact: true });
     await expect(classSelect).toBeVisible();
     await classSelect.selectOption({ label: className });
   }

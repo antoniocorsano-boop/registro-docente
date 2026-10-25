@@ -262,7 +262,7 @@ test('UXT-D active UDA without formal evidence stays watch while an ended gap is
     await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })).toBeVisible();
     await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
-    const classSelect = page.getByLabel('Classe', { exact: true });
+    const classSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Classe', exact: true });
     await classSelect.selectOption({ label: className });
     await page.locator('label').filter({ hasText: 'Mese Inizio' }).locator('..').locator('select').selectOption(String(startMonth));
     const durationInput = page.locator('label').filter({ hasText: 'Durata Mesi' }).locator('..').locator('input[type="number"]');

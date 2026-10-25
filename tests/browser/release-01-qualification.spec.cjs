@@ -199,7 +199,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })).toBeVisible();
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(UDA_TITLE);
-  const udaClassSelect = page.getByLabel('Classe', { exact: true });
+  const udaClassSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Classe', exact: true });
   await expect(udaClassSelect).toBeVisible();
   await udaClassSelect.selectOption({ label: CLASS_NAME });
   await expect(udaClassSelect).toHaveValue(CLASS_NAME);
