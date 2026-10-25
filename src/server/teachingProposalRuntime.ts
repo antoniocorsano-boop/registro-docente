@@ -25,6 +25,14 @@ export interface TeachingProposalRuntimeReceipt {
   attemptCount: 1;
 }
 
+export interface TeachingProposalRuntime {
+  readonly config: TeachingProposalRuntimeConfig;
+  generate(
+    input: TeachingProposalProviderInput,
+    options?: { signal?: AbortSignal; requestId?: string }
+  ): Promise<{ output: unknown; receipt: TeachingProposalRuntimeReceipt }>;
+}
+
 export type TeachingProposalRuntimeErrorCode = 'timeout' | 'aborted';
 
 export class TeachingProposalRuntimeError extends Error {
@@ -81,8 +89,9 @@ function abortPromise(signal: AbortSignal, error: TeachingProposalRuntimeError):
 export function createTeachingProposalRuntime(
   config: TeachingProposalRuntimeConfig,
   provider: GovernedTeachingProposalProvider
-) {
+): TeachingProposalRuntime {
   return {
+    config: { ...config },
     async generate(
       input: TeachingProposalProviderInput,
       options: { signal?: AbortSignal; requestId?: string } = {}
