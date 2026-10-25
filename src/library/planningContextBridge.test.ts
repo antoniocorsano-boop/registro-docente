@@ -227,7 +227,7 @@ describe('LIB-03A planning context bridge', () => {
     });
   });
 
-  test('ignores Arena contexts that are provisional non-vigente non-professional or identity-mismatched', async () => {
+  test('ignores Arena contexts that are provisional non-vigente non-professional stale or identity-mismatched', async () => {
     const { resolveLibraryPlanningContext } = await loadBridge();
     const p = profile();
     const nonProfessional = {
@@ -239,7 +239,9 @@ describe('LIB-03A planning context bridge', () => {
       arenaContext(p, { id: 'non-vigente', vigencyStatus: 'NON_VIGENTE', authorityReceiptRef: null }),
       nonProfessional,
       arenaContext(p, { id: 'wrong-grade', gradeLevel: 2 }),
-      arenaContext(p, { id: 'wrong-cohort', cohortRef: 'other-cohort' })
+      arenaContext(p, { id: 'wrong-cohort', cohortRef: 'other-cohort' }),
+      arenaContext(p, { id: 'wrong-school-order', schoolOrder: 'primaria' }),
+      arenaContext(p, { id: 'stale-regime', regimeRef: 'Regime 2027' })
     ];
 
     const result = resolveLibraryPlanningContext({
