@@ -6,10 +6,13 @@ import type { LibrarySourcePatch } from '../library/libraryState';
 import type { ResolvedLibraryTeachingContext } from '../library/teachingContext';
 import {
   buildLibraryProposalRequest,
+  createInternalSourceFromTeachingProposal,
+  type TeachingProposalContent,
   type TeachingProposalV1
 } from '../library/teachingProposal';
 import { resolveLibraryRemoteProposalActions } from '../library/contextualCoreAdapter';
 import { requestLibraryTeachingProposal } from '../services/libraryProposalService';
+import { uid } from '../utils';
 
 interface LibraryProposalPanelProps {
   source: LibrarySource;
@@ -17,6 +20,19 @@ interface LibraryProposalPanelProps {
   teachingContext: ResolvedLibraryTeachingContext;
   isPending: boolean;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
+  onAddSource: (source: LibrarySource) => Promise<void>;
+}
+
+function contentFromProposal(proposal: TeachingProposalV1): TeachingProposalContent {
+  return {
+    title: proposal.title,
+    objective: proposal.objective,
+    teacherSetup: proposal.teacherSetup,
+    studentTask: proposal.studentTask,
+    steps: [...proposal.steps],
+    questions: [...proposal.questions],
+    adaptationHint: proposal.adaptationHint
+  };
 }
 
 export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
@@ -24,24 +40,35 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   uda,
   teachingContext,
   isPending,
-  onUpdate
+  onUpdate,
+  onAddSource
 }) => {
   const [remoteConsent, setRemoteConsent] = useState(false);
   const [remoteActions, setRemoteActions] = useState<readonly ResolvedAction[]>([]);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [proposal, setProposal] = useState<TeachingProposalV1 | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState<TeachingProposalContent | null>(null);
+  const [isAdopting, setIsAdopting] = useState(false);
+  const [adoptionError, setAdoptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const adoptionSourceIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     requestControllerRef.current?.abort();
     requestControllerRef.current = null;
+    adoptionSourceIdRef.current = null;
     setRemoteConsent(false);
     setRemoteActions([]);
     setIsRemoteLoading(false);
     setIsGenerating(false);
     setProposal(null);
+    setIsEditing(false);
+    setEditedContent(null);
+    setIsAdopting(false);
+    setAdoptionError(null);
     setError(null);
   }, [source.id, source.privacy, teachingContext.udaId, teachingContext.lessonId]);
 
@@ -96,7 +123,11 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
 
     setIsGenerating(true);
     setError(null);
+    setAdoptionError(null);
     setProposal(null);
+    setIsEditing(false);
+    setEditedContent(null);
+    adoptionSourceIdRef.current = null;
     const controller = new AbortController();
     requestControllerRef.current = controller;
 
@@ -108,6 +139,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         explicitTeacherOptIn: true
       });
       const nextProposal = await requestLibraryTeachingProposal(request, controller.signal);
+      adoptionSourceIdRef.current = uid();
       setProposal(nextProposal);
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -122,6 +154,54 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       setIsGenerating(false);
       setRemoteConsent(false);
       setRemoteActions([]);
+    }
+  };
+
+  const leaveProposal = () => {
+    adoptionSourceIdRef.current = null;
+    setProposal(null);
+    setIsEditing(false);
+    setEditedContent(null);
+    setAdoptionError(null);
+    setRemoteConsent(false);
+    setRemoteActions([]);
+  };
+
+  const startEditing = () => {
+    if (!proposal) return;
+    setAdoptionError(null);
+    setEditedContent(contentFromProposal(proposal));
+    setIsEditing(true);
+  };
+
+  const adoptContent = async (content: TeachingProposalContent) => {
+    if (!proposal || isAdopting) return;
+    const adoptionId = adoptionSourceIdRef.current ?? uid();
+    adoptionSourceIdRef.current = adoptionId;
+    setIsAdopting(true);
+    setAdoptionError(null);
+
+    try {
+      const adopted = createInternalSourceFromTeachingProposal({
+        id: adoptionId,
+        proposal,
+        content,
+        capturedAt: new Date().toISOString()
+      });
+      await onAddSource(adopted);
+      adoptionSourceIdRef.current = null;
+      setProposal(null);
+      setIsEditing(false);
+      setEditedContent(null);
+      setAdoptionError(null);
+    } catch (reason) {
+      setAdoptionError(
+        reason instanceof Error && reason.message
+          ? reason.message
+          : 'Salvataggio della proposta non riuscito. Puoi riprovare senza rigenerarla.'
+      );
+    } finally {
+      setIsAdopting(false);
     }
   };
 
@@ -202,8 +282,9 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       )}
 
       {error && <p role="alert" className="text-xs text-amber-200">{error}</p>}
+      {adoptionError && <p role="alert" className="text-xs text-amber-200">{adoptionError}</p>}
 
-      {proposal && (
+      {proposal && !isEditing && (
         <section className="rounded-lg border border-violet-700/60 bg-slate-950/55 p-3 space-y-3" aria-label="Proposta didattica">
           <div>
             <p className="text-[11px] uppercase tracking-wider text-violet-300">Proposta</p>
@@ -240,6 +321,136 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
           <p className="text-[11px] text-slate-500">
             Proposta generata · resta effimera finché non scegli esplicitamente cosa farne.
           </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void adoptContent(contentFromProposal(proposal))}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50"
+            >
+              {isAdopting ? 'Salvo…' : 'Adotta'}
+            </button>
+            <button
+              type="button"
+              onClick={startEditing}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md border border-violet-700 text-violet-100 text-sm disabled:opacity-50"
+            >
+              Adatta
+            </button>
+            <button
+              type="button"
+              onClick={leaveProposal}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md border border-slate-700 text-slate-200 text-sm disabled:opacity-50"
+            >
+              Lascia
+            </button>
+          </div>
+        </section>
+      )}
+
+      {proposal && isEditing && editedContent && (
+        <section className="rounded-lg border border-violet-700/60 bg-slate-950/55 p-3 space-y-3" aria-label="Adatta proposta didattica">
+          <p className="text-[11px] uppercase tracking-wider text-violet-300">Adatta prima di salvare</p>
+          <label className="block text-xs text-slate-300">Titolo
+            <input
+              value={editedContent.title}
+              onChange={event => setEditedContent(current => current ? { ...current, title: event.target.value } : current)}
+              disabled={isPending || isAdopting}
+              className="mt-1 min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+            />
+          </label>
+          <label className="block text-xs text-slate-300">Obiettivo
+            <textarea
+              value={editedContent.objective}
+              onChange={event => setEditedContent(current => current ? { ...current, objective: event.target.value } : current)}
+              disabled={isPending || isAdopting}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="block text-xs text-slate-300">Preparazione docente
+            <textarea
+              value={editedContent.teacherSetup}
+              onChange={event => setEditedContent(current => current ? { ...current, teacherSetup: event.target.value } : current)}
+              disabled={isPending || isAdopting}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="block text-xs text-slate-300">Consegna agli studenti
+            <textarea
+              value={editedContent.studentTask}
+              onChange={event => setEditedContent(current => current ? { ...current, studentTask: event.target.value } : current)}
+              disabled={isPending || isAdopting}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="block text-xs text-slate-300">Passaggi · uno per riga
+            <textarea
+              value={editedContent.steps.join('\n')}
+              onChange={event => setEditedContent(current => current ? {
+                ...current,
+                steps: event.target.value.split('\n').map(item => item.trim()).filter(Boolean)
+              } : current)}
+              disabled={isPending || isAdopting}
+              rows={4}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="block text-xs text-slate-300">Domande guida · una per riga
+            <textarea
+              value={editedContent.questions.join('\n')}
+              onChange={event => setEditedContent(current => current ? {
+                ...current,
+                questions: event.target.value.split('\n').map(item => item.trim()).filter(Boolean)
+              } : current)}
+              disabled={isPending || isAdopting}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="block text-xs text-slate-300">Suggerimento di adattamento
+            <textarea
+              value={editedContent.adaptationHint}
+              onChange={event => setEditedContent(current => current ? { ...current, adaptationHint: event.target.value } : current)}
+              disabled={isPending || isAdopting}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void adoptContent(editedContent)}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50"
+            >
+              {isAdopting ? 'Salvo…' : 'Salva adattamento'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(false);
+                setEditedContent(null);
+                setAdoptionError(null);
+              }}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md border border-slate-700 text-slate-200 text-sm disabled:opacity-50"
+            >
+              Annulla modifica
+            </button>
+            <button
+              type="button"
+              onClick={leaveProposal}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md border border-slate-700 text-slate-200 text-sm disabled:opacity-50"
+            >
+              Lascia
+            </button>
+          </div>
         </section>
       )}
     </div>
