@@ -209,3 +209,64 @@ export function buildLibraryProposalRequest(input: {
     }
   };
 }
+
+function serializeTeachingProposal(content: TeachingProposalContent): string {
+  return [
+    content.title,
+    '',
+    'Obiettivo',
+    content.objective,
+    '',
+    'Preparazione docente',
+    content.teacherSetup,
+    '',
+    'Consegna agli studenti',
+    content.studentTask,
+    '',
+    'Passaggi',
+    ...content.steps.map((step, index) => `${index + 1}. ${step}`),
+    '',
+    'Domande guida',
+    ...content.questions.map(question => `- ${question}`),
+    '',
+    'Adattamento',
+    content.adaptationHint
+  ].join('\n');
+}
+
+export function createInternalSourceFromTeachingProposal(input: {
+  id: string;
+  proposal: TeachingProposalV1;
+  content: TeachingProposalContent;
+  capturedAt: string;
+}): LibrarySource {
+  const content = parseTeachingProposalContent(input.content);
+  const proposal = parseTeachingProposalV1(input.proposal);
+  const capturedAt = requireString(input.capturedAt);
+  const link = proposal.context.lessonId
+    ? { targetType: 'lesson' as const, targetId: proposal.context.lessonId }
+    : { targetType: 'uda' as const, targetId: proposal.context.udaId };
+
+  return {
+    id: requireString(input.id),
+    kind: 'internal',
+    title: content.title,
+    capturedAt,
+    origin: 'Proposta didattica adottata dal docente',
+    payload: {
+      text: serializeTeachingProposal(content)
+    },
+    status: 'ready',
+    privacy: 'teacher-professional',
+    links: [link],
+    provenance: {
+      derivedFromSourceId: proposal.sourceId,
+      generation: {
+        provider: proposal.provenance.provider,
+        model: proposal.provenance.model,
+        generatedAt: proposal.provenance.generatedAt,
+        kind: 'activity'
+      }
+    }
+  };
+}
