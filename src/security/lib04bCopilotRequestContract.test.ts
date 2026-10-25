@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { LibrarySource } from '../library/types';
 
+const SOURCE_BRIDGE = new URL('../library/copilotSourceBridge.ts', import.meta.url);
+
 const makeSource = (privacy: LibrarySource['privacy'] = 'teacher-professional'): LibrarySource => ({
   id: 'lib04b-source',
   kind: 'note',
@@ -109,5 +111,56 @@ describe('LIB-04B shared CopilotRequest consumer contract', () => {
 
     expect(request.context.privacy.dataClasses).toContain('STUDENT_PERSONAL');
     expect(request.context.privacy.remoteProviderAllowed).toBe(false);
+  });
+});
+
+describe('LIB-04B governed source bridge', () => {
+  test('materializes one thin bridge over all three existing LIB-02 intake factories', async () => {
+    expect(await Bun.file(SOURCE_BRIDGE).exists()).toBe(true);
+    if (!(await Bun.file(SOURCE_BRIDGE).exists())) return;
+
+    const source = await Bun.file(SOURCE_BRIDGE).text();
+    expect(source).toContain("from './intake'");
+    expect(source).toContain('createTextSource');
+    expect(source).toContain('createWebSource');
+    expect(source).toContain('createFileSource');
+    expect(source).not.toContain('localStorage');
+    expect(source).not.toContain('SecureVault');
+    expect(source).not.toContain('saveLibrary');
+  });
+
+  test('delegates text and web capture to normal LibrarySource intake semantics', async () => {
+    const modulePath = '../library/copilotSourceBridge';
+    const bridge = await import(modulePath) as {
+      createCopilotLibrarySource?: (input: Record<string, unknown>) => Promise<LibrarySource>;
+    };
+    if (typeof bridge.createCopilotLibrarySource !== 'function') {
+      throw new Error('createCopilotLibrarySource is required by LIB-04B');
+    }
+
+    const textSource = await bridge.createCopilotLibrarySource({
+      mode: 'text',
+      id: 'copilot-text',
+      title: 'Idea per la lezione',
+      text: 'Usare una leva come problema autentico.',
+      kind: 'concept',
+      capturedAt: '2026-10-25T15:00:00.000Z'
+    });
+    expect(textSource.kind).toBe('concept');
+    expect(textSource.status).toBe('ready');
+    expect(textSource.privacy).toBe('unknown');
+    expect(textSource.links).toEqual([]);
+
+    const webSource = await bridge.createCopilotLibrarySource({
+      mode: 'web',
+      id: 'copilot-web',
+      title: 'Articolo da contestualizzare',
+      url: 'https://example.test/articolo',
+      capturedAt: '2026-10-25T15:00:00.000Z'
+    });
+    expect(webSource.kind).toBe('web');
+    expect(webSource.sourceUrl).toBe('https://example.test/articolo');
+    expect(webSource.status).toBe('needs-review');
+    expect(webSource.privacy).toBe('unknown');
   });
 });
