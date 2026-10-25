@@ -60,3 +60,18 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: PR #29 → merge `c1fce98f977c27e6fdf711c53202435128e33c9d`; PR #30 exact head `1f98efb...` → merge `7491ed...`; tree condiviso `cce9c8ae9f9b8c161aa65b79cb77420911ca195c`; PREDEPLOY #321 PASS; PR #33 receipt aggiornato e merge `76c837...`; PREDEPLOY #324 PASS.
 - Promozione candidata: recipe.
 - Sostituita da: —
+
+### LL-005 — Il Planning Context resta vincolato al Teaching Context che lo ha risolto
+- Stato: ACTIVE
+- Ciclo/data: LIB-03B · 2026-10-25
+- Exact SHA/riferimento: review RED `53aacd9a40e65d09cef7efe49a3c9bc43c2272dc`; qualified candidate `524a4bf9cf5799906d74f0527e654b18c0bad87d`; merge `ab55ef83a38012fbaf4eb5e0c0e865cfa2aeef8a`.
+- Obiettivo: usare il profilo annuale LIB-03A come segnale di pertinenza senza trasferirlo a un contesto didattico diverso.
+- Ha funzionato: un ciclo RED → GREEN dedicato ha imposto che il resolver usi il Teaching Context incorporato nel risultato LIB-03A quando è l'unica fonte disponibile e neghi `PLANNING_GRADE_MATCH` quando un Teaching Context esplicito è incompatibile.
+- È fallito: la prima implementazione consentiva di riusare un planning profile già risolto insieme a un Teaching Context esplicito diverso, creando un boost di pertinenza non più legato alla stessa identità operativa.
+- Causa reale: il risultato del Planning Context Bridge veniva trattato come profilo annuale riutilizzabile invece che come read model derivato e vincolato al Teaching Context di origine.
+- Regola generalizzabile: ogni segnale derivato da un contesto composto deve restare legato all'identità operativa che lo ha prodotto; un override esplicito richiede rivalidazione e deve fallire chiuso in caso di mismatch.
+- Recipe: nessuna nuova recipe; applicare TDD causale e rivalidazione dell'identità prima di riusare segnali derivati.
+- Non ripetere: combinare un `LibraryPlanningContextResolution` risolto con un Teaching Context differente assumendo che il solo livello classe renda il profilo ancora valido.
+- Evidenza: PREDEPLOY #595 RED causale; PREDEPLOY #596 PASS; Browser Qualification #315 PASS; PR #51.
+- Promozione candidata: nessuna per ora; il principio è coperto da fail-closed/causalità, ma resta memoria episodica utile per LIB-03C.
+- Sostituita da: —
