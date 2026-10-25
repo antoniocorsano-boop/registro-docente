@@ -80,6 +80,7 @@ import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
 import { LibraryView } from './components/LibraryView';
+import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -1204,6 +1205,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         )}
 
       </main>
+
+      {!studentMode.isOpen && (
+        <LibraryCopilotComposer
+          library={library}
+          udas={udas}
+          currentClassName={currentClass?.name ?? null}
+          onAddSource={handleAddLibrarySource}
+          isPending={isLibraryMutationPending}
+        />
+      )}
 
       {/* Persistence confirmation modal */}
       <BackupReminderModal
