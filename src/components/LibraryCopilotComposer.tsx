@@ -3,11 +3,12 @@ import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'luci
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
-import type { LibrarySource, LibraryStateV1 } from '../library/types';
+import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
-import { resolveLibraryCopilotRequest } from '../library/contextualCoreAdapter';
+import { dispatchLibraryContextAction, resolveLibraryCopilotRequest } from '../library/contextualCoreAdapter';
 import { resolvePlanningContextForLibraryRelevance } from '../library/relevancePresentation';
+import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import {
   resolveLibraryTeachingContext,
   suggestLibraryTeachingContext
@@ -19,6 +20,7 @@ interface LibraryCopilotComposerProps {
   planning: PlanningStateV1;
   currentClassName?: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
+  onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   isPending?: boolean;
 }
 
@@ -44,6 +46,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   planning,
   currentClassName = null,
   onAddSource,
+  onLink,
   isPending = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -58,6 +61,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [isCapturing, setIsCapturing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resolution, setResolution] = useState<CopilotRequestResolution | null>(null);
+  const [isLinkConfirmationOpen, setIsLinkConfirmationOpen] = useState(false);
+  const [isLinkPending, setIsLinkPending] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkSuccess, setLinkSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const teachingSuggestion = useMemo(() => suggestLibraryTeachingContext({
@@ -86,6 +93,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     : currentClassName
       ? `${currentClassName} · contesto UDA non univoco`
       : 'Nessuna classe selezionata';
+
+  const linkTargetLabel = useMemo(() => {
+    if (!resolvedTeachingContext) return null;
+    const uda = udas.find(candidate => candidate.id === resolvedTeachingContext.udaId);
+    if (!uda) return null;
+    if (!resolvedTeachingContext.lessonId) return `UDA · ${uda.title}`;
+    const lesson = (uda.lessons ?? []).find(candidate => candidate.id === resolvedTeachingContext.lessonId);
+    return lesson ? `Lezione · ${lesson.topic}` : null;
+  }, [resolvedTeachingContext, udas]);
 
   const clearCapture = () => {
     setCaptureMode(null);
@@ -173,6 +189,76 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
   };
 
+  const handleBeginLink = async () => {
+    if (!selectedSource || isLinkPending || isPending) return;
+    if (!resolution?.actions.some(action => action.id === 'link-source-to-uda')) return;
+
+    const target = resolveCopilotLinkTarget(resolvedTeachingContext);
+    if (!target || !linkTargetLabel) {
+      setLinkError('Il contesto didattico non è più valido. Ricalcola le possibilità prima di collegare la fonte.');
+      setIsLinkConfirmationOpen(false);
+      return;
+    }
+
+    setLinkError(null);
+    setLinkSuccess(null);
+    const result = await dispatchLibraryContextAction({
+      source: selectedSource,
+      teachingContext: resolvedTeachingContext,
+      actionId: 'link-source-to-uda',
+      humanConfirmed: false,
+      executor: async () => undefined
+    });
+
+    if (result.status === 'HUMAN_CONFIRMATION_REQUIRED') {
+      setIsLinkConfirmationOpen(true);
+      return;
+    }
+
+    setIsLinkConfirmationOpen(false);
+    setLinkError('Il Core non autorizza questo collegamento nel contesto corrente.');
+  };
+
+  const handleConfirmLink = async () => {
+    if (!selectedSource || isLinkPending || isPending) return;
+    if (!resolution?.actions.some(action => action.id === 'link-source-to-uda')) {
+      setIsLinkConfirmationOpen(false);
+      setLinkError('L’azione di collegamento non è più autorizzata. Ricalcola le possibilità.');
+      return;
+    }
+
+    const target = resolveCopilotLinkTarget(resolvedTeachingContext);
+    if (!target || !linkTargetLabel) {
+      setIsLinkConfirmationOpen(false);
+      setLinkError('Il contesto didattico non è più valido. Ricalcola le possibilità prima di collegare la fonte.');
+      return;
+    }
+
+    setIsLinkPending(true);
+    setLinkError(null);
+    setLinkSuccess(null);
+    try {
+      const result = await dispatchLibraryContextAction({
+        source: selectedSource,
+        teachingContext: resolvedTeachingContext,
+        actionId: 'link-source-to-uda',
+        humanConfirmed: true,
+        executor: () => onLink(selectedSource.id, target)
+      });
+
+      if (result.status !== 'EXECUTED') {
+        throw new Error('Il Core non ha eseguito il collegamento autorizzato.');
+      }
+
+      setIsLinkConfirmationOpen(false);
+      setLinkSuccess('Il collegamento è stato salvato nella Biblioteca.');
+    } catch {
+      setLinkError('Salvataggio non riuscito. Puoi riprovare senza perdere la proposta.');
+    } finally {
+      setIsLinkPending(false);
+    }
+  };
+
   if (!isOpen) {
     return (
       <button
@@ -225,6 +311,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             onChange={event => {
               setSelectedSourceId(event.target.value);
               setResolution(null);
+              setIsLinkConfirmationOpen(false);
+              setLinkError(null);
+              setLinkSuccess(null);
             }}
             className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
           >
@@ -340,6 +429,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               onChange={event => {
                 setMessage(event.target.value);
                 setResolution(null);
+                setIsLinkConfirmationOpen(false);
+                setLinkError(null);
+                setLinkSuccess(null);
               }}
               placeholder="Per esempio: aiutami a usare questa fonte nella lezione di oggi"
               className="min-h-24 w-full resize-y rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
@@ -373,7 +465,19 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             )}
             {resolution.actions.slice(0, 4).map(action => (
               <div key={action.id} className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
-                <div className="text-sm font-semibold text-slate-100">{action.label}</div>
+                {action.id === 'link-source-to-uda' ? (
+                  <button
+                    type="button"
+                    data-testid="library-copilot-link-action"
+                    onClick={() => void handleBeginLink()}
+                    disabled={isLinkPending || isPending}
+                    className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/40 px-3 text-left text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {action.label}
+                  </button>
+                ) : (
+                  <div className="text-sm font-semibold text-slate-100">{action.label}</div>
+                )}
                 {ACTION_HELP[action.id] && (
                   <p className="mt-1 text-xs leading-relaxed text-slate-400">{ACTION_HELP[action.id]}</p>
                 )}
@@ -383,9 +487,55 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <p className="text-sm text-slate-400">Nessuna azione è autorizzata per questa fonte nel contesto corrente.</p>
             )}
             <p className="pt-1 text-[11px] leading-relaxed text-slate-500">
-              In questo blocco il copilota propone soltanto possibilità: non esegue modifiche e non invia automaticamente contenuti a servizi esterni.
+              Solo il collegamento è operativo in questo blocco e richiede sempre una conferma esplicita. Nessun contenuto viene inviato automaticamente a servizi esterni.
             </p>
           </div>
+        )}
+
+        {isLinkConfirmationOpen && selectedSource && linkTargetLabel && (
+          <div
+            data-testid="library-copilot-link-confirmation"
+            className="space-y-3 rounded-xl border border-cyan-700/50 bg-cyan-950/20 p-3"
+          >
+            <div className="text-sm font-bold text-cyan-100">Conferma collegamento</div>
+            <p className="text-sm text-slate-200">{selectedSource.title}</p>
+            <p className="text-sm text-slate-300">Destinazione: {linkTargetLabel}</p>
+            <p className="text-xs leading-relaxed text-slate-400">
+              Il collegamento sarà salvato nella Biblioteca e potrà essere rimosso successivamente.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void handleConfirmLink()}
+                disabled={isLinkPending || isPending}
+                className="min-h-[44px] flex-1 rounded-lg bg-cyan-600 px-3 text-sm font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLinkPending || isPending ? 'Salvataggio…' : 'Conferma collegamento'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLinkConfirmationOpen(false);
+                  setLinkError(null);
+                }}
+                disabled={isLinkPending || isPending}
+                className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-sm text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        )}
+
+        {linkSuccess && (
+          <p role="status" className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 p-3 text-sm text-emerald-200">
+            {linkSuccess}
+          </p>
+        )}
+        {linkError && (
+          <p role="alert" className="rounded-xl border border-rose-900/60 bg-rose-950/40 p-3 text-sm text-rose-200">
+            {linkError}
+          </p>
         )}
       </div>
     </section>
