@@ -1,4 +1,5 @@
 import { evaluateDataFlow } from '../security/dataClassification.ts';
+import { isLocallyReadableTextMime } from '../library/intake.ts';
 import {
   parseTeachingProposalContent,
   type LibraryProposalErrorCode,
@@ -121,13 +122,17 @@ function validateSource(
     const normalizedMime = mimeType.toLowerCase();
     if (normalizedMime === 'application/pdf') {
       if (!isBase64Syntax(dataBase64) || text !== undefined) return { ok: false, reason: 'invalid' };
-    } else if (normalizedMime.startsWith('text/')) {
-      if (!isNonEmptyString(text) && !isBase64Syntax(dataBase64)) {
+    } else if (isLocallyReadableTextMime(normalizedMime)) {
+      if (normalizedMime.startsWith('text/')) {
+        if (!isNonEmptyString(text) && !isBase64Syntax(dataBase64)) {
+          return { ok: false, reason: 'invalid' };
+        }
+        const inlineTextBytes = isBase64Syntax(dataBase64) ? base64DecodedBytes(dataBase64) : 0;
+        if (textBytes + inlineTextBytes > limits.maxTextBytes) {
+          return { ok: false, reason: 'too-large' };
+        }
+      } else if (!isNonEmptyString(text) || dataBase64 !== undefined) {
         return { ok: false, reason: 'invalid' };
-      }
-      const inlineTextBytes = isBase64Syntax(dataBase64) ? base64DecodedBytes(dataBase64) : 0;
-      if (textBytes + inlineTextBytes > limits.maxTextBytes) {
-        return { ok: false, reason: 'too-large' };
       }
     } else {
       return { ok: false, reason: 'invalid' };
