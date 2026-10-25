@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FilePlus2, Link2, Search, X } from 'lucide-react';
+import type { PlanningStateV1 } from '../planning/types';
 import type { UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
@@ -12,6 +13,7 @@ import { LibrarySourceCard } from './LibrarySourceCard';
 interface LibraryViewProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
+  planning: PlanningStateV1;
   currentClassName?: string | null;
   isPending: boolean;
   errorMessage: string | null;
@@ -29,6 +31,7 @@ type TextCaptureKind = Extract<LibrarySourceKind, 'text' | 'note' | 'concept'>;
 export const LibraryView: React.FC<LibraryViewProps> = ({
   library,
   udas,
+  planning,
   currentClassName = null,
   isPending,
   errorMessage,
@@ -289,6 +292,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               key={source.id}
               source={source}
               udas={udas}
+              planning={planning}
               currentClassName={currentClassName}
               lastExplicitTeachingContext={lastExplicitTeachingContext}
               onExplicitTeachingContextChange={setLastExplicitTeachingContext}
