@@ -92,8 +92,9 @@ function validateSource(
   const text = value.text;
   const mimeType = value.mimeType;
   const dataBase64 = value.dataBase64;
+  const textBytes = isNonEmptyString(text) ? utf8Bytes(text) : 0;
   if (text !== undefined && !isNonEmptyString(text)) return { ok: false, reason: 'invalid' };
-  if (isNonEmptyString(text) && utf8Bytes(text) > limits.maxTextBytes) {
+  if (textBytes > limits.maxTextBytes) {
     return { ok: false, reason: 'too-large' };
   }
   if (mimeType !== undefined && !isNonEmptyString(mimeType)) return { ok: false, reason: 'invalid' };
@@ -123,6 +124,10 @@ function validateSource(
     } else if (normalizedMime.startsWith('text/')) {
       if (!isNonEmptyString(text) && !isBase64Syntax(dataBase64)) {
         return { ok: false, reason: 'invalid' };
+      }
+      const inlineTextBytes = isBase64Syntax(dataBase64) ? base64DecodedBytes(dataBase64) : 0;
+      if (textBytes + inlineTextBytes > limits.maxTextBytes) {
+        return { ok: false, reason: 'too-large' };
       }
     } else {
       return { ok: false, reason: 'invalid' };
