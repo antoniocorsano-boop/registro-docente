@@ -210,9 +210,26 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     try {
       const discovery = await discoverLibraryCopilotIntent(input);
-      const intent = discovery.intents[0] ?? null;
 
-      if (intent?.actionId === 'prepare-from-source') {
+      if (discovery.reason === 'NO_INTENT_MATCH') {
+        setResolution({
+          status: 'UNRESOLVED',
+          reason: 'NO_INTENT_MATCH',
+          actions: []
+        });
+        return;
+      }
+
+      if (discovery.status !== 'DISCOVERED') {
+        throw new Error('Non posso interpretare questa richiesta nel contesto corrente.');
+      }
+
+      const intent = discovery.intents[0] ?? null;
+      if (!intent) {
+        throw new Error('Non posso interpretare questa richiesta nel contesto corrente.');
+      }
+
+      if (intent.actionId === 'prepare-from-source') {
         if (!resolvedTeachingContext || !proposalUda) {
           setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
           return;
