@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import type { LibrarySource } from '../library/types';
 
 const SOURCE_BRIDGE = new URL('../library/copilotSourceBridge.ts', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
+const APP = new URL('../App.tsx', import.meta.url);
 
 const makeSource = (privacy: LibrarySource['privacy'] = 'teacher-professional'): LibrarySource => ({
   id: 'lib04b-source',
@@ -162,5 +164,59 @@ describe('LIB-04B governed source bridge', () => {
     expect(webSource.sourceUrl).toBe('https://example.test/articolo');
     expect(webSource.status).toBe('needs-review');
     expect(webSource.privacy).toBe('unknown');
+  });
+});
+
+describe('LIB-04B progressive teacher composer', () => {
+  test('materializes a compact composer that proposes only shared-Core actions', async () => {
+    expect(await Bun.file(COMPOSER).exists()).toBe(true);
+    if (!(await Bun.file(COMPOSER).exists())) return;
+
+    const composer = await Bun.file(COMPOSER).text();
+    expect(composer).toContain('resolveLibraryCopilotRequest');
+    expect(composer).toContain('createCopilotLibrarySource');
+    expect(composer).toContain('slice(0, 4)');
+    expect(composer).not.toContain('dispatchLibraryContextAction');
+    expect(composer).not.toContain('requestTeachingProposal');
+    expect(composer).not.toContain('/api/');
+  });
+
+  test('persists a newly captured source through the existing durable callback before selecting it', async () => {
+    if (!(await Bun.file(COMPOSER).exists())) {
+      expect(false).toBe(true);
+      return;
+    }
+
+    const composer = await Bun.file(COMPOSER).text();
+    expect(composer).toContain('await onAddSource(createdSource)');
+    expect(composer).toContain('setSelectedSourceId(createdSource.id)');
+    expect(composer.indexOf('await onAddSource(createdSource)'))
+      .toBeLessThan(composer.indexOf('setSelectedSourceId(createdSource.id)'));
+  });
+
+  test('reuses the qualified teaching-context resolver and keeps the mobile panel closable and touch-safe', async () => {
+    if (!(await Bun.file(COMPOSER).exists())) {
+      expect(false).toBe(true);
+      return;
+    }
+
+    const composer = await Bun.file(COMPOSER).text();
+    expect(composer).toContain('suggestLibraryTeachingContext');
+    expect(composer).toContain('resolveLibraryTeachingContext');
+    expect(composer).toContain('Copilota');
+    expect(composer).toContain('min-h-[44px]');
+    expect(composer).toContain('min-w-[44px]');
+    expect(composer).toContain('overflow-y-auto');
+  });
+
+  test('App mounts the composer globally for the teacher and excludes student portal mode', async () => {
+    const app = await Bun.file(APP).text();
+    expect(app).toContain("import { LibraryCopilotComposer } from './components/LibraryCopilotComposer'");
+    expect(app).toContain('{!studentMode.isOpen && (');
+    expect(app).toContain('<LibraryCopilotComposer');
+    expect(app).toContain('library={library}');
+    expect(app).toContain('udas={udas}');
+    expect(app).toContain('currentClassName={currentClass?.name ?? null}');
+    expect(app).toContain('onAddSource={handleAddLibrarySource}');
   });
 });
