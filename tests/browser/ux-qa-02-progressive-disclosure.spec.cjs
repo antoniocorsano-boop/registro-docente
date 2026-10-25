@@ -236,15 +236,24 @@ test('UX-QA-02 records progressive-disclosure evidence across mature teacher sur
   await openDrawerItem(page, 'Impostazioni');
   await expect(page.getByRole('heading', { name: 'Impostazioni Generali & Profilo Docente' })).toBeVisible();
   const settingsMain = page.locator('main');
-  const weightingVisible = await visible(settingsMain.getByText(/Ponderazione configurabile delle valutazioni/));
+  const weightingContent = settingsMain.getByText(/Ponderazione configurabile delle valutazioni/);
+  const weightingDisclosure = settingsMain.locator('summary').filter({ hasText: 'Ponderazione delle valutazioni' });
+  await expect(weightingDisclosure).toBeVisible();
+  const weightingDisclosureBox = await weightingDisclosure.boundingBox();
+  expect(weightingDisclosureBox).not.toBeNull();
+  expect(weightingDisclosureBox.height).toBeGreaterThanOrEqual(44);
+  expect(await visible(weightingContent)).toBe(false);
   const technicalEmbeddingVisible = await visible(settingsMain.getByText(/Motore Vettoriale & Embedding Locale/));
+  expect(technicalEmbeddingVisible).toBe(false);
+  await weightingDisclosure.click();
+  await expect(weightingContent).toBeVisible();
   const settingsShot = await capture(page, 'ux-qa-02-settings-desktop.png');
   observations.push(observation(
     'UXPD-006',
-    !weightingVisible && !technicalEmbeddingVisible ? 'PASS' : 'FAIL',
+    'PASS',
     'settings',
     'Settings opens on profile/identity and discloses weighting and technical integration groups on demand',
-    `weightingVisible=${weightingVisible}; technicalEmbeddingVisible=${technicalEmbeddingVisible}`,
+    'Evaluation weighting is hidden on entry and revealed only through its explicit disclosure; technical integrations remain collapsed',
     [settingsShot]
   ));
 
