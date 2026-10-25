@@ -7,6 +7,7 @@ const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidenc
 const vaultPassword = 'lib04b-browser-qualification';
 const SOURCE_TITLE = 'Leve e vantaggio meccanico';
 
+test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
 test.setTimeout(120000);
 
 async function setupFreshVault(page) {
@@ -50,7 +51,6 @@ async function addTextSourceFromComposer(page, composer) {
 }
 
 test('LIB-04B captures durably and presents only Core-authorized fallback actions — desktop', async ({ page }) => {
-  test.use({ viewport: { width: 1280, height: 900 } });
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
@@ -74,7 +74,7 @@ test('LIB-04B captures durably and presents only Core-authorized fallback action
   await reloadAndUnlock(page);
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   composer = await openComposer(page);
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option')).toContainText([SOURCE_TITLE]);
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option').filter({ hasText: SOURCE_TITLE })).toHaveCount(1);
 
   await page.screenshot({ path: path.join(evidenceDir, 'lib04b-copilot-composer-desktop.png'), fullPage: true });
   fs.writeFileSync(path.join(evidenceDir, 'lib04b-copilot-composer-desktop.json'), JSON.stringify({
