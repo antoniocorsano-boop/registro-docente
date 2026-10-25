@@ -49,7 +49,7 @@ async function reloadAndUnlock(page) {
 
 async function openDrawerItem(page, label) {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  const item = page.getByRole('button', { name: label, exact: true });
+  const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
 }
