@@ -1,5 +1,5 @@
 import type { UdaActivityType, UdaRecord } from '../types';
-import { isLocallyReadableTextMime } from './intake';
+import { isLocallyReadableTextMime } from './intake.ts';
 import type { LibrarySource, LibrarySourceKind } from './types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
 
