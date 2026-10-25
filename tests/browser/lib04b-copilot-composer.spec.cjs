@@ -50,7 +50,7 @@ async function addTextSourceFromComposer(page, composer) {
   await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
 }
 
-test('LIB-04B captures durably and presents only Core-authorized fallback actions — desktop', async ({ page }) => {
+test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
@@ -59,17 +59,25 @@ test('LIB-04B captures durably and presents only Core-authorized fallback action
   let composer = await openComposer(page);
   await addTextSourceFromComposer(page, composer);
 
-  await composer.getByLabel('Che cosa vuoi farne?').fill('Aiutami a usare questa fonte in una attività didattica.');
+  await composer.getByLabel('Che cosa vuoi farne?').fill('rivedi questa fonte nel contesto della programmazione');
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
 
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
-  await expect(composer.getByText('L’interpretazione automatica dell’intento non è attiva.', { exact: false })).toBeVisible();
+  await expect(composer.getByText('L’interpretazione automatica dell’intento non è attiva.', { exact: false })).toHaveCount(0);
   await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toBeVisible();
-  await expect(composer.getByText('Collega a una UDA', { exact: true })).toBeVisible();
+  await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
-  await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(1);
+  await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
+
+  await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
+  await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
 
   await reloadAndUnlock(page);
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
@@ -81,6 +89,8 @@ test('LIB-04B captures durably and presents only Core-authorized fallback action
     candidateSha: process.env.CANDIDATE_SHA || null,
     viewport: { width: 1280, height: 900 },
     sourcePersistedAfterReload: true,
+    localReviewIntentObserved: true,
+    summarizeStayedNoMatch: true,
     pageErrors
   }, null, 2) + '\n');
 

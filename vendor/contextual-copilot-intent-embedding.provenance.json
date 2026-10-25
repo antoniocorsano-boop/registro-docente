@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "registro.contextual-copilot-intent-embedding-vendor/v1",
+  "package": {
+    "name": "@trama/contextual-copilot-intent-embedding",
+    "version": "0.1.0"
+  },
+  "source": {
+    "repository": "antoniocorsano-boop/trama-ecosistema",
+    "commit": "4cd5d41176a63f15939162b7c33275fbb4130ac5",
+    "distributionCommit": "13aeba119ce041850ac78ce97c0d19d58a179b4f",
+    "path": "shared/contextual-copilot-intent-embedding"
+  },
+  "consumerMode": "vendored-file-package",
+  "networkRequiredAtBuild": false,
+  "externalRegistryRequired": false,
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "84d5220832578cd9fa01cd372dfb833f5a2a003799b9078e5cc0fc05fb9ed3dd"
+    },
+    {
+      "path": "index.d.ts",
+      "sha256": "f2c7d425f37cc525f6cabb671c0dc4ec36896ef7f76fb348fabb9791af21d403"
+    },
+    {
+      "path": "package.json",
+      "sha256": "c0eb015cfc7ee7f649edbb8bab39e3986810e48d18b2a7ee596aa6c173ff09ac"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "edcf38132434b90294012b9bff5ab20e2c750d4757877f5b16c58aa20d69ab39"
+    }
+  ]
+}

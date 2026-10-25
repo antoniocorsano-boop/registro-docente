@@ -6,10 +6,14 @@ import {
   type ContextEntity,
   type ContextSnapshot,
   type ContextualAction,
+  type CopilotIntentDiscovery,
   type CopilotRequest,
   type CopilotRequestResolution,
   type ResolvedAction
 } from '@trama/contextual-copilot-core';
+import { createEmbeddingIntentPort } from '@trama/contextual-copilot-intent-embedding';
+import { LIBRARY_INTENT_CATALOG } from './libraryIntentCatalog';
+import { embedLocalIntentText } from './localIntentEmbedding';
 import type { LibraryPlanningContextResolution } from './planningContextBridge';
 import type { LibrarySource } from './types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
@@ -56,15 +60,20 @@ const LIBRARY_CONTEXT_ACTIONS: ContextualAction[] = [
 const LIBRARY_COPILOT_ALLOWED_CAPABILITIES: readonly CapabilityId[] = Object.freeze([
   'REVIEW',
   'LINK',
-  'PREPARE',
-  'SUMMARIZE'
+  'PREPARE'
 ]);
 
 const actionRegistry = createActionRegistry(LIBRARY_CONTEXT_ACTIONS);
 const policyEngine = createFailClosedPolicyEngine({ generativeMode: 'none' });
+const libraryIntentPort = createEmbeddingIntentPort({
+  embed: embedLocalIntentText,
+  intents: LIBRARY_INTENT_CATALOG,
+  minSimilarity: 0.55
+});
 const libraryContextualCore = createContextualCopilotCore({
   registry: actionRegistry,
   policyEngine,
+  intentPort: libraryIntentPort,
   generativeMode: 'none'
 });
 
@@ -171,6 +180,12 @@ export function buildLibraryCopilotRequest({
     message,
     allowedCapabilities: LIBRARY_COPILOT_ALLOWED_CAPABILITIES
   };
+}
+
+export function discoverLibraryCopilotIntent(
+  input: LibraryCopilotRequestInput
+): Promise<CopilotIntentDiscovery> {
+  return libraryContextualCore.discoverRequestIntent(buildLibraryCopilotRequest(input));
 }
 
 export function resolveLibraryCopilotRequest(

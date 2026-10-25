@@ -7,7 +7,11 @@ import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../librar
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
-import { dispatchLibraryContextAction, resolveLibraryCopilotRequest } from '../library/contextualCoreAdapter';
+import {
+  discoverLibraryCopilotIntent,
+  dispatchLibraryContextAction,
+  resolveLibraryCopilotRequest
+} from '../library/contextualCoreAdapter';
 import { resolvePlanningContextForLibraryRelevance } from '../library/relevancePresentation';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
@@ -100,6 +104,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     setIsPrepareOpen(false);
+    setResolution(null);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
   }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);
 
   const contextLabel = resolvedTeachingContext
@@ -188,13 +196,49 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsResolving(true);
     setErrorMessage(null);
     setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+
+    const input = {
+      source: selectedSource,
+      teachingContext: resolvedTeachingContext,
+      planningContext: resolvedPlanningContext,
+      message: message.trim()
+    };
+
     try {
-      const nextResolution = await resolveLibraryCopilotRequest({
-        source: selectedSource,
-        teachingContext: resolvedTeachingContext,
-        planningContext: resolvedPlanningContext,
-        message: message.trim()
-      });
+      const discovery = await discoverLibraryCopilotIntent(input);
+
+      if (discovery.reason === 'NO_INTENT_MATCH') {
+        setResolution({
+          status: 'UNRESOLVED',
+          reason: 'NO_INTENT_MATCH',
+          actions: []
+        });
+        return;
+      }
+
+      if (discovery.status !== 'DISCOVERED') {
+        throw new Error('Non posso interpretare questa richiesta nel contesto corrente.');
+      }
+
+      const intent = discovery.intents[0] ?? null;
+      if (!intent) {
+        throw new Error('Non posso interpretare questa richiesta nel contesto corrente.');
+      }
+
+      if (intent.actionId === 'prepare-from-source') {
+        if (!resolvedTeachingContext || !proposalUda) {
+          setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
+          return;
+        }
+        setIsPrepareOpen(true);
+        return;
+      }
+
+      const nextResolution = await resolveLibraryCopilotRequest(input);
       setResolution(nextResolution);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
@@ -447,6 +491,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               onChange={event => {
                 setMessage(event.target.value);
                 setResolution(null);
+                setIsPrepareOpen(false);
                 setIsLinkConfirmationOpen(false);
                 setLinkError(null);
                 setLinkSuccess(null);
@@ -476,6 +521,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         {resolution && (
           <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Possibilità autorizzate</div>
+            {resolution.reason === 'NO_INTENT_MATCH' && (
+              <p className="text-xs leading-relaxed text-slate-400">
+                Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione. Prova a riformulare indicando che cosa vuoi fare con la fonte.
+              </p>
+            )}
             {resolution.reason === 'INTENT_PORT_UNAVAILABLE' && (
               <p className="text-xs leading-relaxed text-slate-400">
                 L’interpretazione automatica dell’intento non è attiva. Sono mostrate soltanto le azioni che il Core condiviso autorizza già per questa fonte e questo contesto.

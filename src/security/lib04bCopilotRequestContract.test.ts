@@ -132,7 +132,7 @@ describe('LIB-04B shared CopilotRequest consumer contract', () => {
     const request = adapter.buildLibraryCopilotRequest({ source: makeSource(), message });
 
     expect(request.message).toBe(message);
-    expect([...request.allowedCapabilities].sort()).toEqual(['LINK', 'PREPARE', 'REVIEW', 'SUMMARIZE']);
+    expect([...request.allowedCapabilities].sort()).toEqual(['LINK', 'PREPARE', 'REVIEW']);
 
     const serializedContext = JSON.stringify(request.context);
     for (const forbidden of [
@@ -180,7 +180,7 @@ describe('LIB-04B shared CopilotRequest consumer contract', () => {
     );
   });
 
-  test('delegates unresolved intent to Core fallback without inventing a local parser', async () => {
+  test('delegates free text to the shared local IntentPort without inventing a local parser', async () => {
     const adapter = await import('../library/contextualCoreAdapter') as typeof import('../library/contextualCoreAdapter') & {
       resolveLibraryCopilotRequest?: (input: {
         source: LibrarySource;
@@ -197,15 +197,12 @@ describe('LIB-04B shared CopilotRequest consumer contract', () => {
 
     const resolution = await adapter.resolveLibraryCopilotRequest({
       source: makeSource(),
-      message: 'Preparami qualcosa da questa fonte'
+      message: 'rivedi questa fonte nel contesto della programmazione'
     });
 
-    expect(resolution.status).toBe('UNRESOLVED');
-    expect(resolution.reason).toBe('INTENT_PORT_UNAVAILABLE');
-    expect(resolution.actions.map(action => action.id)).toEqual([
-      'review-source',
-      'link-source-to-uda'
-    ]);
+    expect(resolution.status).toBe('RESOLVED');
+    expect(resolution.reason).toBe('INTENT_RESOLVED');
+    expect(resolution.actions.map(action => action.id)).toEqual(['review-source']);
   });
 
   test('student-personal privacy cannot be widened by conversational input', async () => {
