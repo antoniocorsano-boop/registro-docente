@@ -70,7 +70,10 @@ describe('LIB-06A local intent discovery consumer contract', () => {
     const composer = await readIfExists(COMPOSER);
 
     expect(composer).toContain('discoverLibraryCopilotIntent');
-    expect(composer).toContain("intent?.actionId === 'prepare-from-source'");
+    expect(composer).toContain("discovery.reason === 'NO_INTENT_MATCH'");
+    expect(composer).toContain("reason: 'NO_INTENT_MATCH'");
+    expect(composer).toContain('actions: []');
+    expect(composer).toContain("intent.actionId === 'prepare-from-source'");
     expect(composer).toContain('setIsPrepareOpen(true)');
     expect(composer).toContain('resolveLibraryCopilotRequest');
     expect(composer.indexOf('await discoverLibraryCopilotIntent(input)'))
