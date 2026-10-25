@@ -6,7 +6,11 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { evaluateDataFlow, type DataClassification } from './src/security/dataClassification.ts';
 import { handleLibraryProposalRequest } from './src/server/libraryProposalRoute.ts';
-import { createGeminiTeachingProposalProvider } from './src/server/teachingProposalProvider.ts';
+import { createGeminiTeachingProposalProvider } from './src/server/geminiTeachingProposalProvider.ts';
+import {
+  createTeachingProposalRuntime,
+  resolveTeachingProposalRuntimeConfig
+} from './src/server/teachingProposalRuntime.ts';
 
 dotenv.config();
 
@@ -16,15 +20,43 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+const libraryProposalProvider = createGeminiTeachingProposalProvider({
+  apiKey: process.env.GEMINI_API_KEY
+});
+const libraryProposalRuntime = createTeachingProposalRuntime(
+  resolveTeachingProposalRuntimeConfig(process.env),
+  libraryProposalProvider
+);
+
+app.get('/api/copilot/library-proposal/provider', (_req, res) => {
+  return res.json({
+    available: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    provider: libraryProposalProvider.descriptor.displayName,
+    model: libraryProposalProvider.descriptor.model
+  });
+});
+
 app.post(
   '/api/copilot/library-proposal',
   express.json({ limit: '12mb' }),
   async (req, res) => {
-    const result = await handleLibraryProposalRequest(
-      req.body,
-      createGeminiTeachingProposalProvider(process.env.GEMINI_API_KEY)
-    );
-    return res.status(result.status).json(result.body);
+    const requestController = new AbortController();
+    const abortRequest = () => requestController.abort();
+    req.once('aborted', abortRequest);
+    res.once('close', abortRequest);
+
+    try {
+      const result = await handleLibraryProposalRequest(
+        req.body,
+        libraryProposalRuntime,
+        { signal: requestController.signal }
+      );
+      if (res.headersSent || res.writableEnded) return;
+      return res.status(result.status).json(result.body);
+    } finally {
+      req.removeListener('aborted', abortRequest);
+      res.removeListener('close', abortRequest);
+    }
   }
 );
 
