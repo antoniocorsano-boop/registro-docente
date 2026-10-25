@@ -84,6 +84,42 @@ export function parseTeachingProposalContent(value: unknown): TeachingProposalCo
   };
 }
 
+export function parseTeachingProposalV1(value: unknown): TeachingProposalV1 {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Proposta didattica non valida.');
+  }
+  const proposal = value as Record<string, unknown>;
+  if (proposal.schemaVersion !== 1 || proposal.kind !== 'activity') {
+    throw new Error('Proposta didattica non valida.');
+  }
+  if (!proposal.context || typeof proposal.context !== 'object' || Array.isArray(proposal.context)) {
+    throw new Error('Proposta didattica non valida.');
+  }
+  if (!proposal.provenance || typeof proposal.provenance !== 'object' || Array.isArray(proposal.provenance)) {
+    throw new Error('Proposta didattica non valida.');
+  }
+  const context = proposal.context as Record<string, unknown>;
+  const provenance = proposal.provenance as Record<string, unknown>;
+  if (provenance.mode !== 'remote') throw new Error('Proposta didattica non valida.');
+
+  return {
+    schemaVersion: 1,
+    kind: 'activity',
+    ...parseTeachingProposalContent(value),
+    sourceId: requireString(proposal.sourceId),
+    context: {
+      udaId: requireString(context.udaId),
+      ...(nonEmptyString(context.lessonId) ? { lessonId: context.lessonId.trim() } : {})
+    },
+    provenance: {
+      mode: 'remote',
+      provider: requireString(provenance.provider),
+      model: requireString(provenance.model),
+      generatedAt: requireString(provenance.generatedAt)
+    }
+  };
+}
+
 function decodeDataUrl(dataUrl: string, expectedMimeType?: string): { mimeType: string; dataBase64: string } {
   const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(dataUrl);
   if (!match) throw new Error('Contenuto file non valido.');
