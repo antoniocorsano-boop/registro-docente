@@ -239,7 +239,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {/* Configurable professional weighting criterion */}
-          <div className="pt-4 border-t border-[var(--border)]">
+          <details className="pt-4 border-t border-[var(--border)]">
+            <summary className="min-h-[44px] cursor-pointer list-none rounded-lg border border-[var(--border)] bg-[var(--surface-variant)] px-3 py-2.5 text-sm font-semibold text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] flex items-center">
+              Ponderazione delle valutazioni
+            </summary>
+            <div className="pt-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
               <div>
                 <h4 className="text-xs uppercase tracking-wider font-bold text-slate-200 flex items-center gap-1.5">
@@ -345,7 +349,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Usa la media ponderata come indicatore analitico principale (criterio configurabile)
               </label>
             </div>
-          </div>
+            </div>
+          </details>
 
           <details className="pt-4 border-t border-[var(--border)]">
             <summary className="cursor-pointer list-none rounded-lg border border-[var(--border)] bg-[var(--surface-variant)] p-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">

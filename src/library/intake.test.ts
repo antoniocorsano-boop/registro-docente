@@ -63,6 +63,11 @@ describe('LIB-01A private source intake', () => {
     expect(source.status).toBe('captured');
     expect(source.privacy).toBe('unknown');
 
+    const readable = new File(['fake'], 'TECNOLOGIA_VERDE_2026_2027.json', { type: 'application/json' });
+    const readableSource = await createFileSource({ id: 'readable-1', file: readable, capturedAt: '2026-10-24T10:00:00.000Z' });
+    expect(readableSource.title).toBe('TECNOLOGIA VERDE 2026 2027');
+    expect(readableSource.origin).toBe('TECNOLOGIA_VERDE_2026_2027.json');
+
     const unknown = new File(['fake'], 'asset.bin', { type: 'application/x-custom' });
     const unknownSource = await createFileSource({ id: 'f-1', file: unknown, capturedAt: '2026-10-24T10:00:00.000Z' });
     expect(unknownSource.kind).toBe('file');

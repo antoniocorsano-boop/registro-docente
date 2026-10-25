@@ -8,6 +8,7 @@ const vaultPassword = 'ux-qa-02-browser-qualification';
 const CLASS_NAME = 'Classe Sintetica UXQA02';
 const UDA_TITLE = 'UDA Sintetica UXQA02';
 const TECHNICAL_FILENAME = 'TECNOLOGIA_VERDE_2026_2027.json';
+const READABLE_FILENAME_TITLE = 'TECNOLOGIA VERDE 2026 2027';
 
 test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
 test.setTimeout(180000);
@@ -111,14 +112,25 @@ test('UX-QA-02 records progressive-disclosure evidence across mature teacher sur
   // P2: a destructive action must not compete with the primary class action.
   const classCard = page.locator('[data-uxqa-class-card]').filter({ hasText: CLASS_NAME }).first();
   await expect(classCard).toBeVisible();
-  const deleteClassVisible = await visible(classCard.getByRole('button', { name: `Elimina classe ${CLASS_NAME}`, exact: true }));
+  const manageClassButton = classCard.getByRole('button', { name: `Gestisci classe ${CLASS_NAME}`, exact: true });
+  const deleteClassButton = classCard.getByRole('button', { name: `Elimina classe ${CLASS_NAME}`, exact: true });
+  const deleteClassVisibleBeforeDisclosure = await visible(deleteClassButton);
+  await expect(manageClassButton).toBeVisible();
+  expect(deleteClassVisibleBeforeDisclosure).toBe(false);
+  await manageClassButton.click();
+  await expect(deleteClassButton).toBeVisible();
+  page.once('dialog', dialog => dialog.dismiss());
+  await deleteClassButton.click();
+  await expect(classCard).toBeVisible();
+  await manageClassButton.click();
+  await expect(deleteClassButton).toHaveCount(0);
   const homeShot = await capture(page, 'ux-qa-02-home-class-card-desktop.png');
   observations.push(observation(
     'UXPD-009',
-    deleteClassVisible ? 'FAIL' : 'PASS',
+    'PASS',
     'home.classes',
     'Destructive class maintenance is disclosed behind a secondary management action',
-    deleteClassVisible ? 'Delete control is directly visible on the primary class card' : 'No destructive control competes with Apri classe',
+    'Class deletion is available only after the explicit class-management disclosure',
     [homeShot]
   ));
 
@@ -205,14 +217,18 @@ test('UX-QA-02 records progressive-disclosure evidence across mature teacher sur
   // P2: Library primary label should describe the teacher resource, not expose the technical filename as its title.
   await addSyntheticFileSource(page);
   const libraryMain = page.locator('main');
+  const readableHeading = libraryMain.getByRole('heading', { name: READABLE_FILENAME_TITLE, exact: true });
   const technicalHeadingVisible = await visible(libraryMain.getByRole('heading', { name: TECHNICAL_FILENAME, exact: true }));
+  await expect(readableHeading).toBeVisible();
+  await expect(libraryMain.getByText(TECHNICAL_FILENAME, { exact: true })).toBeVisible();
+  expect(technicalHeadingVisible).toBe(false);
   const libraryShot = await capture(page, 'ux-qa-02-library-desktop.png');
   observations.push(observation(
     'UXPD-005',
-    technicalHeadingVisible ? 'FAIL' : 'PASS',
+    'PASS',
     'library',
     'Library uses a human-readable resource title as primary label and keeps the filename secondary',
-    technicalHeadingVisible ? `Technical filename ${TECHNICAL_FILENAME} is the primary heading` : 'Technical filename is not the primary resource heading',
+    `Readable title ${READABLE_FILENAME_TITLE} is primary; ${TECHNICAL_FILENAME} remains secondary provenance`,
     [libraryShot]
   ));
 
@@ -220,15 +236,24 @@ test('UX-QA-02 records progressive-disclosure evidence across mature teacher sur
   await openDrawerItem(page, 'Impostazioni');
   await expect(page.getByRole('heading', { name: 'Impostazioni Generali & Profilo Docente' })).toBeVisible();
   const settingsMain = page.locator('main');
-  const weightingVisible = await visible(settingsMain.getByText(/Ponderazione configurabile delle valutazioni/));
+  const weightingContent = settingsMain.getByText(/Ponderazione configurabile delle valutazioni/);
+  const weightingDisclosure = settingsMain.locator('summary').filter({ hasText: 'Ponderazione delle valutazioni' });
+  await expect(weightingDisclosure).toBeVisible();
+  const weightingDisclosureBox = await weightingDisclosure.boundingBox();
+  expect(weightingDisclosureBox).not.toBeNull();
+  expect(weightingDisclosureBox.height).toBeGreaterThanOrEqual(44);
+  expect(await visible(weightingContent)).toBe(false);
   const technicalEmbeddingVisible = await visible(settingsMain.getByText(/Motore Vettoriale & Embedding Locale/));
+  expect(technicalEmbeddingVisible).toBe(false);
+  await weightingDisclosure.click();
+  await expect(weightingContent).toBeVisible();
   const settingsShot = await capture(page, 'ux-qa-02-settings-desktop.png');
   observations.push(observation(
     'UXPD-006',
-    !weightingVisible && !technicalEmbeddingVisible ? 'PASS' : 'FAIL',
+    'PASS',
     'settings',
     'Settings opens on profile/identity and discloses weighting and technical integration groups on demand',
-    `weightingVisible=${weightingVisible}; technicalEmbeddingVisible=${technicalEmbeddingVisible}`,
+    'Evaluation weighting is hidden on entry and revealed only through its explicit disclosure; technical integrations remain collapsed',
     [settingsShot]
   ));
 
