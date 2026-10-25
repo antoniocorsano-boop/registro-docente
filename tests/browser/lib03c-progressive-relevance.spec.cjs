@@ -142,7 +142,12 @@ test('LIB-03C reveals ranked destinations progressively and keeps linking human-
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
   await expect(card.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
 
+  const reopenSuggestions = card.getByRole('button', { name: 'Trova dove può servire', exact: true });
+  await expect(reopenSuggestions).toBeVisible();
+  await reopenSuggestions.click();
+  await expect(relevanceRegion).toBeVisible();
   await relevanceRegion.getByRole('button', { name: 'Aggiorna suggerimenti', exact: true }).click();
+
   const topCandidate = exactUdaCandidate(page, relevanceRegion, UDA_TITLES[0]);
   await topCandidate.getByRole('button', { name: 'Collega', exact: true }).click();
   await expect(topCandidate.getByText('Confermi il collegamento a questa destinazione?', { exact: true })).toBeVisible();
