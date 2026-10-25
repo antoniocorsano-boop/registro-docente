@@ -3,6 +3,7 @@ import { buildCapturedWebTextPatch } from '../library/intake';
 import { buildLibraryProposalRequest } from '../library/teachingProposal';
 import type { LibrarySource } from '../library/types';
 import type { ResolvedLibraryTeachingContext } from '../library/teachingContext';
+import { handleLibraryProposalRequest } from '../server/libraryProposalRoute';
 import type { UdaRecord } from '../types';
 
 const UDA: UdaRecord = {
@@ -20,6 +21,16 @@ const CONTEXT: ResolvedLibraryTeachingContext = {
   udaId: UDA.id,
   className: UDA.className,
   period: UDA.period
+};
+
+const VALID_PROVIDER_OUTPUT = {
+  title: 'Dalla fonte alla trasformazione energetica',
+  objective: 'Riconoscere le trasformazioni di energia.',
+  teacherSetup: 'Presentare la fonte strutturata.',
+  studentTask: 'Individuare dati e trasformazioni rilevanti.',
+  steps: ['Leggi la fonte', 'Individua i dati', 'Confronta le trasformazioni'],
+  questions: ['Quale informazione è centrale?', 'Quale trasformazione descrive?'],
+  adaptationHint: 'Ridurre i dati e usare una tabella guida.'
 };
 
 function readyProfessionalFile(mimeType: string, text: string): LibrarySource {
@@ -81,6 +92,47 @@ describe('LIB-02 review findings regression contract', () => {
         mimeType
       });
       expect(request.source.dataBase64).toBeUndefined();
+    }
+  });
+
+  test('accepts locally extracted structured-text file requests at the governed server boundary', async () => {
+    for (const [mimeType, text] of [
+      ['application/json', '{"tema":"energia"}'],
+      ['application/xml', '<tema>energia</tema>']
+    ] as const) {
+      const calls: unknown[] = [];
+      const result = await handleLibraryProposalRequest(
+        {
+          schemaVersion: 1,
+          action: 'prepare-activity',
+          classification: 'TEACHER_PROFESSIONAL',
+          explicitTeacherOptIn: true,
+          source: {
+            id: `source-${mimeType}`,
+            kind: 'file',
+            title: 'Fonte testuale strutturata',
+            text,
+            mimeType
+          },
+          context: {
+            udaId: UDA.id,
+            udaTitle: UDA.title,
+            className: UDA.className,
+            period: String(UDA.period)
+          }
+        },
+        {
+          id: 'fake-provider',
+          model: 'fake-model-v1',
+          async generate(input) {
+            calls.push(input);
+            return VALID_PROVIDER_OUTPUT;
+          }
+        }
+      );
+
+      expect(result.status).toBe(200);
+      expect(calls).toHaveLength(1);
     }
   });
 });
