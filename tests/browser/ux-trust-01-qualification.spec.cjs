@@ -274,6 +274,7 @@ test('UXT-D active UDA without formal evidence stays watch while an ended gap is
   await createUda({ title: activeUdaTitle, startMonth: 1, duration: 3 });
   await createUda({ title: endedUdaTitle, startMonth: 0, duration: 1 });
 
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'Analisi', exact: true }).click();
   await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
   await expect(page.getByRole('heading', { name: /Gap Analysis Competenze & Verifiche Oggettive/ })).toBeVisible();
 

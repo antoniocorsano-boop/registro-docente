@@ -75,6 +75,7 @@ async function createSyntheticUda(page, title, className = null) {
 }
 
 async function addSyntheticLesson(page) {
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'Analisi', exact: true }).click();
   await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
   await expect(page.getByRole('heading', { name: /Gap Analysis Competenze & Verifiche Oggettive/ })).toBeVisible();
 
