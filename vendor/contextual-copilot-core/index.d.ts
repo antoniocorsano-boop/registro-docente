@@ -79,6 +79,39 @@ export interface ResolvedAction extends ContextualAction {
   policy: PolicyDecision;
 }
 
+export interface CopilotRequest {
+  context: ContextSnapshot;
+  message: string;
+  allowedCapabilities: readonly CapabilityId[];
+}
+
+export interface IntentMatch {
+  actionId: string;
+  score: number;
+}
+
+export interface IntentPort {
+  mode: 'local' | 'remote';
+  resolve(input: {
+    context: ContextSnapshot;
+    message: string;
+    actions: readonly ResolvedAction[];
+  }): Promise<readonly IntentMatch[]>;
+}
+
+export interface CopilotRequestResolution {
+  status: 'RESOLVED' | 'UNRESOLVED';
+  reason:
+    | 'INTENT_RESOLVED'
+    | 'NO_ALLOWED_ACTIONS'
+    | 'INTENT_PORT_UNAVAILABLE'
+    | 'REMOTE_PROVIDER_NOT_AUTHORIZED'
+    | 'PROTECTED_DATA_REMOTE_DENIED'
+    | 'INTENT_RESOLUTION_FAILED'
+    | 'NO_INTENT_MATCH';
+  actions: readonly ResolvedAction[];
+}
+
 export interface ActionRegistry {
   list(): readonly ContextualAction[];
   get(actionId: string): ContextualAction | null;
@@ -86,6 +119,7 @@ export interface ActionRegistry {
 
 export interface ContextualCopilotCore {
   resolveActions(context: ContextSnapshot): Promise<readonly ResolvedAction[]>;
+  resolveRequest(request: CopilotRequest): Promise<CopilotRequestResolution>;
   dispatch<TOutput>(input: {
     context: ContextSnapshot;
     actionId: string;
@@ -108,5 +142,6 @@ export function createContextualCopilotCore(input: {
   registry: ActionRegistry;
   policyEngine: PolicyEngine;
   semanticPort?: SemanticPort | null;
+  intentPort?: IntentPort | null;
   generativeMode?: 'none' | 'local' | 'remote';
 }): ContextualCopilotCore;
