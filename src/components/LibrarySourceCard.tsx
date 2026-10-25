@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { ResolvedAction } from '@trama/contextual-copilot-core';
+import type { PlanningStateV1 } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
@@ -17,10 +18,12 @@ import {
   type TeachingContextSuggestionReason
 } from '../library/teachingContext';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
+import { LibraryRelevancePanel } from './LibraryRelevancePanel';
 
 interface LibrarySourceCardProps {
   source: LibrarySource;
   udas: UdaRecord[];
+  planning?: PlanningStateV1 | null;
   currentClassName?: string | null;
   lastExplicitTeachingContext?: LibraryTeachingContext | null;
   onExplicitTeachingContextChange: (context: LibraryTeachingContext) => void;
@@ -83,6 +86,7 @@ function localDateKey(date = new Date()): string {
 export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   source,
   udas,
+  planning = null,
   currentClassName = null,
   lastExplicitTeachingContext = null,
   onExplicitTeachingContextChange,
@@ -257,6 +261,17 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         ...(lessonId ? { lessonId } : {})
       });
     }
+  };
+
+  const selectRelevanceTeachingContext = (context: LibraryTeachingContext) => {
+    setContextUdaId(context.udaId);
+    setContextLessonId(context.lessonId ?? '');
+    setContextSuggestion(null);
+    setContextChooserOpen(true);
+    setContextLinkOpen(false);
+    setContextLinkConfirmationPending(false);
+    setReviewOpen(false);
+    onExplicitTeachingContextChange(context);
   };
 
   const handleContextAction = (actionId: string) => {
@@ -506,6 +521,15 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                   Cambia
                 </button>
               </div>
+            ) : contextUdaId ? (
+              <div>
+                <strong className="block text-sm text-slate-100">Contesto scelto</strong>
+                <p className="mt-1 text-sm text-cyan-100">
+                  {selectedContextLesson
+                    ? `Lezione · ${selectedContextLesson.topic}`
+                    : `UDA · ${selectedContextUda?.title ?? contextUdaId}`}
+                </p>
+              </div>
             ) : (
               <strong className="block text-sm text-slate-100">Scegli dove usarla</strong>
             )}
@@ -558,6 +582,16 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               </p>
             )}
           </div>
+
+          <LibraryRelevancePanel
+            source={source}
+            udas={udas}
+            planning={planning}
+            teachingContext={resolvedTeachingContext}
+            isPending={isPending}
+            onLink={onLink}
+            onSelectTeachingContext={selectRelevanceTeachingContext}
+          />
 
           {webNeedsContent && (
             <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/20 p-3 space-y-3">
