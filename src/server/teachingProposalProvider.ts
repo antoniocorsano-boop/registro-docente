@@ -6,6 +6,62 @@ export interface TeachingProposalProviderInput {
   context: LibraryProposalRequestV1['context'];
 }
 
+export interface TeachingProposalProviderDescriptor {
+  id: string;
+  displayName: string;
+  model: string;
+}
+
+export interface TeachingProposalProviderCallContext {
+  requestId: string;
+  signal: AbortSignal;
+  maxOutputTokens: number;
+}
+
+export interface TeachingProposalProviderCallResult {
+  output: unknown;
+  metadata: {
+    providerResponseId?: string;
+    modelVersion?: string;
+    promptTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+}
+
+export type TeachingProposalProviderErrorCode =
+  | 'not-configured'
+  | 'rate-limited'
+  | 'timeout'
+  | 'blocked'
+  | 'unavailable'
+  | 'output-invalid'
+  | 'provider-error';
+
+export class TeachingProposalProviderError extends Error {
+  readonly code: TeachingProposalProviderErrorCode;
+
+  constructor(code: TeachingProposalProviderErrorCode, message = 'Teaching proposal provider failed.') {
+    super(message);
+    this.name = 'TeachingProposalProviderError';
+    this.code = code;
+  }
+}
+
+/**
+ * Provider contract consumed by the governed LIB-01E runtime.
+ * The legacy LIB-01D route remains on TeachingProposalProvider until the
+ * route migration task, so each task can keep the full repository GREEN.
+ */
+export interface GovernedTeachingProposalProvider {
+  readonly descriptor: TeachingProposalProviderDescriptor;
+  generate(
+    input: TeachingProposalProviderInput,
+    context: TeachingProposalProviderCallContext
+  ): Promise<TeachingProposalProviderCallResult>;
+}
+
+/** @deprecated LIB-01D compatibility boundary; migrated in LIB-01E Task 3. */
 export interface TeachingProposalProvider {
   readonly id: string;
   readonly model: string;
@@ -50,6 +106,7 @@ function parseProviderJson(text: string): unknown {
   return JSON.parse(withoutFence);
 }
 
+/** @deprecated Replaced by geminiTeachingProposalProvider.ts in LIB-01E Task 2. */
 export function createGeminiTeachingProposalProvider(apiKey: string | undefined): TeachingProposalProvider {
   const id = 'google-gemini';
   const model = 'gemini-3.8-flash';

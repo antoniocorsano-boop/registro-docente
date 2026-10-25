@@ -52,6 +52,45 @@ export interface TeachingProposalV1 extends TeachingProposalContent {
   };
 }
 
+export interface TeachingProposalRuntimeReceiptWire {
+  requestId: string;
+  provider: string;
+  model: string;
+  modelVersion?: string;
+  providerResponseId?: string;
+  durationMs: number;
+  promptTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  attemptCount: 1;
+}
+
+export type LibraryProposalErrorCode =
+  | 'REMOTE_POLICY_DENIED'
+  | 'REQUEST_INVALID'
+  | 'SOURCE_TOO_LARGE'
+  | 'PROVIDER_NOT_CONFIGURED'
+  | 'PROVIDER_RATE_LIMITED'
+  | 'PROVIDER_TIMEOUT'
+  | 'PROVIDER_BLOCKED'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'PROVIDER_OUTPUT_INVALID'
+  | 'PROVIDER_ERROR';
+
+export interface LibraryProposalSuccessEnvelope {
+  proposal: TeachingProposalV1;
+  receipt: TeachingProposalRuntimeReceiptWire;
+}
+
+export interface LibraryProposalErrorEnvelope {
+  error: {
+    code: LibraryProposalErrorCode;
+    message: string;
+    retriable: boolean;
+    requestId?: string;
+  };
+}
+
 function nonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }

@@ -11,7 +11,11 @@ import {
   type TeachingProposalV1
 } from '../library/teachingProposal';
 import { resolveLibraryRemoteProposalActions } from '../library/contextualCoreAdapter';
-import { requestLibraryTeachingProposal } from '../services/libraryProposalService';
+import {
+  getLibraryProposalProviderMetadata,
+  requestLibraryTeachingProposal,
+  type LibraryProposalProviderMetadata
+} from '../services/libraryProposalService';
 import { uid } from '../utils';
 
 interface LibraryProposalPanelProps {
@@ -22,6 +26,8 @@ interface LibraryProposalPanelProps {
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onAddSource: (source: LibrarySource) => Promise<void>;
 }
+
+type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 function contentFromProposal(proposal: TeachingProposalV1): TeachingProposalContent {
   return {
@@ -45,6 +51,9 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
 }) => {
   const [remoteConsent, setRemoteConsent] = useState(false);
   const [remoteActions, setRemoteActions] = useState<readonly ResolvedAction[]>([]);
+  const [providerMetadata, setProviderMetadata] = useState<LibraryProposalProviderMetadata | null>(null);
+  const [providerMetadataStatus, setProviderMetadataStatus] = useState<ProviderMetadataStatus>('idle');
+  const [providerMetadataAttempt, setProviderMetadataAttempt] = useState(0);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [proposal, setProposal] = useState<TeachingProposalV1 | null>(null);
@@ -71,6 +80,37 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setAdoptionError(null);
     setError(null);
   }, [source.id, source.privacy, teachingContext.udaId, teachingContext.lessonId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (source.privacy !== 'teacher-professional') {
+      setProviderMetadata(null);
+      setProviderMetadataStatus('idle');
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setProviderMetadata(null);
+    setProviderMetadataStatus('loading');
+    void getLibraryProposalProviderMetadata()
+      .then(metadata => {
+        if (!cancelled) {
+          setProviderMetadata(metadata);
+          setProviderMetadataStatus('ready');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProviderMetadata(null);
+          setProviderMetadataStatus('error');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source.id, source.privacy, providerMetadataAttempt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,9 +178,9 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         uda,
         explicitTeacherOptIn: true
       });
-      const nextProposal = await requestLibraryTeachingProposal(request, controller.signal);
+      const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
-      setProposal(nextProposal);
+      setProposal(result.proposal);
     } catch (reason) {
       if (!controller.signal.aborted) {
         setError(
@@ -245,6 +285,37 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         </p>
       </div>
 
+      {!proposal && (
+        <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-2">
+          <p className="text-xs text-slate-300">
+            Questa richiesta invia la fonte professionale e il contesto didattico al servizio remoto configurato
+            {providerMetadataStatus === 'ready' && providerMetadata
+              ? <>: <strong>{providerMetadata.provider}</strong> ({providerMetadata.model})</>
+              : '.'}
+            {' '}Non includere dati personali degli studenti.
+          </p>
+          {providerMetadataStatus === 'loading' && (
+            <p role="status" className="text-xs text-violet-200">Verifico il servizio remoto configurato…</p>
+          )}
+          {providerMetadataStatus === 'error' && (
+            <div className="space-y-2">
+              <p className="text-xs text-amber-200">Non è stato possibile verificare il servizio remoto configurato.</p>
+              <button
+                type="button"
+                onClick={() => setProviderMetadataAttempt(current => current + 1)}
+                disabled={isPending || isGenerating}
+                className="min-h-[44px] px-3 rounded-md border border-amber-700 text-sm text-amber-100 disabled:opacity-50"
+              >
+                Riprova verifica servizio
+              </button>
+            </div>
+          )}
+          {providerMetadataStatus === 'ready' && providerMetadata?.available === false && (
+            <p className="text-xs text-amber-200">Il servizio remoto configurato non è disponibile in questo ambiente.</p>
+          )}
+        </div>
+      )}
+
       {!remoteConsent && !proposal && (
         <button
           type="button"
@@ -252,7 +323,12 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
             setError(null);
             setRemoteConsent(true);
           }}
-          disabled={isPending || isGenerating}
+          disabled={
+            isPending ||
+            isGenerating ||
+            providerMetadataStatus !== 'ready' ||
+            providerMetadata?.available !== true
+          }
           className="min-h-[44px] px-3 rounded-md border border-violet-700 text-sm text-violet-100 disabled:opacity-50"
         >
           Consenti per questa richiesta
