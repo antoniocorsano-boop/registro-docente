@@ -1158,6 +1158,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             udas={udas}
             planning={planning}
             currentClassName={currentClass?.name ?? null}
+            embeddingConfig={settings.embeddingConfig}
             onAddSource={handleAddLibrarySource}
             onUpdateSource={handleUpdateLibrarySource}
             onLinkSource={handleLinkLibrarySource}
