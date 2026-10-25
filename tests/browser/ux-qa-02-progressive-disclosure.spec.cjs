@@ -8,6 +8,7 @@ const vaultPassword = 'ux-qa-02-browser-qualification';
 const CLASS_NAME = 'Classe Sintetica UXQA02';
 const UDA_TITLE = 'UDA Sintetica UXQA02';
 const TECHNICAL_FILENAME = 'TECNOLOGIA_VERDE_2026_2027.json';
+const READABLE_FILENAME_TITLE = 'TECNOLOGIA VERDE 2026 2027';
 
 test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
 test.setTimeout(180000);
@@ -216,14 +217,18 @@ test('UX-QA-02 records progressive-disclosure evidence across mature teacher sur
   // P2: Library primary label should describe the teacher resource, not expose the technical filename as its title.
   await addSyntheticFileSource(page);
   const libraryMain = page.locator('main');
+  const readableHeading = libraryMain.getByRole('heading', { name: READABLE_FILENAME_TITLE, exact: true });
   const technicalHeadingVisible = await visible(libraryMain.getByRole('heading', { name: TECHNICAL_FILENAME, exact: true }));
+  await expect(readableHeading).toBeVisible();
+  await expect(libraryMain.getByText(TECHNICAL_FILENAME, { exact: true })).toBeVisible();
+  expect(technicalHeadingVisible).toBe(false);
   const libraryShot = await capture(page, 'ux-qa-02-library-desktop.png');
   observations.push(observation(
     'UXPD-005',
-    technicalHeadingVisible ? 'FAIL' : 'PASS',
+    'PASS',
     'library',
     'Library uses a human-readable resource title as primary label and keeps the filename secondary',
-    technicalHeadingVisible ? `Technical filename ${TECHNICAL_FILENAME} is the primary heading` : 'Technical filename is not the primary resource heading',
+    `Readable title ${READABLE_FILENAME_TITLE} is primary; ${TECHNICAL_FILENAME} remains secondary provenance`,
     [libraryShot]
   ));
 
