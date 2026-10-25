@@ -282,6 +282,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               isPending={isPending}
               isSelected={selectedSourceId === source.id}
               onUse={setSelectedSourceId}
+              onAddSource={onAddSource}
               onUpdate={onUpdateSource}
               onLink={onLinkSource}
               onUnlink={onUnlinkSource}
