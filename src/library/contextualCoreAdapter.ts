@@ -32,7 +32,7 @@ const LIBRARY_CONTEXT_ACTIONS: ContextualAction[] = [
   {
     id: 'prepare-from-source',
     capability: 'PREPARE',
-    label: 'Prepara materiale',
+    label: 'Prepara attività',
     priority: 80,
     risk: 'PROPOSE',
     requiresGenerativeAI: true,
