@@ -74,6 +74,7 @@ jobs:
           cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
           cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
           cp tests/browser/ux-qa-01-review-regressions.spec.cjs .browser-tools/ux-qa-01-review-regressions.spec.cjs
+          cp tests/browser/ux-qa-02-progressive-disclosure.spec.cjs .browser-tools/ux-qa-02-progressive-disclosure.spec.cjs
 
       - name: Start production server and wait for readiness
         shell: bash
@@ -122,6 +123,7 @@ jobs:
             ux-trust-01-full-regression.spec.cjs \
             ux-qa-01-navigation.spec.cjs \
             ux-qa-01-review-regressions.spec.cjs \
+            ux-qa-02-progressive-disclosure.spec.cjs \
             --reporter=line \
             --output=../browser-evidence/test-results
 
@@ -134,6 +136,16 @@ jobs:
             browser-evidence/ux-qa-01-evidence.json \
             ux/qa/navigation-contract.v1.json \
             browser-evidence
+
+      - name: Analyze progressive disclosure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          bun scripts/ux-qa/analyze.mjs \
+            browser-evidence/ux-qa-02-evidence.json \
+            ux/qa/progressive-disclosure-contract.v1.json \
+            browser-evidence/ux-qa-02
 
       - name: Stop production server
         if: always()

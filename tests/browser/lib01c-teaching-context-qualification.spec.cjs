@@ -49,7 +49,7 @@ async function reloadAndUnlock(page) {
 
 async function openDrawerItem(page, label) {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  const item = page.getByRole('button', { name: label, exact: true });
+  const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
 }
@@ -63,10 +63,11 @@ async function selectSyntheticClass(page) {
 
 async function createSyntheticUda(page, title, className = null) {
   await openDrawerItem(page, 'UDA');
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
   if (className) {
-    const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
+    const classSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Classe', exact: true });
     await expect(classSelect).toBeVisible();
     await classSelect.selectOption({ label: className });
   }
@@ -75,6 +76,7 @@ async function createSyntheticUda(page, title, className = null) {
 }
 
 async function addSyntheticLesson(page) {
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'Analisi', exact: true }).click();
   await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
   await expect(page.getByRole('heading', { name: /Gap Analysis Competenze & Verifiche Oggettive/ })).toBeVisible();
 

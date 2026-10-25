@@ -262,7 +262,7 @@ test('UXT-D active UDA without formal evidence stays watch while an ended gap is
     await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })).toBeVisible();
     await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
-    const classSelect = page.locator('label').filter({ hasText: /^Classe$/ }).locator('..').locator('select');
+    const classSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Classe', exact: true });
     await classSelect.selectOption({ label: className });
     await page.locator('label').filter({ hasText: 'Mese Inizio' }).locator('..').locator('select').selectOption(String(startMonth));
     const durationInput = page.locator('label').filter({ hasText: 'Durata Mesi' }).locator('..').locator('input[type="number"]');
@@ -274,6 +274,7 @@ test('UXT-D active UDA without formal evidence stays watch while an ended gap is
   await createUda({ title: activeUdaTitle, startMonth: 1, duration: 3 });
   await createUda({ title: endedUdaTitle, startMonth: 0, duration: 1 });
 
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'Analisi', exact: true }).click();
   await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
   await expect(page.getByRole('heading', { name: /Gap Analysis Competenze & Verifiche Oggettive/ })).toBeVisible();
 
