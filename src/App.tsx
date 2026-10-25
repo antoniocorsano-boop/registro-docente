@@ -1213,6 +1213,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           planning={planning}
           currentClassName={currentClass?.name ?? null}
           onAddSource={handleAddLibrarySource}
+          onUpdateSource={handleUpdateLibrarySource}
           onLink={handleLinkLibrarySource}
           isPending={isLibraryMutationPending}
         />
