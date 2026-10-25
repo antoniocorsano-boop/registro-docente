@@ -1,0 +1,120 @@
+const { test, expect } = require('@playwright/test');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
+const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence');
+const vaultPassword = 'lib02-browser-qualification';
+const UDA_TITLE = 'UDA Sintetica LIB-02';
+const WEB_TITLE = 'Articolo rete elettrica';
+const WEB_URL = 'https://example.org/energia/rete';
+const CAPTURED_TEXT = 'Una rete elettrica distribuisce energia tra produzione, trasformazione e utilizzo.';
+
+test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
+test.setTimeout(180000);
+
+async function setupFreshVault(page) {
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('#vault-password').fill(vaultPassword);
+  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+}
+
+async function reloadAndUnlock(page) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
+  if (await unlockHeading.isVisible().catch(() => false)) {
+    await page.locator('#vault-password').fill(vaultPassword);
+    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
+  }
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+}
+
+async function openDrawerItem(page, label) {
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const item = page.getByRole('button', { name: label, exact: true });
+  await expect(item).toBeVisible();
+  await item.click();
+}
+
+async function createSyntheticUda(page) {
+  await openDrawerItem(page, 'UDA');
+  await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+  await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(UDA_TITLE);
+  await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
+  await expect(page.getByText(UDA_TITLE, { exact: true }).first()).toBeVisible();
+}
+
+async function openLibrary(page) {
+  await openDrawerItem(page, 'Biblioteca privata');
+  await expect(page.getByRole('heading', { name: 'Biblioteca privata', exact: true })).toBeVisible();
+}
+
+async function sourceCard(page, title) {
+  const heading = page.getByRole('heading', { name: title, exact: true });
+  await expect(heading).toBeVisible();
+  return heading.locator('xpath=ancestor::article');
+}
+
+test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce il testo — desktop 1280x900', async ({ page }) => {
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error)));
+
+  await setupFreshVault(page);
+  await createSyntheticUda(page);
+  await openLibrary(page);
+
+  await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
+  await page.getByRole('button', { name: 'URL', exact: true }).click();
+  await page.getByLabel('Titolo').fill(WEB_TITLE);
+  await page.getByLabel('URL').fill(WEB_URL);
+  await page.getByRole('button', { name: 'Salva URL', exact: true }).click();
+
+  let card = await sourceCard(page, WEB_TITLE);
+  await expect(card.getByText('Da rivedere', { exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Usa', exact: true }).click();
+
+  const udaChooser = card.getByLabel('UDA corrente');
+  await expect(udaChooser).toBeVisible();
+  await udaChooser.selectOption({ label: UDA_TITLE });
+
+  await expect(card.getByText('Contenuto web non ancora acquisito', { exact: true })).toBeVisible();
+  await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toHaveCount(0);
+
+  await card.getByRole('button', { name: 'Aggiungi testo della pagina', exact: true }).click();
+  await card.getByLabel('Testo della pagina').fill(CAPTURED_TEXT);
+  await card.getByRole('button', { name: 'Salva contenuto', exact: true }).click();
+
+  await expect(card.getByText('Pronta', { exact: true })).toBeVisible();
+  await expect(card.getByText('Contenuto web non ancora acquisito', { exact: true })).toHaveCount(0);
+  await expect(card.getByText(CAPTURED_TEXT, { exact: true })).toBeVisible();
+
+  await reloadAndUnlock(page);
+  await openLibrary(page);
+  card = await sourceCard(page, WEB_TITLE);
+  await expect(card.getByText('Pronta', { exact: true })).toBeVisible();
+  await expect(card.getByText(CAPTURED_TEXT, { exact: true })).toBeVisible();
+
+  await page.screenshot({
+    path: path.join(evidenceDir, 'lib02-source-acquisition-desktop.png'),
+    fullPage: true
+  });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'lib02-source-acquisition-desktop.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      viewport: { width: 1280, height: 900 },
+      checks: [
+        'url-only-needs-review',
+        'incomplete-source-blocks-remote-preparation',
+        'explicit-local-text-completion',
+        'durable-ready-after-reload'
+      ],
+      pageErrors
+    }, null, 2) + '\n'
+  );
+
+  expect(pageErrors).toEqual([]);
+});
