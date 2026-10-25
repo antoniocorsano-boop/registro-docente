@@ -60,8 +60,7 @@ const LIBRARY_CONTEXT_ACTIONS: ContextualAction[] = [
 const LIBRARY_COPILOT_ALLOWED_CAPABILITIES: readonly CapabilityId[] = Object.freeze([
   'REVIEW',
   'LINK',
-  'PREPARE',
-  'SUMMARIZE'
+  'PREPARE'
 ]);
 
 const actionRegistry = createActionRegistry(LIBRARY_CONTEXT_ACTIONS);
