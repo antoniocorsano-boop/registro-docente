@@ -26,6 +26,7 @@ interface LibrarySourceCardProps {
   isPending: boolean;
   isSelected: boolean;
   onUse: (sourceId: string) => void;
+  onAddSource: (source: LibrarySource) => Promise<void>;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onUnlink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
@@ -87,6 +88,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   isPending,
   isSelected,
   onUse,
+  onAddSource,
   onUpdate,
   onLink,
   onUnlink,
@@ -536,6 +538,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               uda={selectedContextUda}
               teachingContext={resolvedTeachingContext}
               isPending={isPending}
+              onAddSource={onAddSource}
               onUpdate={onUpdate}
             />
           )}
