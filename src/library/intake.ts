@@ -10,6 +10,19 @@ function requireValue(value: string, label: string): string {
   return normalized;
 }
 
+function deriveFileDisplayTitle(filename: string): string {
+  const normalized = filename.trim();
+  if (!normalized) return 'Fonte senza nome';
+
+  const withoutFinalExtension = normalized.replace(/\.[^./\\]+$/, '');
+  const readable = withoutFinalExtension
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return readable || 'Fonte senza nome';
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     if (typeof FileReader === 'undefined') {
@@ -101,7 +114,7 @@ export async function createFileSource(input: {
   return {
     id: requireValue(input.id, 'Identificatore'),
     kind: mimeType.startsWith('image/') ? 'image' : 'file',
-    title: input.file.name.trim() || 'Fonte senza nome',
+    title: deriveFileDisplayTitle(input.file.name),
     capturedAt: requireValue(input.capturedAt, 'Data di acquisizione'),
     origin: input.file.name || undefined,
     payload: { mimeType, dataUrl },
