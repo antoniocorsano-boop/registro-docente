@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { evaluateDataFlow, type DataClassification } from './src/security/dataClassification.ts';
+import { handleLibraryProposalRequest } from './src/server/libraryProposalRoute.ts';
+import { createGeminiTeachingProposalProvider } from './src/server/teachingProposalProvider.ts';
 
 dotenv.config();
 
@@ -13,6 +15,18 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+app.post(
+  '/api/copilot/library-proposal',
+  express.json({ limit: '12mb' }),
+  async (req, res) => {
+    const result = await handleLibraryProposalRequest(
+      req.body,
+      createGeminiTeachingProposalProvider(process.env.GEMINI_API_KEY)
+    );
+    return res.status(result.status).json(result.body);
+  }
+);
 
 app.use(express.json());
 
