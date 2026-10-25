@@ -15,6 +15,7 @@ import {
   type TeachingContextSuggestion,
   type TeachingContextSuggestionReason
 } from '../library/teachingContext';
+import { LibraryProposalPanel } from './LibraryProposalPanel';
 
 interface LibrarySourceCardProps {
   source: LibrarySource;
@@ -528,6 +529,16 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               </p>
             )}
           </div>
+
+          {resolvedTeachingContext && selectedContextUda && (
+            <LibraryProposalPanel
+              source={source}
+              uda={selectedContextUda}
+              teachingContext={resolvedTeachingContext}
+              isPending={isPending}
+              onUpdate={onUpdate}
+            />
+          )}
 
           {isContextLoading && <p role="status" className="text-xs text-cyan-200/80">Valuto le azioni disponibili…</p>}
           {contextError && <p role="alert" className="text-xs text-amber-200">{contextError}</p>}
