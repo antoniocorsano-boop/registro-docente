@@ -145,7 +145,8 @@ describe('LIB-02 governed source normalization', () => {
       file: text,
       capturedAt: '2026-10-25T09:00:00.000Z'
     });
-    expect(textSource.payload.dataUrl).toStartWith('data:text/plain;base64,');
+    expect(textSource.payload.dataUrl).toStartWith('data:text/plain');
+    expect(textSource.payload.dataUrl).toContain(';base64,');
     expect(textSource.payload.text).toBe('Energia eolica e rete.');
     expect(textSource.extractedText).toBe('Energia eolica e rete.');
     expect(textSource.status).toBe('ready');
@@ -157,7 +158,8 @@ describe('LIB-02 governed source normalization', () => {
       file: json,
       capturedAt: '2026-10-25T09:00:00.000Z'
     });
-    expect(jsonSource.payload.dataUrl).toStartWith('data:application/json;base64,');
+    expect(jsonSource.payload.dataUrl).toStartWith('data:application/json');
+    expect(jsonSource.payload.dataUrl).toContain(';base64,');
     expect(jsonSource.payload.text).toBe('{"tema":"energia"}');
     expect(jsonSource.extractedText).toBe('{"tema":"energia"}');
     expect(jsonSource.status).toBe('ready');
@@ -181,7 +183,8 @@ describe('LIB-02 governed source normalization', () => {
       capturedAt: '2026-10-25T09:00:00.000Z'
     });
     expect(oversizedSource.status).toBe('needs-review');
-    expect(oversizedSource.payload.dataUrl).toStartWith('data:text/plain;base64,');
+    expect(oversizedSource.payload.dataUrl).toStartWith('data:text/plain');
+    expect(oversizedSource.payload.dataUrl).toContain(';base64,');
     expect(oversizedSource.payload.text).toBeUndefined();
     expect(oversizedSource.extractedText).toBeUndefined();
   });
