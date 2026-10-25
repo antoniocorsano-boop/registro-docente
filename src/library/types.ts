@@ -30,6 +30,16 @@ export interface LibrarySourcePayload {
   dataUrl?: string;
 }
 
+export interface LibrarySourceProvenance {
+  derivedFromSourceId: string;
+  generation?: {
+    provider: string;
+    model: string;
+    generatedAt: string;
+    kind: 'activity';
+  };
+}
+
 export interface LibrarySource {
   id: string;
   kind: LibrarySourceKind;
@@ -43,6 +53,7 @@ export interface LibrarySource {
   privacy: LibraryPrivacyStatus;
   links: LibrarySourceLink[];
   notes?: string;
+  provenance?: LibrarySourceProvenance;
 }
 
 export interface LibraryStateV1 {

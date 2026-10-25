@@ -111,6 +111,26 @@ function isLibraryPayload(value: unknown, kind: unknown): boolean {
   return true;
 }
 
+function isIsoDate(value: unknown): boolean {
+  return typeof value === 'string'
+    && Boolean(value.trim())
+    && Number.isFinite(Date.parse(value));
+}
+
+function isLibraryProvenance(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  if (typeof value.derivedFromSourceId !== 'string' || !value.derivedFromSourceId.trim()) return false;
+  if (value.generation === undefined) return true;
+  if (!isRecord(value.generation)) return false;
+  return typeof value.generation.provider === 'string'
+    && Boolean(value.generation.provider.trim())
+    && typeof value.generation.model === 'string'
+    && Boolean(value.generation.model.trim())
+    && isIsoDate(value.generation.generatedAt)
+    && value.generation.kind === 'activity';
+}
+
 function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
   if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.sources)) return false;
 
@@ -133,6 +153,7 @@ function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
     if (!isOptionalHttpUrl(source.sourceUrl)) return false;
     if (!isOptionalString(source.extractedText)) return false;
     if (!isOptionalString(source.notes)) return false;
+    if (!isLibraryProvenance(source.provenance)) return false;
     if (!isLibraryPayload(source.payload, source.kind) || !Array.isArray(source.links)) return false;
 
     return source.links.every(link => (

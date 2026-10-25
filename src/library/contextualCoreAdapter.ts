@@ -32,7 +32,7 @@ const LIBRARY_CONTEXT_ACTIONS: ContextualAction[] = [
   {
     id: 'prepare-from-source',
     capability: 'PREPARE',
-    label: 'Prepara materiale',
+    label: 'Prepara attività',
     priority: 80,
     risk: 'PROPOSE',
     requiresGenerativeAI: true,
@@ -55,6 +55,16 @@ const libraryContextualCore = createContextualCopilotCore({
   registry: actionRegistry,
   policyEngine,
   generativeMode: 'none'
+});
+
+const remoteProposalActionRegistry = createActionRegistry(
+  LIBRARY_CONTEXT_ACTIONS.filter(action => action.id !== 'summarize-source')
+);
+const remoteProposalPolicyEngine = createFailClosedPolicyEngine({ generativeMode: 'remote' });
+const libraryRemoteProposalCore = createContextualCopilotCore({
+  registry: remoteProposalActionRegistry,
+  policyEngine: remoteProposalPolicyEngine,
+  generativeMode: 'remote'
 });
 
 function libraryDataClasses(
@@ -115,11 +125,36 @@ export function buildLibraryContextSnapshot(
   };
 }
 
+export function buildLibraryRemoteProposalSnapshot(
+  source: LibrarySource,
+  teachingContext: ResolvedLibraryTeachingContext,
+  explicitRemoteOptIn: boolean
+): ContextSnapshot {
+  const base = buildLibraryContextSnapshot(source, teachingContext);
+  return {
+    ...base,
+    privacy: {
+      ...base.privacy,
+      remoteProviderAllowed: source.privacy === 'teacher-professional' && explicitRemoteOptIn
+    }
+  };
+}
+
 export function resolveLibraryContextActions(
   source: LibrarySource,
   teachingContext: ResolvedLibraryTeachingContext | null = null
 ): Promise<readonly ResolvedAction[]> {
   return libraryContextualCore.resolveActions(buildLibraryContextSnapshot(source, teachingContext));
+}
+
+export function resolveLibraryRemoteProposalActions(
+  source: LibrarySource,
+  teachingContext: ResolvedLibraryTeachingContext,
+  explicitRemoteOptIn: boolean
+): Promise<readonly ResolvedAction[]> {
+  return libraryRemoteProposalCore.resolveActions(
+    buildLibraryRemoteProposalSnapshot(source, teachingContext, explicitRemoteOptIn)
+  );
 }
 
 export interface DispatchLibraryContextActionInput<TOutput> {

@@ -68,6 +68,7 @@ jobs:
           cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
           cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
           cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
+          cp tests/browser/lib01d-governed-proposal-qualification.spec.cjs .browser-tools/lib01d-governed-proposal-qualification.spec.cjs
           cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
           cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
           cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
@@ -117,6 +118,7 @@ jobs:
             lib01-private-library-qualification.spec.cjs \
             lib01b-contextual-core-qualification.spec.cjs \
             lib01c-teaching-context-qualification.spec.cjs \
+            lib01d-governed-proposal-qualification.spec.cjs \
             online-01-qualification.spec.cjs \
             release-01-qualification.spec.cjs \
             ux-trust-01-qualification.spec.cjs \
