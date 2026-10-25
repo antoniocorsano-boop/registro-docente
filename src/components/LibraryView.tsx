@@ -1,12 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FilePlus2, Link2, Search, X } from 'lucide-react';
 import type { PlanningStateV1 } from '../planning/types';
-import type { UdaRecord } from '../types';
+import type { LocalEmbeddingConfig, UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import type { LibraryTeachingContext } from '../library/teachingContext';
 import { searchLibrarySources } from '../library/libraryState';
 import { createFileSource, createTextSource, createWebSource } from '../library/intake';
+import { retrieveLibrarySourcesByMeaning } from '../library/semanticRetrieval';
+import type { SemanticLibraryResolution } from '../library/semanticRetrieval';
 import { uid } from '../utils';
 import { LibrarySourceCard } from './LibrarySourceCard';
 
@@ -15,6 +17,7 @@ interface LibraryViewProps {
   udas: UdaRecord[];
   planning: PlanningStateV1;
   currentClassName?: string | null;
+  embeddingConfig?: LocalEmbeddingConfig;
   isPending: boolean;
   errorMessage: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -28,11 +31,28 @@ type LibraryFilter = 'recent' | 'linked' | 'review';
 type CaptureMode = 'file' | 'web' | 'text' | null;
 type TextCaptureKind = Extract<LibrarySourceKind, 'text' | 'note' | 'concept'>;
 
+function semanticUnavailableCopy(resolution: SemanticLibraryResolution | null): string | null {
+  if (!resolution || resolution.status !== 'unavailable') return null;
+  switch (resolution.reason) {
+    case 'QUERY_EMPTY':
+      return 'Scrivi cosa stai cercando prima di avviare la ricerca per significato.';
+    case 'LOCAL_EMBEDDING_DISABLED':
+      return 'Il motore locale per la ricerca per significato non è attivo.';
+    case 'LOCAL_EMBEDDING_REQUIRED':
+      return 'Questa funzione usa solo il motore locale. Non viene attivato automaticamente un servizio remoto.';
+    case 'NO_ELIGIBLE_SOURCE':
+      return 'Non ci sono ancora fonti professionali con testo utilizzabile per questa ricerca.';
+    case 'NO_SEMANTIC_MATCH':
+      return 'Nessuna fonte sufficientemente pertinente trovata per significato.';
+  }
+}
+
 export const LibraryView: React.FC<LibraryViewProps> = ({
   library,
   udas,
   planning,
   currentClassName = null,
+  embeddingConfig,
   isPending,
   errorMessage,
   onAddSource,
@@ -55,6 +75,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [lastExplicitTeachingContext, setLastExplicitTeachingContext] = useState<LibraryTeachingContext | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [semanticResolution, setSemanticResolution] = useState<SemanticLibraryResolution | null>(null);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
+  const [isSemanticPending, setIsSemanticPending] = useState(false);
+  const semanticRequestRef = useRef(0);
 
   const sources = useMemo(() => {
     const searched = searchLibrarySources(library, query);
@@ -64,6 +88,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
     return searched;
   }, [library, query, filter]);
+
+  const semanticSources = useMemo(() => {
+    if (!semanticResolution || semanticResolution.status !== 'ranked') return [];
+    const byId = new Map(library.sources.map(source => [source.id, source]));
+    return semanticResolution.candidates
+      .map(candidate => byId.get(candidate.sourceId))
+      .filter((source): source is LibrarySource => Boolean(source));
+  }, [library.sources, semanticResolution]);
+
+  useEffect(() => {
+    semanticRequestRef.current += 1;
+    setSemanticResolution(null);
+    setSemanticError(null);
+    setIsSemanticPending(false);
+  }, [query, library, embeddingConfig]);
+
+  useEffect(() => () => {
+    semanticRequestRef.current += 1;
+  }, []);
 
   const closeCapture = () => {
     setCaptureOpen(false);
@@ -132,6 +175,32 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       setCaptureError(error instanceof Error ? error.message : 'Testo non valido.');
     }
   };
+
+  const handleRunSemanticSearch = async () => {
+    if (!embeddingConfig || !query.trim() || isSemanticPending) return;
+    const requestId = semanticRequestRef.current + 1;
+    semanticRequestRef.current = requestId;
+    setIsSemanticPending(true);
+    setSemanticResolution(null);
+    setSemanticError(null);
+
+    try {
+      const result = await retrieveLibrarySourcesByMeaning({
+        query,
+        sources: library.sources,
+        config: embeddingConfig
+      });
+      if (semanticRequestRef.current !== requestId) return;
+      setSemanticResolution(result);
+    } catch {
+      if (semanticRequestRef.current !== requestId) return;
+      setSemanticError('Il motore locale non risponde. Puoi riprovare; la ricerca normale resta disponibile.');
+    } finally {
+      if (semanticRequestRef.current === requestId) setIsSemanticPending(false);
+    }
+  };
+
+  const semanticUnavailableMessage = semanticUnavailableCopy(semanticResolution);
 
   return (
     <section className="space-y-5" aria-labelledby="private-library-title">
@@ -258,6 +327,60 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             className="min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-950 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500"
           />
         </label>
+
+        <details data-testid="library-semantic-search-disclosure" className="rounded-lg border border-slate-800 bg-slate-950/40">
+          <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm font-medium text-slate-200">
+            Ricerca per significato
+          </summary>
+          <div className="border-t border-slate-800 px-3 py-3 space-y-3">
+            <p className="text-xs leading-relaxed text-slate-400">
+              Usa il motore locale configurato e non invia automaticamente i materiali a servizi remoti. Sono considerate solo fonti classificate come professionali.
+            </p>
+            <button
+              type="button"
+              data-testid="library-semantic-search-run"
+              onClick={() => void handleRunSemanticSearch()}
+              disabled={!embeddingConfig || !query.trim() || isSemanticPending}
+              className="min-h-[44px] px-4 rounded-lg border border-[var(--primary)] text-[var(--primary)] font-semibold text-sm disabled:opacity-50"
+            >
+              {isSemanticPending ? 'Ricerca in corso…' : 'Cerca per significato'}
+            </button>
+
+            {isSemanticPending && <p role="status" className="text-xs text-slate-400">Confronto locale dei significati in corso…</p>}
+            {semanticError && <p role="alert" className="text-xs text-red-300">{semanticError}</p>}
+            {semanticUnavailableMessage && <p className="text-xs text-slate-400">{semanticUnavailableMessage}</p>}
+
+            {semanticSources.length > 0 && (
+              <div data-testid="library-semantic-results" className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Risultati per significato</p>
+                <div className="grid lg:grid-cols-2 gap-3">
+                  {semanticSources.map(source => (
+                    <div key={`semantic-${source.id}`} className="space-y-1" data-semantic-source-id={source.id}>
+                      <p className="text-[11px] font-semibold text-[var(--primary)]">Pertinenza semantica</p>
+                      <LibrarySourceCard
+                        source={source}
+                        udas={udas}
+                        planning={planning}
+                        currentClassName={currentClassName}
+                        lastExplicitTeachingContext={lastExplicitTeachingContext}
+                        onExplicitTeachingContextChange={setLastExplicitTeachingContext}
+                        isPending={isPending}
+                        isSelected={selectedSourceId === source.id}
+                        onUse={setSelectedSourceId}
+                        onAddSource={onAddSource}
+                        onUpdate={onUpdateSource}
+                        onLink={onLinkSource}
+                        onUnlink={onUnlinkSource}
+                        onDelete={onDeleteSource}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
+
         <div className="flex flex-wrap gap-2" aria-label="Filtra fonti">
           {([
             ['recent', 'Recenti'],
