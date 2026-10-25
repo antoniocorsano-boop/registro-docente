@@ -1,0 +1,163 @@
+name: RELEASE-2026-10-25 Live Verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SHA: '4be167245267da6d664e634e5070a2cc9beb265f'
+  PUBLIC_URL: 'https://registro-docente.ai.studio'
+  PLAYWRIGHT_VERSION: '1.64.1'
+
+jobs:
+  live-verification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Verify exact released source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected release SHA: ${RELEASE_SHA}"
+          echo "Checkout SHA:         ${actual_sha}"
+          test "${actual_sha}" = "${RELEASE_SHA}"
+
+      - name: Setup Node for isolated browser toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .browser-tools live-evidence
+          cat > .browser-tools/package.json <<'JSON'
+          {
+            "name": "registro-docente-release-live-verification-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .browser-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+          cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
+          cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
+          cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
+          cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
+          cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
+          cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
+          cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
+          cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
+          cp tests/browser/ux-qa-01-review-regressions.spec.cjs .browser-tools/ux-qa-01-review-regressions.spec.cjs
+          cp tests/browser/ux-qa-02-progressive-disclosure.spec.cjs .browser-tools/ux-qa-02-progressive-disclosure.spec.cjs
+
+      - name: Probe public target and capture asset fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 \
+            "${PUBLIC_URL}/" \
+            -D live-evidence/public-headers.txt \
+            -o live-evidence/public-index.html
+          printf 'public_url=%s\nrelease_sha=%s\n' "${PUBLIC_URL}" "${RELEASE_SHA}" > live-evidence/release-metadata.txt
+          grep -Eo 'assets/[^"[:space:]]+\.(js|css)' live-evidence/public-index.html \
+            | sort -u \
+            > live-evidence/asset-fingerprints.txt || true
+          test -s live-evidence/public-index.html
+          cat live-evidence/asset-fingerprints.txt
+
+      - name: Run complete live Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="${PUBLIC_URL}" \
+          EVIDENCE_DIR="../live-evidence" \
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            browser-qualification.spec.cjs \
+            lib01-private-library-qualification.spec.cjs \
+            lib01b-contextual-core-qualification.spec.cjs \
+            lib01c-teaching-context-qualification.spec.cjs \
+            online-01-qualification.spec.cjs \
+            release-01-qualification.spec.cjs \
+            ux-trust-01-qualification.spec.cjs \
+            ux-trust-01-full-regression.spec.cjs \
+            ux-qa-01-navigation.spec.cjs \
+            ux-qa-01-review-regressions.spec.cjs \
+            ux-qa-02-progressive-disclosure.spec.cjs \
+            --reporter=line \
+            --output=../live-evidence/test-results
+
+      - name: Analyze live UX navigation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          node scripts/ux-qa/analyze.mjs \
+            live-evidence/ux-qa-01-evidence.json \
+            ux/qa/navigation-contract.v1.json \
+            live-evidence
+
+      - name: Analyze live progressive disclosure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          node scripts/ux-qa/analyze.mjs \
+            live-evidence/ux-qa-02-evidence.json \
+            ux/qa/progressive-disclosure-contract.v1.json \
+            live-evidence/ux-qa-02
+
+      - name: Verify required live evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s live-evidence/ux-trust-01-uxt-f-mobile.png
+          test -s live-evidence/ux-trust-01-uxt-f-desktop.png
+          test -s live-evidence/ux-trust-01-uxt-f-mobile.json
+          test -s live-evidence/ux-trust-01-uxt-f-desktop.json
+          grep -q '"result": "PASS"' live-evidence/ux-trust-01-uxt-f-mobile.json
+          grep -q '"result": "PASS"' live-evidence/ux-trust-01-uxt-f-desktop.json
+          grep -q '"pageErrors": \[\]' live-evidence/ux-trust-01-uxt-f-mobile.json
+          grep -q '"pageErrors": \[\]' live-evidence/ux-trust-01-uxt-f-desktop.json
+          grep -q '"consoleErrors": \[\]' live-evidence/ux-trust-01-uxt-f-mobile.json
+          grep -q '"consoleErrors": \[\]' live-evidence/ux-trust-01-uxt-f-desktop.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expected = process.env.RELEASE_SHA;
+          const reports = [
+            'live-evidence/ux-qa-01-report.json',
+            'live-evidence/ux-qa-02/ux-qa-01-report.json'
+          ];
+          for (const path of reports) {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (report.candidateSha !== expected) throw new Error(`${path}: candidate SHA mismatch`);
+            if (report.result !== 'PASS') throw new Error(`${path}: result is not PASS`);
+            if (!Array.isArray(report.findings) || report.findings.length !== 0) throw new Error(`${path}: findings are not empty`);
+            if (!Array.isArray(report.blockingFindings) || report.blockingFindings.length !== 0) throw new Error(`${path}: blocking findings are not empty`);
+          }
+          NODE
+
+      - name: Upload live verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-2026-10-25-live-${{ env.RELEASE_SHA }}
+          path: live-evidence/
+          if-no-files-found: error
+          retention-days: 7
