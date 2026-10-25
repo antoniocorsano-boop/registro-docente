@@ -101,7 +101,8 @@ LIB-05B updates exactly the canonical package files from TRAMA 0.3.0:
 `vendor/contextual-copilot-core.provenance.json` must bind:
 
 - package version `0.3.0`;
-- source/distribution commit `f5549b8a9cbbcd40752f8aa85183b3db23faf0ce`;
+- canonical package source commit `a40e715a87d674db69364b50fa23f39a4b565ac4`;
+- integrated distribution commit `f5549b8a9cbbcd40752f8aa85183b3db23faf0ce`;
 - exact SHA-256 digests from the qualified TRAMA distribution.
 
 The existing LIB-01B security contract is updated rather than duplicated so the vendored package remains one canonical dependency boundary.
