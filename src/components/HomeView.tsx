@@ -46,6 +46,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const [activeView, setActiveView] = useState<HomeViewMode>('classes');
   const [isClassMutationPending, setIsClassMutationPending] = useState(false);
+  const [managedClassId, setManagedClassId] = useState<string | null>(null);
 
   const handleAddClass = async () => {
     if (isClassMutationPending) return;
@@ -200,18 +201,35 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      aria-label={`Elimina classe ${classData.name}`}
-                      title="Elimina classe"
-                      disabled={isClassMutationPending}
-                      onClick={() => {
-                        if (confirm(`Eliminare definitivamente la classe "${classData.name}" con tutti i suoi dati?`)) {
-                          void handleDeleteClass(classData.id);
-                        }
-                      }}
-                      className="absolute top-1 right-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-900/70"
+                      aria-label={`Gestisci classe ${classData.name}`}
+                      aria-expanded={managedClassId === classData.id}
+                      aria-controls={`class-management-${classData.id}`}
+                      onClick={() => setManagedClassId(current => current === classData.id ? null : classData.id)}
+                      className="absolute top-1 right-1 min-h-[44px] min-w-[44px] px-2 inline-flex items-center justify-center rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900/70"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      Gestisci
                     </button>
+                    {managedClassId === classData.id && (
+                      <div
+                        id={`class-management-${classData.id}`}
+                        className="border-t border-slate-700/70 p-2 flex justify-end"
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Elimina classe ${classData.name}`}
+                          disabled={isClassMutationPending}
+                          onClick={() => {
+                            if (confirm(`Eliminare definitivamente la classe "${classData.name}" con tutti i suoi dati?`)) {
+                              void handleDeleteClass(classData.id);
+                            }
+                          }}
+                          className="min-h-[44px] px-3 inline-flex items-center gap-2 justify-center rounded-lg text-sm font-semibold text-rose-300 hover:text-rose-200 hover:bg-slate-900/70 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Elimina classe
+                        </button>
+                      </div>
+                    )}
                   </article>
                 );
               })}
