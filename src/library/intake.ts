@@ -36,7 +36,7 @@ function deriveFileDisplayTitle(filename: string): string {
   return readable || 'Fonte senza nome';
 }
 
-function isLocallyReadableTextMime(mimeType: string): boolean {
+export function isLocallyReadableTextMime(mimeType: string): boolean {
   const normalized = mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
   return normalized.startsWith('text/')
     || normalized === 'application/json'
@@ -168,7 +168,9 @@ export function buildCapturedWebTextPatch(
   source: LibrarySource,
   text: string
 ): Pick<LibrarySource, 'extractedText' | 'status'> {
-  if (source.kind !== 'web' || source.status !== 'needs-review') {
+  const hasCapturedText = Boolean(source.extractedText?.trim() || source.payload.text?.trim());
+  const hasCompletableStatus = source.status === 'needs-review' || source.status === 'ready';
+  if (source.kind !== 'web' || hasCapturedText || !hasCompletableStatus) {
     throw new Error('Il completamento testuale è ammesso soltanto per una fonte web incompleta.');
   }
 
