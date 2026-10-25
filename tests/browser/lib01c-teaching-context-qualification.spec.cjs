@@ -63,6 +63,7 @@ async function selectSyntheticClass(page) {
 
 async function createSyntheticUda(page, title, className = null) {
   await openDrawerItem(page, 'UDA');
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
   if (className) {
