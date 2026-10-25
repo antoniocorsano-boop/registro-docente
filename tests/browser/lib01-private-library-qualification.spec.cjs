@@ -10,6 +10,7 @@ const backupPassword = 'lib01-backup';
 const UDA_TITLE = 'UDA Sintetica LIB-01A';
 const TEXT_TITLE = 'Idea energia dal quotidiano';
 const IMAGE_TITLE = 'fonte-solare.png';
+const IMAGE_DISPLAY_TITLE = 'fonte solare';
 const WEB_TITLE = 'Articolo energia locale';
 const MOBILE_CLASS = 'Classe Sintetica LIB-01A';
 
@@ -77,7 +78,7 @@ async function addImageSource(page) {
     buffer: png
   });
   await page.getByRole('button', { name: 'Salva in biblioteca', exact: true }).click();
-  await expect(page.getByRole('heading', { name: IMAGE_TITLE, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: IMAGE_DISPLAY_TITLE, exact: true })).toBeVisible();
 }
 
 async function addWebSource(page) {
@@ -137,8 +138,9 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await addImageSource(page);
   await reloadAndUnlock(page);
   await openLibrary(page);
-  await expect(page.getByRole('heading', { name: IMAGE_TITLE, exact: true })).toBeVisible();
-  const imageCard = await sourceCard(page, IMAGE_TITLE);
+  await expect(page.getByRole('heading', { name: IMAGE_DISPLAY_TITLE, exact: true })).toBeVisible();
+  const imageCard = await sourceCard(page, IMAGE_DISPLAY_TITLE);
+  await expect(imageCard.getByText(IMAGE_TITLE, { exact: true })).toBeVisible();
   await expect(imageCard.locator('img')).toHaveCount(1);
 
   // 3. URL source can be captured without fetching it.
@@ -173,7 +175,7 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await expect(page.getByRole('heading', { name: WEB_TITLE, exact: true })).toHaveCount(0);
   await search.fill('');
   await expect(page.getByRole('heading', { name: TEXT_TITLE, exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: IMAGE_TITLE, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: IMAGE_DISPLAY_TITLE, exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: WEB_TITLE, exact: true })).toBeVisible();
 
   // 6. Oversized file is rejected without a false successful source.
