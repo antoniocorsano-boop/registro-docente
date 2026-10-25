@@ -70,9 +70,13 @@ describe('LIB-06A local intent discovery consumer contract', () => {
     const composer = await readIfExists(COMPOSER);
 
     expect(composer).toContain('discoverLibraryCopilotIntent');
-    expect(composer).toContain("intent.actionId === 'prepare-from-source'");
+    expect(composer).toContain("intent?.actionId === 'prepare-from-source'");
     expect(composer).toContain('setIsPrepareOpen(true)');
     expect(composer).toContain('resolveLibraryCopilotRequest');
+    expect(composer.indexOf('await discoverLibraryCopilotIntent(input)'))
+      .toBeLessThan(composer.indexOf('await resolveLibraryCopilotRequest(input)'));
+    expect(composer).toContain('if (!resolvedTeachingContext || !proposalUda)');
+    expect(composer).toContain("resolution.reason === 'NO_INTENT_MATCH'");
     expect(composer).toContain("actionId: 'link-source-to-uda'");
     expect(composer).toContain('humanConfirmed: false');
     expect(composer).toContain('humanConfirmed: true');
