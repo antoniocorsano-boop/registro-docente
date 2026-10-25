@@ -103,7 +103,8 @@ async function classifyProfessional(page, title) {
   const classify = card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();
-  await expect(card.getByText('Materiale professionale del docente', { exact: true })).toBeVisible();
+  await expect(classify).toHaveCount(0);
+  await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
 }
 
 async function assertAtLeast44(locator, label) {
