@@ -45,6 +45,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [webTitle, setWebTitle] = useState('');
   const [webUrl, setWebUrl] = useState('');
+  const [webCapturedText, setWebCapturedText] = useState('');
   const [textTitle, setTextTitle] = useState('');
   const [textValue, setTextValue] = useState('');
   const [textKind, setTextKind] = useState<TextCaptureKind>('text');
@@ -67,6 +68,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setSelectedFile(null);
     setWebTitle('');
     setWebUrl('');
+    setWebCapturedText('');
     setTextTitle('');
     setTextValue('');
     setTextKind('text');
@@ -104,7 +106,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         id: uid(),
         title: webTitle,
         url: webUrl,
-        capturedAt: new Date().toISOString()
+        capturedAt: new Date().toISOString(),
+        ...(webCapturedText.trim() ? { capturedText: webCapturedText } : {})
       });
       await saveSource(source);
     } catch (error) {
@@ -206,6 +209,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <label className="block text-sm text-slate-300">URL
                 <input type="url" value={webUrl} onChange={event => setWebUrl(event.target.value)} disabled={isPending} placeholder="https://…" className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-slate-100" />
               </label>
+              <label className="block text-sm text-slate-300">Testo o estratto della pagina
+                <textarea
+                  value={webCapturedText}
+                  onChange={event => setWebCapturedText(event.target.value)}
+                  disabled={isPending}
+                  rows={5}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+                />
+              </label>
+              <p className="text-xs text-slate-400">Se non lo aggiungi ora, conserveremo l'URL come fonte da completare.</p>
               <button type="button" onClick={() => void handleSaveWeb()} disabled={isPending || !webTitle.trim() || !webUrl.trim()} className="min-h-[44px] px-4 rounded-lg bg-[var(--primary)] text-slate-950 font-semibold text-sm disabled:opacity-50">Salva URL</button>
             </div>
           )}
