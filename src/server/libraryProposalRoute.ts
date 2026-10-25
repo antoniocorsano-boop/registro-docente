@@ -1,13 +1,13 @@
-import { evaluateDataFlow } from '../security/dataClassification';
+import { evaluateDataFlow } from '../security/dataClassification.ts';
 import {
   parseTeachingProposalContent,
   type LibraryProposalRequestV1,
   type TeachingProposalV1
-} from '../library/teachingProposal';
+} from '../library/teachingProposal.ts';
 import type {
   TeachingProposalProvider,
   TeachingProposalProviderInput
-} from './teachingProposalProvider';
+} from './teachingProposalProvider.ts';
 
 export interface LibraryProposalHandlerResult {
   status: number;
@@ -104,24 +104,33 @@ function validateContext(value: unknown): LibraryProposalRequestV1['context'] | 
     'lessonTopic',
     'activityType'
   ])) return null;
-  for (const key of ['udaId', 'udaTitle', 'className', 'period'] as const) {
-    if (!isNonEmptyString(value[key])) return null;
+
+  const udaId = value.udaId;
+  const udaTitle = value.udaTitle;
+  const className = value.className;
+  const period = value.period;
+  const lessonId = value.lessonId;
+  const lessonTopic = value.lessonTopic;
+  const activityType = value.activityType;
+
+  if (!isNonEmptyString(udaId) || !isNonEmptyString(udaTitle) || !isNonEmptyString(className) || !isNonEmptyString(period)) {
+    return null;
   }
-  if (value.lessonId !== undefined && !isNonEmptyString(value.lessonId)) return null;
-  if (value.lessonTopic !== undefined && !isNonEmptyString(value.lessonTopic)) return null;
-  if (value.activityType !== undefined && (
-    !isNonEmptyString(value.activityType) || !ACTIVITY_TYPES.has(value.activityType)
+  if (lessonId !== undefined && !isNonEmptyString(lessonId)) return null;
+  if (lessonTopic !== undefined && !isNonEmptyString(lessonTopic)) return null;
+  if (activityType !== undefined && (
+    !isNonEmptyString(activityType) || !ACTIVITY_TYPES.has(activityType)
   )) return null;
 
   return {
-    udaId: value.udaId.trim(),
-    udaTitle: value.udaTitle.trim(),
-    className: value.className.trim(),
-    period: value.period.trim(),
-    ...(isNonEmptyString(value.lessonId) ? { lessonId: value.lessonId.trim() } : {}),
-    ...(isNonEmptyString(value.lessonTopic) ? { lessonTopic: value.lessonTopic.trim() } : {}),
-    ...(isNonEmptyString(value.activityType)
-      ? { activityType: value.activityType as LibraryProposalRequestV1['context']['activityType'] }
+    udaId: udaId.trim(),
+    udaTitle: udaTitle.trim(),
+    className: className.trim(),
+    period: period.trim(),
+    ...(isNonEmptyString(lessonId) ? { lessonId: lessonId.trim() } : {}),
+    ...(isNonEmptyString(lessonTopic) ? { lessonTopic: lessonTopic.trim() } : {}),
+    ...(isNonEmptyString(activityType)
+      ? { activityType: activityType as LibraryProposalRequestV1['context']['activityType'] }
       : {})
   };
 }
