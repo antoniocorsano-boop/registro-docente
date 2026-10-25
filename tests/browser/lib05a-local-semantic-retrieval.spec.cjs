@@ -93,6 +93,11 @@ async function classifyProfessional(page, title) {
   const card = await sourceCard(page, title);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   const udaSelect = card.getByLabel('UDA corrente');
+  if (!(await udaSelect.isVisible().catch(() => false))) {
+    const changeContext = card.getByRole('button', { name: 'Cambia', exact: true });
+    await expect(changeContext).toBeVisible();
+    await changeContext.click();
+  }
   await expect(udaSelect).toBeVisible();
   await udaSelect.selectOption({ label: UDA_TITLE });
   const classify = card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
