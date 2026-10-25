@@ -87,15 +87,21 @@ function matchesAuthoritativeArenaContext(
 ): boolean {
   const contextYear = normalizeSchoolYear(context.schoolYear);
   const profileYear = normalizeSchoolYear(profile.schoolYear);
+  const expectedSchoolOrder = profile.schoolOrder === 'primary' ? 'primaria' : 'secondaria';
+  const normativeRegime = profile.normativeRegime?.trim();
 
   return (
     context.profileId === profile.id &&
     contextYear !== null &&
     profileYear !== null &&
     contextYear === profileYear &&
+    context.schoolOrder === expectedSchoolOrder &&
     normalizeSubject(context.subjectCode) === normalizeSubject(profile.subjectCode) &&
     context.gradeLevel === profile.gradeLevel &&
     context.cohortRef === profile.cohortRef &&
+    normativeRegime !== undefined &&
+    normativeRegime.length > 0 &&
+    context.regimeRef === profile.normativeRegime &&
     context.privacyClass === 'PROFESSIONAL_NON_PERSONAL' &&
     context.authorityState === 'APPROVED' &&
     context.vigencyStatus === 'VIGENTE'
