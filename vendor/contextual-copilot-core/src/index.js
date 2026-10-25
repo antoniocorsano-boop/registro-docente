@@ -102,6 +102,21 @@ export function validateContextSnapshot(context) {
   return createDefensiveContextSnapshot(context);
 }
 
+function validateCopilotRequest(request) {
+  invariant(request && typeof request === 'object' && !Array.isArray(request), 'CopilotRequest must be an object');
+  const context = validateContextSnapshot(request.context);
+  invariant(nonEmptyString(request.message), 'CopilotRequest.message must be a non-empty string');
+  invariant(Array.isArray(request.allowedCapabilities), 'CopilotRequest.allowedCapabilities must be an array');
+  for (const capability of request.allowedCapabilities) {
+    invariant(CAPABILITY_SET.has(capability), `Unknown allowed capability: ${String(capability)}`);
+  }
+  return Object.freeze({
+    context,
+    message: request.message,
+    allowedCapabilities: Object.freeze([...request.allowedCapabilities]),
+  });
+}
+
 function validateAction(action) {
   invariant(action && typeof action === 'object' && !Array.isArray(action), 'ContextualAction must be an object');
   invariant(nonEmptyString(action.id), 'ContextualAction.id must be a non-empty string');
@@ -189,13 +204,18 @@ function scoreMapFromRanked(ranked, allowedIds) {
   return scores;
 }
 
-export function createContextualCopilotCore({ registry, policyEngine, semanticPort = null, generativeMode = 'none' }) {
+export function createContextualCopilotCore({ registry, policyEngine, semanticPort = null, intentPort = null, generativeMode = 'none' }) {
   invariant(registry && typeof registry.list === 'function' && typeof registry.get === 'function', 'registry must implement list() and get()');
   invariant(policyEngine && typeof policyEngine.evaluate === 'function', 'policyEngine.evaluate is required');
   invariant(GENERATIVE_MODES.has(generativeMode), 'generativeMode must be none, local or remote');
   if (semanticPort !== null) {
     invariant(typeof semanticPort === 'object', 'semanticPort must be an object or null');
     invariant(SEMANTIC_MODES.has(semanticPort.mode), 'semanticPort.mode must be local or remote');
+  }
+  if (intentPort !== null) {
+    invariant(typeof intentPort === 'object', 'intentPort must be an object or null');
+    invariant(SEMANTIC_MODES.has(intentPort.mode), 'intentPort.mode must be local or remote');
+    invariant(typeof intentPort.resolve === 'function', 'intentPort.resolve must be a function');
   }
 
   function coreRiskGuard(action) {
@@ -249,16 +269,25 @@ export function createContextualCopilotCore({ registry, policyEngine, semanticPo
     }
   }
 
+  function remoteAccess(context) {
+    if (!context.privacy.remoteProviderAllowed) {
+      return { allowed: false, reason: 'REMOTE_PROVIDER_NOT_AUTHORIZED' };
+    }
+    if (context.privacy.dataClasses.some((dataClass) => PROTECTED_REMOTE_CLASSES.has(dataClass))) {
+      return { allowed: false, reason: 'PROTECTED_DATA_REMOTE_DENIED' };
+    }
+    return { allowed: true, reason: 'ALLOWED' };
+  }
+
   function semanticAccess(context) {
     if (!semanticPort) return { allowed: false, reason: 'SEMANTIC_PORT_UNAVAILABLE' };
-    if (semanticPort.mode === 'remote') {
-      if (!context.privacy.remoteProviderAllowed) {
-        return { allowed: false, reason: 'REMOTE_PROVIDER_NOT_AUTHORIZED' };
-      }
-      if (context.privacy.dataClasses.some((dataClass) => PROTECTED_REMOTE_CLASSES.has(dataClass))) {
-        return { allowed: false, reason: 'PROTECTED_DATA_REMOTE_DENIED' };
-      }
-    }
+    if (semanticPort.mode === 'remote') return remoteAccess(context);
+    return { allowed: true, reason: 'ALLOWED' };
+  }
+
+  function intentAccess(context) {
+    if (!intentPort) return { allowed: false, reason: 'INTENT_PORT_UNAVAILABLE' };
+    if (intentPort.mode === 'remote') return remoteAccess(context);
     return { allowed: true, reason: 'ALLOWED' };
   }
 
@@ -266,41 +295,86 @@ export function createContextualCopilotCore({ registry, policyEngine, semanticPo
     return Object.freeze([...actions].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id)));
   }
 
+  async function resolveActions(rawContext) {
+    const context = validateContextSnapshot(rawContext);
+    const candidates = registry.list().filter((action) => context.capabilities.includes(action.capability));
+    const allowed = [];
+    const semantic = semanticAccess(context);
+
+    for (const action of candidates) {
+      if (action.requiresSemanticSearch && (!semantic.allowed || typeof semanticPort?.search !== 'function')) continue;
+      const policy = await evaluate(context, action, 'RESOLVE');
+      if (policy.allowed) allowed.push(Object.freeze({ ...action, policy }));
+    }
+
+    if (!semantic.allowed || typeof semanticPort?.rank !== 'function' || allowed.length < 2) {
+      return deterministicOrder(allowed);
+    }
+
+    let ranked;
+    try {
+      ranked = await semanticPort.rank({ context, actions: Object.freeze([...allowed]) });
+    } catch {
+      return deterministicOrder(allowed);
+    }
+    const allowedIds = new Set(allowed.map((action) => action.id));
+    const scores = scoreMapFromRanked(ranked, allowedIds);
+
+    return Object.freeze([...allowed].sort((a, b) => {
+      const aRanked = scores.has(a.id);
+      const bRanked = scores.has(b.id);
+      if (aRanked && bRanked) return scores.get(b.id) - scores.get(a.id) || b.priority - a.priority || a.id.localeCompare(b.id);
+      if (aRanked) return -1;
+      if (bRanked) return 1;
+      return b.priority - a.priority || a.id.localeCompare(b.id);
+    }));
+  }
+
+  async function resolveRequest(rawRequest) {
+    const request = validateCopilotRequest(rawRequest);
+    const allowedCapabilities = new Set(request.allowedCapabilities);
+    const actions = Object.freeze(
+      (await resolveActions(request.context)).filter((action) => allowedCapabilities.has(action.capability)),
+    );
+
+    if (actions.length === 0) {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'NO_ALLOWED_ACTIONS', actions });
+    }
+
+    const intent = intentAccess(request.context);
+    if (!intent.allowed) {
+      return Object.freeze({ status: 'UNRESOLVED', reason: intent.reason, actions });
+    }
+
+    let ranked;
+    try {
+      ranked = await intentPort.resolve({
+        context: request.context,
+        message: request.message,
+        actions: Object.freeze([...actions]),
+      });
+    } catch {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'INTENT_RESOLUTION_FAILED', actions });
+    }
+
+    const allowedIds = new Set(actions.map((action) => action.id));
+    const scores = scoreMapFromRanked(ranked, allowedIds);
+    if (scores.size === 0) {
+      return Object.freeze({ status: 'UNRESOLVED', reason: 'NO_INTENT_MATCH', actions });
+    }
+
+    const matched = Object.freeze(
+      actions
+        .filter((action) => scores.has(action.id))
+        .sort((a, b) => scores.get(b.id) - scores.get(a.id) || b.priority - a.priority || a.id.localeCompare(b.id)),
+    );
+
+    return Object.freeze({ status: 'RESOLVED', reason: 'INTENT_RESOLVED', actions: matched });
+  }
+
   return Object.freeze({
-    async resolveActions(rawContext) {
-      const context = validateContextSnapshot(rawContext);
-      const candidates = registry.list().filter((action) => context.capabilities.includes(action.capability));
-      const allowed = [];
-      const semantic = semanticAccess(context);
-
-      for (const action of candidates) {
-        if (action.requiresSemanticSearch && (!semantic.allowed || typeof semanticPort?.search !== 'function')) continue;
-        const policy = await evaluate(context, action, 'RESOLVE');
-        if (policy.allowed) allowed.push(Object.freeze({ ...action, policy }));
-      }
-
-      if (!semantic.allowed || typeof semanticPort?.rank !== 'function' || allowed.length < 2) {
-        return deterministicOrder(allowed);
-      }
-
-      let ranked;
-      try {
-        ranked = await semanticPort.rank({ context, actions: Object.freeze([...allowed]) });
-      } catch {
-        return deterministicOrder(allowed);
-      }
-      const allowedIds = new Set(allowed.map((action) => action.id));
-      const scores = scoreMapFromRanked(ranked, allowedIds);
-
-      return Object.freeze([...allowed].sort((a, b) => {
-        const aRanked = scores.has(a.id);
-        const bRanked = scores.has(b.id);
-        if (aRanked && bRanked) return scores.get(b.id) - scores.get(a.id) || b.priority - a.priority || a.id.localeCompare(b.id);
-        if (aRanked) return -1;
-        if (bRanked) return 1;
-        return b.priority - a.priority || a.id.localeCompare(b.id);
-      }));
-    },
+    resolveActions,
+    resolveRequest,
 
     async dispatch({ context: rawContext, actionId, executor, humanConfirmed = false }) {
       const context = validateContextSnapshot(rawContext);
