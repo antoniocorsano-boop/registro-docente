@@ -20,6 +20,7 @@
 - No link mutation in Library.
 - No curriculum-coverage claims from Arena items.
 - Fail closed on ambiguous profile or Arena-context matches.
+- Revalidate accepted Arena identity against the current profile; no stale-context reuse after profile edits.
 - Exact-SHA qualification before any integration decision.
 
 ## Review Focus
@@ -28,7 +29,8 @@
 - Equivalent school-year spellings (`2026-2027`, `2026/2027`, `2026/27`) must compare equal without mutating persisted values.
 - Duplicate compatible planning profiles must return `ambiguous`, never first-match wins.
 - Multiple authoritative Arena contexts for one resolved profile must return `ambiguous`, never newest/last wins.
-- Provisional, non-vigente, or non-professional Arena contexts must never be surfaced as authoritative context.
+- Provisional, non-vigente, non-professional or identity-stale Arena contexts must never be surfaced as authoritative context.
+- Arena identity must remain coherent with the acceptance boundary, including `schoolOrder` and `normativeRegime/regimeRef`.
 
 ---
 
@@ -42,15 +44,15 @@
 - Consumes: `ResolvedLibraryTeachingContext`, `PlanningStateV1`, `TeachingProfile`, `ArenaPlanningContext`.
 - Produces: `resolveClassGradeLevel(className: string): number | null`, `normalizeSchoolYear(value: string): string | null`, `resolveLibraryPlanningContext(input: ResolveLibraryPlanningContextInput): LibraryPlanningContextResolution`.
 
-- [ ] **Step 1: Write RED tests for identity helpers**
+- [x] **Step 1: Write RED tests for identity helpers**
 
-Tests must assert:
+Tests assert:
 - `3ª C`, `3A`, `3 A`, `3^A` → `3`;
 - malformed labels and values outside 1..5 → `null`;
 - `2026-2027`, `2026/2027`, `2026/27` normalize to the same canonical comparison value;
 - malformed school years → `null`.
 
-- [ ] **Step 2: Write RED tests for profile resolution**
+- [x] **Step 2: Write RED tests for profile resolution**
 
 Construct a minimal `ResolvedLibraryTeachingContext` and `PlanningStateV1` fixture. Assert:
 - missing teaching context → `{ status: 'unavailable', reason: 'TEACHING_CONTEXT_MISSING' }`;
@@ -61,7 +63,7 @@ Construct a minimal `ResolvedLibraryTeachingContext` and `PlanningStateV1` fixtu
 
 Profile compatibility is exact after normalization on school year, subject, and grade level. `cohortRef` is not derived from the operational class and therefore is not used to select between otherwise compatible profiles; duplicates remain ambiguous.
 
-- [ ] **Step 3: Write RED tests for Arena resolution**
+- [x] **Step 3: Write RED tests for Arena resolution**
 
 Assert:
 - exactly one matching `APPROVED` + `VIGENTE` + `PROFESSIONAL_NON_PERSONAL` context for the resolved profile is returned;
@@ -69,15 +71,15 @@ Assert:
 - zero authoritative contexts leaves the overall result `resolved` with `arenaContext: null`;
 - more than one authoritative matching context → `ambiguous` / `ARENA_CONTEXT_AMBIGUOUS`.
 
-Arena compatibility must additionally match `profileId`, normalized school year, normalized subject, `gradeLevel`, and exact `cohortRef`.
+Arena compatibility additionally matches `profileId`, normalized school year, current mapped `schoolOrder`, normalized subject, `gradeLevel`, exact `cohortRef`, and exact current `normativeRegime/regimeRef`.
 
-- [ ] **Step 4: Commit RED tests only**
+- [x] **Step 4: Commit RED tests only**
 
-Commit message: `test(lib-03a): define planning context bridge contract`.
+Initial RED: `d9081a5b2909d248292cb58e17b395d3b9fc516f`.
 
-- [ ] **Step 5: Verify causal RED through PREDEPLOY**
+- [x] **Step 5: Verify causal RED through PREDEPLOY**
 
-Expected: `test:library` fails because `planningContextBridge.ts`/exports do not yet exist, while unrelated security/typecheck/build/startup remain unaffected as far as the runner can reach them.
+PREDEPLOY #582 failed only in the nine new bridge contracts because the production bridge did not yet exist; security/typecheck/build/startup remained green.
 
 ---
 
@@ -115,29 +117,33 @@ export function normalizeSchoolYear(value: string): string | null;
 export function resolveLibraryPlanningContext(input: ResolveLibraryPlanningContextInput): LibraryPlanningContextResolution;
 ```
 
-- [ ] **Step 1: Implement `resolveClassGradeLevel` minimally**
+- [x] **Step 1: Implement `resolveClassGradeLevel` minimally**
 
 Accept only a leading integer `1..5` followed by end-of-string or a conventional class separator/indicator; reject values outside range and malformed labels.
 
-- [ ] **Step 2: Implement `normalizeSchoolYear` minimally**
+- [x] **Step 2: Implement `normalizeSchoolYear` minimally**
 
 Return canonical `YYYY-YYYY` only when the second year is exactly the next academic year; expand a two-digit trailing year using the first year's century.
 
-- [ ] **Step 3: Implement profile matching**
+- [x] **Step 3: Implement profile matching**
 
 Normalize input/profile school year and subject (trim + lowercase), require exact grade equality, and return not-found/ambiguous/resolved deterministically.
 
-- [ ] **Step 4: Implement authoritative Arena matching**
+- [x] **Step 4: Implement authoritative Arena matching**
 
-Filter only contexts that match the resolved profile identity and are `APPROVED`, `VIGENTE`, `PROFESSIONAL_NON_PERSONAL`. Return null for zero, ambiguous for more than one.
+Filter only contexts matching the current profile identity and `APPROVED`, `VIGENTE`, `PROFESSIONAL_NON_PERSONAL`. Identity includes mapped `schoolOrder` and exact `normativeRegime/regimeRef`, so a context accepted against an older profile configuration is not silently reused.
 
-- [ ] **Step 5: Run bridge tests and complete `test:library`**
+- [x] **Step 5: Initial GREEN**
 
-Expected: all bridge tests PASS and all existing library tests remain PASS.
+Initial GREEN `14a705f79b477273ae10f8151f1afe9b539dc9c9`: PREDEPLOY #583 PASS. Coverage-only candidate `6a1c33bbc658ac8398c821973ad054a738cc8cf5`: PREDEPLOY #584 and Browser #304 PASS.
 
-- [ ] **Step 6: Commit GREEN**
+- [x] **Step 6: Reproduce stale Arena identity before fixing it**
 
-Commit message: `feat(lib-03a): add planning context bridge`.
+Test-only RED `4051bfa84a4203f88dfbcbfff517f92fd1ed268a` added contexts with stale `schoolOrder` and `regimeRef`. PREDEPLOY #585 produced exactly one library failure while 370/370 security tests, typecheck, build and production startup remained green. The bridge returned `ambiguous` because stale contexts were still being counted.
+
+- [x] **Step 7: Apply minimal stale-context fix**
+
+Production matching now revalidates `schoolOrder` and `normativeRegime/regimeRef` against the current profile in addition to the pre-existing identity/authority filters.
 
 ---
 
@@ -148,16 +154,14 @@ Commit message: `feat(lib-03a): add planning context bridge`.
 - Update Draft PR body with exact evidence.
 
 **Interfaces:**
-- Consumes: exact GREEN commit from Task 2.
+- Consumes: exact final GREEN commit from Task 2.
 - Produces: a qualified LIB-03A candidate ready for human integration decision.
 
-- [ ] **Step 1: Open/maintain Draft PR**
-
-Title: `LIB-03A — Planning Context Bridge`.
+- [ ] **Step 1: Maintain Draft PR #50**
 
 State explicitly: no merge/deploy, pure read-only bridge, no UI/provider/persistence changes.
 
-- [ ] **Step 2: Run PREDEPLOY on exact candidate**
+- [ ] **Step 2: Run PREDEPLOY on exact final candidate**
 
 Require PASS for typecheck, security tests, library tests, build, and production startup smoke.
 
@@ -165,16 +169,20 @@ Require PASS for typecheck, security tests, library tests, build, and production
 
 Require only spec/plan, bridge test, bridge implementation. Any other changed file requires explanation or removal.
 
-- [ ] **Step 4: Request fresh independent Codex review on exact candidate**
+- [ ] **Step 4: Run browser regression on exact final candidate**
 
-Review focus: ambiguous identity fail-closed, year normalization, Arena authority filter, no hidden mutation/network/provider dependency.
+No LIB-03A UI exists, so Browser Qualification is regression-only. Require existing Chromium and UX-QA suites to remain green.
 
-- [ ] **Step 5: If review finds an issue, reproduce it with RED before production changes**
+- [ ] **Step 5: Request fresh independent Codex review on exact final candidate**
+
+Review focus: ambiguous identity fail-closed, year normalization, complete current-profile Arena identity, authority/privacy filter, no hidden mutation/network/provider dependency.
+
+- [ ] **Step 6: If review finds an issue, reproduce it with RED before production changes**
 
 No direct patch from prose-only review findings.
 
-- [ ] **Step 6: Freeze candidate**
+- [ ] **Step 7: Freeze candidate**
 
-Final state target: `LIB-03A ENGINEERING QUALIFIED / TERMINAL REVIEW PASS / READY FOR HUMAN INTEGRATION DECISION`.
+Final state target: `LIB-03A ENGINEERING QUALIFIED / BROWSER REGRESSION PASS / TERMINAL REVIEW PASS / READY FOR HUMAN INTEGRATION DECISION`.
 
 No merge and no deploy.
