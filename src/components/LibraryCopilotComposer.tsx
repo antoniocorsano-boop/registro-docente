@@ -1,14 +1,16 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'lucide-react';
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../library/types';
+import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import { dispatchLibraryContextAction, resolveLibraryCopilotRequest } from '../library/contextualCoreAdapter';
 import { resolvePlanningContextForLibraryRelevance } from '../library/relevancePresentation';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
+import { LibraryProposalPanel } from './LibraryProposalPanel';
 import {
   resolveLibraryTeachingContext,
   suggestLibraryTeachingContext
@@ -20,6 +22,7 @@ interface LibraryCopilotComposerProps {
   planning: PlanningStateV1;
   currentClassName?: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
+  onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   isPending?: boolean;
 }
@@ -46,6 +49,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   planning,
   currentClassName = null,
   onAddSource,
+  onUpdateSource,
   onLink,
   isPending = false
 }) => {
@@ -65,6 +69,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [isLinkPending, setIsLinkPending] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkSuccess, setLinkSuccess] = useState<string | null>(null);
+  const [isPrepareOpen, setIsPrepareOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const teachingSuggestion = useMemo(() => suggestLibraryTeachingContext({
@@ -87,6 +92,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     () => library.sources.find(source => source.id === selectedSourceId) ?? null,
     [library.sources, selectedSourceId]
   );
+
+  const proposalUda = useMemo(() => {
+    if (!resolvedTeachingContext) return null;
+    return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
+  }, [resolvedTeachingContext, udas]);
+
+  useEffect(() => {
+    setIsPrepareOpen(false);
+  }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);
 
   const contextLabel = resolvedTeachingContext
     ? `${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
@@ -292,7 +306,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         </div>
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
+          onClick={() => {
+            setIsPrepareOpen(false);
+            setIsOpen(false);
+          }}
           className="min-h-[44px] min-w-[44px] rounded-xl text-slate-400 hover:bg-slate-800 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"
           aria-label="Chiudi Copilota"
         >
@@ -310,6 +327,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             value={selectedSourceId}
             onChange={event => {
               setSelectedSourceId(event.target.value);
+              setIsPrepareOpen(false);
               setResolution(null);
               setIsLinkConfirmationOpen(false);
               setLinkError(null);
@@ -487,8 +505,53 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <p className="text-sm text-slate-400">Nessuna azione è autorizzata per questa fonte nel contesto corrente.</p>
             )}
             <p className="pt-1 text-[11px] leading-relaxed text-slate-500">
-              Solo il collegamento è operativo in questo blocco e richiede sempre una conferma esplicita. Nessun contenuto viene inviato automaticamente a servizi esterni.
+              Il collegamento resta l’unica azione eseguita direttamente dal Copilota. La preparazione assistita usa il flusso governato esistente e richiede un consenso separato prima di inviare la fonte a un servizio remoto.
             </p>
+          </div>
+        )}
+
+        {selectedSource && resolvedTeachingContext && proposalUda && (
+          <div
+            data-testid="library-copilot-prepare-disclosure"
+            className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-bold text-slate-100">Preparazione assistita</div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                  Aprire questa sezione non invia ancora la fonte a servizi remoti.
+                </p>
+              </div>
+              {isPrepareOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsPrepareOpen(false)}
+                  className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
+                >
+                  Chiudi
+                </button>
+              )}
+            </div>
+
+            {!isPrepareOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsPrepareOpen(true)}
+                disabled={isPending}
+                className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/30 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Apri preparazione assistita
+              </button>
+            ) : (
+              <LibraryProposalPanel
+                source={selectedSource}
+                uda={proposalUda}
+                teachingContext={resolvedTeachingContext}
+                isPending={isPending}
+                onUpdate={onUpdateSource}
+                onAddSource={onAddSource}
+              />
+            )}
           </div>
         )}
 
