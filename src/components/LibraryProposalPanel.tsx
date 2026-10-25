@@ -1,0 +1,247 @@
+import React, { useEffect, useRef, useState } from 'react';
+import type { ResolvedAction } from '@trama/contextual-copilot-core';
+import type { UdaRecord } from '../types';
+import type { LibrarySource } from '../library/types';
+import type { LibrarySourcePatch } from '../library/libraryState';
+import type { ResolvedLibraryTeachingContext } from '../library/teachingContext';
+import {
+  buildLibraryProposalRequest,
+  type TeachingProposalV1
+} from '../library/teachingProposal';
+import { resolveLibraryRemoteProposalActions } from '../library/contextualCoreAdapter';
+import { requestLibraryTeachingProposal } from '../services/libraryProposalService';
+
+interface LibraryProposalPanelProps {
+  source: LibrarySource;
+  uda: UdaRecord;
+  teachingContext: ResolvedLibraryTeachingContext;
+  isPending: boolean;
+  onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
+}
+
+export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
+  source,
+  uda,
+  teachingContext,
+  isPending,
+  onUpdate
+}) => {
+  const [remoteConsent, setRemoteConsent] = useState(false);
+  const [remoteActions, setRemoteActions] = useState<readonly ResolvedAction[]>([]);
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [proposal, setProposal] = useState<TeachingProposalV1 | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    setRemoteConsent(false);
+    setRemoteActions([]);
+    setIsRemoteLoading(false);
+    setIsGenerating(false);
+    setProposal(null);
+    setError(null);
+  }, [source.id, source.privacy, teachingContext.udaId, teachingContext.lessonId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!remoteConsent || source.privacy !== 'teacher-professional') {
+      setRemoteActions([]);
+      setIsRemoteLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsRemoteLoading(true);
+    setError(null);
+    void resolveLibraryRemoteProposalActions(source, teachingContext, true)
+      .then(actions => {
+        if (!cancelled) setRemoteActions(actions);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRemoteActions([]);
+          setError('La preparazione assistita non è disponibile in questo momento.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsRemoteLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteConsent, source, teachingContext]);
+
+  useEffect(() => () => {
+    requestControllerRef.current?.abort();
+  }, []);
+
+  const prepareAction = remoteActions.find(action => action.id === 'prepare-from-source');
+
+  const classifyAsProfessional = async () => {
+    setError(null);
+    try {
+      await onUpdate(source.id, { privacy: 'teacher-professional' });
+    } catch {
+      setError('La classificazione non è stata salvata. La fonte resta invariata.');
+    }
+  };
+
+  const generateProposal = async () => {
+    if (!prepareAction || isGenerating || !remoteConsent) return;
+
+    setIsGenerating(true);
+    setError(null);
+    setProposal(null);
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+
+    try {
+      const request = buildLibraryProposalRequest({
+        source,
+        teachingContext,
+        uda,
+        explicitTeacherOptIn: true
+      });
+      const nextProposal = await requestLibraryTeachingProposal(request, controller.signal);
+      setProposal(nextProposal);
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        setError(
+          reason instanceof Error && reason.message
+            ? reason.message
+            : 'La proposta didattica non è disponibile in questo momento.'
+        );
+      }
+    } finally {
+      if (requestControllerRef.current === controller) requestControllerRef.current = null;
+      setIsGenerating(false);
+      setRemoteConsent(false);
+      setRemoteActions([]);
+    }
+  };
+
+  if (source.privacy === 'unknown') {
+    return (
+      <div className="rounded-lg border border-amber-800/60 bg-amber-950/20 p-3 space-y-2">
+        <strong className="block text-sm text-amber-100">Prima verifica la natura della fonte</strong>
+        <p className="text-xs text-amber-200/90">
+          Per usare un servizio remoto devi confermare che questa fonte è materiale professionale del docente e non contiene dati personali degli studenti.
+        </p>
+        <button
+          type="button"
+          onClick={() => void classifyAsProfessional()}
+          disabled={isPending}
+          className="min-h-[44px] px-3 rounded-md border border-amber-700 text-sm text-amber-100 disabled:opacity-50"
+        >
+          Classifica come materiale professionale
+        </button>
+        {error && <p role="alert" className="text-xs text-amber-200">{error}</p>}
+      </div>
+    );
+  }
+
+  if (source.privacy === 'student-personal') {
+    return (
+      <div className="rounded-lg border border-slate-700 bg-slate-950/40 p-3">
+        <strong className="block text-sm text-slate-200">Preparazione assistita non disponibile</strong>
+        <p className="mt-1 text-xs text-slate-400">
+          La generazione remota non è disponibile per fonti che possono contenere dati personali di studenti.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-violet-800/60 bg-violet-950/20 p-3 space-y-3">
+      <div>
+        <strong className="block text-sm text-violet-100">Prepara una proposta didattica</strong>
+        <p className="mt-1 text-xs text-violet-200/80">
+          L’IA può usare soltanto questa fonte professionale e il contesto didattico selezionato. La proposta non viene salvata automaticamente.
+        </p>
+      </div>
+
+      {!remoteConsent && !proposal && (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setRemoteConsent(true);
+          }}
+          disabled={isPending || isGenerating}
+          className="min-h-[44px] px-3 rounded-md border border-violet-700 text-sm text-violet-100 disabled:opacity-50"
+        >
+          Consenti per questa richiesta
+        </button>
+      )}
+
+      {remoteConsent && (
+        <div className="rounded-md border border-violet-900/70 bg-slate-950/40 p-3 space-y-2">
+          <p className="text-xs text-slate-300">
+            Consenso valido solo per questa richiesta. Non verrà ricordato.
+          </p>
+          {isRemoteLoading && <p role="status" className="text-xs text-violet-200">Verifico l’azione disponibile…</p>}
+          {!isRemoteLoading && prepareAction && (
+            <button
+              type="button"
+              onClick={() => void generateProposal()}
+              disabled={isPending || isGenerating}
+              className="min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50"
+            >
+              {isGenerating ? 'Preparo la proposta…' : prepareAction.label}
+            </button>
+          )}
+          {!isRemoteLoading && !prepareAction && !error && (
+            <p className="text-xs text-amber-200">La preparazione assistita non è autorizzata nel contesto corrente.</p>
+          )}
+        </div>
+      )}
+
+      {error && <p role="alert" className="text-xs text-amber-200">{error}</p>}
+
+      {proposal && (
+        <section className="rounded-lg border border-violet-700/60 bg-slate-950/55 p-3 space-y-3" aria-label="Proposta didattica">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-violet-300">Proposta</p>
+            <h4 className="mt-1 font-semibold text-white">{proposal.title}</h4>
+          </div>
+          <div>
+            <strong className="text-xs text-slate-200">Obiettivo</strong>
+            <p className="mt-1 text-sm text-slate-300">{proposal.objective}</p>
+          </div>
+          <div>
+            <strong className="text-xs text-slate-200">Preparazione docente</strong>
+            <p className="mt-1 text-sm text-slate-300">{proposal.teacherSetup}</p>
+          </div>
+          <div>
+            <strong className="text-xs text-slate-200">Consegna agli studenti</strong>
+            <p className="mt-1 text-sm text-slate-300">{proposal.studentTask}</p>
+          </div>
+          <div>
+            <strong className="text-xs text-slate-200">Passaggi</strong>
+            <ol className="mt-1 list-decimal pl-5 space-y-1 text-sm text-slate-300">
+              {proposal.steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}
+            </ol>
+          </div>
+          <div>
+            <strong className="text-xs text-slate-200">Domande guida</strong>
+            <ul className="mt-1 list-disc pl-5 space-y-1 text-sm text-slate-300">
+              {proposal.questions.map((question, index) => <li key={`${index}:${question}`}>{question}</li>)}
+            </ul>
+          </div>
+          <div>
+            <strong className="text-xs text-slate-200">Adattamento</strong>
+            <p className="mt-1 text-sm text-slate-300">{proposal.adaptationHint}</p>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Proposta generata · resta effimera finché non scegli esplicitamente cosa farne.
+          </p>
+        </section>
+      )}
+    </div>
+  );
+};
