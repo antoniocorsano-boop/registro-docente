@@ -1,7 +1,9 @@
 name: RELEASE-2026-10-25 Live Verification
 
 on:
-  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
