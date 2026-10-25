@@ -31,7 +31,7 @@ Il bridge:
 2. deriva il livello della classe dall'identità operativa in modo stretto e testabile;
 3. individua i soli `TeachingProfile` compatibili con anno, disciplina e livello;
 4. se il match è unico, espone il profilo;
-5. seleziona un contesto Arena solo se esiste una singola versione accettata compatibile e autorevole per quel profilo; in caso di zero contesti il bridge resta valido ma senza Arena; in caso di più candidati il contesto Arena viene marcato ambiguo e non scelto arbitrariamente;
+5. seleziona un contesto Arena solo se esiste una singola versione accettata compatibile e autorevole per l'identità corrente del profilo; in caso di zero contesti il bridge resta valido ma senza Arena; in caso di più candidati il contesto Arena viene marcato ambiguo e non scelto arbitrariamente;
 6. non legge né materializza `MasterProgram`, non modifica `PlanningStateV1`, UDA o Biblioteca.
 
 ## Contratto di risoluzione
@@ -71,13 +71,22 @@ Il confronto usa trim + lowercase; nessuna tabella di alias viene introdotta in 
 
 ## Contesto Arena
 
-Un contesto Arena è candidato solo se:
+Un contesto Arena è candidato solo se coincide con **l'identità corrente del profilo**, non semplicemente con l'identità che aveva al momento di una precedente accettazione. Questo è necessario perché il profilo può essere modificato dopo l'accettazione e i contesti Arena già persistiti non vengono automaticamente rimossi.
 
-- `profileId` coincide con il profilo risolto;
-- `schoolYear`, `subjectCode`, `gradeLevel` e `cohortRef` coincidono con il profilo secondo le stesse regole di normalizzazione applicabili;
+Il bridge replica quindi il confine identitario usato dall'accettazione Arena e richiede:
+
+- `profileId` coincidente;
+- `schoolYear` equivalente dopo normalizzazione;
+- `schoolOrder` coerente (`primary → primaria`, `lower_secondary → secondaria`);
+- `subjectCode` coincidente dopo normalizzazione;
+- `gradeLevel` coincidente;
+- `cohortRef` coincidente esattamente;
+- `regimeRef` coincidente esattamente con il `normativeRegime` corrente e non vuoto;
 - `privacyClass === 'PROFESSIONAL_NON_PERSONAL'`;
 - `authorityState === 'APPROVED'`;
 - `vigencyStatus === 'VIGENTE'`.
+
+Un contesto precedentemente accettato ma diventato stale dopo una modifica a ordine scolastico o regime normativo viene ignorato e non riutilizzato implicitamente.
 
 Se non esiste un candidato, il bridge restituisce `resolved` con `arenaContext: null`.
 
@@ -140,9 +149,9 @@ LIB-03A è qualificato quando:
 3. zero profili produce `unavailable`;
 4. più profili producono `ambiguous`;
 5. zero contesti Arena non invalida il profilo risolto;
-6. un solo contesto Arena APPROVED + VIGENTE viene esposto;
+6. un solo contesto Arena pienamente coerente, APPROVED e VIGENTE viene esposto;
 7. più contesti Arena validi producono `ambiguous`;
-8. contesti Arena provisional/non-vigenti/non-professionali vengono ignorati;
+8. contesti Arena provisional, non-vigenti, non-professionali, identity-mismatched o stale rispetto a `schoolOrder`/`normativeRegime` vengono ignorati;
 9. nessun file UI, schema di persistenza, provider, embedding o runtime remoto viene modificato;
 10. `test:library`, security tests, typecheck, build e production startup smoke restano verdi.
 
