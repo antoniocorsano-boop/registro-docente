@@ -3,18 +3,22 @@ import { readFile } from 'node:fs/promises';
 
 const source = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const between = (text: string, start: string, end: string) => {
-  const startIndex = text.indexOf(start);
-  const endIndex = text.indexOf(end, startIndex + start.length);
+const disclosureContaining = (text: string, marker: string) => {
+  const markerIndex = text.indexOf(marker);
+  expect(markerIndex).toBeGreaterThanOrEqual(0);
+
+  const startIndex = text.lastIndexOf('<details', markerIndex);
+  const endIndex = text.indexOf('</details>', markerIndex);
   expect(startIndex).toBeGreaterThanOrEqual(0);
-  expect(endIndex).toBeGreaterThan(startIndex);
-  return text.slice(startIndex, endIndex + end.length);
+  expect(endIndex).toBeGreaterThan(markerIndex);
+
+  return text.slice(startIndex, endIndex + '</details>'.length);
 };
 
 describe('P2-ADVANCED-01 teacher-first settings separation', () => {
   test('technical provider configuration is behind one closed advanced disclosure', async () => {
     const settings = await source('components/SettingsView.tsx');
-    const advanced = between(settings, '<details', '</details>');
+    const advanced = disclosureContaining(settings, 'Impostazioni avanzate e integrazioni');
     const openingTag = advanced.slice(0, advanced.indexOf('>') + 1);
 
     expect(advanced).toContain('Impostazioni avanzate e integrazioni');
@@ -37,7 +41,7 @@ describe('P2-ADVANCED-01 teacher-first settings separation', () => {
 
   test('primary teacher-facing settings do not expose technical provider vocabulary', async () => {
     const settings = await source('components/SettingsView.tsx');
-    const advanced = between(settings, '<details', '</details>');
+    const advanced = disclosureContaining(settings, 'Impostazioni avanzate e integrazioni');
     const primary = settings.replace(advanced, '');
 
     expect(primary).toContain("Aspetto dell'interfaccia");
