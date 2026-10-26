@@ -1,0 +1,363 @@
+name: AIC-02 Task 4 Patcher
+
+on:
+  push:
+    branches:
+      - feat/aic-02-prepare-outcome-loop
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply exact AIC-02 UI wiring
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              assert count == 1, f'{label}: expected 1 occurrence, found {count}'
+              return source.replace(old, new, 1)
+
+          # Panel
+          panel_path = Path('src/components/LibraryProposalPanel.tsx')
+          panel = panel_path.read_text()
+          panel = replace_once(
+              panel,
+              "import { uid } from '../utils';\n",
+              """import { uid } from '../utils';
+          import type {
+            TeachingProposalOutcomeCandidate,
+            TeachingProposalOutcomeMutationInput
+          } from '../persistence/teachingProposalOutcomeMutation';
+          """,
+              'panel import'
+          )
+          panel = replace_once(
+              panel,
+              """  onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
+            onAddSource: (source: LibrarySource) => Promise<void>;
+          }
+          """,
+              """  onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
+            onAddSource: (source: LibrarySource) => Promise<void>;
+            onAdoptProposalToUda: (
+              input: TeachingProposalOutcomeMutationInput
+            ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
+          }
+          """,
+              'panel props'
+          )
+          panel = replace_once(
+              panel,
+              "type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';\n",
+              """type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+          function localDateKey(date = new Date()): string {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+          """,
+              'panel local date'
+          )
+          panel = replace_once(
+              panel,
+              """  onUpdate,
+            onAddSource
+          }) => {
+          """,
+              """  onUpdate,
+            onAddSource,
+            onAdoptProposalToUda
+          }) => {
+          """,
+              'panel destructure'
+          )
+          panel = replace_once(
+              panel,
+              "  const adoptionSourceIdRef = useRef<string | null>(null);\n",
+              """  const adoptionSourceIdRef = useRef<string | null>(null);
+            const adoptionLessonIdRef = useRef<string | null>(null);
+          """,
+              'panel lesson ref'
+          )
+          panel = replace_once(
+              panel,
+              """    adoptionSourceIdRef.current = null;
+            setRemoteConsent(false);
+          """,
+              """    adoptionSourceIdRef.current = null;
+            adoptionLessonIdRef.current = null;
+            setRemoteConsent(false);
+          """,
+              'panel reset'
+          )
+          panel = replace_once(
+              panel,
+              """    setEditedContent(null);
+            adoptionSourceIdRef.current = null;
+            const controller = new AbortController();
+          """,
+              """    setEditedContent(null);
+            adoptionSourceIdRef.current = null;
+            adoptionLessonIdRef.current = null;
+            const controller = new AbortController();
+          """,
+              'panel request reset'
+          )
+          panel = replace_once(
+              panel,
+              """      adoptionSourceIdRef.current = uid();
+            setProposal(result.proposal);
+          """,
+              """      adoptionSourceIdRef.current = uid();
+            adoptionLessonIdRef.current = uid();
+            setProposal(result.proposal);
+          """,
+              'panel stable ids'
+          )
+          panel = replace_once(
+              panel,
+              """  const leaveProposal = () => {
+            adoptionSourceIdRef.current = null;
+            setProposal(null);
+          """,
+              """  const leaveProposal = () => {
+            adoptionSourceIdRef.current = null;
+            adoptionLessonIdRef.current = null;
+            setProposal(null);
+          """,
+              'panel leave'
+          )
+
+          start = panel.index('  const adoptContent = async (content: TeachingProposalContent) => {')
+          end = panel.index("\n  if (source.privacy === 'unknown') {", start)
+          replacement = """  const clearAdoptedProposal = () => {
+            adoptionSourceIdRef.current = null;
+            adoptionLessonIdRef.current = null;
+            setProposal(null);
+            setIsEditing(false);
+            setEditedContent(null);
+            setAdoptionError(null);
+          };
+
+          const adoptLibraryContent = async (content: TeachingProposalContent) => {
+            if (!proposal || isAdopting) return;
+            const adoptionId = adoptionSourceIdRef.current ?? uid();
+            adoptionSourceIdRef.current = adoptionId;
+            setIsAdopting(true);
+            setAdoptionError(null);
+
+            try {
+              const adopted = createInternalSourceFromTeachingProposal({
+                id: adoptionId,
+                proposal,
+                content,
+                capturedAt: new Date().toISOString()
+              });
+              await onAddSource(adopted);
+              clearAdoptedProposal();
+            } catch (reason) {
+              setAdoptionError(
+                reason instanceof Error && reason.message
+                  ? reason.message
+                  : 'Salvataggio della proposta non riuscito. Puoi riprovare senza rigenerarla.'
+              );
+            } finally {
+              setIsAdopting(false);
+            }
+          };
+
+          const adoptUdaContent = async (content: TeachingProposalContent) => {
+            if (!proposal || isAdopting) return;
+            const sourceId = adoptionSourceIdRef.current ?? uid();
+            const lessonId = adoptionLessonIdRef.current ?? uid();
+            adoptionSourceIdRef.current = sourceId;
+            adoptionLessonIdRef.current = lessonId;
+            setIsAdopting(true);
+            setAdoptionError(null);
+
+            try {
+              await onAdoptProposalToUda({
+                proposal,
+                content,
+                teachingContext,
+                sourceId,
+                lessonId,
+                capturedAt: new Date().toISOString(),
+                lessonDate: localDateKey()
+              });
+              clearAdoptedProposal();
+            } catch (reason) {
+              setAdoptionError(
+                reason instanceof Error && reason.message
+                  ? reason.message
+                  : 'Salvataggio della proposta nell’UDA non riuscito. Puoi riprovare senza rigenerarla.'
+              );
+            } finally {
+              setIsAdopting(false);
+            }
+          };
+          """
+          panel = panel[:start] + replacement + panel[end:]
+
+          old_raw = """            <button
+                        type=\"button\"
+                        onClick={() => void adoptContent(contentFromProposal(proposal))}
+                        disabled={isPending || isAdopting}
+                        className=\"min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50\"
+                      >
+                        {isAdopting ? 'Salvo…' : 'Adotta'}
+                      </button>
+          """
+          new_raw = """            <button
+                        type=\"button\"
+                        onClick={() => void adoptLibraryContent(contentFromProposal(proposal))}
+                        disabled={isPending || isAdopting}
+                        className=\"min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50\"
+                      >
+                        {isAdopting ? 'Salvo…' : 'Adotta in Biblioteca'}
+                      </button>
+                      <button
+                        type=\"button\"
+                        onClick={() => void adoptUdaContent(contentFromProposal(proposal))}
+                        disabled={isPending || isAdopting}
+                        className=\"min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50\"
+                      >
+                        {isAdopting ? 'Salvo…' : \"Adotta e aggiungi all'UDA\"}
+                      </button>
+          """
+          panel = replace_once(panel, old_raw, new_raw, 'panel raw buttons')
+
+          old_edited = """            <button
+                        type=\"button\"
+                        onClick={() => void adoptContent(editedContent)}
+                        disabled={isPending || isAdopting}
+                        className=\"min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50\"
+                      >
+                        {isAdopting ? 'Salvo…' : 'Salva adattamento'}
+                      </button>
+          """
+          new_edited = """            <button
+                        type=\"button\"
+                        onClick={() => void adoptLibraryContent(editedContent)}
+                        disabled={isPending || isAdopting}
+                        className=\"min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50\"
+                      >
+                        {isAdopting ? 'Salvo…' : 'Adotta in Biblioteca'}
+                      </button>
+                      <button
+                        type=\"button\"
+                        onClick={() => void adoptUdaContent(editedContent)}
+                        disabled={isPending || isAdopting}
+                        className=\"min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50\"
+                      >
+                        {isAdopting ? 'Salvo…' : \"Adotta e aggiungi all'UDA\"}
+                      </button>
+          """
+          panel = replace_once(panel, old_edited, new_edited, 'panel edited buttons')
+          panel_path.write_text(panel)
+
+          # Composer
+          composer_path = Path('src/components/LibraryCopilotComposer.tsx')
+          composer = composer_path.read_text()
+          composer = replace_once(
+              composer,
+              "import { uid } from '../utils';\n",
+              """import { uid } from '../utils';
+          import type {
+            TeachingProposalOutcomeCandidate,
+            TeachingProposalOutcomeMutationInput
+          } from '../persistence/teachingProposalOutcomeMutation';
+          """,
+              'composer import'
+          )
+          composer = replace_once(
+              composer,
+              """  onAddSource: (source: LibrarySource) => Promise<void>;
+            onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
+          """,
+              """  onAddSource: (source: LibrarySource) => Promise<void>;
+            onAdoptProposalToUda: (
+              input: TeachingProposalOutcomeMutationInput
+            ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
+            onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
+          """,
+              'composer props'
+          )
+          composer = replace_once(
+              composer,
+              """  ambientContext,
+            onAddSource,
+            onUpdateSource,
+          """,
+              """  ambientContext,
+            onAddSource,
+            onAdoptProposalToUda,
+            onUpdateSource,
+          """,
+              'composer destructure'
+          )
+          composer = replace_once(
+              composer,
+              """              onUpdate={onUpdateSource}
+                        onAddSource={onAddSource}
+                      />
+          """,
+              """              onUpdate={onUpdateSource}
+                        onAddSource={onAddSource}
+                        onAdoptProposalToUda={onAdoptProposalToUda}
+                      />
+          """,
+              'composer panel prop'
+          )
+          composer_path.write_text(composer)
+
+          # App
+          app_path = Path('src/App.tsx')
+          app = app_path.read_text()
+          app = replace_once(
+              app,
+              """          onAddSource={handleAddLibrarySource}
+                    onUpdateSource={handleUpdateLibrarySource}
+          """,
+              """          onAddSource={handleAddLibrarySource}
+                    onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
+                    onUpdateSource={handleUpdateLibrarySource}
+          """,
+              'app composer prop'
+          )
+          app_path.write_text(app)
+
+      - name: Verify patch scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t files < <(git diff --name-only)
+          test "${#files[@]}" -eq 3
+          printf '%s\n' "${files[@]}" | sort > /tmp/actual
+          printf '%s\n' src/App.tsx src/components/LibraryCopilotComposer.tsx src/components/LibraryProposalPanel.tsx | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+
+      - name: Commit UI change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/components/LibraryCopilotComposer.tsx src/components/LibraryProposalPanel.tsx
+          git commit -m 'feat: expose explicit PREPARE adoption outcomes'
+          git push origin HEAD:${{ github.ref_name }}
