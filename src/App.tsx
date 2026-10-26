@@ -541,7 +541,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         : activeTab === 'dashboard' ? 'class-dashboard'
           : activeTab === 'biblioteca' ? 'library'
             : activeTab === 'uda-gantt' ? 'uda'
-              : 'global',
+              : activeTab === 'programmazione' ? 'planning'
+                : activeTab === 'verifiche-online' ? 'online-tests'
+                  : activeTab === 'voti' ? 'evaluations'
+                    : 'other-teacher-surface',
     className: currentClass?.name
   };
 
