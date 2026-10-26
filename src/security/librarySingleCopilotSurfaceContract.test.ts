@@ -108,6 +108,9 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('message.trim()');
     expect(composerSource).toContain('const resolutionSnapshot = currentResolutionSnapshot');
     expect(composerSource).toContain('resolutionSnapshot !== resolutionSnapshotRef.current');
+    expect(composerSource).toContain('buildLibraryCopilotRequest');
+    expect(composerSource).toContain('JSON.stringify(buildLibraryCopilotRequest({');
+    expect(composerSource).toContain('planningContext: resolvedPlanningContext');
   });
 
   test('semantic Teaching Context changes invalidate disclosure even when UDA and lesson ids stay stable', () => {

@@ -59,6 +59,7 @@ describe('LIB-01D governed proposal UI contract', () => {
     expect(panel).toContain('disabled={isPending || isGenerating}');
     expect(panel).toContain('setProposal(null)');
     expect(panel).toContain('source.id');
+    expect(panel).toContain('source.status');
     expect(panel).toContain('teachingContext.udaId');
     expect(panel).toContain('teachingContext.lessonId');
   });
