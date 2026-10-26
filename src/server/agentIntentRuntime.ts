@@ -42,7 +42,7 @@ export class AgentIntentRuntimeError extends Error {
 const DEFAULT_CONFIG: AgentIntentRuntimeConfig = {
   provider: 'gemini',
   model: 'gemini-3.8-flash',
-  deadlineMs: 10_000,
+  deadlineMs: 20_000,
   maxOutputTokens: 512
 };
 
