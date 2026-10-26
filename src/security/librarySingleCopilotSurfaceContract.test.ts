@@ -4,6 +4,7 @@ const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
 const composerSource = await Bun.file(new URL('../components/LibraryCopilotComposer.tsx', import.meta.url)).text();
 const libraryViewSource = await Bun.file(new URL('../components/LibraryView.tsx', import.meta.url)).text();
 const sourceCardSource = await Bun.file(new URL('../components/LibrarySourceCard.tsx', import.meta.url)).text();
+const launchContextSource = await Bun.file(new URL('../library/copilotLaunchContext.ts', import.meta.url)).text();
 const udaWorkspaceSource = await Bun.file(new URL('../components/UdaWorkspaceView.tsx', import.meta.url)).text();
 
 describe('single contextual Copilot surface contract', () => {
@@ -36,6 +37,14 @@ describe('single contextual Copilot surface contract', () => {
     expect(sourceCardSource).toContain('udaId: resolvedTeachingContext?.udaId');
     expect(sourceCardSource).toContain('lessonId: resolvedTeachingContext?.lessonId');
     expect(sourceCardSource).toContain('Usa con Copilota');
+  });
+
+  test('Library handoff preserves whether Teaching Context is proposed or explicit', () => {
+    expect(launchContextSource).toContain("teachingContextMode?: 'explicit' | 'proposed'");
+    expect(sourceCardSource).toContain("teachingContextMode: contextSuggestion ? 'proposed' : 'explicit'");
+    expect(composerSource).toContain("launchRequest?.context.teachingContextMode === 'proposed'");
+    expect(composerSource).toContain('hasLaunchTeachingTarget');
+    expect(composerSource).toContain('contextIsProposed');
   });
 
   test('a non-Library UDA surface can launch an explicit teaching context', () => {
