@@ -4,6 +4,7 @@ const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
 const composerSource = await Bun.file(new URL('../components/LibraryCopilotComposer.tsx', import.meta.url)).text();
 const libraryViewSource = await Bun.file(new URL('../components/LibraryView.tsx', import.meta.url)).text();
 const sourceCardSource = await Bun.file(new URL('../components/LibrarySourceCard.tsx', import.meta.url)).text();
+const udaWorkspaceSource = await Bun.file(new URL('../components/UdaWorkspaceView.tsx', import.meta.url)).text();
 
 describe('single contextual Copilot surface contract', () => {
   test('App owns a session-only launch handoff and passes it to the global Composer', () => {
@@ -37,6 +38,15 @@ describe('single contextual Copilot surface contract', () => {
     expect(sourceCardSource).toContain('Usa con Copilota');
   });
 
+  test('a non-Library UDA surface can launch an explicit teaching context', () => {
+    expect(appSource).toContain('onOpenCopilot={openLibraryCopilot}');
+    expect(udaWorkspaceSource).toContain('onOpenCopilot');
+    expect(udaWorkspaceSource).toContain("surface: 'uda'");
+    expect(udaWorkspaceSource).toContain('className: uda.className');
+    expect(udaWorkspaceSource).toContain('udaId: uda.id');
+    expect(udaWorkspaceSource).toContain('Usa con Copilota');
+  });
+
   test('Composer binds an explicit launch request before deterministic fallback', () => {
     expect(composerSource).toContain('resolveLaunchTeachingContext');
     expect(composerSource).toContain('launchRequest?.nonce');
@@ -45,6 +55,14 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('setIsOpen(true)');
     expect(composerSource).toContain('Il contesto richiesto non è più disponibile.');
     expect(composerSource).toContain('hasExplicitLaunchTarget');
+  });
+
+  test('explicit or proposed teaching context is visible, changeable and removable in the Composer', () => {
+    expect(composerSource).toContain('data-testid="library-copilot-context-select"');
+    expect(composerSource).toContain('Contesto didattico');
+    expect(composerSource).toContain('Nessun contesto');
+    expect(composerSource).toContain('Contesto proposto');
+    expect(composerSource).toContain('setContextOverride');
   });
 
   test('source mutations do not replay an already-consumed launch request', () => {
@@ -62,6 +80,13 @@ describe('single contextual Copilot surface contract', () => {
     expect(staleSourceWatcher).toContain('library.sources.some');
     expect(staleSourceWatcher).toContain('La fonte richiesta non è più disponibile.');
     expect(staleSourceWatcher).toContain('Il contesto richiesto non è più disponibile.');
+  });
+
+  test('in-flight intent resolution cannot reapply disclosure after source context or message invalidation', () => {
+    expect(composerSource).toContain('resolutionEpochRef');
+    expect(composerSource).toContain('const resolutionEpoch = ++resolutionEpochRef.current');
+    expect(composerSource).toContain('resolutionEpoch !== resolutionEpochRef.current');
+    expect(composerSource).toContain('resolutionEpochRef.current += 1');
   });
 
   test('LibrarySourceCard is no longer a second transformation engine', () => {
