@@ -13,6 +13,7 @@ import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import {
+  buildLibraryCopilotRequest,
   discoverLibraryCopilotIntent,
   dispatchLibraryContextAction,
   resolveLibraryCopilotRequest
@@ -140,15 +141,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
   }, [resolvedTeachingContext, udas]);
 
-  const currentResolutionSnapshot = [
-    selectedSource?.id ?? '',
-    selectedSource?.kind ?? '',
-    selectedSource?.privacy ?? '',
-    selectedSource?.status ?? '',
-    String(selectedSource?.links.length ?? 0),
-    teachingContextFingerprint,
-    message.trim()
-  ].join('|');
+  const currentResolutionSnapshot = selectedSource
+    ? JSON.stringify(buildLibraryCopilotRequest({
+        source: selectedSource,
+        teachingContext: resolvedTeachingContext,
+        planningContext: resolvedPlanningContext,
+        message: message.trim()
+      }))
+    : '';
   const resolutionSnapshotRef = useRef(currentResolutionSnapshot);
 
   useLayoutEffect(() => {
