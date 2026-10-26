@@ -144,6 +144,13 @@ test('AGENT-INTENT-01 routes the real teacher phrase agent-first without leaking
   const intentRequests = [];
   const proposalRequests = [];
 
+  await page.route('**/api/copilot/intent/provider', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ available: true, provider: 'Browser Provider', model: 'browser-fixture-v1' })
+    });
+  });
   await page.route('**/api/copilot/intent', async route => {
     const body = route.request().postDataJSON();
     intentRequests.push(body);
@@ -251,6 +258,13 @@ test('AGENT-INTENT-01 keeps exact 390x844 mobile usable and ignores stale agent 
   const delayedResponse = new Promise(resolve => { releaseFirstResponse = resolve; });
   let intentCallCount = 0;
 
+  await page.route('**/api/copilot/intent/provider', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ available: true, provider: 'Browser Provider', model: 'browser-fixture-v1' })
+    });
+  });
   await page.route('**/api/copilot/intent', async route => {
     intentCallCount += 1;
     const body = route.request().postDataJSON();
@@ -315,8 +329,17 @@ test('AGENT-INTENT-01 keeps exact 390x844 mobile usable and ignores stale agent 
 
 test('AGENT-INTENT-01 falls back locally and remains fail-closed when the agent route is unavailable', async ({ page }) => {
   const guards = installConsoleGuards(page);
+  let unexpectedIntentPostCount = 0;
+  await page.route('**/api/copilot/intent/provider', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ available: false, provider: 'Browser Provider', model: 'browser-fixture-v1' })
+    });
+  });
   await page.route('**/api/copilot/intent', async route => {
-    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'PROVIDER_UNAVAILABLE' } }) });
+    unexpectedIntentPostCount += 1;
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNEXPECTED_POST' } }) });
   });
 
   const composer = await bootstrap(page);
@@ -325,6 +348,7 @@ test('AGENT-INTENT-01 falls back locally and remains fail-closed when the agent 
   await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-review-panel')).toHaveCount(0);
+  expect(unexpectedIntentPostCount).toBe(0);
   expect(guards.pageErrors).toEqual([]);
   expect(guards.consoleErrors).toEqual([]);
 });

@@ -73,6 +73,14 @@ app.post(
   }
 );
 
+app.get('/api/copilot/intent/provider', (_req, res) => {
+  return res.json({
+    available: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    provider: agentIntentProvider.descriptor.displayName,
+    model: agentIntentProvider.descriptor.model
+  });
+});
+
 app.post(
   '/api/copilot/intent',
   express.json({ limit: '16kb' }),

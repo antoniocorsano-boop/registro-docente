@@ -461,7 +461,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       if (!requestIsCurrent()) return;
       setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
     } finally {
-      if (requestIsCurrent()) setIsResolving(false);
+      setIsResolving(false);
     }
   };
 
