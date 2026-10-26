@@ -73,7 +73,40 @@ async function assertAtLeast44(locator, label) {
   expect(box.width, `${label} width`).toBeGreaterThanOrEqual(44);
 }
 
-test('LIB-01B progressively reveals shared Core actions and gates contextual UDA linking — desktop 1280x900', async ({ page }) => {
+async function handoffToComposer(page, card) {
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  return composer;
+}
+
+async function assertReviewOnlyPossibility(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill(
+    'rivedi questa fonte nel contesto della programmazione'
+  );
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
+  await expect(composer.getByText('Controlla nel contesto', { exact: true })).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
+  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
+}
+
+async function resolveLinkPossibility(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill(
+    'Collega questa fonte al lavoro didattico corrente.'
+  );
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
+}
+
+test('LIB-01B hands contextual source actions to Copilot and gates durable UDA linking — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   const contextualExternalRequests = [];
@@ -92,58 +125,88 @@ test('LIB-01B progressively reveals shared Core actions and gates contextual UDA
   await openLibrary(page);
   await addSyntheticSource(page);
 
-  // Reload clears ephemeral selection: advanced contextual actions must not be visible by default.
+  // Reload clears ephemeral selection: contextual handoff controls must not be visible by default.
   await reloadAndUnlock(page);
   await openLibrary(page);
-  await expect(page.getByText('Che cosa vuoi farne?', { exact: true })).toHaveCount(0);
-
   const card = await sourceCard(page);
-  // Network guard begins exactly where the LIB-01B contextual flow begins. Existing shell assets are out of scope.
-  trackContextualRequests = true;
+  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toHaveCount(0);
+  await expect(card.getByLabel('UDA corrente')).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-testid="library-copilot-composer"]')).toHaveCount(0);
+
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await expect(card.getByText('Che cosa vuoi farne?', { exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Prepara materiale', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Sintetizza la fonte', exact: true })).toHaveCount(0);
+  const currentUda = card.getByLabel('UDA corrente');
+  await expect(currentUda).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
 
-  // LIB-01C adds an explicit teaching-context selection before the existing shared-Core LINK action.
-  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
+  // Select the teaching context explicitly before handing the source to the shared Copilot.
+  await currentUda.selectOption({ label: UDA_TITLE });
+  trackContextualRequests = true;
+  let composer = await handoffToComposer(page, card);
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
 
-  await card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }).click();
-  await expect(card.getByText('Contesto locale', { exact: true })).toBeVisible();
-  await expect(card.getByText('Privacy da verificare', { exact: true })).toBeVisible();
+  await assertReviewOnlyPossibility(composer);
+  await resolveLinkPossibility(composer);
 
-  await card.getByRole('button', { name: 'Collega a una UDA', exact: true }).click();
-  await card.getByRole('button', { name: 'Continua', exact: true }).click();
-  await expect(card.getByText('Confermi il collegamento della fonte alla UDA selezionata?', { exact: true })).toBeVisible();
+  const linkAction = composer.getByTestId('library-copilot-link-action');
+  await linkAction.click();
+  const confirmation = composer.getByTestId('library-copilot-link-confirmation');
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByText(`Destinazione: UDA · ${UDA_TITLE}`, { exact: true })).toBeVisible();
 
-  // The first Core dispatch must not mutate the vertical state.
+  // The first LINK dispatch must not mutate the Library; the pending confirmation can be retried.
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await card.getByText('Gestisci', { exact: true }).click();
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
 
-  await card.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toBeVisible();
+  composer = await page.locator('[data-testid="library-copilot-composer"]').count()
+    ? page.locator('[data-testid="library-copilot-composer"]')
+    : null;
+  if (!composer) {
+    const trigger = page.locator('[data-testid="library-copilot-trigger"]');
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    composer = page.locator('[data-testid="library-copilot-composer"]');
+  }
+  await expect(composer).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-link-confirmation')).toBeVisible();
+  await composer.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
+  await expect(composer.getByText('Il collegamento è stato salvato nella Biblioteca.', { exact: true })).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
-  await page.getByRole('button', { name: 'Collegate', exact: true }).click();
-  await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
+  const linkedCard = await sourceCard(page);
+  const linkedRow = linkedCard.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(linkedRow.getByText(UDA_TITLE, { exact: true })).toBeVisible();
+
+  trackContextualRequests = false;
+  await reloadAndUnlock(page);
+  await openLibrary(page);
+  const reloadedCard = await sourceCard(page);
+  await reloadedCard.getByText('Gestisci', { exact: true }).click();
+  const reloadedRow = reloadedCard.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(reloadedRow.getByText(UDA_TITLE, { exact: true })).toBeVisible();
 
   await page.screenshot({
-    path: path.join(evidenceDir, 'lib01b-contextual-core-desktop.png'),
+    path: path.join(evidenceDir, 'lib01b-copilot-contextual-desktop.png'),
     fullPage: true
   });
   fs.writeFileSync(
-    path.join(evidenceDir, 'lib01b-contextual-core-desktop.json'),
+    path.join(evidenceDir, 'lib01b-copilot-contextual-desktop.json'),
     JSON.stringify({
       candidateSha: process.env.CANDIDATE_SHA || null,
       viewport: { width: 1280, height: 900 },
       checks: [
-        'actions-hidden-before-use',
-        'shared-core-actions-visible-after-use',
-        'generative-actions-unavailable',
-        'local-review',
-        'human-confirmation-before-link',
-        'link-visible-after-confirmed-dispatch',
+        'contextual-controls-hidden-before-use',
+        'explicit-uda-context-before-copilot-handoff',
+        'review-utterance-resolves-review-only',
+        'link-requires-human-confirmation',
+        'no-write-before-explicit-confirmation',
+        'durable-link-visible-after-confirmation',
+        'link-persists-after-reload',
         'no-contextual-external-network'
       ],
       contextualExternalRequests,
@@ -155,7 +218,7 @@ test('LIB-01B progressively reveals shared Core actions and gates contextual UDA
   expect(pageErrors).toEqual([]);
 });
 
-test('LIB-01B contextual disclosure stays touch-safe and overflow-free — mobile 390x844', async ({ browser }) => {
+test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-free — mobile 390x844', async ({ browser }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
@@ -163,15 +226,40 @@ test('LIB-01B contextual disclosure stays touch-safe and overflow-free — mobil
   page.on('pageerror', error => pageErrors.push(String(error)));
 
   await setupFreshVault(page);
+  await createSyntheticUda(page);
   await openLibrary(page);
   await addSyntheticSource(page);
 
   const card = await sourceCard(page);
-  await expect(card.getByText('Che cosa vuoi farne?', { exact: true })).toBeVisible();
-  await assertAtLeast44(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }), 'mobile review action');
-  await assertAtLeast44(card.getByRole('button', { name: 'Collega a una UDA', exact: true }), 'mobile link action');
-  await expect(card.getByRole('button', { name: 'Prepara materiale', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Sintetizza la fonte', exact: true })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  const currentUda = card.getByLabel('UDA corrente');
+  await expect(currentUda).toBeVisible();
+  await currentUda.selectOption({ label: UDA_TITLE });
+
+  const handoff = card.getByRole('button', { name: 'Usa con Copilota', exact: true });
+  await assertAtLeast44(handoff, 'mobile source-to-Copilot handoff');
+  const composer = await handoffToComposer(page, card);
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
+
+  const submit = composer.getByRole('button', { name: 'Mostra le possibilità', exact: true });
+  await assertAtLeast44(submit, 'mobile Copilot possibilities submit');
+  await composer.getByLabel('Che cosa vuoi farne?').fill(
+    'Collega questa fonte al lavoro didattico corrente.'
+  );
+  await submit.click();
+  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
+  const linkAction = composer.getByTestId('library-copilot-link-action');
+  await assertAtLeast44(linkAction, 'mobile Copilot LINK action');
+  await linkAction.click();
+
+  const confirmation = composer.getByTestId('library-copilot-link-confirmation');
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByText(`Destinazione: UDA · ${UDA_TITLE}`, { exact: true })).toBeVisible();
+  const confirmButton = confirmation.getByRole('button', { name: 'Conferma collegamento', exact: true });
+  const cancelButton = confirmation.getByRole('button', { name: 'Annulla', exact: true });
+  await assertAtLeast44(confirmButton, 'mobile confirm LINK');
+  await assertAtLeast44(cancelButton, 'mobile cancel LINK');
 
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -179,12 +267,18 @@ test('LIB-01B contextual disclosure stays touch-safe and overflow-free — mobil
   }));
   expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.innerWidth + 1);
 
+  await cancelButton.click();
+  await expect(confirmation).toBeHidden();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await card.getByText('Gestisci', { exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
+
   await page.screenshot({
-    path: path.join(evidenceDir, 'lib01b-contextual-core-mobile.png'),
+    path: path.join(evidenceDir, 'lib01b-copilot-contextual-mobile.png'),
     fullPage: true
   });
   fs.writeFileSync(
-    path.join(evidenceDir, 'lib01b-contextual-core-mobile.json'),
+    path.join(evidenceDir, 'lib01b-copilot-contextual-mobile.json'),
     JSON.stringify({
       candidateSha: process.env.CANDIDATE_SHA || null,
       viewport: { width: 390, height: 844 },

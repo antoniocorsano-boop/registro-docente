@@ -328,18 +328,18 @@ describe('LIB-01C teaching context contract', () => {
     expect(serialized).not.toContain(UDA.lessons![0].notes!);
   });
 
-  test('wires deterministic suggestion and teacher override into the governed vertical link target', () => {
+  test('wires deterministic suggestion and teacher override into the exact Copilot launch context', () => {
     const cardSource = readFileSync(new URL('../components/LibrarySourceCard.tsx', import.meta.url), 'utf8');
 
     expect(cardSource).toContain('resolveLibraryTeachingContext');
     expect(cardSource).toContain('suggestLibraryTeachingContext');
     expect(cardSource).toContain('onExplicitTeachingContextChange');
     expect(cardSource).toContain("setContextLessonId('')");
-    expect(cardSource).toContain('setContextLinkConfirmationPending(false)');
-    expect(cardSource).toContain('resolveLibraryContextActions(source, resolvedTeachingContext)');
-    expect(cardSource).toContain('teachingContext: resolvedTeachingContext');
-    expect(cardSource).toContain("targetType: 'lesson'");
-    expect(cardSource).toContain("targetType: 'uda'");
+    expect(cardSource).toContain('onOpenCopilot');
+    expect(cardSource).toContain('udaId: resolvedTeachingContext?.udaId');
+    expect(cardSource).toContain('lessonId: resolvedTeachingContext?.lessonId');
+    expect(cardSource).not.toContain('resolveLibraryContextActions');
+    expect(cardSource).not.toContain('dispatchLibraryContextAction');
     expect(cardSource).not.toContain('UDA di destinazione');
   });
 });

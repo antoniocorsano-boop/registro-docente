@@ -1,15 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
-import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { PlanningStateV1 } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
+import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { buildCapturedWebTextPatch } from '../library/intake';
-import {
-  dispatchLibraryContextAction,
-  resolveLibraryContextActions
-} from '../library/contextualCoreAdapter';
 import {
   resolveLibraryTeachingContext,
   suggestLibraryTeachingContext,
@@ -17,7 +13,6 @@ import {
   type TeachingContextSuggestion,
   type TeachingContextSuggestionReason
 } from '../library/teachingContext';
-import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { LibraryRelevancePanel } from './LibraryRelevancePanel';
 
 interface LibrarySourceCardProps {
@@ -30,11 +25,11 @@ interface LibrarySourceCardProps {
   isPending: boolean;
   isSelected: boolean;
   onUse: (sourceId: string) => void;
-  onAddSource: (source: LibrarySource) => Promise<void>;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onUnlink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDelete: (sourceId: string) => Promise<void>;
+  onOpenCopilot: (context: CopilotLaunchContext) => void;
 }
 
 const KIND_LABELS: Record<LibrarySource['kind'], string> = {
@@ -53,12 +48,6 @@ const STATUS_LABELS: Record<LibrarySource['status'], string> = {
   'needs-review': 'Da rivedere',
   restricted: 'Uso limitato',
   failed: 'Da riprovare'
-};
-
-const PRIVACY_LABELS: Record<LibrarySource['privacy'], string> = {
-  unknown: 'Privacy da verificare',
-  'teacher-professional': 'Materiale professionale del docente',
-  'student-personal': 'Può contenere dati personali di studenti'
 };
 
 const ACTIVITY_LABELS: Record<UdaActivityType, string> = {
@@ -93,11 +82,11 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   isPending,
   isSelected,
   onUse,
-  onAddSource,
   onUpdate,
   onLink,
   onUnlink,
-  onDelete
+  onDelete,
+  onOpenCopilot
 }) => {
   const [targetUdaId, setTargetUdaId] = useState('');
   const [contextUdaId, setContextUdaId] = useState('');
@@ -105,12 +94,6 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [contextSuggestion, setContextSuggestion] = useState<TeachingContextSuggestion | null>(null);
   const [contextChooserOpen, setContextChooserOpen] = useState(false);
   const initializedSourceIdRef = useRef<string | null>(null);
-  const [contextActions, setContextActions] = useState<readonly ResolvedAction[]>([]);
-  const [isContextLoading, setIsContextLoading] = useState(false);
-  const [contextError, setContextError] = useState<string | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [contextLinkOpen, setContextLinkOpen] = useState(false);
-  const [contextLinkConfirmationPending, setContextLinkConfirmationPending] = useState(false);
   const [webCaptureOpen, setWebCaptureOpen] = useState(false);
   const [webCapturedText, setWebCapturedText] = useState('');
   const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
@@ -153,60 +136,10 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setContextChooserOpen(!suggestion);
     setContextUdaId(suggestion?.context.udaId ?? '');
     setContextLessonId(suggestion?.context.lessonId ?? '');
-    setContextLinkOpen(false);
-    setContextLinkConfirmationPending(false);
-    setReviewOpen(false);
     setWebCaptureOpen(false);
     setWebCapturedText('');
     setWebCaptureError(null);
   }, [isSelected, source.id, udas, currentClassName, lastExplicitTeachingContext]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!isSelected) {
-      setContextUdaId('');
-      setContextLessonId('');
-      setContextActions([]);
-      setIsContextLoading(false);
-      setContextError(null);
-      setReviewOpen(false);
-      setContextLinkOpen(false);
-      setContextLinkConfirmationPending(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setIsContextLoading(true);
-    setContextError(null);
-    void resolveLibraryContextActions(source, resolvedTeachingContext)
-      .then(actions => {
-        if (!cancelled) setContextActions(actions);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setContextActions([]);
-          setContextError('Le azioni contestuali non sono disponibili in questo momento. La fonte resta invariata.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsContextLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    isSelected,
-    source.id,
-    source.kind,
-    source.status,
-    source.privacy,
-    source.links.length,
-    contextUdaId,
-    contextLessonId
-  ]);
 
   const handleRename = async () => {
     const title = prompt('Nuovo titolo della fonte:', source.title)?.trim();
@@ -242,9 +175,6 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setContextLessonId('');
     setContextSuggestion(null);
     setContextChooserOpen(true);
-    setContextLinkOpen(false);
-    setContextLinkConfirmationPending(false);
-    setReviewOpen(false);
     if (udaId) onExplicitTeachingContextChange({ udaId });
   };
 
@@ -252,9 +182,6 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setContextLessonId(lessonId);
     setContextSuggestion(null);
     setContextChooserOpen(true);
-    setContextLinkOpen(false);
-    setContextLinkConfirmationPending(false);
-    setReviewOpen(false);
     if (contextUdaId) {
       onExplicitTeachingContextChange({
         udaId: contextUdaId,
@@ -268,29 +195,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setContextLessonId(context.lessonId ?? '');
     setContextSuggestion(null);
     setContextChooserOpen(true);
-    setContextLinkOpen(false);
-    setContextLinkConfirmationPending(false);
-    setReviewOpen(false);
     onExplicitTeachingContextChange(context);
-  };
-
-  const handleContextAction = (actionId: string) => {
-    setContextError(null);
-    if (actionId === 'review-source') {
-      setReviewOpen(true);
-      setContextLinkOpen(false);
-      setContextLinkConfirmationPending(false);
-      return;
-    }
-    if (actionId === 'link-source-to-uda') {
-      if (!resolvedTeachingContext) {
-        setContextError('Seleziona prima l’UDA del contesto di lavoro.');
-        return;
-      }
-      setContextLinkOpen(true);
-      setReviewOpen(false);
-      setContextLinkConfirmationPending(false);
-    }
   };
 
   const saveCapturedWebText = async () => {
@@ -306,56 +211,6 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
           ? reason.message
           : 'Salvataggio del contenuto non riuscito. Puoi riprovare senza perdere il testo.'
       );
-    }
-  };
-
-  const requestContextualLinkConfirmation = async () => {
-    if (!resolvedTeachingContext) {
-      setContextError('Il contesto di lavoro non è più valido. Riseleziona l’UDA.');
-      return;
-    }
-    setContextError(null);
-    const result = await dispatchLibraryContextAction({
-      source,
-      teachingContext: resolvedTeachingContext,
-      actionId: 'link-source-to-uda',
-      executor: async () => undefined
-    });
-
-    if (result.status === 'HUMAN_CONFIRMATION_REQUIRED') {
-      setContextLinkConfirmationPending(true);
-      return;
-    }
-    setContextError('Il collegamento non è autorizzato nel contesto corrente.');
-  };
-
-  const confirmContextualLink = async () => {
-    if (!resolvedTeachingContext) {
-      setContextError('Il contesto di lavoro non è più valido. Riseleziona l’UDA.');
-      return;
-    }
-
-    const contextualLink: LibrarySourceLink = resolvedTeachingContext.lessonId
-      ? { targetType: 'lesson', targetId: resolvedTeachingContext.lessonId }
-      : { targetType: 'uda', targetId: resolvedTeachingContext.udaId };
-
-    setContextError(null);
-    try {
-      const result = await dispatchLibraryContextAction({
-        source,
-        teachingContext: resolvedTeachingContext,
-        actionId: 'link-source-to-uda',
-        humanConfirmed: true,
-        executor: () => onLink(source.id, contextualLink)
-      });
-      if (result.status !== 'EXECUTED') {
-        setContextError('Il collegamento non è stato applicato.');
-        return;
-      }
-      setContextLinkConfirmationPending(false);
-      setContextLinkOpen(false);
-    } catch {
-      setContextError('Salvataggio del collegamento non riuscito. Puoi riprovare senza riselezionare la fonte.');
     }
   };
 
@@ -497,8 +352,24 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-3 text-sm text-cyan-100 space-y-3">
           <div>
             <strong className="block">Che cosa vuoi farne?</strong>
-            <span className="text-cyan-200/80">Vedi solo le azioni ammesse per questa fonte. La selezione non modifica UDA o lezioni.</span>
+            <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenCopilot({
+              surface: 'library',
+              sourceId: source.id,
+              className: resolvedTeachingContext?.className ?? currentClassName ?? undefined,
+              udaId: resolvedTeachingContext?.udaId,
+              lessonId: resolvedTeachingContext?.lessonId,
+              teachingContextMode: contextSuggestion ? 'proposed' : 'explicit'
+            })}
+            disabled={isPending}
+            className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
+          >
+            Usa con Copilota
+          </button>
 
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
             {contextSuggestion ? (
@@ -655,93 +526,6 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             </div>
           )}
 
-          {!webNeedsContent && resolvedTeachingContext && selectedContextUda && (
-            <LibraryProposalPanel
-              source={source}
-              uda={selectedContextUda}
-              teachingContext={resolvedTeachingContext}
-              isPending={isPending}
-              onAddSource={onAddSource}
-              onUpdate={onUpdate}
-            />
-          )}
-
-          {isContextLoading && <p role="status" className="text-xs text-cyan-200/80">Valuto le azioni disponibili…</p>}
-          {contextError && <p role="alert" className="text-xs text-amber-200">{contextError}</p>}
-
-          {!isContextLoading && contextActions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {contextActions.map(action => (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => handleContextAction(action.id)}
-                  disabled={isPending}
-                  className="min-h-[44px] px-3 rounded-lg border border-cyan-700/70 bg-cyan-950/50 text-cyan-100 text-sm font-medium disabled:opacity-50"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {reviewOpen && (
-            <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 px-3 py-2 text-xs text-slate-300 space-y-1">
-              <p><strong className="text-slate-100">Contesto locale</strong></p>
-              <p>{KIND_LABELS[source.kind]} · {STATUS_LABELS[source.status]}</p>
-              <p>{PRIVACY_LABELS[source.privacy]}</p>
-              {selectedContextUda && <p>UDA: {selectedContextUda.title}</p>}
-              {selectedContextLesson && <p>Lezione: {selectedContextLesson.topic}</p>}
-              <p>{source.links.length === 0 ? 'Nessun collegamento didattico.' : `${source.links.length} collegamento/i didattico/i.`}</p>
-            </div>
-          )}
-
-          {contextLinkOpen && resolvedTeachingContext && (
-            <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
-              <p className="text-xs text-slate-300">
-                Destinazione: <strong className="text-slate-100">
-                  {selectedContextLesson ? `Lezione · ${selectedContextLesson.topic}` : `UDA · ${selectedContextUda?.title ?? resolvedTeachingContext.udaId}`}
-                </strong>
-              </p>
-
-              {!contextLinkConfirmationPending ? (
-                <button
-                  type="button"
-                  onClick={() => void requestContextualLinkConfirmation()}
-                  disabled={isPending}
-                  className="min-h-[44px] px-3 rounded-md border border-cyan-700 text-sm text-cyan-100 disabled:opacity-50"
-                >
-                  Continua
-                </button>
-              ) : (
-                <div className="rounded-md border border-amber-700/60 bg-amber-950/20 p-3 space-y-2">
-                  <p className="text-xs text-amber-100">
-                    {selectedContextLesson
-                      ? 'Confermi il collegamento della fonte alla lezione selezionata?'
-                      : 'Confermi il collegamento della fonte alla UDA selezionata?'}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void confirmContextualLink()}
-                      disabled={isPending}
-                      className="min-h-[44px] px-3 rounded-md bg-[var(--primary)] text-slate-950 font-semibold text-sm disabled:opacity-50"
-                    >
-                      Conferma collegamento
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setContextLinkConfirmationPending(false)}
-                      disabled={isPending}
-                      className="min-h-[44px] px-3 rounded-md border border-slate-700 text-slate-200 text-sm disabled:opacity-50"
-                    >
-                      Annulla
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </article>

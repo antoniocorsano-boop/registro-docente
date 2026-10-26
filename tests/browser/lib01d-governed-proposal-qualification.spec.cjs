@@ -10,6 +10,7 @@ const STUDENT_NAME = 'Studente Segreto Sintetico LIB-01D';
 const UDA_TITLE = 'UDA Sintetica LIB-01D';
 const ALT_UDA_TITLE = 'UDA Alternativa LIB-01D';
 const SOURCE_TITLE = 'Fonte professionale sintetica LIB-01D';
+const SECOND_SOURCE_TITLE = 'Fonte alternativa sintetica LIB-01D';
 const PROPOSAL_TITLE = 'Proposta sintetica LIB-01D';
 const ADAPTED_TITLE = 'Proposta adattata dal docente LIB-01D';
 const ADAPTED_TASK = 'Costruisci una mappa delle trasformazioni e giustifica due passaggi.';
@@ -75,7 +76,14 @@ async function createSyntheticClassAndStudent(page) {
   await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
 }
 
-async function createSyntheticUda(page, title, className = null) {
+async function selectSyntheticClass(page) {
+  const classButton = page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true });
+  await expect(classButton).toBeVisible();
+  await classButton.click();
+  await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}` })).toBeVisible();
+}
+
+async function createSyntheticUda(page, title, className = null, { activeForSchoolYear = false } = {}) {
   await openDrawerItem(page, 'UDA');
   const udaViewToggle = page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true });
   if (await udaViewToggle.isVisible().catch(() => false)) await udaViewToggle.click();
@@ -86,6 +94,11 @@ async function createSyntheticUda(page, title, className = null) {
     await expect(classSelect).toBeVisible();
     await classSelect.selectOption({ label: className });
   }
+  if (activeForSchoolYear) {
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Mese Inizio').selectOption('0');
+    await dialog.getByLabel('Durata Mesi').fill('10');
+  }
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
 }
@@ -95,14 +108,14 @@ async function openLibrary(page) {
   await expect(page.getByRole('heading', { name: 'Biblioteca privata', exact: true })).toBeVisible();
 }
 
-async function addSyntheticSource(page) {
+async function addSyntheticSource(page, title) {
   await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
   await page.getByRole('button', { name: 'Testo o idea', exact: true }).click();
   await page.getByLabel('Tipo').selectOption('concept');
-  await page.getByLabel('Titolo').fill(SOURCE_TITLE);
+  await page.getByLabel('Titolo').fill(title);
   await page.getByLabel('Contenuto').fill('Fonte sintetica professionale sulle trasformazioni di energia e materia.');
   await page.getByRole('button', { name: 'Salva in biblioteca', exact: true }).click();
-  await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
 async function sourceCard(page, title) {
@@ -117,6 +130,21 @@ async function assertAtLeast44(locator, label) {
   expect(box, `${label} bounding box`).not.toBeNull();
   expect(box.height, `${label} height`).toBeGreaterThanOrEqual(44);
   expect(box.width, `${label} width`).toBeGreaterThanOrEqual(44);
+}
+
+async function openComposer(page) {
+  const trigger = page.locator('[data-testid="library-copilot-trigger"]');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  return composer;
+}
+
+async function selectComposerSource(composer, title) {
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await sourceSelect.selectOption({ label: title });
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 }
 
 function proposalForRequest(body) {
@@ -183,63 +211,107 @@ async function installProposalRoute(page, capturedBodies) {
   });
 }
 
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
+}
+
 test('LIB-01D source → governed proposal → leave/adapt/adopt → durable reload — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   const consoleErrors = [];
+  const externalRequests = [];
   const proposalBodies = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
+  page.on('request', request => {
+    const url = request.url();
+    if (url.startsWith(baseURL) || url.startsWith('data:') || url.startsWith('blob:')) return;
+    const hostname = new URL(url).hostname;
+    const shellAssetHost = hostname === 'fonts.googleapis.com'
+      || hostname === 'fonts.gstatic.com'
+      || hostname === 'cdnjs.cloudflare.com';
+    if (!shellAssetHost) externalRequests.push(url);
+  });
   await installProposalRoute(page, proposalBodies);
 
   await setupFreshVault(page);
   await createSyntheticClassAndStudent(page);
-  await createSyntheticUda(page, UDA_TITLE, CLASS_NAME);
+  await createSyntheticUda(page, UDA_TITLE, CLASS_NAME, { activeForSchoolYear: true });
+  await createSyntheticUda(page, ALT_UDA_TITLE, CLASS_NAME, { activeForSchoolYear: true });
   await openLibrary(page);
-  await addSyntheticSource(page);
+  await addSyntheticSource(page, SOURCE_TITLE);
+  await addSyntheticSource(page, SECOND_SOURCE_TITLE);
+  await reloadAndUnlock(page);
+  await selectSyntheticClass(page);
+  await openLibrary(page);
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
 
   expect(proposalBodies).toHaveLength(0);
-  await expect(card.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
-
-  await card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
-  await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  let composer = page.locator('[data-testid=\"library-copilot-composer\"]');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  expect(proposalBodies).toHaveLength(0);
+  let disclosure = await openPrepareFromIntent(composer);
+  await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
+  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
   expect(proposalBodies).toHaveLength(0);
 
-  await card.getByRole('button', { name: 'Consenti per questa richiesta', exact: true }).click();
-  const prepare = card.getByRole('button', { name: 'Prepara attività', exact: true });
+  await selectComposerSource(composer, SECOND_SOURCE_TITLE);
+  await expect(disclosure).toHaveCount(0);
+  await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toHaveCount(0);
+  expect(proposalBodies).toHaveLength(0);
+
+  await selectComposerSource(composer, SOURCE_TITLE);
+  await openPrepareFromIntent(composer);
+  await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  await expect(disclosure.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
+  expect(proposalBodies).toHaveLength(0);
+
+  await disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true }).click();
+  const prepare = disclosure.getByRole('button', { name: 'Prepara attività', exact: true });
   await expect(prepare).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
 
   await prepare.click();
-  await expect(card.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
-  await expect(card.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toBeVisible();
-  await expect(card.getByText(proposalContent.studentTask, { exact: true })).toBeVisible();
+  await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
+  await expect(disclosure.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toBeVisible();
+  await expect(disclosure.getByText(proposalContent.studentTask, { exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(1);
 
-  await card.getByRole('button', { name: 'Lascia', exact: true }).click();
-  await expect(card.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
+  await disclosure.getByRole('button', { name: 'Lascia', exact: true }).click();
+  await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await openLibrary(page);
   await expect(page.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toHaveCount(0);
 
-  await card.getByRole('button', { name: 'Consenti per questa richiesta', exact: true }).click();
-  const secondPrepare = card.getByRole('button', { name: 'Prepara attività', exact: true });
-  await expect(secondPrepare).toBeVisible();
-  await secondPrepare.click();
+  composer = await openComposer(page);
+  await selectComposerSource(composer, SOURCE_TITLE);
+  const disclosureAgain = await openPrepareFromIntent(composer);
+  await expect(disclosureAgain.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
+  await disclosureAgain.getByRole('button', { name: 'Consenti per questa richiesta', exact: true }).click();
+  await disclosureAgain.getByRole('button', { name: 'Prepara attività', exact: true }).click();
+  await expect(disclosureAgain.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
+  await expect(disclosureAgain.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(2);
 
-  await card.getByRole('button', { name: 'Adatta', exact: true }).click();
-  const editor = card.getByRole('region', { name: 'Adatta proposta didattica' });
+  await disclosureAgain.getByRole('button', { name: 'Adatta', exact: true }).click();
+  const editor = disclosureAgain.getByRole('region', { name: 'Adatta proposta didattica' });
   await expect(editor).toBeVisible();
   await editor.getByLabel('Titolo').fill(ADAPTED_TITLE);
   await editor.getByLabel('Consegna agli studenti').fill(ADAPTED_TASK);
   expect(proposalBodies).toHaveLength(2);
   await editor.getByRole('button', { name: 'Salva adattamento', exact: true }).click();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
   const adopted = await sourceCard(page, ADAPTED_TITLE);
   await expect(adopted.getByText('Materiale interno', { exact: true })).toBeVisible();
@@ -275,13 +347,16 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
         'adapt-is-local',
         'adopt-uses-existing-library-persistence',
         'adopted-material-survives-reload',
-        'derived-origin-and-teaching-link-survive-reload'
+        'derived-origin-and-teaching-link-survive-reload',
+        'no-external-network'
       ],
+      externalRequests,
       pageErrors,
       consoleErrors
     }, null, 2) + '\n'
   );
 
+  expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
@@ -300,31 +375,50 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   await installProposalRoute(page, proposalBodies);
 
   await setupFreshVault(page);
-  await createSyntheticUda(page, UDA_TITLE);
-  await createSyntheticUda(page, ALT_UDA_TITLE);
+  await createSyntheticClassAndStudent(page);
+  await createSyntheticUda(page, UDA_TITLE, CLASS_NAME, { activeForSchoolYear: true });
+  await createSyntheticUda(page, ALT_UDA_TITLE, CLASS_NAME, { activeForSchoolYear: true });
   await openLibrary(page);
-  await addSyntheticSource(page);
+  await addSyntheticSource(page, SOURCE_TITLE);
+  await reloadAndUnlock(page);
+  await selectSyntheticClass(page);
+  await openLibrary(page);
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   const contextSelect = card.getByLabel('UDA corrente');
   await contextSelect.selectOption({ label: UDA_TITLE });
-  await card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
 
-  const consent = card.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.locator('[data-testid=\"library-copilot-composer\"]');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await assertAtLeast44(composer.getByLabel('Che cosa vuoi farne?'), 'mobile prepare request');
+  await assertAtLeast44(composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }), 'mobile prepare submit');
+  const disclosure = await openPrepareFromIntent(composer);
+
+  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await assertAtLeast44(classify, 'mobile professional classification');
+  await classify.click();
+
+  const consent = disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
   await assertAtLeast44(consent, 'mobile one-shot consent');
   await consent.click();
-  const prepare = card.getByRole('button', { name: 'Prepara attività', exact: true });
+  const prepare = disclosure.getByRole('button', { name: 'Prepara attività', exact: true });
   await assertAtLeast44(prepare, 'mobile prepare action');
   await prepare.click();
-  await expect(card.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
-  await assertAtLeast44(card.getByRole('button', { name: 'Adotta', exact: true }), 'mobile adopt');
-  await assertAtLeast44(card.getByRole('button', { name: 'Adatta', exact: true }), 'mobile adapt');
-  await assertAtLeast44(card.getByRole('button', { name: 'Lascia', exact: true }), 'mobile leave');
+  await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
+  await assertAtLeast44(disclosure.getByRole('button', { name: 'Adotta', exact: true }), 'mobile adopt');
+  await assertAtLeast44(disclosure.getByRole('button', { name: 'Adatta', exact: true }), 'mobile adapt');
+  await assertAtLeast44(disclosure.getByRole('button', { name: 'Lascia', exact: true }), 'mobile leave');
 
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await contextSelect.selectOption({ label: ALT_UDA_TITLE });
-  await expect(card.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await expect(composer).toBeVisible();
+  await expect(disclosure).toHaveCount(0);
+  await openPrepareFromIntent(composer);
+  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(1);
 
   const overflow = await page.evaluate(() => ({

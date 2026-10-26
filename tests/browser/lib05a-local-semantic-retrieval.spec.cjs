@@ -89,6 +89,15 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
+async function openComposer(page) {
+  const trigger = page.locator('[data-testid="library-copilot-trigger"]');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  return composer;
+}
+
 async function classifyProfessional(page, title) {
   const card = await sourceCard(page, title);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
@@ -100,11 +109,36 @@ async function classifyProfessional(page, title) {
   }
   await expect(udaSelect).toBeVisible();
   await udaSelect.selectOption({ label: UDA_TITLE });
-  const classify = card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.getByTestId('library-copilot-composer');
+  await expect(composer).toBeVisible();
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await sourceSelect.selectOption({ label: title });
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+
+  const disclosure = await openPrepareFromIntent(composer);
+  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();
   await expect(classify).toHaveCount(0);
-  await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await expect(composer).toBeHidden();
+}
+
+async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
+  const composer = await openComposer(page);
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await sourceSelect.selectOption({ label: title });
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+
+  const disclosure = await openPrepareFromIntent(composer);
+  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await expect(classify).toBeVisible();
+  await classify.click();
+  await expect(classify).toHaveCount(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await expect(composer).toBeHidden();
 }
 
 async function assertAtLeast44(locator, label) {
@@ -173,6 +207,14 @@ async function installProviderMetadataRoute(page) {
   });
 }
 
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
+}
+
 test('LIB-05A semantic search is explicit, local-only, ranked and stale-safe — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const localEmbeddingRequests = [];
@@ -198,7 +240,7 @@ test('LIB-05A semantic search is explicit, local-only, ranked and stale-safe —
   await addSyntheticSource(page, WIND_TITLE, WIND_TEXT);
   await addSyntheticSource(page, DRAWING_TITLE, DRAWING_TEXT);
   await classifyProfessional(page, WIND_TITLE);
-  await classifyProfessional(page, DRAWING_TITLE);
+  await classifyProfessionalUsingCurrentCopilotContext(page, DRAWING_TITLE);
 
   const disclosure = page.getByTestId('library-semantic-search-disclosure');
   await expect(disclosure).toBeVisible();

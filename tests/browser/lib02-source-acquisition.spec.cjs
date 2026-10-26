@@ -57,10 +57,38 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
+async function handoffToComposer(card, page, title) {
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+  return composer;
+}
+
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
+}
+
 test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce il testo — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
+  const proposalRequests = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
+  page.on('request', request => {
+    const url = request.url();
+    if (
+      request.method() === 'POST' &&
+      url.includes('/api/copilot/library-proposal') &&
+      !url.includes('/provider')
+    ) {
+      proposalRequests.push(url);
+    }
+  });
 
   await setupFreshVault(page);
   await createSyntheticUda(page);
@@ -84,8 +112,15 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
 
   await expect(card.getByText('Contenuto web non ancora acquisito', { exact: true })).toBeVisible();
   await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
+
+  let composer = await handoffToComposer(card, page, WEB_TITLE);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  const incompleteDisclosure = await openPrepareFromIntent(composer);
+  await expect(incompleteDisclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
+  await expect(incompleteDisclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
+  expect(proposalRequests).toEqual([]);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
   await card.getByRole('button', { name: 'Aggiungi testo della pagina', exact: true }).click();
   await card.getByLabel('Testo della pagina').fill(CAPTURED_TEXT);
@@ -101,6 +136,17 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
   await expect(card.getByText('Pronta', { exact: true })).toBeVisible();
   await expect(card.getByText(CAPTURED_TEXT, { exact: true })).toBeVisible();
 
+  await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
+  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
+
+  composer = await handoffToComposer(card, page, WEB_TITLE);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  const completeDisclosure = await openPrepareFromIntent(composer);
+  await expect(completeDisclosure).toBeVisible();
+  await expect(composer.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Chiudi Copilota', exact: true })).toBeVisible();
+
   await page.screenshot({
     path: path.join(evidenceDir, 'lib02-source-acquisition-desktop.png'),
     fullPage: true
@@ -114,13 +160,17 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
         'url-form-offers-optional-captured-text',
         'url-only-needs-review',
         'incomplete-source-blocks-remote-preparation',
-        'incomplete-source-keeps-local-review-and-link-actions',
+        'incomplete-source-handoff-remains-fail-closed-before-consent',
         'explicit-local-text-completion',
-        'durable-ready-after-reload'
+        'durable-ready-after-reload',
+        'captured-source-handoff-binds-same-source',
+        'no-proposal-generation'
       ],
+      proposalRequests,
       pageErrors
     }, null, 2) + '\n'
   );
 
+  expect(proposalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });

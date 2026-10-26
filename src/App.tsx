@@ -81,6 +81,10 @@ import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
 import { LibraryView } from './components/LibraryView';
 import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
+import type {
+  CopilotLaunchContext,
+  LibraryCopilotLaunchRequest
+} from './library/copilotLaunchContext';
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -178,6 +182,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
   const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
+  const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
+
+  const openLibraryCopilot = useCallback((context: CopilotLaunchContext) => {
+    setLaunchRequest(previous => ({
+      nonce: (previous?.nonce ?? 0) + 1,
+      context
+    }));
+  }, []);
 
   // Metadata for backup tracking
   const [meta, setMeta] = useState<SecureMeta>(() =>
@@ -523,6 +535,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  const ambientCopilotContext: CopilotLaunchContext = {
+    surface:
+      activeTab === 'home' ? 'home'
+        : activeTab === 'dashboard' ? 'class-dashboard'
+          : activeTab === 'biblioteca' ? 'library'
+            : activeTab === 'uda-gantt' ? 'uda'
+              : 'global',
+    className: currentClass?.name
+  };
 
   // Synchronize URL query params
   useEffect(() => {
@@ -1164,6 +1185,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onLinkSource={handleLinkLibrarySource}
             onUnlinkSource={handleUnlinkLibrarySource}
             onDeleteSource={handleDeleteLibrarySource}
+            onOpenCopilot={openLibraryCopilot}
             isPending={isLibraryMutationPending}
             errorMessage={libraryMutationError}
           />
@@ -1178,6 +1200,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             tests={tests}
             onSaveUdas={handleSaveUdas}
             onNavigateTab={handleNavigateTab}
+            onOpenCopilot={openLibraryCopilot}
           />
         )}
 
@@ -1213,6 +1236,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           udas={udas}
           planning={planning}
           currentClassName={currentClass?.name ?? null}
+          launchRequest={launchRequest}
+          ambientContext={ambientCopilotContext}
           onAddSource={handleAddLibrarySource}
           onUpdateSource={handleUpdateLibrarySource}
           onLink={handleLinkLibrarySource}

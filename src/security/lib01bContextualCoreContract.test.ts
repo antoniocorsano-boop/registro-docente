@@ -8,6 +8,7 @@ const VENDOR_ROOT = new URL('../../vendor/contextual-copilot-core/', import.meta
 const PROVENANCE = new URL('../../vendor/contextual-copilot-core.provenance.json', import.meta.url);
 const ADAPTER = new URL('../library/contextualCoreAdapter.ts', import.meta.url);
 const CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 
 const EXPECTED_SOURCE_COMMIT = 'a40e715a87d674db69364b50fa23f39a4b565ac4';
 const EXPECTED_DISTRIBUTION_COMMIT = 'f5549b8a9cbbcd40752f8aa85183b3db23faf0ce';
@@ -132,12 +133,16 @@ describe('LIB-01B shared Contextual Copilot Core integration', () => {
     expect(executions).toBe(1);
   });
 
-  test('progressively reveals only Core-resolved actions after Usa', async () => {
+  test('keeps Core-resolved actions in the single Copilot surface after the Library handoff', async () => {
     const card = await Bun.file(CARD).text();
-    expect(card).toContain('resolveLibraryContextActions');
-    expect(card).toContain('dispatchLibraryContextAction');
-    expect(card).toContain('Che cosa vuoi farne?');
-    expect(card).toContain('isSelected &&');
-    expect(card).not.toContain('Funzioni contestuali disponibili con il copilota');
+    const composer = await Bun.file(COMPOSER).text();
+
+    expect(card).toContain('Usa con Copilota');
+    expect(card).not.toContain('resolveLibraryContextActions');
+    expect(card).not.toContain('dispatchLibraryContextAction');
+    expect(composer).toContain('resolveLibraryCopilotRequest');
+    expect(composer).toContain('dispatchLibraryContextAction');
+    expect(composer).toContain('Mostra le possibilità');
+    expect(composer).not.toContain('Funzioni contestuali disponibili con il copilota');
   });
 });

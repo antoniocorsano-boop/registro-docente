@@ -181,6 +181,14 @@ async function installProposalRoutes(page, capturedBodies) {
   });
 }
 
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
+}
+
 test('LIB-04D PREPARE reuses governed proposal flow and persists only after adoption — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const proposalBodies = [];
@@ -203,23 +211,19 @@ test('LIB-04D PREPARE reuses governed proposal flow and persists only after adop
 
   let composer = await openComposer(page);
   await selectComposerSource(composer, SOURCE_TITLE);
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
-  await expect(openPrepare).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
-
-  await openPrepare.click();
+  const disclosure = await openPrepareFromIntent(composer);
   await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
 
   // Changing source before consent must close the PREPARE disclosure and remain non-mutating.
   await selectComposerSource(composer, SECOND_SOURCE_TITLE);
-  await expect(disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true })).toBeVisible();
+  await expect(disclosure).toHaveCount(0);
   await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toHaveCount(0);
   expect(proposalBodies).toHaveLength(0);
 
   await selectComposerSource(composer, SOURCE_TITLE);
-  await disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true }).click();
+  await openPrepareFromIntent(composer);
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
   await expect(disclosure.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
@@ -242,8 +246,7 @@ test('LIB-04D PREPARE reuses governed proposal flow and persists only after adop
   // Reopening starts a fresh request-scoped consent; only explicit adoption persists the generated material.
   composer = await openComposer(page);
   await selectComposerSource(composer, SOURCE_TITLE);
-  const disclosureAgain = composer.getByTestId('library-copilot-prepare-disclosure');
-  await disclosureAgain.getByRole('button', { name: 'Apri preparazione assistita', exact: true }).click();
+  const disclosureAgain = await openPrepareFromIntent(composer);
   await expect(disclosureAgain.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   await disclosureAgain.getByRole('button', { name: 'Consenti per questa richiesta', exact: true }).click();
   await disclosureAgain.getByRole('button', { name: 'Prepara attività', exact: true }).click();
@@ -302,10 +305,9 @@ test('LIB-04D PREPARE disclosure and governed actions are touch-safe — mobile 
 
   const composer = await openComposer(page);
   await selectComposerSource(composer, MOBILE_SOURCE_TITLE);
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
-  await assertAtLeast44(openPrepare, 'mobile prepare disclosure');
-  await openPrepare.click();
+  await assertAtLeast44(composer.getByLabel('Che cosa vuoi farne?'), 'mobile prepare request');
+  await assertAtLeast44(composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }), 'mobile prepare submit');
+  const disclosure = await openPrepareFromIntent(composer);
 
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await assertAtLeast44(classify, 'mobile professional classification');

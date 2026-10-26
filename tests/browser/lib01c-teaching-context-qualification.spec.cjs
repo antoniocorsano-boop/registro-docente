@@ -129,6 +129,25 @@ async function assertAtLeast44(locator, label) {
   expect(box.width, `${label} width`).toBeGreaterThanOrEqual(44);
 }
 
+async function handOffToComposer(page, card, title) {
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+  return composer;
+}
+
+async function resolveCopilotPossibilities(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('Collega questa fonte al lavoro didattico corrente.');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
+  await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
+  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
+}
+
 test('LIB-01C proposes deterministic teaching context but persists the teacher override — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
@@ -170,18 +189,35 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
   await card.getByLabel('UDA corrente').selectOption({ label: OVERRIDE_UDA_TITLE });
   await expect(card.getByLabel('Lezione corrente')).toHaveCount(0);
 
-  await card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }).click();
-  await expect(card.getByText(`UDA: ${OVERRIDE_UDA_TITLE}`, { exact: true })).toBeVisible();
+  let composer = await handOffToComposer(page, card, SOURCE_TITLE);
+  await resolveCopilotPossibilities(composer);
 
-  await card.getByRole('button', { name: 'Collega a una UDA', exact: true }).click();
-  await expect(card.getByText(`Destinazione: UDA · ${OVERRIDE_UDA_TITLE}`, { exact: false })).toBeVisible();
-  await card.getByRole('button', { name: 'Continua', exact: true }).click();
-  await expect(card.getByText('Confermi il collegamento della fonte alla UDA selezionata?', { exact: true })).toBeVisible();
+  const linkAction = composer.getByTestId('library-copilot-link-action');
+  await expect(linkAction).toBeVisible();
+  await linkAction.click();
+  const confirmation = composer.getByTestId('library-copilot-link-confirmation');
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByText(`Destinazione: UDA · ${OVERRIDE_UDA_TITLE}`, { exact: true })).toBeVisible();
 
+  // Cancel remains non-mutating; the teacher must explicitly confirm the override target.
+  await confirmation.getByRole('button', { name: 'Annulla', exact: true }).click();
+  await expect(confirmation).toBeHidden();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await card.getByText('Gestisci', { exact: true }).click();
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
+  await card.getByText('Gestisci', { exact: true }).click();
 
-  await card.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
+  composer = await handOffToComposer(page, card, SOURCE_TITLE);
+  await resolveCopilotPossibilities(composer);
+  await composer.getByTestId('library-copilot-link-action').click();
+  const confirmationAgain = composer.getByTestId('library-copilot-link-confirmation');
+  await expect(confirmationAgain).toBeVisible();
+  await expect(confirmationAgain.getByText(`Destinazione: UDA · ${OVERRIDE_UDA_TITLE}`, { exact: true })).toBeVisible();
+  await confirmationAgain.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
+  await expect(composer.getByText('Il collegamento è stato salvato nella Biblioteca.', { exact: true })).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await card.getByText('Gestisci', { exact: true }).click();
+
   const linkedOverrideRow = card.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
   await expect(linkedOverrideRow.getByText(OVERRIDE_UDA_TITLE, { exact: true })).toBeVisible();
   await expect(linkedOverrideRow.getByText(LESSON_TOPIC, { exact: true })).toHaveCount(0);
@@ -204,10 +240,10 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
         'deterministic-context-proposed',
         'proposal-explained',
         'teacher-can-change-context',
-        'teacher-override-used-by-review',
+        'teacher-override-used-by-copilot-review-result',
         'human-confirmation-before-link',
         'teacher-override-persists-after-reload',
-        'generative-actions-unavailable',
+        'transformations-owned-by-copilot',
         'no-contextual-external-network'
       ],
       contextualExternalRequests,
@@ -239,10 +275,12 @@ test('LIB-01C falls back to manual context when no deterministic suggestion exis
   const udaSelect = card.getByLabel('UDA corrente');
   await assertAtLeast44(udaSelect, 'mobile UDA context select');
   await udaSelect.selectOption({ label: UDA_TITLE });
-  await assertAtLeast44(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true }), 'mobile review action');
-  await assertAtLeast44(card.getByRole('button', { name: 'Collega a una UDA', exact: true }), 'mobile link action');
-  await expect(card.getByRole('button', { name: 'Prepara materiale', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Sintetizza la fonte', exact: true })).toHaveCount(0);
+
+  const handoff = card.getByRole('button', { name: 'Usa con Copilota', exact: true });
+  await assertAtLeast44(handoff, 'mobile Copilot handoff');
+  const composer = await handOffToComposer(page, card, MANUAL_SOURCE_TITLE);
+  await resolveCopilotPossibilities(composer);
+  await assertAtLeast44(composer.getByTestId('library-copilot-link-action'), 'mobile Copilot LINK action');
 
   const overflow = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,

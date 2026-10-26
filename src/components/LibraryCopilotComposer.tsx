@@ -1,13 +1,19 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'lucide-react';
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
+import {
+  resolveLaunchTeachingContext,
+  type CopilotLaunchContext,
+  type LibraryCopilotLaunchRequest
+} from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import {
+  buildLibraryCopilotRequest,
   discoverLibraryCopilotIntent,
   dispatchLibraryContextAction,
   resolveLibraryCopilotRequest
@@ -17,7 +23,8 @@ import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import {
   resolveLibraryTeachingContext,
-  suggestLibraryTeachingContext
+  suggestLibraryTeachingContext,
+  type LibraryTeachingContext
 } from '../library/teachingContext';
 
 interface LibraryCopilotComposerProps {
@@ -25,6 +32,8 @@ interface LibraryCopilotComposerProps {
   udas: UdaRecord[];
   planning: PlanningStateV1;
   currentClassName?: string | null;
+  launchRequest?: LibraryCopilotLaunchRequest | null;
+  ambientContext?: CopilotLaunchContext;
   onAddSource: (source: LibrarySource) => Promise<void>;
   onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
@@ -43,8 +52,7 @@ function localDateKey(date = new Date()): string {
 const ACTION_HELP: Record<string, string> = {
   'review-source': 'Rivedi la fonte nel contesto didattico corrente.',
   'link-source-to-uda': 'Collega la fonte a una UDA con conferma del docente.',
-  'prepare-from-source': 'Prepara una proposta didattica senza modificarne automaticamente i dati.',
-  'summarize-source': 'Produci una sintesi quando un provider autorizzato sarà disponibile.'
+  'prepare-from-source': 'Prepara una proposta didattica senza modificarne automaticamente i dati.'
 };
 
 export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
@@ -52,6 +60,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   udas,
   planning,
   currentClassName = null,
+  launchRequest = null,
+  ambientContext,
   onAddSource,
   onUpdateSource,
   onLink,
@@ -74,18 +84,47 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkSuccess, setLinkSuccess] = useState<string | null>(null);
   const [isPrepareOpen, setIsPrepareOpen] = useState(false);
+  const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
+  const resolutionEpochRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const teachingSuggestion = useMemo(() => suggestLibraryTeachingContext({
-    udas,
-    currentClassName,
-    today: localDateKey()
-  }), [udas, currentClassName]);
+  const hasLaunchTeachingTarget = Boolean(
+    launchRequest?.context.udaId || launchRequest?.context.lessonId
+  );
+  const launchTeachingContextIsProposed = hasLaunchTeachingTarget
+    && launchRequest?.context.teachingContextMode === 'proposed';
+  const hasExplicitLaunchTarget = hasLaunchTeachingTarget && !launchTeachingContextIsProposed;
+  const effectiveClassName = launchRequest?.context.className
+    ?? ambientContext?.className
+    ?? currentClassName;
 
-  const resolvedTeachingContext = useMemo(() => resolveLibraryTeachingContext(
-    udas,
-    teachingSuggestion?.context ?? null
-  ), [udas, teachingSuggestion]);
+  const explicitLaunchTeachingContext = useMemo(
+    () => resolveLaunchTeachingContext(launchRequest, udas),
+    [launchRequest?.nonce, udas]
+  );
+
+  const teachingSuggestion = useMemo(() => {
+    if (contextOverride !== 'auto' || hasLaunchTeachingTarget) return null;
+    return suggestLibraryTeachingContext({
+      udas,
+      currentClassName: effectiveClassName ?? null,
+      today: localDateKey()
+    });
+  }, [udas, effectiveClassName, hasLaunchTeachingTarget, contextOverride]);
+
+  const resolvedTeachingContext = contextOverride === 'auto'
+    ? (hasLaunchTeachingTarget
+      ? explicitLaunchTeachingContext
+      : resolveLibraryTeachingContext(udas, teachingSuggestion?.context ?? null))
+    : resolveLibraryTeachingContext(udas, contextOverride);
+
+  const teachingContextFingerprint = [
+    resolvedTeachingContext?.udaId ?? '',
+    resolvedTeachingContext?.lessonId ?? '',
+    resolvedTeachingContext?.className ?? '',
+    resolvedTeachingContext?.period ?? '',
+    resolvedTeachingContext?.activityType ?? ''
+  ].join('|');
 
   const resolvedPlanningContext = useMemo(() => resolvePlanningContextForLibraryRelevance(
     resolvedTeachingContext,
@@ -102,18 +141,111 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
   }, [resolvedTeachingContext, udas]);
 
+  const currentResolutionSnapshot = selectedSource
+    ? JSON.stringify(buildLibraryCopilotRequest({
+        source: selectedSource,
+        teachingContext: resolvedTeachingContext,
+        planningContext: resolvedPlanningContext,
+        message: message.trim()
+      }))
+    : '';
+  const resolutionSnapshotRef = useRef(currentResolutionSnapshot);
+
+  useLayoutEffect(() => {
+    resolutionSnapshotRef.current = currentResolutionSnapshot;
+  }, [currentResolutionSnapshot]);
+
+  const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+
   useEffect(() => {
+    if (!launchRequest) return;
+
+    resolutionEpochRef.current += 1;
+    setContextOverride('auto');
+    setIsOpen(true);
+    setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+
+    if (requestedLaunchSourceId) {
+      const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
+      if (!sourceExists) {
+        setSelectedSourceId('');
+        setErrorMessage('La fonte richiesta non è più disponibile.');
+        return;
+      }
+      setSelectedSourceId(requestedLaunchSourceId);
+    }
+
+    if (hasLaunchTeachingTarget && !explicitLaunchTeachingContext) {
+      setErrorMessage('Il contesto richiesto non è più disponibile.');
+      return;
+    }
+
+    setErrorMessage(null);
+    // A launch is an event identified by nonce. Library/source mutations must not replay it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launchRequest?.nonce]);
+
+  useEffect(() => {
+    if (!launchRequest || !requestedLaunchSourceId) return;
+    const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
+    if (sourceExists) return;
+
+    resolutionEpochRef.current += 1;
+    setSelectedSourceId('');
+    setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+    setErrorMessage('La fonte richiesta non è più disponibile.');
+  }, [launchRequest?.nonce, requestedLaunchSourceId, library.sources]);
+
+  useEffect(() => {
+    if (contextOverride !== 'auto') return;
+    if (!launchRequest || !hasLaunchTeachingTarget || explicitLaunchTeachingContext) return;
+
+    resolutionEpochRef.current += 1;
+    setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+    setErrorMessage('Il contesto richiesto non è più disponibile.');
+  }, [launchRequest?.nonce, hasLaunchTeachingTarget, explicitLaunchTeachingContext, contextOverride]);
+
+  useEffect(() => {
+    resolutionEpochRef.current += 1;
     setIsPrepareOpen(false);
     setResolution(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-  }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);
+  }, [selectedSourceId, teachingContextFingerprint]);
+
+  useEffect(() => {
+    resolutionEpochRef.current += 1;
+    setResolution(null);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+  }, [selectedSource?.privacy, selectedSource?.status]);
+
+  const contextIsProposed = contextOverride === 'auto' && (
+    launchTeachingContextIsProposed
+    || (!hasLaunchTeachingTarget && Boolean(teachingSuggestion))
+  );
+  const contextSelectValue = resolvedTeachingContext
+    ? `${resolvedTeachingContext.udaId}${resolvedTeachingContext.lessonId ? `::${resolvedTeachingContext.lessonId}` : ''}`
+    : '';
 
   const contextLabel = resolvedTeachingContext
-    ? `${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
-    : currentClassName
-      ? `${currentClassName} · contesto UDA non univoco`
+    ? `${contextIsProposed ? 'Contesto proposto · ' : ''}${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
+    : effectiveClassName
+      ? `${effectiveClassName} · contesto UDA non univoco`
       : 'Nessuna classe selezionata';
 
   const linkTargetLabel = useMemo(() => {
@@ -193,6 +325,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     event.preventDefault();
     if (!selectedSource || !message.trim() || isResolving) return;
 
+    const resolutionEpoch = ++resolutionEpochRef.current;
+    const resolutionSnapshot = currentResolutionSnapshot;
     setIsResolving(true);
     setErrorMessage(null);
     setResolution(null);
@@ -210,6 +344,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     try {
       const discovery = await discoverLibraryCopilotIntent(input);
+      if (
+        resolutionEpoch !== resolutionEpochRef.current
+        || resolutionSnapshot !== resolutionSnapshotRef.current
+      ) return;
 
       if (discovery.reason === 'NO_INTENT_MATCH') {
         setResolution({
@@ -239,8 +377,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       }
 
       const nextResolution = await resolveLibraryCopilotRequest(input);
+      if (
+        resolutionEpoch !== resolutionEpochRef.current
+        || resolutionSnapshot !== resolutionSnapshotRef.current
+      ) return;
       setResolution(nextResolution);
     } catch (error) {
+      if (
+        resolutionEpoch !== resolutionEpochRef.current
+        || resolutionSnapshot !== resolutionSnapshotRef.current
+      ) return;
       setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
     } finally {
       setIsResolving(false);
@@ -370,6 +516,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             id="copilot-source"
             value={selectedSourceId}
             onChange={event => {
+              resolutionEpochRef.current += 1;
               setSelectedSourceId(event.target.value);
               setIsPrepareOpen(false);
               setResolution(null);
@@ -384,6 +531,51 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <option key={source.id} value={source.id}>{source.title}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="library-copilot-context" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Contesto didattico
+          </label>
+          <select
+            id="library-copilot-context"
+            data-testid="library-copilot-context-select"
+            value={contextSelectValue}
+            onChange={event => {
+              resolutionEpochRef.current += 1;
+              const value = event.target.value;
+              if (!value) {
+                setContextOverride(null);
+              } else {
+                const [udaId, lessonId] = value.split('::');
+                setContextOverride({ udaId, ...(lessonId ? { lessonId } : {}) });
+              }
+              setResolution(null);
+              setIsPrepareOpen(false);
+              setIsLinkConfirmationOpen(false);
+              setLinkError(null);
+              setLinkSuccess(null);
+              setErrorMessage(null);
+            }}
+            className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+          >
+            <option value="">Nessun contesto</option>
+            {udas.map(uda => (
+              <React.Fragment key={uda.id}>
+                <option value={uda.id}>{uda.className} · UDA · {uda.title}</option>
+                {(uda.lessons ?? []).map(lesson => (
+                  <option key={lesson.id} value={`${uda.id}::${lesson.id}`}>
+                    {uda.className} · Lezione · {lesson.topic}
+                  </option>
+                ))}
+              </React.Fragment>
+            ))}
+          </select>
+          {contextIsProposed && resolvedTeachingContext && (
+            <p className="mt-1.5 text-xs leading-relaxed text-amber-300/90">
+              Contesto proposto: puoi cambiarlo o scegliere Nessun contesto prima di continuare.
+            </p>
+          )}
         </div>
 
         <details className="rounded-xl border border-slate-800 bg-slate-900/50">
@@ -489,6 +681,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               id="copilot-message"
               value={message}
               onChange={event => {
+                resolutionEpochRef.current += 1;
                 setMessage(event.target.value);
                 setResolution(null);
                 setIsPrepareOpen(false);
@@ -531,7 +724,27 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 L’interpretazione automatica dell’intento non è attiva. Sono mostrate soltanto le azioni che il Core condiviso autorizza già per questa fonte e questo contesto.
               </p>
             )}
-            {resolution.actions.slice(0, 4).map(action => (
+            {resolution.actions.some(action => action.id === 'review-source') && selectedSource && (
+              <section
+                data-testid="library-copilot-review-panel"
+                className="space-y-2 rounded-lg border border-slate-700 bg-slate-950/70 p-3"
+              >
+                <div className="text-sm font-semibold text-slate-100">Controlla nel contesto</div>
+                <p className="text-xs leading-relaxed text-slate-300">Fonte: {selectedSource.title}</p>
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Contenuto leggibile: {selectedSource.extractedText || selectedSource.payload.text ? 'sì' : 'no'} ·
+                  {' '}Classificazione: {selectedSource.privacy === 'teacher-professional'
+                    ? 'materiale professionale'
+                    : selectedSource.privacy === 'student-personal'
+                      ? 'contiene dati personali'
+                      : 'da verificare'}
+                </p>
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Contesto: {contextLabel ?? 'nessun contesto didattico univoco'} · Collegamenti già presenti: {selectedSource.links.length}
+                </p>
+              </section>
+            )}
+            {resolution.actions.filter(action => action.id !== 'review-source').slice(0, 4).map(action => (
               <div key={action.id} className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
                 {action.id === 'link-source-to-uda' ? (
                   <button
@@ -560,7 +773,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
         )}
 
-        {selectedSource && resolvedTeachingContext && proposalUda && (
+        {isPrepareOpen && selectedSource && resolvedTeachingContext && proposalUda && (
           <div
             data-testid="library-copilot-prepare-disclosure"
             className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3"
@@ -569,39 +782,25 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <div>
                 <div className="text-sm font-bold text-slate-100">Preparazione assistita</div>
                 <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                  Aprire questa sezione non invia ancora la fonte a servizi remoti.
+                  La preparazione compare solo dopo una richiesta esplicita. L’invio remoto resta bloccato fino al consenso previsto dal flusso governato.
                 </p>
               </div>
-              {isPrepareOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsPrepareOpen(false)}
-                  className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
-                >
-                  Chiudi
-                </button>
-              )}
-            </div>
-
-            {!isPrepareOpen ? (
               <button
                 type="button"
-                onClick={() => setIsPrepareOpen(true)}
-                disabled={isPending}
-                className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/30 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setIsPrepareOpen(false)}
+                className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
               >
-                Apri preparazione assistita
+                Chiudi
               </button>
-            ) : (
-              <LibraryProposalPanel
-                source={selectedSource}
-                uda={proposalUda}
-                teachingContext={resolvedTeachingContext}
-                isPending={isPending}
-                onUpdate={onUpdateSource}
-                onAddSource={onAddSource}
-              />
-            )}
+            </div>
+            <LibraryProposalPanel
+              source={selectedSource}
+              uda={proposalUda}
+              teachingContext={resolvedTeachingContext}
+              isPending={isPending}
+              onUpdate={onUpdateSource}
+              onAddSource={onAddSource}
+            />
           </div>
         )}
 

@@ -79,7 +79,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setIsAdopting(false);
     setAdoptionError(null);
     setError(null);
-  }, [source.id, source.privacy, teachingContext.udaId, teachingContext.lessonId]);
+  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId]);
 
   useEffect(() => {
     let cancelled = false;

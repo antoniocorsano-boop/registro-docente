@@ -3,8 +3,7 @@ import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
 import type { CompleteSecureAppSnapshot } from './secureAppStorage';
 
 const PANEL = new URL('../components/LibraryProposalPanel.tsx', import.meta.url);
-const CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
-const VIEW = new URL('../components/LibraryView.tsx', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 
 const PROPOSAL = {
   schemaVersion: 1 as const,
@@ -145,14 +144,13 @@ describe('LIB-01D proposal adoption contract', () => {
     expect(() => normalizeBackupPayload(malformed, snapshot)).toThrow(/backup v4|library|biblioteca/i);
   });
 
-  test('threads the existing durable add-source callback to the proposal panel without a new persistence path', async () => {
-    const view = await Bun.file(VIEW).text();
-    const card = await Bun.file(CARD).text();
+  test('threads the existing durable add-source callback from the single Copilot surface to the proposal panel', async () => {
+    const composer = await Bun.file(COMPOSER).text();
     const panel = await Bun.file(PANEL).text();
 
-    expect(view).toContain('onAddSource={onAddSource}');
-    expect(card).toContain('onAddSource: (source: LibrarySource) => Promise<void>');
-    expect(card).toContain('onAddSource={onAddSource}');
+    expect(composer).toContain('onAddSource: (source: LibrarySource) => Promise<void>');
+    expect(composer).toContain('<LibraryProposalPanel');
+    expect(composer).toContain('onAddSource={onAddSource}');
     expect(panel).toContain('onAddSource: (source: LibrarySource) => Promise<void>');
     expect(panel).toContain('createInternalSourceFromTeachingProposal');
     expect(panel).toContain('await onAddSource');

@@ -4,6 +4,7 @@ import type { PlanningStateV1 } from '../planning/types';
 import type { LocalEmbeddingConfig, UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
+import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibraryTeachingContext } from '../library/teachingContext';
 import { searchLibrarySources } from '../library/libraryState';
 import { createFileSource, createTextSource, createWebSource } from '../library/intake';
@@ -25,6 +26,7 @@ interface LibraryViewProps {
   onLinkSource: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onUnlinkSource: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
+  onOpenCopilot: (context: CopilotLaunchContext) => void;
 }
 
 type LibraryFilter = 'recent' | 'linked' | 'review';
@@ -59,7 +61,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onUpdateSource,
   onLinkSource,
   onUnlinkSource,
-  onDeleteSource
+  onDeleteSource,
+  onOpenCopilot
 }) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('recent');
@@ -367,11 +370,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         isPending={isPending}
                         isSelected={selectedSourceId === source.id}
                         onUse={setSelectedSourceId}
-                        onAddSource={onAddSource}
                         onUpdate={onUpdateSource}
                         onLink={onLinkSource}
                         onUnlink={onUnlinkSource}
                         onDelete={onDeleteSource}
+                        onOpenCopilot={onOpenCopilot}
                       />
                     </div>
                   ))}
@@ -422,11 +425,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               isPending={isPending}
               isSelected={selectedSourceId === source.id}
               onUse={setSelectedSourceId}
-              onAddSource={onAddSource}
               onUpdate={onUpdateSource}
               onLink={onLinkSource}
               onUnlink={onUnlinkSource}
               onDelete={onDeleteSource}
+              onOpenCopilot={onOpenCopilot}
             />
           ))}
         </div>
