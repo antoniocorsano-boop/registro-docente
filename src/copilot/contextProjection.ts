@@ -33,6 +33,12 @@ export interface BuildCopilotContextProjectionInput {
   assessmentId?: string | null;
 }
 
+export interface ResolveCopilotProjectionSurfaceInput {
+  ambientSurface?: CopilotLocalSurface | null;
+  launchSurface?: CopilotLocalSurface | null;
+  hasExplicitTeachingTarget: boolean;
+}
+
 export interface CopilotRemoteRoutingProjectionV1 {
   surface: AgentRoutingSurface;
   hasCurrentClass: boolean;
@@ -44,6 +50,19 @@ function optionalTrimmed(value: string | null | undefined): string | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim();
   return normalized || undefined;
+}
+
+export function resolveCopilotProjectionSurface(
+  input: ResolveCopilotProjectionSurfaceInput
+): CopilotLocalSurface {
+  if (
+    input.hasExplicitTeachingTarget
+    && (input.launchSurface === 'uda' || input.launchSurface === 'lesson')
+  ) {
+    return input.launchSurface;
+  }
+
+  return input.ambientSurface ?? input.launchSurface ?? 'library';
 }
 
 export function buildCopilotContextProjection(
