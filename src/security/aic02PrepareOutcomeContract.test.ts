@@ -104,20 +104,23 @@ describe('AIC-02 governed PREPARE outcome boundary', () => {
 
   test('App serializes one committed-state compound task and publishes only after atomic persistence', async () => {
     const app = await Bun.file(APP).text();
+    const callback = app.split('const handleAdoptTeachingProposalToUda = useCallback(', 2)[1]
+      ?.split('const handleAddLibrarySource = useCallback(', 1)[0] ?? '';
 
     expect(app).toContain("from './persistence/teachingProposalOutcomeMutation'");
-    expect(app).toContain('const handleAdoptTeachingProposalToUda = useCallback(');
-    expect(app).toContain('mutationCoordinator.enqueueTask(async () =>');
-    expect(app).toContain('library: libraryRef.current');
-    expect(app).toContain('udas: udasRef.current');
-    expect(app).toContain('meta: metaRef.current');
-    expect(app).toContain('deriveTeachingProposalOutcomeCandidate({');
-    expect(app).toContain('await secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta)');
-    expect(app).toContain('libraryRef.current = candidate.library');
-    expect(app).toContain('udasRef.current = candidate.udas');
-    expect(app).toContain('metaRef.current = candidate.meta');
-    expect(app.indexOf('await secureStorage.saveLibraryUdasAndMeta')).toBeLessThan(app.indexOf('libraryRef.current = candidate.library'));
-    expect(app).toContain("toast('Proposta aggiunta all’UDA')");
-    expect(app).toContain('return candidate.receipt');
+    expect(callback).toContain('mutationCoordinator.enqueueTask(async () =>');
+    expect(callback).toContain('library: libraryRef.current');
+    expect(callback).toContain('udas: udasRef.current');
+    expect(callback).toContain('meta: metaRef.current');
+    expect(callback).toContain('deriveTeachingProposalOutcomeCandidate({');
+    expect(callback).toContain('await secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta)');
+    expect(callback).toContain('libraryRef.current = candidate.library');
+    expect(callback).toContain('udasRef.current = candidate.udas');
+    expect(callback).toContain('metaRef.current = candidate.meta');
+    expect(callback.indexOf('await secureStorage.saveLibraryUdasAndMeta')).toBeLessThan(
+      callback.indexOf('libraryRef.current = candidate.library')
+    );
+    expect(callback).toContain("toast('Proposta aggiunta all’UDA')");
+    expect(callback).toContain('return candidate.receipt');
   });
 });
