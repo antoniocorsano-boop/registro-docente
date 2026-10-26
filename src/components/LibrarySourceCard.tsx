@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { PlanningStateV1 } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
@@ -113,7 +113,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       : null
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isSelected) {
       initializedSourceIdRef.current = null;
       setContextSuggestion(null);
