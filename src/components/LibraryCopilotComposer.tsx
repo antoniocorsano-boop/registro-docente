@@ -50,8 +50,7 @@ function localDateKey(date = new Date()): string {
 const ACTION_HELP: Record<string, string> = {
   'review-source': 'Rivedi la fonte nel contesto didattico corrente.',
   'link-source-to-uda': 'Collega la fonte a una UDA con conferma del docente.',
-  'prepare-from-source': 'Prepara una proposta didattica senza modificarne automaticamente i dati.',
-  'summarize-source': 'Produci una sintesi quando un provider autorizzato sarà disponibile.'
+  'prepare-from-source': 'Prepara una proposta didattica senza modificarne automaticamente i dati.'
 };
 
 export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
@@ -611,7 +610,27 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 L’interpretazione automatica dell’intento non è attiva. Sono mostrate soltanto le azioni che il Core condiviso autorizza già per questa fonte e questo contesto.
               </p>
             )}
-            {resolution.actions.slice(0, 4).map(action => (
+            {resolution.actions.some(action => action.id === 'review-source') && selectedSource && (
+              <section
+                data-testid="library-copilot-review-panel"
+                className="space-y-2 rounded-lg border border-slate-700 bg-slate-950/70 p-3"
+              >
+                <div className="text-sm font-semibold text-slate-100">Controlla nel contesto</div>
+                <p className="text-xs leading-relaxed text-slate-300">Fonte: {selectedSource.title}</p>
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Contenuto leggibile: {selectedSource.extractedText || selectedSource.payload.text ? 'sì' : 'no'} ·
+                  {' '}Classificazione: {selectedSource.privacy === 'teacher-professional'
+                    ? 'materiale professionale'
+                    : selectedSource.privacy === 'student-personal'
+                      ? 'contiene dati personali'
+                      : 'da verificare'}
+                </p>
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Contesto: {contextLabel ?? 'nessun contesto didattico univoco'} · Collegamenti già presenti: {selectedSource.links.length}
+                </p>
+              </section>
+            )}
+            {resolution.actions.filter(action => action.id !== 'review-source').slice(0, 4).map(action => (
               <div key={action.id} className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
                 {action.id === 'link-source-to-uda' ? (
                   <button
@@ -640,7 +659,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
         )}
 
-        {selectedSource && resolvedTeachingContext && proposalUda && (
+        {isPrepareOpen && selectedSource && resolvedTeachingContext && proposalUda && (
           <div
             data-testid="library-copilot-prepare-disclosure"
             className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3"
@@ -649,39 +668,25 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <div>
                 <div className="text-sm font-bold text-slate-100">Preparazione assistita</div>
                 <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                  Aprire questa sezione non invia ancora la fonte a servizi remoti.
+                  La preparazione compare solo dopo una richiesta esplicita. L’invio remoto resta bloccato fino al consenso previsto dal flusso governato.
                 </p>
               </div>
-              {isPrepareOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsPrepareOpen(false)}
-                  className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
-                >
-                  Chiudi
-                </button>
-              )}
-            </div>
-
-            {!isPrepareOpen ? (
               <button
                 type="button"
-                onClick={() => setIsPrepareOpen(true)}
-                disabled={isPending}
-                className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/30 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setIsPrepareOpen(false)}
+                className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
               >
-                Apri preparazione assistita
+                Chiudi
               </button>
-            ) : (
-              <LibraryProposalPanel
-                source={selectedSource}
-                uda={proposalUda}
-                teachingContext={resolvedTeachingContext}
-                isPending={isPending}
-                onUpdate={onUpdateSource}
-                onAddSource={onAddSource}
-              />
-            )}
+            </div>
+            <LibraryProposalPanel
+              source={selectedSource}
+              uda={proposalUda}
+              teachingContext={resolvedTeachingContext}
+              isPending={isPending}
+              onUpdate={onUpdateSource}
+              onAddSource={onAddSource}
+            />
           </div>
         )}
 

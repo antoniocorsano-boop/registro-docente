@@ -101,6 +101,14 @@ async function selectComposerSource(composer) {
   await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
 }
 
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
+}
+
 test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succeeds and allows explicit metadata retry', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
@@ -163,10 +171,7 @@ test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succe
 
   const composer = await openComposer(page);
   await selectComposerSource(composer);
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
-  await expect(openPrepare).toBeVisible();
-  await openPrepare.click();
+  const disclosure = await openPrepareFromIntent(composer);
 
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await classify.click();

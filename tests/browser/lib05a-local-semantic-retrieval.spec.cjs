@@ -117,10 +117,7 @@ async function classifyProfessional(page, title) {
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
-  await expect(openPrepare).toBeVisible();
-  await openPrepare.click();
+  const disclosure = await openPrepareFromIntent(composer);
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();
@@ -135,10 +132,7 @@ async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
-  await expect(openPrepare).toBeVisible();
-  await openPrepare.click();
+  const disclosure = await openPrepareFromIntent(composer);
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();
@@ -211,6 +205,14 @@ async function installProviderMetadataRoute(page) {
       body: JSON.stringify({ available: false })
     });
   });
+}
+
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
 }
 
 test('LIB-05A semantic search is explicit, local-only, ranked and stale-safe — desktop 1280x900', async ({ page }) => {

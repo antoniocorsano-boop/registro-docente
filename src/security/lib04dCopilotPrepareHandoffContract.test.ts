@@ -24,16 +24,16 @@ describe('LIB-04D Copilot PREPARE governed handoff contract', () => {
     expect(composer).toContain('onAddSource: (source: LibrarySource) => Promise<void>');
   });
 
-  test('mounts PREPARE only behind explicit progressive disclosure with a valid source, context and UDA', async () => {
+  test('mounts PREPARE only after explicit PREPARE intent with a valid source, context and UDA', async () => {
     const composer = await Bun.file(COMPOSER).text();
 
     expect(composer).toContain('const [isPrepareOpen, setIsPrepareOpen] = useState(false)');
     expect(composer).toContain('const proposalUda = useMemo');
     expect(composer).toContain('resolvedTeachingContext.udaId');
     expect(composer).toContain('data-testid="library-copilot-prepare-disclosure"');
-    expect(composer).toContain('Apri preparazione assistita');
-    expect(composer).toContain('Aprire questa sezione non invia ancora la fonte a servizi remoti.');
-    expect(composer).toContain('selectedSource && resolvedTeachingContext && proposalUda &&');
+    expect(composer).not.toContain('Apri preparazione assistita');
+    expect(composer).toContain('La preparazione compare solo dopo una richiesta esplicita.');
+    expect(composer).toContain('isPrepareOpen && selectedSource && resolvedTeachingContext && proposalUda &&');
     expect(composer).toContain('<LibraryProposalPanel');
     expect(composer).toContain('source={selectedSource}');
     expect(composer).toContain('uda={proposalUda}');
