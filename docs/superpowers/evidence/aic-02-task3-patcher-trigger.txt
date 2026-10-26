@@ -1,0 +1,1 @@
+Temporary synchronize trigger for the deterministic AIC-02 Task 3 App patcher. Remove before qualification.
