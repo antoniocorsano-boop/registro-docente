@@ -6,16 +6,34 @@ const libraryViewSource = await Bun.file(new URL('../components/LibraryView.tsx'
 const sourceCardSource = await Bun.file(new URL('../components/LibrarySourceCard.tsx', import.meta.url)).text();
 
 describe('single contextual Copilot surface contract', () => {
-  test('App owns the session launch handoff and passes it to the global Composer', () => {
+  test('App owns a session-only launch handoff and passes it to the global Composer', () => {
     expect(appSource).toContain("from './library/copilotLaunchContext'");
+    expect(appSource).toContain('LibraryCopilotLaunchRequest');
+    expect(appSource).toContain('CopilotLaunchContext');
+    expect(appSource).toContain('launchRequest');
+    expect(appSource).toContain('openLibraryCopilot');
     expect(appSource).toContain('launchRequest=');
     expect(appSource).toContain('onOpenCopilot=');
     expect(composerSource).toContain('launchRequest');
+
+    expect(appSource).not.toContain('saveCopilotLaunch');
+    expect(appSource).not.toContain('copilotLaunchRef.current = initialSnapshot');
+  });
+
+  test('global launch context is ambient metadata only and excludes student data', () => {
+    expect(appSource).toContain('ambientCopilotContext');
+    expect(appSource).toContain('className: currentClass?.name');
+    expect(appSource).not.toContain('ambientCopilotContext = { student');
+    expect(appSource).not.toContain('ambientCopilotContext = { grades');
+    expect(appSource).not.toContain('ambientCopilotContext = { behaviors');
   });
 
   test('Library can hand a selected source and teaching context to the Copilot', () => {
     expect(libraryViewSource).toContain('onOpenCopilot');
     expect(sourceCardSource).toContain('onOpenCopilot');
+    expect(sourceCardSource).toContain('sourceId: source.id');
+    expect(sourceCardSource).toContain('udaId: resolvedTeachingContext?.udaId');
+    expect(sourceCardSource).toContain('lessonId: resolvedTeachingContext?.lessonId');
     expect(sourceCardSource).toContain('Usa con Copilota');
   });
 
