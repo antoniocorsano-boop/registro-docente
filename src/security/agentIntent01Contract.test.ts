@@ -20,9 +20,14 @@ describe('AGENT-INTENT-01 architecture contract', () => {
     expect(composer.indexOf('interpretCopilotIntent')).toBeLessThan(composer.indexOf('discoverLibraryCopilotIntent'));
   });
 
-  test('keeps remote interpretation on one dedicated server route and existing server secret', async () => {
+  test('keeps remote interpretation on one dedicated server route, clean availability preflight and existing server secret', async () => {
     const server = await Bun.file(SERVER).text();
+    const service = await Bun.file(SERVICE).text();
+    expect(server).toContain("'/api/copilot/intent/provider'");
     expect(server).toContain("'/api/copilot/intent'");
+    expect(service.indexOf("fetch('/api/copilot/intent/provider'")).toBeLessThan(
+      service.indexOf("fetch('/api/copilot/intent',")
+    );
     expect(server).toContain('GEMINI_API_KEY');
     expect(server).not.toContain('AGENT_INTENT_API_KEY');
     expect(server).not.toContain('OPENAI_API_KEY');
