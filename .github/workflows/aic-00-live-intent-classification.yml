@@ -1,0 +1,281 @@
+name: AIC-00 Live Intent Classification
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SHA: '315c467494fbdc7d4185863410483c96dc79899c'
+  PUBLIC_URL: 'https://registro-docente.ai.studio'
+  PLAYWRIGHT_VERSION: '1.64.1'
+
+jobs:
+  live-intent-classification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact integrated source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Verify exact integrated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected release SHA: ${RELEASE_SHA}"
+          echo "Checkout SHA:         ${actual_sha}"
+          test "${actual_sha}" = "${RELEASE_SHA}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aic00-tools aic00-evidence
+          cat > .aic00-tools/package.json <<'JSON'
+          {
+            "name": "registro-docente-aic00-live-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .aic00-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.aic00-tools/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Probe public target
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 \
+            "${PUBLIC_URL}/" \
+            -D aic00-evidence/public-headers.txt \
+            -o aic00-evidence/public-index.html
+          test -s aic00-evidence/public-index.html
+          printf 'public_url=%s\nrelease_sha=%s\n' "${PUBLIC_URL}" "${RELEASE_SHA}" > aic00-evidence/release-metadata.txt
+
+      - name: Classify canonical live teacher phrase
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$PWD/.aic00-tools/node_modules" \
+          PUBLIC_URL="${PUBLIC_URL}" \
+          RELEASE_SHA="${RELEASE_SHA}" \
+          node <<'NODE'
+          const { chromium } = require('@playwright/test');
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const PUBLIC_URL = process.env.PUBLIC_URL;
+          const RELEASE_SHA = process.env.RELEASE_SHA;
+          const EVIDENCE_DIR = path.resolve('aic00-evidence');
+          const REAL_PHRASE = 'Preparazione Attività per fare comprendere il funzionamento della centrale elettrica';
+          const CLASS_NAME = '3ª A Sintetica AIC-00';
+          const UDA_TITLE = 'Energia e centrale elettrica AIC-00';
+          const SOURCE_TITLE = 'Fonte centrale elettrica AIC-00';
+          const VAULT_PASSWORD = 'aic-00-live-browser';
+          const ALLOWLIST = new Set([
+            'INVALID_REQUEST',
+            'POLICY_BLOCKED',
+            'PROVIDER_NOT_CONFIGURED',
+            'PROVIDER_TIMEOUT',
+            'PROVIDER_RATE_LIMITED',
+            'PROVIDER_UNAVAILABLE',
+            'PROVIDER_BLOCKED',
+            'PROVIDER_OUTPUT_INVALID',
+            'PROVIDER_ERROR'
+          ]);
+
+          fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+
+          async function visible(locator) {
+            return locator.isVisible().catch(() => false);
+          }
+
+          async function closePersistenceConfirmation(page) {
+            const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+            await heading.waitFor({ state: 'visible', timeout: 15000 });
+            await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+            await heading.waitFor({ state: 'hidden', timeout: 10000 });
+          }
+
+          async function openDrawerItem(page, label) {
+            await page.getByRole('button', { name: 'Menu', exact: true }).click();
+            const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
+            await item.waitFor({ state: 'visible', timeout: 10000 });
+            await item.click();
+          }
+
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+          const page = await context.newPage();
+          const pageErrors = [];
+          const consoleErrors = [];
+          const intentRequests = [];
+          const intentResponses = [];
+
+          page.on('pageerror', error => pageErrors.push(String(error)));
+          page.on('console', message => {
+            if (message.type() === 'error') consoleErrors.push(message.text());
+          });
+          page.on('request', request => {
+            const url = request.url();
+            if (request.method() === 'POST' && /\/api\/copilot\/intent(?:\?|$)/.test(url)) {
+              let body = null;
+              try { body = request.postDataJSON(); } catch {}
+              intentRequests.push({ url, body });
+            }
+          });
+          page.on('response', response => {
+            const url = response.url();
+            if (/\/api\/copilot\/intent(?:\?|$)/.test(url)) {
+              intentResponses.push({ url, status: response.status() });
+            }
+          });
+
+          let result;
+          let fallbackCode = null;
+          let guidanceText = null;
+          let prepareVisible = false;
+          let error = null;
+
+          try {
+            await page.goto(PUBLIC_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.getByRole('heading', { name: 'Configura archivio protetto' }).waitFor({ state: 'visible', timeout: 15000 });
+            await page.locator('#vault-password').fill(VAULT_PASSWORD);
+            await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+            await page.getByRole('heading', { name: 'Le mie classi' }).waitFor({ state: 'visible', timeout: 15000 });
+
+            page.once('dialog', dialog => dialog.accept(CLASS_NAME));
+            await page.getByRole('button', { name: /Nuova Classe/ }).click();
+            await page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` }).waitFor({ state: 'visible', timeout: 15000 });
+            await closePersistenceConfirmation(page);
+
+            await openDrawerItem(page, 'UDA');
+            await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
+            await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+            const dialog = page.getByRole('dialog');
+            await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(UDA_TITLE);
+            await dialog.getByRole('combobox', { name: 'Classe', exact: true }).selectOption({ label: CLASS_NAME });
+            await dialog.getByLabel('Mese Inizio').selectOption('0');
+            await dialog.getByLabel('Durata Mesi').fill('10');
+            await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
+            await page.getByText(UDA_TITLE, { exact: true }).first().waitFor({ state: 'visible', timeout: 15000 });
+
+            await openDrawerItem(page, 'Biblioteca privata');
+            await page.getByRole('heading', { name: 'Biblioteca privata', exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+            await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
+            await page.getByRole('button', { name: 'Testo o idea', exact: true }).click();
+            await page.getByLabel('Tipo').selectOption('concept');
+            await page.getByLabel('Titolo').fill(SOURCE_TITLE);
+            await page.getByLabel('Contenuto').fill('Materiale professionale sintetico sul funzionamento di una centrale elettrica.');
+            await page.getByRole('button', { name: 'Salva in biblioteca', exact: true }).click();
+            const sourceHeading = page.getByRole('heading', { name: SOURCE_TITLE, exact: true });
+            await sourceHeading.waitFor({ state: 'visible', timeout: 15000 });
+            const card = sourceHeading.locator('xpath=ancestor::article');
+            await card.getByRole('button', { name: 'Usa', exact: true }).click();
+            const udaSelect = card.getByLabel('UDA corrente');
+            if (!(await visible(udaSelect))) {
+              await card.getByRole('button', { name: 'Cambia', exact: true }).click();
+            }
+            await udaSelect.selectOption({ label: UDA_TITLE });
+            await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+
+            const composer = page.getByTestId('library-copilot-composer');
+            await composer.waitFor({ state: 'visible', timeout: 15000 });
+            await composer.getByLabel('Che cosa vuoi farne?').fill(REAL_PHRASE);
+            await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+
+            const prepare = composer.getByTestId('library-copilot-prepare-disclosure');
+            const guidance = composer.getByTestId('library-copilot-agent-guidance');
+            const started = Date.now();
+            while (Date.now() - started < 45000) {
+              prepareVisible = await visible(prepare);
+              fallbackCode = await composer.getAttribute('data-agent-intent-fallback-code');
+              if (prepareVisible || fallbackCode || await visible(guidance)) break;
+              await page.waitForTimeout(250);
+            }
+
+            if (await visible(guidance)) guidanceText = (await guidance.textContent())?.trim() || null;
+            prepareVisible = await visible(prepare);
+            fallbackCode = await composer.getAttribute('data-agent-intent-fallback-code');
+
+            if (prepareVisible) {
+              result = 'ROUTED_PREPARE';
+            } else if (fallbackCode && ALLOWLIST.has(fallbackCode)) {
+              result = `CLASSIFIED_FALLBACK:${fallbackCode}`;
+            } else if (fallbackCode) {
+              result = `UNSAFE_OR_UNKNOWN_CODE:${fallbackCode}`;
+            } else {
+              result = 'UNCLASSIFIED_FALLBACK';
+            }
+
+            const requestBody = intentRequests[0]?.body || null;
+            const serializedRequest = JSON.stringify(requestBody || {});
+            const forbidden = [SOURCE_TITLE, 'Materiale professionale sintetico', CLASS_NAME];
+            const leaked = forbidden.filter(value => serializedRequest.includes(value));
+            if (leaked.length) throw new Error(`Remote intent request leaked forbidden contextual content: ${leaked.join(', ')}`);
+
+            await page.screenshot({ path: path.join(EVIDENCE_DIR, 'aic-00-live.png'), fullPage: true });
+          } catch (caught) {
+            error = caught instanceof Error ? `${caught.name}: ${caught.message}` : String(caught);
+            if (!result) result = 'HARNESS_OR_LIVE_FAILURE';
+            try {
+              await page.screenshot({ path: path.join(EVIDENCE_DIR, 'aic-00-live-failure.png'), fullPage: true });
+            } catch {}
+          } finally {
+            const evidence = {
+              releaseSha: RELEASE_SHA,
+              publicUrl: PUBLIC_URL,
+              phrase: REAL_PHRASE,
+              result,
+              prepareVisible,
+              fallbackCode,
+              guidanceText,
+              intentRequestCount: intentRequests.length,
+              intentRequest: intentRequests[0]?.body || null,
+              intentResponses,
+              pageErrors,
+              consoleErrors,
+              error
+            };
+            fs.writeFileSync(path.join(EVIDENCE_DIR, 'aic-00-live.json'), JSON.stringify(evidence, null, 2) + '\n');
+            console.log(JSON.stringify(evidence, null, 2));
+            await context.close();
+            await browser.close();
+          }
+
+          if (result === 'ROUTED_PREPARE') process.exit(0);
+          if (result && result.startsWith('CLASSIFIED_FALLBACK:')) process.exit(0);
+          process.exit(1);
+          NODE
+
+      - name: Verify AIC-00 evidence exists
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s aic00-evidence/aic-00-live.json
+          cat aic00-evidence/aic-00-live.json
+
+      - name: Upload AIC-00 live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aic-00-live-${{ env.RELEASE_SHA }}
+          path: aic00-evidence/
+          if-no-files-found: error
+          retention-days: 7
