@@ -256,7 +256,7 @@ const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-  }, [selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]);
+  }, [selectedSourceId, teachingContextFingerprint]);
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
