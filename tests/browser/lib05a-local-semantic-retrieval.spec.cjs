@@ -89,6 +89,15 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
+async function openComposer(page) {
+  const trigger = page.locator('[data-testid="library-copilot-trigger"]');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  return composer;
+}
+
 async function classifyProfessional(page, title) {
   const card = await sourceCard(page, title);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
@@ -100,11 +109,24 @@ async function classifyProfessional(page, title) {
   }
   await expect(udaSelect).toBeVisible();
   await udaSelect.selectOption({ label: UDA_TITLE });
-  const classify = card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.getByTestId('library-copilot-composer');
+  await expect(composer).toBeVisible();
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await sourceSelect.selectOption({ label: title });
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
+  await expect(openPrepare).toBeVisible();
+  await openPrepare.click();
+  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();
-  await expect(classify).toHaveCount(0);
-  await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
+  await expect(disclosure.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await expect(composer).toBeHidden();
 }
 
 async function assertAtLeast44(locator, label) {

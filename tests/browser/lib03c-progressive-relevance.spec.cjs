@@ -140,7 +140,15 @@ test('LIB-03C reveals ranked destinations progressively and keeps linking human-
   const prepareCandidate = exactUdaCandidate(page, relevanceRegion, UDA_TITLES[2]);
   await prepareCandidate.getByRole('button', { name: 'Usa per preparare', exact: true }).click();
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
-  await expect(card.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
+
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.getByTestId('library-copilot-composer');
+  await expect(composer).toBeVisible();
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
+  await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
   const reopenSuggestions = card.getByRole('button', { name: 'Trova dove può servire', exact: true });
   await expect(reopenSuggestions).toBeVisible();

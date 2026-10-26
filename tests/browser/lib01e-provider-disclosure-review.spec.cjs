@@ -5,8 +5,12 @@ const path = require('node:path');
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence');
 const vaultPassword = 'lib01e-disclosure-review';
+const CLASS_NAME = 'Classe Sintetica LIB-01E';
 const UDA_TITLE = 'UDA Disclosure LIB-01E';
 const SOURCE_TITLE = 'Fonte Disclosure LIB-01E';
+
+test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
+test.setTimeout(120000);
 
 async function setupFreshVault(page) {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
@@ -16,22 +20,55 @@ async function setupFreshVault(page) {
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
+async function closePersistenceConfirmation(page) {
+  const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  await expect(heading).toBeVisible();
+  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(heading).toBeHidden();
+}
+
+async function createSyntheticClass(page) {
+  page.once('dialog', dialog => dialog.accept(CLASS_NAME));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
+}
+
+async function reloadAndUnlock(page) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
+  if (await unlockHeading.isVisible().catch(() => false)) {
+    await page.locator('#vault-password').fill(vaultPassword);
+    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
+  }
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+}
+
 async function openDrawerItem(page, label) {
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  const drawer = page.getByRole('complementary');
-  const item = drawer.getByRole('button', { name: label, exact: true });
+  const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
 }
 
-async function createSyntheticUda(page) {
+async function createActiveSyntheticUda(page) {
   await openDrawerItem(page, 'UDA');
-  const udaViewToggle = page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true });
-  if (await udaViewToggle.isVisible().catch(() => false)) await udaViewToggle.click();
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+  const dialog = page.getByRole('dialog');
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(UDA_TITLE);
+  await dialog.getByRole('combobox', { name: 'Classe', exact: true }).selectOption({ label: CLASS_NAME });
+  await dialog.getByLabel('Mese Inizio').selectOption('0');
+  await dialog.getByLabel('Durata Mesi').fill('10');
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await expect(page.getByText(UDA_TITLE, { exact: true }).first()).toBeVisible();
+}
+
+async function selectSyntheticClass(page) {
+  const classButton = page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true });
+  await expect(classButton).toBeVisible();
+  await classButton.click();
+  await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}` })).toBeVisible();
 }
 
 async function openLibrary(page) {
@@ -49,19 +86,35 @@ async function addSyntheticSource(page) {
   await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
 }
 
-async function sourceCard(page) {
-  const heading = page.getByRole('heading', { name: SOURCE_TITLE, exact: true });
-  await expect(heading).toBeVisible();
-  return heading.locator('xpath=ancestor::article');
+async function openComposer(page) {
+  const trigger = page.locator('[data-testid="library-copilot-trigger"]');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  return composer;
+}
+
+async function selectComposerSource(composer) {
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await sourceSelect.selectOption({ label: SOURCE_TITLE });
+  await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
 }
 
 test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succeeds and allows explicit metadata retry', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   const consoleErrors = [];
+  const externalRequests = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('request', request => {
+    const url = request.url();
+    if (!url.startsWith(baseURL) && !url.startsWith('data:') && !url.startsWith('blob:')) {
+      externalRequests.push(url);
+    }
   });
 
   let metadataAttempts = 0;
@@ -74,6 +127,7 @@ test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succe
     releaseFirst = resolve;
   });
 
+  let proposalAttempts = 0;
   await page.route('**/api/copilot/library-proposal/provider', async route => {
     metadataAttempts += 1;
     if (metadataAttempts === 1) {
@@ -97,35 +151,58 @@ test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succe
       })
     });
   });
+  await page.route('**/api/copilot/library-proposal', async route => {
+    proposalAttempts += 1;
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'unexpected proposal request before explicit preparation' })
+    });
+  });
 
   await setupFreshVault(page);
-  await createSyntheticUda(page);
+  await createSyntheticClass(page);
+  await createActiveSyntheticUda(page);
+  await reloadAndUnlock(page);
+  await selectSyntheticClass(page);
   await openLibrary(page);
   await addSyntheticSource(page);
 
-  const card = await sourceCard(page);
-  await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
-  await card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  const composer = await openComposer(page);
+  await selectComposerSource(composer);
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
+  await expect(openPrepare).toBeVisible();
+  await openPrepare.click();
+
+  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await classify.click();
 
   await firstStarted;
-  const consent = card.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
+  const consent = disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
   await expect(consent).toBeVisible();
   await expect(consent).toBeDisabled();
-  await expect(card.getByText('Browser Provider LIB-01E', { exact: true })).toHaveCount(0);
+  await expect(disclosure.getByText('Browser Provider LIB-01E', { exact: true })).toHaveCount(0);
+  expect(proposalAttempts).toBe(0);
 
   releaseFirst();
-  await expect(card.getByText('Non è stato possibile verificare il servizio remoto configurato.', { exact: true })).toBeVisible();
+  await expect(disclosure.getByText('Non è stato possibile verificare il servizio remoto configurato.', { exact: true })).toBeVisible();
   await expect(consent).toBeDisabled();
 
-  const retry = card.getByRole('button', { name: 'Riprova verifica servizio', exact: true });
+  const retry = disclosure.getByRole('button', { name: 'Riprova verifica servizio', exact: true });
   await expect(retry).toBeVisible();
   await retry.click();
 
-  await expect(card.getByText('Browser Provider LIB-01E', { exact: true })).toBeVisible();
-  await expect(card).toContainText('browser-fixture-v1');
+  await expect(disclosure.getByText('Browser Provider LIB-01E', { exact: true })).toBeVisible();
+  await expect(disclosure).toContainText('browser-fixture-v1');
   await expect(consent).toBeEnabled();
   expect(metadataAttempts).toBe(2);
+  expect(proposalAttempts).toBe(0);
+
+  await consent.click();
+  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
+  await expect(disclosure.getByRole('button', { name: 'Prepara attività', exact: true })).toBeVisible();
+  expect(proposalAttempts).toBe(0);
 
   const unexpectedConsoleErrors = consoleErrors.filter(message =>
     !/^Failed to load resource: the server responded with a status of 503 \(/.test(message)
@@ -140,12 +217,15 @@ test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succe
     JSON.stringify({
       candidateSha: process.env.CANDIDATE_SHA || null,
       metadataAttempts,
+      proposalAttempts,
+      externalRequests,
       pageErrors,
       expectedSyntheticConsoleErrors: consoleErrors.filter(message => !unexpectedConsoleErrors.includes(message)),
       unexpectedConsoleErrors
     }, null, 2) + '\n'
   );
 
+  expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
   expect(unexpectedConsoleErrors).toEqual([]);
 });
