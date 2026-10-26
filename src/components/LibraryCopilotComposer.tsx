@@ -114,6 +114,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       : resolveLibraryTeachingContext(udas, teachingSuggestion?.context ?? null))
     : resolveLibraryTeachingContext(udas, contextOverride);
 
+  const teachingContextFingerprint = [
+    resolvedTeachingContext?.udaId ?? '',
+    resolvedTeachingContext?.lessonId ?? '',
+    resolvedTeachingContext?.className ?? '',
+    resolvedTeachingContext?.period ?? '',
+    resolvedTeachingContext?.activityType ?? ''
+  ].join('|');
+
   const resolvedPlanningContext = useMemo(() => resolvePlanningContextForLibraryRelevance(
     resolvedTeachingContext,
     planning
@@ -198,7 +206,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-  }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);
+  }, [selectedSourceId, teachingContextFingerprint]);
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
