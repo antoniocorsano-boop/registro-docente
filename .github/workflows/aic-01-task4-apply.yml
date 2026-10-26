@@ -1,0 +1,184 @@
+name: AIC-01 Task 4 Apply
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply-task4:
+    if: github.head_ref == 'feat/aic-01-unified-context-projection'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/aic-01-unified-context-projection
+          fetch-depth: 0
+
+      - name: Apply exact Task 4 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/App.tsx')
+          composer_path = Path('src/components/LibraryCopilotComposer.tsx')
+          app = app_path.read_text()
+          composer = composer_path.read_text()
+
+          done_marker = 'buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection)'
+          app_marker = "activeTab === 'programmazione' ? 'planning'"
+          if done_marker in composer and app_marker in app:
+              print('Task 4 patch already applied; no mutation required.')
+              raise SystemExit(0)
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one occurrence, found {count}')
+              return text.replace(old, new, 1)
+
+          old_app = """  const ambientCopilotContext: CopilotLaunchContext = {
+            surface:
+              activeTab === 'home' ? 'home'
+                : activeTab === 'dashboard' ? 'class-dashboard'
+                  : activeTab === 'biblioteca' ? 'library'
+                    : activeTab === 'uda-gantt' ? 'uda'
+                      : 'global',
+            className: currentClass?.name
+          };
+          """
+          new_app = """  const ambientCopilotContext: CopilotLaunchContext = {
+            surface:
+              activeTab === 'home' ? 'home'
+                : activeTab === 'dashboard' ? 'class-dashboard'
+                  : activeTab === 'biblioteca' ? 'library'
+                    : activeTab === 'uda-gantt' ? 'uda'
+                      : activeTab === 'programmazione' ? 'planning'
+                        : activeTab === 'verifiche-online' ? 'online-tests'
+                          : activeTab === 'voti' ? 'evaluations'
+                            : 'other-teacher-surface',
+            className: currentClass?.name
+          };
+          """
+          app = replace_once(app, old_app, new_app, 'App ambient Copilot surface mapping')
+
+          old_import = """import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
+          import {
+            buildAgentRoutingRequest,
+            type AgentRoutingSurface
+          } from '../library/agentIntent';
+          """
+          new_import = """import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
+          import { buildCopilotContextProjection } from '../copilot/contextProjection';
+          import { buildAgentRoutingRequestFromProjection } from '../library/agentIntent';
+          """
+          composer = replace_once(composer, old_import, new_import, 'Composer projection imports')
+
+          old_helper = """function agentRoutingSurface(surface: CopilotLaunchContext['surface'] | undefined): AgentRoutingSurface {
+            if (
+              surface === 'home'
+              || surface === 'class-dashboard'
+              || surface === 'library'
+              || surface === 'uda'
+              || surface === 'lesson'
+            ) return surface;
+            return 'other-teacher-surface';
+          }
+
+          """
+          composer = replace_once(composer, old_helper, '', 'Composer legacy surface helper')
+
+          old_selected = """  const selectedSource = useMemo(
+            () => library.sources.find(source => source.id === selectedSourceId) ?? null,
+            [library.sources, selectedSourceId]
+          );
+
+          """
+          new_selected = """  const selectedSource = useMemo(
+            () => library.sources.find(source => source.id === selectedSourceId) ?? null,
+            [library.sources, selectedSourceId]
+          );
+
+            const copilotContextProjection = useMemo(() => buildCopilotContextProjection({
+              surface: ambientContext?.surface ?? launchRequest?.context.surface ?? 'library',
+              className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,
+              udaId: resolvedTeachingContext?.udaId ?? null,
+              lessonId: resolvedTeachingContext?.lessonId ?? null,
+              sourceId: selectedSource?.id ?? null,
+              planningProfileId: resolvedPlanningContext?.status === 'resolved'
+                ? resolvedPlanningContext.profile.id
+                : null
+            }), [
+              ambientContext?.surface,
+              launchRequest?.context.surface,
+              effectiveClassName,
+              teachingContextFingerprint,
+              selectedSource?.id,
+              resolvedPlanningContext
+            ]);
+            const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
+
+          """
+          composer = replace_once(composer, old_selected, new_selected, 'Composer unified projection')
+
+          old_snapshot = """  const currentResolutionSnapshot = selectedSource
+            ? JSON.stringify(buildLibraryCopilotRequest({
+                source: selectedSource,
+                teachingContext: resolvedTeachingContext,
+                planningContext: resolvedPlanningContext,
+                message: message.trim()
+              }))
+            : '';
+          """
+          new_snapshot = """  const currentResolutionSnapshot = selectedSource
+            ? JSON.stringify({
+                request: buildLibraryCopilotRequest({
+                  source: selectedSource,
+                  teachingContext: resolvedTeachingContext,
+                  planningContext: resolvedPlanningContext,
+                  message: message.trim()
+                }),
+                contextProjection: copilotContextProjection
+              })
+            : '';
+          """
+          composer = replace_once(composer, old_snapshot, new_snapshot, 'Composer stale snapshot projection')
+
+          old_effect = """  }, [selectedSourceId, teachingContextFingerprint]);
+          """
+          new_effect = """  }, [selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]);
+          """
+          composer = replace_once(composer, old_effect, new_effect, 'Composer stale invalidation dependencies')
+
+          old_request = """        const agentRequest = buildAgentRoutingRequest({
+                  message: message.trim(),
+                  surface: agentRoutingSurface(launchRequest?.context.surface ?? ambientContext?.surface ?? 'library'),
+                  hasCurrentClass: Boolean(effectiveClassName || resolvedTeachingContext?.className),
+                  hasCurrentUda: Boolean(resolvedTeachingContext?.udaId),
+                  hasSelectedSource: true
+                });
+          """
+          new_request = """        const agentRequest = buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection);
+          """
+          composer = replace_once(composer, old_request, new_request, 'Composer routing request builder')
+
+          app_path.write_text(app)
+          composer_path.write_text(composer)
+          PY
+
+          git diff --check
+          if git diff --quiet; then
+            echo 'No patch commit required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/components/LibraryCopilotComposer.tsx
+          git commit -m 'feat: wire unified Copilot context projection'
+          git push origin HEAD:feat/aic-01-unified-context-projection
