@@ -65,6 +65,38 @@ describe('AGENT-INTENT-01 governed routing', () => {
     if (link.kind === 'ACTION') expect(link.action.id).toBe('link-source-to-uda');
   });
 
+  test('does not bind explicit or unknown agent context to the current teaching context', async () => {
+    if (!await Bun.file(ROUTING).exists()) return;
+    const { routeAgentIntent } = await import('./agentIntentRouting');
+    let resolveCalls = 0;
+    const resolveActions = async () => {
+      resolveCalls += 1;
+      return [];
+    };
+
+    const explicit = await routeAgentIntent({
+      envelope: envelope('LINK', {
+        contextTarget: 'explicit',
+        udaReference: 'uda-altra'
+      }),
+      source: professionalSource,
+      teachingContext,
+      resolveActions
+    });
+    expect(explicit.kind).toBe('CLARIFY');
+
+    const unknown = await routeAgentIntent({
+      envelope: envelope('PREPARE', {
+        contextTarget: 'unknown'
+      }),
+      source: professionalSource,
+      teachingContext,
+      resolveActions
+    });
+    expect(unknown.kind).toBe('CLARIFY');
+    expect(resolveCalls).toBe(0);
+  });
+
   test('routes PREPARE to the existing governed handoff without dispatching it', async () => {
     if (!await Bun.file(ROUTING).exists()) return;
     const { routeAgentIntent } = await import('./agentIntentRouting');
