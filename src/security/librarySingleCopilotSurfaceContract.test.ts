@@ -37,6 +37,15 @@ describe('single contextual Copilot surface contract', () => {
     expect(sourceCardSource).toContain('Usa con Copilota');
   });
 
+  test('Composer binds an explicit launch request before deterministic fallback', () => {
+    expect(composerSource).toContain('resolveLaunchTeachingContext');
+    expect(composerSource).toContain('launchRequest?.nonce');
+    expect(composerSource).toContain('launchRequest.context.sourceId');
+    expect(composerSource).toContain('setIsOpen(true)');
+    expect(composerSource).toContain('Il contesto richiesto non è più disponibile.');
+    expect(composerSource).toContain('hasExplicitLaunchTarget');
+  });
+
   test('LibrarySourceCard is no longer a second transformation engine', () => {
     expect(sourceCardSource).not.toContain("import { LibraryProposalPanel } from './LibraryProposalPanel'");
     expect(sourceCardSource).not.toContain('resolveLibraryContextActions');
