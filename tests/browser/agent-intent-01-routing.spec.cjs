@@ -164,6 +164,13 @@ test('AGENT-INTENT-01 routes the real teacher phrase agent-first without leaking
         udaReference: 'current',
         sourceReference: 'current'
       });
+    } else if (message.includes('altra UDA')) {
+      response = envelope('LINK', {
+        goal: 'collegare la fonte a una UDA diversa da quella corrente',
+        contextTarget: 'explicit',
+        udaReference: 'uda-non-legata',
+        sourceReference: 'current'
+      });
     } else if (message.includes('collega')) {
       response = envelope('LINK', { goal: 'collegare la fonte alla UDA corrente' });
     } else if (message.includes('ambigua')) {
@@ -221,6 +228,11 @@ test('AGENT-INTENT-01 routes the real teacher phrase agent-first without leaking
   await expect(composer.getByText('Il collegamento è stato salvato nella Biblioteca.')).toHaveCount(0);
   await confirmation.getByRole('button', { name: 'Annulla', exact: true }).click();
   await expect(confirmation).toHaveCount(0);
+
+  await submit(composer, 'collega questa fonte a un’altra UDA');
+  await expect(composer.getByTestId('library-copilot-agent-guidance')).toContainText('Hai indicato un contesto specifico');
+  await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
 
   await submit(composer, 'richiesta ambigua');
   await expect(composer.getByTestId('library-copilot-agent-guidance')).toHaveText('Vuoi collegare la fonte oppure preparare una nuova attività?');
