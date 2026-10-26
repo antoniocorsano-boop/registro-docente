@@ -3,7 +3,11 @@ import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'luci
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
-import type { CopilotLaunchContext, LibraryCopilotLaunchRequest } from '../library/copilotLaunchContext';
+import {
+  resolveLaunchTeachingContext,
+  type CopilotLaunchContext,
+  type LibraryCopilotLaunchRequest
+} from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
@@ -55,6 +59,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   udas,
   planning,
   currentClassName = null,
+  launchRequest = null,
+  ambientContext,
   onAddSource,
   onUpdateSource,
   onLink,
@@ -79,16 +85,30 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [isPrepareOpen, setIsPrepareOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const teachingSuggestion = useMemo(() => suggestLibraryTeachingContext({
-    udas,
-    currentClassName,
-    today: localDateKey()
-  }), [udas, currentClassName]);
+  const hasExplicitLaunchTarget = Boolean(
+    launchRequest?.context.udaId || launchRequest?.context.lessonId
+  );
+  const effectiveClassName = launchRequest?.context.className
+    ?? ambientContext?.className
+    ?? currentClassName;
 
-  const resolvedTeachingContext = useMemo(() => resolveLibraryTeachingContext(
-    udas,
-    teachingSuggestion?.context ?? null
-  ), [udas, teachingSuggestion]);
+  const explicitLaunchTeachingContext = useMemo(
+    () => resolveLaunchTeachingContext(launchRequest, udas),
+    [launchRequest?.nonce, udas]
+  );
+
+  const teachingSuggestion = useMemo(() => {
+    if (hasExplicitLaunchTarget) return null;
+    return suggestLibraryTeachingContext({
+      udas,
+      currentClassName: effectiveClassName ?? null,
+      today: localDateKey()
+    });
+  }, [udas, effectiveClassName, hasExplicitLaunchTarget]);
+
+  const resolvedTeachingContext = hasExplicitLaunchTarget
+    ? explicitLaunchTeachingContext
+    : resolveLibraryTeachingContext(udas, teachingSuggestion?.context ?? null);
 
   const resolvedPlanningContext = useMemo(() => resolvePlanningContextForLibraryRelevance(
     resolvedTeachingContext,
@@ -106,6 +126,40 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [resolvedTeachingContext, udas]);
 
   useEffect(() => {
+    if (!launchRequest) return;
+
+    setIsOpen(true);
+    setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+
+    const requestedSourceId = launchRequest.context.sourceId;
+    if (requestedSourceId) {
+      const sourceExists = library.sources.some(source => source.id === requestedSourceId);
+      if (!sourceExists) {
+        setSelectedSourceId('');
+        setErrorMessage('La fonte richiesta non è più disponibile.');
+        return;
+      }
+      setSelectedSourceId(requestedSourceId);
+    }
+
+    if (hasExplicitLaunchTarget && !explicitLaunchTeachingContext) {
+      setErrorMessage('Il contesto richiesto non è più disponibile.');
+      return;
+    }
+
+    setErrorMessage(null);
+  }, [
+    launchRequest?.nonce,
+    library.sources,
+    hasExplicitLaunchTarget,
+    explicitLaunchTeachingContext
+  ]);
+
+  useEffect(() => {
     setIsPrepareOpen(false);
     setResolution(null);
     setIsLinkConfirmationOpen(false);
@@ -115,8 +169,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const contextLabel = resolvedTeachingContext
     ? `${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
-    : currentClassName
-      ? `${currentClassName} · contesto UDA non univoco`
+    : effectiveClassName
+      ? `${effectiveClassName} · contesto UDA non univoco`
       : 'Nessuna classe selezionata';
 
   const linkTargetLabel = useMemo(() => {
