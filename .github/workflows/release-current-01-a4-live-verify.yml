@@ -1,0 +1,168 @@
+name: RELEASE-CURRENT-01 A4 Live Verification
+
+on:
+  push:
+    branches:
+      - ops/release-current-01-a4-live-verify
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_RELEASE_SHA: 0ebda92248b9bb984f2e3e201661292daa47e96d
+  BASE_URL: https://registro-docente.ai.studio
+  PLAYWRIGHT_VERSION: '1.64.1'
+
+jobs:
+  live-verification:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact frozen release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_RELEASE_SHA }}
+
+      - name: Verify exact release-source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          printf 'expected_release_sha=%s\nactual_checkout_sha=%s\n' \
+            "${EXPECTED_RELEASE_SHA}" "${actual_sha}" | tee /tmp/release-source.txt
+          test "${actual_sha}" = "${EXPECTED_RELEASE_SHA}"
+
+      - name: Setup Node for isolated live browser toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .a4-tools a4-evidence
+          cat > .a4-tools/package.json <<'JSON'
+          {
+            "name": "registro-docente-release-current-01-a4-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .a4-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.a4-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/ux-trust-01-full-regression.spec.cjs .a4-tools/ux-trust-01-full-regression.spec.cjs
+          cp /tmp/release-source.txt a4-evidence/release-source.txt
+
+      - name: Probe public target and capture raw response
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 60 \
+            --dump-header a4-evidence/public-headers.txt \
+            "${BASE_URL}/" > a4-evidence/public-index.html
+          test -s a4-evidence/public-index.html
+
+      - name: Capture live asset fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .a4-tools/asset-probe.cjs <<'NODE'
+          const { chromium } = require('@playwright/test');
+          const fs = require('node:fs/promises');
+          const path = require('node:path');
+
+          (async () => {
+            const baseURL = process.env.BASE_URL;
+            const outDir = path.resolve('../a4-evidence');
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+            const pageErrors = [];
+            const consoleErrors = [];
+            page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
+            page.on('console', message => {
+              if (message.type() === 'error') consoleErrors.push(message.text());
+            });
+            const response = await page.goto(baseURL, { waitUntil: 'networkidle', timeout: 60000 });
+            if (!response || !response.ok()) throw new Error(`public target not ready: ${response && response.status()}`);
+            const assets = await page.evaluate(() => performance.getEntriesByType('resource')
+              .map(entry => entry.name)
+              .filter(name => /\.(?:js|css)(?:\?|$)/i.test(name)));
+            const unique = [...new Set(assets)].sort();
+            if (unique.length === 0) throw new Error('no live JS/CSS asset fingerprints observed');
+            await fs.writeFile(path.join(outDir, 'asset-fingerprints.json'), JSON.stringify({
+              baseURL,
+              observedAt: new Date().toISOString(),
+              assets: unique,
+              pageErrors,
+              consoleErrors
+            }, null, 2) + '\n');
+            await fs.writeFile(path.join(outDir, 'asset-fingerprints.txt'), unique.join('\n') + '\n');
+            if (pageErrors.length || consoleErrors.length) throw new Error('unexpected page/console errors during asset probe');
+            await browser.close();
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          cd .a4-tools
+          BASE_URL="${BASE_URL}" node asset-probe.cjs
+
+      - name: Run canonical UXT-F live inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .a4-tools
+          BASE_URL="${BASE_URL}" \
+          EVIDENCE_DIR="../a4-evidence" \
+          CANDIDATE_SHA="${EXPECTED_RELEASE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ux-trust-01-full-regression.spec.cjs \
+            --reporter=line \
+            --output=../a4-evidence/test-results
+
+      - name: Require canonical live evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expectedSha = process.env.EXPECTED_RELEASE_SHA;
+          const required = [
+            'a4-evidence/ux-trust-01-uxt-f-mobile.json',
+            'a4-evidence/ux-trust-01-uxt-f-desktop.json'
+          ];
+          for (const file of required) {
+            if (!fs.existsSync(file)) throw new Error(`missing required evidence: ${file}`);
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.result !== 'PASS') throw new Error(`${file}: result is not PASS`);
+            if (evidence.candidateSha !== expectedSha) throw new Error(`${file}: candidate SHA mismatch`);
+            if (!Array.isArray(evidence.pageErrors) || evidence.pageErrors.length !== 0) throw new Error(`${file}: page errors present`);
+            if (!Array.isArray(evidence.consoleErrors) || evidence.consoleErrors.length !== 0) throw new Error(`${file}: console errors present`);
+          }
+          for (const file of [
+            'a4-evidence/ux-trust-01-uxt-f-mobile.png',
+            'a4-evidence/ux-trust-01-uxt-f-desktop.png',
+            'a4-evidence/asset-fingerprints.json',
+            'a4-evidence/asset-fingerprints.txt',
+            'a4-evidence/public-headers.txt',
+            'a4-evidence/public-index.html',
+            'a4-evidence/release-source.txt'
+          ]) {
+            if (!fs.existsSync(file) || fs.statSync(file).size === 0) throw new Error(`missing/empty required artifact: ${file}`);
+          }
+          console.log('A4 required-evidence gate: PASS');
+          NODE
+
+      - name: Upload A4 live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-current-01-a4-live-${{ env.EXPECTED_RELEASE_SHA }}
+          path: a4-evidence/
+          if-no-files-found: error
+          retention-days: 7
