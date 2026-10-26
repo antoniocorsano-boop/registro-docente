@@ -399,24 +399,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     setIsLibraryMutationPending(true);
     setLibraryMutationError(null);
 
-    return mutationCoordinator.enqueue<TeachingProposalOutcomeCandidate>({
-      getCommitted: () => ({
+    return mutationCoordinator.enqueueTask(async () => {
+      const candidate = deriveTeachingProposalOutcomeCandidate({
         library: libraryRef.current,
         udas: udasRef.current,
         meta: metaRef.current
-      }),
-      derive: current => deriveTeachingProposalOutcomeCandidate(current, input),
-      persist: candidate => secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta),
-      publish: candidate => {
-        libraryRef.current = candidate.library;
-        udasRef.current = candidate.udas;
-        metaRef.current = candidate.meta;
-        setLibrary(candidate.library);
-        setUdas(candidate.udas);
-        setMeta(candidate.meta);
-      },
-      afterCommit: () => toast('Proposta aggiunta all’UDA')
-    }).then(candidate => candidate.receipt).catch(error => {
+      }, input);
+
+      await secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta);
+      libraryRef.current = candidate.library;
+      udasRef.current = candidate.udas;
+      metaRef.current = candidate.meta;
+      setLibrary(candidate.library);
+      setUdas(candidate.udas);
+      setMeta(candidate.meta);
+      toast('Proposta aggiunta all’UDA');
+      return candidate.receipt;
+    }).catch(error => {
       console.error('Secure proposal outcome save failed', error);
       const message = error instanceof Error ? error.message : 'Salvataggio della proposta nell’UDA non riuscito.';
       setLibraryMutationError(message);
