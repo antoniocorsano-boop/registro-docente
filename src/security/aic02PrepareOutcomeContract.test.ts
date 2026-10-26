@@ -9,6 +9,8 @@ import type { SecureMeta } from './secureAppStorage';
 
 const APP = new URL('../App.tsx', import.meta.url);
 const MUTATION = new URL('../persistence/teachingProposalOutcomeMutation.ts', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
+const PANEL = new URL('../components/LibraryProposalPanel.tsx', import.meta.url);
 
 function mutationInput(): TeachingProposalOutcomeMutationInput {
   return {
@@ -122,5 +124,26 @@ describe('AIC-02 governed PREPARE outcome boundary', () => {
     );
     expect(callback).toContain("toast('Proposta aggiunta all’UDA')");
     expect(callback).toContain('return candidate.receipt');
+  });
+
+  test('exposes two explicit adoption destinations with stable retry IDs and no hidden UDA write', async () => {
+    const app = await Bun.file(APP).text();
+    const composer = await Bun.file(COMPOSER).text();
+    const panel = await Bun.file(PANEL).text();
+
+    expect(app).toContain('onAdoptProposalToUda={handleAdoptTeachingProposalToUda}');
+    expect(composer).toContain('onAdoptProposalToUda:');
+    expect(composer).toContain('onAdoptProposalToUda={onAdoptProposalToUda}');
+    expect(panel).toContain('onAdoptProposalToUda:');
+    expect(panel).toContain("const adoptionSourceIdRef = useRef<string | null>(null)");
+    expect(panel).toContain("const adoptionLessonIdRef = useRef<string | null>(null)");
+    expect(panel).toContain('Adotta in Biblioteca');
+    expect(panel).toContain("Adotta e aggiungi all'UDA");
+    expect(panel).toContain('adoptLibraryContent');
+    expect(panel).toContain('adoptUdaContent');
+    expect(panel).toContain('await onAddSource(adopted)');
+    expect(panel).toContain('await onAdoptProposalToUda({');
+    expect(panel).not.toContain('type="checkbox"');
+    expect(panel).not.toContain("'Adotta'}");
   });
 });
