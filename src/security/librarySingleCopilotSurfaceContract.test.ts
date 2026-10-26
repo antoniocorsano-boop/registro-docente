@@ -94,7 +94,8 @@ describe('single contextual Copilot surface contract', () => {
   test('in-flight intent resolution cannot reapply disclosure after source context or message invalidation', () => {
     expect(composerSource).toContain('resolutionEpochRef');
     expect(composerSource).toContain('const resolutionEpoch = ++resolutionEpochRef.current');
-    expect(composerSource).toContain('resolutionEpoch !== resolutionEpochRef.current');
+    expect(composerSource).toContain('const requestIsCurrent = () => (');
+    expect(composerSource).toContain('resolutionEpoch === resolutionEpochRef.current');
     expect(composerSource).toContain('resolutionEpochRef.current += 1');
   });
 
@@ -107,10 +108,19 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('teachingContextFingerprint');
     expect(composerSource).toContain('message.trim()');
     expect(composerSource).toContain('const resolutionSnapshot = currentResolutionSnapshot');
-    expect(composerSource).toContain('resolutionSnapshot !== resolutionSnapshotRef.current');
+    expect(composerSource).toContain('resolutionSnapshot === resolutionSnapshotRef.current');
     expect(composerSource).toContain('buildLibraryCopilotRequest');
     expect(composerSource).toContain('JSON.stringify(buildLibraryCopilotRequest({');
     expect(composerSource).toContain('planningContext: resolvedPlanningContext');
+
+    const staleGuards = composerSource.match(/if \(!requestIsCurrent\(\)\) return;/g) ?? [];
+    expect(staleGuards.length).toBeGreaterThanOrEqual(5);
+    expect(composerSource.indexOf('await interpretCopilotIntent')).toBeLessThan(
+      composerSource.indexOf('if (!requestIsCurrent()) return;', composerSource.indexOf('await interpretCopilotIntent'))
+    );
+    expect(composerSource.indexOf('await routeAgentIntent')).toBeLessThan(
+      composerSource.indexOf('if (!requestIsCurrent()) return;', composerSource.indexOf('await routeAgentIntent'))
+    );
   });
 
   test('semantic Teaching Context changes invalidate disclosure even when UDA and lesson ids stay stable', () => {

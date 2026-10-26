@@ -12,6 +12,12 @@ import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../librar
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
+import { interpretCopilotIntent } from '../services/agentIntentService';
+import {
+  buildAgentRoutingRequest,
+  type AgentRoutingSurface
+} from '../library/agentIntent';
+import { routeAgentIntent } from '../library/agentIntentRouting';
 import {
   buildLibraryCopilotRequest,
   discoverLibraryCopilotIntent,
@@ -49,6 +55,17 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function agentRoutingSurface(surface: CopilotLaunchContext['surface'] | undefined): AgentRoutingSurface {
+  if (
+    surface === 'home'
+    || surface === 'class-dashboard'
+    || surface === 'library'
+    || surface === 'uda'
+    || surface === 'lesson'
+  ) return surface;
+  return 'other-teacher-surface';
+}
+
 const ACTION_HELP: Record<string, string> = {
   'review-source': 'Rivedi la fonte nel contesto didattico corrente.',
   'link-source-to-uda': 'Collega la fonte a una UDA con conferma del docente.',
@@ -78,6 +95,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [isResolving, setIsResolving] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [guidanceMessage, setGuidanceMessage] = useState<string | null>(null);
   const [resolution, setResolution] = useState<CopilotRequestResolution | null>(null);
   const [isLinkConfirmationOpen, setIsLinkConfirmationOpen] = useState(false);
   const [isLinkPending, setIsLinkPending] = useState(false);
@@ -164,6 +182,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setContextOverride('auto');
     setIsOpen(true);
     setResolution(null);
+    setGuidanceMessage(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
@@ -197,6 +216,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolutionEpochRef.current += 1;
     setSelectedSourceId('');
     setResolution(null);
+    setGuidanceMessage(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
@@ -210,6 +230,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     resolutionEpochRef.current += 1;
     setResolution(null);
+    setGuidanceMessage(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
@@ -221,6 +242,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolutionEpochRef.current += 1;
     setIsPrepareOpen(false);
     setResolution(null);
+    setGuidanceMessage(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
@@ -229,6 +251,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   useEffect(() => {
     resolutionEpochRef.current += 1;
     setResolution(null);
+    setGuidanceMessage(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
@@ -314,6 +337,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       setSelectedSourceId(createdSource.id);
       clearCapture();
       setResolution(null);
+      setGuidanceMessage(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Acquisizione della fonte non riuscita.');
     } finally {
@@ -327,8 +351,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     const resolutionEpoch = ++resolutionEpochRef.current;
     const resolutionSnapshot = currentResolutionSnapshot;
+    const requestIsCurrent = () => (
+      resolutionEpoch === resolutionEpochRef.current
+      && resolutionSnapshot === resolutionSnapshotRef.current
+    );
+
     setIsResolving(true);
     setErrorMessage(null);
+    setGuidanceMessage(null);
     setResolution(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
@@ -342,12 +372,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       message: message.trim()
     };
 
-    try {
+    const runLocalFallback = async () => {
       const discovery = await discoverLibraryCopilotIntent(input);
-      if (
-        resolutionEpoch !== resolutionEpochRef.current
-        || resolutionSnapshot !== resolutionSnapshotRef.current
-      ) return;
+      if (!requestIsCurrent()) return;
 
       if (discovery.reason === 'NO_INTENT_MATCH') {
         setResolution({
@@ -377,16 +404,61 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       }
 
       const nextResolution = await resolveLibraryCopilotRequest(input);
-      if (
-        resolutionEpoch !== resolutionEpochRef.current
-        || resolutionSnapshot !== resolutionSnapshotRef.current
-      ) return;
+      if (!requestIsCurrent()) return;
       setResolution(nextResolution);
+    };
+
+    try {
+      try {
+        const agentRequest = buildAgentRoutingRequest({
+          message: message.trim(),
+          surface: agentRoutingSurface(launchRequest?.context.surface ?? ambientContext?.surface ?? 'library'),
+          hasCurrentClass: Boolean(effectiveClassName || resolvedTeachingContext?.className),
+          hasCurrentUda: Boolean(resolvedTeachingContext?.udaId),
+          hasSelectedSource: true
+        });
+        const envelope = await interpretCopilotIntent(agentRequest);
+        if (!requestIsCurrent()) return;
+
+        const routed = await routeAgentIntent({
+          envelope,
+          source: selectedSource,
+          teachingContext: resolvedTeachingContext
+        });
+        if (!requestIsCurrent()) return;
+
+        if (routed.kind === 'CLARIFY') {
+          setGuidanceMessage(routed.question);
+          return;
+        }
+        if (routed.kind === 'UNSUPPORTED') {
+          setGuidanceMessage('Ho compreso la richiesta, ma questa capacità non è ancora disponibile nel Copilota corrente.');
+          return;
+        }
+        if (routed.kind === 'DENIED') {
+          setGuidanceMessage('Ho compreso la richiesta, ma il Core non autorizza questa azione nel contesto corrente.');
+          return;
+        }
+        if (routed.kind === 'PREPARE') {
+          if (!resolvedTeachingContext || !proposalUda) {
+            setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
+            return;
+          }
+          setIsPrepareOpen(true);
+          return;
+        }
+
+        setResolution({
+          status: 'RESOLVED',
+          reason: 'INTENT_RESOLVED',
+          actions: [routed.action]
+        });
+      } catch {
+        if (!requestIsCurrent()) return;
+        await runLocalFallback();
+      }
     } catch (error) {
-      if (
-        resolutionEpoch !== resolutionEpochRef.current
-        || resolutionSnapshot !== resolutionSnapshotRef.current
-      ) return;
+      if (!requestIsCurrent()) return;
       setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
     } finally {
       setIsResolving(false);
@@ -520,6 +592,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               setSelectedSourceId(event.target.value);
               setIsPrepareOpen(false);
               setResolution(null);
+              setGuidanceMessage(null);
               setIsLinkConfirmationOpen(false);
               setLinkError(null);
               setLinkSuccess(null);
@@ -551,6 +624,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 setContextOverride({ udaId, ...(lessonId ? { lessonId } : {}) });
               }
               setResolution(null);
+              setGuidanceMessage(null);
               setIsPrepareOpen(false);
               setIsLinkConfirmationOpen(false);
               setLinkError(null);
@@ -684,6 +758,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 resolutionEpochRef.current += 1;
                 setMessage(event.target.value);
                 setResolution(null);
+                setGuidanceMessage(null);
                 setIsPrepareOpen(false);
                 setIsLinkConfirmationOpen(false);
                 setLinkError(null);
@@ -700,7 +775,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           >
             <span className="flex items-center justify-center gap-2">
               <Send size={17} aria-hidden="true" />
-              {isResolving ? 'Valuto le possibilità…' : 'Mostra le possibilità'}
+              {isResolving ? 'Interpreto la richiesta…' : 'Mostra le possibilità'}
             </span>
           </button>
         </form>
@@ -708,6 +783,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         {errorMessage && (
           <p role="alert" className="rounded-xl border border-rose-900/60 bg-rose-950/40 p-3 text-sm text-rose-200">
             {errorMessage}
+          </p>
+        )}
+
+        {guidanceMessage && (
+          <p data-testid="library-copilot-agent-guidance" role="status" className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-3 text-sm leading-relaxed text-cyan-100">
+            {guidanceMessage}
           </p>
         )}
 
