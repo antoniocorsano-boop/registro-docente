@@ -72,14 +72,15 @@ describe('AIC-01 remote context privacy contract', () => {
     }
   });
 
-  test('App maps teacher work surfaces into one professional Copilot context without student records', () => {
+  test('App maps teacher work surfaces without treating an ambient UDA tab as an explicit UDA context', () => {
     expect(appSource).toContain("activeTab === 'home' ? 'home'");
     expect(appSource).toContain("activeTab === 'dashboard' ? 'class-dashboard'");
     expect(appSource).toContain("activeTab === 'biblioteca' ? 'library'");
-    expect(appSource).toContain("activeTab === 'uda-gantt' ? 'uda'");
+    expect(appSource).toContain("activeTab === 'uda-gantt' ? 'other-teacher-surface'");
     expect(appSource).toContain("activeTab === 'programmazione' ? 'planning'");
     expect(appSource).toContain("activeTab === 'verifiche-online' ? 'online-tests'");
     expect(appSource).toContain("activeTab === 'voti' ? 'evaluations'");
+    expect(appSource).toContain("activeTab === 'tabellone' ? 'evaluations'");
     expect(appSource).toContain(": 'other-teacher-surface'");
     expect(appSource).toContain('className: currentClass?.name');
     expect(appSource).not.toContain('ambientCopilotContext = { student');
@@ -87,8 +88,36 @@ describe('AIC-01 remote context privacy contract', () => {
     expect(appSource).not.toContain('ambientCopilotContext = { behaviors');
   });
 
+  test('explicit launch context can promote an ambient generic surface to its real UDA surface', async () => {
+    const module = await import('../copilot/contextProjection') as Record<string, unknown>;
+    expect(typeof module.resolveCopilotProjectionSurface).toBe('function');
+    if (typeof module.resolveCopilotProjectionSurface !== 'function') return;
+    const resolveSurface = module.resolveCopilotProjectionSurface as (input: {
+      ambientSurface?: string;
+      launchSurface?: string;
+      hasExplicitTeachingTarget: boolean;
+    }) => string;
+
+    expect(resolveSurface({
+      ambientSurface: 'other-teacher-surface',
+      launchSurface: 'uda',
+      hasExplicitTeachingTarget: true
+    })).toBe('uda');
+    expect(resolveSurface({
+      ambientSurface: 'other-teacher-surface',
+      launchSurface: 'lesson',
+      hasExplicitTeachingTarget: true
+    })).toBe('lesson');
+    expect(resolveSurface({
+      ambientSurface: 'other-teacher-surface',
+      launchSurface: 'uda',
+      hasExplicitTeachingTarget: false
+    })).toBe('other-teacher-surface');
+  });
+
   test('Composer derives remote routing from the unified projection and binds it into stale-result identity', () => {
     expect(composerSource).toContain('buildCopilotContextProjection');
+    expect(composerSource).toContain('resolveCopilotProjectionSurface');
     expect(composerSource).toContain('buildAgentRoutingRequestFromProjection');
     expect(composerSource).not.toContain('function agentRoutingSurface');
     expect(composerSource).toContain('copilotContextProjection');
