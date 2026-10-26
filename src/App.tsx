@@ -1200,6 +1200,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             tests={tests}
             onSaveUdas={handleSaveUdas}
             onNavigateTab={handleNavigateTab}
+            onOpenCopilot={openLibraryCopilot}
           />
         )}
 

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { AppSettings, ClassData, OnlineTest, UdaRecord } from '../types';
+import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import { uid } from '../utils';
 import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';
 
@@ -12,6 +13,7 @@ interface UdaWorkspaceViewProps {
   tests?: Record<string, OnlineTest>;
   onSaveUdas: (udas: UdaRecord[]) => Promise<void>;
   onNavigateTab?: (tab: any) => void;
+  onOpenCopilot?: (context: CopilotLaunchContext) => void;
 }
 
 const MONTHS = ['Settembre', 'Ottobre', 'Novembre', 'Dicembre', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno'];
@@ -29,7 +31,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   settings,
   tests,
   onSaveUdas,
-  onNavigateTab
+  onNavigateTab,
+  onOpenCopilot
 }) => {
   const [activeView, setActiveView] = useState<WorkspaceView>('uda');
   const [classFilter, setClassFilter] = useState('all');
@@ -160,7 +163,18 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                     </div>
                     <span className="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-400">{(uda.lessons ?? []).length} lezioni</span>
                   </div>
-                  <button type="button" onClick={() => setActiveView('planning')} className="mt-4 min-h-[44px] w-full rounded-lg border border-cyan-900 px-3 py-2 text-sm font-semibold text-cyan-300">Gestisci in Pianificazione</button>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <button type="button" onClick={() => setActiveView('planning')} className="min-h-[44px] w-full rounded-lg border border-cyan-900 px-3 py-2 text-sm font-semibold text-cyan-300">Gestisci in Pianificazione</button>
+                    {onOpenCopilot && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenCopilot({ surface: 'uda', className: uda.className, udaId: uda.id })}
+                        className="min-h-[44px] w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-700 hover:text-cyan-200"
+                      >
+                        Usa con Copilota
+                      </button>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
