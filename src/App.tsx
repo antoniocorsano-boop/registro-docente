@@ -54,6 +54,11 @@ import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
 import { persistLibraryMutation } from './persistence/libraryMutation';
 import {
+  deriveTeachingProposalOutcomeCandidate,
+  type TeachingProposalOutcomeCandidate,
+  type TeachingProposalOutcomeMutationInput
+} from './persistence/teachingProposalOutcomeMutation';
+import {
   applyBackupReceipt,
   incrementBackupChanges,
   prepareBackupCheckpoint,
@@ -376,6 +381,44 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).catch(error => {
       console.error('Secure library save failed', error);
       const message = error instanceof Error ? error.message : 'Salvataggio biblioteca non riuscito.';
+      setLibraryMutationError(message);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    }).finally(() => {
+      libraryMutationPendingCountRef.current = Math.max(0, libraryMutationPendingCountRef.current - 1);
+      if (libraryMutationPendingCountRef.current === 0) {
+        setIsLibraryMutationPending(false);
+      }
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleAdoptTeachingProposalToUda = useCallback((
+    input: TeachingProposalOutcomeMutationInput
+  ): Promise<TeachingProposalOutcomeCandidate['receipt']> => {
+    libraryMutationPendingCountRef.current += 1;
+    setIsLibraryMutationPending(true);
+    setLibraryMutationError(null);
+
+    return mutationCoordinator.enqueue<TeachingProposalOutcomeCandidate>({
+      getCommitted: () => ({
+        library: libraryRef.current,
+        udas: udasRef.current,
+        meta: metaRef.current
+      }),
+      derive: current => deriveTeachingProposalOutcomeCandidate(current, input),
+      persist: candidate => secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta),
+      publish: candidate => {
+        libraryRef.current = candidate.library;
+        udasRef.current = candidate.udas;
+        metaRef.current = candidate.meta;
+        setLibrary(candidate.library);
+        setUdas(candidate.udas);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast('Proposta aggiunta all’UDA')
+    }).then(candidate => candidate.receipt).catch(error => {
+      console.error('Secure proposal outcome save failed', error);
+      const message = error instanceof Error ? error.message : 'Salvataggio della proposta nell’UDA non riuscito.';
       setLibraryMutationError(message);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
       throw error;
