@@ -77,6 +77,7 @@ jobs:
           cp tests/browser/lib04c-copilot-link.spec.cjs .browser-tools/lib04c-copilot-link.spec.cjs
           cp tests/browser/lib04d-copilot-prepare.spec.cjs .browser-tools/lib04d-copilot-prepare.spec.cjs
           cp tests/browser/lib05a-local-semantic-retrieval.spec.cjs .browser-tools/lib05a-local-semantic-retrieval.spec.cjs
+          cp tests/browser/library-contextual-copilot-handoff.spec.cjs .browser-tools/library-contextual-copilot-handoff.spec.cjs
           cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
           cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
           cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
@@ -135,6 +136,7 @@ jobs:
             lib04c-copilot-link.spec.cjs \
             lib04d-copilot-prepare.spec.cjs \
             lib05a-local-semantic-retrieval.spec.cjs \
+            library-contextual-copilot-handoff.spec.cjs \
             online-01-qualification.spec.cjs \
             release-01-qualification.spec.cjs \
             ux-trust-01-qualification.spec.cjs \
