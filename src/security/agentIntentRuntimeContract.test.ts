@@ -80,24 +80,31 @@ describe('AGENT-INTENT-01 governed server boundary', () => {
         return fakeRuntime(prepareEnvelope).interpret(request);
       }
     };
-    const studentPersonalRequest = buildAgentRoutingRequest({
-      message: 'Prepara un’attività per lo studente Marco Rossi della 3A: ha preso 4 e ha un PDP.',
-      surface: 'uda',
-      hasCurrentClass: true,
-      hasCurrentUda: true,
-      hasSelectedSource: true
-    });
 
-    const rejected = await handleAgentIntentRequest(studentPersonalRequest, runtime);
+    for (const message of [
+      'Prepara un’attività per lo studente Marco Rossi della 3A: ha preso 4 e ha un PDP.',
+      'prepara un recupero per lo studente marco rossi della 3a',
+      'Marco Rossi è assente oggi: prepara qualcosa per il rientro.'
+    ]) {
+      const studentPersonalRequest = buildAgentRoutingRequest({
+        message,
+        surface: 'uda',
+        hasCurrentClass: true,
+        hasCurrentUda: true,
+        hasSelectedSource: true
+      });
 
-    expect(rejected.status).toBe(403);
-    expect(rejected.body).toEqual({
-      error: {
-        code: 'REMOTE_POLICY_DENIED',
-        message: 'La richiesta non può essere inviata al servizio di interpretazione.',
-        retriable: false
-      }
-    });
+      const rejected = await handleAgentIntentRequest(studentPersonalRequest, runtime);
+
+      expect(rejected.status).toBe(403);
+      expect(rejected.body).toEqual({
+        error: {
+          code: 'REMOTE_POLICY_DENIED',
+          message: 'La richiesta non può essere inviata al servizio di interpretazione.',
+          retriable: false
+        }
+      });
+    }
     expect(calls).toBe(0);
   });
 
