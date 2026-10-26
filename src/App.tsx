@@ -540,8 +540,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       activeTab === 'home' ? 'home'
         : activeTab === 'dashboard' ? 'class-dashboard'
           : activeTab === 'biblioteca' ? 'library'
-            : activeTab === 'uda-gantt' ? 'uda'
-              : 'global',
+            : activeTab === 'uda-gantt' ? 'other-teacher-surface'
+              : activeTab === 'programmazione' ? 'planning'
+                : activeTab === 'verifiche-online' ? 'online-tests'
+                  : activeTab === 'voti' ? 'evaluations'
+                    : activeTab === 'tabellone' ? 'evaluations'
+                      : 'other-teacher-surface',
     className: currentClass?.name
   };
 

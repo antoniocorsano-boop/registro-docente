@@ -91,6 +91,33 @@ describe('single contextual Copilot launch context', () => {
     expect(resolveLaunchTeachingContext(null, udas)).toBeNull();
   });
 
+  test('fails closed when launch class metadata disagrees with the resolved UDA', () => {
+    expect(resolveLaunchTeachingContext(request({
+      surface: 'uda',
+      className: '2C',
+      udaId: 'uda-energia'
+    }), udas)).toBeNull();
+  });
+
+  test('accepts planning, online-test and evaluation surfaces as session-only professional metadata', () => {
+    const contexts: CopilotLaunchContext[] = [
+      { surface: 'planning', className: '3C' },
+      { surface: 'online-tests', className: '3C' },
+      { surface: 'evaluations', className: '3C' }
+    ];
+
+    for (const context of contexts) {
+      expect(resolveLaunchTeachingContext(request(context), udas)).toBeNull();
+      expect(context.className).toBe('3C');
+    }
+  });
+
+  test('shares its surface vocabulary with the unified AIC-01 projection boundary', async () => {
+    const source = await Bun.file(new URL('./copilotLaunchContext.ts', import.meta.url)).text();
+    expect(source).toContain("import type { CopilotLocalSurface } from '../copilot/contextProjection';");
+    expect(source).toContain('export type CopilotLaunchSurface = CopilotLocalSurface;');
+  });
+
   test('launch context is metadata-only and has no source payload or student-data fields', () => {
     const context: CopilotLaunchContext = {
       surface: 'class-dashboard',

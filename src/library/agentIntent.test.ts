@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { buildCopilotContextProjection } from '../copilot/contextProjection';
 import { AGENT_INTENT_REFERENCE_CORPUS } from './fixtures/agentIntentReferenceCorpus';
 
 const MODULE = new URL('./agentIntent.ts', import.meta.url);
@@ -8,10 +9,11 @@ describe('AGENT-INTENT-01 contract', () => {
     expect(await Bun.file(MODULE).exists()).toBe(true);
     if (!await Bun.file(MODULE).exists()) return;
 
-    const module = await import('./agentIntent');
+    const module = await import('./agentIntent') as Record<string, unknown>;
     expect(typeof module.parseIntentEnvelopeV1).toBe('function');
     expect(typeof module.parseAgentRoutingRequestV1).toBe('function');
     expect(typeof module.buildAgentRoutingRequest).toBe('function');
+    expect(typeof module.buildAgentRoutingRequestFromProjection).toBe('function');
   });
 
   test('accepts the real PREPARE envelope but rejects authority-bearing extras', async () => {
@@ -100,6 +102,36 @@ describe('AGENT-INTENT-01 contract', () => {
       ...request,
       sourceText: 'NON DEVE USCIRE'
     })).toThrow();
+  });
+
+  test('derives the legacy routing wire contract from the unified local projection', async () => {
+    const module = await import('./agentIntent') as Record<string, unknown>;
+    expect(typeof module.buildAgentRoutingRequestFromProjection).toBe('function');
+    if (typeof module.buildAgentRoutingRequestFromProjection !== 'function') return;
+
+    const context = buildCopilotContextProjection({
+      surface: 'planning',
+      className: '3C',
+      udaId: 'uda-energia',
+      sourceId: 'source-1',
+      planningProfileId: 'planning-2026-27'
+    });
+    const buildRequest = module.buildAgentRoutingRequestFromProjection as (
+      message: string,
+      context: typeof context
+    ) => unknown;
+
+    expect(buildRequest('Rivedi questa fonte', context)).toEqual({
+      schema: 'registro.agent-routing-request/v1',
+      message: 'Rivedi questa fonte',
+      context: {
+        surface: 'planning',
+        hasCurrentClass: true,
+        hasCurrentUda: true,
+        hasSelectedSource: true
+      },
+      explicitTeacherSubmission: true
+    });
   });
 
   test('freezes a realistic corpus including the production finding', () => {

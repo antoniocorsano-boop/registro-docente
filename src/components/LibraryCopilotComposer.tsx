@@ -13,10 +13,8 @@ import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
-import {
-  buildAgentRoutingRequest,
-  type AgentRoutingSurface
-} from '../library/agentIntent';
+import { buildCopilotContextProjection, resolveCopilotProjectionSurface } from '../copilot/contextProjection';
+import { buildAgentRoutingRequestFromProjection } from '../library/agentIntent';
 import { routeAgentIntent } from '../library/agentIntentRouting';
 import {
   buildLibraryCopilotRequest,
@@ -53,17 +51,6 @@ function localDateKey(date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function agentRoutingSurface(surface: CopilotLaunchContext['surface'] | undefined): AgentRoutingSurface {
-  if (
-    surface === 'home'
-    || surface === 'class-dashboard'
-    || surface === 'library'
-    || surface === 'uda'
-    || surface === 'lesson'
-  ) return surface;
-  return 'other-teacher-surface';
 }
 
 const ACTION_HELP: Record<string, string> = {
@@ -155,19 +142,46 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     [library.sources, selectedSourceId]
   );
 
+  const copilotProjectionSurface = resolveCopilotProjectionSurface({
+    ambientSurface: ambientContext?.surface,
+    launchSurface: launchRequest?.context.surface,
+    hasExplicitTeachingTarget: hasExplicitLaunchTarget
+  });
+
+  const copilotContextProjection = useMemo(() => buildCopilotContextProjection({
+    surface: copilotProjectionSurface,
+    className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,
+    udaId: resolvedTeachingContext?.udaId ?? null,
+    lessonId: resolvedTeachingContext?.lessonId ?? null,
+    sourceId: selectedSource?.id ?? null,
+    planningProfileId: resolvedPlanningContext?.status === 'resolved'
+      ? resolvedPlanningContext.profile.id
+      : null
+  }), [
+    copilotProjectionSurface,
+    effectiveClassName,
+    teachingContextFingerprint,
+    selectedSource?.id,
+    resolvedPlanningContext
+  ]);
+  const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
+
   const proposalUda = useMemo(() => {
     if (!resolvedTeachingContext) return null;
     return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
   }, [resolvedTeachingContext, udas]);
 
   const currentResolutionSnapshot = selectedSource
-    ? JSON.stringify(buildLibraryCopilotRequest({
+  ? JSON.stringify({
+      request: buildLibraryCopilotRequest({
         source: selectedSource,
         teachingContext: resolvedTeachingContext,
         planningContext: resolvedPlanningContext,
         message: message.trim()
-      }))
-    : '';
+      }),
+      contextProjection: copilotContextProjection
+    })
+  : '';
   const resolutionSnapshotRef = useRef(currentResolutionSnapshot);
 
   useLayoutEffect(() => {
@@ -412,13 +426,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     try {
       try {
-        const agentRequest = buildAgentRoutingRequest({
-          message: message.trim(),
-          surface: agentRoutingSurface(launchRequest?.context.surface ?? ambientContext?.surface ?? 'library'),
-          hasCurrentClass: Boolean(effectiveClassName || resolvedTeachingContext?.className),
-          hasCurrentUda: Boolean(resolvedTeachingContext?.udaId),
-          hasSelectedSource: true
-        });
+        const agentRequest = buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection);
         const envelope = await interpretCopilotIntent(agentRequest);
         if (!requestIsCurrent()) return;
 

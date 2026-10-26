@@ -1,16 +1,11 @@
 import type { UdaRecord } from '../types';
+import type { CopilotLocalSurface } from '../copilot/contextProjection';
 import {
   resolveLibraryTeachingContext,
   type ResolvedLibraryTeachingContext
 } from './teachingContext';
 
-export type CopilotLaunchSurface =
-  | 'global'
-  | 'home'
-  | 'class-dashboard'
-  | 'library'
-  | 'uda'
-  | 'lesson';
+export type CopilotLaunchSurface = CopilotLocalSurface;
 
 export interface CopilotLaunchContext {
   surface: CopilotLaunchSurface;

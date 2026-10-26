@@ -1,3 +1,8 @@
+import {
+  toRemoteRoutingProjection,
+  type CopilotContextProjectionV1
+} from '../copilot/contextProjection.ts';
+
 export type AgentIntentId =
   | 'REVIEW'
   | 'LINK'
@@ -205,5 +210,15 @@ export function buildAgentRoutingRequest(input: BuildAgentRoutingRequestInput): 
       hasSelectedSource: input.hasSelectedSource
     },
     explicitTeacherSubmission: true
+  });
+}
+
+export function buildAgentRoutingRequestFromProjection(
+  message: string,
+  context: CopilotContextProjectionV1
+): AgentRoutingRequestV1 {
+  return buildAgentRoutingRequest({
+    message,
+    ...toRemoteRoutingProjection(context)
   });
 }
