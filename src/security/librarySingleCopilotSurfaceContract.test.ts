@@ -40,7 +40,8 @@ describe('single contextual Copilot surface contract', () => {
   test('Composer binds an explicit launch request before deterministic fallback', () => {
     expect(composerSource).toContain('resolveLaunchTeachingContext');
     expect(composerSource).toContain('launchRequest?.nonce');
-    expect(composerSource).toContain('launchRequest.context.sourceId');
+    expect(composerSource).toContain('launchRequest?.context.sourceId');
+    expect(composerSource).toContain('requestedLaunchSourceId');
     expect(composerSource).toContain('setIsOpen(true)');
     expect(composerSource).toContain('Il contesto richiesto non è più disponibile.');
     expect(composerSource).toContain('hasExplicitLaunchTarget');
