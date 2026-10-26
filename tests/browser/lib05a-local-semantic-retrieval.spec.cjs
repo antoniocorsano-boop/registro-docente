@@ -129,6 +129,24 @@ async function classifyProfessional(page, title) {
   await expect(composer).toBeHidden();
 }
 
+async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
+  const composer = await openComposer(page);
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await sourceSelect.selectOption({ label: title });
+  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
+  await expect(openPrepare).toBeVisible();
+  await openPrepare.click();
+  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await expect(classify).toBeVisible();
+  await classify.click();
+  await expect(classify).toHaveCount(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await expect(composer).toBeHidden();
+}
+
 async function assertAtLeast44(locator, label) {
   await expect(locator, `${label} visible`).toBeVisible();
   const box = await locator.boundingBox();
@@ -220,7 +238,7 @@ test('LIB-05A semantic search is explicit, local-only, ranked and stale-safe —
   await addSyntheticSource(page, WIND_TITLE, WIND_TEXT);
   await addSyntheticSource(page, DRAWING_TITLE, DRAWING_TEXT);
   await classifyProfessional(page, WIND_TITLE);
-  await classifyProfessional(page, DRAWING_TITLE);
+  await classifyProfessionalUsingCurrentCopilotContext(page, DRAWING_TITLE);
 
   const disclosure = page.getByTestId('library-semantic-search-disclosure');
   await expect(disclosure).toBeVisible();
