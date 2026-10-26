@@ -93,4 +93,13 @@ describe('AGENT-INTENT-02 safe diagnostics contract', () => {
       expect((error as Error).message).not.toContain('upstream secret-ish detail');
     }
   });
+
+  test('exposes the allowlisted fallback code only as a non-visible Composer data attribute', async () => {
+    const composer = await Bun.file('src/components/LibraryCopilotComposer.tsx').text();
+    expect(composer).toContain('AgentIntentClientError');
+    expect(composer).toContain('data-agent-intent-fallback-code');
+    expect(composer).toContain('error instanceof AgentIntentClientError');
+    expect(composer).not.toContain('PROVIDER_OUTPUT_INVALID</');
+    expect(composer).not.toContain('PROVIDER_TIMEOUT</');
+  });
 });
