@@ -79,7 +79,9 @@ export async function handleAgentIntentRequest(
     }
     if (error instanceof AgentIntentProviderError) {
       switch (error.code) {
-        case 'not-configured': return failure('PROVIDER_NOT_CONFIGURED', 503, false);
+        // Provider absence is a supported offline/fallback state, not an HTTP failure.
+        // The client receives a typed non-intent envelope and falls back locally.
+        case 'not-configured': return failure('PROVIDER_NOT_CONFIGURED', 200, false);
         case 'rate-limited': return failure('PROVIDER_RATE_LIMITED', 429, true);
         case 'timeout': return failure('PROVIDER_TIMEOUT', 504, true);
         case 'blocked': return failure('PROVIDER_BLOCKED', 422, false);
