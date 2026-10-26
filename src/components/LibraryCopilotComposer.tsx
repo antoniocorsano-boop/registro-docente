@@ -13,7 +13,7 @@ import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
-import { buildCopilotContextProjection } from '../copilot/contextProjection';
+import { buildCopilotContextProjection, resolveCopilotProjectionSurface } from '../copilot/contextProjection';
 import { buildAgentRoutingRequestFromProjection } from '../library/agentIntent';
 import { routeAgentIntent } from '../library/agentIntentRouting';
 import {
@@ -142,24 +142,29 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     [library.sources, selectedSourceId]
   );
 
+  const copilotProjectionSurface = resolveCopilotProjectionSurface({
+    ambientSurface: ambientContext?.surface,
+    launchSurface: launchRequest?.context.surface,
+    hasExplicitTeachingTarget: hasExplicitLaunchTarget
+  });
+
   const copilotContextProjection = useMemo(() => buildCopilotContextProjection({
-  surface: ambientContext?.surface ?? launchRequest?.context.surface ?? 'library',
-  className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,
-  udaId: resolvedTeachingContext?.udaId ?? null,
-  lessonId: resolvedTeachingContext?.lessonId ?? null,
-  sourceId: selectedSource?.id ?? null,
-  planningProfileId: resolvedPlanningContext?.status === 'resolved'
-    ? resolvedPlanningContext.profile.id
-    : null
-}), [
-  ambientContext?.surface,
-  launchRequest?.context.surface,
-  effectiveClassName,
-  teachingContextFingerprint,
-  selectedSource?.id,
-  resolvedPlanningContext
-]);
-const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
+    surface: copilotProjectionSurface,
+    className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,
+    udaId: resolvedTeachingContext?.udaId ?? null,
+    lessonId: resolvedTeachingContext?.lessonId ?? null,
+    sourceId: selectedSource?.id ?? null,
+    planningProfileId: resolvedPlanningContext?.status === 'resolved'
+      ? resolvedPlanningContext.profile.id
+      : null
+  }), [
+    copilotProjectionSurface,
+    effectiveClassName,
+    teachingContextFingerprint,
+    selectedSource?.id,
+    resolvedPlanningContext
+  ]);
+  const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
 
   const proposalUda = useMemo(() => {
     if (!resolvedTeachingContext) return null;
