@@ -1,0 +1,37 @@
+name: AGENT-INTENT-01 Live Postfix Verification
+
+on:
+  push:
+    branches:
+      - ops/agent-intent-01-live-postfix
+
+permissions:
+  contents: read
+
+env:
+  BASE_URL: https://registro-docente.ai.studio
+
+jobs:
+  verify-live-route:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Probe live provider and intent route
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          curl --fail --silent --show-error --location "${BASE_URL}/api/copilot/intent/provider" | tee evidence/provider.json
+          status="$(curl --silent --show-error --location --max-time 25 -o evidence/intent.json -w '%{http_code}' -X POST "${BASE_URL}/api/copilot/intent" -H 'content-type: application/json' --data-binary '{"schema":"registro.agent-routing-request/v1","message":"Preparazione Attività per fare comprendere il funzionamento della centrale elettrica","context":{"surface":"library","hasCurrentClass":true,"hasCurrentUda":true,"hasSelectedSource":true},"explicitTeacherSubmission":true}')"
+          printf '%s\n' "${status}" | tee evidence/status.txt
+          cat evidence/intent.json
+          test "${status}" = "200"
+          grep -q '"intent":"PREPARE"' evidence/intent.json
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-intent-01-live-postfix
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 2
