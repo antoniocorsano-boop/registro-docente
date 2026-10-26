@@ -89,6 +89,16 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('resolutionEpochRef.current += 1');
   });
 
+  test('semantic Teaching Context changes invalidate disclosure even when UDA and lesson ids stay stable', () => {
+    expect(composerSource).toContain('teachingContextFingerprint');
+    expect(composerSource).toContain('resolvedTeachingContext?.udaId');
+    expect(composerSource).toContain('resolvedTeachingContext?.lessonId');
+    expect(composerSource).toContain('resolvedTeachingContext?.className');
+    expect(composerSource).toContain('resolvedTeachingContext?.period');
+    expect(composerSource).toContain('resolvedTeachingContext?.activityType');
+    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint]');
+  });
+
   test('LibrarySourceCard is no longer a second transformation engine', () => {
     expect(sourceCardSource).not.toContain("import { LibraryProposalPanel } from './LibraryProposalPanel'");
     expect(sourceCardSource).not.toContain('resolveLibraryContextActions');
