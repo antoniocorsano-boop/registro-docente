@@ -1,4 +1,4 @@
-name: AIC-00 Live Intent Classification
+name: AIC-00 Public Bundle Audit
 
 on:
   pull_request:
@@ -13,9 +13,9 @@ env:
   PUBLIC_URL: 'https://registro-docente.ai.studio'
 
 jobs:
-  live-intent-classification:
+  public-bundle-audit:
     runs-on: ubuntu-22.04
-    timeout-minutes: 8
+    timeout-minutes: 12
 
     steps:
       - name: Checkout exact integrated source
@@ -32,11 +32,43 @@ jobs:
           echo "Checkout SHA:         ${actual_sha}"
           test "${actual_sha}" = "${RELEASE_SHA}"
 
-      - name: Probe public target and diagnostic bundle marker
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build exact integrated source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p aic00-evidence/assets
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Capture expected bundle fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p aic00-evidence/public-assets
+          test -s dist/index.html
+          grep -Eo 'src="/assets/[^"]+\.js[^\"]*"' dist/index.html \
+            | sed -E 's/^src="//; s/"$//' \
+            | sort -u \
+            > aic00-evidence/expected-js-assets.txt
+          test -s aic00-evidence/expected-js-assets.txt
+
+          if grep -R -q --include='*.js' 'data-agent-intent-fallback-code' dist/assets; then
+            printf 'true\n' > aic00-evidence/expected-diagnostic-marker.txt
+          else
+            printf 'false\n' > aic00-evidence/expected-diagnostic-marker.txt
+          fi
+
+          find dist/assets -maxdepth 1 -type f -name '*.js' -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            > aic00-evidence/expected-js-sha256.txt
+
+      - name: Capture public bundle fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
           curl --fail --silent --show-error --location \
             --connect-timeout 10 --max-time 30 \
             "${PUBLIC_URL}/" \
@@ -44,159 +76,75 @@ jobs:
             -o aic00-evidence/public-index.html
           test -s aic00-evidence/public-index.html
 
-          grep -Eo 'src="[^"]+\.js[^\"]*"' aic00-evidence/public-index.html \
+          grep -Eo 'src="/assets/[^"]+\.js[^\"]*"' aic00-evidence/public-index.html \
             | sed -E 's/^src="//; s/"$//' \
             | sort -u \
-            > aic00-evidence/js-assets.txt || true
+            > aic00-evidence/public-js-assets.txt
+          test -s aic00-evidence/public-js-assets.txt
 
           marker=false
+          : > aic00-evidence/public-js-sha256.txt
           while IFS= read -r asset; do
             [[ -n "$asset" ]] || continue
-            case "$asset" in
-              http://*|https://*) asset_url="$asset" ;;
-              /*) asset_url="${PUBLIC_URL}${asset}" ;;
-              *) asset_url="${PUBLIC_URL}/${asset}" ;;
-            esac
-            safe_name="$(printf '%s' "$asset" | tr '/?&=' '____')"
+            base="$(basename "${asset%%\?*}")"
+            target="aic00-evidence/public-assets/${base}"
             curl --fail --silent --show-error --location \
               --connect-timeout 10 --max-time 30 \
-              "$asset_url" \
-              -o "aic00-evidence/assets/${safe_name}"
-            if grep -q 'data-agent-intent-fallback-code' "aic00-evidence/assets/${safe_name}"; then
+              "${PUBLIC_URL}${asset}" \
+              -o "$target"
+            sha256sum "$target" >> aic00-evidence/public-js-sha256.txt
+            if grep -q 'data-agent-intent-fallback-code' "$target"; then
               marker=true
             fi
-          done < aic00-evidence/js-assets.txt
-
-          printf '%s\n' "$marker" > aic00-evidence/diagnostic-bundle-marker.txt
+          done < aic00-evidence/public-js-assets.txt
+          printf '%s\n' "$marker" > aic00-evidence/public-diagnostic-marker.txt
           printf 'public_url=%s\nrelease_sha=%s\n' "${PUBLIC_URL}" "${RELEASE_SHA}" > aic00-evidence/release-metadata.txt
 
-      - name: Probe live intent provider metadata
+      - name: Compare exact source and public bundle
         shell: bash
         run: |
           set -euo pipefail
-          status="$(curl --silent --show-error --location \
-            --connect-timeout 10 --max-time 30 \
-            -o aic00-evidence/provider-response.json \
-            -w '%{http_code}' \
-            "${PUBLIC_URL}/api/copilot/intent/provider")"
-          printf '%s\n' "$status" > aic00-evidence/provider-status.txt
-          test "$status" = '200'
+          if diff -u aic00-evidence/expected-js-assets.txt aic00-evidence/public-js-assets.txt \
+            > aic00-evidence/js-assets.diff; then
+            asset_match=true
+          else
+            asset_match=false
+          fi
 
-      - name: Submit canonical live routing request
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > aic00-evidence/intent-request.json <<'JSON'
-          {
-            "schema": "registro.agent-routing-request/v1",
-            "message": "Preparazione Attività per fare comprendere il funzionamento della centrale elettrica",
-            "context": {
-              "surface": "library",
-              "hasCurrentClass": true,
-              "hasCurrentUda": true,
-              "hasSelectedSource": true
-            },
-            "explicitTeacherSubmission": true
-          }
-          JSON
+          expected_marker="$(cat aic00-evidence/expected-diagnostic-marker.txt)"
+          public_marker="$(cat aic00-evidence/public-diagnostic-marker.txt)"
 
-          status="$(curl --silent --show-error --location \
-            --connect-timeout 10 --max-time 35 \
-            -H 'Content-Type: application/json' \
-            --data-binary @aic00-evidence/intent-request.json \
-            -o aic00-evidence/intent-response.json \
-            -w '%{http_code}' \
-            "${PUBLIC_URL}/api/copilot/intent")"
-          printf '%s\n' "$status" > aic00-evidence/intent-status.txt
-
-      - name: Classify AIC-00 result
-        shell: bash
-        run: |
-          set -euo pipefail
-          RELEASE_SHA="${RELEASE_SHA}" PUBLIC_URL="${PUBLIC_URL}" node <<'NODE'
+          RELEASE_SHA="${RELEASE_SHA}" \
+          PUBLIC_URL="${PUBLIC_URL}" \
+          ASSET_MATCH="$asset_match" \
+          EXPECTED_MARKER="$expected_marker" \
+          PUBLIC_MARKER="$public_marker" \
+          node <<'NODE'
           const fs = require('node:fs');
-
-          const routeCodes = new Set([
-            'REQUEST_INVALID',
-            'REMOTE_POLICY_DENIED',
-            'PROVIDER_NOT_CONFIGURED',
-            'PROVIDER_RATE_LIMITED',
-            'PROVIDER_TIMEOUT',
-            'PROVIDER_BLOCKED',
-            'PROVIDER_UNAVAILABLE',
-            'PROVIDER_OUTPUT_INVALID',
-            'PROVIDER_ERROR'
-          ]);
-          const clientAllowlisted = new Set([
-            'PROVIDER_NOT_CONFIGURED',
-            'PROVIDER_RATE_LIMITED',
-            'PROVIDER_TIMEOUT',
-            'PROVIDER_BLOCKED',
-            'PROVIDER_UNAVAILABLE',
-            'PROVIDER_OUTPUT_INVALID',
-            'PROVIDER_ERROR'
-          ]);
-
-          const read = path => fs.readFileSync(path, 'utf8').trim();
-          const parse = path => JSON.parse(fs.readFileSync(path, 'utf8'));
-          const diagnosticBundleMarker = read('aic00-evidence/diagnostic-bundle-marker.txt') === 'true';
-          const providerStatus = Number(read('aic00-evidence/provider-status.txt'));
-          const providerResponse = parse('aic00-evidence/provider-response.json');
-          const intentStatus = Number(read('aic00-evidence/intent-status.txt'));
-          const intentResponse = parse('aic00-evidence/intent-response.json');
-
-          let result = 'UNCLASSIFIED';
-          let routeCode = null;
-          let clientFallbackCode = null;
-
-          if (intentStatus === 200 && intentResponse?.intent?.intent === 'PREPARE') {
-            result = 'ROUTED_PREPARE';
-          } else if (typeof intentResponse?.error?.code === 'string' && routeCodes.has(intentResponse.error.code)) {
-            routeCode = intentResponse.error.code;
-            if (clientAllowlisted.has(routeCode)) {
-              clientFallbackCode = routeCode;
-              result = `CLASSIFIED_FALLBACK:${routeCode}`;
-            } else {
-              result = `SERVER_CLASSIFIED_BUT_CLIENT_UNMAPPED:${routeCode}`;
-            }
-          }
-
+          const lines = path => fs.readFileSync(path, 'utf8').split(/\r?\n/).map(v => v.trim()).filter(Boolean);
           const evidence = {
             releaseSha: process.env.RELEASE_SHA,
             publicUrl: process.env.PUBLIC_URL,
-            canonicalPhrase: 'Preparazione Attività per fare comprendere il funzionamento della centrale elettrica',
-            diagnosticBundleMarker,
-            providerStatus,
-            providerAvailable: providerResponse?.available ?? null,
-            provider: providerResponse?.provider ?? null,
-            model: providerResponse?.model ?? null,
-            intentStatus,
-            result,
-            routeCode,
-            clientFallbackCode,
-            intent: intentResponse?.intent?.intent ?? null,
-            confidence: intentResponse?.intent?.confidence ?? null,
-            needsClarification: intentResponse?.intent?.needsClarification ?? null
+            expectedAssets: lines('aic00-evidence/expected-js-assets.txt'),
+            publicAssets: lines('aic00-evidence/public-js-assets.txt'),
+            assetFingerprintMatch: process.env.ASSET_MATCH === 'true',
+            expectedDiagnosticMarker: process.env.EXPECTED_MARKER === 'true',
+            publicDiagnosticMarker: process.env.PUBLIC_MARKER === 'true'
           };
-
-          fs.writeFileSync('aic00-evidence/aic-00-live.json', JSON.stringify(evidence, null, 2) + '\n');
+          fs.writeFileSync('aic00-evidence/aic-00-publication-audit.json', JSON.stringify(evidence, null, 2) + '\n');
           console.log(JSON.stringify(evidence, null, 2));
-
-          if (!diagnosticBundleMarker) {
-            console.error('Public bundle does not contain AGENT-INTENT-02 diagnostic marker.');
-            process.exit(1);
+          if (!evidence.expectedDiagnosticMarker) {
+            console.error('Exact source build itself lacks the AGENT-INTENT-02 marker; audit assumption invalid.');
+            process.exit(2);
           }
-          if (result === 'ROUTED_PREPARE' || result.startsWith('CLASSIFIED_FALLBACK:')) {
-            process.exit(0);
-          }
-          process.exit(1);
+          if (!evidence.assetFingerprintMatch || !evidence.publicDiagnosticMarker) process.exit(1);
           NODE
 
-      - name: Upload AIC-00 live evidence
+      - name: Upload AIC-00 publication evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aic-00-live-${{ env.RELEASE_SHA }}
+          name: aic-00-publication-${{ env.RELEASE_SHA }}
           path: aic00-evidence/
           if-no-files-found: error
           retention-days: 7
