@@ -11,6 +11,12 @@ import {
   createTeachingProposalRuntime,
   resolveTeachingProposalRuntimeConfig
 } from './src/server/teachingProposalRuntime.ts';
+import { handleAgentIntentRequest } from './src/server/agentIntentRoute.ts';
+import { createGeminiAgentIntentProvider } from './src/server/geminiAgentIntentProvider.ts';
+import {
+  createAgentIntentRuntime,
+  resolveAgentIntentRuntimeConfig
+} from './src/server/agentIntentRuntime.ts';
 
 dotenv.config();
 
@@ -26,6 +32,13 @@ const libraryProposalProvider = createGeminiTeachingProposalProvider({
 const libraryProposalRuntime = createTeachingProposalRuntime(
   resolveTeachingProposalRuntimeConfig(process.env),
   libraryProposalProvider
+);
+const agentIntentProvider = createGeminiAgentIntentProvider({
+  apiKey: process.env.GEMINI_API_KEY
+});
+const agentIntentRuntime = createAgentIntentRuntime(
+  resolveAgentIntentRuntimeConfig(process.env),
+  agentIntentProvider
 );
 
 app.get('/api/copilot/library-proposal/provider', (_req, res) => {
@@ -49,6 +62,30 @@ app.post(
       const result = await handleLibraryProposalRequest(
         req.body,
         libraryProposalRuntime,
+        { signal: requestController.signal }
+      );
+      if (res.headersSent || res.writableEnded) return;
+      return res.status(result.status).json(result.body);
+    } finally {
+      req.removeListener('aborted', abortRequest);
+      res.removeListener('close', abortRequest);
+    }
+  }
+);
+
+app.post(
+  '/api/copilot/intent',
+  express.json({ limit: '16kb' }),
+  async (req, res) => {
+    const requestController = new AbortController();
+    const abortRequest = () => requestController.abort();
+    req.once('aborted', abortRequest);
+    res.once('close', abortRequest);
+
+    try {
+      const result = await handleAgentIntentRequest(
+        req.body,
+        agentIntentRuntime,
         { signal: requestController.signal }
       );
       if (res.headersSent || res.writableEnded) return;
