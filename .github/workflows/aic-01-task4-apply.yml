@@ -25,6 +25,7 @@ jobs:
           set -euo pipefail
           python <<'PY'
           from pathlib import Path
+          import re
 
           app_path = Path('src/App.tsx')
           composer_path = Path('src/components/LibraryCopilotComposer.tsx')
@@ -43,100 +44,69 @@ jobs:
                   raise SystemExit(f'{label}: expected exactly one occurrence, found {count}')
               return text.replace(old, new, 1)
 
-          old_app = """  const ambientCopilotContext: CopilotLaunchContext = {
-            surface:
-              activeTab === 'home' ? 'home'
-                : activeTab === 'dashboard' ? 'class-dashboard'
-                  : activeTab === 'biblioteca' ? 'library'
-                    : activeTab === 'uda-gantt' ? 'uda'
-                      : 'global',
-            className: currentClass?.name
-          };
-          """
-          new_app = """  const ambientCopilotContext: CopilotLaunchContext = {
-            surface:
-              activeTab === 'home' ? 'home'
-                : activeTab === 'dashboard' ? 'class-dashboard'
-                  : activeTab === 'biblioteca' ? 'library'
-                    : activeTab === 'uda-gantt' ? 'uda'
-                      : activeTab === 'programmazione' ? 'planning'
-                        : activeTab === 'verifiche-online' ? 'online-tests'
-                          : activeTab === 'voti' ? 'evaluations'
-                            : 'other-teacher-surface',
-            className: currentClass?.name
-          };
-          """
-          app = replace_once(app, old_app, new_app, 'App ambient Copilot surface mapping')
+          def regex_once(text: str, pattern: str, replacement: str, label: str, flags=0) -> str:
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one regex occurrence, found {count}')
+              return updated
 
-          old_import = """import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
-          import {
-            buildAgentRoutingRequest,
-            type AgentRoutingSurface
-          } from '../library/agentIntent';
-          """
-          new_import = """import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
-          import { buildCopilotContextProjection } from '../copilot/contextProjection';
-          import { buildAgentRoutingRequestFromProjection } from '../library/agentIntent';
-          """
-          composer = replace_once(composer, old_import, new_import, 'Composer projection imports')
+          app = regex_once(
+              app,
+              r"(?P<indent>\s*): activeTab === 'uda-gantt' \? 'uda'\n(?P=indent)  : 'global',",
+              lambda m: (
+                  f"{m.group('indent')}: activeTab === 'uda-gantt' ? 'uda'\n"
+                  f"{m.group('indent')}  : activeTab === 'programmazione' ? 'planning'\n"
+                  f"{m.group('indent')}    : activeTab === 'verifiche-online' ? 'online-tests'\n"
+                  f"{m.group('indent')}      : activeTab === 'voti' ? 'evaluations'\n"
+                  f"{m.group('indent')}        : 'other-teacher-surface',"
+              ),
+              'App ambient Copilot surface mapping'
+          )
 
-          old_helper = """function agentRoutingSurface(surface: CopilotLaunchContext['surface'] | undefined): AgentRoutingSurface {
-            if (
-              surface === 'home'
-              || surface === 'class-dashboard'
-              || surface === 'library'
-              || surface === 'uda'
-              || surface === 'lesson'
-            ) return surface;
-            return 'other-teacher-surface';
-          }
+          composer = regex_once(
+              composer,
+              r"import \{ AgentIntentClientError, interpretCopilotIntent \} from '../services/agentIntentService';\nimport \{\n\s*buildAgentRoutingRequest,\n\s*type AgentRoutingSurface\n\} from '../library/agentIntent';",
+              "import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';\nimport { buildCopilotContextProjection } from '../copilot/contextProjection';\nimport { buildAgentRoutingRequestFromProjection } from '../library/agentIntent';",
+              'Composer projection imports'
+          )
 
-          """
-          composer = replace_once(composer, old_helper, '', 'Composer legacy surface helper')
+          composer = regex_once(
+              composer,
+              r"function agentRoutingSurface\(surface: CopilotLaunchContext\['surface'\] \| undefined\): AgentRoutingSurface \{.*?\n\}\n\n",
+              '',
+              'Composer legacy surface helper',
+              re.S
+          )
 
-          old_selected = """  const selectedSource = useMemo(
-            () => library.sources.find(source => source.id === selectedSourceId) ?? null,
-            [library.sources, selectedSourceId]
-          );
+          projection_block = """  const copilotContextProjection = useMemo(() => buildCopilotContextProjection({
+            surface: ambientContext?.surface ?? launchRequest?.context.surface ?? 'library',
+            className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,
+            udaId: resolvedTeachingContext?.udaId ?? null,
+            lessonId: resolvedTeachingContext?.lessonId ?? null,
+            sourceId: selectedSource?.id ?? null,
+            planningProfileId: resolvedPlanningContext?.status === 'resolved'
+              ? resolvedPlanningContext.profile.id
+              : null
+          }), [
+            ambientContext?.surface,
+            launchRequest?.context.surface,
+            effectiveClassName,
+            teachingContextFingerprint,
+            selectedSource?.id,
+            resolvedPlanningContext
+          ]);
+          const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
 
           """
-          new_selected = """  const selectedSource = useMemo(
-            () => library.sources.find(source => source.id === selectedSourceId) ?? null,
-            [library.sources, selectedSourceId]
-          );
+          marker = '  const proposalUda = useMemo(() => {'
+          if composer.count(marker) != 1:
+              raise SystemExit(f'Composer projection insertion marker: expected 1, found {composer.count(marker)}')
+          composer = composer.replace(marker, projection_block + marker, 1)
 
-            const copilotContextProjection = useMemo(() => buildCopilotContextProjection({
-              surface: ambientContext?.surface ?? launchRequest?.context.surface ?? 'library',
-              className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,
-              udaId: resolvedTeachingContext?.udaId ?? null,
-              lessonId: resolvedTeachingContext?.lessonId ?? null,
-              sourceId: selectedSource?.id ?? null,
-              planningProfileId: resolvedPlanningContext?.status === 'resolved'
-                ? resolvedPlanningContext.profile.id
-                : null
-            }), [
-              ambientContext?.surface,
-              launchRequest?.context.surface,
-              effectiveClassName,
-              teachingContextFingerprint,
-              selectedSource?.id,
-              resolvedPlanningContext
-            ]);
-            const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
-
-          """
-          composer = replace_once(composer, old_selected, new_selected, 'Composer unified projection')
-
-          old_snapshot = """  const currentResolutionSnapshot = selectedSource
-            ? JSON.stringify(buildLibraryCopilotRequest({
-                source: selectedSource,
-                teachingContext: resolvedTeachingContext,
-                planningContext: resolvedPlanningContext,
-                message: message.trim()
-              }))
-            : '';
-          """
-          new_snapshot = """  const currentResolutionSnapshot = selectedSource
+          composer = regex_once(
+              composer,
+              r"  const currentResolutionSnapshot = selectedSource\n\s*\? JSON\.stringify\(buildLibraryCopilotRequest\(\{\n\s*source: selectedSource,\n\s*teachingContext: resolvedTeachingContext,\n\s*planningContext: resolvedPlanningContext,\n\s*message: message\.trim\(\)\n\s*\}\)\)\n\s*: '';",
+              """  const currentResolutionSnapshot = selectedSource
             ? JSON.stringify({
                 request: buildLibraryCopilotRequest({
                   source: selectedSource,
@@ -146,27 +116,23 @@ jobs:
                 }),
                 contextProjection: copilotContextProjection
               })
-            : '';
-          """
-          composer = replace_once(composer, old_snapshot, new_snapshot, 'Composer stale snapshot projection')
+            : '';""",
+              'Composer stale snapshot projection'
+          )
 
-          old_effect = """  }, [selectedSourceId, teachingContextFingerprint]);
-          """
-          new_effect = """  }, [selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]);
-          """
-          composer = replace_once(composer, old_effect, new_effect, 'Composer stale invalidation dependencies')
+          composer = replace_once(
+              composer,
+              '[selectedSourceId, teachingContextFingerprint]',
+              '[selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]',
+              'Composer stale invalidation dependencies'
+          )
 
-          old_request = """        const agentRequest = buildAgentRoutingRequest({
-                  message: message.trim(),
-                  surface: agentRoutingSurface(launchRequest?.context.surface ?? ambientContext?.surface ?? 'library'),
-                  hasCurrentClass: Boolean(effectiveClassName || resolvedTeachingContext?.className),
-                  hasCurrentUda: Boolean(resolvedTeachingContext?.udaId),
-                  hasSelectedSource: true
-                });
-          """
-          new_request = """        const agentRequest = buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection);
-          """
-          composer = replace_once(composer, old_request, new_request, 'Composer routing request builder')
+          composer = regex_once(
+              composer,
+              r"        const agentRequest = buildAgentRoutingRequest\(\{\n\s*message: message\.trim\(\),\n\s*surface: agentRoutingSurface\(launchRequest\?\.context\.surface \?\? ambientContext\?\.surface \?\? 'library'\),\n\s*hasCurrentClass: Boolean\(effectiveClassName \|\| resolvedTeachingContext\?\.className\),\n\s*hasCurrentUda: Boolean\(resolvedTeachingContext\?\.udaId\),\n\s*hasSelectedSource: true\n\s*\}\);",
+              '        const agentRequest = buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection);',
+              'Composer routing request builder'
+          )
 
           app_path.write_text(app)
           composer_path.write_text(composer)
