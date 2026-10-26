@@ -3,6 +3,7 @@ import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'luci
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
+import type { CopilotLaunchContext, LibraryCopilotLaunchRequest } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
@@ -25,6 +26,8 @@ interface LibraryCopilotComposerProps {
   udas: UdaRecord[];
   planning: PlanningStateV1;
   currentClassName?: string | null;
+  launchRequest?: LibraryCopilotLaunchRequest | null;
+  ambientContext?: CopilotLaunchContext;
   onAddSource: (source: LibrarySource) => Promise<void>;
   onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;

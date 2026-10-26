@@ -3,6 +3,7 @@ import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 
 import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { PlanningStateV1 } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
+import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { buildCapturedWebTextPatch } from '../library/intake';
@@ -35,6 +36,7 @@ interface LibrarySourceCardProps {
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onUnlink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDelete: (sourceId: string) => Promise<void>;
+  onOpenCopilot: (context: CopilotLaunchContext) => void;
 }
 
 const KIND_LABELS: Record<LibrarySource['kind'], string> = {
@@ -97,7 +99,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   onUpdate,
   onLink,
   onUnlink,
-  onDelete
+  onDelete,
+  onOpenCopilot
 }) => {
   const [targetUdaId, setTargetUdaId] = useState('');
   const [contextUdaId, setContextUdaId] = useState('');
@@ -499,6 +502,21 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             <strong className="block">Che cosa vuoi farne?</strong>
             <span className="text-cyan-200/80">Vedi solo le azioni ammesse per questa fonte. La selezione non modifica UDA o lezioni.</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenCopilot({
+              surface: 'library',
+              sourceId: source.id,
+              className: resolvedTeachingContext?.className ?? currentClassName ?? undefined,
+              udaId: resolvedTeachingContext?.udaId,
+              lessonId: resolvedTeachingContext?.lessonId
+            })}
+            disabled={isPending}
+            className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
+          >
+            Usa con Copilota
+          </button>
 
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
             {contextSuggestion ? (
