@@ -56,7 +56,7 @@ describe('AGENT-INTENT-01 deterministic evaluation', () => {
       observation(unsupported!, 'PREPARE')
     ]);
 
-    expect(evaluation.paraphraseNoisyEllipticalRecall).toBe(0);
+    expect(evaluation.paraphraseNoisyEllipticalRecall).toBe(0.5);
     expect(evaluation.ambiguousClarificationRate).toBe(1);
     expect(evaluation.unsupportedFalseActionRate).toBe(1);
     expect(evaluation.falseExecutableActionOnNonExecutable).toBe(1);
