@@ -106,11 +106,12 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('selectedSource?.privacy');
     expect(composerSource).toContain('selectedSource?.status');
     expect(composerSource).toContain('teachingContextFingerprint');
+    expect(composerSource).toContain('copilotContextFingerprint');
     expect(composerSource).toContain('message.trim()');
     expect(composerSource).toContain('const resolutionSnapshot = currentResolutionSnapshot');
     expect(composerSource).toContain('resolutionSnapshot === resolutionSnapshotRef.current');
-    expect(composerSource).toContain('buildLibraryCopilotRequest');
-    expect(composerSource).toContain('JSON.stringify(buildLibraryCopilotRequest({');
+    expect(composerSource).toContain('request: buildLibraryCopilotRequest({');
+    expect(composerSource).toContain('contextProjection: copilotContextProjection');
     expect(composerSource).toContain('planningContext: resolvedPlanningContext');
 
     const staleGuards = composerSource.match(/if \(!requestIsCurrent\(\)\) return;/g) ?? [];
@@ -123,14 +124,15 @@ describe('single contextual Copilot surface contract', () => {
     );
   });
 
-  test('semantic Teaching Context changes invalidate disclosure even when UDA and lesson ids stay stable', () => {
+  test('semantic Teaching Context and ambient surface changes invalidate disclosure even when UDA and lesson ids stay stable', () => {
     expect(composerSource).toContain('teachingContextFingerprint');
+    expect(composerSource).toContain('copilotContextFingerprint');
     expect(composerSource).toContain('resolvedTeachingContext?.udaId');
     expect(composerSource).toContain('resolvedTeachingContext?.lessonId');
     expect(composerSource).toContain('resolvedTeachingContext?.className');
     expect(composerSource).toContain('resolvedTeachingContext?.period');
     expect(composerSource).toContain('resolvedTeachingContext?.activityType');
-    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint]');
+    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]');
   });
 
   test('LibrarySourceCard is no longer a second transformation engine', () => {
