@@ -1,7 +1,7 @@
 import {
   toRemoteRoutingProjection,
   type CopilotContextProjectionV1
-} from '../copilot/contextProjection';
+} from '../copilot/contextProjection.ts';
 
 export type AgentIntentId =
   | 'REVIEW'
