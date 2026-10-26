@@ -103,6 +103,24 @@ describe('AGENT-INTENT-01 governed server boundary', () => {
     });
   });
 
+  test('treats an unconfigured agent as a clean local-fallback state rather than a failed browser resource', async () => {
+    const runtime: AgentIntentRuntime = {
+      config: resolveAgentIntentRuntimeConfig({}),
+      interpret: async () => {
+        throw new AgentIntentProviderError('not-configured');
+      }
+    };
+    const result = await handleAgentIntentRequest(request, runtime);
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({
+      error: {
+        code: 'PROVIDER_NOT_CONFIGURED',
+        message: 'Il servizio di interpretazione del Copilota non è configurato.',
+        retriable: false
+      }
+    });
+  });
+
   test('normalizes provider failures without raw vendor diagnostics', async () => {
     const runtime: AgentIntentRuntime = {
       config: resolveAgentIntentRuntimeConfig({}),
