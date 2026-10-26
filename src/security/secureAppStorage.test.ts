@@ -2,16 +2,20 @@ import { describe, expect, test } from 'bun:test';
 import {
   SecureAppStorage,
   decideVaultBootstrap,
+  type SecureMeta,
   type VaultBootstrapInput
 } from './secureAppStorage';
 import { SecureVault } from './secureVault';
 import type { VaultStore } from './vaultStore';
+import type { UdaRecord } from '../types';
+import type { LibraryStateV1 } from '../library/types';
 import type { EncryptedVaultRecord, VaultMetadataV1, VaultRecordKey } from './vaultTypes';
 
 class MemoryVaultStore implements VaultStore {
   private metadata: VaultMetadataV1 | null = null;
   private readonly records = new Map<VaultRecordKey, EncryptedVaultRecord>();
   readonly batchKeys: VaultRecordKey[][] = [];
+  rejectNextBatch = false;
 
   async getMetadata(): Promise<VaultMetadataV1 | null> { return this.metadata; }
   async putMetadata(metadata: VaultMetadataV1): Promise<void> { this.metadata = metadata; }
@@ -19,6 +23,10 @@ class MemoryVaultStore implements VaultStore {
   async putRecord(record: EncryptedVaultRecord): Promise<void> { this.records.set(record.recordKey as VaultRecordKey, record); }
   async putRecords(records: EncryptedVaultRecord[]): Promise<void> {
     this.batchKeys.push(records.map(record => record.recordKey as VaultRecordKey));
+    if (this.rejectNextBatch) {
+      this.rejectNextBatch = false;
+      throw new Error('synthetic batch failure');
+    }
     records.forEach(record => this.records.set(record.recordKey as VaultRecordKey, record));
   }
   async deleteRecord(key: VaultRecordKey): Promise<void> { this.records.delete(key); }
@@ -109,7 +117,6 @@ describe('SEC-1 secure application storage', () => {
     expect(store.batchKeys).toEqual([['appData', 'meta']]);
   });
 
-
   test('commits library and meta through one vault batch', async () => {
     const store = new MemoryVaultStore();
     const vault = new SecureVault(store);
@@ -125,6 +132,88 @@ describe('SEC-1 secure application storage', () => {
     expect(snapshot.library).toEqual({ schemaVersion: 1, sources: [] });
     expect(snapshot.meta).toEqual({ changes: 4, lastBackup: null });
     expect(store.batchKeys).toEqual([['library', 'meta']]);
+  });
+
+  test('commits library UDA and meta through one vault batch', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const storage = new SecureAppStorage(vault) as SecureAppStorage & {
+      saveLibraryUdasAndMeta?: (
+        library: LibraryStateV1,
+        udas: UdaRecord[],
+        meta: SecureMeta
+      ) => Promise<void>;
+    };
+
+    expect(typeof storage.saveLibraryUdasAndMeta).toBe('function');
+    if (!storage.saveLibraryUdasAndMeta) return;
+
+    const library: LibraryStateV1 = { schemaVersion: 1, sources: [] };
+    const udas: UdaRecord[] = [{
+      id: 'uda-energy',
+      title: 'Energia',
+      className: '3ª A',
+      hours: 1,
+      period: 'Q1',
+      startMonth: 0,
+      durationMonths: 1,
+      lessons: [],
+      dependencies: []
+    }];
+    const meta: SecureMeta = { changes: 5, lastBackup: null };
+
+    await storage.saveLibraryUdasAndMeta(library, udas, meta);
+
+    const snapshot = await storage.loadSnapshot();
+    expect(snapshot.library).toEqual(library);
+    expect(snapshot.udas).toEqual(udas);
+    expect(snapshot.meta).toEqual(meta);
+    expect(store.batchKeys).toEqual([['library', 'udas', 'meta']]);
+  });
+
+  test('propagates a rejected compound batch without writing partial library or UDA state', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const storage = new SecureAppStorage(vault) as SecureAppStorage & {
+      saveLibraryUdasAndMeta?: (
+        library: LibraryStateV1,
+        udas: UdaRecord[],
+        meta: SecureMeta
+      ) => Promise<void>;
+    };
+
+    expect(typeof storage.saveLibraryUdasAndMeta).toBe('function');
+    if (!storage.saveLibraryUdasAndMeta) return;
+
+    await storage.saveLibrary({ schemaVersion: 1, sources: [] });
+    await storage.saveUdas([]);
+    await storage.saveMeta({ changes: 4, lastBackup: null });
+    store.batchKeys.length = 0;
+    store.rejectNextBatch = true;
+
+    await expect(storage.saveLibraryUdasAndMeta(
+      { schemaVersion: 1, sources: [] },
+      [{
+        id: 'uda-energy',
+        title: 'Energia',
+        className: '3ª A',
+        hours: 1,
+        period: 'Q1',
+        startMonth: 0,
+        durationMonths: 1,
+        lessons: [],
+        dependencies: []
+      }],
+      { changes: 5, lastBackup: null }
+    )).rejects.toThrow('synthetic batch failure');
+
+    const snapshot = await storage.loadSnapshot();
+    expect(snapshot.library).toEqual({ schemaVersion: 1, sources: [] });
+    expect(snapshot.udas).toEqual([]);
+    expect(snapshot.meta).toEqual({ changes: 4, lastBackup: null });
+    expect(store.batchKeys).toEqual([['library', 'udas', 'meta']]);
   });
 
   test('strips embedding API keys on settings persistence', async () => {
