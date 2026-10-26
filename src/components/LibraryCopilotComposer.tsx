@@ -198,13 +198,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-  }, [
-    selectedSourceId,
-    selectedSource?.privacy,
-    selectedSource?.status,
-    resolvedTeachingContext?.udaId,
-    resolvedTeachingContext?.lessonId
-  ]);
+  }, [selectedSourceId, resolvedTeachingContext?.udaId, resolvedTeachingContext?.lessonId]);
+
+  useEffect(() => {
+    resolutionEpochRef.current += 1;
+    setResolution(null);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+  }, [selectedSource?.privacy, selectedSource?.status]);
 
   const contextIsProposed = contextOverride === 'auto' && !hasExplicitLaunchTarget && Boolean(teachingSuggestion);
   const contextSelectValue = resolvedTeachingContext
