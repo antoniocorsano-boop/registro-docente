@@ -144,6 +144,11 @@ Anche per classi consentite il provider riceve soltanto il sottoinsieme minimo n
 ### 8.4 Logs and diagnostics
 Diagnostica e telemetria, se presenti, registrano codici, metadati tecnici e metriche aggregate; mai prompt completi, contenuti studente o documenti integrali salvo opt-in esplicito e policy dedicata.
 
+### 8.5 Compliance gate
+Ogni nuova capability che amplia il trattamento remoto, le classi di dati, la persistenza della memoria o le integrazioni esterne richiede **privacy/compliance review prima dell'abilitazione**. L'implementazione deve rispettare i regolamenti applicabili e le policy del sistema; il Copilota non può estendere per inferenza un consenso o una base di trattamento esistente.
+
+Le superfici che contengono dati studente possono fornire al Copilota soltanto un **context projection sanitizzato** che esclude dati individuali prima di qualsiasi confine remoto.
+
 ## 9. Professional memory
 
 ### 9.1 Purpose
@@ -169,6 +174,18 @@ Il docente può configurare categorie da ricordare automaticamente oppure scegli
 
 ### 9.4 Never-memory
 Dati personali studente, valutazioni individuali, comportamenti, informazioni sanitarie, PEI/PDP e altri dati individualizzanti non entrano nella memoria professionale AI.
+
+### 9.5 Memory controls
+La memoria professionale deve essere:
+
+- **privata** e local-first per default;
+- **ispezionabile**: il docente può vedere che cosa il sistema sta ricordando;
+- **correggibile**: una preferenza o sintesi inferita può essere modificata;
+- **rimovibile**: singoli elementi/categorie possono essere cancellati;
+- **disattivabile per categoria**;
+- dotata di provenienza sufficiente a distinguere fatto professionale, decisione esplicita e inferenza consolidata.
+
+La rimozione dalla memoria professionale non deve cancellare automaticamente il documento/UDA/artefatto canonico da cui l'informazione deriva.
 
 ## 10. AI budget governor
 
@@ -207,6 +224,9 @@ Il Copilota può generare suggerimenti spontanei solo quando:
 6. il suggerimento può essere ignorato senza conseguenze.
 
 Pattern UI: segnale discreto -> breve ragione -> dettaglio/azione soltanto su apertura.
+
+### 11.1 Background-cost rule
+La proattività deve essere **local-first e event-driven**. Non deve generare chiamate remote continue o polling generativo in background. Il provider remoto può essere coinvolto solo quando un trigger locale ha già individuato un'opportunità plausibile e la policy/budget lo consente; per default la semplice presenza dell'utente in una schermata non giustifica consumo di token.
 
 Esempi ammessi:
 - fonte pertinente all'UDA corrente;
@@ -308,7 +328,7 @@ Non consentito al provider remoto:
 
 ## 16. Cross-surface handoff
 
-Ogni superficie deve poter fornire al Copilota un contesto coerente e minimale.
+Ogni superficie deve poter fornire al Copilota un contesto coerente e minimale. Le superfici student-bearing devono applicare la proiezione privacy-safe prima di costruire il context snapshot utilizzabile dal Copilota remoto.
 
 Priorità iniziali:
 1. Biblioteca;
