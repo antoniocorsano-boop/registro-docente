@@ -9,14 +9,64 @@ export type AgentIntentClientErrorCode =
   | 'RESPONSE_INVALID'
   | 'ABORTED';
 
+export type AgentIntentRouteFailureCode =
+  | 'INVALID_REQUEST'
+  | 'POLICY_BLOCKED'
+  | 'PROVIDER_NOT_CONFIGURED'
+  | 'PROVIDER_TIMEOUT'
+  | 'PROVIDER_RATE_LIMITED'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'PROVIDER_BLOCKED'
+  | 'PROVIDER_OUTPUT_INVALID'
+  | 'PROVIDER_ERROR';
+
+const AGENT_INTENT_ROUTE_FAILURE_CODES = new Set<AgentIntentRouteFailureCode>([
+  'INVALID_REQUEST',
+  'POLICY_BLOCKED',
+  'PROVIDER_NOT_CONFIGURED',
+  'PROVIDER_TIMEOUT',
+  'PROVIDER_RATE_LIMITED',
+  'PROVIDER_UNAVAILABLE',
+  'PROVIDER_BLOCKED',
+  'PROVIDER_OUTPUT_INVALID',
+  'PROVIDER_ERROR'
+]);
+
 export class AgentIntentClientError extends Error {
   readonly code: AgentIntentClientErrorCode;
+  readonly routeCode?: AgentIntentRouteFailureCode;
+  readonly retriable?: boolean;
 
-  constructor(code: AgentIntentClientErrorCode) {
+  constructor(
+    code: AgentIntentClientErrorCode,
+    diagnostics: { routeCode?: AgentIntentRouteFailureCode; retriable?: boolean } = {}
+  ) {
     super(code);
     this.name = 'AgentIntentClientError';
     this.code = code;
+    this.routeCode = diagnostics.routeCode;
+    this.retriable = diagnostics.retriable;
   }
+}
+
+function parseSafeRouteFailure(payload: unknown): {
+  routeCode?: AgentIntentRouteFailureCode;
+  retriable?: boolean;
+} {
+  if (!payload || typeof payload !== 'object') return {};
+  const error = (payload as { error?: unknown }).error;
+  if (!error || typeof error !== 'object') return {};
+
+  const record = error as { code?: unknown; retriable?: unknown };
+  if (
+    typeof record.code !== 'string'
+    || !AGENT_INTENT_ROUTE_FAILURE_CODES.has(record.code as AgentIntentRouteFailureCode)
+  ) return {};
+
+  return {
+    routeCode: record.code as AgentIntentRouteFailureCode,
+    ...(typeof record.retriable === 'boolean' ? { retriable: record.retriable } : {})
+  };
 }
 
 async function agentIntentProviderIsAvailable(signal?: AbortSignal): Promise<boolean> {
@@ -77,7 +127,7 @@ export async function interpretCopilotIntent(
   }
 
   if (!response.ok || !payload || typeof payload !== 'object' || !('intent' in payload)) {
-    throw new AgentIntentClientError('REQUEST_FAILED');
+    throw new AgentIntentClientError('REQUEST_FAILED', parseSafeRouteFailure(payload));
   }
 
   try {
