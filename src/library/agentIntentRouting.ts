@@ -26,6 +26,15 @@ const AGENT_TO_ACTION_ID: Partial<Record<IntentEnvelopeV1['intent'], string>> = 
   LINK: 'link-source-to-uda'
 };
 
+function needsContextBinding(envelope: IntentEnvelopeV1): boolean {
+  if (envelope.contextTarget !== 'current') return true;
+  return [
+    envelope.classReference,
+    envelope.udaReference,
+    envelope.sourceReference
+  ].some(reference => reference !== undefined && reference !== 'current');
+}
+
 export async function routeAgentIntent({
   envelope,
   source,
@@ -37,6 +46,14 @@ export async function routeAgentIntent({
       kind: 'CLARIFY',
       question: envelope.clarificationQuestion
         ?? 'Puoi specificare meglio che cosa vuoi fare con questa fonte?',
+      envelope
+    };
+  }
+
+  if (needsContextBinding(envelope)) {
+    return {
+      kind: 'CLARIFY',
+      question: 'Hai indicato un contesto specifico. Vuoi usare il contesto corrente oppure selezionare prima quello a cui ti riferisci?',
       envelope
     };
   }
