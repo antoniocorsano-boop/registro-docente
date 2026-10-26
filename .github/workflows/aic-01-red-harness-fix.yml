@@ -1,0 +1,39 @@
+name: AIC-01 RED Harness Fix
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  repair-harness:
+    if: github.head_ref == 'test/aic-01-context-projection-red'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/aic-01-context-projection-red
+          fetch-depth: 0
+      - name: Replace incorrect student-save modal expectation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+          path = Path('tests/browser/aic-01-context-projection.spec.cjs')
+          text = path.read_text()
+          old = """  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(STUDENT_NAME);\n  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();\n  await closePersistenceConfirmation(page);"""
+          new = """  const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');\n  await studentInput.fill(STUDENT_NAME);\n  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();\n  await expect(studentInput).toHaveValue('');"""
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one student-save harness block, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/browser/aic-01-context-projection.spec.cjs
+          git commit -m 'test: wait for durable student save without modal'
+          git push origin HEAD:test/aic-01-context-projection-red
