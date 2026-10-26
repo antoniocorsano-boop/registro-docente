@@ -102,19 +102,22 @@ describe('AIC-02 governed PREPARE outcome boundary', () => {
     expect(current).toEqual(snapshot);
   });
 
-  test('App commits Library UDA and meta through one coordinator entry and publishes only after persistence', async () => {
+  test('App serializes one committed-state compound task and publishes only after atomic persistence', async () => {
     const app = await Bun.file(APP).text();
 
     expect(app).toContain("from './persistence/teachingProposalOutcomeMutation'");
     expect(app).toContain('const handleAdoptTeachingProposalToUda = useCallback(');
+    expect(app).toContain('mutationCoordinator.enqueueTask(async () =>');
     expect(app).toContain('library: libraryRef.current');
     expect(app).toContain('udas: udasRef.current');
     expect(app).toContain('meta: metaRef.current');
-    expect(app).toContain('deriveTeachingProposalOutcomeCandidate(current, input)');
-    expect(app).toContain('secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta)');
+    expect(app).toContain('deriveTeachingProposalOutcomeCandidate({');
+    expect(app).toContain('await secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta)');
     expect(app).toContain('libraryRef.current = candidate.library');
     expect(app).toContain('udasRef.current = candidate.udas');
     expect(app).toContain('metaRef.current = candidate.meta');
+    expect(app.indexOf('await secureStorage.saveLibraryUdasAndMeta')).toBeLessThan(app.indexOf('libraryRef.current = candidate.library'));
     expect(app).toContain("toast('Proposta aggiunta all’UDA')");
+    expect(app).toContain('return candidate.receipt');
   });
 });
