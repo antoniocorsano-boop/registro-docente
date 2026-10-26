@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 const CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 const PANEL = new URL('../components/LibraryProposalPanel.tsx', import.meta.url);
 const SERVICE = new URL('../services/libraryProposalService.ts', import.meta.url);
 
@@ -15,12 +16,16 @@ describe('LIB-01D governed proposal UI contract', () => {
     expect(await Bun.file(SERVICE).exists()).toBe(true);
   });
 
-  test('reveals remote generation only inside the selected source with a valid teaching context', async () => {
+  test('reveals governed remote generation only inside the Copilot with a selected source and valid teaching context', async () => {
     const card = await Bun.file(CARD).text();
-    expect(card).toContain('LibraryProposalPanel');
-    expect(card).toContain('resolvedTeachingContext');
-    expect(card).toContain('selectedContextUda');
-    expect(card).toContain('isSelected &&');
+    const composer = await Bun.file(COMPOSER).text();
+
+    expect(card).not.toContain('LibraryProposalPanel');
+    expect(composer).toContain('<LibraryProposalPanel');
+    expect(composer).toContain('selectedSource');
+    expect(composer).toContain('resolvedTeachingContext');
+    expect(composer).toContain('proposalUda');
+    expect(composer).toContain('isPrepareOpen');
   });
 
   test('keeps unknown and student-personal sources behind explicit privacy boundaries', async () => {
