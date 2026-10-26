@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'lucide-react';
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
@@ -139,6 +139,21 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     if (!resolvedTeachingContext) return null;
     return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
   }, [resolvedTeachingContext, udas]);
+
+  const currentResolutionSnapshot = [
+    selectedSource?.id ?? '',
+    selectedSource?.kind ?? '',
+    selectedSource?.privacy ?? '',
+    selectedSource?.status ?? '',
+    String(selectedSource?.links.length ?? 0),
+    teachingContextFingerprint,
+    message.trim()
+  ].join('|');
+  const resolutionSnapshotRef = useRef(currentResolutionSnapshot);
+
+  useLayoutEffect(() => {
+    resolutionSnapshotRef.current = currentResolutionSnapshot;
+  }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
 
@@ -311,6 +326,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     if (!selectedSource || !message.trim() || isResolving) return;
 
     const resolutionEpoch = ++resolutionEpochRef.current;
+    const resolutionSnapshot = currentResolutionSnapshot;
     setIsResolving(true);
     setErrorMessage(null);
     setResolution(null);
@@ -328,7 +344,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     try {
       const discovery = await discoverLibraryCopilotIntent(input);
-      if (resolutionEpoch !== resolutionEpochRef.current) return;
+      if (
+        resolutionEpoch !== resolutionEpochRef.current
+        || resolutionSnapshot !== resolutionSnapshotRef.current
+      ) return;
 
       if (discovery.reason === 'NO_INTENT_MATCH') {
         setResolution({
@@ -358,10 +377,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       }
 
       const nextResolution = await resolveLibraryCopilotRequest(input);
-      if (resolutionEpoch !== resolutionEpochRef.current) return;
+      if (
+        resolutionEpoch !== resolutionEpochRef.current
+        || resolutionSnapshot !== resolutionSnapshotRef.current
+      ) return;
       setResolution(nextResolution);
     } catch (error) {
-      if (resolutionEpoch !== resolutionEpochRef.current) return;
+      if (
+        resolutionEpoch !== resolutionEpochRef.current
+        || resolutionSnapshot !== resolutionSnapshotRef.current
+      ) return;
       setErrorMessage(error instanceof Error ? error.message : 'Il copilota contestuale non è disponibile in questo momento.');
     } finally {
       setIsResolving(false);
