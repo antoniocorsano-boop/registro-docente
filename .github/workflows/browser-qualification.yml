@@ -65,6 +65,7 @@ jobs:
             "@playwright/test@${PLAYWRIGHT_VERSION}"
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+          cp tests/browser/agent-intent-01-routing.spec.cjs .browser-tools/agent-intent-01-routing.spec.cjs
           cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
           cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
           cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
@@ -124,6 +125,7 @@ jobs:
           CANDIDATE_SHA="${CANDIDATE_SHA}" \
           ./node_modules/.bin/playwright test \
             browser-qualification.spec.cjs \
+            agent-intent-01-routing.spec.cjs \
             lib01-private-library-qualification.spec.cjs \
             lib01b-contextual-core-qualification.spec.cjs \
             lib01c-teaching-context-qualification.spec.cjs \
