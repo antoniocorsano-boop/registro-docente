@@ -46,6 +46,23 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('hasExplicitLaunchTarget');
   });
 
+  test('source mutations do not replay an already-consumed launch request', () => {
+    const launchEffectStart = composerSource.indexOf("useEffect(() => {\n    if (!launchRequest) return;");
+    const staleSourceWatcherStart = composerSource.indexOf("useEffect(() => {\n    if (!launchRequest || !requestedLaunchSourceId) return;", launchEffectStart + 1);
+    expect(launchEffectStart).toBeGreaterThan(-1);
+    expect(staleSourceWatcherStart).toBeGreaterThan(launchEffectStart);
+
+    const launchEffect = composerSource.slice(launchEffectStart, staleSourceWatcherStart);
+    expect(launchEffect).toContain('[launchRequest?.nonce]');
+    expect(launchEffect).not.toContain('library.sources,');
+    expect(launchEffect).not.toContain('explicitLaunchTeachingContext\n  ]');
+
+    const staleSourceWatcher = composerSource.slice(staleSourceWatcherStart);
+    expect(staleSourceWatcher).toContain('library.sources.some');
+    expect(staleSourceWatcher).toContain('La fonte richiesta non è più disponibile.');
+    expect(staleSourceWatcher).toContain('Il contesto richiesto non è più disponibile.');
+  });
+
   test('LibrarySourceCard is no longer a second transformation engine', () => {
     expect(sourceCardSource).not.toContain("import { LibraryProposalPanel } from './LibraryProposalPanel'");
     expect(sourceCardSource).not.toContain('resolveLibraryContextActions');

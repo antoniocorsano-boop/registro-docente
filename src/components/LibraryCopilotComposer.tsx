@@ -125,6 +125,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
   }, [resolvedTeachingContext, udas]);
 
+  const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+
   useEffect(() => {
     if (!launchRequest) return;
 
@@ -135,15 +137,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
 
-    const requestedSourceId = launchRequest.context.sourceId;
-    if (requestedSourceId) {
-      const sourceExists = library.sources.some(source => source.id === requestedSourceId);
+    if (requestedLaunchSourceId) {
+      const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
       if (!sourceExists) {
         setSelectedSourceId('');
         setErrorMessage('La fonte richiesta non è più disponibile.');
         return;
       }
-      setSelectedSourceId(requestedSourceId);
+      setSelectedSourceId(requestedLaunchSourceId);
     }
 
     if (hasExplicitLaunchTarget && !explicitLaunchTeachingContext) {
@@ -152,12 +153,34 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
 
     setErrorMessage(null);
-  }, [
-    launchRequest?.nonce,
-    library.sources,
-    hasExplicitLaunchTarget,
-    explicitLaunchTeachingContext
-  ]);
+    // A launch is an event identified by nonce. Library/source mutations must not replay it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launchRequest?.nonce]);
+
+  useEffect(() => {
+    if (!launchRequest || !requestedLaunchSourceId) return;
+    const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
+    if (sourceExists) return;
+
+    setSelectedSourceId('');
+    setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+    setErrorMessage('La fonte richiesta non è più disponibile.');
+  }, [launchRequest?.nonce, requestedLaunchSourceId, library.sources]);
+
+  useEffect(() => {
+    if (!launchRequest || !hasExplicitLaunchTarget || explicitLaunchTeachingContext) return;
+
+    setResolution(null);
+    setIsPrepareOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+    setErrorMessage('Il contesto richiesto non è più disponibile.');
+  }, [launchRequest?.nonce, hasExplicitLaunchTarget, explicitLaunchTeachingContext]);
 
   useEffect(() => {
     setIsPrepareOpen(false);
