@@ -18,6 +18,7 @@ export interface CopilotLaunchContext {
   udaId?: string;
   lessonId?: string;
   sourceId?: string;
+  teachingContextMode?: 'explicit' | 'proposed';
 }
 
 export interface LibraryCopilotLaunchRequest {

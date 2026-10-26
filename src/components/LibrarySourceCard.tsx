@@ -362,7 +362,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               sourceId: source.id,
               className: resolvedTeachingContext?.className ?? currentClassName ?? undefined,
               udaId: resolvedTeachingContext?.udaId,
-              lessonId: resolvedTeachingContext?.lessonId
+              lessonId: resolvedTeachingContext?.lessonId,
+              teachingContextMode: contextSuggestion ? 'proposed' : 'explicit'
             })}
             disabled={isPending}
             className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"

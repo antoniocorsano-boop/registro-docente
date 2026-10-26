@@ -87,9 +87,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const resolutionEpochRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const hasExplicitLaunchTarget = Boolean(
+  const hasLaunchTeachingTarget = Boolean(
     launchRequest?.context.udaId || launchRequest?.context.lessonId
   );
+  const launchTeachingContextIsProposed = hasLaunchTeachingTarget
+    && launchRequest?.context.teachingContextMode === 'proposed';
+  const hasExplicitLaunchTarget = hasLaunchTeachingTarget && !launchTeachingContextIsProposed;
   const effectiveClassName = launchRequest?.context.className
     ?? ambientContext?.className
     ?? currentClassName;
@@ -100,16 +103,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   );
 
   const teachingSuggestion = useMemo(() => {
-    if (contextOverride !== 'auto' || hasExplicitLaunchTarget) return null;
+    if (contextOverride !== 'auto' || hasLaunchTeachingTarget) return null;
     return suggestLibraryTeachingContext({
       udas,
       currentClassName: effectiveClassName ?? null,
       today: localDateKey()
     });
-  }, [udas, effectiveClassName, hasExplicitLaunchTarget, contextOverride]);
+  }, [udas, effectiveClassName, hasLaunchTeachingTarget, contextOverride]);
 
   const resolvedTeachingContext = contextOverride === 'auto'
-    ? (hasExplicitLaunchTarget
+    ? (hasLaunchTeachingTarget
       ? explicitLaunchTeachingContext
       : resolveLibraryTeachingContext(udas, teachingSuggestion?.context ?? null))
     : resolveLibraryTeachingContext(udas, contextOverride);
@@ -161,7 +164,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       setSelectedSourceId(requestedLaunchSourceId);
     }
 
-    if (hasExplicitLaunchTarget && !explicitLaunchTeachingContext) {
+    if (hasLaunchTeachingTarget && !explicitLaunchTeachingContext) {
       setErrorMessage('Il contesto richiesto non è più disponibile.');
       return;
     }
@@ -188,7 +191,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     if (contextOverride !== 'auto') return;
-    if (!launchRequest || !hasExplicitLaunchTarget || explicitLaunchTeachingContext) return;
+    if (!launchRequest || !hasLaunchTeachingTarget || explicitLaunchTeachingContext) return;
 
     resolutionEpochRef.current += 1;
     setResolution(null);
@@ -197,7 +200,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
     setErrorMessage('Il contesto richiesto non è più disponibile.');
-  }, [launchRequest?.nonce, hasExplicitLaunchTarget, explicitLaunchTeachingContext, contextOverride]);
+  }, [launchRequest?.nonce, hasLaunchTeachingTarget, explicitLaunchTeachingContext, contextOverride]);
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
@@ -216,7 +219,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkSuccess(null);
   }, [selectedSource?.privacy, selectedSource?.status]);
 
-  const contextIsProposed = contextOverride === 'auto' && !hasExplicitLaunchTarget && Boolean(teachingSuggestion);
+  const contextIsProposed = contextOverride === 'auto' && (
+    launchTeachingContextIsProposed
+    || (!hasLaunchTeachingTarget && Boolean(teachingSuggestion))
+  );
   const contextSelectValue = resolvedTeachingContext
     ? `${resolvedTeachingContext.udaId}${resolvedTeachingContext.lessonId ? `::${resolvedTeachingContext.lessonId}` : ''}`
     : '';
