@@ -1,4 +1,4 @@
-import { evaluateDataFlow } from '../security/dataClassification.ts';
+import { evaluateDataFlow, type DataClassification } from '../security/dataClassification.ts';
 import {
   parseAgentRoutingRequestV1,
   parseIntentEnvelopeV1,
@@ -41,6 +41,27 @@ const COPY: Record<AgentIntentRouteErrorCode, string> = {
   PROVIDER_ERROR: 'Si è verificato un problema durante l’interpretazione della richiesta.'
 };
 
+const NAMED_STUDENT = /\b(?:studente|studentessa|alunno|alunna)\s+[A-ZÀÈÉÌÒÙ][\p{L}'’-]{1,40}(?:\s+[A-ZÀÈÉÌÒÙ][\p{L}'’-]{1,40}){0,2}\b/u;
+const PROPER_NAME_PAIR = /\b[A-ZÀÈÉÌÒÙ][\p{L}'’-]{1,40}\s+[A-ZÀÈÉÌÒÙ][\p{L}'’-]{1,40}\b/u;
+const SENSITIVE_STUDENT_RECORD = /\b(?:voto|ha preso|pdp|pei|dsa|bes|diagnosi|dislessia|discalculia|adhd|autismo|comportamento|assenze?)\b/i;
+const EMAIL_ADDRESS = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const ITALIAN_MOBILE = /\b(?:\+39\s*)?3\d{2}[\s.-]?\d{6,7}\b/;
+const ITALIAN_FISCAL_CODE = /\b[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}[A-Z]\d{3}[A-Z]\b/i;
+
+function classifyRoutingMessage(message: string): DataClassification {
+  const normalized = message.normalize('NFKC');
+  if (
+    NAMED_STUDENT.test(normalized)
+    || EMAIL_ADDRESS.test(normalized)
+    || ITALIAN_MOBILE.test(normalized)
+    || ITALIAN_FISCAL_CODE.test(normalized)
+    || (PROPER_NAME_PAIR.test(normalized) && SENSITIVE_STUDENT_RECORD.test(normalized))
+  ) {
+    return 'STUDENT_PERSONAL';
+  }
+  return 'TEACHER_PROFESSIONAL';
+}
+
 function failure(code: AgentIntentRouteErrorCode, status: number, retriable: boolean): AgentIntentRouteResult {
   return { status, body: { error: { code, message: COPY[code], retriable } } };
 }
@@ -58,7 +79,7 @@ export async function handleAgentIntentRequest(
   }
 
   const policy = evaluateDataFlow(
-    'TEACHER_PROFESSIONAL',
+    classifyRoutingMessage(request.message),
     'REMOTE_PROVIDER',
     request.explicitTeacherSubmission === true
   );
