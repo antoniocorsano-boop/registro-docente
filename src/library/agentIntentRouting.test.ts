@@ -19,12 +19,6 @@ const professionalSource: LibrarySource = {
   notes: ''
 };
 
-const studentPersonalSource: LibrarySource = {
-  ...professionalSource,
-  id: 'agent-intent-student-personal',
-  privacy: 'student-personal'
-};
-
 const teachingContext: ResolvedLibraryTeachingContext = {
   udaId: 'uda-energia',
   lessonId: 'lesson-centrale',
@@ -124,8 +118,9 @@ describe('AGENT-INTENT-01 governed routing', () => {
     const { routeAgentIntent } = await import('./agentIntentRouting');
     const result = await routeAgentIntent({
       envelope: envelope('LINK'),
-      source: studentPersonalSource,
-      teachingContext
+      source: professionalSource,
+      teachingContext,
+      resolveActions: async () => []
     });
     expect(result.kind).toBe('DENIED');
   });
