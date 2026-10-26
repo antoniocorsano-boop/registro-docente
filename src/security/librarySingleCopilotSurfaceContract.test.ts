@@ -98,6 +98,18 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('resolutionEpochRef.current += 1');
   });
 
+  test('async intent results validate the current request snapshot after every await', () => {
+    expect(composerSource).toContain('currentResolutionSnapshot');
+    expect(composerSource).toContain('resolutionSnapshotRef');
+    expect(composerSource).toContain('useLayoutEffect');
+    expect(composerSource).toContain('selectedSource?.privacy');
+    expect(composerSource).toContain('selectedSource?.status');
+    expect(composerSource).toContain('teachingContextFingerprint');
+    expect(composerSource).toContain('message.trim()');
+    expect(composerSource).toContain('const resolutionSnapshot = currentResolutionSnapshot');
+    expect(composerSource).toContain('resolutionSnapshot !== resolutionSnapshotRef.current');
+  });
+
   test('semantic Teaching Context changes invalidate disclosure even when UDA and lesson ids stay stable', () => {
     expect(composerSource).toContain('teachingContextFingerprint');
     expect(composerSource).toContain('resolvedTeachingContext?.udaId');
