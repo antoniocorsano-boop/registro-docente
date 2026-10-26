@@ -71,6 +71,36 @@ describe('AGENT-INTENT-01 governed server boundary', () => {
     expect(calls).toBe(0);
   });
 
+  test('blocks student-personal free text before any remote provider invocation', async () => {
+    let calls = 0;
+    const runtime: AgentIntentRuntime = {
+      ...fakeRuntime(prepareEnvelope),
+      interpret: async () => {
+        calls += 1;
+        return fakeRuntime(prepareEnvelope).interpret(request);
+      }
+    };
+    const studentPersonalRequest = buildAgentRoutingRequest({
+      message: 'Prepara un’attività per lo studente Marco Rossi della 3A: ha preso 4 e ha un PDP.',
+      surface: 'uda',
+      hasCurrentClass: true,
+      hasCurrentUda: true,
+      hasSelectedSource: true
+    });
+
+    const rejected = await handleAgentIntentRequest(studentPersonalRequest, runtime);
+
+    expect(rejected.status).toBe(403);
+    expect(rejected.body).toEqual({
+      error: {
+        code: 'REMOTE_POLICY_DENIED',
+        message: 'La richiesta non può essere inviata al servizio di interpretazione.',
+        retriable: false
+      }
+    });
+    expect(calls).toBe(0);
+  });
+
   test('fails closed before the provider when explicit teacher submission is absent', async () => {
     let calls = 0;
     const runtime: AgentIntentRuntime = {
