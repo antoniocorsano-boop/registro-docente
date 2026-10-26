@@ -1,0 +1,58 @@
+name: AIC-01 Task 4 Green Apply
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply-task4-green:
+    if: github.head_ref == 'feat/aic-01-unified-context-projection'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/aic-01-unified-context-projection
+          fetch-depth: 0
+
+      - name: Apply exact Task 4 wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          app = Path('src/App.tsx')
+          app_text = app.read_text()
+          old_app = """      activeTab === 'home' ? 'home'\n        : activeTab === 'dashboard' ? 'class-dashboard'\n          : activeTab === 'biblioteca' ? 'library'\n            : activeTab === 'uda-gantt' ? 'uda'\n              : activeTab === 'programmazione' ? 'planning'\n                : activeTab === 'verifiche-online' ? 'online-tests'\n                  : activeTab === 'voti' ? 'evaluations'\n                    : 'other-teacher-surface',"""
+          new_app = """      activeTab === 'home' ? 'home'\n        : activeTab === 'dashboard' ? 'class-dashboard'\n          : activeTab === 'biblioteca' ? 'library'\n            : activeTab === 'uda-gantt' ? 'other-teacher-surface'\n              : activeTab === 'programmazione' ? 'planning'\n                : activeTab === 'verifiche-online' ? 'online-tests'\n                  : activeTab === 'voti' ? 'evaluations'\n                    : activeTab === 'tabellone' ? 'evaluations'\n                      : 'other-teacher-surface',"""
+          if app_text.count(old_app) != 1:
+              raise SystemExit(f'App ambient mapping occurrence mismatch: {app_text.count(old_app)}')
+          app.write_text(app_text.replace(old_app, new_app, 1))
+
+          composer = Path('src/components/LibraryCopilotComposer.tsx')
+          text = composer.read_text()
+
+          old_import = "import { buildCopilotContextProjection } from '../copilot/contextProjection';"
+          new_import = "import { buildCopilotContextProjection, resolveCopilotProjectionSurface } from '../copilot/contextProjection';"
+          if text.count(old_import) != 1:
+              raise SystemExit(f'Composer projection import occurrence mismatch: {text.count(old_import)}')
+          text = text.replace(old_import, new_import, 1)
+
+          old_projection = """  const copilotContextProjection = useMemo(() => buildCopilotContextProjection({\n  surface: ambientContext?.surface ?? launchRequest?.context.surface ?? 'library',\n  className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,\n  udaId: resolvedTeachingContext?.udaId ?? null,\n  lessonId: resolvedTeachingContext?.lessonId ?? null,\n  sourceId: selectedSource?.id ?? null,\n  planningProfileId: resolvedPlanningContext?.status === 'resolved'\n    ? resolvedPlanningContext.profile.id\n    : null\n}), [\n  ambientContext?.surface,\n  launchRequest?.context.surface,\n  effectiveClassName,\n  teachingContextFingerprint,\n  selectedSource?.id,\n  resolvedPlanningContext\n]);\nconst copilotContextFingerprint = JSON.stringify(copilotContextProjection);"""
+          new_projection = """  const copilotProjectionSurface = resolveCopilotProjectionSurface({\n    ambientSurface: ambientContext?.surface,\n    launchSurface: launchRequest?.context.surface,\n    hasExplicitTeachingTarget: hasExplicitLaunchTarget\n  });\n\n  const copilotContextProjection = useMemo(() => buildCopilotContextProjection({\n    surface: copilotProjectionSurface,\n    className: resolvedTeachingContext?.className ?? effectiveClassName ?? null,\n    udaId: resolvedTeachingContext?.udaId ?? null,\n    lessonId: resolvedTeachingContext?.lessonId ?? null,\n    sourceId: selectedSource?.id ?? null,\n    planningProfileId: resolvedPlanningContext?.status === 'resolved'\n      ? resolvedPlanningContext.profile.id\n      : null\n  }), [\n    copilotProjectionSurface,\n    effectiveClassName,\n    teachingContextFingerprint,\n    selectedSource?.id,\n    resolvedPlanningContext\n  ]);\n  const copilotContextFingerprint = JSON.stringify(copilotContextProjection);"""
+          if text.count(old_projection) != 1:
+              raise SystemExit(f'Composer projection block occurrence mismatch: {text.count(old_projection)}')
+          composer.write_text(text.replace(old_projection, new_projection, 1))
+          PY
+
+          git diff --check
+          git diff -- src/App.tsx src/components/LibraryCopilotComposer.tsx
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/components/LibraryCopilotComposer.tsx
+          git commit -m 'feat: wire explicit Copilot context projection'
+          git push origin HEAD:feat/aic-01-unified-context-projection
