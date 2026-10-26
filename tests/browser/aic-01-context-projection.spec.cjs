@@ -65,9 +65,10 @@ async function createSyntheticClassAndStudent(page) {
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await closePersistenceConfirmation(page);
 
-  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(STUDENT_NAME);
+  const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
+  await studentInput.fill(STUDENT_NAME);
   await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
-  await closePersistenceConfirmation(page);
+  await expect(studentInput).toHaveValue('');
 }
 
 async function createSyntheticGrade(page) {
