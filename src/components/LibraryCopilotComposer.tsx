@@ -12,7 +12,7 @@ import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../librar
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
-import { interpretCopilotIntent } from '../services/agentIntentService';
+import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
 import {
   buildAgentRoutingRequest,
   type AgentRoutingSurface
@@ -104,6 +104,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [isPrepareOpen, setIsPrepareOpen] = useState(false);
   const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
   const resolutionEpochRef = useRef(0);
+  const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const hasLaunchTeachingTarget = Boolean(
@@ -356,6 +357,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       && resolutionSnapshot === resolutionSnapshotRef.current
     );
 
+    agentFallbackCodeRef.current = null;
     setIsResolving(true);
     setErrorMessage(null);
     setGuidanceMessage(null);
@@ -453,8 +455,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           reason: 'INTENT_RESOLVED',
           actions: [routed.action]
         });
-      } catch {
+      } catch (error) {
         if (!requestIsCurrent()) return;
+        agentFallbackCodeRef.current = error instanceof AgentIntentClientError
+          ? (error.routeCode ?? error.code)
+          : null;
         await runLocalFallback();
       }
     } catch (error) {
@@ -555,6 +560,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   return (
     <section
       data-testid="library-copilot-composer"
+      data-agent-intent-fallback-code={agentFallbackCodeRef.current ?? undefined}
       aria-label="Copilota contestuale"
       className="fixed inset-x-3 bottom-36 md:inset-x-auto md:right-6 md:bottom-20 z-[70] max-h-[calc(100dvh-10rem)] md:w-[430px] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950/98 shadow-2xl backdrop-blur"
     >
