@@ -1,0 +1,248 @@
+name: RELEASE-CURRENT-01 Frozen Source Qualification
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SHA: '0ebda92248b9bb984f2e3e201661292daa47e96d'
+  PLAYWRIGHT_VERSION: '1.64.1'
+  PORT: '4173'
+
+jobs:
+  predeploy-equivalent:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Verify exact frozen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Frozen release SHA: ${RELEASE_SHA}"
+          echo "Checkout SHA:       ${actual_sha}"
+          test "${actual_sha}" = "${RELEASE_SHA}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run lint
+
+      - name: Security tests
+        run: bun run test:security
+
+      - name: Library tests
+        run: bun run test:library
+
+      - name: Production build
+        run: bun run build
+
+      - name: Production startup smoke
+        shell: bash
+        run: |
+          set +e
+          NODE_ENV=production PORT=0 timeout 5s node server.ts
+          code=$?
+          if [[ "${code}" -eq 124 ]]; then
+            exit 0
+          fi
+          exit "${code}"
+
+  browser-exact-release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout frozen release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Verify exact frozen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Frozen release SHA: ${RELEASE_SHA}"
+          echo "Checkout SHA:       ${actual_sha}"
+          test "${actual_sha}" = "${RELEASE_SHA}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node for isolated browser toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build production application
+        run: bun run build
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .browser-tools browser-evidence
+          cat > .browser-tools/package.json <<'JSON'
+          {
+            "name": "release-current-01-browser-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .browser-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+          cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
+          cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
+          cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
+          cp tests/browser/lib01d-governed-proposal-qualification.spec.cjs .browser-tools/lib01d-governed-proposal-qualification.spec.cjs
+          cp tests/browser/lib01e-governed-provider-runtime.spec.cjs .browser-tools/lib01e-governed-provider-runtime.spec.cjs
+          cp tests/browser/lib01e-provider-disclosure-review.spec.cjs .browser-tools/lib01e-provider-disclosure-review.spec.cjs
+          cp tests/browser/lib02-source-acquisition.spec.cjs .browser-tools/lib02-source-acquisition.spec.cjs
+          cp tests/browser/lib03c-progressive-relevance.spec.cjs .browser-tools/lib03c-progressive-relevance.spec.cjs
+          cp tests/browser/lib04b-copilot-composer.spec.cjs .browser-tools/lib04b-copilot-composer.spec.cjs
+          cp tests/browser/lib04c-copilot-link.spec.cjs .browser-tools/lib04c-copilot-link.spec.cjs
+          cp tests/browser/lib04d-copilot-prepare.spec.cjs .browser-tools/lib04d-copilot-prepare.spec.cjs
+          cp tests/browser/lib05a-local-semantic-retrieval.spec.cjs .browser-tools/lib05a-local-semantic-retrieval.spec.cjs
+          cp tests/browser/library-contextual-copilot-handoff.spec.cjs .browser-tools/library-contextual-copilot-handoff.spec.cjs
+          cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
+          cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
+          cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
+          cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
+          cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
+          cp tests/browser/ux-qa-01-review-regressions.spec.cjs .browser-tools/ux-qa-01-review-regressions.spec.cjs
+          cp tests/browser/ux-qa-02-progressive-disclosure.spec.cjs .browser-tools/ux-qa-02-progressive-disclosure.spec.cjs
+
+      - name: Start production server and wait for readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence
+          NODE_ENV=production PORT="${PORT}" bun run start > browser-evidence/server.log 2>&1 &
+          server_pid=$!
+          echo "${server_pid}" > browser-evidence/server.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/" > /dev/null; then
+              echo "Production server ready on attempt ${attempt}."
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              echo "Production server exited before readiness."
+              cat browser-evidence/server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Production server did not become ready within 30 seconds."
+          cat browser-evidence/server.log
+          exit 1
+
+      - name: Run Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            browser-qualification.spec.cjs \
+            lib01-private-library-qualification.spec.cjs \
+            lib01b-contextual-core-qualification.spec.cjs \
+            lib01c-teaching-context-qualification.spec.cjs \
+            lib01d-governed-proposal-qualification.spec.cjs \
+            lib01e-governed-provider-runtime.spec.cjs \
+            lib01e-provider-disclosure-review.spec.cjs \
+            lib02-source-acquisition.spec.cjs \
+            lib03c-progressive-relevance.spec.cjs \
+            lib04b-copilot-composer.spec.cjs \
+            lib04c-copilot-link.spec.cjs \
+            lib04d-copilot-prepare.spec.cjs \
+            lib05a-local-semantic-retrieval.spec.cjs \
+            library-contextual-copilot-handoff.spec.cjs \
+            online-01-qualification.spec.cjs \
+            release-01-qualification.spec.cjs \
+            ux-trust-01-qualification.spec.cjs \
+            ux-trust-01-full-regression.spec.cjs \
+            ux-qa-01-navigation.spec.cjs \
+            ux-qa-01-review-regressions.spec.cjs \
+            ux-qa-02-progressive-disclosure.spec.cjs \
+            --reporter=line \
+            --output=../browser-evidence/test-results
+
+      - name: Analyze UX navigation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          bun scripts/ux-qa/analyze.mjs \
+            browser-evidence/ux-qa-01-evidence.json \
+            ux/qa/navigation-contract.v1.json \
+            browser-evidence
+
+      - name: Analyze progressive disclosure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="${RELEASE_SHA}" \
+          bun scripts/ux-qa/analyze.mjs \
+            browser-evidence/ux-qa-02-evidence.json \
+            ux/qa/progressive-disclosure-contract.v1.json \
+            browser-evidence/ux-qa-02
+
+      - name: Record frozen-source metadata
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p browser-evidence
+          printf '%s\n' "${RELEASE_SHA}" > browser-evidence/release-sha.txt
+          printf '%s\n' "release-current-01-preverify" > browser-evidence/qualification-purpose.txt
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f browser-evidence/server.pid ]]; then
+            server_pid="$(cat browser-evidence/server.pid)"
+            kill "${server_pid}" 2>/dev/null || true
+          fi
+
+      - name: Require browser evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s browser-evidence/release-sha.txt
+          test -d browser-evidence/test-results
+          test -s browser-evidence/ux-qa-01-report.json
+          test -s browser-evidence/ux-qa-02/ux-qa-01-report.json || test -s browser-evidence/ux-qa-02/ux-qa-02-report.json
+
+      - name: Upload frozen-source browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-current-01-preverify-${{ env.RELEASE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
