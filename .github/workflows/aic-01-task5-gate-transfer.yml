@@ -1,0 +1,33 @@
+name: AIC-01 Task 5 Gate Transfer
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  transfer-gate:
+    if: github.head_ref == 'feat/aic-01-unified-context-projection'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/aic-01-unified-context-projection
+          fetch-depth: 0
+      - name: Copy exact causal RED gate onto GREEN candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin test/aic-01-context-projection-red
+          git checkout FETCH_HEAD -- \
+            tests/browser/aic-01-context-projection.spec.cjs \
+            .github/workflows/browser-qualification.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/browser/aic-01-context-projection.spec.cjs .github/workflows/browser-qualification.yml
+          git commit -m 'test: qualify AIC-01 cross-surface context projection'
+          git push origin HEAD:feat/aic-01-unified-context-projection
