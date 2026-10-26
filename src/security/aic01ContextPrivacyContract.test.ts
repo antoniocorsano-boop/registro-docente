@@ -4,6 +4,9 @@ import {
   type BuildCopilotContextProjectionInput
 } from '../copilot/contextProjection';
 
+const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
+const composerSource = await Bun.file(new URL('../components/LibraryCopilotComposer.tsx', import.meta.url)).text();
+
 describe('AIC-01 remote context privacy contract', () => {
   test('remote routing request is derived only from the allowlisted professional projection', async () => {
     const module = await import('../library/agentIntent') as Record<string, unknown>;
@@ -67,5 +70,30 @@ describe('AIC-01 remote context privacy contract', () => {
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
+  });
+
+  test('App maps teacher work surfaces into one professional Copilot context without student records', () => {
+    expect(appSource).toContain("activeTab === 'home' ? 'home'");
+    expect(appSource).toContain("activeTab === 'dashboard' ? 'class-dashboard'");
+    expect(appSource).toContain("activeTab === 'biblioteca' ? 'library'");
+    expect(appSource).toContain("activeTab === 'uda-gantt' ? 'uda'");
+    expect(appSource).toContain("activeTab === 'programmazione' ? 'planning'");
+    expect(appSource).toContain("activeTab === 'verifiche-online' ? 'online-tests'");
+    expect(appSource).toContain("activeTab === 'voti' ? 'evaluations'");
+    expect(appSource).toContain(": 'other-teacher-surface'");
+    expect(appSource).toContain('className: currentClass?.name');
+    expect(appSource).not.toContain('ambientCopilotContext = { student');
+    expect(appSource).not.toContain('ambientCopilotContext = { grades');
+    expect(appSource).not.toContain('ambientCopilotContext = { behaviors');
+  });
+
+  test('Composer derives remote routing from the unified projection and binds it into stale-result identity', () => {
+    expect(composerSource).toContain('buildCopilotContextProjection');
+    expect(composerSource).toContain('buildAgentRoutingRequestFromProjection');
+    expect(composerSource).not.toContain('function agentRoutingSurface');
+    expect(composerSource).toContain('copilotContextProjection');
+    expect(composerSource).toContain('copilotContextFingerprint');
+    expect(composerSource).toContain('contextProjection: copilotContextProjection');
+    expect(composerSource).toContain('buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection)');
   });
 });
