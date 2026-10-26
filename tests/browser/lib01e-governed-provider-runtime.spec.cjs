@@ -303,10 +303,15 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
-
-  const composer = await openComposer(page);
-  await selectComposerSource(composer, SOURCE_TITLE);
+  const udaSelect = card.getByLabel('UDA corrente');
+  if (!(await udaSelect.isVisible().catch(() => false))) {
+    await card.getByRole('button', { name: 'Cambia', exact: true }).click();
+  }
+  await udaSelect.selectOption({ label: UDA_TITLE });
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true }).click();
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
@@ -467,10 +472,14 @@ test('LIB-01E pending result is discarded after teaching-context change — mobi
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   const contextSelect = card.getByLabel('UDA corrente');
+  if (!(await contextSelect.isVisible().catch(() => false))) {
+    await card.getByRole('button', { name: 'Cambia', exact: true }).click();
+  }
   await contextSelect.selectOption({ label: UDA_TITLE });
-
-  const composer = await openComposer(page);
-  await selectComposerSource(composer, SOURCE_TITLE);
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  let composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
   await openPrepare.click();
@@ -486,16 +495,22 @@ test('LIB-01E pending result is discarded after teaching-context change — mobi
 
   await requestStarted;
   expect(proposalBodies).toHaveLength(1);
+
+  // A new explicit launch context must dispose the old request/result rather than accepting it late.
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await contextSelect.selectOption({ label: ALT_UDA_TITLE });
   await expect(contextSelect).toHaveValue(/.+/);
-  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  composer = page.locator('[data-testid="library-copilot-composer"]');
+  await expect(composer).toBeVisible();
+  const relaunchedDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(relaunchedDisclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true })).toBeVisible();
 
   releaseResponse();
   await page.waitForTimeout(350);
 
-  await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
-  await expect(disclosure.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toHaveCount(0);
-  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
+  await expect(relaunchedDisclosure.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
+  await expect(relaunchedDisclosure.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toHaveCount(0);
   expect(proposalBodies).toHaveLength(1);
 
   const overflow = await page.evaluate(() => ({

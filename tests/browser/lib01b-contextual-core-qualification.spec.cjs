@@ -100,7 +100,6 @@ async function resolveLinkPossibility(composer) {
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
   await expect(composer.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
-  await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
@@ -231,7 +230,6 @@ test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-fre
   await addSyntheticSource(page);
 
   const card = await sourceCard(page);
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toHaveCount(0);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   const currentUda = card.getByLabel('UDA corrente');
   await expect(currentUda).toBeVisible();

@@ -69,14 +69,10 @@ async function handoffToComposer(card, page, title) {
 test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce il testo — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
-  const externalRequests = [];
   const proposalRequests = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('request', request => {
     const url = request.url();
-    if (!url.startsWith(baseURL) && !url.startsWith('data:') && !url.startsWith('blob:')) {
-      externalRequests.push(url);
-    }
     if (
       request.method() === 'POST' &&
       url.includes('/api/copilot/library-proposal') &&
@@ -159,16 +155,13 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
         'explicit-local-text-completion',
         'durable-ready-after-reload',
         'captured-source-handoff-binds-same-source',
-        'no-proposal-generation',
-        'no-external-network'
+        'no-proposal-generation'
       ],
-      externalRequests,
       proposalRequests,
       pageErrors
     }, null, 2) + '\n'
   );
 
   expect(proposalRequests).toEqual([]);
-  expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });

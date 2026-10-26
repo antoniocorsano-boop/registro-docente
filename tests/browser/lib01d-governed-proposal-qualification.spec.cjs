@@ -243,8 +243,10 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
 
   expect(proposalBodies).toHaveLength(0);
-  let composer = await openComposer(page);
-  await selectComposerSource(composer, SOURCE_TITLE);
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  let composer = page.locator('[data-testid=\"library-copilot-composer\"]');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
   let disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
   await expect(openPrepare).toBeVisible();
@@ -379,8 +381,10 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   const contextSelect = card.getByLabel('UDA corrente');
   await contextSelect.selectOption({ label: UDA_TITLE });
 
-  const composer = await openComposer(page);
-  await selectComposerSource(composer, SOURCE_TITLE);
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  const composer = page.locator('[data-testid=\"library-copilot-composer\"]');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   const openPrepare = disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true });
   await assertAtLeast44(openPrepare, 'mobile prepare disclosure');

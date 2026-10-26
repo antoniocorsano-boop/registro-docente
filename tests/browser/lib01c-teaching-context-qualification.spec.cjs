@@ -216,6 +216,7 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
   await confirmationAgain.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
   await expect(composer.getByText('Il collegamento è stato salvato nella Biblioteca.', { exact: true })).toBeVisible();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await card.getByText('Gestisci', { exact: true }).click();
 
   const linkedOverrideRow = card.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
   await expect(linkedOverrideRow.getByText(OVERRIDE_UDA_TITLE, { exact: true })).toBeVisible();

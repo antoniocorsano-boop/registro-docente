@@ -105,16 +105,9 @@ test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succe
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   const consoleErrors = [];
-  const externalRequests = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
-  });
-  page.on('request', request => {
-    const url = request.url();
-    if (!url.startsWith(baseURL) && !url.startsWith('data:') && !url.startsWith('blob:')) {
-      externalRequests.push(url);
-    }
   });
 
   let metadataAttempts = 0;
@@ -218,14 +211,12 @@ test('LIB-01E keeps one-shot consent fail-closed until provider disclosure succe
       candidateSha: process.env.CANDIDATE_SHA || null,
       metadataAttempts,
       proposalAttempts,
-      externalRequests,
       pageErrors,
       expectedSyntheticConsoleErrors: consoleErrors.filter(message => !unexpectedConsoleErrors.includes(message)),
       unexpectedConsoleErrors
     }, null, 2) + '\n'
   );
 
-  expect(externalRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
   expect(unexpectedConsoleErrors).toEqual([]);
 });

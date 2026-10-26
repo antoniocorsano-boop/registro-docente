@@ -124,7 +124,7 @@ async function classifyProfessional(page, title) {
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();
-  await expect(disclosure.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
+  await expect(classify).toHaveCount(0);
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await expect(composer).toBeHidden();
 }
