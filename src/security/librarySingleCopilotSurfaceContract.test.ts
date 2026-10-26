@@ -124,15 +124,11 @@ describe('single contextual Copilot surface contract', () => {
     );
   });
 
-  test('semantic Teaching Context and ambient surface changes invalidate disclosure even when UDA and lesson ids stay stable', () => {
-    expect(composerSource).toContain('teachingContextFingerprint');
+  test('ambient surface participates in async stale identity without clearing an already-resolved disclosure', () => {
     expect(composerSource).toContain('copilotContextFingerprint');
-    expect(composerSource).toContain('resolvedTeachingContext?.udaId');
-    expect(composerSource).toContain('resolvedTeachingContext?.lessonId');
-    expect(composerSource).toContain('resolvedTeachingContext?.className');
-    expect(composerSource).toContain('resolvedTeachingContext?.period');
-    expect(composerSource).toContain('resolvedTeachingContext?.activityType');
-    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]');
+    expect(composerSource).toContain('contextProjection: copilotContextProjection');
+    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint]');
+    expect(composerSource).not.toContain('[selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]');
   });
 
   test('LibrarySourceCard is no longer a second transformation engine', () => {
