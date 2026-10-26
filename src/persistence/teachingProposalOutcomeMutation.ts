@@ -19,9 +19,11 @@ export interface TeachingProposalOutcomeCandidate extends TeachingProposalOutcom
   receipt: TeachingProposalUdaAdoptionReceipt;
 }
 
+export type TeachingProposalOutcomeMutationInput = Omit<TeachingProposalUdaAdoptionInput, 'udas'>;
+
 export function deriveTeachingProposalOutcomeCandidate(
   current: TeachingProposalOutcomeState,
-  input: TeachingProposalUdaAdoptionInput
+  input: TeachingProposalOutcomeMutationInput
 ): TeachingProposalOutcomeCandidate {
   const outcome = buildTeachingProposalUdaAdoption({
     ...input,
