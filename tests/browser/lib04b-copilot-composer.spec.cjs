@@ -64,17 +64,18 @@ test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop',
 
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
   await expect(composer.getByText('L’interpretazione automatica dell’intento non è attiva.', { exact: false })).toHaveCount(0);
-  await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
+  await expect(composer.getByText('Controlla nel contesto', { exact: true })).toBeVisible();
   await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
-  await expect(composer.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
 
   await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
-  await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toHaveCount(0);
+  await expect(composer.getByText('Controlla nel contesto', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);

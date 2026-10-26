@@ -146,7 +146,7 @@ test('LIB-03C reveals ranked destinations progressively and keeps linking human-
   await expect(composer).toBeVisible();
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
   await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 

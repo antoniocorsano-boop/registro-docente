@@ -66,6 +66,14 @@ async function handoffToComposer(card, page, title) {
   return composer;
 }
 
+async function openPrepareFromIntent(composer) {
+  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
+  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  return disclosure;
+}
+
 test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce il testo — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
@@ -107,9 +115,8 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
   await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
 
   let composer = await handoffToComposer(card, page, WEB_TITLE);
-  const incompleteDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  await expect(incompleteDisclosure).toBeVisible();
-  await incompleteDisclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true }).click();
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  const incompleteDisclosure = await openPrepareFromIntent(composer);
   await expect(incompleteDisclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
   await expect(incompleteDisclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
   expect(proposalRequests).toEqual([]);
@@ -134,7 +141,9 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
   await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
 
   composer = await handoffToComposer(card, page, WEB_TITLE);
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  const completeDisclosure = await openPrepareFromIntent(composer);
+  await expect(completeDisclosure).toBeVisible();
   await expect(composer.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: 'Chiudi Copilota', exact: true })).toBeVisible();
 

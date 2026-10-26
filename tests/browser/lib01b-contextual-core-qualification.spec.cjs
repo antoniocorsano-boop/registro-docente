@@ -86,8 +86,9 @@ async function assertReviewOnlyPossibility(composer) {
   );
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
-  await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toBeVisible();
-  await expect(composer.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
+  await expect(composer.getByText('Controlla nel contesto', { exact: true })).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
@@ -99,7 +100,7 @@ async function resolveLinkPossibility(composer) {
   );
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
-  await expect(composer.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
@@ -130,7 +131,7 @@ test('LIB-01B hands contextual source actions to Copilot and gates durable UDA l
   const card = await sourceCard(page);
   await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toHaveCount(0);
   await expect(card.getByLabel('UDA corrente')).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
   await expect(page.locator('[data-testid="library-copilot-composer"]')).toHaveCount(0);
 
@@ -138,7 +139,7 @@ test('LIB-01B hands contextual source actions to Copilot and gates durable UDA l
   const currentUda = card.getByLabel('UDA corrente');
   await expect(currentUda).toBeVisible();
   await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Rivedi nel contesto', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
 
   // Select the teaching context explicitly before handing the source to the shared Copilot.
