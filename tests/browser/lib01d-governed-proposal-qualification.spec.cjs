@@ -223,7 +223,12 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   });
   page.on('request', request => {
     const url = request.url();
-    if (!url.startsWith(baseURL) && !url.startsWith('data:') && !url.startsWith('blob:')) externalRequests.push(url);
+    if (url.startsWith(baseURL) || url.startsWith('data:') || url.startsWith('blob:')) return;
+    const hostname = new URL(url).hostname;
+    const shellAssetHost = hostname === 'fonts.googleapis.com'
+      || hostname === 'fonts.gstatic.com'
+      || hostname === 'cdnjs.cloudflare.com';
+    if (!shellAssetHost) externalRequests.push(url);
   });
   await installProposalRoute(page, proposalBodies);
 
@@ -405,8 +410,12 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   await assertAtLeast44(disclosure.getByRole('button', { name: 'Adatta', exact: true }), 'mobile adapt');
   await assertAtLeast44(disclosure.getByRole('button', { name: 'Lascia', exact: true }), 'mobile leave');
 
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await contextSelect.selectOption({ label: ALT_UDA_TITLE });
+  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await expect(composer).toBeVisible();
   await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
+  await disclosure.getByRole('button', { name: 'Apri preparazione assistita', exact: true }).click();
   await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(1);
 
