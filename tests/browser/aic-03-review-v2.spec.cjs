@@ -187,8 +187,10 @@ async function submit(composer, message) {
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
 }
 
-async function classifyProfessional(composer) {
+async function classifyProfessional(composer, state) {
+  state.failIntent = true;
   await submit(composer, 'Prepara una attività a partire da questa fonte');
+  state.failIntent = false;
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
@@ -260,7 +262,7 @@ test('AIC-03 REVIEW v2 is structured, local/read-only and remains reviewable whe
   await openLibrary(page);
   await addSource(page, SOURCE_TITLE, 'Il vento aziona una turbina e produce energia elettrica attraverso trasformazioni energetiche.');
   const composer = await launchComposerFor(page, SOURCE_TITLE);
-  await classifyProfessional(composer);
+  await classifyProfessional(composer, state);
   await linkCurrentLesson(composer);
 
   state.intentRequests = 0;
@@ -324,7 +326,7 @@ test('AIC-03 REVIEW v2 fails closed for unknown source then shows weak/unverifie
   await expect(panel.getByText(/classificata come materiale professionale/i)).toBeVisible();
   await expect(panel.getByText('Argilla, ceramica e cottura in forno.', { exact: true })).toHaveCount(0);
 
-  await classifyProfessional(composer);
+  await classifyProfessional(composer, state);
   await submit(composer, REVIEW_MESSAGE);
   panel = composer.getByTestId('library-copilot-review-panel');
   await expectReviewSections(panel);
