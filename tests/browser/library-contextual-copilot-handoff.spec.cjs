@@ -138,7 +138,7 @@ test('contextual Copilot handoff makes disclosure intent-owned and keeps provide
 
   await submitIntent(composer, 'rivedi questa fonte nel contesto della programmazione');
   await expect(reviewPanel).toBeVisible();
-  await expect(reviewPanel.getByText('Controlla nel contesto', { exact: true })).toBeVisible();
+  await expect(reviewPanel.getByText('Revisione nel contesto', { exact: true })).toBeVisible();
   await expect(linkAction).toHaveCount(0);
   await expect(prepareDisclosure).toHaveCount(0);
 

@@ -65,7 +65,7 @@ test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop',
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
   await expect(composer.getByText('L’interpretazione automatica dell’intento non è attiva.', { exact: false })).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
-  await expect(composer.getByText('Controlla nel contesto', { exact: true })).toBeVisible();
+  await expect(composer.getByText('Revisione nel contesto', { exact: true })).toBeVisible();
   await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);

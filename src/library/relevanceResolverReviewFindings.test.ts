@@ -107,4 +107,47 @@ describe('LIB-03B review findings — planning context binding', () => {
     expect(result.candidates[0]?.score).toBe(20);
     expect(result.candidates[0]?.signals).toEqual(['SOURCE_TITLE_MATCH']);
   });
+
+  test('tokenizes source title and content once per full relevance resolution', () => {
+    let titleReads = 0;
+    let contentReads = 0;
+    const payload: LibrarySource['payload'] = {};
+    const source: LibrarySource = {
+      ...sourceWithTitle,
+      payload
+    };
+
+    Object.defineProperty(source, 'title', {
+      enumerable: true,
+      get() {
+        titleReads += 1;
+        return 'Energia eolica';
+      }
+    });
+    Object.defineProperty(payload, 'text', {
+      enumerable: true,
+      get() {
+        contentReads += 1;
+        return 'Energia eolica, vento e turbina.';
+      }
+    });
+
+    const candidates = Array.from({ length: 6 }, (_, index) => ({
+      ...currentUda,
+      id: `uda-${index}`,
+      title: `Energia ${index}`,
+      lessons: Array.from({ length: 5 }, (_, lessonIndex) => ({
+        id: `lesson-${index}-${lessonIndex}`,
+        date: '2026-10-25',
+        topic: `Energia eolica ${lessonIndex}`,
+        hours: 1
+      }))
+    }));
+
+    const result = resolveLibraryRelevance({ source, udas: candidates });
+
+    expect(result.status).toBe('ranked');
+    expect(titleReads).toBe(1);
+    expect(contentReads).toBe(1);
+  });
 });
