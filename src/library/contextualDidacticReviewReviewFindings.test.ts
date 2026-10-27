@@ -44,20 +44,41 @@ const uda: UdaRecord = {
   }]
 };
 
+const planningProfile = {
+  id: 'profile-tech-3',
+  schoolYear: '2026-2027',
+  schoolOrder: 'lower_secondary',
+  gradeLevel: 3,
+  cohortRef: '2026-2027:secondaria:classe-iii',
+  subjectCode: 'tecnologia',
+  normativeRegime: 'IN2025'
+};
+
 const resolvedWithoutArena = {
   status: 'resolved',
   reason: 'RESOLVED',
   teachingContext,
-  profile: {
-    id: 'profile-tech-3',
-    schoolYear: '2026-2027',
-    schoolOrder: 'lower_secondary',
-    gradeLevel: 3,
-    cohortRef: '2026-2027:secondaria:classe-iii',
-    subjectCode: 'tecnologia',
-    normativeRegime: 'IN2025'
-  },
+  profile: planningProfile,
   arenaContext: null
+} as unknown as LibraryPlanningContextResolution;
+
+const resolvedWithUnrelatedArena = {
+  status: 'resolved',
+  reason: 'RESOLVED',
+  teachingContext,
+  profile: planningProfile,
+  arenaContext: {
+    id: 'arena-tech-3',
+    authorityState: 'APPROVED',
+    vigencyStatus: 'VIGENTE',
+    privacyClass: 'PROFESSIONAL_NON_PERSONAL',
+    curricoloItems: [{
+      id: 'curr-drawing',
+      kind: 'obiettivo',
+      sourceSection: 'Disegno tecnico',
+      text: 'Proiezioni ortogonali e rappresentazione grafica.'
+    }]
+  }
 } as unknown as LibraryPlanningContextResolution;
 
 describe('AIC-03 review findings — alignment evidence', () => {
@@ -67,6 +88,21 @@ describe('AIC-03 review findings — alignment evidence', () => {
       udas: [uda],
       teachingContext,
       planningContext: resolvedWithoutArena
+    });
+
+    expect(result.status).toBe('reviewed');
+    if (result.status !== 'reviewed') return;
+
+    expect(result.review.alignment.planningMatches).toEqual([]);
+    expect(result.review.alignment.status).toBe('unverified');
+  });
+
+  test('authoritative Arena without a source match still remains unverified', () => {
+    const result = resolveContextualDidacticReview({
+      source,
+      udas: [uda],
+      teachingContext,
+      planningContext: resolvedWithUnrelatedArena
     });
 
     expect(result.status).toBe('reviewed');
