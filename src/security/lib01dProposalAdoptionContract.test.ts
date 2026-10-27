@@ -112,7 +112,7 @@ describe('LIB-01D proposal adoption contract', () => {
     expect(adopted.links).toEqual([{ targetType: 'uda', targetId: 'uda-energy' }]);
   });
 
-  test('backup v4 preserves valid provenance and rejects malformed generation provenance', async () => {
+  test('current backup preserves valid provenance and rejects malformed generation provenance', async () => {
     const module = await import('../library/teachingProposal') as any;
     if (typeof module.createInternalSourceFromTeachingProposal !== 'function') return;
 
@@ -141,7 +141,7 @@ describe('LIB-01D proposal adoption contract', () => {
         }
       }]
     }));
-    expect(() => normalizeBackupPayload(malformed, snapshot)).toThrow(/backup v4|library|biblioteca/i);
+    expect(() => normalizeBackupPayload(malformed, snapshot)).toThrow(/backup v5|library|biblioteca|memoria/i);
   });
 
   test('threads the existing durable add-source callback from the single Copilot surface to the proposal panel', async () => {
