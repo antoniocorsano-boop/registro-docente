@@ -424,8 +424,10 @@ test('AIC-02 choices are touch-safe and compound adoption stays pending until du
   const patched = await delayFutureVaultEncryption(page, 5000);
   expect(patched).toBe(true);
   await compound.click();
-  await expect(libraryOnly).toBeDisabled({ timeout: 1000 });
-  await expect(compound).toBeDisabled({ timeout: 1000 });
+  const savingButtons = proposal.getByRole('button', { name: 'Salvo…', exact: true });
+  await expect(savingButtons).toHaveCount(2, { timeout: 1000 });
+  await expect(savingButtons.nth(0)).toBeDisabled();
+  await expect(savingButtons.nth(1)).toBeDisabled();
   await expect(leave).toBeDisabled({ timeout: 1000 });
   await expect(page.getByText('Proposta aggiunta all’UDA', { exact: true })).toHaveCount(0);
   await restoreVaultEncryption(page);
