@@ -37,13 +37,20 @@ import {
   type RememberProfessionalItemInput
 } from './memory/professionalMemory';
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
+import { buildCopilotContextProjection } from './copilot/contextProjection';
+import { authorizeCopilotMission, type CopilotMissionExecutionGrantV1, type CopilotMissionPreviewV1 } from './copilot/mission';
+import type { MissionProposalReadyNotification } from './services/libraryProposalService';
+import type { CopilotPreferenceSignalKind } from './copilot/preferenceLearning';
+import { bindMissionRuntime } from './components/CopilotMissionBridge';
 import type { CopilotStateV1 } from './copilot/state';
 import type { CopilotOpportunityV1 } from './copilot/opportunityResolver';
 import {
+  appendCopilotMission,
   deferCopilotOpportunity,
   dismissCopilotOpportunity,
   recordCopilotOutcomeSignal,
-  resetCopilotStatePreferences
+  resetCopilotStatePreferences,
+  updateCopilotMission
 } from './persistence/copilotStateMutation';
 import {
   calcAvg,
@@ -113,6 +120,7 @@ import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
 import { CopilotExperience } from './components/CopilotExperience';
 import type {
   CopilotLaunchContext,
+  CopilotMissionLaunchV1,
   LibraryCopilotLaunchRequest
 } from './library/copilotLaunchContext';
 
@@ -225,10 +233,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
 
-  const openLibraryCopilot = useCallback((context: CopilotLaunchContext) => {
+  const openLibraryCopilot = useCallback((
+    context: CopilotLaunchContext,
+    mission?: CopilotMissionLaunchV1
+  ) => {
     setLaunchRequest(previous => ({
       nonce: (previous?.nonce ?? 0) + 1,
-      context
+      context,
+      ...(mission ? { mission } : {})
     }));
   }, []);
 
@@ -246,6 +258,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const libraryRef = useRef(library);
   const professionalMemoryRef = useRef(professionalMemory);
   const copilotStateRef = useRef(copilotState);
+  const missionExecutionGrantsRef = useRef(new Map<string, CopilotMissionExecutionGrantV1>());
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
@@ -611,6 +624,88 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       'Preferenze del Copilota reimpostate'
     ).then(() => undefined),
   [commitCopilotStateMutation]);
+
+  const handleStartCopilotMission = useCallback(async (
+    opportunity: CopilotOpportunityV1,
+    preview: CopilotMissionPreviewV1,
+    contextFingerprint: string
+  ): Promise<void> => {
+    void contextFingerprint;
+    const uda = udasRef.current.find(candidate => candidate.id === opportunity.contextRef.udaId);
+    if (!uda) throw new Error('Il contesto della missione non è più disponibile.');
+    const sources = libraryRef.current.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
+    if (sources.length !== opportunity.proposedMission.sourceRefs.length
+      || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
+      throw new Error('La fonte professionale della missione non è più disponibile.');
+    }
+    const now = new Date().toISOString();
+    const projection = buildCopilotContextProjection({
+      surface: 'library',
+      className: opportunity.contextRef.className,
+      udaId: opportunity.contextRef.udaId,
+      lessonId: opportunity.contextRef.lessonId,
+      sourceId: opportunity.contextRef.sourceId ?? opportunity.proposedMission.sourceRefs[0]
+    });
+    const { mission, grant } = authorizeCopilotMission(preview, {
+      id: uid(),
+      opportunity,
+      fingerprintInput: {
+        context: projection,
+        uda,
+        sources,
+        planningProfileId: projection.planningProfileId,
+        missionSettings: {
+          aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+          copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
+        }
+      },
+      budgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+      now
+    });
+    await commitCopilotStateMutation(current => recordCopilotOutcomeSignal(
+      appendCopilotMission(current, mission),
+      {
+        id: uid(),
+        opportunityKind: opportunity.kind,
+        signal: 'play',
+        occurredAt: now
+      }
+    ), 'Incarico del Copilota avviato');
+    missionExecutionGrantsRef.current.set(mission.id, grant);
+    const runtime = bindMissionRuntime(mission, grant);
+    openLibraryCopilot({
+      surface: 'library',
+      className: mission.contextRef.className,
+      udaId: mission.contextRef.udaId,
+      ...(mission.contextRef.lessonId ? { lessonId: mission.contextRef.lessonId } : {}),
+      ...(mission.contextRef.sourceId ? { sourceId: mission.contextRef.sourceId } : {}),
+      teachingContextMode: 'explicit'
+    }, runtime);
+  }, [commitCopilotStateMutation, openLibraryCopilot]);
+
+  const handleMissionProposalReady = useCallback(async (
+    { missionId, proposal, receipt }: MissionProposalReadyNotification
+  ): Promise<void> => {
+    await commitCopilotStateMutation(current => updateCopilotMission(
+      current,
+      missionId,
+      mission => ({ ...mission, status: 'ready', result: { proposal, receipt } })
+    ), 'Incarico pronto da controllare');
+    missionExecutionGrantsRef.current.delete(missionId);
+  }, [commitCopilotStateMutation]);
+
+  const handleMissionOutcome = useCallback((
+    { missionId, signal }: { missionId: string; signal: CopilotPreferenceSignalKind }
+  ): Promise<void> => {
+    const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
+    if (!mission) return Promise.resolve();
+    return commitCopilotStateMutation(current => recordCopilotOutcomeSignal(current, {
+      id: uid(),
+      opportunityKind: mission.kind,
+      signal,
+      occurredAt: new Date().toISOString()
+    }), '').then(() => undefined);
+  }, [commitCopilotStateMutation]);
 
   const handleAdoptTeachingProposalToUda = useCallback((
     input: TeachingProposalOutcomeMutationInput
@@ -1566,6 +1661,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             ambientContext={ambientCopilotContext}
             onPutAside={handlePutAsideCopilotOpportunity}
             onIgnore={handleIgnoreCopilotOpportunity}
+            onStart={handleStartCopilotMission}
             onOpenConversation={() => openLibraryCopilot(ambientCopilotContext)}
           />
           <div className="aic07-hide-legacy-copilot-trigger contents">
@@ -1588,6 +1684,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               onRemoveMemoryEntry={handleRemoveMemoryEntry}
               onSetMemoryCategory={handleSetMemoryCategory}
               onRemoveMemoryCategory={handleRemoveMemoryCategory}
+              onMissionProposalReady={handleMissionProposalReady}
+              onMissionOutcome={handleMissionOutcome}
               isPending={isLibraryMutationPending}
             />
           </div>

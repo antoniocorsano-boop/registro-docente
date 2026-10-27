@@ -7,6 +7,7 @@ import type {
 import type { CopilotProactivityProfile } from './proactivity';
 import type { LibrarySource } from '../library/types';
 import type { UdaRecord } from '../types';
+import type { TeachingProposalRuntimeReceiptWire, TeachingProposalV1 } from '../library/teachingProposal';
 
 export interface CopilotMissionPreviewV1 {
   schemaVersion: 1;
@@ -59,6 +60,10 @@ export interface CopilotMissionV1 {
   createdAt: string;
   contextFingerprint: string;
   semanticExpiry: MissionSemanticExpiryV1;
+  result?: {
+    proposal: TeachingProposalV1;
+    receipt: TeachingProposalRuntimeReceiptWire;
+  };
   status: CopilotMissionStatus;
 }
 

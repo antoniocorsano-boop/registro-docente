@@ -22,10 +22,14 @@ import {
   type AiBudgetProfile
 } from '../copilot/aiBudgetGovernor';
 import { LibraryProposalServiceError } from '../services/libraryProposalErrors';
+import { classifyTeachingProposalOutcome } from '../copilot/missionOutcome';
+import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
 import {
   getLibraryProposalProviderMetadata,
+  notifyMissionProposalReady,
   requestLibraryTeachingProposal,
-  type LibraryProposalProviderMetadata
+  type LibraryProposalProviderMetadata,
+  type MissionProposalReadyCallback
 } from '../services/libraryProposalService';
 import { uid } from '../utils';
 import type {
@@ -45,6 +49,9 @@ interface LibraryProposalPanelProps {
   onAdoptProposalToUda: (
     input: TeachingProposalOutcomeMutationInput
   ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
+  missionId?: string;
+  onMissionProposalReady?: MissionProposalReadyCallback;
+  onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
 }
 
 type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -81,7 +88,10 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   isPending,
   onUpdate,
   onAddSource,
-  onAdoptProposalToUda
+  onAdoptProposalToUda,
+  missionId,
+  onMissionProposalReady,
+  onMissionOutcome
 }) => {
   const [remoteConsent, setRemoteConsent] = useState(false);
   const [remoteActions, setRemoteActions] = useState<readonly ResolvedAction[]>([]);
@@ -198,6 +208,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     }
   };
 
+  const emitMissionOutcome = (signal: CopilotPreferenceSignalKind) => {
+    if (!missionId || !onMissionOutcome) return;
+    void Promise.resolve(onMissionOutcome({ missionId, signal })).catch(error => {
+      console.error('Copilot mission outcome learning failed', error);
+    });
+  };
+
   const generateProposal = async (explicitAuthorization?: AiBudgetAuthorizationV1) => {
     if (!prepareAction || isGenerating || !remoteConsent) return;
 
@@ -254,6 +271,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
       adoptionLessonIdRef.current = uid();
+      if (missionId) {
+        await notifyMissionProposalReady(onMissionProposalReady, {
+          missionId,
+          proposal: result.proposal,
+          receipt: result.receipt
+        });
+      }
       setProposal(result.proposal);
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -295,6 +319,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   };
 
   const leaveProposal = () => {
+    emitMissionOutcome('discarded');
     adoptionSourceIdRef.current = null;
     adoptionLessonIdRef.current = null;
     setProposal(null);
@@ -337,6 +362,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         capturedAt: new Date().toISOString()
       });
       await onAddSource(adopted);
+      emitMissionOutcome(classifyTeachingProposalOutcome(proposal, content));
+      emitMissionOutcome('saved-to-library');
       clearAdoptedProposal();
     } catch (reason) {
       setAdoptionError(
@@ -368,6 +395,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         capturedAt: new Date().toISOString(),
         lessonDate: localDateKey()
       });
+      emitMissionOutcome(classifyTeachingProposalOutcome(proposal, content));
+      emitMissionOutcome('linked-to-uda');
       clearAdoptedProposal();
     } catch (reason) {
       setAdoptionError(

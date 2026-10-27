@@ -20,6 +20,24 @@ export interface LibraryTeachingProposalResponse {
   receipt: TeachingProposalRuntimeReceiptWire;
 }
 
+export interface MissionProposalReadyNotification {
+  missionId: string;
+  proposal: TeachingProposalV1;
+  receipt: TeachingProposalRuntimeReceiptWire;
+}
+
+export type MissionProposalReadyCallback = (
+  input: MissionProposalReadyNotification
+) => Promise<void> | void;
+
+export async function notifyMissionProposalReady(
+  callback: MissionProposalReadyCallback | undefined,
+  input: MissionProposalReadyNotification
+): Promise<void> {
+  if (!callback) return;
+  await callback(input);
+}
+
 function nonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }

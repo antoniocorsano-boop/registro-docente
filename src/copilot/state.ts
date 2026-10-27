@@ -1,4 +1,5 @@
 import type { CopilotMissionV1 } from './mission';
+import { parseTeachingProposalV1, type TeachingProposalRuntimeReceiptWire } from '../library/teachingProposal';
 import type {
   CopilotDeferredOpportunityV1,
   CopilotOpportunityDismissalV1
@@ -26,6 +27,44 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
   return Object.keys(value).every(key => allowed.has(key));
 }
 
+function isMissionReceipt(value: unknown): value is TeachingProposalRuntimeReceiptWire {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'requestId', 'provider', 'model', 'modelVersion', 'providerResponseId', 'durationMs',
+    'promptTokens', 'outputTokens', 'totalTokens', 'attemptCount', 'budget'
+  ])) return false;
+  if (!isNonEmptyString(value.requestId)
+    || !isNonEmptyString(value.provider)
+    || !isNonEmptyString(value.model)
+    || typeof value.durationMs !== 'number'
+    || !Number.isFinite(value.durationMs)
+    || value.durationMs < 0
+    || value.attemptCount !== 1) return false;
+  for (const key of ['promptTokens', 'outputTokens', 'totalTokens'] as const) {
+    const entry = value[key];
+    if (entry !== undefined && (typeof entry !== 'number' || !Number.isFinite(entry) || entry < 0)) return false;
+  }
+  if (value.modelVersion !== undefined && !isNonEmptyString(value.modelVersion)) return false;
+  if (value.providerResponseId !== undefined && !isNonEmptyString(value.providerResponseId)) return false;
+  if (value.budget !== undefined) {
+    if (!isRecord(value.budget)
+      || !hasOnlyKeys(value.budget, ['tier', 'profile', 'escalated'])
+      || !['remote-low', 'remote-expanded'].includes(String(value.budget.tier))
+      || !['economy', 'balanced', 'quality'].includes(String(value.budget.profile))
+      || typeof value.budget.escalated !== 'boolean') return false;
+  }
+  return true;
+}
+
+function isMissionResult(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['proposal', 'receipt'])) return false;
+  try {
+    parseTeachingProposalV1(value.proposal);
+  } catch {
+    return false;
+  }
+  return isMissionReceipt(value.receipt);
+}
+
 const MISSION_STATUSES = new Set(['authorized', 'running', 'suspended', 'ready', 'archived']);
 const OPPORTUNITY_SCOPES = new Set(['contextual', 'today', 'later']);
 const OPPORTUNITY_KINDS = new Set([
@@ -50,7 +89,7 @@ function isMission(value: unknown): value is CopilotMissionV1 {
   if (!hasOnlyKeys(value, [
     'schemaVersion', 'id', 'opportunityId', 'kind', 'goal', 'contextRef', 'sourceRefs',
     'allowedCapabilities', 'expectedOutputs', 'authority', 'budgetProfile', 'createdAt',
-    'contextFingerprint', 'semanticExpiry', 'status'
+    'contextFingerprint', 'semanticExpiry', 'result', 'status'
   ])) return false;
   if (value.schemaVersion !== 1
     || !isNonEmptyString(value.id)
@@ -73,6 +112,7 @@ function isMission(value: unknown): value is CopilotMissionV1 {
     || !isNonEmptyString(value.contextFingerprint)
     || !isRecord(value.semanticExpiry)
     || !['context', 'date'].includes(String(value.semanticExpiry.kind))
+    || (value.result !== undefined && !isMissionResult(value.result))
     || !MISSION_STATUSES.has(String(value.status))) return false;
 
   if (value.semanticExpiry.expiresAt !== undefined
@@ -149,6 +189,21 @@ export function normalizeLoadedCopilotState(value: CopilotStateV1): CopilotState
     schemaVersion: 1,
     missions: value.missions.map(mission => ({
       ...mission,
+      ...(mission.result ? {
+        result: {
+          proposal: {
+            ...mission.result.proposal,
+            steps: [...mission.result.proposal.steps],
+            questions: [...mission.result.proposal.questions],
+            context: { ...mission.result.proposal.context },
+            provenance: { ...mission.result.proposal.provenance }
+          },
+          receipt: {
+            ...mission.result.receipt,
+            ...(mission.result.receipt.budget ? { budget: { ...mission.result.receipt.budget } } : {})
+          }
+        }
+      } : {}),
       status: mission.status === 'authorized' || mission.status === 'running'
         ? 'suspended'
         : mission.status

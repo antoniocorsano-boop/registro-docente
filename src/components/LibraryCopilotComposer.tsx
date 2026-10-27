@@ -42,6 +42,9 @@ import {
 } from '../library/contextualDidacticReview';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
+import { CopilotMissionBridge } from './CopilotMissionBridge';
+import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
+import type { MissionProposalReadyNotification } from '../services/libraryProposalService';
 import {
   ProfessionalMemoryPanel,
   type ProfessionalMemoryRememberCandidate
@@ -73,6 +76,8 @@ interface LibraryCopilotComposerProps {
   onRemoveMemoryEntry: (entryId: string) => Promise<void>;
   onSetMemoryCategory: (category: ProfessionalMemoryCategory, enabled: boolean) => Promise<void>;
   onRemoveMemoryCategory: (category: ProfessionalMemoryCategory) => Promise<void>;
+  onMissionProposalReady?: (input: MissionProposalReadyNotification) => Promise<void> | void;
+  onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
   isPending?: boolean;
 }
 
@@ -150,6 +155,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   onRemoveMemoryEntry,
   onSetMemoryCategory,
   onRemoveMemoryCategory,
+  onMissionProposalReady,
+  onMissionOutcome,
   isPending = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -338,6 +345,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
+    if (launchRequest.mission) setMessage(launchRequest.mission.objective);
 
     if (requestedLaunchSourceId) {
       const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
@@ -501,9 +509,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
   };
 
-  const handleResolve = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!message.trim() || isResolving) return;
+  const resolveObjective = async (objective: string) => {
+    const normalizedObjective = objective.trim();
+    if (!normalizedObjective || isResolving) return;
 
     const resolutionEpoch = ++resolutionEpochRef.current;
     const resolutionSnapshot = currentResolutionSnapshot;
@@ -533,7 +541,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         source: selectedSource,
         teachingContext: resolvedTeachingContext,
         planningContext: resolvedPlanningContext,
-        message: message.trim()
+        message: normalizedObjective
       };
       const discovery = await discoverLibraryCopilotIntent(input);
       if (!requestIsCurrent()) return;
@@ -579,7 +587,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     try {
       try {
-        const agentRequest = buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection);
+        const agentRequest = buildAgentRoutingRequestFromProjection(normalizedObjective, copilotContextProjection);
         const envelope = await interpretCopilotIntent(agentRequest);
         if (!requestIsCurrent()) return;
 
@@ -639,6 +647,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
   };
 
+
+  const handleResolve = (event: React.FormEvent) => {
+    event.preventDefault();
+    void resolveObjective(message);
+  };
   const handleBeginLink = async () => {
     if (!selectedSource || isLinkPending || isPending) return;
     if (!resolution?.actions.some(action => action.id === 'link-source-to-uda')) return;
@@ -923,6 +936,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
         </details>
 
+        <CopilotMissionBridge launchRequest={launchRequest} message={message} />
+
         <form onSubmit={handleResolve} className="space-y-3">
           <div>
             <label htmlFor="copilot-message" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1180,6 +1195,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}
               onAdoptProposalToUda={onAdoptProposalToUda}
+              missionId={launchRequest?.mission?.missionId}
+              onMissionProposalReady={onMissionProposalReady}
+              onMissionOutcome={onMissionOutcome}
             />
           </div>
         )}
