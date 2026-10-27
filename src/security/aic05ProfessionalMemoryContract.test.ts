@@ -25,13 +25,16 @@ describe('AIC-05 professional memory foundation contract', () => {
   });
 
   test('fails closed for student-personal and ambiguous memory candidates', async () => {
-    const policy = await Bun.file(POLICY).text();
+    const [policy, types] = await Promise.all([
+      Bun.file(POLICY).text(),
+      Bun.file(TYPES).text()
+    ]);
 
     expect(policy).toContain('DENY_STUDENT_PERSONAL');
     expect(policy).toContain('DENY_AMBIGUOUS');
-    expect(policy).toContain('TEACHER_PROFESSIONAL');
-    expect(policy).toContain('CURRICULUM_PLANNING');
-    expect(policy).toContain('PUBLIC_EXTERNAL_CONTENT');
-    expect(policy).toContain('AGGREGATED_NON_IDENTIFIABLE');
+    expect(types).toContain('TEACHER_PROFESSIONAL');
+    expect(types).toContain('CURRICULUM_PLANNING');
+    expect(types).toContain('PUBLIC_EXTERNAL_CONTENT');
+    expect(types).toContain('AGGREGATED_NON_IDENTIFIABLE');
   });
 });
