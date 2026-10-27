@@ -100,6 +100,7 @@ export interface AppProps {
 }
 
 export default function App({ initialSnapshot, secureStorage, onFactoryReset }: AppProps) {
+  // 1. Settings & Theme
   const [settings, setSettings] = useState<AppSettings>(() => {
     const persisted = initialSnapshot.settings;
     return persisted
@@ -111,6 +112,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       : DEFAULT_SETTINGS;
   });
 
+  // Apply theme to document.body
   useEffect(() => {
     document.body.className = '';
     if (settings.theme && settings.theme !== 'cyan') {
@@ -118,6 +120,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }
   }, [settings.theme]);
 
+  // 2. Main App Data (Classes, Students, Grades, Behaviors)
   const [appData, setAppData] = useState<AppData>(() => {
     const persisted = initialSnapshot.appData;
     if (persisted && Array.isArray(persisted.classes)) {
@@ -128,6 +131,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           grades: c.grades || [],
           behaviors: c.behaviors || []
         })),
+        // Navigation context is session-only: never reactivate a persisted class on entry.
         currentClassId: null
       };
     }
@@ -142,28 +146,34 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     };
   });
 
+  // 3. Online Tests & Flashcards
   const [tests, setTests] = useState<Record<string, OnlineTest>>(() =>
     initialSnapshot.customTests
       ? { ...INITIAL_TESTS, ...initialSnapshot.customTests }
       : INITIAL_TESTS
   );
 
+  // 4. Online Submissions
   const [submissions, setSubmissions] = useState<OnlineSubmission[]>(() =>
     initialSnapshot.submissions || []
   );
 
+  // 5. UDA Records
   const [udas, setUdas] = useState<UdaRecord[]>(() =>
     initialSnapshot.udas || INITIAL_UDAS
   );
 
+  // 5b. Annual planning domain (separate from legacy UDA/Gantt until migration is qualified)
   const [planning, setPlanning] = useState<PlanningStateV1>(() =>
     initialSnapshot.planning || createEmptyPlanningState()
   );
 
+  // 5c. Private teacher library (local-first, no provider side effects)
   const [library, setLibrary] = useState<LibraryStateV1>(() =>
     initialSnapshot.library || createEmptyLibraryState()
   );
 
+  // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
   const setActiveTab = useCallback((tab: ActiveTab) => {
@@ -186,6 +196,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }));
   }, []);
 
+  // Metadata for backup tracking
   const [meta, setMeta] = useState<SecureMeta>(() =>
     initialSnapshot.meta || { changes: 0, lastBackup: null }
   );
@@ -539,6 +550,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   }, [mutationCoordinator, secureStorage, toast]);
 
+  // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
   const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
 
   const handleTogglePrivacyShield = useCallback(() => {
@@ -549,6 +561,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   }, [toast]);
 
+  // 7. Student Portal mode (if query param `?mode=student`)
   const [studentMode, setStudentMode] = useState<{
     isOpen: boolean;
     testId: string;
@@ -562,6 +575,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     };
   });
 
+  // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
   const ambientCopilotContext: CopilotLaunchContext = {
     surface:
@@ -577,6 +591,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     className: currentClass?.name
   };
 
+  // Synchronize URL query params
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       const nextCurrentClassId = e.state?.classId || null;
@@ -588,6 +603,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Handle Class selection
   const handleSelectClass = (classId: string) => {
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
@@ -612,6 +628,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Add new class
   const handleAddClass = (): Promise<void> => {
     const name = prompt('Inserisci la denominazione della nuova classe (es. 2ª B):');
     if (!name || !name.trim()) return Promise.resolve();
@@ -641,6 +658,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Delete class
   const handleDeleteClass = (classId: string): Promise<void> => {
     return commitAppDataMutation(current => ({
       ...current,
@@ -652,6 +670,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Save evaluations batch (add new or update existing)
   const handleSaveEvaluations = (batchData: {
     batchId: string;
     period: 'Q1' | 'Q2';
@@ -700,6 +719,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Save behavior notes
   const handleSaveBehaviors = (newRecords: any[]): Promise<void> => {
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
@@ -727,12 +747,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Edit batch
   const handleEditBatch = (batchId: string) => {
     setEditingBatchId(batchId);
     setActiveTab('voti');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Delete batch
   const handleDeleteBatch = (batchId: string): Promise<void> => {
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
@@ -754,6 +776,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Add single student
   const handleAddStudent = (name: string): Promise<void> => {
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
@@ -776,6 +799,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Remove single student
   const handleRemoveStudent = (studentId: string): Promise<void> => {
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
@@ -799,6 +823,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Bulk add students from Excel
   const handleBulkAddStudents = (newStudents: Student[]): Promise<number> => {
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve(0);
@@ -828,6 +853,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => addedCount);
   };
 
+  // Invert student names (Cognome Nome <-> Nome Cognome)
   const handleInvertNames = (): Promise<void> => {
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
@@ -859,6 +885,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Save new test
   const handleSaveNewTest = (newTest: OnlineTest): Promise<void> => {
     return commitTestsMutation(current => ({
       ...current,
@@ -866,6 +893,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     })).then(() => undefined);
   };
 
+  // Delete submission
   const handleDeleteSubmission = (submissionId: string): Promise<void> => {
     return commitSubmissionsMutation(
       current => current.filter(s => s.id !== submissionId),
@@ -883,6 +911,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     );
   }, [commitSubmissionsMutation]);
 
+  // Import submissions into class grades
   const handleImportSubmissionsToRegister = (targetUdaId?: string): Promise<void> => {
     if (submissionsRef.current.length === 0) {
       alert('Nessuna consegna online ricevuta da importare.');
@@ -905,15 +934,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Save UDAs
   const handleSaveUdas = (newUdas: UdaRecord[]): Promise<void> => {
     const mutation = createUdaSnapshotMutation(udasRef.current, newUdas);
     return commitUdasMutation(mutation).then(() => undefined);
   };
 
+  // Save Settings
   const handleUpdateSettings = (patch: Partial<AppSettings>): Promise<void> => {
     return commitSettingsMutation(patch).then(() => undefined);
   };
 
+  // Backup actions are routed to the protected Privacy area.
   const handleExportBackup = () => {
     setActiveTab('privacy');
     toast('Usa il backup cifrato con password nella sezione Privacy');
@@ -924,6 +956,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     toast('Ripristina un backup cifrato nella sezione Privacy');
   };
 
+  // Prepare encrypted backup checkpoint
   const getCompleteCommittedSnapshot = (): CompleteSecureAppSnapshot => ({
     appData: appDataRef.current,
     settings: settingsRef.current,
@@ -955,6 +988,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }).then(() => undefined);
   };
 
+  // Import Encrypted Backup
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
@@ -983,6 +1017,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   };
 
+  // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
     try {
       await onFactoryReset();
@@ -1009,6 +1044,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
   return (
     <div className="min-h-screen bg-[#030712] text-[#f8fafc] flex flex-col pb-36 md:pb-20">
+      {/* If in Student Portal Mode */}
       {studentMode.isOpen && (
         <StudentPortal
           tests={tests}
@@ -1025,6 +1061,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         />
       )}
 
+      {/* Main Navbar & Navigation Drawer */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={handleNavigateTab}
@@ -1041,7 +1078,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         onTogglePrivacyShield={handleTogglePrivacyShield}
       />
 
+      {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5">
+        {/* TAB 1: Cruscotto Istituto */}
         {activeTab === 'home' && (
           <HomeView
             classes={appData.classes}
@@ -1054,6 +1093,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 2: Dashboard Classe */}
         {activeTab === 'dashboard' && currentClass && (
           <DashboardView
             currentClass={currentClass}
@@ -1062,6 +1102,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 3: Inserisci Valutazioni */}
         {activeTab === 'voti' && currentClass && (
           <EvaluationsView
             currentClass={currentClass}
@@ -1073,6 +1114,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 4: Valutazione Comportamenti */}
         {activeTab === 'comportamenti' && currentClass && (
           <BehaviorsView
             currentClass={currentClass}
@@ -1081,6 +1123,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 5: Analisi & Soglie D.M. 221/2025 */}
         {activeTab === 'analytics' && currentClass && (
           <AnalyticsView
             currentClass={currentClass}
@@ -1093,6 +1136,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 6: Tabellone Classe */}
         {activeTab === 'tabellone' && currentClass && (
           <MatrixView
             currentClass={currentClass}
@@ -1105,6 +1149,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 7: Storico Prove */}
         {activeTab === 'storico' && currentClass && (
           <HistoryView
             currentClass={currentClass}
@@ -1117,6 +1162,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 8: Scheda Alunno */}
         {activeTab === 'report' && currentClass && (
           <StudentReportView
             currentClass={currentClass}
@@ -1128,6 +1174,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 9: Gestione Alunni */}
         {activeTab === 'dati' && currentClass && (
           <StudentsManagementView
             currentClass={currentClass}
@@ -1139,6 +1186,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 10: Verifiche Online, Flashcards & Parser ZIP/DOCX */}
         {activeTab === 'verifiche-online' && (
           <VerificheOnlineView
             classes={appData.classes}
@@ -1160,6 +1208,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 11: Programmazione didattica annuale */}
         {activeTab === 'programmazione' && (
           <PlanningProfileView
             profiles={planning.profiles}
@@ -1169,6 +1218,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* Biblioteca privata del docente */}
         {activeTab === 'biblioteca' && (
           <LibraryView
             library={library}
@@ -1187,6 +1237,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 12: Programmazione UDA & Gantt legacy */}
         {activeTab === 'uda-gantt' && (
           <UdaGanttView
             classes={appData.classes}
@@ -1199,6 +1250,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 12: Impostazioni & Tema */}
         {activeTab === 'impostazioni' && (
           <SettingsView
             settings={settings}
@@ -1208,6 +1260,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           />
         )}
 
+        {/* TAB 13: Privacy First & GDPR */}
         {activeTab === 'privacy' && (
           <PrivacyView
             settings={settings}
@@ -1220,6 +1273,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onFactoryReset={handleFactoryReset}
           />
         )}
+
       </main>
 
       {!studentMode.isOpen && (
@@ -1238,6 +1292,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         />
       )}
 
+      {/* Persistence confirmation modal */}
       <BackupReminderModal
         isOpen={isBackupModalOpen}
         onClose={() => setIsBackupModalOpen(false)}
