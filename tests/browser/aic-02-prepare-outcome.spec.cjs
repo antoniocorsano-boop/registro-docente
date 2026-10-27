@@ -363,7 +363,8 @@ test('AIC-02 UDA-only compound adoption persists one source and one new lesson a
   const adoptedCard = await sourceCard(page, PROPOSAL_TITLE);
   await expect(page.getByRole('heading', { name: PROPOSAL_TITLE, exact: true })).toHaveCount(1);
   await adoptedCard.getByText('Gestisci', { exact: true }).click();
-  await expect(adoptedCard.getByText(UDA_TITLE, { exact: true })).toBeVisible();
+  const linkedUdaRow = adoptedCard.getByRole('button', { name: 'Scollega', exact: true }).locator('xpath=..');
+  await expect(linkedUdaRow.getByText(UDA_TITLE, { exact: true })).toBeVisible();
 
   await openUdaDossier(page);
   await expect(page.getByText(PROPOSAL_TITLE, { exact: true }).first()).toBeVisible();
@@ -420,12 +421,12 @@ test('AIC-02 choices are touch-safe and compound adoption stays pending until du
   await assertAtLeast44(leave, 'AIC-02 mobile leave choice');
   await assertNoHorizontalOverflow(page);
 
-  const patched = await delayFutureVaultEncryption(page, 700);
+  const patched = await delayFutureVaultEncryption(page, 5000);
   expect(patched).toBe(true);
   await compound.click();
-  await expect(libraryOnly).toBeDisabled();
-  await expect(compound).toBeDisabled();
-  await expect(leave).toBeDisabled();
+  await expect(libraryOnly).toBeDisabled({ timeout: 1000 });
+  await expect(compound).toBeDisabled({ timeout: 1000 });
+  await expect(leave).toBeDisabled({ timeout: 1000 });
   await expect(page.getByText('Proposta aggiunta all’UDA', { exact: true })).toHaveCount(0);
   await restoreVaultEncryption(page);
 
