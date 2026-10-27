@@ -108,6 +108,26 @@ describe('AIC-06 server-side budget enforcement', () => {
     expect(calls).toHaveLength(0);
   });
 
+  test('counts provider-bound context text toward escalation before runtime invocation', async () => {
+    const { runtime, calls } = runtimeStub();
+    const request = structuredClone(BASE_REQUEST) as any;
+    request.source.text = 'x';
+    request.context.udaTitle = 'A'.repeat(70 * 1024);
+
+    const result = await handleLibraryProposalRequest(request, runtime as any, {
+      requestId: 'request-aic06-large-context',
+      now: () => '2026-10-27T18:00:00.000Z'
+    } as any);
+
+    expect(result.status).toBe(409);
+    expect(errorOf(result)).toMatchObject({
+      code: 'AI_BUDGET_ESCALATION_REQUIRED',
+      retriable: false,
+      reason: 'LARGE_SOURCE'
+    });
+    expect(calls).toHaveLength(0);
+  });
+
   test('binary source requires escalation and does not invoke the provider first', async () => {
     const { runtime, calls } = runtimeStub();
     const request = structuredClone(BASE_REQUEST) as any;
@@ -162,6 +182,49 @@ describe('AIC-06 server-side budget enforcement', () => {
       profile: 'balanced',
       escalated: true
     });
+  });
+
+  test('operation authorization is consumed after the first expanded provider attempt', async () => {
+    const { runtime, calls } = runtimeStub();
+    const request = structuredClone(BASE_REQUEST) as any;
+    request.source = {
+      id: 'source-aic06-operation-first',
+      kind: 'image',
+      title: 'Schema energetico A',
+      mimeType: 'image/png',
+      dataBase64: 'QUJDRA=='
+    };
+    request.budget.authorization = createAiBudgetAuthorization({
+      scope: 'operation',
+      activityKey: ACTIVITY_KEY,
+      issuedAt: '2026-10-27T18:00:00.000Z'
+    });
+
+    const first = await handleLibraryProposalRequest(request, runtime as any, {
+      requestId: 'request-aic06-operation-first',
+      now: () => '2026-10-27T18:01:00.000Z'
+    } as any);
+    expect(first.status).toBe(200);
+    expect(calls).toHaveLength(1);
+
+    const replay = structuredClone(request) as any;
+    replay.source = {
+      ...replay.source,
+      id: 'source-aic06-operation-replay',
+      title: 'Schema energetico B'
+    };
+    const second = await handleLibraryProposalRequest(replay, runtime as any, {
+      requestId: 'request-aic06-operation-replay',
+      now: () => '2026-10-27T18:02:00.000Z'
+    } as any);
+
+    expect(second.status).toBe(409);
+    expect(errorOf(second)).toMatchObject({
+      code: 'AI_BUDGET_ESCALATION_REQUIRED',
+      retriable: false,
+      reason: 'BINARY_SOURCE'
+    });
+    expect(calls).toHaveLength(1);
   });
 
   test('expired or wrong-activity authorization never upgrades an expensive request', async () => {
