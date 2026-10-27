@@ -230,11 +230,10 @@ function buildRationale(
 }
 
 function alignmentStatus(
-  planningContext: LibraryPlanningContextResolution | null,
+  _planningContext: LibraryPlanningContextResolution | null,
   matches: ContextualReviewPlanningMatch[]
 ): 'supported' | 'partial' | 'unverified' {
   if (matches.length > 0) return 'supported';
-  if (authoritativeArenaContext(planningContext)) return 'partial';
   return 'unverified';
 }
 
