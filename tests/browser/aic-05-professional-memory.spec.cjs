@@ -200,7 +200,7 @@ async function linkSourceToUda(page, title) {
   await card.getByLabel('Collega a UDA').selectOption({ label: UDA_TITLE });
   await card.getByRole('button', { name: 'Collega', exact: true }).click();
   await expect(card.getByText('Collegamenti', { exact: true })).toBeVisible();
-  await expect(card.getByText(UDA_TITLE, { exact: true })).toBeVisible();
+  await expect(card.locator('span.truncate.text-slate-300').filter({ hasText: UDA_TITLE })).toBeVisible();
 }
 
 async function assertAtLeast44(locator, label) {
