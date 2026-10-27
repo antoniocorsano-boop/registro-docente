@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, OnlineTest, UdaActivityType, UdaLesson, UdaRecord } from '../types';
 import { MONTHS_LABELS, calcAvg, formatGrade, getCompetenceLevel, today, uid } from '../utils';
 import {
@@ -410,6 +410,11 @@ export function computeCascadeShifts(
   return results;
 }
 
+export function reconcileOpenUdaRecord(current: UdaRecord | null, udas: UdaRecord[]): UdaRecord | null {
+  if (!current) return null;
+  return udas.find(uda => uda.id === current.id) || null;
+}
+
 export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   classes,
   udas,
@@ -474,6 +479,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const udaCommittedSnapshotRef = useRef(udas);
   const udaLatestSnapshotRef = useRef(udas);
   udaLatestSnapshotRef.current = udas;
+
+  useEffect(() => {
+    if (udaTextMutationDepthRef.current > 0 || udaActionMutationDepthRef.current > 0) return;
+    setSelectedUdaForDetail(current => reconcileOpenUdaRecord(current, udas));
+    setGanttSelectedUda(current => reconcileOpenUdaRecord(current, udas));
+  }, [udas]);
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
