@@ -355,7 +355,7 @@ test('AIC-02 UDA-only compound adoption persists one source and one new lesson a
   const { proposal } = await generateProposal(composer);
   await proposal.getByRole('button', { name: "Adotta e aggiungi all'UDA", exact: true }).click();
   await expect(proposal).toBeHidden();
-  await expect(page.getByText('Proposta aggiunta all’UDA', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Proposta aggiunta all’UDA', { exact: true })).toBeVisible();
 
   await reloadAndUnlock(page);
   await selectSyntheticClass(page);
@@ -429,7 +429,7 @@ test('AIC-02 choices are touch-safe and compound adoption stays pending until du
   await expect(savingButtons.nth(0)).toBeDisabled();
   await expect(savingButtons.nth(1)).toBeDisabled();
   await expect(leave).toBeDisabled({ timeout: 1000 });
-  await expect(page.getByText('Proposta aggiunta all’UDA', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Proposta aggiunta all’UDA', { exact: true })).toHaveCount(0);
   await restoreVaultEncryption(page);
 
   await expect(proposal).toBeHidden({ timeout: 10000 });
