@@ -44,6 +44,15 @@ const ACTIVITY_TYPES = new Set([
   'digitale',
   'civica'
 ]);
+const PROFESSIONAL_MEMORY_CATEGORIES = new Set([
+  'format-preference',
+  'didactic-pattern',
+  'material-reuse',
+  'planning-continuity',
+  'workflow-preference'
+]);
+const MAX_PROFESSIONAL_MEMORY_ITEMS = 5;
+const MAX_PROFESSIONAL_MEMORY_SUMMARY_CHARS = 800;
 const LEGACY_MAX_INLINE_BYTES = 8 * 1024 * 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,9 +104,7 @@ function validateSource(
   const dataBase64 = value.dataBase64;
   const textBytes = isNonEmptyString(text) ? utf8Bytes(text) : 0;
   if (text !== undefined && !isNonEmptyString(text)) return { ok: false, reason: 'invalid' };
-  if (textBytes > limits.maxTextBytes) {
-    return { ok: false, reason: 'too-large' };
-  }
+  if (textBytes > limits.maxTextBytes) return { ok: false, reason: 'too-large' };
   if (mimeType !== undefined && !isNonEmptyString(mimeType)) return { ok: false, reason: 'invalid' };
   if (dataBase64 !== undefined && !isBase64Syntax(dataBase64)) return { ok: false, reason: 'invalid' };
   if (isBase64Syntax(dataBase64) && base64DecodedBytes(dataBase64) > limits.maxInlineBytes) {
@@ -105,16 +112,9 @@ function validateSource(
   }
 
   if (value.kind === 'web' || value.kind === 'text' || value.kind === 'note' || value.kind === 'concept' || value.kind === 'internal') {
-    if (!isNonEmptyString(text) || mimeType !== undefined || dataBase64 !== undefined) {
-      return { ok: false, reason: 'invalid' };
-    }
+    if (!isNonEmptyString(text) || mimeType !== undefined || dataBase64 !== undefined) return { ok: false, reason: 'invalid' };
   } else if (value.kind === 'image') {
-    if (
-      !isNonEmptyString(mimeType) ||
-      !mimeType.toLowerCase().startsWith('image/') ||
-      !isBase64Syntax(dataBase64) ||
-      text !== undefined
-    ) {
+    if (!isNonEmptyString(mimeType) || !mimeType.toLowerCase().startsWith('image/') || !isBase64Syntax(dataBase64) || text !== undefined) {
       return { ok: false, reason: 'invalid' };
     }
   } else if (value.kind === 'file') {
@@ -124,13 +124,9 @@ function validateSource(
       if (!isBase64Syntax(dataBase64) || text !== undefined) return { ok: false, reason: 'invalid' };
     } else if (isLocallyReadableTextMime(normalizedMime)) {
       if (normalizedMime.startsWith('text/')) {
-        if (!isNonEmptyString(text) && !isBase64Syntax(dataBase64)) {
-          return { ok: false, reason: 'invalid' };
-        }
+        if (!isNonEmptyString(text) && !isBase64Syntax(dataBase64)) return { ok: false, reason: 'invalid' };
         const inlineTextBytes = isBase64Syntax(dataBase64) ? base64DecodedBytes(dataBase64) : 0;
-        if (textBytes + inlineTextBytes > limits.maxTextBytes) {
-          return { ok: false, reason: 'too-large' };
-        }
+        if (textBytes + inlineTextBytes > limits.maxTextBytes) return { ok: false, reason: 'too-large' };
       } else if (!isNonEmptyString(text) || dataBase64 !== undefined) {
         return { ok: false, reason: 'invalid' };
       }
@@ -154,32 +150,13 @@ function validateSource(
 
 function validateContext(value: unknown): LibraryProposalRequestV1['context'] | null {
   if (!isRecord(value)) return null;
-  if (!hasOnlyKeys(value, [
-    'udaId',
-    'udaTitle',
-    'className',
-    'period',
-    'lessonId',
-    'lessonTopic',
-    'activityType'
-  ])) return null;
+  if (!hasOnlyKeys(value, ['udaId', 'udaTitle', 'className', 'period', 'lessonId', 'lessonTopic', 'activityType'])) return null;
 
-  const udaId = value.udaId;
-  const udaTitle = value.udaTitle;
-  const className = value.className;
-  const period = value.period;
-  const lessonId = value.lessonId;
-  const lessonTopic = value.lessonTopic;
-  const activityType = value.activityType;
-
-  if (!isNonEmptyString(udaId) || !isNonEmptyString(udaTitle) || !isNonEmptyString(className) || !isNonEmptyString(period)) {
-    return null;
-  }
+  const { udaId, udaTitle, className, period, lessonId, lessonTopic, activityType } = value;
+  if (!isNonEmptyString(udaId) || !isNonEmptyString(udaTitle) || !isNonEmptyString(className) || !isNonEmptyString(period)) return null;
   if (lessonId !== undefined && !isNonEmptyString(lessonId)) return null;
   if (lessonTopic !== undefined && !isNonEmptyString(lessonTopic)) return null;
-  if (activityType !== undefined && (!isNonEmptyString(activityType) || !ACTIVITY_TYPES.has(activityType))) {
-    return null;
-  }
+  if (activityType !== undefined && (!isNonEmptyString(activityType) || !ACTIVITY_TYPES.has(activityType))) return null;
 
   return {
     udaId: udaId.trim(),
@@ -188,9 +165,37 @@ function validateContext(value: unknown): LibraryProposalRequestV1['context'] | 
     period: period.trim(),
     ...(isNonEmptyString(lessonId) ? { lessonId: lessonId.trim() } : {}),
     ...(isNonEmptyString(lessonTopic) ? { lessonTopic: lessonTopic.trim() } : {}),
-    ...(isNonEmptyString(activityType)
-      ? { activityType: activityType as LibraryProposalRequestV1['context']['activityType'] }
-      : {})
+    ...(isNonEmptyString(activityType) ? { activityType: activityType as LibraryProposalRequestV1['context']['activityType'] } : {})
+  };
+}
+
+type MemoryValidation =
+  | { ok: true; value?: NonNullable<LibraryProposalRequestV1['professionalMemory']> }
+  | { ok: false };
+
+function validateProfessionalMemory(value: unknown): MemoryValidation {
+  if (value === undefined) return { ok: true };
+  if (!isRecord(value) || !hasOnlyKeys(value, ['schema', 'items'])) return { ok: false };
+  if (value.schema !== 'registro.professional-memory-remote/v1' || !Array.isArray(value.items)) return { ok: false };
+  if (value.items.length > MAX_PROFESSIONAL_MEMORY_ITEMS) return { ok: false };
+
+  const items: NonNullable<LibraryProposalRequestV1['professionalMemory']>['items'] = [];
+  for (const item of value.items) {
+    if (!isRecord(item) || !hasOnlyKeys(item, ['category', 'summary'])) return { ok: false };
+    if (!isNonEmptyString(item.category) || !PROFESSIONAL_MEMORY_CATEGORIES.has(item.category)) return { ok: false };
+    if (!isNonEmptyString(item.summary) || item.summary.trim().length > MAX_PROFESSIONAL_MEMORY_SUMMARY_CHARS) return { ok: false };
+    items.push({
+      category: item.category as NonNullable<LibraryProposalRequestV1['professionalMemory']>['items'][number]['category'],
+      summary: item.summary.trim()
+    });
+  }
+
+  return {
+    ok: true,
+    value: {
+      schema: 'registro.professional-memory-remote/v1',
+      items
+    }
   };
 }
 
@@ -204,24 +209,17 @@ function validateRequest(
 ): RequestValidation {
   if (!isRecord(value)) return { ok: false, reason: 'invalid' };
   if (!hasOnlyKeys(value, [
-    'schemaVersion',
-    'action',
-    'classification',
-    'explicitTeacherOptIn',
-    'source',
-    'context'
+    'schemaVersion', 'action', 'classification', 'explicitTeacherOptIn', 'source', 'context', 'professionalMemory'
   ])) return { ok: false, reason: 'invalid' };
-  if (value.schemaVersion !== 1 || value.action !== 'prepare-activity') {
-    return { ok: false, reason: 'invalid' };
-  }
-  if (value.classification !== 'TEACHER_PROFESSIONAL' || value.explicitTeacherOptIn !== true) {
-    return { ok: false, reason: 'invalid' };
-  }
+  if (value.schemaVersion !== 1 || value.action !== 'prepare-activity') return { ok: false, reason: 'invalid' };
+  if (value.classification !== 'TEACHER_PROFESSIONAL' || value.explicitTeacherOptIn !== true) return { ok: false, reason: 'invalid' };
 
   const source = validateSource(value.source, limits);
   if (!source.ok) return source;
   const context = validateContext(value.context);
   if (!context) return { ok: false, reason: 'invalid' };
+  const professionalMemory = validateProfessionalMemory(value.professionalMemory);
+  if (!professionalMemory.ok) return { ok: false, reason: 'invalid' };
 
   return {
     ok: true,
@@ -231,7 +229,8 @@ function validateRequest(
       classification: 'TEACHER_PROFESSIONAL',
       explicitTeacherOptIn: true,
       source: source.value,
-      context
+      context,
+      ...(professionalMemory.value ? { professionalMemory: professionalMemory.value } : {})
     }
   };
 }
@@ -239,122 +238,66 @@ function validateRequest(
 function policyAllowsRemote(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return value.classification === 'TEACHER_PROFESSIONAL' &&
-    evaluateDataFlow(
-      'TEACHER_PROFESSIONAL',
-      'REMOTE_PROVIDER',
-      value.explicitTeacherOptIn === true
-    ) === 'ALLOW';
+    evaluateDataFlow('TEACHER_PROFESSIONAL', 'REMOTE_PROVIDER', value.explicitTeacherOptIn === true) === 'ALLOW';
 }
 
 function isGovernedRuntime(value: TeachingProposalProvider | TeachingProposalRuntime): value is TeachingProposalRuntime {
   return 'config' in value && isRecord(value.config) && typeof value.generate === 'function';
 }
 
-function stableError(
-  code: LibraryProposalErrorCode,
-  status: number,
-  message: string,
-  retriable: boolean,
-  requestId?: string
-): LibraryProposalHandlerResult {
-  return {
-    status,
-    body: {
-      error: {
-        code,
-        message,
-        retriable,
-        ...(requestId ? { requestId } : {})
-      }
-    }
-  };
+function stableError(code: LibraryProposalErrorCode, status: number, message: string, retriable: boolean, requestId?: string): LibraryProposalHandlerResult {
+  return { status, body: { error: { code, message, retriable, ...(requestId ? { requestId } : {}) } } };
 }
 
 function mapRuntimeError(error: unknown, requestId?: string): LibraryProposalHandlerResult {
   if (error instanceof TeachingProposalRuntimeError) {
-    if (error.code === 'timeout') {
-      return stableError('PROVIDER_TIMEOUT', 504, 'Il servizio remoto non ha risposto entro il tempo previsto.', true, requestId);
-    }
+    if (error.code === 'timeout') return stableError('PROVIDER_TIMEOUT', 504, 'Il servizio remoto non ha risposto entro il tempo previsto.', true, requestId);
     return stableError('PROVIDER_ERROR', 502, 'La richiesta al servizio remoto è stata interrotta.', false, requestId);
   }
-
   if (error instanceof TeachingProposalProviderError) {
     switch (error.code) {
-      case 'not-configured':
-        return stableError('PROVIDER_NOT_CONFIGURED', 503, 'Il servizio remoto non è configurato.', false, requestId);
-      case 'rate-limited':
-        return stableError('PROVIDER_RATE_LIMITED', 429, 'Il servizio remoto ha raggiunto temporaneamente il proprio limite.', true, requestId);
-      case 'timeout':
-        return stableError('PROVIDER_TIMEOUT', 504, 'Il servizio remoto non ha risposto entro il tempo previsto.', true, requestId);
-      case 'blocked':
-        return stableError('PROVIDER_BLOCKED', 422, 'Il servizio remoto non può produrre una proposta per questa richiesta.', false, requestId);
-      case 'unavailable':
-        return stableError('PROVIDER_UNAVAILABLE', 503, 'Il servizio remoto è temporaneamente non disponibile.', true, requestId);
-      case 'output-invalid':
-        return stableError('PROVIDER_OUTPUT_INVALID', 502, 'Il servizio remoto ha restituito una proposta non valida.', false, requestId);
-      default:
-        return stableError('PROVIDER_ERROR', 502, 'Il servizio remoto non ha completato la richiesta.', false, requestId);
+      case 'not-configured': return stableError('PROVIDER_NOT_CONFIGURED', 503, 'Il servizio remoto non è configurato.', false, requestId);
+      case 'rate-limited': return stableError('PROVIDER_RATE_LIMITED', 429, 'Il servizio remoto ha raggiunto temporaneamente il proprio limite.', true, requestId);
+      case 'timeout': return stableError('PROVIDER_TIMEOUT', 504, 'Il servizio remoto non ha risposto entro il tempo previsto.', true, requestId);
+      case 'blocked': return stableError('PROVIDER_BLOCKED', 422, 'Il servizio remoto non può produrre una proposta per questa richiesta.', false, requestId);
+      case 'unavailable': return stableError('PROVIDER_UNAVAILABLE', 503, 'Il servizio remoto è temporaneamente non disponibile.', true, requestId);
+      case 'output-invalid': return stableError('PROVIDER_OUTPUT_INVALID', 502, 'Il servizio remoto ha restituito una proposta non valida.', false, requestId);
+      default: return stableError('PROVIDER_ERROR', 502, 'Il servizio remoto non ha completato la richiesta.', false, requestId);
     }
   }
-
   return stableError('PROVIDER_ERROR', 502, 'Il servizio remoto non ha completato la richiesta.', false, requestId);
 }
 
 function legacyLimits() {
-  return {
-    maxTextBytes: Number.POSITIVE_INFINITY,
-    maxInlineBytes: LEGACY_MAX_INLINE_BYTES
-  };
+  return { maxTextBytes: Number.POSITIVE_INFINITY, maxInlineBytes: LEGACY_MAX_INLINE_BYTES };
 }
 
-async function handleLegacyProvider(
-  body: unknown,
-  provider: TeachingProposalProvider,
-  now: () => string
-): Promise<LibraryProposalHandlerResult> {
+async function handleLegacyProvider(body: unknown, provider: TeachingProposalProvider, now: () => string): Promise<LibraryProposalHandlerResult> {
   if (!policyAllowsRemote(body)) {
-    return {
-      status: 403,
-      body: { error: 'Flusso verso provider remoto non consentito dalla policy SEC.' }
-    };
+    return { status: 403, body: { error: 'Flusso verso provider remoto non consentito dalla policy SEC.' } };
   }
-
   const validated = validateRequest(body, legacyLimits());
-  if (!validated.ok) {
-    return {
-      status: 400,
-      body: { error: 'Richiesta di proposta didattica non valida.' }
-    };
-  }
+  if (!validated.ok) return { status: 400, body: { error: 'Richiesta di proposta didattica non valida.' } };
 
   const request = validated.value;
   const providerInput: TeachingProposalProviderInput = {
     source: request.source,
-    context: request.context
+    context: request.context,
+    ...(request.professionalMemory ? { professionalMemory: request.professionalMemory } : {})
   };
 
   let rawProposal: unknown;
   try {
     rawProposal = await provider.generate(providerInput);
   } catch (error) {
-    return {
-      status: 502,
-      body: {
-        error: error instanceof Error
-          ? error.message
-          : 'Provider di proposta didattica non disponibile.'
-      }
-    };
+    return { status: 502, body: { error: error instanceof Error ? error.message : 'Provider di proposta didattica non disponibile.' } };
   }
 
   let content;
   try {
     content = parseTeachingProposalContent(rawProposal);
   } catch {
-    return {
-      status: 502,
-      body: { error: 'Il provider ha restituito una proposta didattica non valida.' }
-    };
+    return { status: 502, body: { error: 'Il provider ha restituito una proposta didattica non valida.' } };
   }
 
   const proposal: TeachingProposalV1 = {
@@ -362,18 +305,9 @@ async function handleLegacyProvider(
     kind: 'activity',
     ...content,
     sourceId: request.source.id,
-    context: {
-      udaId: request.context.udaId,
-      ...(request.context.lessonId ? { lessonId: request.context.lessonId } : {})
-    },
-    provenance: {
-      mode: 'remote',
-      provider: provider.id,
-      model: provider.model,
-      generatedAt: now()
-    }
+    context: { udaId: request.context.udaId, ...(request.context.lessonId ? { lessonId: request.context.lessonId } : {}) },
+    provenance: { mode: 'remote', provider: provider.id, model: provider.model, generatedAt: now() }
   };
-
   return { status: 200, body: { proposal } };
 }
 
@@ -383,41 +317,27 @@ export async function handleLibraryProposalRequest(
   nowOrOptions: (() => string) | LibraryProposalHandlerOptions = () => new Date().toISOString()
 ): Promise<LibraryProposalHandlerResult> {
   if (!isGovernedRuntime(executor)) {
-    const now = typeof nowOrOptions === 'function'
-      ? nowOrOptions
-      : nowOrOptions.now ?? (() => new Date().toISOString());
+    const now = typeof nowOrOptions === 'function' ? nowOrOptions : nowOrOptions.now ?? (() => new Date().toISOString());
     return handleLegacyProvider(body, executor, now);
   }
 
   const options = typeof nowOrOptions === 'function' ? { now: nowOrOptions } : nowOrOptions;
   const now = options.now ?? (() => new Date().toISOString());
-
   if (!policyAllowsRemote(body)) {
-    return stableError(
-      'REMOTE_POLICY_DENIED',
-      403,
-      'La policy non consente l’invio di questa fonte al servizio remoto.',
-      false
-    );
+    return stableError('REMOTE_POLICY_DENIED', 403, 'La policy non consente l’invio di questa fonte al servizio remoto.', false);
   }
 
   const validated = validateRequest(body, executor.config);
   if (!validated.ok) {
-    if (validated.reason === 'too-large') {
-      return stableError(
-        'SOURCE_TOO_LARGE',
-        413,
-        'La fonte supera il limite previsto per questa richiesta.',
-        false
-      );
-    }
+    if (validated.reason === 'too-large') return stableError('SOURCE_TOO_LARGE', 413, 'La fonte supera il limite previsto per questa richiesta.', false);
     return stableError('REQUEST_INVALID', 400, 'La richiesta di proposta didattica non è valida.', false);
   }
 
   const request = validated.value;
   const providerInput: TeachingProposalProviderInput = {
     source: request.source,
-    context: request.context
+    context: request.context,
+    ...(request.professionalMemory ? { professionalMemory: request.professionalMemory } : {})
   };
 
   let runtimeResult: { output: unknown; receipt: TeachingProposalRuntimeReceiptWire };
@@ -434,13 +354,7 @@ export async function handleLibraryProposalRequest(
   try {
     content = parseTeachingProposalContent(runtimeResult.output);
   } catch {
-    return stableError(
-      'PROVIDER_OUTPUT_INVALID',
-      502,
-      'Il servizio remoto ha restituito una proposta non valida.',
-      false,
-      runtimeResult.receipt.requestId
-    );
+    return stableError('PROVIDER_OUTPUT_INVALID', 502, 'Il servizio remoto ha restituito una proposta non valida.', false, runtimeResult.receipt.requestId);
   }
 
   const proposal: TeachingProposalV1 = {
@@ -448,10 +362,7 @@ export async function handleLibraryProposalRequest(
     kind: 'activity',
     ...content,
     sourceId: request.source.id,
-    context: {
-      udaId: request.context.udaId,
-      ...(request.context.lessonId ? { lessonId: request.context.lessonId } : {})
-    },
+    context: { udaId: request.context.udaId, ...(request.context.lessonId ? { lessonId: request.context.lessonId } : {}) },
     provenance: {
       mode: 'remote',
       provider: runtimeResult.receipt.provider,
@@ -460,11 +371,5 @@ export async function handleLibraryProposalRequest(
     }
   };
 
-  return {
-    status: 200,
-    body: {
-      proposal,
-      receipt: runtimeResult.receipt
-    }
-  };
+  return { status: 200, body: { proposal, receipt: runtimeResult.receipt } };
 }

@@ -1,3 +1,4 @@
+import type { RemoteProfessionalMemoryProjectionV1 } from '../memory/types';
 import type { UdaActivityType, UdaRecord } from '../types';
 import { isLocallyReadableTextMime } from './intake.ts';
 import type { LibrarySource, LibrarySourceKind } from './types';
@@ -25,6 +26,7 @@ export interface LibraryProposalRequestV1 {
     lessonTopic?: string;
     activityType?: UdaActivityType;
   };
+  professionalMemory?: RemoteProfessionalMemoryProjectionV1;
 }
 
 export interface TeachingProposalContent {
@@ -213,8 +215,9 @@ export function buildLibraryProposalRequest(input: {
   teachingContext: ResolvedLibraryTeachingContext;
   uda: UdaRecord;
   explicitTeacherOptIn: boolean;
+  professionalMemory?: RemoteProfessionalMemoryProjectionV1;
 }): LibraryProposalRequestV1 {
-  const { source, teachingContext, uda, explicitTeacherOptIn } = input;
+  const { source, teachingContext, uda, explicitTeacherOptIn, professionalMemory } = input;
 
   if (!explicitTeacherOptIn) throw new Error('Consenso remoto richiesto.');
   if (source.privacy !== 'teacher-professional') {
@@ -248,7 +251,8 @@ export function buildLibraryProposalRequest(input: {
       period: String(uda.period),
       ...(lesson ? { lessonId: lesson.id, lessonTopic: lesson.topic } : {}),
       ...(teachingContext.activityType ? { activityType: teachingContext.activityType } : {})
-    }
+    },
+    ...(professionalMemory?.items.length ? { professionalMemory } : {})
   };
 }
 
