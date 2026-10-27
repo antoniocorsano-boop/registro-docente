@@ -125,16 +125,16 @@ async function createAuthoritativePlanning(page) {
     authorityReceiptRef: 'aic-03-browser-authority-receipt',
     masterId: 'AIC-03-MASTER',
     masterVersion: '1.0',
-    structuralFingerprint: { scope: 'MASTER', algorithm: 'fnv1a', version: 1, hash: 'aic03browserhash' },
+    structuralFingerprint: { scope: 'MASTER', algorithm: 'fnv1a', version: 1, hash: 'a1c03e01' },
     provenance: {
-      repository: 'synthetic/aic-03-arena',
-      sourceCommit: 'aic03browsercommit',
+      repository: 'antoniocorsano-boop/CurManLight_arena',
+      sourceCommit: '1234567890abcdef1234567890abcdef12345678',
       sourceDocumentId: 'aic03-curriculum',
       sourceRevisionId: 'aic03-rev-1'
     },
     curricoloItems: [{
       id: 'curr-energy-wind',
-      kind: 'OBIETTIVO',
+      kind: 'ANNUALITA_DISCIPLINARE',
       schoolStage: 'Secondaria di primo grado',
       gradeLabel: 'Classe III',
       sourceSection: 'Energia',
