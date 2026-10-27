@@ -202,7 +202,14 @@ describe('LIB-01E governed proposal route contract', () => {
     expect(result.status).toBe(200);
     expect(calls).toHaveLength(1);
     const body = result.body as any;
-    expect(body.receipt).toEqual(RECEIPT);
+    expect(body.receipt).toEqual({
+      ...RECEIPT,
+      budget: {
+        tier: 'remote-low',
+        profile: 'balanced',
+        escalated: false
+      }
+    });
     expect(body.proposal).toMatchObject({
       schemaVersion: 1,
       kind: 'activity',
