@@ -36,13 +36,17 @@ const AGENT_TO_ACTION_ID: Partial<Record<IntentEnvelopeV1['intent'], string>> = 
   LINK: 'link-source-to-uda'
 };
 
-function needsContextBinding(envelope: IntentEnvelopeV1): boolean {
+function needsContextBinding(envelope: IntentEnvelopeV1, source: LibrarySource | null): boolean {
   if (envelope.contextTarget !== 'current') return true;
-  return [
-    envelope.classReference,
-    envelope.udaReference,
-    envelope.sourceReference
-  ].some(reference => reference !== undefined && reference !== 'current');
+
+  if ([envelope.classReference, envelope.udaReference]
+    .some(reference => reference !== undefined && reference !== 'current')) {
+    return true;
+  }
+
+  return envelope.sourceReference !== undefined
+    && envelope.sourceReference !== 'current'
+    && !(envelope.sourceReference === 'none' && source === null);
 }
 
 export function routeAgentIntent(
@@ -66,7 +70,7 @@ export async function routeAgentIntent({
     };
   }
 
-  if (needsContextBinding(envelope)) {
+  if (needsContextBinding(envelope, source)) {
     return {
       kind: 'CLARIFY',
       question: 'Hai indicato un contesto specifico. Vuoi usare il contesto corrente oppure selezionare prima quello a cui ti riferisci?',
