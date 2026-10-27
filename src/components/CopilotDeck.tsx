@@ -228,7 +228,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
               return (
                 <section key={group.scope} aria-labelledby={`copilot-group-${group.scope}`} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    <Icon className="h-4 w-4 text-slate-400" aria-hidden={true} />
                     <h3 id={`copilot-group-${group.scope}`} className="text-xs font-bold uppercase tracking-wider text-slate-300">{group.label}</h3>
                   </div>
                   {group.opportunities.length === 0 ? (
