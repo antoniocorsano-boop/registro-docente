@@ -339,6 +339,9 @@ test('AIC-05 manual professional memory lifecycle survives reload and never muta
   let entry = panel.locator('[data-testid^="copilot-memory-entry-"]').filter({ hasText: MANUAL_MEMORY });
   await expect(entry).toHaveCount(1);
   await expect(entry.getByText('Ricordo confermato dal docente', { exact: true })).toBeVisible();
+  const entryTestId = await entry.getAttribute('data-testid');
+  expect(entryTestId).toBeTruthy();
+  entry = panel.getByTestId(entryTestId);
 
   await entry.getByRole('button', { name: 'Modifica', exact: true }).click();
   await entry.locator('textarea').fill(EDITED_MEMORY);
@@ -350,8 +353,8 @@ test('AIC-05 manual professional memory lifecycle survives reload and never muta
   composer = await openComposer(page);
   await selectComposerSource(composer, SOURCE_A);
   panel = await openMemoryPanel(composer);
-  entry = panel.locator('[data-testid^="copilot-memory-entry-"]').filter({ hasText: EDITED_MEMORY });
-  await expect(entry).toHaveCount(1);
+  entry = panel.getByTestId(entryTestId);
+  await expect(entry).toContainText(EDITED_MEMORY);
   await expect(entry.getByText('Ricordo confermato dal docente', { exact: true })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept());
@@ -405,8 +408,9 @@ test('AIC-05 automatic material-reuse category is durable, revocable and does no
   let category = panel.getByTestId('copilot-memory-category-material-reuse');
   let toggle = category.getByRole('checkbox');
   await expect(toggle).not.toBeChecked();
-  await toggle.check();
+  await toggle.click();
   await expect(panel.getByRole('status')).toContainText('Memoria automatica attivata per questa categoria.');
+  await expect(toggle).toBeChecked();
 
   await reloadAndUnlock(page);
   await selectSyntheticClass(page);
@@ -429,8 +433,9 @@ test('AIC-05 automatic material-reuse category is durable, revocable and does no
 
   category = panel.getByTestId('copilot-memory-category-material-reuse');
   toggle = category.getByRole('checkbox');
-  await toggle.uncheck();
+  await toggle.click();
   await expect(panel.getByRole('status')).toContainText('Memoria automatica disattivata per questa categoria.');
+  await expect(toggle).not.toBeChecked();
 
   await reloadAndUnlock(page);
   await selectSyntheticClass(page);
@@ -481,7 +486,7 @@ test('AIC-05 fails closed for ambiguous student-bearing material and does not le
   await addSyntheticSource(page, STUDENT_SOURCE, STUDENT_SOURCE_TEXT);
   await reloadAndUnlock(page);
   await selectSyntheticClass(page);
-  await page.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Valutazioni', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
 
   let composer = await openComposer(page);
