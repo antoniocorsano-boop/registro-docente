@@ -415,6 +415,29 @@ export function reconcileOpenUdaRecord(current: UdaRecord | null, udas: UdaRecor
   return udas.find(uda => uda.id === current.id) || null;
 }
 
+export function rebaseOpenUdaPatch(
+  currentUdas: UdaRecord[],
+  openDossier: Pick<UdaRecord, 'id'>,
+  patch: Partial<UdaRecord>
+): UdaRecord[] {
+  return currentUdas.map(uda =>
+    uda.id === openDossier.id ? { ...uda, ...patch } : uda
+  );
+}
+
+export function rebaseOpenUdaFieldEdit(
+  currentUdas: UdaRecord[],
+  openDossier: UdaRecord,
+  field: keyof UdaRecord,
+  value: unknown
+): UdaRecord[] {
+  return rebaseOpenUdaPatch(
+    currentUdas,
+    openDossier,
+    { [field]: value } as Partial<UdaRecord>
+  );
+}
+
 export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   classes,
   udas,
@@ -1115,7 +1138,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     if (!selectedUdaForDetail) return;
     const updatedUda = { ...selectedUdaForDetail, [field]: value };
     setSelectedUdaForDetail(updatedUda);
-    const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
+    const nextUdas = rebaseOpenUdaFieldEdit(udas, selectedUdaForDetail, field, value);
     queueUdaTextMutation(nextUdas);
   };
 
@@ -1128,7 +1151,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     };
     const updatedUda = { ...selectedUdaForDetail, rubricLevels: updatedRubric };
     setSelectedUdaForDetail(updatedUda);
-    const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
+    const nextUdas = rebaseOpenUdaPatch(udas, selectedUdaForDetail, { rubricLevels: updatedRubric });
     queueUdaTextMutation(nextUdas);
   };
 
