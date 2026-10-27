@@ -26,8 +26,16 @@ import {
   type LibrarySourcePatch
 } from './library/libraryState';
 import { createEmptyProfessionalMemoryState } from './memory/emptyProfessionalMemoryState';
-import type { ProfessionalMemoryStateV1 } from './memory/types';
-import type { RecordProfessionalMemoryEventInput } from './memory/professionalMemory';
+import type { ProfessionalMemoryCategory, ProfessionalMemoryStateV1 } from './memory/types';
+import {
+  correctProfessionalMemoryEntry,
+  rememberProfessionalItem,
+  removeProfessionalMemoryCategory,
+  removeProfessionalMemoryEntry,
+  setAutoRememberCategory,
+  type RecordProfessionalMemoryEventInput,
+  type RememberProfessionalItemInput
+} from './memory/professionalMemory';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -200,7 +208,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
-  void professionalMemoryError;
 
   const openLibraryCopilot = useCallback((context: CopilotLaunchContext) => {
     setLaunchRequest(previous => ({
@@ -429,6 +436,85 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setProfessionalMemoryError(message);
     }
   }, [secureStorage]);
+
+  const commitProfessionalMemoryMutation = useCallback((
+    derive: (current: ProfessionalMemoryStateV1) => ProfessionalMemoryStateV1,
+    successMessage: string
+  ): Promise<ProfessionalMemoryStateV1> => {
+    setProfessionalMemoryError(null);
+    return mutationCoordinator.enqueue<{
+      professionalMemory: ProfessionalMemoryStateV1;
+      meta: SecureMeta;
+    }>({
+      getCommitted: () => ({
+        professionalMemory: professionalMemoryRef.current,
+        meta: metaRef.current
+      }),
+      derive: current => ({
+        professionalMemory: derive(current.professionalMemory),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveProfessionalMemoryAndMeta(
+        candidate.professionalMemory,
+        candidate.meta
+      ),
+      publish: candidate => {
+        professionalMemoryRef.current = candidate.professionalMemory;
+        metaRef.current = candidate.meta;
+        setProfessionalMemory(candidate.professionalMemory);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast(successMessage)
+    }).then(candidate => candidate.professionalMemory).catch(error => {
+      console.error('Professional memory mutation failed', error);
+      const message = error instanceof Error
+        ? error.message
+        : 'Salvataggio memoria professionale non riuscito.';
+      setProfessionalMemoryError(message);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleRememberProfessionalItem = useCallback((
+    input: RememberProfessionalItemInput
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => rememberProfessionalItem(current, input),
+    'Ricordo professionale salvato'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handleCorrectMemoryEntry = useCallback((
+    entryId: string,
+    summary: string
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => correctProfessionalMemoryEntry(current, {
+      entryId,
+      summary,
+      correctedAt: new Date().toISOString()
+    }),
+    'Ricordo professionale aggiornato'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handleRemoveMemoryEntry = useCallback((entryId: string): Promise<void> =>
+    commitProfessionalMemoryMutation(
+      current => removeProfessionalMemoryEntry(current, entryId),
+      'Ricordo professionale rimosso'
+    ).then(() => undefined),
+  [commitProfessionalMemoryMutation]);
+
+  const handleSetMemoryCategory = useCallback((
+    category: ProfessionalMemoryCategory,
+    enabled: boolean
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => setAutoRememberCategory(current, category, enabled),
+    enabled ? 'Memoria automatica attivata' : 'Memoria automatica disattivata'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handleRemoveMemoryCategory = useCallback((
+    category: ProfessionalMemoryCategory
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => removeProfessionalMemoryCategory(current, category),
+    'Ricordi della categoria eliminati'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
 
   const handleAdoptTeachingProposalToUda = useCallback((
     input: TeachingProposalOutcomeMutationInput
@@ -1362,6 +1448,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           udas={udas}
           planning={planning}
           professionalMemory={professionalMemory}
+          memoryError={professionalMemoryError}
           currentClassName={currentClass?.name ?? null}
           launchRequest={launchRequest}
           ambientContext={ambientCopilotContext}
@@ -1369,6 +1456,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
           onUpdateSource={handleUpdateLibrarySource}
           onLink={handleLinkLibrarySource}
+          onRemember={handleRememberProfessionalItem}
+          onCorrectMemoryEntry={handleCorrectMemoryEntry}
+          onRemoveMemoryEntry={handleRemoveMemoryEntry}
+          onSetMemoryCategory={handleSetMemoryCategory}
+          onRemoveMemoryCategory={handleRemoveMemoryCategory}
           isPending={isLibraryMutationPending}
         />
       )}
