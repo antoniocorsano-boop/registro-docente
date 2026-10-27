@@ -1,3 +1,5 @@
+import type { AiBudgetProfile } from './copilot/aiBudgetGovernor';
+
 export type EvaluationType = 'test' | 'verifica' | 'orale' | 'disegno' | 'osserv';
 
 export interface Student {
@@ -122,6 +124,7 @@ export interface AppSettings {
   evaluationWeights?: Record<EvaluationType, number>; // Pesi in percentuale (es. 100, 80, 50)
   useWeightedAverage?: boolean; // Se abilitare la media ponderata come calcolo predefinito
   embeddingConfig?: LocalEmbeddingConfig; // Configurazione motore vettoriale / embedding locale
+  aiBudgetProfile?: AiBudgetProfile; // Profilo base durevole; le autorizzazioni temporanee non vengono persistite
 }
 
 
@@ -155,4 +158,3 @@ export type ActiveTab =
   | 'biblioteca'
   | 'impostazioni'
   | 'privacy';
-
