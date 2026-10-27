@@ -368,7 +368,7 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
   await expect(editor).toBeVisible();
   await editor.getByLabel('Titolo').fill(ADAPTED_TITLE);
   await editor.getByLabel('Consegna agli studenti').fill(ADAPTED_TASK);
-  await editor.getByRole('button', { name: 'Salva adattamento', exact: true }).click();
+  await editor.getByRole('button', { name: 'Adotta in Biblioteca', exact: true }).click();
 
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   const adopted = await sourceCard(page, ADAPTED_TITLE);
