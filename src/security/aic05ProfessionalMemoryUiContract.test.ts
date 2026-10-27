@@ -93,4 +93,26 @@ describe('AIC-05 Task 6 progressive professional memory controls', () => {
     expect(panel).toContain('data-testid="copilot-memory-relevant"');
     expect(panel).toContain('relevantMemory.items');
   });
+
+  test('discloses professional memory before remote PREPARE consent', async () => {
+    const [proposalPanel, memoryPanel] = await Promise.all([
+      readSource('components/LibraryProposalPanel.tsx'),
+      readSource('components/ProfessionalMemoryPanel.tsx')
+    ]);
+
+    const disclosureStart = proposalPanel.indexOf('Questa richiesta invia');
+    const consentStart = proposalPanel.indexOf('{!remoteConsent', disclosureStart);
+    expect(disclosureStart).toBeGreaterThanOrEqual(0);
+    expect(consentStart).toBeGreaterThan(disclosureStart);
+    expect(proposalPanel.slice(disclosureStart, consentStart).toLowerCase()).toContain('memoria professionale');
+    expect(memoryPanel.toLowerCase()).toContain('servizio remoto');
+  });
+
+  test('invalidates an open remember confirmation when the candidate identity changes', async () => {
+    const panel = await readSource('components/ProfessionalMemoryPanel.tsx');
+
+    expect(panel).toContain('rememberCandidateIdentity');
+    expect(panel).toContain('setIsRememberConfirmationOpen(false)');
+    expect(panel).toMatch(/useEffect\([\s\S]*?\[rememberCandidateIdentity\]\);/);
+  });
 });
