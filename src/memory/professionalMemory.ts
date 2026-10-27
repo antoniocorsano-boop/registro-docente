@@ -151,7 +151,7 @@ export function recordProfessionalMemoryEvent(
     const current = entries[reusableIndex]!;
     entries[reusableIndex] = {
       ...current,
-      summary: input.descriptor,
+      summary: current.correctedByTeacherAt ? current.summary : input.descriptor,
       sourceEventIds: appendUnique(current.sourceEventIds, input.id),
       updatedAt: input.occurredAt
     };
@@ -314,7 +314,7 @@ export function toRemoteProfessionalMemoryProjection(
     schema: 'registro.professional-memory-remote/v1',
     items: workingSet.items.slice(0, 5).map(item => ({
       category: item.category,
-      summary: item.summary
+      summary: item.summary.slice(0, 800)
     }))
   };
 }

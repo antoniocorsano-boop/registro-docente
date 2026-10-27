@@ -380,7 +380,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }, [mutationCoordinator, secureStorage, toast]);
 
   const commitLibraryMutation = useCallback((
-    derive: (current: LibraryStateV1) => LibraryStateV1
+    derive: (current: LibraryStateV1) => LibraryStateV1,
+    afterCanonicalCommit?: (committedLibrary: LibraryStateV1) => Promise<void>
   ): Promise<LibraryStateV1> => {
     libraryMutationPendingCountRef.current += 1;
     setIsLibraryMutationPending(true);
@@ -398,6 +399,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setLibrary(candidate.library);
       setMeta(candidate.meta);
       toast('Biblioteca aggiornata');
+      if (afterCanonicalCommit) {
+        try {
+          await afterCanonicalCommit(candidate.library);
+        } catch (error) {
+          console.error('Post-library derived work failed', error);
+        }
+      }
       return candidate.library;
     }).catch(error => {
       console.error('Secure library save failed', error);
@@ -578,34 +586,38 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     commitLibraryMutation(current => updateLibrarySource(current, sourceId, patch)).then(() => undefined),
   [commitLibraryMutation]);
 
-  const handleLinkLibrarySource = useCallback(async (
+  const handleLinkLibrarySource = useCallback((
     sourceId: string,
     link: LibrarySourceLink
-  ): Promise<void> => {
-    await commitLibraryMutation(current => linkLibrarySource(current, sourceId, link));
-    const source = libraryRef.current.sources.find(candidate => candidate.id === sourceId);
-    const privacyClassification: RecordProfessionalMemoryEventInput['privacyClassification'] =
-      source?.privacy === 'teacher-professional'
-        ? 'TEACHER_PROFESSIONAL'
-        : source?.privacy === 'student-personal'
-          ? 'STUDENT_PERSONAL'
-          : 'AMBIGUOUS';
-    const occurredAt = new Date().toISOString();
-    await persistDerivedMemoryEvent({
-      id: `source-linked:${sourceId}:${link.targetType}:${link.targetId}:${occurredAt}`,
-      kind: 'source-linked',
-      category: 'material-reuse',
-      occurredAt,
-      descriptor: 'Fonte professionale collegata al contesto didattico corrente.',
-      context: {
-        sourceId,
-        ...(link.targetType === 'uda' ? { udaId: link.targetId } : {}),
-        ...(link.targetType === 'lesson' ? { lessonId: link.targetId } : {})
-      },
-      canonicalRef: `source:${sourceId}`,
-      privacyClassification
-    });
-  }, [commitLibraryMutation, persistDerivedMemoryEvent]);
+  ): Promise<void> =>
+    commitLibraryMutation(
+      current => linkLibrarySource(current, sourceId, link),
+      async committedLibrary => {
+        const source = committedLibrary.sources.find(candidate => candidate.id === sourceId);
+        const privacyClassification: RecordProfessionalMemoryEventInput['privacyClassification'] =
+          source?.privacy === 'teacher-professional'
+            ? 'TEACHER_PROFESSIONAL'
+            : source?.privacy === 'student-personal'
+              ? 'STUDENT_PERSONAL'
+              : 'AMBIGUOUS';
+        const occurredAt = new Date().toISOString();
+        await persistDerivedMemoryEvent({
+          id: `source-linked:${sourceId}:${link.targetType}:${link.targetId}:${occurredAt}`,
+          kind: 'source-linked',
+          category: 'material-reuse',
+          occurredAt,
+          descriptor: 'Fonte professionale collegata al contesto didattico corrente.',
+          context: {
+            sourceId,
+            ...(link.targetType === 'uda' ? { udaId: link.targetId } : {}),
+            ...(link.targetType === 'lesson' ? { lessonId: link.targetId } : {})
+          },
+          canonicalRef: `source:${sourceId}`,
+          privacyClassification
+        });
+      }
+    ).then(() => undefined),
+  [commitLibraryMutation, persistDerivedMemoryEvent]);
 
   const handleUnlinkLibrarySource = useCallback((
     sourceId: string,
