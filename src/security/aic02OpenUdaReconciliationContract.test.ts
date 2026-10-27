@@ -14,13 +14,18 @@ function uda(id: string, lessons: Array<{ id: string; topic: string }> = []): Ud
     id,
     title: `UDA ${id}`,
     className: '3ª A',
+    hours: 10,
+    period: 'Q1',
+    startMonth: 1,
+    durationMonths: 2,
+    description: 'Fixture sintetico AIC-02',
     lessons: lessons.map(lesson => ({
       id: lesson.id,
       date: '2026-10-27',
       topic: lesson.topic,
       hours: 1
     }))
-  } as UdaRecord;
+  };
 }
 
 describe('AIC-02 open UDA dossier reconciliation', () => {
