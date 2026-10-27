@@ -64,6 +64,7 @@ const AI_BUDGET_AUTHORIZATION_SCOPES = new Set(['operation', 'activity']);
 const MAX_PROFESSIONAL_MEMORY_ITEMS = 5;
 const MAX_PROFESSIONAL_MEMORY_SUMMARY_CHARS = 800;
 const LEGACY_MAX_INLINE_BYTES = 8 * 1024 * 1024;
+const consumedOperationAuthorizations = new Map<string, number>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -90,6 +91,35 @@ function isBase64Syntax(value: unknown): value is string {
 
 function utf8Bytes(value: string): number {
   return new TextEncoder().encode(value).byteLength;
+}
+
+function providerBoundContextTextBytes(request: LibraryProposalRequestV1): number {
+  const values = [
+    request.source.title,
+    request.context.className,
+    request.context.period,
+    request.context.udaTitle,
+    request.context.lessonTopic,
+    request.context.activityType,
+    ...(request.professionalMemory?.items.flatMap(item => [item.category, item.summary]) ?? [])
+  ];
+  return values.reduce((total, value) => total + (typeof value === 'string' ? utf8Bytes(value) : 0), 0);
+}
+
+function operationAuthorizationKey(authorization: AiBudgetAuthorizationV1): string {
+  return [authorization.activityKey, authorization.issuedAt, authorization.expiresAt].join('\u001f');
+}
+
+function consumeOperationAuthorization(authorization: AiBudgetAuthorizationV1, nowIso: string): boolean {
+  if (authorization.scope !== 'operation') return true;
+  const nowMs = Date.parse(nowIso);
+  for (const [key, expiresAt] of consumedOperationAuthorizations) {
+    if (expiresAt <= nowMs) consumedOperationAuthorizations.delete(key);
+  }
+  const key = operationAuthorizationKey(authorization);
+  if (consumedOperationAuthorizations.has(key)) return false;
+  consumedOperationAuthorizations.set(key, Date.parse(authorization.expiresAt));
+  return true;
 }
 
 type SourceValidation =
@@ -401,6 +431,7 @@ export async function handleLibraryProposalRequest(
 
   const request = validated.value;
   const budgetMetrics = measureLibraryProposalBudget(request);
+  budgetMetrics.textBytes += providerBoundContextTextBytes(request);
   const evaluatedAt = now();
   const budgetDecision = resolvePrepareBudget({
     profile: request.budget.profile,
@@ -418,6 +449,30 @@ export async function handleLibraryProposalRequest(
       options.requestId,
       budgetDecision.reason
     );
+  }
+
+  if (
+    budgetDecision.escalated &&
+    request.budget.authorization?.scope === 'operation' &&
+    !consumeOperationAuthorization(request.budget.authorization, evaluatedAt)
+  ) {
+    const withoutAuthorization = resolvePrepareBudget({
+      profile: request.budget.profile,
+      ...budgetMetrics,
+      activityKey: request.budget.activityKey,
+      now: evaluatedAt
+    });
+    if (withoutAuthorization.kind === 'escalation-required') {
+      return stableError(
+        'AI_BUDGET_ESCALATION_REQUIRED',
+        409,
+        withoutAuthorization.explanation,
+        false,
+        options.requestId,
+        withoutAuthorization.reason
+      );
+    }
+    return stableError('REQUEST_INVALID', 400, 'La richiesta di proposta didattica non è valida.', false, options.requestId);
   }
 
   const budgetReceipt = {
