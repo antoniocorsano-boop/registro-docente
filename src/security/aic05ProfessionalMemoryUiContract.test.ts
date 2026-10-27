@@ -79,6 +79,16 @@ describe('AIC-05 Task 6 progressive professional memory controls', () => {
     expect(app).toContain('removeProfessionalMemoryCategory');
   });
 
+  test('keeps category cleanup available when only retained events remain', async () => {
+    const panel = await readSource('components/ProfessionalMemoryPanel.tsx');
+
+    expect(panel).toContain('eventCount');
+    expect(panel).toContain('state.events.filter(event => event.category === category).length');
+    expect(panel).toContain('categoryDataCount');
+    expect(panel).toMatch(/categoryDataCount\s*>\s*0/);
+    expect(panel).not.toContain('if (count === 0) return;');
+  });
+
   test('persists manual memory mutations truthfully and shows only the bounded relevant working set', async () => {
     const [app, composer, panel] = await Promise.all([
       readSource('App.tsx'),
