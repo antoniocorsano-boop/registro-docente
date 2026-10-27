@@ -7,7 +7,7 @@ import {
   type AiBudgetEscalationReason,
   type AiBudgetProfile,
   type AiRemoteTier
-} from '../copilot/aiBudgetGovernor';
+} from '../copilot/aiBudgetGovernor.ts';
 import { isLocallyReadableTextMime } from './intake.ts';
 import type { LibrarySource, LibrarySourceKind } from './types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
