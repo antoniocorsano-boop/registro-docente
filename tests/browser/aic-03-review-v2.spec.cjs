@@ -9,7 +9,7 @@ const CLASS_NAME = '3C';
 const UDA_TITLE = 'Energia eolica e trasformazioni AIC-03';
 const LESSON_TOPIC = 'Energia eolica e turbina AIC-03';
 const SOURCE_TITLE = 'Energia eolica e turbina AIC-03';
-const WEAK_SOURCE_TITLE = 'Ceramica argilla cottura AIC-03';
+const WEAK_SOURCE_TITLE = 'Ceramica argilla cottura';
 const REVIEW_MESSAGE = 'Rivedi questa fonte nel contesto didattico corrente';
 
 function intentEnvelope(intent) {
@@ -320,7 +320,7 @@ test('AIC-03 REVIEW v2 is structured and local/read-only — desktop', async ({ 
   await expect(panel).toHaveCount(0);
 
   state.failIntent = true;
-  await submit(composer, REVIEW_MESSAGE);
+  await submit(composer, 'rivedi questa fonte nel contesto della programmazione');
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
   state.failIntent = false;
 
