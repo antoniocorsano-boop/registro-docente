@@ -35,8 +35,8 @@
 1. **Stale evidence / source mutation:** an opportunity created from a source or UDA that changes before Play must be suppressed or re-previewed, never executed against stale context. Task 1 and Task 3 tests pin this.
 2. **Immediate reappearance after Ignore:** ignoring an opportunity must suppress the same opportunity in the same context fingerprint while still allowing it to return after a material context change. Task 2 tests pin this.
 3. **Reload during active mission:** `authorized`/`running` work restored from Vault must become `suspended`; no persisted Play token may silently restart remote work. Task 3 and Task 4 tests pin this.
-4. **Preference-store corruption/unavailability:** ranking must fall back to the selected base proactivity profile instead of blocking normal Registro/Copilot work. Task 2 and Task 4 tests pin this.
-5. **Mission handoff encounters privacy/Core/budget denial:** the mission must suspend or report a teacher-language blocked state while preserving completed safe work; it must not reinterpret the denial as teacher rejection or bypass the gate. Task 6 tests pin this.
+4. **Preference-state corruption/unavailability:** ranking must fall back to the selected base proactivity profile instead of blocking normal Registro/Copilot work. Task 7 failure tests pin this.
+5. **Mission handoff encounters privacy/Core/budget denial:** the mission must suspend or report a teacher-language blocked state while preserving completed safe work; it must not reinterpret the denial as teacher rejection or bypass the gate. Task 6 and Task 7 tests pin this.
 
 ---
 
@@ -532,7 +532,7 @@ Prove:
 
 Prove:
 - opportunity resolver failure -> Deck falls back to explicit “Parla con il Copilota” and normal Registro remains usable;
-- preference-state failure -> base profile ranking;
+- preference-state failure/corruption -> base profile ranking;
 - Core/privacy/provider/budget denial -> mission suspended/blocked with safe reason, not teacher-rejection signal;
 - retry does not reuse expired mission execution grant.
 
