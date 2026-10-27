@@ -110,7 +110,9 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('message.trim()');
     expect(composerSource).toContain('const resolutionSnapshot = currentResolutionSnapshot');
     expect(composerSource).toContain('resolutionSnapshot === resolutionSnapshotRef.current');
-    expect(composerSource).toContain('request: buildLibraryCopilotRequest({');
+    expect(composerSource).toContain('sourceRequest: selectedSource');
+    expect(composerSource).toContain('buildLibraryCopilotRequest({');
+    expect(composerSource).toContain('message: message.trim(),');
     expect(composerSource).toContain('contextProjection: copilotContextProjection');
     expect(composerSource).toContain('planningContext: resolvedPlanningContext');
 
