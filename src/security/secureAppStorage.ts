@@ -74,9 +74,15 @@ function canonicalizeCompleteSnapshot(
   snapshot: CompleteSecureAppSnapshot
 ): CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 } {
   return {
-    ...snapshot,
+    appData: snapshot.appData,
     settings: sanitizePersistedSettings(snapshot.settings),
-    professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState()
+    udas: snapshot.udas,
+    customTests: snapshot.customTests,
+    submissions: snapshot.submissions,
+    planning: snapshot.planning,
+    library: snapshot.library,
+    professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState(),
+    meta: snapshot.meta
   };
 }
 
@@ -254,17 +260,17 @@ export class SecureAppStorage {
   }
 
   private writeCompleteSnapshotAtomic(snapshot: CompleteSecureAppSnapshot): Promise<void> {
-    const canonical = canonicalizeCompleteSnapshot(snapshot);
+    const sanitized = canonicalizeCompleteSnapshot(snapshot);
     return this.vault.putMany([
-      { key: 'appData', value: canonical.appData },
-      { key: 'settings', value: canonical.settings },
-      { key: 'udas', value: canonical.udas },
-      { key: 'customTests', value: canonical.customTests },
-      { key: 'submissions', value: canonical.submissions },
-      { key: 'planning', value: canonical.planning },
-      { key: 'library', value: canonical.library },
-      { key: 'professionalMemory', value: canonical.professionalMemory },
-      { key: 'meta', value: canonical.meta }
+      { key: 'appData', value: sanitized.appData },
+      { key: 'settings', value: sanitized.settings },
+      { key: 'udas', value: sanitized.udas },
+      { key: 'customTests', value: sanitized.customTests },
+      { key: 'submissions', value: sanitized.submissions },
+      { key: 'planning', value: sanitized.planning },
+      { key: 'library', value: sanitized.library },
+      { key: 'professionalMemory', value: sanitized.professionalMemory },
+      { key: 'meta', value: sanitized.meta }
     ]);
   }
 
