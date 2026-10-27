@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { buildAiBudgetActivityKey } from '../copilot/aiBudgetGovernor';
 
 const VALID_REQUEST = {
   schemaVersion: 1,
@@ -19,6 +20,11 @@ const VALID_REQUEST = {
     lessonId: 'lesson-lib01d-route',
     lessonTopic: 'Trasformazioni di energia',
     activityType: 'laboratorio'
+  },
+  budget: {
+    schemaVersion: 1,
+    profile: 'balanced',
+    activityKey: buildAiBudgetActivityKey('uda-lib01d-route', 'lesson-lib01d-route')
   }
 };
 
