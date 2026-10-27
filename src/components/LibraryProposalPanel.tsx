@@ -17,6 +17,10 @@ import {
   type LibraryProposalProviderMetadata
 } from '../services/libraryProposalService';
 import { uid } from '../utils';
+import type {
+  TeachingProposalOutcomeCandidate,
+  TeachingProposalOutcomeMutationInput
+} from '../persistence/teachingProposalOutcomeMutation';
 
 interface LibraryProposalPanelProps {
   source: LibrarySource;
@@ -25,9 +29,19 @@ interface LibraryProposalPanelProps {
   isPending: boolean;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onAddSource: (source: LibrarySource) => Promise<void>;
+  onAdoptProposalToUda: (
+    input: TeachingProposalOutcomeMutationInput
+  ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
 }
 
 type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 function contentFromProposal(proposal: TeachingProposalV1): TeachingProposalContent {
   return {
@@ -47,7 +61,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   teachingContext,
   isPending,
   onUpdate,
-  onAddSource
+  onAddSource,
+  onAdoptProposalToUda
 }) => {
   const [remoteConsent, setRemoteConsent] = useState(false);
   const [remoteActions, setRemoteActions] = useState<readonly ResolvedAction[]>([]);
@@ -64,11 +79,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const adoptionSourceIdRef = useRef<string | null>(null);
+  const adoptionLessonIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     requestControllerRef.current?.abort();
     requestControllerRef.current = null;
     adoptionSourceIdRef.current = null;
+    adoptionLessonIdRef.current = null;
     setRemoteConsent(false);
     setRemoteActions([]);
     setIsRemoteLoading(false);
@@ -168,6 +185,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setIsEditing(false);
     setEditedContent(null);
     adoptionSourceIdRef.current = null;
+    adoptionLessonIdRef.current = null;
     const controller = new AbortController();
     requestControllerRef.current = controller;
 
@@ -180,6 +198,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       });
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
+      adoptionLessonIdRef.current = uid();
       setProposal(result.proposal);
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -199,6 +218,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
 
   const leaveProposal = () => {
     adoptionSourceIdRef.current = null;
+    adoptionLessonIdRef.current = null;
     setProposal(null);
     setIsEditing(false);
     setEditedContent(null);
@@ -214,7 +234,16 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setIsEditing(true);
   };
 
-  const adoptContent = async (content: TeachingProposalContent) => {
+  const clearAdoptedProposal = () => {
+    adoptionSourceIdRef.current = null;
+    adoptionLessonIdRef.current = null;
+    setProposal(null);
+    setIsEditing(false);
+    setEditedContent(null);
+    setAdoptionError(null);
+  };
+
+  const adoptLibraryContent = async (content: TeachingProposalContent) => {
     if (!proposal || isAdopting) return;
     const adoptionId = adoptionSourceIdRef.current ?? uid();
     adoptionSourceIdRef.current = adoptionId;
@@ -229,16 +258,43 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         capturedAt: new Date().toISOString()
       });
       await onAddSource(adopted);
-      adoptionSourceIdRef.current = null;
-      setProposal(null);
-      setIsEditing(false);
-      setEditedContent(null);
-      setAdoptionError(null);
+      clearAdoptedProposal();
     } catch (reason) {
       setAdoptionError(
         reason instanceof Error && reason.message
           ? reason.message
           : 'Salvataggio della proposta non riuscito. Puoi riprovare senza rigenerarla.'
+      );
+    } finally {
+      setIsAdopting(false);
+    }
+  };
+
+  const adoptUdaContent = async (content: TeachingProposalContent) => {
+    if (!proposal || isAdopting) return;
+    const sourceId = adoptionSourceIdRef.current ?? uid();
+    const lessonId = adoptionLessonIdRef.current ?? uid();
+    adoptionSourceIdRef.current = sourceId;
+    adoptionLessonIdRef.current = lessonId;
+    setIsAdopting(true);
+    setAdoptionError(null);
+
+    try {
+      await onAdoptProposalToUda({
+        proposal,
+        content,
+        teachingContext,
+        sourceId,
+        lessonId,
+        capturedAt: new Date().toISOString(),
+        lessonDate: localDateKey()
+      });
+      clearAdoptedProposal();
+    } catch (reason) {
+      setAdoptionError(
+        reason instanceof Error && reason.message
+          ? reason.message
+          : 'Salvataggio della proposta nell’UDA non riuscito. Puoi riprovare senza rigenerarla.'
       );
     } finally {
       setIsAdopting(false);
@@ -400,11 +456,19 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void adoptContent(contentFromProposal(proposal))}
+              onClick={() => void adoptLibraryContent(contentFromProposal(proposal))}
               disabled={isPending || isAdopting}
               className="min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50"
             >
-              {isAdopting ? 'Salvo…' : 'Adotta'}
+              {isAdopting ? 'Salvo…' : 'Adotta in Biblioteca'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void adoptUdaContent(contentFromProposal(proposal))}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50"
+            >
+              {isAdopting ? 'Salvo…' : "Adotta e aggiungi all'UDA"}
             </button>
             <button
               type="button"
@@ -500,11 +564,19 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void adoptContent(editedContent)}
+              onClick={() => void adoptLibraryContent(editedContent)}
               disabled={isPending || isAdopting}
               className="min-h-[44px] px-3 rounded-md bg-violet-200 text-violet-950 font-semibold text-sm disabled:opacity-50"
             >
-              {isAdopting ? 'Salvo…' : 'Salva adattamento'}
+              {isAdopting ? 'Salvo…' : 'Adotta in Biblioteca'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void adoptUdaContent(editedContent)}
+              disabled={isPending || isAdopting}
+              className="min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50"
+            >
+              {isAdopting ? 'Salvo…' : "Adotta e aggiungi all'UDA"}
             </button>
             <button
               type="button"
