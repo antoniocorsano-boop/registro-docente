@@ -107,14 +107,7 @@ export function removeProfessionalMemoryCategory(
   return {
     ...state,
     events: state.events.filter(event => event.category !== category),
-    entries: state.entries.filter(entry => entry.category !== category),
-    settings: {
-      ...state.settings,
-      autoRemember: {
-        ...state.settings.autoRemember,
-        [category]: false
-      }
-    }
+    entries: state.entries.filter(entry => entry.category !== category)
   };
 }
 
@@ -289,10 +282,12 @@ export function selectProfessionalMemoryWorkingSet(
 
   const ranked = candidates.map(entry => ({
     entry,
-    score: (entry.provenance.kind === 'teacher-explicit' ? 100 : 0)
-      + contextMatchScore(entry, input.context)
+    score: contextMatchScore(entry, input.context)
       + (entry.correctedByTeacherAt ? 10 : 0)
   })).sort((left, right) => {
+    const leftExplicit = left.entry.provenance.kind === 'teacher-explicit';
+    const rightExplicit = right.entry.provenance.kind === 'teacher-explicit';
+    if (leftExplicit !== rightExplicit) return leftExplicit ? -1 : 1;
     if (right.score !== left.score) return right.score - left.score;
     const updatedOrder = right.entry.updatedAt.localeCompare(left.entry.updatedAt);
     if (updatedOrder !== 0) return updatedOrder;
