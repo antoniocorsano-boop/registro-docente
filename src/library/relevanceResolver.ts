@@ -116,6 +116,18 @@ function sourceContentTokens(source: LibrarySource): Set<string> {
   ].filter((value): value is string => typeof value === 'string').join(' '));
 }
 
+interface PreparedSourceLexicalEvidence {
+  title: Set<string>;
+  content: Set<string>;
+}
+
+function prepareSourceLexicalEvidence(source: LibrarySource): PreparedSourceLexicalEvidence {
+  return {
+    title: tokenize(source.title),
+    content: sourceContentTokens(source)
+  };
+}
+
 function udaSupportTokens(candidate: UdaRecord): Set<string> {
   return tokenize([
     candidate.description,
@@ -207,20 +219,17 @@ function effectiveTeachingContext(
 }
 
 function scoreTarget(
-  source: LibrarySource,
+  sourceEvidence: PreparedSourceLexicalEvidence,
   candidate: UdaRecord,
   targetType: 'uda' | 'lesson',
   targetId: string,
   teachingContext: ResolvedLibraryTeachingContext | null,
   planningContext: LibraryPlanningContextResolution | null | undefined
 ): LibraryRelevanceCandidate | null {
-  const sourceTitle = tokenize(source.title);
-  const sourceContent = sourceContentTokens(source);
-
   const lexical = targetType === 'uda'
     ? lexicalScore(
-        sourceTitle,
-        sourceContent,
+        sourceEvidence.title,
+        sourceEvidence.content,
         tokenize(candidate.title),
         udaSupportTokens(candidate)
       )
@@ -228,8 +237,8 @@ function scoreTarget(
         const lesson = (candidate.lessons ?? []).find(item => item.id === targetId);
         if (!lesson) return null;
         return lexicalScore(
-          sourceTitle,
-          sourceContent,
+          sourceEvidence.title,
+          sourceEvidence.content,
           tokenize(lesson.topic),
           lessonSupportTokens(candidate, lesson.notes)
         );
@@ -266,13 +275,14 @@ export function resolveLibraryRelevanceTarget({
   targetId
 }: ResolveLibraryRelevanceTargetInput): LibraryRelevanceCandidate | null {
   const effectiveContext = effectiveTeachingContext(teachingContext, planningContext);
+  const sourceEvidence = prepareSourceLexicalEvidence(source);
   const candidate = targetType === 'uda'
     ? udas.find(uda => uda.id === targetId)
     : udas.find(uda => (uda.lessons ?? []).some(lesson => lesson.id === targetId));
 
   if (!candidate) return null;
   return scoreTarget(
-    source,
+    sourceEvidence,
     candidate,
     targetType,
     targetId,
@@ -287,11 +297,10 @@ export function resolveLibraryRelevance({
   teachingContext,
   planningContext
 }: ResolveLibraryRelevanceInput): LibraryRelevanceResolution {
-  const sourceTitle = tokenize(source.title);
-  const sourceContent = sourceContentTokens(source);
+  const sourceEvidence = prepareSourceLexicalEvidence(source);
   const effectiveContext = effectiveTeachingContext(teachingContext, planningContext);
 
-  if (sourceTitle.size === 0 && sourceContent.size === 0 && !effectiveContext) {
+  if (sourceEvidence.title.size === 0 && sourceEvidence.content.size === 0 && !effectiveContext) {
     return {
       status: 'unavailable',
       reason: 'SOURCE_AND_CONTEXT_UNAVAILABLE',
@@ -304,7 +313,7 @@ export function resolveLibraryRelevance({
   for (const candidate of udas) {
     if (!isAlreadyLinked(source, 'uda', candidate.id)) {
       const scored = scoreTarget(
-        source,
+        sourceEvidence,
         candidate,
         'uda',
         candidate.id,
@@ -318,7 +327,7 @@ export function resolveLibraryRelevance({
       if (isAlreadyLinked(source, 'lesson', lesson.id)) continue;
 
       const scored = scoreTarget(
-        source,
+        sourceEvidence,
         candidate,
         'lesson',
         lesson.id,
