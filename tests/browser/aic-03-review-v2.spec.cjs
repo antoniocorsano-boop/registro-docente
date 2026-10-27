@@ -31,6 +31,14 @@ function intentEnvelope(intent) {
 }
 
 function installIntentRoute(page, state) {
+  page.route('**/api/copilot/intent/provider', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ available: true })
+    });
+  });
+
   return page.route('**/api/copilot/intent', async route => {
     state.intentRequests += 1;
     if (state.failIntent) {
