@@ -1361,6 +1361,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           library={library}
           udas={udas}
           planning={planning}
+          professionalMemory={professionalMemory}
           currentClassName={currentClass?.name ?? null}
           launchRequest={launchRequest}
           ambientContext={ambientCopilotContext}

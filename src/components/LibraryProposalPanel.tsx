@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
+import type { RemoteProfessionalMemoryProjectionV1 } from '../memory/types';
 import type { LibrarySource } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import type { ResolvedLibraryTeachingContext } from '../library/teachingContext';
@@ -26,6 +27,7 @@ interface LibraryProposalPanelProps {
   source: LibrarySource;
   uda: UdaRecord;
   teachingContext: ResolvedLibraryTeachingContext;
+  professionalMemory: RemoteProfessionalMemoryProjectionV1;
   isPending: boolean;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -59,6 +61,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   source,
   uda,
   teachingContext,
+  professionalMemory,
   isPending,
   onUpdate,
   onAddSource,
@@ -194,7 +197,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         source,
         teachingContext,
         uda,
-        explicitTeacherOptIn: true
+        explicitTeacherOptIn: true,
+        professionalMemory
       });
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();

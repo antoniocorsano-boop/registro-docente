@@ -3,6 +3,11 @@ import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'luci
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
+import type { ProfessionalMemoryStateV1 } from '../memory/types';
+import {
+  selectProfessionalMemoryWorkingSet,
+  toRemoteProfessionalMemoryProjection
+} from '../memory/professionalMemory';
 import {
   resolveLaunchTeachingContext,
   type CopilotLaunchContext,
@@ -45,6 +50,7 @@ interface LibraryCopilotComposerProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
   planning: PlanningStateV1;
+  professionalMemory: ProfessionalMemoryStateV1;
   currentClassName?: string | null;
   launchRequest?: LibraryCopilotLaunchRequest | null;
   ambientContext?: CopilotLaunchContext;
@@ -116,6 +122,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   library,
   udas,
   planning,
+  professionalMemory,
   currentClassName = null,
   launchRequest = null,
   ambientContext,
@@ -230,6 +237,30 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolvedPlanningContext
   ]);
   const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
+
+  const professionalMemoryWorkingSet = useMemo(() => selectProfessionalMemoryWorkingSet({
+    state: professionalMemory,
+    context: {
+      ...(copilotContextProjection.className ? { className: copilotContextProjection.className } : {}),
+      ...(copilotContextProjection.udaId ? { udaId: copilotContextProjection.udaId } : {}),
+      ...(copilotContextProjection.lessonId ? { lessonId: copilotContextProjection.lessonId } : {}),
+      ...(copilotContextProjection.sourceId ? { sourceId: copilotContextProjection.sourceId } : {}),
+      ...(copilotContextProjection.planningProfileId
+        ? { planningProfileId: copilotContextProjection.planningProfileId }
+        : {})
+    },
+    activeCanonicalRefs: [
+      ...library.sources.map(source => `source:${source.id}`),
+      ...udas.map(uda => `uda:${uda.id}`),
+      ...udas.flatMap(uda => (uda.lessons ?? []).map(lesson => `lesson:${lesson.id}`)),
+      ...planning.profiles.map(profile => `planning:${profile.id}`)
+    ]
+  }), [professionalMemory, copilotContextProjection, library.sources, udas, planning.profiles]);
+
+  const remoteProfessionalMemory = useMemo(
+    () => toRemoteProfessionalMemoryProjection(professionalMemoryWorkingSet),
+    [professionalMemoryWorkingSet]
+  );
 
   const proposalUda = useMemo(() => {
     if (!resolvedTeachingContext) return null;
@@ -1093,6 +1124,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               source={selectedSource}
               uda={proposalUda}
               teachingContext={resolvedTeachingContext}
+              professionalMemory={remoteProfessionalMemory}
               isPending={isPending}
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}
