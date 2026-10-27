@@ -66,14 +66,32 @@ export const ProfessionalMemoryPanel: React.FC<ProfessionalMemoryPanelProps> = (
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const rememberCandidateIdentity = rememberCandidate
+    ? JSON.stringify([
+        rememberCandidate.privacyClassification,
+        rememberCandidate.canonicalRef ?? null,
+        rememberCandidate.summary,
+        rememberCandidate.context.className ?? null,
+        rememberCandidate.context.udaId ?? null,
+        rememberCandidate.context.lessonId ?? null,
+        rememberCandidate.context.sourceId ?? null,
+        rememberCandidate.context.planningProfileId ?? null,
+        rememberCandidate.context.assessmentId ?? null
+      ])
+    : null;
+
   useEffect(() => {
     if (!rememberCandidate) {
       setRememberDraft('');
       setIsRememberConfirmationOpen(false);
       return;
     }
-    if (!isRememberConfirmationOpen) setRememberDraft(rememberCandidate.summary);
-  }, [rememberCandidate, isRememberConfirmationOpen]);
+    setRememberDraft(rememberCandidate.summary);
+    setRememberCategory('material-reuse');
+    setIsRememberConfirmationOpen(false);
+    setLocalError(null);
+    setSuccessMessage(null);
+  }, [rememberCandidateIdentity]);
 
   const runAction = async (key: string, action: () => Promise<void>, success: string) => {
     if (pendingAction) return;
@@ -185,7 +203,7 @@ export const ProfessionalMemoryPanel: React.FC<ProfessionalMemoryPanelProps> = (
 
       <div className="space-y-4 border-t border-slate-800 p-3">
         <p className="text-xs leading-relaxed text-slate-400">
-          Conserva solo preferenze e continuità professionali. Non autorizza azioni del Copilota e non sostituisce Biblioteca, UDA o Programmazione.
+          Conserva solo preferenze e continuità professionali. Non autorizza azioni del Copilota e non sostituisce Biblioteca, UDA o Programmazione. Quando confermi una richiesta PREPARE remota, una selezione limitata di sintesi pertinenti può essere inviata al servizio remoto insieme alla fonte e al contesto.
         </p>
 
         {rememberCandidate && (
