@@ -157,3 +157,51 @@ describe('AGENT-INTENT-01 governed routing', () => {
     expect(result.kind).toBe('DENIED');
   });
 });
+
+describe('AIC-04 source-optional entry routing', () => {
+  test('requires a source for current REVIEW LINK and PREPARE before Core action resolution', async () => {
+    const { routeAgentIntent } = await import('./agentIntentRouting');
+    let resolveCalls = 0;
+    const resolveActions = async () => {
+      resolveCalls += 1;
+      return [];
+    };
+
+    for (const intent of ['REVIEW', 'LINK', 'PREPARE'] as const) {
+      const result = await routeAgentIntent({
+        envelope: envelope(intent),
+        source: null,
+        teachingContext,
+        resolveActions
+      });
+      expect(result.kind).toBe('SOURCE_REQUIRED');
+    }
+
+    expect(resolveCalls).toBe(0);
+  });
+
+  test('clarification and explicit context binding take precedence over source requirement', async () => {
+    const { routeAgentIntent } = await import('./agentIntentRouting');
+
+    const clarification = await routeAgentIntent({
+      envelope: envelope('REVIEW', {
+        confidence: 'low',
+        needsClarification: true,
+        clarificationQuestion: 'Quale obiettivo vuoi approfondire?'
+      }),
+      source: null,
+      teachingContext
+    });
+    expect(clarification.kind).toBe('CLARIFY');
+
+    const explicit = await routeAgentIntent({
+      envelope: envelope('LINK', {
+        contextTarget: 'explicit',
+        udaReference: 'uda-altra'
+      }),
+      source: null,
+      teachingContext
+    });
+    expect(explicit.kind).toBe('CLARIFY');
+  });
+});
