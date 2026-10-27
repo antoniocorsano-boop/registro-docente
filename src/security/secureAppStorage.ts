@@ -54,7 +54,7 @@ export interface CompleteSecureAppSnapshot {
   submissions: OnlineSubmission[];
   planning: PlanningStateV1;
   library: LibraryStateV1;
-  professionalMemory: ProfessionalMemoryStateV1;
+  professionalMemory?: ProfessionalMemoryStateV1;
   meta: SecureMeta;
 }
 
@@ -70,10 +70,13 @@ const SNAPSHOT_KEYS = [
   'meta'
 ] as const;
 
-function sanitizeCompleteSnapshot(snapshot: CompleteSecureAppSnapshot): CompleteSecureAppSnapshot {
+function canonicalizeCompleteSnapshot(
+  snapshot: CompleteSecureAppSnapshot
+): CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 } {
   return {
     ...snapshot,
-    settings: sanitizePersistedSettings(snapshot.settings)
+    settings: sanitizePersistedSettings(snapshot.settings),
+    professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState()
   };
 }
 
@@ -81,13 +84,15 @@ function snapshotEquals(left: SecureAppSnapshot, right: SecureAppSnapshot): bool
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot {
+function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot & {
+  professionalMemory: ProfessionalMemoryStateV1;
+} {
   for (const key of SNAPSHOT_KEYS) {
     if (snapshot[key] === null) {
       throw new Error(`Restore non verificabile: record ${key} mancante nel readback.`);
     }
   }
-  return snapshot as CompleteSecureAppSnapshot;
+  return snapshot as CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 };
 }
 
 export function decideVaultBootstrap(input: VaultBootstrapInput): VaultGateState {
@@ -249,17 +254,17 @@ export class SecureAppStorage {
   }
 
   private writeCompleteSnapshotAtomic(snapshot: CompleteSecureAppSnapshot): Promise<void> {
-    const sanitized = sanitizeCompleteSnapshot(snapshot);
+    const canonical = canonicalizeCompleteSnapshot(snapshot);
     return this.vault.putMany([
-      { key: 'appData', value: sanitized.appData },
-      { key: 'settings', value: sanitized.settings },
-      { key: 'udas', value: sanitized.udas },
-      { key: 'customTests', value: sanitized.customTests },
-      { key: 'submissions', value: sanitized.submissions },
-      { key: 'planning', value: sanitized.planning },
-      { key: 'library', value: sanitized.library },
-      { key: 'professionalMemory', value: sanitized.professionalMemory },
-      { key: 'meta', value: sanitized.meta }
+      { key: 'appData', value: canonical.appData },
+      { key: 'settings', value: canonical.settings },
+      { key: 'udas', value: canonical.udas },
+      { key: 'customTests', value: canonical.customTests },
+      { key: 'submissions', value: canonical.submissions },
+      { key: 'planning', value: canonical.planning },
+      { key: 'library', value: canonical.library },
+      { key: 'professionalMemory', value: canonical.professionalMemory },
+      { key: 'meta', value: canonical.meta }
     ]);
   }
 
@@ -290,24 +295,24 @@ export class SecureAppStorage {
   async restoreSnapshotVerified(
     candidate: CompleteSecureAppSnapshot,
     previousLogical?: CompleteSecureAppSnapshot
-  ): Promise<CompleteSecureAppSnapshot> {
+  ): Promise<CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 }> {
     const previousPhysical = previousLogical ? null : await this.loadSnapshot();
-    const sanitizedCandidate = sanitizeCompleteSnapshot(candidate);
-    const sanitizedPrevious = previousLogical ? sanitizeCompleteSnapshot(previousLogical) : null;
+    const canonicalCandidate = canonicalizeCompleteSnapshot(candidate);
+    const canonicalPrevious = previousLogical ? canonicalizeCompleteSnapshot(previousLogical) : null;
 
     try {
-      await this.writeCompleteSnapshotAtomic(sanitizedCandidate);
+      await this.writeCompleteSnapshotAtomic(canonicalCandidate);
       const verified = requireCompleteSnapshot(await this.loadSnapshot());
-      if (!snapshotEquals(verified, sanitizedCandidate)) {
+      if (!snapshotEquals(verified, canonicalCandidate)) {
         throw new Error('Restore non verificabile: il readback non coincide con lo snapshot candidato.');
       }
       return verified;
     } catch (restoreError) {
       try {
-        if (sanitizedPrevious) {
-          await this.writeCompleteSnapshotAtomic(sanitizedPrevious);
+        if (canonicalPrevious) {
+          await this.writeCompleteSnapshotAtomic(canonicalPrevious);
           const rollbackReadback = requireCompleteSnapshot(await this.loadSnapshot());
-          if (!snapshotEquals(rollbackReadback, sanitizedPrevious)) {
+          if (!snapshotEquals(rollbackReadback, canonicalPrevious)) {
             throw new Error('Il readback del rollback non coincide con lo snapshot precedente.');
           }
         } else if (previousPhysical) {
