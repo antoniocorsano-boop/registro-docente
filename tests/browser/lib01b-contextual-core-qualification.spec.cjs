@@ -87,7 +87,7 @@ async function assertReviewOnlyPossibility(composer) {
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
-  await expect(composer.getByText('Controlla nel contesto', { exact: true })).toBeVisible();
+  await expect(composer.getByText('Revisione nel contesto', { exact: true })).toBeVisible();
   await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
