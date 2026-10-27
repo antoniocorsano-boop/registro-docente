@@ -210,6 +210,18 @@ describe('AIC-05 governed product integration contract', () => {
     expect(link.indexOf('commitLibraryMutation')).toBeLessThan(link.indexOf('await persistDerivedMemoryEvent'));
   });
 
+  test('LINK-derived memory runs inside the same mutation ordering as explicit memory changes', async () => {
+    const app = await Bun.file(APP).text();
+    const linkStart = app.indexOf('const handleLinkLibrarySource');
+    const linkEnd = app.indexOf('const handleUnlinkLibrarySource', linkStart);
+    const link = app.slice(linkStart, linkEnd);
+
+    expect(link).toContain('async committedLibrary =>');
+    expect(link).toContain('await persistDerivedMemoryEvent');
+    expect(link.indexOf('async committedLibrary =>')).toBeLessThan(link.indexOf('await persistDerivedMemoryEvent'));
+    expect(link).toContain('[commitLibraryMutation, persistDerivedMemoryEvent]');
+  });
+
   test('App exposes a separate non-destructive memory error instead of reusing canonical save failure state', async () => {
     const app = await Bun.file(APP).text();
     expect(app).toContain('const [professionalMemoryError, setProfessionalMemoryError]');
