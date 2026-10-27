@@ -61,8 +61,8 @@ describe('AIC-05 Task 6 progressive professional memory controls', () => {
     expect(panel).toContain('Rimuovi');
     expect(app).toContain('correctProfessionalMemoryEntry');
     expect(app).toContain('removeProfessionalMemoryEntry');
-    expect(composer).toContain('onCorrectMemoryEntry=');
-    expect(composer).toContain('onRemoveMemoryEntry=');
+    expect(composer).toContain('onCorrectEntry={onCorrectMemoryEntry}');
+    expect(composer).toContain('onRemoveEntry={onRemoveMemoryEntry}');
   });
 
   test('separates category enablement from confirmed bulk deletion', async () => {
