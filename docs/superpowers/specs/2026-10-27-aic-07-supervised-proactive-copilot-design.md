@@ -1,6 +1,6 @@
 # AIC-07 — Supervised Proactive Copilot Design
 
-**Status:** DRAFT — product behavior captured from human design review; implementation is not yet authorized by this document  
+**Status:** APPROVED — product behavior approved by human review on 2026-10-27; implementation proceeds only through the separate implementation plan and exact-SHA qualification gates  
 **Repository baseline:** `main@54f7941492baf8aca952d9f7cf3263fc036d6591` (AIC-06 integrated; post-merge PREDEPLOY #990 SUCCESS)  
 **Scope:** `registro-docente`  
 **Date:** 2026-10-27
