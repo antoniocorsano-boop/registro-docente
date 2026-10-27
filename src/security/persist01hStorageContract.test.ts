@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import type { AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
 import {
@@ -64,7 +65,7 @@ const emptyPlanning = {
 };
 
 const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
-const nineDatasetKeys: VaultRecordKey[] = [
+const tenDatasetKeys: VaultRecordKey[] = [
   'appData',
   'settings',
   'udas',
@@ -73,6 +74,7 @@ const nineDatasetKeys: VaultRecordKey[] = [
   'planning',
   'library',
   'professionalMemory',
+  'copilotState',
   'meta'
 ];
 
@@ -86,6 +88,7 @@ function complete(label: string): CompleteSecureAppSnapshot {
     planning: emptyPlanning,
     library: emptyLibrary,
     professionalMemory: createEmptyProfessionalMemoryState(),
+    copilotState: createEmptyCopilotState(),
     meta: meta(label === 'old' ? 3 : 0)
   };
 }
@@ -137,7 +140,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     ]);
   });
 
-  test('verified restore writes the nine-record candidate atomically', async () => {
+  test('verified restore writes the ten-record candidate atomically', async () => {
     const store = new AtomicRecordingStore();
     const vault = new SecureVault(store);
     await vault.initializeActive('password');
@@ -150,7 +153,8 @@ describe('PERSIST-01H atomic storage contracts', () => {
 
     expect(restored.settings.school).toBe('IC new');
     expect(restored.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
-    expect(store.batchKeys).toEqual([nineDatasetKeys]);
+    expect(restored.copilotState).toEqual(createEmptyCopilotState());
+    expect(store.batchKeys).toEqual([tenDatasetKeys]);
   });
 
   test('readback mismatch restores the explicit previous logical snapshot atomically even from a fresh physical vault', async () => {
@@ -167,6 +171,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     expect(afterFailure.settings?.school).toBe('IC old');
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(afterFailure.professionalMemory).toEqual(previous.professionalMemory);
-    expect(store.batchKeys).toEqual([nineDatasetKeys, nineDatasetKeys]);
+    expect(afterFailure.copilotState).toEqual(previous.copilotState);
+    expect(store.batchKeys).toEqual([tenDatasetKeys, tenDatasetKeys]);
   });
 });
