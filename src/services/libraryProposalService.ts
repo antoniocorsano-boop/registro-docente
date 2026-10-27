@@ -30,6 +30,26 @@ function optionalFiniteNumber(value: unknown): number | undefined {
     : undefined;
 }
 
+function parseBudgetReceipt(value: unknown): TeachingProposalRuntimeReceiptWire['budget'] | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new LibraryProposalServiceError({ code: 'PROVIDER_OUTPUT_INVALID', retriable: false, status: 502 });
+  }
+  const budget = value as Record<string, unknown>;
+  if (
+    (budget.tier !== 'remote-low' && budget.tier !== 'remote-expanded') ||
+    (budget.profile !== 'economy' && budget.profile !== 'balanced' && budget.profile !== 'quality') ||
+    typeof budget.escalated !== 'boolean'
+  ) {
+    throw new LibraryProposalServiceError({ code: 'PROVIDER_OUTPUT_INVALID', retriable: false, status: 502 });
+  }
+  return {
+    tier: budget.tier,
+    profile: budget.profile,
+    escalated: budget.escalated
+  };
+}
+
 function parseReceipt(value: unknown): TeachingProposalRuntimeReceiptWire {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new LibraryProposalServiceError({ code: 'PROVIDER_OUTPUT_INVALID', retriable: false, status: 502 });
@@ -55,7 +75,8 @@ function parseReceipt(value: unknown): TeachingProposalRuntimeReceiptWire {
     ...(optionalFiniteNumber(receipt.promptTokens) !== undefined ? { promptTokens: receipt.promptTokens as number } : {}),
     ...(optionalFiniteNumber(receipt.outputTokens) !== undefined ? { outputTokens: receipt.outputTokens as number } : {}),
     ...(optionalFiniteNumber(receipt.totalTokens) !== undefined ? { totalTokens: receipt.totalTokens as number } : {}),
-    attemptCount: 1
+    attemptCount: 1,
+    ...(parseBudgetReceipt(receipt.budget) ? { budget: parseBudgetReceipt(receipt.budget) } : {})
   };
 }
 

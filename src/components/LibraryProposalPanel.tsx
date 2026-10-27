@@ -8,10 +8,20 @@ import type { ResolvedLibraryTeachingContext } from '../library/teachingContext'
 import {
   buildLibraryProposalRequest,
   createInternalSourceFromTeachingProposal,
+  measureLibraryProposalBudget,
   type TeachingProposalContent,
   type TeachingProposalV1
 } from '../library/teachingProposal';
 import { resolveLibraryRemoteProposalActions } from '../library/contextualCoreAdapter';
+import {
+  buildAiBudgetActivityKey,
+  createAiBudgetAuthorization,
+  resolvePrepareBudget,
+  type AiBudgetAuthorizationV1,
+  type AiBudgetEscalationReason,
+  type AiBudgetProfile
+} from '../copilot/aiBudgetGovernor';
+import { LibraryProposalServiceError } from '../services/libraryProposalErrors';
 import {
   getLibraryProposalProviderMetadata,
   requestLibraryTeachingProposal,
@@ -28,6 +38,7 @@ interface LibraryProposalPanelProps {
   uda: UdaRecord;
   teachingContext: ResolvedLibraryTeachingContext;
   professionalMemory: RemoteProfessionalMemoryProjectionV1;
+  aiBudgetProfile?: AiBudgetProfile;
   isPending: boolean;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -37,6 +48,10 @@ interface LibraryProposalPanelProps {
 }
 
 type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';
+type BudgetEscalationState = {
+  reason?: AiBudgetEscalationReason;
+  explanation: string;
+};
 
 function localDateKey(date = new Date()): string {
   const year = date.getFullYear();
@@ -62,6 +77,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   uda,
   teachingContext,
   professionalMemory,
+  aiBudgetProfile,
   isPending,
   onUpdate,
   onAddSource,
@@ -80,6 +96,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   const [isAdopting, setIsAdopting] = useState(false);
   const [adoptionError, setAdoptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [budgetEscalation, setBudgetEscalation] = useState<BudgetEscalationState | null>(null);
+  const [activityBudgetAuthorization, setActivityBudgetAuthorization] = useState<AiBudgetAuthorizationV1 | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const adoptionSourceIdRef = useRef<string | null>(null);
   const adoptionLessonIdRef = useRef<string | null>(null);
@@ -98,6 +116,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setEditedContent(null);
     setIsAdopting(false);
     setAdoptionError(null);
+    setBudgetEscalation(null);
+    setActivityBudgetAuthorization(null);
     setError(null);
   }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId]);
 
@@ -178,10 +198,9 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     }
   };
 
-  const generateProposal = async () => {
+  const generateProposal = async (explicitAuthorization?: AiBudgetAuthorizationV1) => {
     if (!prepareAction || isGenerating || !remoteConsent) return;
 
-    setIsGenerating(true);
     setError(null);
     setAdoptionError(null);
     setProposal(null);
@@ -189,35 +208,90 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setEditedContent(null);
     adoptionSourceIdRef.current = null;
     adoptionLessonIdRef.current = null;
-    const controller = new AbortController();
-    requestControllerRef.current = controller;
 
+    let request;
     try {
-      const request = buildLibraryProposalRequest({
+      const budgetAuthorization = explicitAuthorization ?? activityBudgetAuthorization ?? undefined;
+      request = buildLibraryProposalRequest({
         source,
         teachingContext,
         uda,
         explicitTeacherOptIn: true,
-        professionalMemory
+        professionalMemory,
+        aiBudgetProfile,
+        ...(budgetAuthorization ? { budgetAuthorization } : {})
       });
+      const budgetDecision = resolvePrepareBudget({
+        profile: request.budget.profile,
+        ...measureLibraryProposalBudget(request),
+        activityKey: request.budget.activityKey,
+        ...(request.budget.authorization ? { authorization: request.budget.authorization } : {}),
+        now: new Date().toISOString()
+      });
+      if (budgetDecision.kind === 'escalation-required') {
+        setBudgetEscalation({
+          reason: budgetDecision.reason,
+          explanation: budgetDecision.explanation
+        });
+        return;
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof Error && reason.message
+          ? reason.message
+          : 'La proposta didattica non è disponibile in questo momento.'
+      );
+      return;
+    }
+
+    setBudgetEscalation(null);
+    setIsGenerating(true);
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    let keepConsentOpen = false;
+
+    try {
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
       adoptionLessonIdRef.current = uid();
       setProposal(result.proposal);
     } catch (reason) {
       if (!controller.signal.aborted) {
-        setError(
-          reason instanceof Error && reason.message
-            ? reason.message
-            : 'La proposta didattica non è disponibile in questo momento.'
-        );
+        if (reason instanceof LibraryProposalServiceError && reason.code === 'AI_BUDGET_ESCALATION_REQUIRED') {
+          keepConsentOpen = true;
+          setBudgetEscalation({
+            ...(reason.budgetReason ? { reason: reason.budgetReason } : {}),
+            explanation: reason.message
+          });
+          setError(null);
+        } else {
+          setError(
+            reason instanceof Error && reason.message
+              ? reason.message
+              : 'La proposta didattica non è disponibile in questo momento.'
+          );
+        }
       }
     } finally {
       if (requestControllerRef.current === controller) requestControllerRef.current = null;
       setIsGenerating(false);
-      setRemoteConsent(false);
-      setRemoteActions([]);
+      if (!keepConsentOpen) {
+        setRemoteConsent(false);
+        setRemoteActions([]);
+      }
     }
+  };
+
+  const authorizeBudgetEscalation = async (scope: AiBudgetAuthorizationV1['scope']) => {
+    if (isGenerating || !remoteConsent) return;
+    const authorization = createAiBudgetAuthorization({
+      scope,
+      activityKey: buildAiBudgetActivityKey(uda.id, teachingContext.lessonId),
+      issuedAt: new Date().toISOString()
+    });
+    if (scope === 'activity') setActivityBudgetAuthorization(authorization);
+    setBudgetEscalation(null);
+    await generateProposal(authorization);
   };
 
   const leaveProposal = () => {
@@ -227,6 +301,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setIsEditing(false);
     setEditedContent(null);
     setAdoptionError(null);
+    setBudgetEscalation(null);
     setRemoteConsent(false);
     setRemoteActions([]);
   };
@@ -401,7 +476,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
             Consenso valido solo per questa richiesta. Non verrà ricordato.
           </p>
           {isRemoteLoading && <p role="status" className="text-xs text-violet-200">Verifico l’azione disponibile…</p>}
-          {!isRemoteLoading && prepareAction && (
+          {!isRemoteLoading && prepareAction && !budgetEscalation && (
             <button
               type="button"
               onClick={() => void generateProposal()}
@@ -410,6 +485,35 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
             >
               {isGenerating ? 'Preparo la proposta…' : prepareAction.label}
             </button>
+          )}
+          {budgetEscalation && (
+            <div className="rounded-md border border-amber-700/70 bg-amber-950/20 p-3 space-y-3">
+              <div>
+                <strong className="block text-sm text-amber-100">Serve una tua autorizzazione aggiuntiva</strong>
+                <p className="mt-1 text-xs text-amber-200/90">{budgetEscalation.explanation}</p>
+              </div>
+              <p className="text-xs text-slate-300">
+                L’autorizzazione è temporanea e non modifica le regole sulla privacy né il consenso già espresso per questa richiesta.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => void authorizeBudgetEscalation('operation')}
+                  disabled={isPending || isGenerating}
+                  className="min-h-[44px] rounded-md bg-amber-200 px-3 text-sm font-semibold text-amber-950 disabled:opacity-50"
+                >
+                  Autorizza solo questa operazione
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void authorizeBudgetEscalation('activity')}
+                  disabled={isPending || isGenerating}
+                  className="min-h-[44px] rounded-md border border-amber-600 px-3 text-sm font-semibold text-amber-100 disabled:opacity-50"
+                >
+                  Autorizza per questa attività
+                </button>
+              </div>
+            </div>
           )}
           {!isRemoteLoading && !prepareAction && !error && (
             <p className="text-xs text-amber-200">La preparazione assistita non è autorizzata nel contesto corrente.</p>
