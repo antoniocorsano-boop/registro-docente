@@ -29,6 +29,10 @@ interface SecureBackupSnapshotV4 extends SecureBackupSnapshotV3 {
   library: LibraryStateV1;
 }
 
+type SecureBackupSnapshotV5 = Omit<CompleteSecureAppSnapshot, 'professionalMemory'> & {
+  professionalMemory: ProfessionalMemoryStateV1;
+};
+
 export interface SecureBackupPayloadV2 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V2;
@@ -54,7 +58,7 @@ export interface SecureBackupPayloadV5 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V5;
   exportedAt: string;
-  snapshot: CompleteSecureAppSnapshot;
+  snapshot: SecureBackupSnapshotV5;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -304,14 +308,18 @@ function isProfessionalMemoryStateV1(value: unknown): value is ProfessionalMemor
     || value.schemaVersion !== 1
     || !Array.isArray(value.events)
     || !Array.isArray(value.entries)
-    || !isRecord(value.settings)
-    || !hasOnlyKeys(value.settings, ['autoRemember'])
-    || !isRecord(value.settings.autoRemember)
-    || !hasOnlyKeys(value.settings.autoRemember, MEMORY_CATEGORIES)) {
+    || !isRecord(value.settings)) {
     return false;
   }
 
-  return MEMORY_CATEGORIES.every(category => typeof value.settings.autoRemember[category] === 'boolean')
+  const settings = value.settings;
+  if (!hasOnlyKeys(settings, ['autoRemember']) || !isRecord(settings.autoRemember)) {
+    return false;
+  }
+  const autoRemember = settings.autoRemember;
+  if (!hasOnlyKeys(autoRemember, MEMORY_CATEGORIES)) return false;
+
+  return MEMORY_CATEGORIES.every(category => typeof autoRemember[category] === 'boolean')
     && value.events.every(isMemoryEvent)
     && value.entries.every(isMemoryEntry);
 }
@@ -322,7 +330,7 @@ function isSnapshotV4(value: unknown): value is SecureBackupSnapshotV4 {
     && isLibraryStateV1(value.library);
 }
 
-function isSnapshotV5(value: unknown): value is CompleteSecureAppSnapshot {
+function isSnapshotV5(value: unknown): value is SecureBackupSnapshotV5 {
   return isSnapshotV4(value)
     && isRecord(value)
     && isProfessionalMemoryStateV1(value.professionalMemory);
@@ -336,14 +344,17 @@ export function createBackupPayload(
     app: 'registro-docente',
     backupDataVersion: BACKUP_DATA_VERSION_V5,
     exportedAt,
-    snapshot
+    snapshot: {
+      ...snapshot,
+      professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState()
+    }
   };
 }
 
 export function normalizeBackupPayload(
   payload: unknown,
   current: CompleteSecureAppSnapshot
-): CompleteSecureAppSnapshot {
+): CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 } {
   if (!isRecord(payload)) {
     throw new Error('Backup registro-docente non valido.');
   }
@@ -355,7 +366,7 @@ export function normalizeBackupPayload(
   if (payload.backupDataVersion !== undefined) {
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V5) {
       if (!isSnapshotV5(payload.snapshot)) {
-        throw new Error('Il backup v5 non contiene una memoria professionale valida e privacy-safe.');
+        throw new Error('Il backup v5 non contiene uno snapshot completo con memoria professionale valida e privacy-safe.');
       }
       return payload.snapshot;
     }
