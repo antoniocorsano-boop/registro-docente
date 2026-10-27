@@ -1,4 +1,10 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
+import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
+import {
+  isCopilotStateV1,
+  normalizeLoadedCopilotState,
+  type CopilotStateV1
+} from '../copilot/state';
 import { createEmptyLibraryState } from '../library/emptyLibraryState';
 import type { LibraryStateV1 } from '../library/types';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
@@ -11,6 +17,7 @@ export const BACKUP_DATA_VERSION_V2 = 2;
 export const BACKUP_DATA_VERSION_V3 = 3;
 export const BACKUP_DATA_VERSION_V4 = 4;
 export const BACKUP_DATA_VERSION_V5 = 5;
+export const BACKUP_DATA_VERSION_V6 = 6;
 
 interface SecureBackupSnapshotV2 {
   appData: AppData;
@@ -29,8 +36,13 @@ interface SecureBackupSnapshotV4 extends SecureBackupSnapshotV3 {
   library: LibraryStateV1;
 }
 
-type SecureBackupSnapshotV5 = Omit<CompleteSecureAppSnapshot, 'professionalMemory'> & {
+type SecureBackupSnapshotV5 = Omit<CompleteSecureAppSnapshot, 'professionalMemory' | 'copilotState'> & {
   professionalMemory: ProfessionalMemoryStateV1;
+};
+
+type SecureBackupSnapshotV6 = Omit<CompleteSecureAppSnapshot, 'professionalMemory' | 'copilotState'> & {
+  professionalMemory: ProfessionalMemoryStateV1;
+  copilotState: CopilotStateV1;
 };
 
 export interface SecureBackupPayloadV2 {
@@ -59,6 +71,13 @@ export interface SecureBackupPayloadV5 {
   backupDataVersion: typeof BACKUP_DATA_VERSION_V5;
   exportedAt: string;
   snapshot: SecureBackupSnapshotV5;
+}
+
+export interface SecureBackupPayloadV6 {
+  app: 'registro-docente';
+  backupDataVersion: typeof BACKUP_DATA_VERSION_V6;
+  exportedAt: string;
+  snapshot: SecureBackupSnapshotV6;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -336,17 +355,24 @@ function isSnapshotV5(value: unknown): value is SecureBackupSnapshotV5 {
     && isProfessionalMemoryStateV1(value.professionalMemory);
 }
 
+function isSnapshotV6(value: unknown): value is SecureBackupSnapshotV6 {
+  return isSnapshotV5(value)
+    && isRecord(value)
+    && isCopilotStateV1(value.copilotState);
+}
+
 export function createBackupPayload(
   snapshot: CompleteSecureAppSnapshot,
   exportedAt = new Date().toISOString()
-): SecureBackupPayloadV5 {
+): SecureBackupPayloadV6 {
   return {
     app: 'registro-docente',
-    backupDataVersion: BACKUP_DATA_VERSION_V5,
+    backupDataVersion: BACKUP_DATA_VERSION_V6,
     exportedAt,
     snapshot: {
       ...snapshot,
-      professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState()
+      professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState(),
+      copilotState: normalizeLoadedCopilotState(snapshot.copilotState ?? createEmptyCopilotState())
     }
   };
 }
@@ -354,7 +380,10 @@ export function createBackupPayload(
 export function normalizeBackupPayload(
   payload: unknown,
   current: CompleteSecureAppSnapshot
-): CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 } {
+): CompleteSecureAppSnapshot & {
+  professionalMemory: ProfessionalMemoryStateV1;
+  copilotState: CopilotStateV1;
+} {
   if (!isRecord(payload)) {
     throw new Error('Backup registro-docente non valido.');
   }
@@ -364,11 +393,24 @@ export function normalizeBackupPayload(
   }
 
   if (payload.backupDataVersion !== undefined) {
+    if (payload.backupDataVersion === BACKUP_DATA_VERSION_V6) {
+      if (!isSnapshotV6(payload.snapshot)) {
+        throw new Error('Il backup v6 non contiene uno snapshot completo con stato Copilota valido e supervisionato.');
+      }
+      return {
+        ...payload.snapshot,
+        copilotState: normalizeLoadedCopilotState(payload.snapshot.copilotState)
+      };
+    }
+
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V5) {
       if (!isSnapshotV5(payload.snapshot)) {
         throw new Error('Il backup v5 non contiene uno snapshot completo con memoria professionale valida e privacy-safe.');
       }
-      return payload.snapshot;
+      return {
+        ...payload.snapshot,
+        copilotState: createEmptyCopilotState()
+      };
     }
 
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V4) {
@@ -377,7 +419,8 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
-        professionalMemory: createEmptyProfessionalMemoryState()
+        professionalMemory: createEmptyProfessionalMemoryState(),
+        copilotState: createEmptyCopilotState()
       };
     }
 
@@ -388,7 +431,8 @@ export function normalizeBackupPayload(
       return {
         ...payload.snapshot,
         library: createEmptyLibraryState(),
-        professionalMemory: createEmptyProfessionalMemoryState()
+        professionalMemory: createEmptyProfessionalMemoryState(),
+        copilotState: createEmptyCopilotState()
       };
     }
 
@@ -400,7 +444,8 @@ export function normalizeBackupPayload(
         ...payload.snapshot,
         planning: createEmptyPlanningState(),
         library: createEmptyLibraryState(),
-        professionalMemory: createEmptyProfessionalMemoryState()
+        professionalMemory: createEmptyProfessionalMemoryState(),
+        copilotState: createEmptyCopilotState()
       };
     }
 
@@ -435,6 +480,7 @@ export function normalizeBackupPayload(
     planning: createEmptyPlanningState(),
     library: createEmptyLibraryState(),
     professionalMemory: createEmptyProfessionalMemoryState(),
+    copilotState: createEmptyCopilotState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
 }
