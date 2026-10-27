@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import {
   SecureAppStorage,
   type CompleteSecureAppSnapshot
@@ -99,12 +100,13 @@ function snapshot(label: string): CompleteSecureAppSnapshot {
     submissions: [],
     planning: emptyPlanning,
     library: libraryFor(label),
+    professionalMemory: createEmptyProfessionalMemoryState(),
     meta: { changes: label === 'old' ? 3 : 0, lastBackup: null }
   };
 }
 
 describe('SEC-1 verified vault backup restore', () => {
-  test('writes a complete candidate, verifies readback and strips provider secrets', async () => {
+  test('writes a complete nine-dataset candidate, verifies readback and strips provider secrets', async () => {
     const vault = new SecureVault(new RestoreTestStore());
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
@@ -114,6 +116,7 @@ describe('SEC-1 verified vault backup restore', () => {
 
     expect(restored.settings.school).toBe('IC new');
     expect(restored.library.sources[0]?.id).toBe('source-new');
+    expect(restored.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
     expect(restored.settings.embeddingConfig?.apiKey).toBeUndefined();
     expect(restored.planning).toEqual(emptyPlanning);
     expect((await storage.loadSnapshot()).settings?.school).toBe('IC new');
@@ -127,24 +130,25 @@ describe('SEC-1 verified vault backup restore', () => {
     const previous = snapshot('old');
 
     await storage.restoreSnapshotVerified(previous);
-    store.armOneReadCorruption('appData', 8);
+    store.armOneReadCorruption('appData', 9);
 
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
     const afterFailure = await storage.loadSnapshot();
     expect(afterFailure.settings?.school).toBe('IC old');
     expect(afterFailure.planning).toEqual(emptyPlanning);
+    expect(afterFailure.professionalMemory).toEqual(previous.professionalMemory);
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(afterFailure.settings?.embeddingConfig?.apiKey).toBeUndefined();
   });
 
-  test('returns an initially empty vault to empty when a restore readback fails', async () => {
+  test('returns an initially empty vault to logically empty memory when a restore readback fails', async () => {
     const store = new RestoreTestStore();
     const vault = new SecureVault(store);
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
 
-    store.armOneReadCorruption('appData', 8);
+    store.armOneReadCorruption('appData', 9);
     await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
 
     expect(await storage.loadSnapshot()).toEqual({
@@ -155,6 +159,7 @@ describe('SEC-1 verified vault backup restore', () => {
       submissions: null,
       planning: null,
       library: null,
+      professionalMemory: createEmptyProfessionalMemoryState(),
       meta: null
     });
   });
