@@ -80,7 +80,9 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     const app = await Bun.file(APP).text();
     const start = app.indexOf('const handleResetCopilotPreferences');
     expect(start).toBeGreaterThan(-1);
-    const fragment = app.slice(start, start + 1200);
+    const end = app.indexOf('const handleAdoptTeachingProposalToUda', start);
+    expect(end).toBeGreaterThan(start);
+    const fragment = app.slice(start, end);
     expect(fragment).toContain('resetCopilotStatePreferences');
     expect(fragment).not.toContain('setLibrary(');
     expect(fragment).not.toContain('setProfessionalMemory(');
