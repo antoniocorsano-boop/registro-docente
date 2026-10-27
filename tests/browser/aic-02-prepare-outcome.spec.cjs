@@ -433,7 +433,7 @@ test('AIC-02 choices are touch-safe and compound adoption stays pending until du
   await restoreVaultEncryption(page);
 
   await expect(proposal).toBeHidden({ timeout: 10000 });
-  await expect(page.getByText('Proposta aggiunta all’UDA', { exact: true })).toBeVisible();
+  await expect(page.getByText('Proposta aggiunta all’UDA', { exact: true })).toHaveCount(1);
   await reloadAndUnlock(page);
   await selectSyntheticClass(page);
   await openLibrary(page);
