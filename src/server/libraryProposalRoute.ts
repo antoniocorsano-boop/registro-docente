@@ -1,12 +1,20 @@
 import { evaluateDataFlow } from '../security/dataClassification.ts';
 import { isLocallyReadableTextMime } from '../library/intake.ts';
 import {
+  measureLibraryProposalBudget,
   parseTeachingProposalContent,
   type LibraryProposalErrorCode,
   type LibraryProposalRequestV1,
   type TeachingProposalRuntimeReceiptWire,
   type TeachingProposalV1
 } from '../library/teachingProposal.ts';
+import {
+  buildAiBudgetActivityKey,
+  resolvePrepareBudget,
+  type AiBudgetAuthorizationV1,
+  type AiBudgetEscalationReason,
+  type AiBudgetProfile
+} from '../copilot/aiBudgetGovernor.ts';
 import {
   TeachingProposalProviderError,
   type TeachingProposalProvider,
@@ -51,6 +59,8 @@ const PROFESSIONAL_MEMORY_CATEGORIES = new Set([
   'planning-continuity',
   'workflow-preference'
 ]);
+const AI_BUDGET_PROFILES = new Set<AiBudgetProfile>(['economy', 'balanced', 'quality']);
+const AI_BUDGET_AUTHORIZATION_SCOPES = new Set(['operation', 'activity']);
 const MAX_PROFESSIONAL_MEMORY_ITEMS = 5;
 const MAX_PROFESSIONAL_MEMORY_SUMMARY_CHARS = 800;
 const LEGACY_MAX_INLINE_BYTES = 8 * 1024 * 1024;
@@ -199,6 +209,46 @@ function validateProfessionalMemory(value: unknown): MemoryValidation {
   };
 }
 
+function validIsoTimestamp(value: unknown): value is string {
+  return isNonEmptyString(value) && Number.isFinite(Date.parse(value));
+}
+
+function validateBudgetAuthorization(value: unknown): AiBudgetAuthorizationV1 | null {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'scope', 'issuedAt', 'expiresAt', 'activityKey'])) return null;
+  if (value.schemaVersion !== 1 || !isNonEmptyString(value.scope) || !AI_BUDGET_AUTHORIZATION_SCOPES.has(value.scope)) return null;
+  if (!validIsoTimestamp(value.issuedAt) || !validIsoTimestamp(value.expiresAt) || !isNonEmptyString(value.activityKey)) return null;
+  return {
+    schemaVersion: 1,
+    scope: value.scope as AiBudgetAuthorizationV1['scope'],
+    issuedAt: value.issuedAt,
+    expiresAt: value.expiresAt,
+    activityKey: value.activityKey.trim()
+  };
+}
+
+function validateBudget(
+  value: unknown,
+  context: LibraryProposalRequestV1['context']
+): LibraryProposalRequestV1['budget'] | null {
+  const expectedActivityKey = buildAiBudgetActivityKey(context.udaId, context.lessonId);
+  if (value === undefined) {
+    // Backward-compatible wire fallback. It remains governed: missing budget cannot bypass
+    // the balanced thresholds or obtain expanded capacity.
+    return { schemaVersion: 1, profile: 'balanced', activityKey: expectedActivityKey };
+  }
+  if (!isRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'profile', 'activityKey', 'authorization'])) return null;
+  if (value.schemaVersion !== 1 || !isNonEmptyString(value.profile) || !AI_BUDGET_PROFILES.has(value.profile as AiBudgetProfile)) return null;
+  if (!isNonEmptyString(value.activityKey) || value.activityKey.trim() !== expectedActivityKey) return null;
+  const authorization = value.authorization === undefined ? undefined : validateBudgetAuthorization(value.authorization);
+  if (value.authorization !== undefined && !authorization) return null;
+  return {
+    schemaVersion: 1,
+    profile: value.profile as AiBudgetProfile,
+    activityKey: expectedActivityKey,
+    ...(authorization ? { authorization } : {})
+  };
+}
+
 type RequestValidation =
   | { ok: true; value: LibraryProposalRequestV1 }
   | { ok: false; reason: 'invalid' | 'too-large' };
@@ -209,7 +259,7 @@ function validateRequest(
 ): RequestValidation {
   if (!isRecord(value)) return { ok: false, reason: 'invalid' };
   if (!hasOnlyKeys(value, [
-    'schemaVersion', 'action', 'classification', 'explicitTeacherOptIn', 'source', 'context', 'professionalMemory'
+    'schemaVersion', 'action', 'classification', 'explicitTeacherOptIn', 'source', 'context', 'budget', 'professionalMemory'
   ])) return { ok: false, reason: 'invalid' };
   if (value.schemaVersion !== 1 || value.action !== 'prepare-activity') return { ok: false, reason: 'invalid' };
   if (value.classification !== 'TEACHER_PROFESSIONAL' || value.explicitTeacherOptIn !== true) return { ok: false, reason: 'invalid' };
@@ -218,6 +268,8 @@ function validateRequest(
   if (!source.ok) return source;
   const context = validateContext(value.context);
   if (!context) return { ok: false, reason: 'invalid' };
+  const budget = validateBudget(value.budget, context);
+  if (!budget) return { ok: false, reason: 'invalid' };
   const professionalMemory = validateProfessionalMemory(value.professionalMemory);
   if (!professionalMemory.ok) return { ok: false, reason: 'invalid' };
 
@@ -230,6 +282,7 @@ function validateRequest(
       explicitTeacherOptIn: true,
       source: source.value,
       context,
+      budget,
       ...(professionalMemory.value ? { professionalMemory: professionalMemory.value } : {})
     }
   };
@@ -245,8 +298,26 @@ function isGovernedRuntime(value: TeachingProposalProvider | TeachingProposalRun
   return 'config' in value && isRecord(value.config) && typeof value.generate === 'function';
 }
 
-function stableError(code: LibraryProposalErrorCode, status: number, message: string, retriable: boolean, requestId?: string): LibraryProposalHandlerResult {
-  return { status, body: { error: { code, message, retriable, ...(requestId ? { requestId } : {}) } } };
+function stableError(
+  code: LibraryProposalErrorCode,
+  status: number,
+  message: string,
+  retriable: boolean,
+  requestId?: string,
+  reason?: AiBudgetEscalationReason
+): LibraryProposalHandlerResult {
+  return {
+    status,
+    body: {
+      error: {
+        code,
+        message,
+        retriable,
+        ...(requestId ? { requestId } : {}),
+        ...(reason ? { reason } : {})
+      }
+    }
+  };
 }
 
 function mapRuntimeError(error: unknown, requestId?: string): LibraryProposalHandlerResult {
@@ -334,6 +405,31 @@ export async function handleLibraryProposalRequest(
   }
 
   const request = validated.value;
+  const budgetMetrics = measureLibraryProposalBudget(request);
+  const evaluatedAt = now();
+  const budgetDecision = resolvePrepareBudget({
+    profile: request.budget.profile,
+    ...budgetMetrics,
+    activityKey: request.budget.activityKey,
+    ...(request.budget.authorization ? { authorization: request.budget.authorization } : {}),
+    now: evaluatedAt
+  });
+  if (budgetDecision.kind === 'escalation-required') {
+    return stableError(
+      'AI_BUDGET_ESCALATION_REQUIRED',
+      409,
+      budgetDecision.explanation,
+      false,
+      options.requestId,
+      budgetDecision.reason
+    );
+  }
+
+  const budgetReceipt = {
+    tier: budgetDecision.tier,
+    profile: request.budget.profile,
+    escalated: budgetDecision.escalated
+  } as const;
   const providerInput: TeachingProposalProviderInput = {
     source: request.source,
     context: request.context,
@@ -344,17 +440,23 @@ export async function handleLibraryProposalRequest(
   try {
     runtimeResult = await executor.generate(providerInput, {
       ...(options.signal ? { signal: options.signal } : {}),
-      ...(options.requestId ? { requestId: options.requestId } : {})
+      ...(options.requestId ? { requestId: options.requestId } : {}),
+      maxOutputTokens: budgetDecision.maxOutputTokens,
+      budget: budgetReceipt
     });
   } catch (error) {
     return mapRuntimeError(error, options.requestId);
   }
 
+  const receipt: TeachingProposalRuntimeReceiptWire = {
+    ...runtimeResult.receipt,
+    budget: budgetReceipt
+  };
   let content;
   try {
     content = parseTeachingProposalContent(runtimeResult.output);
   } catch {
-    return stableError('PROVIDER_OUTPUT_INVALID', 502, 'Il servizio remoto ha restituito una proposta non valida.', false, runtimeResult.receipt.requestId);
+    return stableError('PROVIDER_OUTPUT_INVALID', 502, 'Il servizio remoto ha restituito una proposta non valida.', false, receipt.requestId);
   }
 
   const proposal: TeachingProposalV1 = {
@@ -365,11 +467,11 @@ export async function handleLibraryProposalRequest(
     context: { udaId: request.context.udaId, ...(request.context.lessonId ? { lessonId: request.context.lessonId } : {}) },
     provenance: {
       mode: 'remote',
-      provider: runtimeResult.receipt.provider,
-      model: runtimeResult.receipt.model,
-      generatedAt: now()
+      provider: receipt.provider,
+      model: receipt.model,
+      generatedAt: evaluatedAt
     }
   };
 
-  return { status: 200, body: { proposal, receipt: runtimeResult.receipt } };
+  return { status: 200, body: { proposal, receipt } };
 }
