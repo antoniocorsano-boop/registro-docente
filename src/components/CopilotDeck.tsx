@@ -6,7 +6,6 @@ import {
   ChevronUp,
   Clock3,
   MessageCircle,
-  Play,
   Sparkles,
   Target,
   X
@@ -41,12 +40,10 @@ const GROUPS: Array<{
 
 function PreviewBlock({
   preview,
-  canStart,
   onStart
 }: {
   preview: CopilotMissionPreviewV1;
-  canStart: boolean;
-  onStart: () => void;
+  onStart?: () => void;
 }) {
   const rows: Array<[string, string[]]> = [
     ['Obiettivo', [preview.goal]],
@@ -68,13 +65,13 @@ function PreviewBlock({
       </dl>
       <button
         type="button"
-        disabled={!canStart}
+        disabled={!onStart}
         onClick={onStart}
         className="mt-3 min-h-[44px] w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-45"
       >
         ▶ Avvia incarico
       </button>
-      {!canStart && (
+      {!onStart && (
         <p className="mt-1 text-center text-[11px] text-slate-500">Il Play sarà abilitato quando il mandato è pronto per l’esecuzione governata.</p>
       )}
     </div>
@@ -94,7 +91,7 @@ function OpportunityCard({
   onPreview: () => void;
   onPutAside: () => void;
   onIgnore: () => void;
-  onStart: () => void;
+  onStart?: () => void;
 }) {
   return (
     <article className="rounded-xl border border-slate-700/80 bg-slate-900/75 p-3" data-testid={`copilot-opportunity-${opportunity.id}`}>
@@ -123,7 +120,7 @@ function OpportunityCard({
         </button>
       </div>
 
-      {preview && <PreviewBlock preview={preview} canStart={Boolean(onStart)} onStart={onStart} />}
+      {preview && <PreviewBlock preview={preview} onStart={onStart} />}
     </article>
   );
 }
@@ -238,6 +235,9 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                     <p className="rounded-lg border border-dashed border-slate-800 px-3 py-2 text-xs text-slate-600">Nessuna opportunità forte in questo gruppo.</p>
                   ) : group.opportunities.map(opportunity => {
                     const preview = previewId === opportunity.id ? resolvePreview(opportunity) : null;
+                    const start = onStart && preview
+                      ? () => void run(opportunity.id, () => onStart(opportunity, preview))
+                      : undefined;
                     return (
                       <OpportunityCard
                         key={opportunity.id}
@@ -246,7 +246,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                         onPreview={() => setPreviewId(current => current === opportunity.id ? null : opportunity.id)}
                         onPutAside={() => void run(opportunity.id, () => onPutAside(opportunity))}
                         onIgnore={() => void run(opportunity.id, () => onIgnore(opportunity))}
-                        onStart={onStart && preview ? () => void run(opportunity.id, () => onStart(opportunity, preview)) : undefined as never}
+                        onStart={start}
                       />
                     );
                   })}
