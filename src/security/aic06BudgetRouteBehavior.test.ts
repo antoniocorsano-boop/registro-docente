@@ -90,6 +90,24 @@ describe('AIC-06 server-side budget enforcement', () => {
     });
   });
 
+  test('missing budget envelope is rejected before provider invocation', async () => {
+    const { runtime, calls } = runtimeStub();
+    const request = structuredClone(BASE_REQUEST) as any;
+    delete request.budget;
+
+    const result = await handleLibraryProposalRequest(request, runtime as any, {
+      requestId: 'request-aic06-missing-budget',
+      now: () => '2026-10-27T18:00:00.000Z'
+    } as any);
+
+    expect(result.status).toBe(400);
+    expect(errorOf(result)).toMatchObject({
+      code: 'REQUEST_INVALID',
+      retriable: false
+    });
+    expect(calls).toHaveLength(0);
+  });
+
   test('binary source requires escalation and does not invoke the provider first', async () => {
     const { runtime, calls } = runtimeStub();
     const request = structuredClone(BASE_REQUEST) as any;
