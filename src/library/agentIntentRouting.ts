@@ -12,6 +12,11 @@ export type AgentIntentRoutingResult =
   | { kind: 'UNSUPPORTED'; envelope: IntentEnvelopeV1 }
   | { kind: 'DENIED'; envelope: IntentEnvelopeV1 };
 
+export type AgentIntentRoutingResultWithSource = Exclude<
+  AgentIntentRoutingResult,
+  { kind: 'SOURCE_REQUIRED' }
+>;
+
 export interface RouteAgentIntentInput {
   envelope: IntentEnvelopeV1;
   source: LibrarySource | null;
@@ -20,6 +25,10 @@ export interface RouteAgentIntentInput {
     source: LibrarySource,
     teachingContext: ResolvedLibraryTeachingContext | null
   ) => Promise<readonly ResolvedAction[]>;
+}
+
+export interface RouteAgentIntentWithSourceInput extends Omit<RouteAgentIntentInput, 'source'> {
+  source: LibrarySource;
 }
 
 const AGENT_TO_ACTION_ID: Partial<Record<IntentEnvelopeV1['intent'], string>> = {
@@ -36,6 +45,12 @@ function needsContextBinding(envelope: IntentEnvelopeV1): boolean {
   ].some(reference => reference !== undefined && reference !== 'current');
 }
 
+export function routeAgentIntent(
+  input: RouteAgentIntentWithSourceInput
+): Promise<AgentIntentRoutingResultWithSource>;
+export function routeAgentIntent(
+  input: RouteAgentIntentInput
+): Promise<AgentIntentRoutingResult>;
 export async function routeAgentIntent({
   envelope,
   source,
