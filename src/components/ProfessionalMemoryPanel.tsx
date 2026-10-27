@@ -174,9 +174,11 @@ export const ProfessionalMemoryPanel: React.FC<ProfessionalMemoryPanelProps> = (
   };
 
   const handleRemoveCategory = async (category: ProfessionalMemoryCategory) => {
-    const count = state.entries.filter(entry => entry.category === category).length;
-    if (count === 0) return;
-    if (!window.confirm(`Eliminare ${count} ricord${count === 1 ? 'o' : 'i'} dalla categoria “${CATEGORY_LABELS[category]}”? L’attivazione automatica non verrà modificata.`)) return;
+    const entryCount = state.entries.filter(entry => entry.category === category).length;
+    const eventCount = state.events.filter(event => event.category === category).length;
+    const categoryDataCount = entryCount + eventCount;
+    if (categoryDataCount === 0) return;
+    if (!window.confirm(`Eliminare tutti i dati di memoria della categoria “${CATEGORY_LABELS[category]}”? Verranno rimossi ricordi salvati ed eventi professionali; l’attivazione automatica non verrà modificata.`)) return;
     try {
       await runAction(
         `clear:${category}`,
@@ -295,6 +297,8 @@ export const ProfessionalMemoryPanel: React.FC<ProfessionalMemoryPanelProps> = (
             {CATEGORIES.map(category => {
               const enabled = state.settings.autoRemember[category];
               const entryCount = state.entries.filter(entry => entry.category === category).length;
+              const eventCount = state.events.filter(event => event.category === category).length;
+              const categoryDataCount = entryCount + eventCount;
               return (
                 <div
                   key={category}
@@ -304,7 +308,10 @@ export const ProfessionalMemoryPanel: React.FC<ProfessionalMemoryPanelProps> = (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-sm font-semibold text-slate-200">{CATEGORY_LABELS[category]}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">{entryCount} ricord{entryCount === 1 ? 'o' : 'i'} conservat{entryCount === 1 ? 'o' : 'i'}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {entryCount} ricord{entryCount === 1 ? 'o' : 'i'} conservat{entryCount === 1 ? 'o' : 'i'}
+                        {eventCount > 0 ? ` · ${eventCount} event${eventCount === 1 ? 'o' : 'i'} registrat${eventCount === 1 ? 'o' : 'i'}` : ''}
+                      </div>
                     </div>
                     <label className="flex min-h-[44px] items-center gap-2 text-xs text-slate-300">
                       <input
@@ -317,14 +324,14 @@ export const ProfessionalMemoryPanel: React.FC<ProfessionalMemoryPanelProps> = (
                       Memorizza automaticamente
                     </label>
                   </div>
-                  {entryCount > 0 && (
+                  {categoryDataCount > 0 && (
                     <button
                       type="button"
                       onClick={() => void handleRemoveCategory(category)}
                       disabled={Boolean(pendingAction)}
                       className="mt-2 min-h-[44px] rounded-lg border border-rose-900/60 px-3 text-xs font-semibold text-rose-200 disabled:opacity-50"
                     >
-                      Elimina i ricordi della categoria
+                      Elimina i dati della categoria
                     </button>
                   )}
                 </div>
