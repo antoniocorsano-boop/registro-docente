@@ -234,7 +234,7 @@ function alignmentStatus(
   matches: ContextualReviewPlanningMatch[]
 ): 'supported' | 'partial' | 'unverified' {
   if (matches.length > 0) return 'supported';
-  if (planningContext?.status === 'resolved') return 'partial';
+  if (authoritativeArenaContext(planningContext)) return 'partial';
   return 'unverified';
 }
 
