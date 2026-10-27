@@ -75,3 +75,25 @@ export interface ProfessionalMemoryStateV1 {
   entries: ProfessionalMemoryEntryV1[];
   settings: ProfessionalMemorySettingsV1;
 }
+
+export interface ProfessionalMemoryWorkingItemV1 {
+  entryId: string;
+  category: ProfessionalMemoryCategory;
+  summary: string;
+  context: ProfessionalMemoryContextRefsV1;
+  provenanceKind: ProfessionalMemoryProvenanceV1['kind'];
+  updatedAt: string;
+}
+
+export interface ProfessionalMemoryWorkingSetV1 {
+  schema: 'registro.professional-memory-working-set/v1';
+  items: ProfessionalMemoryWorkingItemV1[];
+}
+
+export interface RemoteProfessionalMemoryProjectionV1 {
+  schema: 'registro.professional-memory-remote/v1';
+  items: Array<{
+    category: ProfessionalMemoryCategory;
+    summary: string;
+  }>;
+}
