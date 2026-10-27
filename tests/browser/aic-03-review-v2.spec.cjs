@@ -238,10 +238,10 @@ async function submit(composer, message) {
 async function classifyProfessional(composer, state) {
   state.failIntent = true;
   await submit(composer, 'crea una proposta didattica a partire da questo materiale');
-  state.failIntent = false;
 
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
+  state.failIntent = false;
   const classify = disclosure.getByRole('button', {
     name: 'Classifica come materiale professionale',
     exact: true
