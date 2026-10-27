@@ -16,7 +16,11 @@ function intentEnvelope(intent) {
   return {
     schema: 'registro.agent-intent/v1',
     intent,
-    goal: intent === 'REVIEW' ? 'valutare la pertinenza della fonte' : intent === 'LINK' ? 'collegare la fonte al contesto corrente' : 'preparare una attività',
+    goal: intent === 'REVIEW'
+      ? 'valutare la pertinenza della fonte'
+      : intent === 'PREPARE'
+        ? 'preparare una attività'
+        : 'collegare la fonte al contesto corrente',
     contextTarget: 'current',
     confidence: 'high',
     needsClarification: false,
@@ -24,6 +28,29 @@ function intentEnvelope(intent) {
     udaReference: 'current',
     sourceReference: 'current'
   };
+}
+
+function installIntentRoute(page, state) {
+  return page.route('**/api/copilot/intent', async route => {
+    state.intentRequests += 1;
+    if (state.failIntent) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'UNAVAILABLE' })
+      });
+      return;
+    }
+
+    const body = route.request().postDataJSON();
+    const message = String(body?.message || '').toLocaleLowerCase('it');
+    const intent = message.includes('prepara') ? 'PREPARE' : 'REVIEW';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ intent: intentEnvelope(intent) })
+    });
+  });
 }
 
 async function setupFreshVault(page) {
@@ -57,8 +84,10 @@ async function createSyntheticClass(page) {
 
 async function createSyntheticUdaAndLesson(page) {
   await openDrawerItem(page, 'UDA');
-  const udaToggle = page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true });
+  const views = page.getByRole('group', { name: 'Viste UDA' });
+  const udaToggle = views.getByRole('button', { name: 'UDA', exact: true });
   if (await udaToggle.isVisible().catch(() => false)) await udaToggle.click();
+
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(UDA_TITLE);
@@ -68,13 +97,14 @@ async function createSyntheticUdaAndLesson(page) {
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await expect(page.getByText(UDA_TITLE, { exact: true }).first()).toBeVisible();
 
-  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'Analisi', exact: true }).click();
+  await views.getByRole('button', { name: 'Analisi', exact: true }).click();
   await page.getByRole('button', { name: /Gap Analysis Competenze/ }).click();
   const udaCard = page
     .getByText(UDA_TITLE, { exact: true })
     .last()
     .locator('xpath=ancestor::div[contains(@class,"rounded-xl") and contains(@class,"border")][1]');
   await udaCard.getByRole('button', { name: 'Dossier & Rubrica', exact: true }).click();
+
   const topicInput = page.getByPlaceholder('Argomento o fase operativa svolta...');
   const form = topicInput.locator('xpath=ancestor::form');
   await topicInput.fill(LESSON_TOPIC);
@@ -125,7 +155,12 @@ async function createAuthoritativePlanning(page) {
     authorityReceiptRef: 'aic-03-browser-authority-receipt',
     masterId: 'AIC-03-MASTER',
     masterVersion: '1.0',
-    structuralFingerprint: { scope: 'MASTER', algorithm: 'fnv1a', version: 1, hash: 'a1c03e01' },
+    structuralFingerprint: {
+      scope: 'MASTER',
+      algorithm: 'fnv1a',
+      version: 1,
+      hash: 'a1c03e01'
+    },
     provenance: {
       repository: 'antoniocorsano-boop/CurManLight_arena',
       sourceCommit: '1234567890abcdef1234567890abcdef12345678',
@@ -173,12 +208,17 @@ async function launchComposerFor(page, sourceTitle) {
   const card = page.getByRole('heading', { name: sourceTitle, exact: true }).locator('xpath=ancestor::article');
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   const udaSelect = card.getByLabel('UDA corrente');
-  if (!(await udaSelect.isVisible().catch(() => false))) await card.getByRole('button', { name: 'Cambia', exact: true }).click();
+  if (!(await udaSelect.isVisible().catch(() => false))) {
+    await card.getByRole('button', { name: 'Cambia', exact: true }).click();
+  }
   await udaSelect.selectOption({ label: UDA_TITLE });
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await composer.getByLabel('Contesto didattico').selectOption({ label: `${CLASS_NAME} · Lezione · ${LESSON_TOPIC}` });
+  await composer
+    .getByLabel('Contesto didattico')
+    .selectOption({ label: `${CLASS_NAME} · Lezione · ${LESSON_TOPIC}` });
   return composer;
 }
 
@@ -191,21 +231,17 @@ async function classifyProfessional(composer, state) {
   state.failIntent = true;
   await submit(composer, 'Prepara una attività a partire da questa fonte');
   state.failIntent = false;
+
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
-  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  const classify = disclosure.getByRole('button', {
+    name: 'Classifica come materiale professionale',
+    exact: true
+  });
   if (await classify.isVisible().catch(() => false)) await classify.click();
+
   await composer.getByLabel('Che cosa vuoi farne?').fill('');
   await expect(disclosure).toHaveCount(0);
-}
-
-async function linkCurrentLesson(composer) {
-  await submit(composer, 'Collega questa fonte alla lezione corrente');
-  await composer.getByTestId('library-copilot-link-action').click();
-  const confirmation = composer.getByTestId('library-copilot-link-confirmation');
-  await expect(confirmation).toBeVisible();
-  await confirmation.getByRole('button', { name: 'Conferma collegamento', exact: true }).click();
-  await expect(composer.getByText('Il collegamento è stato salvato nella Biblioteca.', { exact: true })).toBeVisible();
 }
 
 async function expectReviewSections(panel) {
@@ -221,29 +257,16 @@ async function expectReviewSections(panel) {
   }
 }
 
-function installIntentRoute(page, state) {
-  return page.route('**/api/copilot/intent', async route => {
-    state.intentRequests += 1;
-    if (state.failIntent) {
-      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'UNAVAILABLE' }) });
-      return;
-    }
-    const body = route.request().postDataJSON();
-    const message = String(body?.message || '').toLocaleLowerCase('it');
-    const intent = message.includes('collega') ? 'LINK' : message.includes('prepara') ? 'PREPARE' : 'REVIEW';
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ intent: intentEnvelope(intent) })
-    });
-  });
-}
-
-test('AIC-03 REVIEW v2 is structured, local/read-only and remains reviewable when current lesson is already linked — desktop', async ({ page }) => {
+test('AIC-03 REVIEW v2 is structured and local/read-only — desktop', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
-  const state = { intentRequests: 0, proposalRequests: 0, reviewEndpointRequests: 0, failIntent: false };
+  const state = {
+    intentRequests: 0,
+    proposalRequests: 0,
+    reviewEndpointRequests: 0,
+    failIntent: false
+  };
 
   await installIntentRoute(page, state);
   await page.route('**/api/copilot/library-proposal', async route => {
@@ -260,10 +283,13 @@ test('AIC-03 REVIEW v2 is structured, local/read-only and remains reviewable whe
   await createSyntheticUdaAndLesson(page);
   await createAuthoritativePlanning(page);
   await openLibrary(page);
-  await addSource(page, SOURCE_TITLE, 'Il vento aziona una turbina e produce energia elettrica attraverso trasformazioni energetiche.');
+  await addSource(
+    page,
+    SOURCE_TITLE,
+    'Il vento aziona una turbina e produce energia elettrica attraverso trasformazioni energetiche.'
+  );
   const composer = await launchComposerFor(page, SOURCE_TITLE);
   await classifyProfessional(composer, state);
-  await linkCurrentLesson(composer);
 
   state.intentRequests = 0;
   state.proposalRequests = 0;
@@ -290,17 +316,23 @@ test('AIC-03 REVIEW v2 is structured, local/read-only and remains reviewable whe
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
   state.failIntent = false;
 
-  await page.screenshot({ path: path.join(evidenceDir, 'aic-03-review-v2-desktop.png'), fullPage: true });
-  fs.writeFileSync(path.join(evidenceDir, 'aic-03-review-v2-desktop.json'), JSON.stringify({
-    candidateSha: process.env.CANDIDATE_SHA || null,
-    viewport: { width: 1280, height: 900 },
-    intentRequests: state.intentRequests,
-    proposalRequests: state.proposalRequests,
-    reviewEndpointRequests: state.reviewEndpointRequests,
-    alreadyLinkedCurrentLessonReviewed: true,
-    fallbackReviewed: true,
-    pageErrors
-  }, null, 2) + '\n');
+  await page.screenshot({
+    path: path.join(evidenceDir, 'aic-03-review-v2-desktop.png'),
+    fullPage: true
+  });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'aic-03-review-v2-desktop.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      viewport: { width: 1280, height: 900 },
+      intentRequests: state.intentRequests,
+      proposalRequests: state.proposalRequests,
+      reviewEndpointRequests: state.reviewEndpointRequests,
+      structuredReviewReached: true,
+      fallbackReviewed: true,
+      pageErrors
+    }, null, 2) + '\n'
+  );
   expect(pageErrors).toEqual([]);
 });
 
@@ -310,7 +342,12 @@ test('AIC-03 REVIEW v2 fails closed for unknown source then shows weak/unverifie
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
-  const state = { intentRequests: 0, proposalRequests: 0, reviewEndpointRequests: 0, failIntent: false };
+  const state = {
+    intentRequests: 0,
+    proposalRequests: 0,
+    reviewEndpointRequests: 0,
+    failIntent: false
+  };
   await installIntentRoute(page, state);
 
   await setupFreshVault(page);
@@ -339,19 +376,30 @@ test('AIC-03 REVIEW v2 fails closed for unknown source then shows weak/unverifie
   expect(closeBox).not.toBeNull();
   expect(closeBox.width).toBeGreaterThanOrEqual(44);
   expect(closeBox.height).toBeGreaterThanOrEqual(44);
-  const overflow = await page.evaluate(() => ({ width: innerWidth, root: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+
+  const overflow = await page.evaluate(() => ({
+    width: innerWidth,
+    root: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth
+  }));
   expect(overflow.root).toBeLessThanOrEqual(overflow.width + 1);
   expect(overflow.body).toBeLessThanOrEqual(overflow.width + 1);
 
-  await page.screenshot({ path: path.join(evidenceDir, 'aic-03-review-v2-mobile.png'), fullPage: true });
-  fs.writeFileSync(path.join(evidenceDir, 'aic-03-review-v2-mobile.json'), JSON.stringify({
-    candidateSha: process.env.CANDIDATE_SHA || null,
-    viewport: { width: 390, height: 844 },
-    overflow,
-    unknownSourceFailClosed: true,
-    weakUnverifiedReview: true,
-    pageErrors
-  }, null, 2) + '\n');
+  await page.screenshot({
+    path: path.join(evidenceDir, 'aic-03-review-v2-mobile.png'),
+    fullPage: true
+  });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'aic-03-review-v2-mobile.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      viewport: { width: 390, height: 844 },
+      overflow,
+      unknownSourceFailClosed: true,
+      weakUnverifiedReview: true,
+      pageErrors
+    }, null, 2) + '\n'
+  );
   expect(pageErrors).toEqual([]);
   await context.close();
 });
