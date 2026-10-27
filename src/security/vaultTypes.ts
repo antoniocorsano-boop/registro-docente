@@ -8,6 +8,7 @@ export type VaultRecordKey =
   | 'submissions'
   | 'planning'
   | 'library'
+  | 'professionalMemory'
   | 'meta';
 
 export interface VaultKdfParametersV1 {
