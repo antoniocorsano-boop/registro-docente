@@ -1,3 +1,4 @@
+import type { AiBudgetProfile, AiRemoteTier } from '../copilot/aiBudgetGovernor.ts';
 import type {
   GovernedTeachingProposalProvider,
   TeachingProposalProviderInput
@@ -12,6 +13,12 @@ export interface TeachingProposalRuntimeConfig {
   maxOutputTokens: number;
 }
 
+export interface TeachingProposalRuntimeBudgetReceipt {
+  tier: AiRemoteTier;
+  profile: AiBudgetProfile;
+  escalated: boolean;
+}
+
 export interface TeachingProposalRuntimeReceipt {
   requestId: string;
   provider: string;
@@ -23,13 +30,21 @@ export interface TeachingProposalRuntimeReceipt {
   outputTokens?: number;
   totalTokens?: number;
   attemptCount: 1;
+  budget?: TeachingProposalRuntimeBudgetReceipt;
+}
+
+export interface TeachingProposalRuntimeOptions {
+  signal?: AbortSignal;
+  requestId?: string;
+  maxOutputTokens?: number;
+  budget?: TeachingProposalRuntimeBudgetReceipt;
 }
 
 export interface TeachingProposalRuntime {
   readonly config: TeachingProposalRuntimeConfig;
   generate(
     input: TeachingProposalProviderInput,
-    options?: { signal?: AbortSignal; requestId?: string }
+    options?: TeachingProposalRuntimeOptions
   ): Promise<{ output: unknown; receipt: TeachingProposalRuntimeReceipt }>;
 }
 
@@ -86,6 +101,11 @@ function abortPromise(signal: AbortSignal, error: TeachingProposalRuntimeError):
   });
 }
 
+function governedOutputCap(configuredMaximum: number, requested: number | undefined): number {
+  if (!Number.isSafeInteger(requested) || (requested ?? 0) <= 0) return configuredMaximum;
+  return Math.min(configuredMaximum, requested!);
+}
+
 export function createTeachingProposalRuntime(
   config: TeachingProposalRuntimeConfig,
   provider: GovernedTeachingProposalProvider
@@ -94,7 +114,7 @@ export function createTeachingProposalRuntime(
     config: { ...config },
     async generate(
       input: TeachingProposalProviderInput,
-      options: { signal?: AbortSignal; requestId?: string } = {}
+      options: TeachingProposalRuntimeOptions = {}
     ): Promise<{ output: unknown; receipt: TeachingProposalRuntimeReceipt }> {
       const requestId = options.requestId?.trim() || createRequestId();
       if (options.signal?.aborted) throw new TeachingProposalRuntimeError('aborted');
@@ -121,7 +141,7 @@ export function createTeachingProposalRuntime(
       const providerCall = provider.generate(input, {
         requestId,
         signal: controller.signal,
-        maxOutputTokens: config.maxOutputTokens
+        maxOutputTokens: governedOutputCap(config.maxOutputTokens, options.maxOutputTokens)
       });
 
       try {
@@ -143,7 +163,8 @@ export function createTeachingProposalRuntime(
             ...(typeof metadata.promptTokens === 'number' ? { promptTokens: metadata.promptTokens } : {}),
             ...(typeof metadata.outputTokens === 'number' ? { outputTokens: metadata.outputTokens } : {}),
             ...(typeof metadata.totalTokens === 'number' ? { totalTokens: metadata.totalTokens } : {}),
-            attemptCount: 1
+            attemptCount: 1,
+            ...(options.budget ? { budget: { ...options.budget } } : {})
           }
         };
       } finally {

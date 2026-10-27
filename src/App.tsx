@@ -1460,6 +1460,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           udas={udas}
           planning={planning}
           professionalMemory={professionalMemory}
+          aiBudgetProfile={settings.aiBudgetProfile}
           memoryError={professionalMemoryError}
           currentClassName={currentClass?.name ?? null}
           launchRequest={launchRequest}

@@ -17,6 +17,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { DEFAULT_EMBEDDING_CONFIG } from '../utils';
+import { normalizeAiBudgetProfile, type AiBudgetProfile } from '../copilot/aiBudgetGovernor';
 import { diffSettings } from '../persistence/settingsMutation';
 import {
   testEmbeddingConnection,
@@ -40,6 +41,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [formData, setFormData] = useState<AppSettings>(settings);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [aiBudgetSaveError, setAiBudgetSaveError] = useState<string | null>(null);
 
   // Embedding testing and playground state
   const [embeddingTestResult, setEmbeddingTestResult] = useState<EmbeddingTestResult | null>(null);
@@ -110,6 +112,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } catch {
       setFormData(prev => ({ ...prev, theme: previousTheme }));
       return;
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleAiBudgetProfileChange = async (profile: AiBudgetProfile) => {
+    if (isSavingSettings) return;
+    const previousProfile = normalizeAiBudgetProfile(formData.aiBudgetProfile);
+    setFormData(prev => ({ ...prev, aiBudgetProfile: profile }));
+    setAiBudgetSaveError(null);
+    setIsSavingSettings(true);
+    try {
+      await onUpdateSettings({ aiBudgetProfile: profile });
+    } catch {
+      setFormData(prev => ({ ...prev, aiBudgetProfile: previousProfile }));
+      setAiBudgetSaveError('Il profilo di uso delle risorse IA non è stato salvato.');
     } finally {
       setIsSavingSettings(false);
     }
@@ -236,6 +254,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 );
               })}
             </div>
+          </div>
+
+          <div className="pt-4 border-t border-[var(--border)]">
+            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-300 mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[var(--primary)]" /> Uso delle risorse IA
+            </h4>
+            <p className="text-xs text-slate-400 mb-3">
+              Scegli quando l’app deve chiederti un’autorizzazione aggiuntiva per operazioni remote più impegnative. Questa preferenza non modifica i controlli sulla privacy né il consenso all’invio remoto.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {([
+                { id: 'economy', label: 'Risparmio', detail: 'Chiede prima l’autorizzazione per richieste più ampie.' },
+                { id: 'balanced', label: 'Bilanciato', detail: 'Mantiene compatte le richieste ordinarie e chiede conferma quando serve più capacità.' },
+                { id: 'quality', label: 'Qualità', detail: 'Consente più contesto ordinario prima di chiedere conferma.' }
+              ] as const).map(option => {
+                const selected = normalizeAiBudgetProfile(formData.aiBudgetProfile) === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => void handleAiBudgetProfileChange(option.id)}
+                    disabled={isSavingSettings}
+                    className={`min-h-[72px] rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${
+                      selected
+                        ? 'border-[var(--primary)] bg-[var(--surface-variant)] text-white'
+                        : 'border-[var(--border)] bg-slate-950/30 text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{option.label}</span>
+                    <span className="mt-1 block text-xs text-slate-400">{option.detail}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {aiBudgetSaveError && <p role="alert" className="mt-2 text-xs text-amber-300">{aiBudgetSaveError}</p>}
           </div>
 
           {/* Configurable professional weighting criterion */}

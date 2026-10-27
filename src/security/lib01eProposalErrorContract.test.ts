@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { buildAiBudgetActivityKey } from '../copilot/aiBudgetGovernor';
 import { handleLibraryProposalRequest } from '../server/libraryProposalRoute';
 import { TeachingProposalProviderError } from '../server/teachingProposalProvider';
 import { TeachingProposalRuntimeError } from '../server/teachingProposalRuntime';
@@ -31,6 +32,11 @@ const BASE_REQUEST = {
     period: 'Q1',
     lessonId: 'lesson-lib01e-route',
     lessonTopic: 'Trasformazioni di energia'
+  },
+  budget: {
+    schemaVersion: 1,
+    profile: 'balanced',
+    activityKey: buildAiBudgetActivityKey('uda-lib01e-route', 'lesson-lib01e-route')
   }
 } as const;
 
@@ -202,7 +208,14 @@ describe('LIB-01E governed proposal route contract', () => {
     expect(result.status).toBe(200);
     expect(calls).toHaveLength(1);
     const body = result.body as any;
-    expect(body.receipt).toEqual(RECEIPT);
+    expect(body.receipt).toEqual({
+      ...RECEIPT,
+      budget: {
+        tier: 'remote-low',
+        profile: 'balanced',
+        escalated: false
+      }
+    });
     expect(body.proposal).toMatchObject({
       schemaVersion: 1,
       kind: 'activity',

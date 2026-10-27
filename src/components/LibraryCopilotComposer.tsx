@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'lucide-react';
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
+import type { AiBudgetProfile } from '../copilot/aiBudgetGovernor';
 import type { PlanningStateV1 } from '../planning/types';
 import type { ProfessionalMemoryCategory, ProfessionalMemoryStateV1 } from '../memory/types';
 import {
@@ -56,6 +57,7 @@ interface LibraryCopilotComposerProps {
   udas: UdaRecord[];
   planning: PlanningStateV1;
   professionalMemory: ProfessionalMemoryStateV1;
+  aiBudgetProfile?: AiBudgetProfile;
   memoryError?: string | null;
   currentClassName?: string | null;
   launchRequest?: LibraryCopilotLaunchRequest | null;
@@ -134,6 +136,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   udas,
   planning,
   professionalMemory,
+  aiBudgetProfile,
   memoryError = null,
   currentClassName = null,
   launchRequest = null,
@@ -1172,6 +1175,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               uda={proposalUda}
               teachingContext={resolvedTeachingContext}
               professionalMemory={remoteProfessionalMemory}
+              aiBudgetProfile={aiBudgetProfile}
               isPending={isPending}
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}

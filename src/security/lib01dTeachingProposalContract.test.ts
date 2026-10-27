@@ -94,6 +94,11 @@ describe('LIB-01D teaching proposal contract', () => {
         lessonId: 'lesson-lib01d',
         lessonTopic: 'Trasformazioni di energia nella centrale elettrica',
         activityType: 'laboratorio'
+      },
+      budget: {
+        schemaVersion: 1,
+        profile: 'balanced',
+        activityKey: 'uda:uda-lib01d|lesson:lesson-lib01d'
       }
     });
 
