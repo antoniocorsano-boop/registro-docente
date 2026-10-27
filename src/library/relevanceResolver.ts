@@ -27,6 +27,11 @@ export interface ResolveLibraryRelevanceInput {
   planningContext?: LibraryPlanningContextResolution | null;
 }
 
+export interface ResolveLibraryRelevanceTargetInput extends ResolveLibraryRelevanceInput {
+  targetType: 'uda' | 'lesson';
+  targetId: string;
+}
+
 export type LibraryRelevanceResolution =
   | {
       status: 'ranked';
@@ -193,6 +198,89 @@ function compareCandidates(
   return left.targetId.localeCompare(right.targetId, 'it');
 }
 
+function effectiveTeachingContext(
+  teachingContext: ResolvedLibraryTeachingContext | null | undefined,
+  planningContext: LibraryPlanningContextResolution | null | undefined
+): ResolvedLibraryTeachingContext | null {
+  return teachingContext
+    ?? (planningContext?.status === 'resolved' ? planningContext.teachingContext : null);
+}
+
+function scoreTarget(
+  source: LibrarySource,
+  candidate: UdaRecord,
+  targetType: 'uda' | 'lesson',
+  targetId: string,
+  teachingContext: ResolvedLibraryTeachingContext | null,
+  planningContext: LibraryPlanningContextResolution | null | undefined
+): LibraryRelevanceCandidate | null {
+  const sourceTitle = tokenize(source.title);
+  const sourceContent = sourceContentTokens(source);
+
+  const lexical = targetType === 'uda'
+    ? lexicalScore(
+        sourceTitle,
+        sourceContent,
+        tokenize(candidate.title),
+        udaSupportTokens(candidate)
+      )
+    : (() => {
+        const lesson = (candidate.lessons ?? []).find(item => item.id === targetId);
+        if (!lesson) return null;
+        return lexicalScore(
+          sourceTitle,
+          sourceContent,
+          tokenize(lesson.topic),
+          lessonSupportTokens(candidate, lesson.notes)
+        );
+      })();
+
+  if (!lexical) return null;
+
+  const contextual = contextualScore(
+    candidate,
+    targetType,
+    targetId,
+    teachingContext,
+    planningContext
+  );
+  const score = lexical.score + contextual.score;
+  if (score <= 0) return null;
+
+  return {
+    targetType,
+    targetId,
+    udaId: candidate.id,
+    score,
+    signals: [...contextual.signals, ...lexical.signals],
+    matchedTerms: lexical.matchedTerms
+  };
+}
+
+export function resolveLibraryRelevanceTarget({
+  source,
+  udas,
+  teachingContext,
+  planningContext,
+  targetType,
+  targetId
+}: ResolveLibraryRelevanceTargetInput): LibraryRelevanceCandidate | null {
+  const effectiveContext = effectiveTeachingContext(teachingContext, planningContext);
+  const candidate = targetType === 'uda'
+    ? udas.find(uda => uda.id === targetId)
+    : udas.find(uda => (uda.lessons ?? []).some(lesson => lesson.id === targetId));
+
+  if (!candidate) return null;
+  return scoreTarget(
+    source,
+    candidate,
+    targetType,
+    targetId,
+    effectiveContext,
+    planningContext
+  );
+}
+
 export function resolveLibraryRelevance({
   source,
   udas,
@@ -201,10 +289,9 @@ export function resolveLibraryRelevance({
 }: ResolveLibraryRelevanceInput): LibraryRelevanceResolution {
   const sourceTitle = tokenize(source.title);
   const sourceContent = sourceContentTokens(source);
-  const effectiveTeachingContext = teachingContext
-    ?? (planningContext?.status === 'resolved' ? planningContext.teachingContext : null);
+  const effectiveContext = effectiveTeachingContext(teachingContext, planningContext);
 
-  if (sourceTitle.size === 0 && sourceContent.size === 0 && !effectiveTeachingContext) {
+  if (sourceTitle.size === 0 && sourceContent.size === 0 && !effectiveContext) {
     return {
       status: 'unavailable',
       reason: 'SOURCE_AND_CONTEXT_UNAVAILABLE',
@@ -216,61 +303,29 @@ export function resolveLibraryRelevance({
 
   for (const candidate of udas) {
     if (!isAlreadyLinked(source, 'uda', candidate.id)) {
-      const lexical = lexicalScore(
-        sourceTitle,
-        sourceContent,
-        tokenize(candidate.title),
-        udaSupportTokens(candidate)
-      );
-      const contextual = contextualScore(
+      const scored = scoreTarget(
+        source,
         candidate,
         'uda',
         candidate.id,
-        effectiveTeachingContext,
+        effectiveContext,
         planningContext
       );
-      const score = lexical.score + contextual.score;
-
-      if (score > 0) {
-        candidates.push({
-          targetType: 'uda',
-          targetId: candidate.id,
-          udaId: candidate.id,
-          score,
-          signals: [...contextual.signals, ...lexical.signals],
-          matchedTerms: lexical.matchedTerms
-        });
-      }
+      if (scored) candidates.push(scored);
     }
 
     for (const lesson of candidate.lessons ?? []) {
       if (isAlreadyLinked(source, 'lesson', lesson.id)) continue;
 
-      const lexical = lexicalScore(
-        sourceTitle,
-        sourceContent,
-        tokenize(lesson.topic),
-        lessonSupportTokens(candidate, lesson.notes)
-      );
-      const contextual = contextualScore(
+      const scored = scoreTarget(
+        source,
         candidate,
         'lesson',
         lesson.id,
-        effectiveTeachingContext,
+        effectiveContext,
         planningContext
       );
-      const score = lexical.score + contextual.score;
-
-      if (score > 0) {
-        candidates.push({
-          targetType: 'lesson',
-          targetId: lesson.id,
-          udaId: candidate.id,
-          score,
-          signals: [...contextual.signals, ...lexical.signals],
-          matchedTerms: lexical.matchedTerms
-        });
-      }
+      if (scored) candidates.push(scored);
     }
   }
 
