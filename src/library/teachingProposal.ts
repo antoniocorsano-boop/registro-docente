@@ -1,5 +1,13 @@
 import type { RemoteProfessionalMemoryProjectionV1 } from '../memory/types';
 import type { UdaActivityType, UdaRecord } from '../types';
+import {
+  buildAiBudgetActivityKey,
+  normalizeAiBudgetProfile,
+  type AiBudgetAuthorizationV1,
+  type AiBudgetEscalationReason,
+  type AiBudgetProfile,
+  type AiRemoteTier
+} from '../copilot/aiBudgetGovernor';
 import { isLocallyReadableTextMime } from './intake.ts';
 import type { LibrarySource, LibrarySourceKind } from './types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
@@ -25,6 +33,12 @@ export interface LibraryProposalRequestV1 {
     lessonId?: string;
     lessonTopic?: string;
     activityType?: UdaActivityType;
+  };
+  budget: {
+    schemaVersion: 1;
+    profile: AiBudgetProfile;
+    activityKey: string;
+    authorization?: AiBudgetAuthorizationV1;
   };
   professionalMemory?: RemoteProfessionalMemoryProjectionV1;
 }
@@ -66,12 +80,18 @@ export interface TeachingProposalRuntimeReceiptWire {
   outputTokens?: number;
   totalTokens?: number;
   attemptCount: 1;
+  budget?: {
+    tier: AiRemoteTier;
+    profile: AiBudgetProfile;
+    escalated: boolean;
+  };
 }
 
 export type LibraryProposalErrorCode =
   | 'REMOTE_POLICY_DENIED'
   | 'REQUEST_INVALID'
   | 'SOURCE_TOO_LARGE'
+  | 'AI_BUDGET_ESCALATION_REQUIRED'
   | 'PROVIDER_NOT_CONFIGURED'
   | 'PROVIDER_RATE_LIMITED'
   | 'PROVIDER_TIMEOUT'
@@ -91,6 +111,7 @@ export interface LibraryProposalErrorEnvelope {
     message: string;
     retriable: boolean;
     requestId?: string;
+    reason?: AiBudgetEscalationReason;
   };
 }
 
@@ -210,14 +231,49 @@ function sourceContent(source: LibrarySource): Pick<LibraryProposalRequestV1['so
   throw new Error('Fonte non supportata per la proposta didattica.');
 }
 
+function base64DecodedBytes(value: string): number {
+  const compact = value.replace(/\s+/g, '');
+  const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
+}
+
+export function measureLibraryProposalBudget(request: LibraryProposalRequestV1): {
+  textBytes: number;
+  inlineBytes: number;
+  memoryItems: number;
+} {
+  let textBytes = request.source.text ? new TextEncoder().encode(request.source.text).byteLength : 0;
+  let inlineBytes = 0;
+  if (request.source.dataBase64) {
+    const decodedBytes = base64DecodedBytes(request.source.dataBase64);
+    if (request.source.mimeType?.startsWith('text/')) textBytes += decodedBytes;
+    else inlineBytes += decodedBytes;
+  }
+  return {
+    textBytes,
+    inlineBytes,
+    memoryItems: request.professionalMemory?.items.length ?? 0
+  };
+}
+
 export function buildLibraryProposalRequest(input: {
   source: LibrarySource;
   teachingContext: ResolvedLibraryTeachingContext;
   uda: UdaRecord;
   explicitTeacherOptIn: boolean;
   professionalMemory?: RemoteProfessionalMemoryProjectionV1;
+  aiBudgetProfile?: AiBudgetProfile;
+  budgetAuthorization?: AiBudgetAuthorizationV1;
 }): LibraryProposalRequestV1 {
-  const { source, teachingContext, uda, explicitTeacherOptIn, professionalMemory } = input;
+  const {
+    source,
+    teachingContext,
+    uda,
+    explicitTeacherOptIn,
+    professionalMemory,
+    aiBudgetProfile,
+    budgetAuthorization
+  } = input;
 
   if (!explicitTeacherOptIn) throw new Error('Consenso remoto richiesto.');
   if (source.privacy !== 'teacher-professional') {
@@ -233,6 +289,7 @@ export function buildLibraryProposalRequest(input: {
   if (teachingContext.lessonId && !lesson) throw new Error('Contesto didattico non valido.');
 
   const content = sourceContent(source);
+  const activityKey = buildAiBudgetActivityKey(uda.id, lesson?.id);
   return {
     schemaVersion: 1,
     action: 'prepare-activity',
@@ -251,6 +308,12 @@ export function buildLibraryProposalRequest(input: {
       period: String(uda.period),
       ...(lesson ? { lessonId: lesson.id, lessonTopic: lesson.topic } : {}),
       ...(teachingContext.activityType ? { activityType: teachingContext.activityType } : {})
+    },
+    budget: {
+      schemaVersion: 1,
+      profile: normalizeAiBudgetProfile(aiBudgetProfile),
+      activityKey,
+      ...(budgetAuthorization ? { authorization: budgetAuthorization } : {})
     },
     ...(professionalMemory?.items.length ? { professionalMemory } : {})
   };
