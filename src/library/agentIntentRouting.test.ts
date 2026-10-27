@@ -180,6 +180,26 @@ describe('AIC-04 source-optional entry routing', () => {
     expect(resolveCalls).toBe(0);
   });
 
+  test('treats sourceReference none as an explicit absence marker rather than a different context', async () => {
+    const { routeAgentIntent } = await import('./agentIntentRouting');
+    let resolveCalls = 0;
+
+    for (const intent of ['REVIEW', 'LINK', 'PREPARE'] as const) {
+      const result = await routeAgentIntent({
+        envelope: envelope(intent, { sourceReference: 'none' }),
+        source: null,
+        teachingContext,
+        resolveActions: async () => {
+          resolveCalls += 1;
+          return [];
+        }
+      });
+      expect(result.kind).toBe('SOURCE_REQUIRED');
+    }
+
+    expect(resolveCalls).toBe(0);
+  });
+
   test('clarification and explicit context binding take precedence over source requirement', async () => {
     const { routeAgentIntent } = await import('./agentIntentRouting');
 
