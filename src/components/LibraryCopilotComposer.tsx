@@ -236,17 +236,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
   }, [resolvedTeachingContext, udas]);
 
-  const currentResolutionSnapshot = selectedSource
-  ? JSON.stringify({
-      request: buildLibraryCopilotRequest({
-        source: selectedSource,
-        teachingContext: resolvedTeachingContext,
-        planningContext: resolvedPlanningContext,
-        message: message.trim()
-      }),
-      contextProjection: copilotContextProjection
-    })
-  : '';
+  const currentResolutionSnapshot = JSON.stringify({
+    sourceRequest: selectedSource
+      ? buildLibraryCopilotRequest({
+          source: selectedSource,
+          teachingContext: resolvedTeachingContext,
+          planningContext: resolvedPlanningContext,
+          message: message.trim()
+        })
+      : null,
+    message: message.trim(),
+    contextProjection: copilotContextProjection
+  });
   const resolutionSnapshotRef = useRef(currentResolutionSnapshot);
 
   useLayoutEffect(() => {
@@ -433,7 +434,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const handleResolve = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedSource || !message.trim() || isResolving) return;
+    if (!message.trim() || isResolving) return;
 
     const resolutionEpoch = ++resolutionEpochRef.current;
     const resolutionSnapshot = currentResolutionSnapshot;
@@ -453,14 +454,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
 
-    const input = {
-      source: selectedSource,
-      teachingContext: resolvedTeachingContext,
-      planningContext: resolvedPlanningContext,
-      message: message.trim()
-    };
-
     const runLocalFallback = async () => {
+      if (!selectedSource) {
+        setGuidanceMessage('Il servizio di interpretazione non è disponibile. Puoi riprovare oppure seleziona o aggiungi una fonte per usare il percorso locale.');
+        return;
+      }
+
+      const input = {
+        source: selectedSource,
+        teachingContext: resolvedTeachingContext,
+        planningContext: resolvedPlanningContext,
+        message: message.trim()
+      };
       const discovery = await discoverLibraryCopilotIntent(input);
       if (!requestIsCurrent()) return;
 
@@ -511,13 +516,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
         const routed = await routeAgentIntent({
           envelope,
-          source: selectedSource,
+          source: selectedSource ?? null,
           teachingContext: resolvedTeachingContext
         });
         if (!requestIsCurrent()) return;
 
         if (routed.kind === 'CLARIFY') {
           setGuidanceMessage(routed.question);
+          return;
+        }
+        if (routed.kind === 'SOURCE_REQUIRED') {
+          setGuidanceMessage('Per questa richiesta serve una fonte professionale: seleziona o aggiungi una fonte qui nel Copilota, poi invia di nuovo l’obiettivo.');
           return;
         }
         if (routed.kind === 'UNSUPPORTED') {
@@ -870,7 +879,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
           <button
             type="submit"
-            disabled={!selectedSource || !message.trim() || isResolving}
+            disabled={!message.trim() || isResolving}
             className="min-h-[44px] w-full rounded-xl bg-cyan-600 px-4 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="flex items-center justify-center gap-2">
