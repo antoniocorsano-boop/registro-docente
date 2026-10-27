@@ -27,6 +27,12 @@ import {
   resolveLibraryCopilotRequest
 } from '../library/contextualCoreAdapter';
 import { resolvePlanningContextForLibraryRelevance } from '../library/relevancePresentation';
+import {
+  resolveContextualDidacticReview,
+  type ContextualDidacticReviewResolution,
+  type ContextualReviewConfidenceLevel,
+  type ContextualReviewRelevanceLevel
+} from '../library/contextualDidacticReview';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import {
@@ -66,6 +72,46 @@ const ACTION_HELP: Record<string, string> = {
   'prepare-from-source': 'Prepara una proposta didattica senza modificarne automaticamente i dati.'
 };
 
+type UnavailableContextualReview = Extract<
+  ContextualDidacticReviewResolution,
+  { status: 'unavailable' }
+>;
+
+function reviewRelevanceLabel(level: ContextualReviewRelevanceLevel): string {
+  switch (level) {
+    case 'strong': return 'Pertinenza forte';
+    case 'plausible': return 'Pertinenza plausibile';
+    case 'weak': return 'Pertinenza debole';
+  }
+}
+
+function reviewAlignmentLabel(status: 'supported' | 'partial' | 'unverified'): string {
+  switch (status) {
+    case 'supported': return 'Allineamento supportato';
+    case 'partial': return 'Allineamento parziale';
+    case 'unverified': return 'Allineamento non verificato';
+  }
+}
+
+function reviewConfidenceLabel(level: ContextualReviewConfidenceLevel): string {
+  switch (level) {
+    case 'high': return 'Affidabilità alta';
+    case 'medium': return 'Affidabilità media';
+    case 'low': return 'Affidabilità bassa';
+  }
+}
+
+function reviewUnavailableCopy(reason: UnavailableContextualReview['reason']): string {
+  switch (reason) {
+    case 'SOURCE_NOT_PROFESSIONAL':
+      return 'La fonte deve essere classificata come materiale professionale del docente prima della revisione contestuale.';
+    case 'SOURCE_NOT_USABLE':
+      return 'La fonte non è ancora in uno stato utilizzabile per questa revisione contestuale.';
+    case 'TEACHING_CONTEXT_MISSING':
+      return 'Seleziona un contesto didattico valido con UDA o lezione prima della revisione contestuale.';
+  }
+}
+
 export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   library,
   udas,
@@ -92,6 +138,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [guidanceMessage, setGuidanceMessage] = useState<string | null>(null);
   const [resolution, setResolution] = useState<CopilotRequestResolution | null>(null);
+  const [isReviewUnavailableOpen, setIsReviewUnavailableOpen] = useState(false);
   const [isLinkConfirmationOpen, setIsLinkConfirmationOpen] = useState(false);
   const [isLinkPending, setIsLinkPending] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -150,6 +197,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     [library.sources, selectedSourceId]
   );
 
+  const contextualReview = useMemo(() => {
+    if (!selectedSource) return null;
+    return resolveContextualDidacticReview({
+      source: selectedSource,
+      udas,
+      teachingContext: resolvedTeachingContext,
+      planningContext: resolvedPlanningContext
+    });
+  }, [selectedSource, udas, teachingContextFingerprint, resolvedPlanningContext]);
+
   const copilotProjectionSurface = resolveCopilotProjectionSurface({
     ambientSurface: ambientContext?.surface,
     launchSurface: launchRequest?.context.surface,
@@ -205,6 +262,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setContextOverride('auto');
     setIsOpen(true);
     setResolution(null);
+    setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
@@ -239,6 +297,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolutionEpochRef.current += 1;
     setSelectedSourceId('');
     setResolution(null);
+    setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
@@ -253,6 +312,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     resolutionEpochRef.current += 1;
     setResolution(null);
+    setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
@@ -265,6 +325,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolutionEpochRef.current += 1;
     setIsPrepareOpen(false);
     setResolution(null);
+    setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
@@ -274,6 +335,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   useEffect(() => {
     resolutionEpochRef.current += 1;
     setResolution(null);
+    setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
@@ -360,6 +422,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       setSelectedSourceId(createdSource.id);
       clearCapture();
       setResolution(null);
+      setIsReviewUnavailableOpen(false);
       setGuidanceMessage(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Acquisizione della fonte non riuscita.');
@@ -384,6 +447,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setErrorMessage(null);
     setGuidanceMessage(null);
     setResolution(null);
+    setIsReviewUnavailableOpen(false);
     setIsPrepareOpen(false);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
@@ -429,6 +493,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
       const nextResolution = await resolveLibraryCopilotRequest(input);
       if (!requestIsCurrent()) return;
+      if (
+        intent.actionId === 'review-source'
+        && contextualReview?.status === 'unavailable'
+        && !nextResolution.actions.some(action => action.id === 'review-source')
+      ) {
+        setIsReviewUnavailableOpen(true);
+      }
       setResolution(nextResolution);
     };
 
@@ -454,6 +525,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           return;
         }
         if (routed.kind === 'DENIED') {
+          if (envelope.intent === 'REVIEW' && contextualReview?.status === 'unavailable') {
+            setIsReviewUnavailableOpen(true);
+            return;
+          }
           setGuidanceMessage('Ho compreso la richiesta, ma il Core non autorizza questa azione nel contesto corrente.');
           return;
         }
@@ -614,6 +689,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               setSelectedSourceId(event.target.value);
               setIsPrepareOpen(false);
               setResolution(null);
+              setIsReviewUnavailableOpen(false);
               setGuidanceMessage(null);
               setIsLinkConfirmationOpen(false);
               setLinkError(null);
@@ -646,6 +722,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 setContextOverride({ udaId, ...(lessonId ? { lessonId } : {}) });
               }
               setResolution(null);
+              setIsReviewUnavailableOpen(false);
               setGuidanceMessage(null);
               setIsPrepareOpen(false);
               setIsLinkConfirmationOpen(false);
@@ -780,6 +857,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 resolutionEpochRef.current += 1;
                 setMessage(event.target.value);
                 setResolution(null);
+                setIsReviewUnavailableOpen(false);
                 setGuidanceMessage(null);
                 setIsPrepareOpen(false);
                 setIsLinkConfirmationOpen(false);
@@ -814,6 +892,24 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </p>
         )}
 
+        {isReviewUnavailableOpen && selectedSource && contextualReview?.status === 'unavailable' && (
+          <section
+            data-testid="library-copilot-review-panel"
+            className="space-y-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3"
+          >
+            <div className="text-sm font-semibold text-slate-100">Revisione nel contesto</div>
+            <p className="text-sm leading-relaxed text-slate-200">
+              {reviewUnavailableCopy(contextualReview.reason)}
+            </p>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Affidabilità e limiti</div>
+              <ul className="mt-1 space-y-1 text-xs leading-relaxed text-slate-400">
+                {contextualReview.limitations.map(item => <li key={item}>• {item}</li>)}
+              </ul>
+            </div>
+          </section>
+        )}
+
         {resolution && (
           <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Possibilità autorizzate</div>
@@ -827,24 +923,112 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 L’interpretazione automatica dell’intento non è attiva. Sono mostrate soltanto le azioni che il Core condiviso autorizza già per questa fonte e questo contesto.
               </p>
             )}
-            {resolution.actions.some(action => action.id === 'review-source') && selectedSource && (
+            {resolution.actions.some(action => action.id === 'review-source') && selectedSource && contextualReview && (
               <section
                 data-testid="library-copilot-review-panel"
-                className="space-y-2 rounded-lg border border-slate-700 bg-slate-950/70 p-3"
+                className="space-y-4 rounded-lg border border-slate-700 bg-slate-950/70 p-3"
               >
-                <div className="text-sm font-semibold text-slate-100">Controlla nel contesto</div>
-                <p className="text-xs leading-relaxed text-slate-300">Fonte: {selectedSource.title}</p>
-                <p className="text-xs leading-relaxed text-slate-400">
-                  Contenuto leggibile: {selectedSource.extractedText || selectedSource.payload.text ? 'sì' : 'no'} ·
-                  {' '}Classificazione: {selectedSource.privacy === 'teacher-professional'
-                    ? 'materiale professionale'
-                    : selectedSource.privacy === 'student-personal'
-                      ? 'contiene dati personali'
-                      : 'da verificare'}
-                </p>
-                <p className="text-xs leading-relaxed text-slate-400">
-                  Contesto: {contextLabel ?? 'nessun contesto didattico univoco'} · Collegamenti già presenti: {selectedSource.links.length}
-                </p>
+                <div className="text-sm font-semibold text-slate-100">Revisione nel contesto</div>
+                {contextualReview.status === 'unavailable' ? (
+                  <>
+                    <p className="text-sm leading-relaxed text-slate-200">
+                      {reviewUnavailableCopy(contextualReview.reason)}
+                    </p>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Affidabilità e limiti</div>
+                      <ul className="mt-1 space-y-1 text-xs leading-relaxed text-slate-400">
+                        {contextualReview.limitations.map(item => <li key={item}>• {item}</li>)}
+                      </ul>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quanto è pertinente</div>
+                      <div className="mt-1 text-sm font-semibold text-cyan-100">
+                        {reviewRelevanceLabel(contextualReview.review.relevance.level)}
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                        {contextualReview.review.relevance.statement}
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Perché</div>
+                      <ul className="mt-1 space-y-1 text-xs leading-relaxed text-slate-300">
+                        {contextualReview.review.rationale.map(item => <li key={item}>• {item}</li>)}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Allineamento alla programmazione</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-200">
+                        {reviewAlignmentLabel(contextualReview.review.alignment.status)}
+                      </div>
+                      {contextualReview.review.alignment.planningMatches.length > 0 ? (
+                        <ul className="mt-1 space-y-2 text-xs leading-relaxed text-slate-300">
+                          {contextualReview.review.alignment.planningMatches.map(match => (
+                            <li key={match.itemId} className="rounded-md border border-slate-800 bg-slate-900/70 p-2">
+                              <div className="font-semibold text-slate-200">{match.sourceSection}</div>
+                              <div className="mt-0.5 text-slate-400">
+                                Termini condivisi: {match.matchedTerms.join(', ')}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                          Nessuna corrispondenza curricolare specifica è dimostrata dai dati disponibili.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Cosa manca o va verificato</div>
+                      {contextualReview.review.gaps.length > 0 ? (
+                        <ul className="mt-1 space-y-1 text-xs leading-relaxed text-slate-300">
+                          {contextualReview.review.gaps.map(item => <li key={item}>• {item}</li>)}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                          Nessuna lacuna specifica è emersa dalle evidenze locali disponibili.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Possibili riusi</div>
+                      {contextualReview.review.reuseSuggestions.length > 0 ? (
+                        <ul className="mt-1 space-y-2 text-xs leading-relaxed text-slate-300">
+                          {contextualReview.review.reuseSuggestions.map(suggestion => (
+                            <li key={`${suggestion.targetType}:${suggestion.targetId}`} className="rounded-md border border-slate-800 bg-slate-900/70 p-2">
+                              <div className="font-semibold text-slate-200">{suggestion.title}</div>
+                              <div className="text-slate-400">{suggestion.subtitle}</div>
+                              {suggestion.reasons.length > 0 && (
+                                <div className="mt-1 text-slate-400">{suggestion.reasons.join(' · ')}</div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                          Nessun riuso aggiuntivo è suggerito dalle evidenze locali disponibili.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Affidabilità e limiti</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-200">
+                        {reviewConfidenceLabel(contextualReview.review.confidence.level)}
+                      </div>
+                      <ul className="mt-1 space-y-1 text-xs leading-relaxed text-slate-300">
+                        {contextualReview.review.confidence.reasons.map(item => <li key={`confidence:${item}`}>• {item}</li>)}
+                        {contextualReview.review.limitations.map(item => <li key={`limit:${item}`}>• {item}</li>)}
+                      </ul>
+                    </div>
+                  </>
+                )}
               </section>
             )}
             {resolution.actions.filter(action => action.id !== 'review-source').slice(0, 4).map(action => (
