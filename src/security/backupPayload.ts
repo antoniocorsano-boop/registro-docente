@@ -1,13 +1,16 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
-import { createEmptyPlanningState } from '../planning/emptyPlanningState';
 import { createEmptyLibraryState } from '../library/emptyLibraryState';
-import type { PlanningStateV1 } from '../planning/types';
 import type { LibraryStateV1 } from '../library/types';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
+import type { ProfessionalMemoryStateV1 } from '../memory/types';
+import { createEmptyPlanningState } from '../planning/emptyPlanningState';
+import type { PlanningStateV1 } from '../planning/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 
 export const BACKUP_DATA_VERSION_V2 = 2;
 export const BACKUP_DATA_VERSION_V3 = 3;
 export const BACKUP_DATA_VERSION_V4 = 4;
+export const BACKUP_DATA_VERSION_V5 = 5;
 
 interface SecureBackupSnapshotV2 {
   appData: AppData;
@@ -20,6 +23,10 @@ interface SecureBackupSnapshotV2 {
 
 interface SecureBackupSnapshotV3 extends SecureBackupSnapshotV2 {
   planning: PlanningStateV1;
+}
+
+interface SecureBackupSnapshotV4 extends SecureBackupSnapshotV3 {
+  library: LibraryStateV1;
 }
 
 export interface SecureBackupPayloadV2 {
@@ -40,6 +47,13 @@ export interface SecureBackupPayloadV4 {
   app: 'registro-docente';
   backupDataVersion: typeof BACKUP_DATA_VERSION_V4;
   exportedAt: string;
+  snapshot: SecureBackupSnapshotV4;
+}
+
+export interface SecureBackupPayloadV5 {
+  app: 'registro-docente';
+  backupDataVersion: typeof BACKUP_DATA_VERSION_V5;
+  exportedAt: string;
   snapshot: CompleteSecureAppSnapshot;
 }
 
@@ -47,8 +61,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const allowed = new Set(keys);
+  return Object.keys(value).every(key => allowed.has(key));
+}
+
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string';
+}
+
+function isOptionalNonEmptyString(value: unknown): boolean {
+  return value === undefined || (typeof value === 'string' && Boolean(value.trim()));
 }
 
 function isOptionalHttpUrl(value: unknown): boolean {
@@ -165,19 +188,153 @@ function isLibraryStateV1(value: unknown): value is LibraryStateV1 {
   });
 }
 
-function isSnapshotV4(value: unknown): value is CompleteSecureAppSnapshot {
+const MEMORY_CATEGORIES = [
+  'format-preference',
+  'didactic-pattern',
+  'material-reuse',
+  'planning-continuity',
+  'workflow-preference'
+] as const;
+const MEMORY_CATEGORY_SET = new Set<string>(MEMORY_CATEGORIES);
+const MEMORY_EVENT_KINDS = new Set([
+  'proposal-adopted',
+  'proposal-rejected',
+  'proposal-modified',
+  'source-reused',
+  'source-linked',
+  'artifact-created',
+  'remember-explicit'
+]);
+const MEMORY_PROVENANCE_KINDS = new Set([
+  'teacher-explicit',
+  'product-event',
+  'consolidated-inference'
+]);
+const MEMORY_ALLOWED_PRIVACY = new Set([
+  'TEACHER_PROFESSIONAL',
+  'CURRICULUM_PLANNING',
+  'PUBLIC_EXTERNAL_CONTENT',
+  'AGGREGATED_NON_IDENTIFIABLE'
+]);
+const MEMORY_ENTRY_STATUSES = new Set(['active', 'stale']);
+const MEMORY_CONTEXT_KEYS = [
+  'className',
+  'udaId',
+  'lessonId',
+  'sourceId',
+  'planningProfileId',
+  'assessmentId'
+] as const;
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value)
+    && value.every(item => typeof item === 'string' && Boolean(item.trim()));
+}
+
+function isMemoryContext(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, MEMORY_CONTEXT_KEYS)) return false;
+  return MEMORY_CONTEXT_KEYS.every(key => isOptionalNonEmptyString(value[key]));
+}
+
+function isMemoryProvenance(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['kind', 'canonicalRef'])) return false;
+  return MEMORY_PROVENANCE_KINDS.has(String(value.kind))
+    && isOptionalNonEmptyString(value.canonicalRef);
+}
+
+function isMemoryEvent(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'category',
+    'occurredAt',
+    'descriptor',
+    'context',
+    'provenance',
+    'privacyClassification'
+  ])) return false;
+
+  return typeof value.id === 'string'
+    && Boolean(value.id.trim())
+    && MEMORY_EVENT_KINDS.has(String(value.kind))
+    && MEMORY_CATEGORY_SET.has(String(value.category))
+    && isIsoDate(value.occurredAt)
+    && typeof value.descriptor === 'string'
+    && Boolean(value.descriptor.trim())
+    && isMemoryContext(value.context)
+    && isMemoryProvenance(value.provenance)
+    && MEMORY_ALLOWED_PRIVACY.has(String(value.privacyClassification));
+}
+
+function isMemoryEntry(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'id',
+    'category',
+    'summary',
+    'provenance',
+    'sourceEventIds',
+    'canonicalRefs',
+    'createdAt',
+    'updatedAt',
+    'correctedByTeacherAt',
+    'status',
+    'context',
+    'privacyClassification'
+  ])) return false;
+
+  return typeof value.id === 'string'
+    && Boolean(value.id.trim())
+    && MEMORY_CATEGORY_SET.has(String(value.category))
+    && typeof value.summary === 'string'
+    && Boolean(value.summary.trim())
+    && isMemoryProvenance(value.provenance)
+    && isStringArray(value.sourceEventIds)
+    && isStringArray(value.canonicalRefs)
+    && isIsoDate(value.createdAt)
+    && isIsoDate(value.updatedAt)
+    && (value.correctedByTeacherAt === undefined || isIsoDate(value.correctedByTeacherAt))
+    && MEMORY_ENTRY_STATUSES.has(String(value.status))
+    && isMemoryContext(value.context)
+    && MEMORY_ALLOWED_PRIVACY.has(String(value.privacyClassification));
+}
+
+function isProfessionalMemoryStateV1(value: unknown): value is ProfessionalMemoryStateV1 {
+  if (!isRecord(value)
+    || !hasOnlyKeys(value, ['schemaVersion', 'events', 'entries', 'settings'])
+    || value.schemaVersion !== 1
+    || !Array.isArray(value.events)
+    || !Array.isArray(value.entries)
+    || !isRecord(value.settings)
+    || !hasOnlyKeys(value.settings, ['autoRemember'])
+    || !isRecord(value.settings.autoRemember)
+    || !hasOnlyKeys(value.settings.autoRemember, MEMORY_CATEGORIES)) {
+    return false;
+  }
+
+  return MEMORY_CATEGORIES.every(category => typeof value.settings.autoRemember[category] === 'boolean')
+    && value.events.every(isMemoryEvent)
+    && value.entries.every(isMemoryEntry);
+}
+
+function isSnapshotV4(value: unknown): value is SecureBackupSnapshotV4 {
   return isSnapshotV3(value)
     && isRecord(value)
     && isLibraryStateV1(value.library);
 }
 
+function isSnapshotV5(value: unknown): value is CompleteSecureAppSnapshot {
+  return isSnapshotV4(value)
+    && isRecord(value)
+    && isProfessionalMemoryStateV1(value.professionalMemory);
+}
+
 export function createBackupPayload(
   snapshot: CompleteSecureAppSnapshot,
   exportedAt = new Date().toISOString()
-): SecureBackupPayloadV4 {
+): SecureBackupPayloadV5 {
   return {
     app: 'registro-docente',
-    backupDataVersion: BACKUP_DATA_VERSION_V4,
+    backupDataVersion: BACKUP_DATA_VERSION_V5,
     exportedAt,
     snapshot
   };
@@ -196,11 +353,21 @@ export function normalizeBackupPayload(
   }
 
   if (payload.backupDataVersion !== undefined) {
+    if (payload.backupDataVersion === BACKUP_DATA_VERSION_V5) {
+      if (!isSnapshotV5(payload.snapshot)) {
+        throw new Error('Il backup v5 non contiene una memoria professionale valida e privacy-safe.');
+      }
+      return payload.snapshot;
+    }
+
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V4) {
       if (!isSnapshotV4(payload.snapshot)) {
         throw new Error('Il backup v4 non contiene uno snapshot completo con una biblioteca privata valida.');
       }
-      return payload.snapshot;
+      return {
+        ...payload.snapshot,
+        professionalMemory: createEmptyProfessionalMemoryState()
+      };
     }
 
     if (payload.backupDataVersion === BACKUP_DATA_VERSION_V3) {
@@ -209,7 +376,8 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
-        library: createEmptyLibraryState()
+        library: createEmptyLibraryState(),
+        professionalMemory: createEmptyProfessionalMemoryState()
       };
     }
 
@@ -220,7 +388,8 @@ export function normalizeBackupPayload(
       return {
         ...payload.snapshot,
         planning: createEmptyPlanningState(),
-        library: createEmptyLibraryState()
+        library: createEmptyLibraryState(),
+        professionalMemory: createEmptyProfessionalMemoryState()
       };
     }
 
@@ -254,6 +423,7 @@ export function normalizeBackupPayload(
       : current.submissions,
     planning: createEmptyPlanningState(),
     library: createEmptyLibraryState(),
+    professionalMemory: createEmptyProfessionalMemoryState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
 }
