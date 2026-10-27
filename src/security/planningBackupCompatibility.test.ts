@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 
 const emptyPlanning = {
@@ -36,7 +37,8 @@ const completePlanningSnapshot = {
     ...emptyPlanning,
     profiles: [{ id: 'profile-current' }]
   },
-  professionalMemory: createEmptyProfessionalMemoryState()
+  professionalMemory: createEmptyProfessionalMemoryState(),
+  copilotState: createEmptyCopilotState()
 };
 
 async function loadBackupModule() {
@@ -45,18 +47,19 @@ async function loadBackupModule() {
 }
 
 describe('EDU-PLAN-01A planning backup compatibility', () => {
-  test('exports planning in current application backup data version 5', async () => {
+  test('exports planning in current application backup data version 6', async () => {
     const backup = await loadBackupModule();
 
-    expect(backup.BACKUP_DATA_VERSION_V5).toBe(5);
+    expect(backup.BACKUP_DATA_VERSION_V6).toBe(6);
     const payload = backup.createBackupPayload(completePlanningSnapshot as any, '2026-10-24T10:00:00.000Z');
 
-    expect(payload.backupDataVersion).toBe(5);
+    expect(payload.backupDataVersion).toBe(6);
     expect(payload.snapshot.planning).toEqual(completePlanningSnapshot.planning);
     expect(payload.snapshot.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
+    expect(payload.snapshot.copilotState).toEqual(createEmptyCopilotState());
   });
 
-  test('normalizes v2 backup into current runtime state with empty planning library and professional memory', async () => {
+  test('normalizes v2 backup into current runtime state with empty planning library, professional memory and Copilot state', async () => {
     const backup = await loadBackupModule();
     const restored = backup.normalizeBackupPayload({
       app: 'registro-docente',
@@ -69,7 +72,8 @@ describe('EDU-PLAN-01A planning backup compatibility', () => {
       ...sixDatasetSnapshot,
       planning: emptyPlanning,
       library: emptyLibrary,
-      professionalMemory: createEmptyProfessionalMemoryState()
+      professionalMemory: createEmptyProfessionalMemoryState(),
+      copilotState: createEmptyCopilotState()
     });
   });
 
@@ -88,6 +92,7 @@ describe('EDU-PLAN-01A planning backup compatibility', () => {
     expect(restored.planning).not.toEqual(completePlanningSnapshot.planning);
     expect(restored.library).toEqual(emptyLibrary);
     expect(restored.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
+    expect(restored.copilotState).toEqual(createEmptyCopilotState());
   });
 
   test('keeps unsupported application backup versions fail-closed', async () => {
