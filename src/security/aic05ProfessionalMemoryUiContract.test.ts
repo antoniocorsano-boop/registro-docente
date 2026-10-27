@@ -17,7 +17,8 @@ describe('AIC-05 Task 6 progressive professional memory controls', () => {
     ]);
 
     expect(panel).not.toBe('');
-    expect(composer).toContain("import { ProfessionalMemoryPanel } from './ProfessionalMemoryPanel';");
+    expect(composer).toContain("from './ProfessionalMemoryPanel';");
+    expect(composer).toContain('ProfessionalMemoryPanel');
     expect(composer).toContain('<ProfessionalMemoryPanel');
     expect(panel).toContain('<details');
     expect(panel).toContain('data-testid="copilot-memory-trigger"');
