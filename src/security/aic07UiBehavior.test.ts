@@ -1,27 +1,27 @@
 import { describe, expect, test } from 'bun:test';
 
 const TYPES = new URL('../types.ts', import.meta.url);
-const UTILS = new URL('../utils.ts', import.meta.url);
-const SETTINGS = new URL('../components/SettingsView.tsx', import.meta.url);
+const PROACTIVITY = new URL('../copilot/proactivity.ts', import.meta.url);
+const SETTINGS = new URL('../components/CopilotProactivitySettings.tsx', import.meta.url);
 const DECK = new URL('../components/CopilotDeck.tsx', import.meta.url);
+const EXPERIENCE = new URL('../components/CopilotExperience.tsx', import.meta.url);
 const APP = new URL('../App.tsx', import.meta.url);
-const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 
 describe('AIC-07 supervised Copilot Deck UI contract', () => {
   test('adds a durable proactivity profile independent from AIC-06 budget settings', async () => {
-    const [types, utils, settings] = await Promise.all([
+    const [types, proactivity, settings] = await Promise.all([
       Bun.file(TYPES).text(),
-      Bun.file(UTILS).text(),
+      Bun.file(PROACTIVITY).text(),
       Bun.file(SETTINGS).text()
     ]);
     expect(types).toContain('copilotProactivity?: CopilotProactivityProfile');
-    expect(utils).toContain("copilotProactivity: 'balanced'");
+    expect(proactivity).toContain("return value === 'essential' || value === 'present' || value === 'balanced'");
+    expect(proactivity).toContain(": 'balanced'");
     expect(settings).toContain('Proattività del Copilota');
     expect(settings).toContain('Essenziale');
     expect(settings).toContain('Equilibrato');
     expect(settings).toContain('Presente');
     expect(settings).toContain('Uso delle risorse IA');
-    expect(settings.indexOf('Proattività del Copilota')).not.toBe(settings.indexOf('Uso delle risorse IA'));
     expect(settings).toContain('Reimposta preferenze del Copilota');
     expect(settings).toContain('onResetCopilotPreferences');
   });
@@ -55,25 +55,25 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
   });
 
   test('opening or rendering the Deck cannot start intent/provider/generative work', async () => {
-    const deck = await Bun.file(DECK).text();
-    expect(deck).not.toContain('fetch(');
-    expect(deck).not.toContain('interpretCopilotIntent');
-    expect(deck).not.toContain('requestLibraryTeachingProposal');
-    expect(deck).not.toContain('generateProposal');
+    const [deck, experience] = await Promise.all([
+      Bun.file(DECK).text(),
+      Bun.file(EXPERIENCE).text()
+    ]);
+    for (const source of [deck, experience]) {
+      expect(source).not.toContain('fetch(');
+      expect(source).not.toContain('interpretCopilotIntent');
+      expect(source).not.toContain('requestLibraryTeachingProposal');
+      expect(source).not.toContain('generateProposal');
+    }
   });
 
-  test('App commits copilotState through the durable coordinator before publishing and Deck owns the sole FAB', async () => {
-    const [app, composer] = await Promise.all([
-      Bun.file(APP).text(),
-      Bun.file(COMPOSER).text()
-    ]);
+  test('App commits copilotState through the durable coordinator before publishing and Deck owns the floating entry', async () => {
+    const app = await Bun.file(APP).text();
     expect(app).toContain('initialSnapshot.copilotState ?? createEmptyCopilotState()');
     expect(app).toContain('const copilotStateRef = useRef(copilotState)');
     expect(app).toContain('secureStorage.saveCopilotStateAndMeta');
-    expect(app).toContain('<CopilotDeck');
-    expect(app).toContain('showTrigger={false}');
-    expect(composer).toContain('showTrigger?: boolean');
-    expect(composer).toContain('showTrigger &&');
+    expect(app).toContain('<CopilotExperience');
+    expect(app).toContain('aic07-hide-legacy-copilot-trigger');
   });
 
   test('preference reset is scoped to copilotState preferences only', async () => {
