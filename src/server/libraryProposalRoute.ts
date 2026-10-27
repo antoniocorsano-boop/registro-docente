@@ -231,11 +231,6 @@ function validateBudget(
   context: LibraryProposalRequestV1['context']
 ): LibraryProposalRequestV1['budget'] | null {
   const expectedActivityKey = buildAiBudgetActivityKey(context.udaId, context.lessonId);
-  if (value === undefined) {
-    // Backward-compatible wire fallback. It remains governed: missing budget cannot bypass
-    // the balanced thresholds or obtain expanded capacity.
-    return { schemaVersion: 1, profile: 'balanced', activityKey: expectedActivityKey };
-  }
   if (!isRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'profile', 'activityKey', 'authorization'])) return null;
   if (value.schemaVersion !== 1 || !isNonEmptyString(value.profile) || !AI_BUDGET_PROFILES.has(value.profile as AiBudgetProfile)) return null;
   if (!isNonEmptyString(value.activityKey) || value.activityKey.trim() !== expectedActivityKey) return null;
