@@ -195,7 +195,7 @@ export function buildCopilotMissionPreview(
   const lesson = selectedLesson(input.uda, opportunity.contextRef.lessonId) as { topic?: string } | null;
   const selectedSources = input.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
   const context = [
-    `Classe ${opportunity.contextRef.className}`,
+    opportunity.contextRef.className,
     `UDA ${input.uda.title}`,
     ...(lesson?.topic ? [`Lezione ${lesson.topic}`] : [])
   ];
