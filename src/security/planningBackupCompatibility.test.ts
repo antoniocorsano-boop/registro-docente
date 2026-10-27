@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 
 const emptyPlanning = {
   schemaVersion: 1 as const,
@@ -34,7 +35,8 @@ const completePlanningSnapshot = {
   planning: {
     ...emptyPlanning,
     profiles: [{ id: 'profile-current' }]
-  }
+  },
+  professionalMemory: createEmptyProfessionalMemoryState()
 };
 
 async function loadBackupModule() {
@@ -43,17 +45,18 @@ async function loadBackupModule() {
 }
 
 describe('EDU-PLAN-01A planning backup compatibility', () => {
-  test('exports planning in application backup data version 4', async () => {
+  test('exports planning in current application backup data version 5', async () => {
     const backup = await loadBackupModule();
 
-    expect(backup.BACKUP_DATA_VERSION_V4).toBe(4);
+    expect(backup.BACKUP_DATA_VERSION_V5).toBe(5);
     const payload = backup.createBackupPayload(completePlanningSnapshot as any, '2026-10-24T10:00:00.000Z');
 
-    expect(payload.backupDataVersion).toBe(4);
+    expect(payload.backupDataVersion).toBe(5);
     expect(payload.snapshot.planning).toEqual(completePlanningSnapshot.planning);
+    expect(payload.snapshot.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
   });
 
-  test('normalizes v2 backup into v3 runtime state with empty planning', async () => {
+  test('normalizes v2 backup into current runtime state with empty planning library and professional memory', async () => {
     const backup = await loadBackupModule();
     const restored = backup.normalizeBackupPayload({
       app: 'registro-docente',
@@ -65,7 +68,8 @@ describe('EDU-PLAN-01A planning backup compatibility', () => {
     expect(restored).toEqual({
       ...sixDatasetSnapshot,
       planning: emptyPlanning,
-      library: emptyLibrary
+      library: emptyLibrary,
+      professionalMemory: createEmptyProfessionalMemoryState()
     });
   });
 
@@ -83,6 +87,7 @@ describe('EDU-PLAN-01A planning backup compatibility', () => {
     expect(restored.planning).toEqual(emptyPlanning);
     expect(restored.planning).not.toEqual(completePlanningSnapshot.planning);
     expect(restored.library).toEqual(emptyLibrary);
+    expect(restored.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
   });
 
   test('keeps unsupported application backup versions fail-closed', async () => {
