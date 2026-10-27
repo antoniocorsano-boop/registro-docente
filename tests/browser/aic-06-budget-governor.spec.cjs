@@ -204,9 +204,7 @@ test('AIC-06 governs routine and expensive PREPARE and persists only the base pr
   disclosure = await openPrepare(composer);
   await expect(disclosure.getByText('Serve una tua autorizzazione aggiuntiva', { exact: true })).toBeVisible();
   expect(bodies).toHaveLength(2);
-  await activity.click().catch(async () => {
-    await disclosure.getByRole('button', { name: 'Autorizza per questa attività', exact: true }).click();
-  });
+  await disclosure.getByRole('button', { name: 'Autorizza per questa attività', exact: true }).click();
   await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
   expect(bodies).toHaveLength(3);
   expect(bodies[2].budget.authorization.scope).toBe('activity');
