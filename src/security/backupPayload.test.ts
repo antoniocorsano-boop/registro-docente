@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import type { CompleteSecureAppSnapshot } from './secureAppStorage';
 import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
 
@@ -22,25 +23,36 @@ function currentSnapshot(): CompleteSecureAppSnapshot {
     submissions: [],
     planning: { ...emptyPlanning, profiles: [{ id: 'profile-current' } as any] },
     library: emptyLibrary,
+    professionalMemory: createEmptyProfessionalMemoryState(),
     meta: { changes: 4, lastBackup: null }
   };
 }
 
+function v4Payload(snapshot: CompleteSecureAppSnapshot) {
+  const { professionalMemory: _professionalMemory, ...snapshotV4 } = snapshot;
+  return {
+    app: 'registro-docente' as const,
+    backupDataVersion: 4 as const,
+    exportedAt: '2026-10-24T10:00:00.000Z',
+    snapshot: snapshotV4
+  };
+}
+
 describe('SEC-1 backup application payload', () => {
-  test('exports all eight secure datasets in a versioned v4 payload', () => {
+  test('exports all nine secure datasets in a versioned v5 payload', () => {
     const snapshot = currentSnapshot();
     const payload = createBackupPayload(snapshot, '2026-10-21T12:00:00.000Z');
 
     expect(payload.app).toBe('registro-docente');
-    expect(payload.backupDataVersion).toBe(4);
+    expect(payload.backupDataVersion).toBe(5);
     expect(payload.exportedAt).toBe('2026-10-21T12:00:00.000Z');
     expect(payload.snapshot).toEqual(snapshot);
     expect(Object.keys(payload.snapshot).sort()).toEqual([
-      'appData', 'customTests', 'library', 'meta', 'planning', 'settings', 'submissions', 'udas'
+      'appData', 'customTests', 'library', 'meta', 'planning', 'professionalMemory', 'settings', 'submissions', 'udas'
     ]);
   });
 
-  test('accepts a complete v4 payload and keeps unsupported versions fail-closed', () => {
+  test('accepts a complete v5 payload and keeps unsupported versions fail-closed', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 
@@ -48,9 +60,18 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload({ ...payload, backupDataVersion: 99 }, current)).toThrow(/versione/i);
   });
 
-  test('normalizes a valid v3 payload with an empty private library', () => {
+  test('normalizes a valid v4 payload with an empty professional memory', () => {
     const current = currentSnapshot();
-    const { library: _library, ...snapshotV3 } = current;
+    const normalized = normalizeBackupPayload(v4Payload(current), current);
+
+    expect(normalized.library).toEqual(current.library);
+    expect(normalized.planning).toEqual(current.planning);
+    expect(normalized.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
+  });
+
+  test('normalizes a valid v3 payload with an empty private library and professional memory', () => {
+    const current = currentSnapshot();
+    const { library: _library, professionalMemory: _professionalMemory, ...snapshotV3 } = current;
     const normalized = normalizeBackupPayload({
       app: 'registro-docente',
       backupDataVersion: 3,
@@ -60,11 +81,12 @@ describe('SEC-1 backup application payload', () => {
 
     expect(normalized.library).toEqual(emptyLibrary);
     expect(normalized.planning).toEqual(current.planning);
+    expect(normalized.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
   });
 
   test('rejects a v4 payload whose library is structurally invalid', () => {
     const current = currentSnapshot();
-    const payload = createBackupPayload(current);
+    const payload = v4Payload(current);
     const corrupted = {
       ...payload,
       snapshot: {
@@ -81,7 +103,7 @@ describe('SEC-1 backup application payload', () => {
 
   test('rejects malformed optional library fields during v4 restore', () => {
     const current = currentSnapshot();
-    const payload = createBackupPayload(current);
+    const payload = v4Payload(current);
     const corrupted = {
       ...payload,
       snapshot: {
@@ -108,7 +130,7 @@ describe('SEC-1 backup application payload', () => {
 
   test('rejects non-http source URLs during v4 restore', () => {
     const current = currentSnapshot();
-    const payload = createBackupPayload(current);
+    const payload = v4Payload(current);
     const corrupted = {
       ...payload,
       snapshot: {
@@ -135,7 +157,7 @@ describe('SEC-1 backup application payload', () => {
 
   test('rejects restored image payloads that would trigger a remote request', () => {
     const current = currentSnapshot();
-    const payload = createBackupPayload(current);
+    const payload = v4Payload(current);
     const corrupted = {
       ...payload,
       snapshot: {
@@ -180,12 +202,13 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.submissions).toEqual(current.submissions);
     expect(normalized.planning).toEqual(emptyPlanning);
     expect(normalized.library).toEqual(emptyLibrary);
+    expect(normalized.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
     expect(normalized.meta).toEqual(current.meta);
   });
 
   test('rejects foreign or structurally incomplete v4 payloads', () => {
     const current = currentSnapshot();
-    const payload = createBackupPayload(current);
+    const payload = v4Payload(current);
 
     expect(() => normalizeBackupPayload({ ...payload, app: 'other-app' }, current)).toThrow(/registro-docente/i);
     expect(() => normalizeBackupPayload({ ...payload, snapshot: { settings: current.settings } }, current)).toThrow(/completo/i);
