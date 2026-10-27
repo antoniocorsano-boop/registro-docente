@@ -452,7 +452,8 @@ test('AIC-05 automatic material-reuse category is durable, revocable and does no
   await selectComposerSource(composer, SOURCE_B);
   panel = await openMemoryPanel(composer);
   await expect(panel.locator('[data-testid^="copilot-memory-entry-"]')).toHaveCount(1);
-  await expect(panel.getByText('1 ricordo conservato', { exact: true })).toBeVisible();
+  await expect(category).toContainText('1 ricordo conservato');
+  await expect(category).toContainText('1 evento registrato');
 
   await page.screenshot({ path: path.join(evidenceDir, 'aic-05-memory-auto-category-desktop.png'), fullPage: true });
   fs.writeFileSync(path.join(evidenceDir, 'aic-05-memory-auto-category-desktop.json'), JSON.stringify({
