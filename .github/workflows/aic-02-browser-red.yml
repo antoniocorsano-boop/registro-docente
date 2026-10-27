@@ -1,0 +1,94 @@
+name: AIC-02 Browser RED
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+  PLAYWRIGHT_VERSION: '1.64.1'
+  PORT: '4173'
+
+jobs:
+  causal-red:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact test-only candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Install isolated Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .aic02-red-tools browser-evidence
+          cat > .aic02-red-tools/package.json <<'JSON'
+          {"name":"aic-02-browser-red","private":true}
+          JSON
+          npm --prefix .aic02-red-tools install --save-exact --package-lock=false "@playwright/test@${PLAYWRIGHT_VERSION}"
+          ./.aic02-red-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/aic-02-prepare-outcome.spec.cjs .aic02-red-tools/aic-02-prepare-outcome.spec.cjs
+
+      - name: Start production server
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_ENV=production PORT="${PORT}" bun run start > browser-evidence/server.log 2>&1 &
+          echo $! > browser-evidence/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:${PORT}/" > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/server.log
+          exit 1
+
+      - name: Run causal AIC-02 Chromium RED
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .aic02-red-tools
+          BASE_URL="http://127.0.0.1:${PORT}" EVIDENCE_DIR="../browser-evidence" \
+            ./node_modules/.bin/playwright test aic-02-prepare-outcome.spec.cjs \
+            --reporter=line --output=../browser-evidence/test-results
+
+      - name: Stop server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f browser-evidence/server.pid ]]; then kill "$(cat browser-evidence/server.pid)" 2>/dev/null || true; fi
+
+      - name: Upload RED evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aic-02-browser-red-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
