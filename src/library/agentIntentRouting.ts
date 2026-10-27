@@ -8,12 +8,13 @@ export type AgentIntentRoutingResult =
   | { kind: 'ACTION'; action: ResolvedAction; envelope: IntentEnvelopeV1 }
   | { kind: 'PREPARE'; envelope: IntentEnvelopeV1 }
   | { kind: 'CLARIFY'; question: string; envelope: IntentEnvelopeV1 }
+  | { kind: 'SOURCE_REQUIRED'; envelope: IntentEnvelopeV1 }
   | { kind: 'UNSUPPORTED'; envelope: IntentEnvelopeV1 }
   | { kind: 'DENIED'; envelope: IntentEnvelopeV1 };
 
 export interface RouteAgentIntentInput {
   envelope: IntentEnvelopeV1;
-  source: LibrarySource;
+  source: LibrarySource | null;
   teachingContext: ResolvedLibraryTeachingContext | null;
   resolveActions?: (
     source: LibrarySource,
@@ -58,6 +59,17 @@ export async function routeAgentIntent({
     };
   }
 
+  if (
+    !source
+    && (
+      envelope.intent === 'REVIEW'
+      || envelope.intent === 'LINK'
+      || envelope.intent === 'PREPARE'
+    )
+  ) {
+    return { kind: 'SOURCE_REQUIRED', envelope };
+  }
+
   if (envelope.intent === 'PREPARE') {
     return teachingContext
       ? { kind: 'PREPARE', envelope }
@@ -67,6 +79,10 @@ export async function routeAgentIntent({
   const actionId = AGENT_TO_ACTION_ID[envelope.intent];
   if (!actionId) {
     return { kind: 'UNSUPPORTED', envelope };
+  }
+
+  if (!source) {
+    return { kind: 'SOURCE_REQUIRED', envelope };
   }
 
   const actions = await resolveActions(source, teachingContext);
