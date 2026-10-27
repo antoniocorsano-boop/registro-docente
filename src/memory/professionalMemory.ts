@@ -49,11 +49,10 @@ export interface SelectProfessionalMemoryWorkingSetInput {
 function requireAllowedClassification(
   classification: ProfessionalMemoryCandidateClassification
 ): ProfessionalMemoryAllowedClassification {
-  const policy = canPersistProfessionalMemoryCandidate({ classification });
-  if (policy.decision === 'DENY_STUDENT_PERSONAL') {
+  if (classification === 'STUDENT_PERSONAL') {
     throw new Error('Memoria professionale rifiutata: dato personale studente non memorizzabile.');
   }
-  if (policy.decision === 'DENY_AMBIGUOUS') {
+  if (classification === 'AMBIGUOUS') {
     throw new Error('Memoria professionale rifiutata: classificazione privacy ambigua.');
   }
   return classification;
