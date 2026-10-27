@@ -156,23 +156,27 @@ describe('LIB-01D proposal adoption contract', () => {
     expect(panel).toContain('await onAddSource');
   });
 
-  test('exposes only explicit Adotta Adatta Lascia decisions and keeps failed persistence retryable', async () => {
+  test('exposes explicit Library and UDA adoption destinations and keeps failed persistence retryable', async () => {
     const panel = await Bun.file(PANEL).text();
-    expect(panel).toContain('Adotta');
+    expect(panel).toContain('Adotta in Biblioteca');
+    expect(panel).toContain("Adotta e aggiungi all'UDA");
     expect(panel).toContain('Adatta');
     expect(panel).toContain('Lascia');
     expect(panel).toContain('setIsEditing(true)');
-    expect(panel).toContain('setProposal(null)');
     expect(panel).toContain('setAdoptionError');
     expect(panel).toContain('catch');
-    expect(panel).toMatch(/await onAddSource[\s\S]+setProposal\(null\)/);
+    expect(panel).toMatch(/await onAddSource\(adopted\);[\s\S]+clearAdoptedProposal\(\)/);
+    expect(panel).toMatch(/const clearAdoptedProposal[\s\S]+setProposal\(null\)/);
+    expect(panel).toContain('adoptionSourceIdRef.current = sourceId');
+    expect(panel).toContain('adoptionLessonIdRef.current = lessonId');
   });
 
-  test('adapting is local and does not trigger another proposal request', async () => {
+  test('adapting remains local and preserves the same explicit adoption destinations without another proposal request', async () => {
     const panel = await Bun.file(PANEL).text();
     expect(panel).toContain('editedContent');
     expect(panel).toContain('setEditedContent');
-    expect(panel).toContain('Salva adattamento');
+    expect(panel).toContain('Adotta in Biblioteca');
+    expect(panel).toContain("Adotta e aggiungi all'UDA");
     const requestCalls = panel.match(/requestLibraryTeachingProposal\(/g) ?? [];
     expect(requestCalls).toHaveLength(1);
   });

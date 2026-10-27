@@ -196,6 +196,14 @@ export class SecureAppStorage {
     ]);
   }
 
+  saveLibraryUdasAndMeta(library: LibraryStateV1, udas: UdaRecord[], meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'library', value: library },
+      { key: 'udas', value: udas },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveMeta(value: SecureMeta): Promise<void> {
     return this.vault.put('meta', value);
   }

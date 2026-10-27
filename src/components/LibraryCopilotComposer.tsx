@@ -11,6 +11,10 @@ import {
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { uid } from '../utils';
+import type {
+  TeachingProposalOutcomeCandidate,
+  TeachingProposalOutcomeMutationInput
+} from '../persistence/teachingProposalOutcomeMutation';
 import { createCopilotLibrarySource } from '../library/copilotSourceBridge';
 import { AgentIntentClientError, interpretCopilotIntent } from '../services/agentIntentService';
 import { buildCopilotContextProjection, resolveCopilotProjectionSurface } from '../copilot/contextProjection';
@@ -39,6 +43,9 @@ interface LibraryCopilotComposerProps {
   launchRequest?: LibraryCopilotLaunchRequest | null;
   ambientContext?: CopilotLaunchContext;
   onAddSource: (source: LibrarySource) => Promise<void>;
+  onAdoptProposalToUda: (
+    input: TeachingProposalOutcomeMutationInput
+  ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
   onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   isPending?: boolean;
@@ -67,6 +74,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   launchRequest = null,
   ambientContext,
   onAddSource,
+  onAdoptProposalToUda,
   onUpdateSource,
   onLink,
   isPending = false
@@ -895,6 +903,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               isPending={isPending}
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}
+              onAdoptProposalToUda={onAdoptProposalToUda}
             />
           </div>
         )}

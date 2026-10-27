@@ -252,7 +252,7 @@ test('LIB-04D PREPARE reuses governed proposal flow and persists only after adop
   await disclosureAgain.getByRole('button', { name: 'Prepara attività', exact: true }).click();
   await expect(disclosureAgain.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
   expect(proposalBodies).toHaveLength(2);
-  await disclosureAgain.getByRole('button', { name: 'Adotta', exact: true }).click();
+  await disclosureAgain.getByRole('button', { name: 'Adotta in Biblioteca', exact: true }).click();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
   const adopted = await sourceCard(page, PROPOSAL_TITLE);
@@ -320,7 +320,8 @@ test('LIB-04D PREPARE disclosure and governed actions are touch-safe — mobile 
   await assertAtLeast44(prepare, 'mobile prepare action');
   await prepare.click();
   await expect(disclosure.getByRole('region', { name: 'Proposta didattica' })).toBeVisible();
-  await assertAtLeast44(disclosure.getByRole('button', { name: 'Adotta', exact: true }), 'mobile adopt');
+  await assertAtLeast44(disclosure.getByRole('button', { name: 'Adotta in Biblioteca', exact: true }), 'mobile Library-only adopt');
+  await assertAtLeast44(disclosure.getByRole('button', { name: "Adotta e aggiungi all'UDA", exact: true }), 'mobile compound adopt');
   await assertAtLeast44(disclosure.getByRole('button', { name: 'Adatta', exact: true }), 'mobile adapt');
   await assertAtLeast44(disclosure.getByRole('button', { name: 'Lascia', exact: true }), 'mobile leave');
 

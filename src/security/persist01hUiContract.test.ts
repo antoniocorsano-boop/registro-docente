@@ -103,7 +103,7 @@ describe('PERSIST-01H App mutation boundary contract', () => {
 
 describe('PERSIST-01H pending intent boundaries', () => {
   test('UDA mutations serialize on the shared durable tail and preserve post-commit success sequencing', () => {
-    expect(udaSource).toContain("import React, { useRef, useState } from 'react';");
+    expect(udaSource).toContain("import React, { useEffect, useRef, useState } from 'react';");
     expect(udaSource).toContain('const [isSavingUda, setIsSavingUda] = useState(false);');
     expect(udaSource).toContain('const udaMutationPendingRef = useRef(false);');
 

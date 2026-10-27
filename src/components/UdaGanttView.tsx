@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, OnlineTest, UdaActivityType, UdaLesson, UdaRecord } from '../types';
 import { MONTHS_LABELS, calcAvg, formatGrade, getCompetenceLevel, today, uid } from '../utils';
 import {
@@ -410,6 +410,34 @@ export function computeCascadeShifts(
   return results;
 }
 
+export function reconcileOpenUdaRecord(current: UdaRecord | null, udas: UdaRecord[]): UdaRecord | null {
+  if (!current) return null;
+  return udas.find(uda => uda.id === current.id) || null;
+}
+
+export function rebaseOpenUdaPatch(
+  currentUdas: UdaRecord[],
+  openDossier: Pick<UdaRecord, 'id'>,
+  patch: Partial<UdaRecord>
+): UdaRecord[] {
+  return currentUdas.map(uda =>
+    uda.id === openDossier.id ? { ...uda, ...patch } : uda
+  );
+}
+
+export function rebaseOpenUdaFieldEdit(
+  currentUdas: UdaRecord[],
+  openDossier: UdaRecord,
+  field: keyof UdaRecord,
+  value: unknown
+): UdaRecord[] {
+  return rebaseOpenUdaPatch(
+    currentUdas,
+    openDossier,
+    { [field]: value } as Partial<UdaRecord>
+  );
+}
+
 export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   classes,
   udas,
@@ -474,6 +502,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const udaCommittedSnapshotRef = useRef(udas);
   const udaLatestSnapshotRef = useRef(udas);
   udaLatestSnapshotRef.current = udas;
+
+  useEffect(() => {
+    if (udaTextMutationDepthRef.current > 0 || udaActionMutationDepthRef.current > 0) return;
+    setSelectedUdaForDetail(current => reconcileOpenUdaRecord(current, udas));
+    setGanttSelectedUda(current => reconcileOpenUdaRecord(current, udas));
+  }, [udas]);
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
@@ -1104,7 +1138,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     if (!selectedUdaForDetail) return;
     const updatedUda = { ...selectedUdaForDetail, [field]: value };
     setSelectedUdaForDetail(updatedUda);
-    const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
+    const nextUdas = rebaseOpenUdaFieldEdit(udas, selectedUdaForDetail, field, value);
     queueUdaTextMutation(nextUdas);
   };
 
@@ -1117,7 +1151,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     };
     const updatedUda = { ...selectedUdaForDetail, rubricLevels: updatedRubric };
     setSelectedUdaForDetail(updatedUda);
-    const nextUdas = udas.map(u => (u.id === updatedUda.id ? updatedUda : u));
+    const nextUdas = rebaseOpenUdaPatch(udas, selectedUdaForDetail, { rubricLevels: updatedRubric });
     queueUdaTextMutation(nextUdas);
   };
 
