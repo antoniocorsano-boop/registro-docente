@@ -141,7 +141,7 @@ describe('LIB-01D proposal adoption contract', () => {
         }
       }]
     }));
-    expect(() => normalizeBackupPayload(malformed, snapshot)).toThrow(/backup v5|library|biblioteca|memoria/i);
+    expect(() => normalizeBackupPayload(malformed, snapshot)).toThrow(/backup v6|copilot|library|biblioteca|memoria/i);
   });
 
   test('threads the existing durable add-source callback from the single Copilot surface to the proposal panel', async () => {
