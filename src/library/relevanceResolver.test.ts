@@ -326,3 +326,99 @@ describe('LIB-03B relevance resolver — teaching and planning context', () => {
     expect(result.candidates[0]?.targetId).toBe('uda-energy');
   });
 });
+
+describe('AIC-03 direct current-target relevance evidence', () => {
+  test('evaluates an already-linked current lesson without treating the link as ineligibility', async () => {
+    const { resolveLibraryRelevanceTarget } = await loadResolver();
+    const current = uda({
+      id: 'uda-current',
+      title: 'Energia e trasformazioni',
+      className: '3C',
+      lessons: [{
+        id: 'lesson-current',
+        date: '2026-10-25',
+        topic: 'Energia eolica e turbina',
+        hours: 1
+      }]
+    });
+
+    const candidate = resolveLibraryRelevanceTarget({
+      source: source({
+        title: 'Energia eolica',
+        links: [{ targetType: 'lesson', targetId: 'lesson-current' }]
+      }),
+      udas: [current],
+      teachingContext,
+      targetType: 'lesson',
+      targetId: 'lesson-current'
+    });
+
+    expect(candidate).not.toBeNull();
+    expect(candidate?.signals).toEqual(expect.arrayContaining([
+      'CURRENT_LESSON',
+      'CURRENT_UDA',
+      'CURRENT_CLASS',
+      'SOURCE_TITLE_MATCH'
+    ]));
+    expect(candidate?.matchedTerms).toEqual(expect.arrayContaining(['energia', 'eolica']));
+  });
+
+  test('evaluates an already-linked current UDA directly', async () => {
+    const { resolveLibraryRelevanceTarget } = await loadResolver();
+    const currentContext = { ...teachingContext, lessonId: undefined, activityType: undefined };
+    const current = uda({ id: 'uda-current', className: '3C', title: 'Energia eolica' });
+
+    const candidate = resolveLibraryRelevanceTarget({
+      source: source({
+        title: 'Energia eolica',
+        links: [{ targetType: 'uda', targetId: 'uda-current' }]
+      }),
+      udas: [current],
+      teachingContext: currentContext,
+      targetType: 'uda',
+      targetId: 'uda-current'
+    });
+
+    expect(candidate).toMatchObject({
+      targetType: 'uda',
+      targetId: 'uda-current',
+      udaId: 'uda-current'
+    });
+    expect(candidate?.signals).toEqual(expect.arrayContaining(['CURRENT_UDA', 'CURRENT_CLASS', 'SOURCE_TITLE_MATCH']));
+  });
+
+  test('returns null for an unknown direct target', async () => {
+    const { resolveLibraryRelevanceTarget } = await loadResolver();
+    expect(resolveLibraryRelevanceTarget({
+      source: source(),
+      udas: [uda()],
+      teachingContext,
+      targetType: 'lesson',
+      targetId: 'lesson-missing'
+    })).toBeNull();
+  });
+
+  test('keeps ordinary suggestions excluding already-linked destinations', async () => {
+    const { resolveLibraryRelevance } = await loadResolver();
+    const result = resolveLibraryRelevance({
+      source: source({
+        title: 'Energia',
+        payload: { text: '' },
+        links: [
+          { targetType: 'uda', targetId: 'uda-current' },
+          { targetType: 'lesson', targetId: 'lesson-current' }
+        ]
+      }),
+      udas: [uda({
+        id: 'uda-current',
+        title: 'Energia',
+        lessons: [{ id: 'lesson-current', date: '2026-10-25', topic: 'Energia', hours: 1 }]
+      })],
+      teachingContext
+    });
+
+    expect(result.status).toBe('unavailable');
+    if (result.status !== 'unavailable') return;
+    expect(result.reason).toBe('NO_RELEVANT_CANDIDATE');
+  });
+});
