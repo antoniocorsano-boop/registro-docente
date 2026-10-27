@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { buildAiBudgetActivityKey } from '../copilot/aiBudgetGovernor';
 import { buildCapturedWebTextPatch } from '../library/intake';
 import { buildLibraryProposalRequest } from '../library/teachingProposal';
 import type { LibrarySource } from '../library/types';
@@ -119,6 +120,11 @@ describe('LIB-02 review findings regression contract', () => {
             udaTitle: UDA.title,
             className: UDA.className,
             period: String(UDA.period)
+          },
+          budget: {
+            schemaVersion: 1,
+            profile: 'balanced',
+            activityKey: buildAiBudgetActivityKey(UDA.id)
           }
         },
         {
