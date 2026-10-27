@@ -356,9 +356,8 @@ function isSnapshotV5(value: unknown): value is SecureBackupSnapshotV5 {
 }
 
 function isSnapshotV6(value: unknown): value is SecureBackupSnapshotV6 {
-  return isSnapshotV5(value)
-    && isRecord(value)
-    && isCopilotStateV1(value.copilotState);
+  if (!isRecord(value) || !isSnapshotV5(value)) return false;
+  return isCopilotStateV1((value as Record<string, unknown>).copilotState);
 }
 
 export function createBackupPayload(
