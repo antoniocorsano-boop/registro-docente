@@ -6,6 +6,8 @@ import type {
   UdaRecord
 } from '../types';
 import type { LibraryStateV1 } from '../library/types';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
+import type { ProfessionalMemoryStateV1 } from '../memory/types';
 import type { PlanningStateV1 } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
@@ -40,6 +42,7 @@ export interface SecureAppSnapshot {
   submissions: OnlineSubmission[] | null;
   planning: PlanningStateV1 | null;
   library: LibraryStateV1 | null;
+  professionalMemory: ProfessionalMemoryStateV1;
   meta: SecureMeta | null;
 }
 
@@ -51,6 +54,7 @@ export interface CompleteSecureAppSnapshot {
   submissions: OnlineSubmission[];
   planning: PlanningStateV1;
   library: LibraryStateV1;
+  professionalMemory: ProfessionalMemoryStateV1;
   meta: SecureMeta;
 }
 
@@ -62,6 +66,7 @@ const SNAPSHOT_KEYS = [
   'submissions',
   'planning',
   'library',
+  'professionalMemory',
   'meta'
 ] as const;
 
@@ -105,7 +110,17 @@ export class SecureAppStorage {
   constructor(private readonly vault: SecureVault) {}
 
   async loadSnapshot(): Promise<SecureAppSnapshot> {
-    const [appData, settings, udas, customTests, submissions, planning, library, meta] = await Promise.all([
+    const [
+      appData,
+      settings,
+      udas,
+      customTests,
+      submissions,
+      planning,
+      library,
+      professionalMemory,
+      meta
+    ] = await Promise.all([
       this.vault.get<AppData>('appData'),
       this.vault.get<AppSettings>('settings'),
       this.vault.get<UdaRecord[]>('udas'),
@@ -113,10 +128,21 @@ export class SecureAppStorage {
       this.vault.get<OnlineSubmission[]>('submissions'),
       this.vault.get<PlanningStateV1>('planning'),
       this.vault.get<LibraryStateV1>('library'),
+      this.vault.get<ProfessionalMemoryStateV1>('professionalMemory'),
       this.vault.get<SecureMeta>('meta')
     ]);
 
-    return { appData, settings, udas, customTests, submissions, planning, library, meta };
+    return {
+      appData,
+      settings,
+      udas,
+      customTests,
+      submissions,
+      planning,
+      library,
+      professionalMemory: professionalMemory ?? createEmptyProfessionalMemoryState(),
+      meta
+    };
   }
 
   saveAppData(value: AppData): Promise<void> {
@@ -204,6 +230,20 @@ export class SecureAppStorage {
     ]);
   }
 
+  saveProfessionalMemory(value: ProfessionalMemoryStateV1): Promise<void> {
+    return this.vault.put('professionalMemory', value);
+  }
+
+  saveProfessionalMemoryAndMeta(
+    memory: ProfessionalMemoryStateV1,
+    meta: SecureMeta
+  ): Promise<void> {
+    return this.vault.putMany([
+      { key: 'professionalMemory', value: memory },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveMeta(value: SecureMeta): Promise<void> {
     return this.vault.put('meta', value);
   }
@@ -218,6 +258,7 @@ export class SecureAppStorage {
       { key: 'submissions', value: sanitized.submissions },
       { key: 'planning', value: sanitized.planning },
       { key: 'library', value: sanitized.library },
+      { key: 'professionalMemory', value: sanitized.professionalMemory },
       { key: 'meta', value: sanitized.meta }
     ]);
   }
@@ -231,6 +272,7 @@ export class SecureAppStorage {
       ['submissions', snapshot.submissions],
       ['planning', snapshot.planning],
       ['library', snapshot.library],
+      ['professionalMemory', snapshot.professionalMemory],
       ['meta', snapshot.meta]
     ];
 
