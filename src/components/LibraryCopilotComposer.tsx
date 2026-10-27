@@ -3,6 +3,12 @@ import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'luci
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
 import type { PlanningStateV1 } from '../planning/types';
+import type { ProfessionalMemoryCategory, ProfessionalMemoryStateV1 } from '../memory/types';
+import {
+  selectProfessionalMemoryWorkingSet,
+  toRemoteProfessionalMemoryProjection,
+  type RememberProfessionalItemInput
+} from '../memory/professionalMemory';
 import {
   resolveLaunchTeachingContext,
   type CopilotLaunchContext,
@@ -36,6 +42,10 @@ import {
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import {
+  ProfessionalMemoryPanel,
+  type ProfessionalMemoryRememberCandidate
+} from './ProfessionalMemoryPanel';
+import {
   resolveLibraryTeachingContext,
   suggestLibraryTeachingContext,
   type LibraryTeachingContext
@@ -45,6 +55,8 @@ interface LibraryCopilotComposerProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
   planning: PlanningStateV1;
+  professionalMemory: ProfessionalMemoryStateV1;
+  memoryError?: string | null;
   currentClassName?: string | null;
   launchRequest?: LibraryCopilotLaunchRequest | null;
   ambientContext?: CopilotLaunchContext;
@@ -54,6 +66,11 @@ interface LibraryCopilotComposerProps {
   ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
   onUpdateSource: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
+  onRemember: (input: RememberProfessionalItemInput) => Promise<void>;
+  onCorrectMemoryEntry: (entryId: string, summary: string) => Promise<void>;
+  onRemoveMemoryEntry: (entryId: string) => Promise<void>;
+  onSetMemoryCategory: (category: ProfessionalMemoryCategory, enabled: boolean) => Promise<void>;
+  onRemoveMemoryCategory: (category: ProfessionalMemoryCategory) => Promise<void>;
   isPending?: boolean;
 }
 
@@ -116,6 +133,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   library,
   udas,
   planning,
+  professionalMemory,
+  memoryError = null,
   currentClassName = null,
   launchRequest = null,
   ambientContext,
@@ -123,6 +142,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   onAdoptProposalToUda,
   onUpdateSource,
   onLink,
+  onRemember,
+  onCorrectMemoryEntry,
+  onRemoveMemoryEntry,
+  onSetMemoryCategory,
+  onRemoveMemoryCategory,
   isPending = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -230,6 +254,48 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolvedPlanningContext
   ]);
   const copilotContextFingerprint = JSON.stringify(copilotContextProjection);
+
+  const professionalMemoryWorkingSet = useMemo(() => selectProfessionalMemoryWorkingSet({
+    state: professionalMemory,
+    context: {
+      ...(copilotContextProjection.className ? { className: copilotContextProjection.className } : {}),
+      ...(copilotContextProjection.udaId ? { udaId: copilotContextProjection.udaId } : {}),
+      ...(copilotContextProjection.lessonId ? { lessonId: copilotContextProjection.lessonId } : {}),
+      ...(copilotContextProjection.sourceId ? { sourceId: copilotContextProjection.sourceId } : {}),
+      ...(copilotContextProjection.planningProfileId
+        ? { planningProfileId: copilotContextProjection.planningProfileId }
+        : {})
+    },
+    activeCanonicalRefs: [
+      ...library.sources.map(source => `source:${source.id}`),
+      ...udas.map(uda => `uda:${uda.id}`),
+      ...udas.flatMap(uda => (uda.lessons ?? []).map(lesson => `lesson:${lesson.id}`)),
+      ...planning.profiles.map(profile => `planning:${profile.id}`)
+    ]
+  }), [professionalMemory, copilotContextProjection, library.sources, udas, planning.profiles]);
+
+  const remoteProfessionalMemory = useMemo(
+    () => toRemoteProfessionalMemoryProjection(professionalMemoryWorkingSet),
+    [professionalMemoryWorkingSet]
+  );
+
+  const rememberCandidate = useMemo<ProfessionalMemoryRememberCandidate | null>(() => {
+    if (!(selectedSource?.privacy === 'teacher-professional')) return null;
+    return {
+      summary: `Riusa “${selectedSource.title}” quando è pertinente al contesto didattico corrente.`,
+      context: {
+        ...(copilotContextProjection.className ? { className: copilotContextProjection.className } : {}),
+        ...(copilotContextProjection.udaId ? { udaId: copilotContextProjection.udaId } : {}),
+        ...(copilotContextProjection.lessonId ? { lessonId: copilotContextProjection.lessonId } : {}),
+        sourceId: selectedSource.id,
+        ...(copilotContextProjection.planningProfileId
+          ? { planningProfileId: copilotContextProjection.planningProfileId }
+          : {})
+      },
+      canonicalRef: `source:${selectedSource.id}`,
+      privacyClassification: 'TEACHER_PROFESSIONAL'
+    };
+  }, [selectedSource?.id, selectedSource?.title, selectedSource?.privacy, copilotContextProjection]);
 
   const proposalUda = useMemo(() => {
     if (!resolvedTeachingContext) return null;
@@ -889,6 +955,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </button>
         </form>
 
+        <ProfessionalMemoryPanel
+          state={professionalMemory}
+          relevantMemory={professionalMemoryWorkingSet}
+          rememberCandidate={rememberCandidate}
+          errorMessage={memoryError}
+          onRemember={onRemember}
+          onCorrectEntry={onCorrectMemoryEntry}
+          onRemoveEntry={onRemoveMemoryEntry}
+          onSetCategory={onSetMemoryCategory}
+          onRemoveCategory={onRemoveMemoryCategory}
+        />
+
         {errorMessage && (
           <p role="alert" className="rounded-xl border border-rose-900/60 bg-rose-950/40 p-3 text-sm text-rose-200">
             {errorMessage}
@@ -1093,6 +1171,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               source={selectedSource}
               uda={proposalUda}
               teachingContext={resolvedTeachingContext}
+              professionalMemory={remoteProfessionalMemory}
               isPending={isPending}
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}

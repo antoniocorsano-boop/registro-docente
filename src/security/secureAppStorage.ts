@@ -6,6 +6,8 @@ import type {
   UdaRecord
 } from '../types';
 import type { LibraryStateV1 } from '../library/types';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
+import type { ProfessionalMemoryStateV1 } from '../memory/types';
 import type { PlanningStateV1 } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
@@ -40,6 +42,7 @@ export interface SecureAppSnapshot {
   submissions: OnlineSubmission[] | null;
   planning: PlanningStateV1 | null;
   library: LibraryStateV1 | null;
+  professionalMemory: ProfessionalMemoryStateV1;
   meta: SecureMeta | null;
 }
 
@@ -51,6 +54,7 @@ export interface CompleteSecureAppSnapshot {
   submissions: OnlineSubmission[];
   planning: PlanningStateV1;
   library: LibraryStateV1;
+  professionalMemory?: ProfessionalMemoryStateV1;
   meta: SecureMeta;
 }
 
@@ -62,13 +66,23 @@ const SNAPSHOT_KEYS = [
   'submissions',
   'planning',
   'library',
+  'professionalMemory',
   'meta'
 ] as const;
 
-function sanitizeCompleteSnapshot(snapshot: CompleteSecureAppSnapshot): CompleteSecureAppSnapshot {
+function canonicalizeCompleteSnapshot(
+  snapshot: CompleteSecureAppSnapshot
+): CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 } {
   return {
-    ...snapshot,
-    settings: sanitizePersistedSettings(snapshot.settings)
+    appData: snapshot.appData,
+    settings: sanitizePersistedSettings(snapshot.settings),
+    udas: snapshot.udas,
+    customTests: snapshot.customTests,
+    submissions: snapshot.submissions,
+    planning: snapshot.planning,
+    library: snapshot.library,
+    professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState(),
+    meta: snapshot.meta
   };
 }
 
@@ -76,13 +90,15 @@ function snapshotEquals(left: SecureAppSnapshot, right: SecureAppSnapshot): bool
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot {
+function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot & {
+  professionalMemory: ProfessionalMemoryStateV1;
+} {
   for (const key of SNAPSHOT_KEYS) {
     if (snapshot[key] === null) {
       throw new Error(`Restore non verificabile: record ${key} mancante nel readback.`);
     }
   }
-  return snapshot as CompleteSecureAppSnapshot;
+  return snapshot as CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 };
 }
 
 export function decideVaultBootstrap(input: VaultBootstrapInput): VaultGateState {
@@ -105,7 +121,17 @@ export class SecureAppStorage {
   constructor(private readonly vault: SecureVault) {}
 
   async loadSnapshot(): Promise<SecureAppSnapshot> {
-    const [appData, settings, udas, customTests, submissions, planning, library, meta] = await Promise.all([
+    const [
+      appData,
+      settings,
+      udas,
+      customTests,
+      submissions,
+      planning,
+      library,
+      professionalMemory,
+      meta
+    ] = await Promise.all([
       this.vault.get<AppData>('appData'),
       this.vault.get<AppSettings>('settings'),
       this.vault.get<UdaRecord[]>('udas'),
@@ -113,10 +139,21 @@ export class SecureAppStorage {
       this.vault.get<OnlineSubmission[]>('submissions'),
       this.vault.get<PlanningStateV1>('planning'),
       this.vault.get<LibraryStateV1>('library'),
+      this.vault.get<ProfessionalMemoryStateV1>('professionalMemory'),
       this.vault.get<SecureMeta>('meta')
     ]);
 
-    return { appData, settings, udas, customTests, submissions, planning, library, meta };
+    return {
+      appData,
+      settings,
+      udas,
+      customTests,
+      submissions,
+      planning,
+      library,
+      professionalMemory: professionalMemory ?? createEmptyProfessionalMemoryState(),
+      meta
+    };
   }
 
   saveAppData(value: AppData): Promise<void> {
@@ -204,12 +241,26 @@ export class SecureAppStorage {
     ]);
   }
 
+  saveProfessionalMemory(value: ProfessionalMemoryStateV1): Promise<void> {
+    return this.vault.put('professionalMemory', value);
+  }
+
+  saveProfessionalMemoryAndMeta(
+    memory: ProfessionalMemoryStateV1,
+    meta: SecureMeta
+  ): Promise<void> {
+    return this.vault.putMany([
+      { key: 'professionalMemory', value: memory },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveMeta(value: SecureMeta): Promise<void> {
     return this.vault.put('meta', value);
   }
 
   private writeCompleteSnapshotAtomic(snapshot: CompleteSecureAppSnapshot): Promise<void> {
-    const sanitized = sanitizeCompleteSnapshot(snapshot);
+    const sanitized = canonicalizeCompleteSnapshot(snapshot);
     return this.vault.putMany([
       { key: 'appData', value: sanitized.appData },
       { key: 'settings', value: sanitized.settings },
@@ -218,6 +269,7 @@ export class SecureAppStorage {
       { key: 'submissions', value: sanitized.submissions },
       { key: 'planning', value: sanitized.planning },
       { key: 'library', value: sanitized.library },
+      { key: 'professionalMemory', value: sanitized.professionalMemory },
       { key: 'meta', value: sanitized.meta }
     ]);
   }
@@ -231,6 +283,7 @@ export class SecureAppStorage {
       ['submissions', snapshot.submissions],
       ['planning', snapshot.planning],
       ['library', snapshot.library],
+      ['professionalMemory', snapshot.professionalMemory],
       ['meta', snapshot.meta]
     ];
 
@@ -248,24 +301,24 @@ export class SecureAppStorage {
   async restoreSnapshotVerified(
     candidate: CompleteSecureAppSnapshot,
     previousLogical?: CompleteSecureAppSnapshot
-  ): Promise<CompleteSecureAppSnapshot> {
+  ): Promise<CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 }> {
     const previousPhysical = previousLogical ? null : await this.loadSnapshot();
-    const sanitizedCandidate = sanitizeCompleteSnapshot(candidate);
-    const sanitizedPrevious = previousLogical ? sanitizeCompleteSnapshot(previousLogical) : null;
+    const canonicalCandidate = canonicalizeCompleteSnapshot(candidate);
+    const canonicalPrevious = previousLogical ? canonicalizeCompleteSnapshot(previousLogical) : null;
 
     try {
-      await this.writeCompleteSnapshotAtomic(sanitizedCandidate);
+      await this.writeCompleteSnapshotAtomic(canonicalCandidate);
       const verified = requireCompleteSnapshot(await this.loadSnapshot());
-      if (!snapshotEquals(verified, sanitizedCandidate)) {
+      if (!snapshotEquals(verified, canonicalCandidate)) {
         throw new Error('Restore non verificabile: il readback non coincide con lo snapshot candidato.');
       }
       return verified;
     } catch (restoreError) {
       try {
-        if (sanitizedPrevious) {
-          await this.writeCompleteSnapshotAtomic(sanitizedPrevious);
+        if (canonicalPrevious) {
+          await this.writeCompleteSnapshotAtomic(canonicalPrevious);
           const rollbackReadback = requireCompleteSnapshot(await this.loadSnapshot());
-          if (!snapshotEquals(rollbackReadback, sanitizedPrevious)) {
+          if (!snapshotEquals(rollbackReadback, canonicalPrevious)) {
             throw new Error('Il readback del rollback non coincide con lo snapshot precedente.');
           }
         } else if (previousPhysical) {

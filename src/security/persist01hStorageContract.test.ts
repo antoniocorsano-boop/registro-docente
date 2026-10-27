@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import type { AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
 import {
   SecureAppStorage,
@@ -63,6 +64,17 @@ const emptyPlanning = {
 };
 
 const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
+const nineDatasetKeys: VaultRecordKey[] = [
+  'appData',
+  'settings',
+  'udas',
+  'customTests',
+  'submissions',
+  'planning',
+  'library',
+  'professionalMemory',
+  'meta'
+];
 
 function complete(label: string): CompleteSecureAppSnapshot {
   return {
@@ -73,6 +85,7 @@ function complete(label: string): CompleteSecureAppSnapshot {
     submissions: [{ id: `sub-${label}`, testId: `test-${label}`, name: 'Rossi Mario', class: '3ª A', testTitle: label, score: 1, total: 1, date: '2026-10-22T10:00:00.000Z' } as OnlineSubmission],
     planning: emptyPlanning,
     library: emptyLibrary,
+    professionalMemory: createEmptyProfessionalMemoryState(),
     meta: meta(label === 'old' ? 3 : 0)
   };
 }
@@ -124,7 +137,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     ]);
   });
 
-  test('verified restore writes the eight-record candidate atomically', async () => {
+  test('verified restore writes the nine-record candidate atomically', async () => {
     const store = new AtomicRecordingStore();
     const vault = new SecureVault(store);
     await vault.initializeActive('password');
@@ -136,7 +149,8 @@ describe('PERSIST-01H atomic storage contracts', () => {
     const restored = await storage.restoreSnapshotVerified(candidate, previous);
 
     expect(restored.settings.school).toBe('IC new');
-    expect(store.batchKeys).toEqual([['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'library', 'meta']]);
+    expect(restored.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
+    expect(store.batchKeys).toEqual([nineDatasetKeys]);
   });
 
   test('readback mismatch restores the explicit previous logical snapshot atomically even from a fresh physical vault', async () => {
@@ -152,9 +166,7 @@ describe('PERSIST-01H atomic storage contracts', () => {
     const afterFailure = await storage.loadSnapshot();
     expect(afterFailure.settings?.school).toBe('IC old');
     expect(afterFailure.meta).toEqual(previous.meta);
-    expect(store.batchKeys).toEqual([
-      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'library', 'meta'],
-      ['appData', 'settings', 'udas', 'customTests', 'submissions', 'planning', 'library', 'meta']
-    ]);
+    expect(afterFailure.professionalMemory).toEqual(previous.professionalMemory);
+    expect(store.batchKeys).toEqual([nineDatasetKeys, nineDatasetKeys]);
   });
 });

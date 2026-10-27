@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ResolvedAction } from '@trama/contextual-copilot-core';
 import type { UdaRecord } from '../types';
+import type { RemoteProfessionalMemoryProjectionV1 } from '../memory/types';
 import type { LibrarySource } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import type { ResolvedLibraryTeachingContext } from '../library/teachingContext';
@@ -26,6 +27,7 @@ interface LibraryProposalPanelProps {
   source: LibrarySource;
   uda: UdaRecord;
   teachingContext: ResolvedLibraryTeachingContext;
+  professionalMemory: RemoteProfessionalMemoryProjectionV1;
   isPending: boolean;
   onUpdate: (sourceId: string, patch: LibrarySourcePatch) => Promise<void>;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -59,6 +61,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   source,
   uda,
   teachingContext,
+  professionalMemory,
   isPending,
   onUpdate,
   onAddSource,
@@ -194,7 +197,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         source,
         teachingContext,
         uda,
-        explicitTeacherOptIn: true
+        explicitTeacherOptIn: true,
+        professionalMemory
       });
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
@@ -337,14 +341,14 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       <div>
         <strong className="block text-sm text-violet-100">Prepara una proposta didattica</strong>
         <p className="mt-1 text-xs text-violet-200/80">
-          L’IA può usare soltanto questa fonte professionale e il contesto didattico selezionato. La proposta non viene salvata automaticamente.
+          L’IA può usare questa fonte professionale, il contesto didattico selezionato e, quando pertinenti, una selezione limitata di sintesi dalla memoria professionale. La proposta non viene salvata automaticamente.
         </p>
       </div>
 
       {!proposal && (
         <div className="rounded-md border border-slate-800 bg-slate-950/35 p-3 space-y-2">
           <p className="text-xs text-slate-300">
-            Questa richiesta invia la fonte professionale e il contesto didattico al servizio remoto configurato
+            Questa richiesta invia la fonte professionale, il contesto didattico e, quando presenti, una selezione limitata di sintesi dalla memoria professionale al servizio remoto configurato
             {providerMetadataStatus === 'ready' && providerMetadata
               ? <>: <strong>{providerMetadata.provider}</strong> ({providerMetadata.model})</>
               : '.'}

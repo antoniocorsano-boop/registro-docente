@@ -25,6 +25,17 @@ import {
   updateLibrarySource,
   type LibrarySourcePatch
 } from './library/libraryState';
+import { createEmptyProfessionalMemoryState } from './memory/emptyProfessionalMemoryState';
+import type { ProfessionalMemoryCategory, ProfessionalMemoryStateV1 } from './memory/types';
+import {
+  correctProfessionalMemoryEntry,
+  rememberProfessionalItem,
+  removeProfessionalMemoryCategory,
+  removeProfessionalMemoryEntry,
+  setAutoRememberCategory,
+  type RecordProfessionalMemoryEventInput,
+  type RememberProfessionalItemInput
+} from './memory/professionalMemory';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -53,6 +64,9 @@ import { createDurableMutationCoordinator } from './persistence/durableMutationC
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
 import { persistLibraryMutation } from './persistence/libraryMutation';
+import {
+  persistDerivedProfessionalMemoryAfterCanonicalCommit
+} from './persistence/professionalMemoryOutcome';
 import {
   deriveTeachingProposalOutcomeCandidate,
   type TeachingProposalOutcomeCandidate,
@@ -173,6 +187,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.library || createEmptyLibraryState()
   );
 
+  // 5d. Professional memory is derived, local-first state and never canonical domain authority.
+  const [professionalMemory, setProfessionalMemory] = useState<ProfessionalMemoryStateV1>(() =>
+    initialSnapshot.professionalMemory || createEmptyProfessionalMemoryState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -187,6 +206,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
   const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
+  const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
 
   const openLibraryCopilot = useCallback((context: CopilotLaunchContext) => {
@@ -208,6 +228,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
   const libraryRef = useRef(library);
+  const professionalMemoryRef = useRef(professionalMemory);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
@@ -359,7 +380,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }, [mutationCoordinator, secureStorage, toast]);
 
   const commitLibraryMutation = useCallback((
-    derive: (current: LibraryStateV1) => LibraryStateV1
+    derive: (current: LibraryStateV1) => LibraryStateV1,
+    afterCanonicalCommit?: (committedLibrary: LibraryStateV1) => Promise<void>
   ): Promise<LibraryStateV1> => {
     libraryMutationPendingCountRef.current += 1;
     setIsLibraryMutationPending(true);
@@ -377,6 +399,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setLibrary(candidate.library);
       setMeta(candidate.meta);
       toast('Biblioteca aggiornata');
+      if (afterCanonicalCommit) {
+        try {
+          await afterCanonicalCommit(candidate.library);
+        } catch (error) {
+          console.error('Post-library derived work failed', error);
+        }
+      }
       return candidate.library;
     }).catch(error => {
       console.error('Secure library save failed', error);
@@ -391,6 +420,109 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       }
     });
   }, [mutationCoordinator, secureStorage, toast]);
+
+  const persistDerivedMemoryEvent = useCallback(async (
+    event: RecordProfessionalMemoryEventInput
+  ): Promise<void> => {
+    const result = await persistDerivedProfessionalMemoryAfterCanonicalCommit({
+      current: professionalMemoryRef.current,
+      event,
+      persist: candidate => secureStorage.saveProfessionalMemory(candidate)
+    });
+
+    if (result.status === 'persisted') {
+      professionalMemoryRef.current = result.state;
+      setProfessionalMemory(result.state);
+      setProfessionalMemoryError(null);
+      return;
+    }
+
+    if (result.status === 'failed') {
+      const message = result.error;
+      const error = new Error(message);
+      console.error('Professional memory save failed', error);
+      setProfessionalMemoryError(message);
+    }
+  }, [secureStorage]);
+
+  const commitProfessionalMemoryMutation = useCallback((
+    derive: (current: ProfessionalMemoryStateV1) => ProfessionalMemoryStateV1,
+    successMessage: string
+  ): Promise<ProfessionalMemoryStateV1> => {
+    setProfessionalMemoryError(null);
+    return mutationCoordinator.enqueue<{
+      professionalMemory: ProfessionalMemoryStateV1;
+      meta: SecureMeta;
+    }>({
+      getCommitted: () => ({
+        professionalMemory: professionalMemoryRef.current,
+        meta: metaRef.current
+      }),
+      derive: current => ({
+        professionalMemory: derive(current.professionalMemory),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveProfessionalMemoryAndMeta(
+        candidate.professionalMemory,
+        candidate.meta
+      ),
+      publish: candidate => {
+        professionalMemoryRef.current = candidate.professionalMemory;
+        metaRef.current = candidate.meta;
+        setProfessionalMemory(candidate.professionalMemory);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast(successMessage)
+    }).then(candidate => candidate.professionalMemory).catch(error => {
+      console.error('Professional memory mutation failed', error);
+      const message = error instanceof Error
+        ? error.message
+        : 'Salvataggio memoria professionale non riuscito.';
+      setProfessionalMemoryError(message);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleRememberProfessionalItem = useCallback((
+    input: RememberProfessionalItemInput
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => rememberProfessionalItem(current, input),
+    'Ricordo professionale salvato'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handleCorrectMemoryEntry = useCallback((
+    entryId: string,
+    summary: string
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => correctProfessionalMemoryEntry(current, {
+      entryId,
+      summary,
+      correctedAt: new Date().toISOString()
+    }),
+    'Ricordo professionale aggiornato'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handleRemoveMemoryEntry = useCallback((entryId: string): Promise<void> =>
+    commitProfessionalMemoryMutation(
+      current => removeProfessionalMemoryEntry(current, entryId),
+      'Ricordo professionale rimosso'
+    ).then(() => undefined),
+  [commitProfessionalMemoryMutation]);
+
+  const handleSetMemoryCategory = useCallback((
+    category: ProfessionalMemoryCategory,
+    enabled: boolean
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => setAutoRememberCategory(current, category, enabled),
+    enabled ? 'Memoria automatica attivata' : 'Memoria automatica disattivata'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handleRemoveMemoryCategory = useCallback((
+    category: ProfessionalMemoryCategory
+  ): Promise<void> => commitProfessionalMemoryMutation(
+    current => removeProfessionalMemoryCategory(current, category),
+    'Ricordi della categoria eliminati'
+  ).then(() => undefined), [commitProfessionalMemoryMutation]);
 
   const handleAdoptTeachingProposalToUda = useCallback((
     input: TeachingProposalOutcomeMutationInput
@@ -413,6 +545,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setLibrary(candidate.library);
       setUdas(candidate.udas);
       setMeta(candidate.meta);
+      await persistDerivedMemoryEvent({
+        id: `proposal-adopted:${candidate.receipt.sourceId}:${candidate.receipt.udaId}:${candidate.receipt.lessonId}:${input.capturedAt}`,
+        kind: 'proposal-adopted',
+        category: 'material-reuse',
+        occurredAt: input.capturedAt,
+        descriptor: 'Proposta didattica adottata nell’UDA corrente.',
+        context: {
+          udaId: candidate.receipt.udaId,
+          lessonId: candidate.receipt.lessonId,
+          sourceId: candidate.receipt.sourceId
+        },
+        canonicalRef: `source:${candidate.receipt.sourceId}`,
+        privacyClassification: 'TEACHER_PROFESSIONAL'
+      });
       toast('Proposta aggiunta all’UDA');
       return candidate.receipt;
     }).catch(error => {
@@ -427,7 +573,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         setIsLibraryMutationPending(false);
       }
     });
-  }, [mutationCoordinator, secureStorage, toast]);
+  }, [mutationCoordinator, persistDerivedMemoryEvent, secureStorage, toast]);
 
   const handleAddLibrarySource = useCallback((source: LibrarySource): Promise<void> =>
     commitLibraryMutation(current => addLibrarySource(current, source)).then(() => undefined),
@@ -444,8 +590,34 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     sourceId: string,
     link: LibrarySourceLink
   ): Promise<void> =>
-    commitLibraryMutation(current => linkLibrarySource(current, sourceId, link)).then(() => undefined),
-  [commitLibraryMutation]);
+    commitLibraryMutation(
+      current => linkLibrarySource(current, sourceId, link),
+      async committedLibrary => {
+        const source = committedLibrary.sources.find(candidate => candidate.id === sourceId);
+        const privacyClassification: RecordProfessionalMemoryEventInput['privacyClassification'] =
+          source?.privacy === 'teacher-professional'
+            ? 'TEACHER_PROFESSIONAL'
+            : source?.privacy === 'student-personal'
+              ? 'STUDENT_PERSONAL'
+              : 'AMBIGUOUS';
+        const occurredAt = new Date().toISOString();
+        await persistDerivedMemoryEvent({
+          id: `source-linked:${sourceId}:${link.targetType}:${link.targetId}:${occurredAt}`,
+          kind: 'source-linked',
+          category: 'material-reuse',
+          occurredAt,
+          descriptor: 'Fonte professionale collegata al contesto didattico corrente.',
+          context: {
+            sourceId,
+            ...(link.targetType === 'uda' ? { udaId: link.targetId } : {}),
+            ...(link.targetType === 'lesson' ? { lessonId: link.targetId } : {})
+          },
+          canonicalRef: `source:${sourceId}`,
+          privacyClassification
+        });
+      }
+    ).then(() => undefined),
+  [commitLibraryMutation, persistDerivedMemoryEvent]);
 
   const handleUnlinkLibrarySource = useCallback((
     sourceId: string,
@@ -965,6 +1137,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     submissions: submissionsRef.current,
     planning: planningRef.current,
     library: libraryRef.current,
+    professionalMemory: professionalMemoryRef.current,
     meta: metaRef.current
   });
 
@@ -1003,6 +1176,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       submissionsRef.current = restored.submissions;
       planningRef.current = restored.planning;
       libraryRef.current = restored.library;
+      professionalMemoryRef.current = restored.professionalMemory;
       metaRef.current = restored.meta;
       setAppData(restoredVisibleAppData);
       setSettings(restored.settings);
@@ -1011,6 +1185,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setSubmissions(restored.submissions);
       setPlanning(restored.planning);
       setLibrary(restored.library);
+      setProfessionalMemory(restored.professionalMemory);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
@@ -1024,15 +1199,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
       const resetLibrary = createEmptyLibraryState();
+      const resetProfessionalMemory = createEmptyProfessionalMemoryState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
+      professionalMemoryRef.current = resetProfessionalMemory;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
       setPlanning(resetPlanning);
       setLibrary(resetLibrary);
+      setProfessionalMemory(resetProfessionalMemory);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
@@ -1281,6 +1459,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           library={library}
           udas={udas}
           planning={planning}
+          professionalMemory={professionalMemory}
+          memoryError={professionalMemoryError}
           currentClassName={currentClass?.name ?? null}
           launchRequest={launchRequest}
           ambientContext={ambientCopilotContext}
@@ -1288,6 +1468,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
           onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
           onUpdateSource={handleUpdateLibrarySource}
           onLink={handleLinkLibrarySource}
+          onRemember={handleRememberProfessionalItem}
+          onCorrectMemoryEntry={handleCorrectMemoryEntry}
+          onRemoveMemoryEntry={handleRemoveMemoryEntry}
+          onSetMemoryCategory={handleSetMemoryCategory}
+          onRemoveMemoryCategory={handleRemoveMemoryCategory}
           isPending={isLibraryMutationPending}
         />
       )}
