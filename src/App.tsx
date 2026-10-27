@@ -36,6 +36,15 @@ import {
   type RecordProfessionalMemoryEventInput,
   type RememberProfessionalItemInput
 } from './memory/professionalMemory';
+import { createEmptyCopilotState } from './copilot/emptyCopilotState';
+import type { CopilotStateV1 } from './copilot/state';
+import type { CopilotOpportunityV1 } from './copilot/opportunityResolver';
+import {
+  deferCopilotOpportunity,
+  dismissCopilotOpportunity,
+  recordCopilotOutcomeSignal,
+  resetCopilotStatePreferences
+} from './persistence/copilotStateMutation';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -94,12 +103,14 @@ import { StudentsManagementView } from './components/StudentsManagementView';
 import { VerificheOnlineView } from './components/VerificheOnlineView';
 import { UdaGanttView } from './components/UdaGanttView';
 import { SettingsView } from './components/SettingsView';
+import { CopilotProactivitySettings } from './components/CopilotProactivitySettings';
 import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
 import { LibraryView } from './components/LibraryView';
 import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
+import { CopilotExperience } from './components/CopilotExperience';
 import type {
   CopilotLaunchContext,
   LibraryCopilotLaunchRequest
@@ -192,6 +203,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.professionalMemory || createEmptyProfessionalMemoryState()
   );
 
+  // 5e. Supervised Copilot state is durable, while execution grants remain session-only outside this state.
+  const [copilotState, setCopilotState] = useState<CopilotStateV1>(() =>
+    initialSnapshot.copilotState ?? createEmptyCopilotState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -229,6 +245,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const planningRef = useRef(planning);
   const libraryRef = useRef(library);
   const professionalMemoryRef = useRef(professionalMemory);
+  const copilotStateRef = useRef(copilotState);
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
@@ -483,6 +500,31 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   }, [mutationCoordinator, secureStorage, toast]);
 
+  const commitCopilotStateMutation = useCallback((
+    derive: (current: CopilotStateV1) => CopilotStateV1,
+    successMessage: string
+  ): Promise<CopilotStateV1> => {
+    return mutationCoordinator.enqueue<{ copilotState: CopilotStateV1; meta: SecureMeta }>({
+      getCommitted: () => ({ copilotState: copilotStateRef.current, meta: metaRef.current }),
+      derive: current => ({
+        copilotState: derive(current.copilotState),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveCopilotStateAndMeta(candidate.copilotState, candidate.meta),
+      publish: candidate => {
+        copilotStateRef.current = candidate.copilotState;
+        metaRef.current = candidate.meta;
+        setCopilotState(candidate.copilotState);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast(successMessage)
+    }).then(candidate => candidate.copilotState).catch(error => {
+      console.error('Supervised Copilot state save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
   const handleRememberProfessionalItem = useCallback((
     input: RememberProfessionalItemInput
   ): Promise<void> => commitProfessionalMemoryMutation(
@@ -523,6 +565,52 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     current => removeProfessionalMemoryCategory(current, category),
     'Ricordi della categoria eliminati'
   ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handlePutAsideCopilotOpportunity = useCallback((
+    opportunity: CopilotOpportunityV1,
+    contextFingerprint: string
+  ): Promise<void> => {
+    const occurredAt = new Date().toISOString();
+    return commitCopilotStateMutation(current => {
+      const deferred = deferCopilotOpportunity(current, {
+        opportunity,
+        contextFingerprint,
+        deferredAt: occurredAt
+      });
+      return recordCopilotOutcomeSignal(deferred, {
+        id: uid(),
+        opportunityKind: opportunity.kind,
+        signal: 'put-aside',
+        occurredAt
+      });
+    }, 'Opportunità messa da parte').then(() => undefined);
+  }, [commitCopilotStateMutation]);
+
+  const handleIgnoreCopilotOpportunity = useCallback((
+    opportunity: CopilotOpportunityV1,
+    contextFingerprint: string
+  ): Promise<void> => {
+    const occurredAt = new Date().toISOString();
+    return commitCopilotStateMutation(current => {
+      const dismissed = dismissCopilotOpportunity(current, {
+        opportunityId: opportunity.id,
+        contextFingerprint
+      });
+      return recordCopilotOutcomeSignal(dismissed, {
+        id: uid(),
+        opportunityKind: opportunity.kind,
+        signal: 'ignore',
+        occurredAt
+      });
+    }, 'Opportunità ignorata').then(() => undefined);
+  }, [commitCopilotStateMutation]);
+
+  const handleResetCopilotPreferences = useCallback((): Promise<void> =>
+    commitCopilotStateMutation(
+      current => resetCopilotStatePreferences(current),
+      'Preferenze del Copilota reimpostate'
+    ).then(() => undefined),
+  [commitCopilotStateMutation]);
 
   const handleAdoptTeachingProposalToUda = useCallback((
     input: TeachingProposalOutcomeMutationInput
@@ -1138,6 +1226,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     planning: planningRef.current,
     library: libraryRef.current,
     professionalMemory: professionalMemoryRef.current,
+    copilotState: copilotStateRef.current,
     meta: metaRef.current
   });
 
@@ -1177,6 +1266,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       planningRef.current = restored.planning;
       libraryRef.current = restored.library;
       professionalMemoryRef.current = restored.professionalMemory;
+      copilotStateRef.current = restored.copilotState;
       metaRef.current = restored.meta;
       setAppData(restoredVisibleAppData);
       setSettings(restored.settings);
@@ -1186,6 +1276,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setPlanning(restored.planning);
       setLibrary(restored.library);
       setProfessionalMemory(restored.professionalMemory);
+      setCopilotState(restored.copilotState);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
@@ -1200,17 +1291,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const resetPlanning = createEmptyPlanningState();
       const resetLibrary = createEmptyLibraryState();
       const resetProfessionalMemory = createEmptyProfessionalMemoryState();
+      const resetCopilotState = createEmptyCopilotState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
       professionalMemoryRef.current = resetProfessionalMemory;
+      copilotStateRef.current = resetCopilotState;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
       setPlanning(resetPlanning);
       setLibrary(resetLibrary);
       setProfessionalMemory(resetProfessionalMemory);
+      setCopilotState(resetCopilotState);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
@@ -1430,12 +1524,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
         {/* TAB 12: Impostazioni & Tema */}
         {activeTab === 'impostazioni' && (
-          <SettingsView
-            settings={settings}
-            onUpdateSettings={handleUpdateSettings}
-            onExportBackup={handleExportBackup}
-            onImportBackup={handleImportBackup}
-          />
+          <div className="space-y-4">
+            <SettingsView
+              settings={settings}
+              onUpdateSettings={handleUpdateSettings}
+              onExportBackup={handleExportBackup}
+              onImportBackup={handleImportBackup}
+            />
+            <CopilotProactivitySettings
+              settings={settings}
+              onUpdateSettings={handleUpdateSettings}
+              onResetCopilotPreferences={handleResetCopilotPreferences}
+            />
+          </div>
         )}
 
         {/* TAB 13: Privacy First & GDPR */}
@@ -1455,27 +1556,43 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       </main>
 
       {!studentMode.isOpen && (
-        <LibraryCopilotComposer
-          library={library}
-          udas={udas}
-          planning={planning}
-          professionalMemory={professionalMemory}
-          aiBudgetProfile={settings.aiBudgetProfile}
-          memoryError={professionalMemoryError}
-          currentClassName={currentClass?.name ?? null}
-          launchRequest={launchRequest}
-          ambientContext={ambientCopilotContext}
-          onAddSource={handleAddLibrarySource}
-          onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
-          onUpdateSource={handleUpdateLibrarySource}
-          onLink={handleLinkLibrarySource}
-          onRemember={handleRememberProfessionalItem}
-          onCorrectMemoryEntry={handleCorrectMemoryEntry}
-          onRemoveMemoryEntry={handleRemoveMemoryEntry}
-          onSetMemoryCategory={handleSetMemoryCategory}
-          onRemoveMemoryCategory={handleRemoveMemoryCategory}
-          isPending={isLibraryMutationPending}
-        />
+        <>
+          <CopilotExperience
+            settings={settings}
+            copilotState={copilotState}
+            library={library}
+            udas={udas}
+            planning={planning}
+            ambientContext={ambientCopilotContext}
+            onPutAside={handlePutAsideCopilotOpportunity}
+            onIgnore={handleIgnoreCopilotOpportunity}
+            onOpenConversation={() => openLibraryCopilot(ambientCopilotContext)}
+          />
+          <div className="aic07-hide-legacy-copilot-trigger contents">
+            <LibraryCopilotComposer
+              library={library}
+              udas={udas}
+              planning={planning}
+              professionalMemory={professionalMemory}
+              aiBudgetProfile={settings.aiBudgetProfile}
+              memoryError={professionalMemoryError}
+              currentClassName={currentClass?.name ?? null}
+              launchRequest={launchRequest}
+              ambientContext={ambientCopilotContext}
+              onAddSource={handleAddLibrarySource}
+              onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
+              onUpdateSource={handleUpdateLibrarySource}
+              onLink={handleLinkLibrarySource}
+              onRemember={handleRememberProfessionalItem}
+              onCorrectMemoryEntry={handleCorrectMemoryEntry}
+              onRemoveMemoryEntry={handleRemoveMemoryEntry}
+              onSetMemoryCategory={handleSetMemoryCategory}
+              onRemoveMemoryCategory={handleRemoveMemoryCategory}
+              isPending={isLibraryMutationPending}
+            />
+          </div>
+          <style>{`.aic07-hide-legacy-copilot-trigger [data-testid="library-copilot-trigger"] { display: none !important; }`}</style>
+        </>
       )}
 
       {/* Persistence confirmation modal */}
