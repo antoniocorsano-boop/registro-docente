@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
+import { setAutoRememberCategory } from '../memory/professionalMemory';
 import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
 
 const EMPTY_STATE = new URL('../memory/emptyProfessionalMemoryState.ts', import.meta.url);
@@ -8,6 +9,7 @@ const TYPES = new URL('../memory/types.ts', import.meta.url);
 const VAULT_TYPES = new URL('./vaultTypes.ts', import.meta.url);
 const VAULT_STORE = new URL('./vaultStore.ts', import.meta.url);
 const APP_STORAGE = new URL('./secureAppStorage.ts', import.meta.url);
+const APP = new URL('../App.tsx', import.meta.url);
 
 const emptyPlanning = {
   schemaVersion: 1 as const,
@@ -131,5 +133,87 @@ describe('AIC-05 professional memory foundation contract', () => {
       exportedAt: '2026-10-27T09:00:00.000Z',
       snapshot: { ...current, professionalMemory: invalidMemory }
     }, current as any)).toThrow(/memory|memoria|privacy/i);
+  });
+});
+
+describe('AIC-05 governed product integration contract', () => {
+  test('derived memory persistence reports failure without publishing a false saved state', async () => {
+    const module = await import('../persistence/professionalMemoryOutcome') as typeof import('../persistence/professionalMemoryOutcome');
+    const current = setAutoRememberCategory(
+      createEmptyProfessionalMemoryState(),
+      'material-reuse',
+      true
+    );
+    let persistedCandidate: unknown = null;
+
+    const result = await module.persistDerivedProfessionalMemoryAfterCanonicalCommit({
+      current,
+      event: {
+        id: 'event-link-1',
+        kind: 'source-linked',
+        category: 'material-reuse',
+        occurredAt: '2026-10-27T09:40:00.000Z',
+        descriptor: 'Fonte professionale collegata all’UDA corrente.',
+        context: { udaId: 'uda-energy', sourceId: 'source-energy' },
+        canonicalRef: 'source:source-energy',
+        privacyClassification: 'TEACHER_PROFESSIONAL'
+      },
+      persist: async candidate => {
+        persistedCandidate = candidate;
+        throw new Error('forced memory write failure');
+      }
+    });
+
+    expect(persistedCandidate).not.toBeNull();
+    expect(result.status).toBe('failed');
+    expect(result.state).toEqual(current);
+    if (result.status === 'failed') {
+      expect(result.error).toContain('forced memory write failure');
+    }
+    expect(current.events).toEqual([]);
+    expect(current.entries).toEqual([]);
+  });
+
+  test('App keeps memory aligned with backup restore reset and never widens canonical compound persistence', async () => {
+    const app = await Bun.file(APP).text();
+
+    expect(app).toContain('initialSnapshot.professionalMemory || createEmptyProfessionalMemoryState()');
+    expect(app).toContain('const professionalMemoryRef = useRef(professionalMemory)');
+    expect(app).toContain('professionalMemory: professionalMemoryRef.current');
+    expect(app).toContain('professionalMemoryRef.current = restored.professionalMemory');
+    expect(app).toContain('setProfessionalMemory(restored.professionalMemory)');
+    expect(app).toContain('const resetProfessionalMemory = createEmptyProfessionalMemoryState()');
+    expect(app).toContain('professionalMemoryRef.current = resetProfessionalMemory');
+    expect(app).toContain('setProfessionalMemory(resetProfessionalMemory)');
+    expect(app).not.toContain('saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta, professionalMemory');
+  });
+
+  test('LINK and PREPARE publish canonical refs before derived memory is attempted', async () => {
+    const app = await Bun.file(APP).text();
+
+    const prepareStart = app.indexOf('const handleAdoptTeachingProposalToUda');
+    const prepareEnd = app.indexOf('const handleAddLibrarySource', prepareStart);
+    const prepare = app.slice(prepareStart, prepareEnd);
+    expect(prepare).toContain('await secureStorage.saveLibraryUdasAndMeta(candidate.library, candidate.udas, candidate.meta)');
+    expect(prepare).toContain('libraryRef.current = candidate.library');
+    expect(prepare).toContain('udasRef.current = candidate.udas');
+    expect(prepare).toContain('await persistDerivedMemoryEvent');
+    expect(prepare.indexOf('await secureStorage.saveLibraryUdasAndMeta')).toBeLessThan(prepare.indexOf('libraryRef.current = candidate.library'));
+    expect(prepare.indexOf('libraryRef.current = candidate.library')).toBeLessThan(prepare.indexOf('await persistDerivedMemoryEvent'));
+    expect(prepare.indexOf('udasRef.current = candidate.udas')).toBeLessThan(prepare.indexOf('await persistDerivedMemoryEvent'));
+
+    const linkStart = app.indexOf('const handleLinkLibrarySource');
+    const linkEnd = app.indexOf('const handleUnlinkLibrarySource', linkStart);
+    const link = app.slice(linkStart, linkEnd);
+    expect(link).toContain('commitLibraryMutation');
+    expect(link).toContain('await persistDerivedMemoryEvent');
+    expect(link.indexOf('commitLibraryMutation')).toBeLessThan(link.indexOf('await persistDerivedMemoryEvent'));
+  });
+
+  test('App exposes a separate non-destructive memory error instead of reusing canonical save failure state', async () => {
+    const app = await Bun.file(APP).text();
+    expect(app).toContain('const [professionalMemoryError, setProfessionalMemoryError]');
+    expect(app).toContain('setProfessionalMemoryError(message)');
+    expect(app).toContain("console.error('Professional memory save failed', error)");
   });
 });
