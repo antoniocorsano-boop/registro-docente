@@ -229,7 +229,7 @@ async function submit(composer, message) {
 
 async function classifyProfessional(composer, state) {
   state.failIntent = true;
-  await submit(composer, 'Prepara una attività a partire da questa fonte');
+  await submit(composer, 'prepara un'attività per questa lezione usando la fonte');
   state.failIntent = false;
 
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
