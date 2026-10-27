@@ -215,6 +215,8 @@ test('AIC-06 governs routine and expensive PREPARE and persists only the base pr
   const economy = page.getByRole('button', { name: /^Risparmio/ });
   await economy.click();
   await expect(economy).toHaveAttribute('aria-pressed', 'true');
+  await expect(economy).toBeEnabled();
+  await expect(page.locator('[aria-label="Impostazioni aggiornate"]')).toBeVisible();
   await reloadAndUnlock(page);
   await page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true }).click();
   await openDrawerItem(page, 'Impostazioni');
