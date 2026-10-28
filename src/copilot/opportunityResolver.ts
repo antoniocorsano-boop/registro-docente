@@ -330,9 +330,20 @@ function revalidateDeferredOpportunity(
     });
   }
 
+  const refreshedLabel = targetLabel(uda, lessonId);
   return {
     ...opportunity,
     scope: 'later',
+    title: lessonId
+      ? `Prepara ${refreshedLabel} — ${uda.className}`
+      : `Continua ${uda.title} — ${uda.className}`,
+    contextRef: {
+      className: uda.className,
+      udaId: uda.id,
+      ...(lessonId ? { lessonId } : {}),
+      sourceId: source.id
+    },
+    proposedMission: missionSeed(uda, source, lessonId),
     whyNow: reason,
     evidence: refreshedEvidence,
     rank: rank({
