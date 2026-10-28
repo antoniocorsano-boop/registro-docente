@@ -15,11 +15,12 @@ describe('A4-R1 teacher-first mobile surface contract', () => {
     expect(deck).not.toContain('Nessuna opportunità forte in questo gruppo.');
   });
 
-  test('the floating Copilot trigger is not rendered while the Deck is already open', async () => {
+  test('the floating Copilot trigger is rendered only while the whole Copilot surface is closed', async () => {
     const deck = await source(DECK);
 
-    expect(deck).toContain('{!isOpen && (');
+    expect(deck).toContain("surfaceMode === 'closed' && (");
     expect(deck).toContain('data-testid="library-copilot-trigger"');
+    expect(deck).not.toContain('{!isOpen && (');
   });
 
   test('mobile Vault controls keep direct lock access without a persistent wide select toolbar', async () => {
