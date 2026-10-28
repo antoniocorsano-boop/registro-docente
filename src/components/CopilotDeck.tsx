@@ -152,12 +152,13 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
 
   const activeMissions = missions.filter(mission => mission.status !== 'archived');
 
-  const run = async (id: string, action: () => Promise<void>) => {
+  const run = async (id: string, action: () => Promise<void>, closeDeckOnSuccess = false) => {
     if (busyId) return;
     setBusyId(id);
     try {
       await action();
       setPreviewId(null);
+      if (closeDeckOnSuccess) setIsOpen(false);
     } finally {
       setBusyId(null);
     }
@@ -214,6 +215,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                             void onResume(mission)
                               .then(decision => {
                                 setPreviewId(decision === 'repreview' ? mission.opportunityId : null);
+                                if (decision === 'resume') setIsOpen(false);
                               })
                               .finally(() => setBusyId(null));
                           }}
@@ -244,7 +246,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                   ) : group.opportunities.map(opportunity => {
                     const preview = previewId === opportunity.id ? resolvePreview(opportunity) : null;
                     const start = onStart && preview
-                      ? () => void run(opportunity.id, () => onStart(opportunity, preview))
+                      ? () => void run(opportunity.id, () => onStart(opportunity, preview), true)
                       : undefined;
                     return (
                       <OpportunityCard
