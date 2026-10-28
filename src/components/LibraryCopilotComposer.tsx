@@ -275,6 +275,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     () => library.sources.find(source => source.id === selectedSourceId) ?? null,
     [library.sources, selectedSourceId]
   );
+  const hasResolvedConversationContext = Boolean(selectedSource && resolvedTeachingContext);
 
   const contextualReview = useMemo(() => {
     if (!selectedSource) return null;
@@ -962,7 +963,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const handleResolve = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!isBoundMissionFlow && !hasBoundLaunchContext) {
+    if (!isBoundMissionFlow && !hasBoundLaunchContext && !hasResolvedConversationContext) {
       frameTeacherFirstObjective(message);
       return;
     }
