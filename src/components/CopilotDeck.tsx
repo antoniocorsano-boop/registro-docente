@@ -175,7 +175,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
 
   return (
     <>
-      {!isOpen && (
+      {surfaceMode === 'closed' && (
         <button
           type="button"
           data-testid="library-copilot-trigger"
