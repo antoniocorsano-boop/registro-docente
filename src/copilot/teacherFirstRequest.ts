@@ -37,10 +37,11 @@ function uniqueClassNames(classNames: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const className of classNames) {
-    const normalized = normalizeClassName(className);
+    const canonical = className.trim();
+    const normalized = normalizeClassName(canonical);
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
-    result.push(normalized);
+    result.push(canonical);
   }
   return result;
 }
