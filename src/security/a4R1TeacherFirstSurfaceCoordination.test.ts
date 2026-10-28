@@ -45,4 +45,25 @@ describe('A4-R1 one Copilot surface coordination', () => {
     expect(vault).toContain('!copilotSurfaceOpen &&');
     expect(vault).toContain('aria-label="Blocca Registro"');
   });
+
+  test('an ordinary Copilot reopen starts fresh instead of inheriting a prior source/context launch or draft', async () => {
+    const app = await source(APP);
+    const composer = await source(COMPOSER);
+
+    const reopenStart = app.indexOf('const reopenLibraryCopilot = useCallback(() => {');
+    const reopenEnd = app.indexOf('}, []);', reopenStart);
+    const reopen = app.slice(reopenStart, reopenEnd);
+    expect(reopenStart).toBeGreaterThanOrEqual(0);
+    expect(reopen).toContain('setLaunchRequest(null)');
+
+    const closeLabel = 'aria-label="Chiudi Copilota"';
+    const closeLabelIndex = composer.indexOf(closeLabel);
+    const closeHandlerStart = composer.lastIndexOf('onClick={() => {', closeLabelIndex);
+    const closeHandlerEnd = composer.indexOf('}}', closeHandlerStart);
+    const closeHandler = composer.slice(closeHandlerStart, closeHandlerEnd);
+    expect(closeLabelIndex).toBeGreaterThanOrEqual(0);
+    expect(closeHandlerStart).toBeGreaterThanOrEqual(0);
+    expect(closeHandler).toContain("setSelectedSourceId('')");
+    expect(closeHandler).toContain("setMessage('')");
+  });
 });
