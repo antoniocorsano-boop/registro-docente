@@ -356,6 +356,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady
     ? launchRequest.mission.missionId
     : undefined;
+  const currentPlanningProfileId = resolvedPlanningContext?.status === 'resolved'
+    ? resolvedPlanningContext.profile.id
+    : null;
   const generationContextFingerprint = useMemo(() => {
     if (!boundLaunchMissionId || !selectedSource || !resolvedTeachingContext || !proposalUda) return null;
     const missionProjection = buildCopilotContextProjection({
@@ -363,13 +366,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       className: resolvedTeachingContext.className,
       udaId: resolvedTeachingContext.udaId,
       lessonId: resolvedTeachingContext.lessonId,
-      sourceId: selectedSource.id
+      sourceId: selectedSource.id,
+      planningProfileId: currentPlanningProfileId
     });
     return buildMissionContextFingerprint({
       context: missionProjection,
       uda: proposalUda,
       sources: [selectedSource],
-      planningProfileId: missionProjection.planningProfileId,
+      planningProfileId: currentPlanningProfileId,
       missionSettings: {
         aiBudgetProfile: aiBudgetProfile ?? 'balanced',
         copilotProactivity: copilotProactivity ?? 'balanced'
@@ -380,6 +384,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     selectedSource,
     resolvedTeachingContext,
     proposalUda,
+    currentPlanningProfileId,
     aiBudgetProfile,
     copilotProactivity
   ]);

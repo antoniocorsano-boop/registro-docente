@@ -8,17 +8,19 @@ import { normalizeCopilotProactivity } from '../copilot/proactivity';
 import { copilotPreferenceFactor } from '../copilot/preferenceLearning';
 import {
   buildCopilotOpportunityDismissalFingerprint,
-  buildCopilotOpportunityMaterialFingerprint,
   resolveCopilotOpportunities,
   type CopilotOpportunityV1
 } from '../copilot/opportunityResolver';
 import {
   buildCopilotMissionPreview,
+  buildMissionContextFingerprint,
   type CopilotMissionPreviewV1,
   type CopilotMissionV1,
   type MissionResumeDecision
 } from '../copilot/mission';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
+import { resolvePlanningContextForLibraryRelevance } from '../library/relevancePresentation';
+import { resolveLibraryTeachingContext } from '../library/teachingContext';
 import { CopilotDeck } from './CopilotDeck';
 
 interface CopilotExperienceProps {
@@ -86,23 +88,54 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
     contextFingerprint
   }), [settings.copilotProactivity, projection, udas, library, planning, copilotState, now, contextFingerprint]);
 
-  const resolvePreview = (opportunity: CopilotOpportunityV1): CopilotMissionPreviewV1 | null => {
+  const resolveMissionInputs = (opportunity: CopilotOpportunityV1) => {
     const uda = udas.find(candidate => candidate.id === opportunity.contextRef.udaId);
     if (!uda) return null;
     const sources = library.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
     if (sources.length !== opportunity.proposedMission.sourceRefs.length) return null;
+    const teachingContext = resolveLibraryTeachingContext(udas, {
+      udaId: opportunity.contextRef.udaId,
+      ...(opportunity.contextRef.lessonId ? { lessonId: opportunity.contextRef.lessonId } : {})
+    });
+    if (!teachingContext || teachingContext.className !== opportunity.contextRef.className) return null;
+    const planningContext = resolvePlanningContextForLibraryRelevance(teachingContext, planning);
+    const currentPlanningProfileId = planningContext?.status === 'resolved'
+      ? planningContext.profile.id
+      : null;
+    const context = buildCopilotContextProjection({
+      surface: projection.surface,
+      className: opportunity.contextRef.className,
+      udaId: opportunity.contextRef.udaId,
+      lessonId: opportunity.contextRef.lessonId,
+      sourceId: opportunity.contextRef.sourceId,
+      planningProfileId: currentPlanningProfileId
+    });
+    return { uda, sources, context, currentPlanningProfileId };
+  };
 
+  const resolvePreview = (opportunity: CopilotOpportunityV1): CopilotMissionPreviewV1 | null => {
+    const inputs = resolveMissionInputs(opportunity);
+    if (!inputs) return null;
     return buildCopilotMissionPreview(opportunity, {
-      context: buildCopilotContextProjection({
-        surface: projection.surface,
-        className: opportunity.contextRef.className,
-        udaId: opportunity.contextRef.udaId,
-        lessonId: opportunity.contextRef.lessonId,
-        sourceId: opportunity.contextRef.sourceId
-      }),
-      uda,
-      sources,
-      planningProfileId: projection.planningProfileId,
+      context: inputs.context,
+      uda: inputs.uda,
+      sources: inputs.sources,
+      planningProfileId: inputs.currentPlanningProfileId,
+      missionSettings: {
+        aiBudgetProfile: settings.aiBudgetProfile ?? 'balanced',
+        copilotProactivity: normalizeCopilotProactivity(settings.copilotProactivity)
+      }
+    });
+  };
+
+  const resolveMissionFingerprint = (opportunity: CopilotOpportunityV1): string => {
+    const inputs = resolveMissionInputs(opportunity);
+    if (!inputs) return '';
+    return buildMissionContextFingerprint({
+      context: inputs.context,
+      uda: inputs.uda,
+      sources: inputs.sources,
+      planningProfileId: inputs.currentPlanningProfileId,
       missionSettings: {
         aiBudgetProfile: settings.aiBudgetProfile ?? 'balanced',
         copilotProactivity: normalizeCopilotProactivity(settings.copilotProactivity)
@@ -115,7 +148,7 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
       opportunities={opportunities}
       missions={copilotState.missions}
       resolvePreview={resolvePreview}
-      resolveMaterialFingerprint={opportunity => buildCopilotOpportunityMaterialFingerprint({ opportunity, udas, library })}
+      resolveMaterialFingerprint={resolveMissionFingerprint}
       onPutAside={opportunity => onPutAside(opportunity, buildCopilotOpportunityDismissalFingerprint({
         opportunity, context: projection, udas, library
       }))}

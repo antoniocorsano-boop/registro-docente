@@ -17,6 +17,8 @@ import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
+import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
+import { resolveLibraryTeachingContext } from './library/teachingContext';
 import {
   addLibrarySource,
   linkLibrarySource,
@@ -55,7 +57,6 @@ import type { CopilotPreferenceSignalKind } from './copilot/preferenceLearning';
 import { bindMissionRuntime, clearMissionRuntime } from './components/CopilotMissionBridge';
 import type { CopilotStateV1 } from './copilot/state';
 import {
-  buildCopilotOpportunityMaterialFingerprint,
   type CopilotOpportunityV1
 } from './copilot/opportunityResolver';
 import {
@@ -657,22 +658,42 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
       throw new Error('La fonte professionale della missione non è più disponibile.');
     }
-    const currentMaterialFingerprint = buildCopilotOpportunityMaterialFingerprint({
-      opportunity,
-      udas: udasRef.current,
-      library: libraryRef.current
+    const currentTeachingContext = resolveLibraryTeachingContext(udasRef.current, {
+      udaId: opportunity.contextRef.udaId,
+      ...(opportunity.contextRef.lessonId ? { lessonId: opportunity.contextRef.lessonId } : {})
     });
-    if (currentMaterialFingerprint !== materialFingerprint) {
-      throw new Error('Il contesto della missione è cambiato: rivedi l’anteprima prima di avviare.');
+    if (!currentTeachingContext || currentTeachingContext.className !== opportunity.contextRef.className) {
+      throw new Error('Il contesto didattico della missione non è più disponibile.');
     }
+    const currentPlanningContext = resolvePlanningContextForLibraryRelevance(
+      currentTeachingContext,
+      planningRef.current
+    );
+    const currentPlanningProfileId = currentPlanningContext?.status === 'resolved'
+      ? currentPlanningContext.profile.id
+      : null;
     const now = new Date().toISOString();
     const projection = buildCopilotContextProjection({
       surface: 'library',
       className: opportunity.contextRef.className,
       udaId: opportunity.contextRef.udaId,
       lessonId: opportunity.contextRef.lessonId,
-      sourceId: opportunity.contextRef.sourceId ?? opportunity.proposedMission.sourceRefs[0]
+      sourceId: opportunity.contextRef.sourceId ?? opportunity.proposedMission.sourceRefs[0],
+      planningProfileId: currentPlanningProfileId
     });
+    const currentContextFingerprint = buildMissionContextFingerprint({
+      context: projection,
+      uda,
+      sources,
+      planningProfileId: currentPlanningProfileId,
+      missionSettings: {
+        aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+        copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
+      }
+    });
+    if (currentContextFingerprint !== materialFingerprint) {
+      throw new Error('Il contesto della missione è cambiato: rivedi l’anteprima prima di avviare.');
+    }
     const { mission, grant } = authorizeCopilotMission(preview, {
       id: uid(),
       opportunity,
@@ -680,7 +701,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
         context: projection,
         uda,
         sources,
-        planningProfileId: projection.planningProfileId,
+        planningProfileId: currentPlanningProfileId,
         missionSettings: {
           aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
           copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
@@ -731,19 +752,34 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       return 'archive';
     }
 
+    const currentTeachingContext = resolveLibraryTeachingContext(udasRef.current, {
+      udaId: currentMission.contextRef.udaId,
+      ...(currentMission.contextRef.lessonId ? { lessonId: currentMission.contextRef.lessonId } : {})
+    });
+    if (!currentTeachingContext || currentTeachingContext.className !== currentMission.contextRef.className) {
+      return 'archive';
+    }
+    const currentPlanningContext = resolvePlanningContextForLibraryRelevance(
+      currentTeachingContext,
+      planningRef.current
+    );
+    const currentPlanningProfileId = currentPlanningContext?.status === 'resolved'
+      ? currentPlanningContext.profile.id
+      : null;
     const now = new Date().toISOString();
     const projection = buildCopilotContextProjection({
       surface: 'library',
       className: currentMission.contextRef.className,
       udaId: currentMission.contextRef.udaId,
       lessonId: currentMission.contextRef.lessonId,
-      sourceId: currentMission.contextRef.sourceId ?? currentMission.sourceRefs[0]
+      sourceId: currentMission.contextRef.sourceId ?? currentMission.sourceRefs[0],
+      planningProfileId: currentPlanningProfileId
     });
     const currentContextFingerprint = buildMissionContextFingerprint({
       context: projection,
       uda,
       sources,
-      planningProfileId: projection.planningProfileId,
+      planningProfileId: currentPlanningProfileId,
       missionSettings: {
         aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
         copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
