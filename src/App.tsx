@@ -232,6 +232,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
+  const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
 
   const openLibraryCopilot = useCallback((
     context: CopilotLaunchContext,
@@ -242,6 +243,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       context,
       ...(mission ? { mission } : {})
     }));
+  }, []);
+
+  const reopenLibraryCopilot = useCallback(() => {
+    setCopilotOpenRequestNonce(previous => previous + 1);
   }, []);
 
   // Metadata for backup tracking
@@ -1662,7 +1667,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onPutAside={handlePutAsideCopilotOpportunity}
             onIgnore={handleIgnoreCopilotOpportunity}
             onStart={handleStartCopilotMission}
-            onOpenConversation={() => openLibraryCopilot(ambientCopilotContext)}
+            onOpenConversation={reopenLibraryCopilot}
           />
           <LibraryCopilotComposer
               library={library}
@@ -1673,6 +1678,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               memoryError={professionalMemoryError}
               currentClassName={currentClass?.name ?? null}
               launchRequest={launchRequest}
+              openRequestNonce={copilotOpenRequestNonce}
               ambientContext={ambientCopilotContext}
               showStandaloneTrigger={false}
               onAddSource={handleAddLibrarySource}

@@ -5,8 +5,9 @@ const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
 
 describe('AIC-04 cross-surface Copilot entry contract', () => {
   test('allows a teacher objective to be submitted without selecting a Library source first', () => {
-    expect(composerSource).toContain('if (!message.trim() || isResolving) return;');
-    expect(composerSource).not.toContain('if (!selectedSource || !message.trim() || isResolving) return;');
+    expect(composerSource).toContain('const normalizedObjective = objective.trim();');
+    expect(composerSource).toContain('if (!normalizedObjective || isResolving) return;');
+    expect(composerSource).not.toContain('if (!selectedSource || !normalizedObjective || isResolving) return;');
     expect(composerSource).toContain('disabled={!message.trim() || isResolving}');
     expect(composerSource).not.toContain('disabled={!selectedSource || !message.trim() || isResolving}');
 

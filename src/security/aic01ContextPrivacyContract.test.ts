@@ -123,6 +123,6 @@ describe('AIC-01 remote context privacy contract', () => {
     expect(composerSource).toContain('copilotContextProjection');
     expect(composerSource).toContain('copilotContextFingerprint');
     expect(composerSource).toContain('contextProjection: copilotContextProjection');
-    expect(composerSource).toContain('buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection)');
+    expect(composerSource).toContain('buildAgentRoutingRequestFromProjection(normalizedObjective, copilotContextProjection)');
   });
 });

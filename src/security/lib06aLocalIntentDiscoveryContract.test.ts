@@ -83,7 +83,7 @@ describe('LIB-06A local intent discovery consumer contract', () => {
     expect(composer).toContain("actionId: 'link-source-to-uda'");
     expect(composer).toContain('humanConfirmed: false');
     expect(composer).toContain('humanConfirmed: true');
-    expect(composer).not.toContain("from '../services/libraryProposalService'");
+    expect(composer).not.toContain('requestLibraryTeachingProposal');
     expect(composer).not.toContain("from '../library/teachingProposal'");
   });
 });

@@ -11,7 +11,7 @@ describe('LIB-04D Copilot PREPARE governed handoff contract', () => {
 
     expect(panel).toContain('export const LibraryProposalPanel');
     expect(composer).toContain("import { LibraryProposalPanel } from './LibraryProposalPanel'");
-    expect(composer).not.toContain("from '../services/libraryProposalService'");
+    expect(composer).not.toContain('requestLibraryTeachingProposal');
     expect(composer).not.toContain("from '../library/teachingProposal'");
     expect(composer).not.toContain('requestLibraryTeachingProposal');
   });

@@ -78,9 +78,22 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     expect(app).toContain('secureStorage.saveCopilotStateAndMeta');
     expect(app).toContain('<CopilotExperience');
     expect(app).toContain('showStandaloneTrigger={false}');
+    expect(app).toContain('onOpenConversation={reopenLibraryCopilot}');
+    expect(app).toContain('openRequestNonce={copilotOpenRequestNonce}');
+    expect(app).not.toContain('onOpenConversation={() => openLibraryCopilot(ambientCopilotContext)}');
     expect(app).not.toContain('aic07-hide-legacy-copilot-trigger');
     expect(composer).toContain('showStandaloneTrigger?: boolean;');
     expect(composer).toContain('showStandaloneTrigger = true');
+    expect(composer).toContain('openRequestNonce?: number;');
+    expect(composer).toContain('if (!openRequestNonce) return;');
+    const reopenStart = composer.indexOf('if (!openRequestNonce) return;');
+    const reopenEnd = composer.indexOf('}, [openRequestNonce]);', reopenStart);
+    expect(reopenEnd).toBeGreaterThan(reopenStart);
+    const reopenFragment = composer.slice(reopenStart, reopenEnd);
+    expect(reopenFragment).toContain('setIsOpen(true)');
+    expect(reopenFragment).not.toContain('setResolution(null)');
+    expect(reopenFragment).not.toContain('setIsPrepareOpen(false)');
+    expect(reopenFragment).not.toContain('setIsLinkConfirmationOpen(false)');
     expect(composer).toContain('if (!isOpen && !showStandaloneTrigger) return null;');
   });
 

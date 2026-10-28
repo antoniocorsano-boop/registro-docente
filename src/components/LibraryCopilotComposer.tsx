@@ -64,6 +64,7 @@ interface LibraryCopilotComposerProps {
   memoryError?: string | null;
   currentClassName?: string | null;
   launchRequest?: LibraryCopilotLaunchRequest | null;
+  openRequestNonce?: number;
   ambientContext?: CopilotLaunchContext;
   onAddSource: (source: LibrarySource) => Promise<void>;
   onAdoptProposalToUda: (
@@ -146,6 +147,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   memoryError = null,
   currentClassName = null,
   launchRequest = null,
+  openRequestNonce = 0,
   ambientContext,
   onAddSource,
   onAdoptProposalToUda,
@@ -333,6 +335,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+
+  useEffect(() => {
+    if (!openRequestNonce) return;
+    setIsOpen(true);
+  }, [openRequestNonce]);
 
   useEffect(() => {
     if (!launchRequest) return;
