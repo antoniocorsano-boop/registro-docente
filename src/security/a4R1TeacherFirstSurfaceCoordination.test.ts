@@ -60,6 +60,8 @@ describe('A4-R1 one Copilot surface coordination', () => {
     expect(app).not.toContain('key={`library-copilot-${copilotOpenRequestNonce}`}');
     expect(composer).toContain('const preserveGovernedContinuationOnReopenRef = useRef(false);');
     expect(composer).toContain('!isBoundMissionFlow && (isPrepareOpen || isLinkConfirmationOpen)');
+    expect(composer).toContain('if (preserveGovernedContinuation && resolvedTeachingContext)');
+    expect(composer).toContain('udaId: resolvedTeachingContext.udaId');
     expect(composer).toContain('if (!preserveGovernedContinuation)');
     expect(composer).toContain("setSelectedSourceId('');");
     expect(composer).toContain("setMessage('');");
