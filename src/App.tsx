@@ -271,6 +271,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   }, []);
 
   const reopenLibraryCopilot = useCallback(() => {
+    setLaunchRequest(null);
     setCopilotSurfaceMode('compose');
     setCopilotOpenRequestNonce(previous => previous + 1);
   }, []);
@@ -1841,6 +1842,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onSurfaceModeChange={setCopilotSurfaceMode}
           />
           <LibraryCopilotComposer
+              key={`library-copilot-${copilotOpenRequestNonce}`}
               library={library}
               udas={udas}
               planning={planning}
