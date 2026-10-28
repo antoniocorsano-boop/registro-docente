@@ -62,6 +62,7 @@ test('A4-R1 authentic teacher phrase is locally framed, disambiguated and mobile
   await deck.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
   await expect(composer.getByText('Cosa vuoi fare?', { exact: true })).toBeVisible();
   await expect(composer.getByText('Fonte della Biblioteca', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Contesto didattico', { exact: true })).toHaveCount(0);
