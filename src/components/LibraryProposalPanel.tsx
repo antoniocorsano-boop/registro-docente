@@ -52,6 +52,7 @@ interface LibraryProposalPanelProps {
   ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
   initialResult?: CopilotMissionV1['result'] | null;
   missionId?: string;
+  generationMissionId?: string;
   onMissionProposalReady?: MissionProposalReadyCallback;
   onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
 }
@@ -93,6 +94,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   onAdoptProposalToUda,
   initialResult = null,
   missionId,
+  generationMissionId,
   onMissionProposalReady,
   onMissionOutcome
 }) => {
@@ -274,9 +276,9 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
       adoptionLessonIdRef.current = uid();
-      if (missionId) {
+      if (generationMissionId) {
         await notifyMissionProposalReady(onMissionProposalReady, {
-          missionId,
+          missionId: generationMissionId,
           proposal: result.proposal,
           receipt: result.receipt
         });

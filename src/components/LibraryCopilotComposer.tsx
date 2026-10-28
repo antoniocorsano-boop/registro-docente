@@ -343,9 +343,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
   const missionLaunchBindingsReady = !launchRequest?.mission || Boolean(
     (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
+    && (!launchRequest.context.className || resolvedTeachingContext?.className === launchRequest.context.className)
     && (!launchRequest.context.udaId || resolvedTeachingContext?.udaId === launchRequest.context.udaId)
     && (!launchRequest.context.lessonId || resolvedTeachingContext?.lessonId === launchRequest.context.lessonId)
   );
+  const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady
+    ? launchRequest.mission.missionId
+    : undefined;
   const missionLaunchReady = !launchRequest?.mission || Boolean(
     missionLaunchBindingsReady
     && missionLaunchSettledNonce === launchRequest.nonce
@@ -1307,7 +1311,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               onAddSource={onAddSource}
               onAdoptProposalToUda={onAdoptProposalToUda}
               initialResult={readyMissionReview?.result ?? null}
-              missionId={readyMissionReview?.missionId ?? launchRequest?.mission?.missionId}
+              missionId={readyMissionReview?.missionId ?? boundLaunchMissionId}
+              generationMissionId={boundLaunchMissionId}
               onMissionProposalReady={onMissionProposalReady}
               onMissionOutcome={onMissionOutcome}
             />

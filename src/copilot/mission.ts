@@ -323,6 +323,18 @@ export function resolveMissionResume(
   return currentContextFingerprint === mission.contextFingerprint ? 'resume' : 'repreview';
 }
 
+export function canAcceptMissionProposalResult(
+  mission: CopilotMissionV1,
+  proposal: TeachingProposalV1
+): boolean {
+  if (mission.status !== 'authorized' && mission.status !== 'running') return false;
+  if (!mission.sourceRefs.includes(proposal.sourceId)) return false;
+  if (mission.contextRef.sourceId && proposal.sourceId !== mission.contextRef.sourceId) return false;
+  if (proposal.context.udaId !== mission.contextRef.udaId) return false;
+  if ((proposal.context.lessonId ?? '') !== (mission.contextRef.lessonId ?? '')) return false;
+  return true;
+}
+
 export function assertMissionStepWithinScope(
   mission: CopilotMissionV1,
   step: CopilotMissionStepV1

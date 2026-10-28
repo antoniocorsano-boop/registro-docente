@@ -42,6 +42,7 @@ import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
   buildMissionContextFingerprint,
+  canAcceptMissionProposalResult,
   resolveMissionResume,
   type CopilotMissionExecutionGrantV1,
   type CopilotMissionPreviewV1,
@@ -769,10 +770,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const handleMissionProposalReady = useCallback(async (
     { missionId, proposal, receipt }: MissionProposalReadyNotification
   ): Promise<void> => {
+    const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
+    if (!mission || !canAcceptMissionProposalResult(mission, proposal)) return;
+
     await commitCopilotStateMutation(current => updateCopilotMission(
       current,
       missionId,
-      mission => ({ ...mission, status: 'ready', result: { proposal, receipt } })
+      currentMission => ({ ...currentMission, status: 'ready', result: { proposal, receipt } })
     ), 'Incarico pronto da controllare');
     missionExecutionGrantsRef.current.delete(missionId);
   }, [commitCopilotStateMutation]);
