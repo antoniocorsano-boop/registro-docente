@@ -61,7 +61,7 @@ test('A4-R1 authentic teacher phrase is locally framed, disambiguated and mobile
   await expect(deck.getByText('Nessuna opportunità forte in questo gruppo.', { exact: true })).toHaveCount(0);
 
   await expect(page.getByRole('button', { name: 'Blocca Registro', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Imposta blocco automatico', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Imposta blocco automatico', exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Blocco automatico Registro')).toHaveCount(0);
 
   await deck.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
