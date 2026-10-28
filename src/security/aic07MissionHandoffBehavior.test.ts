@@ -79,7 +79,6 @@ describe('AIC-07 mission Play handoff', () => {
     expect(bridge).toContain('[launchRequest?.nonce, launchRequest?.mission, message, ready]');
   });
 
-
   test('mission auto-submit waits for the launch nonce to settle after stale-result invalidators', async () => {
     const composer = await Bun.file(COMPOSER).text();
     expect(composer).toContain('missionLaunchSettledNonce');
@@ -88,4 +87,23 @@ describe('AIC-07 mission Play handoff', () => {
     expect(composer).toContain('missionLaunchSettledNonce === launchRequest.nonce');
   });
 
+  test('consumes a Play launch outside the bridge mount lifecycle and revalidates its execution grant before submit', async () => {
+    const [app, bridge, composer] = await Promise.all([
+      Bun.file(APP).text(),
+      Bun.file(BRIDGE).text(),
+      Bun.file(COMPOSER).text()
+    ]);
+    expect(app).toContain('consumedMissionLaunchNonce');
+    expect(app).toContain('isMissionExecutionGrantValid');
+    expect(app).toContain('canSubmitMissionLaunch');
+    expect(app).toContain('onMissionLaunchConsumed');
+    expect(composer).toContain('consumedMissionLaunchNonce');
+    expect(composer).toContain('canSubmitMissionLaunch');
+    expect(composer).toContain('onMissionLaunchConsumed');
+    expect(bridge).toContain('consumedNonce: number | null');
+    expect(bridge).toContain('canSubmitMission');
+    expect(bridge).toContain('onConsumed');
+    expect(bridge).toContain('consumedNonce === launchRequest.nonce');
+    expect(bridge).toContain('canSubmitMission(mission.missionId)');
+  });
 });
