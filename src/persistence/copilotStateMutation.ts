@@ -7,6 +7,7 @@ import type {
 import {
   recordCopilotPreferenceSignal,
   resetCopilotPreferences,
+  type CopilotPreferenceSignalKind,
   type CopilotPreferenceSignalV1
 } from '../copilot/preferenceLearning';
 import type { CopilotStateV1 } from '../copilot/state';
@@ -78,4 +79,28 @@ export function resetCopilotStatePreferences(state: CopilotStateV1): CopilotStat
 
 export function archiveCopilotMission(state: CopilotStateV1, missionId: string): CopilotStateV1 {
   return updateCopilotMission(state, missionId, mission => ({ ...mission, status: 'archived' }));
+}
+
+export function recordCopilotMissionOutcome(
+  state: CopilotStateV1,
+  input: {
+    missionId: string;
+    signal: CopilotPreferenceSignalKind;
+    signalId: string;
+    occurredAt: string;
+  }
+): CopilotStateV1 {
+  const mission = state.missions.find(item => item.id === input.missionId);
+  if (!mission) throw new Error('Missione Copilota non trovata.');
+
+  const lifecycleState = input.signal === 'discarded'
+    ? archiveCopilotMission(state, input.missionId)
+    : state;
+
+  return recordCopilotOutcomeSignal(lifecycleState, {
+    id: input.signalId,
+    opportunityKind: mission.kind,
+    signal: input.signal,
+    occurredAt: input.occurredAt
+  });
 }
