@@ -44,6 +44,7 @@ import {
   buildMissionContextFingerprint,
   canAcceptMissionProposalResult,
   resolveMissionResume,
+  suspendCopilotMission,
   type CopilotMissionExecutionGrantV1,
   type CopilotMissionPreviewV1,
   type CopilotMissionV1,
@@ -767,6 +768,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     }, runtime);
     return 'resume';
   }, [commitCopilotStateMutation, openLibraryCopilot]);
+
+  const handleMissionInterrupted = useCallback((
+    { missionId }: { missionId: string }
+  ): Promise<void> => {
+    const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
+    if (!mission || (mission.status !== 'authorized' && mission.status !== 'running')) {
+      return Promise.resolve();
+    }
+
+    return commitCopilotStateMutation(current => updateCopilotMission(
+      current,
+      missionId,
+      suspendCopilotMission
+    ), '').then(() => {
+      missionExecutionGrantsRef.current.delete(missionId);
+    });
+  }, [commitCopilotStateMutation]);
 
   const handleMissionProposalReady = useCallback(async (
     { missionId, proposal, receipt }: MissionProposalReadyNotification
@@ -1775,6 +1793,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               onSetMemoryCategory={handleSetMemoryCategory}
               onRemoveMemoryCategory={handleRemoveMemoryCategory}
               onMissionProposalReady={handleMissionProposalReady}
+              onMissionInterrupted={handleMissionInterrupted}
               onMissionOutcome={handleMissionOutcome}
               isPending={isLibraryMutationPending}
             />
