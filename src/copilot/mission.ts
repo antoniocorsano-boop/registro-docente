@@ -309,6 +309,11 @@ export function isMissionExecutionGrantValid(
     && nowMs <= expiresAtMs;
 }
 
+export function suspendCopilotMission(mission: CopilotMissionV1): CopilotMissionV1 {
+  if (mission.status !== 'authorized' && mission.status !== 'running') return mission;
+  return { ...mission, status: 'suspended' };
+}
+
 export function resolveMissionResume(
   mission: CopilotMissionV1,
   currentContextFingerprint: string,
