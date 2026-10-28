@@ -61,7 +61,7 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).toContain('launchRequest?.nonce');
     expect(composerSource).toContain('launchRequest?.context.sourceId');
     expect(composerSource).toContain('requestedLaunchSourceId');
-    expect(composerSource).toContain('setIsOpen(true)');
+    expect(composerSource).toContain("onSurfaceModeChange('compose')");
     expect(composerSource).toContain('Il contesto richiesto non è più disponibile.');
     expect(composerSource).toContain('hasExplicitLaunchTarget');
   });
