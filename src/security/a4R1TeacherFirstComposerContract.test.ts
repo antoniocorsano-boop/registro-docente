@@ -68,6 +68,13 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(handler).not.toContain("if (hasBoundLaunchContext && goal === 'material') {\n      setContextOverride(null)");
   });
 
+  test('after staged source and teaching context resolution free text returns to governed conversational interpretation', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const hasResolvedConversationContext = Boolean(selectedSource && resolvedTeachingContext);');
+    expect(source).toContain('!isBoundMissionFlow && !hasBoundLaunchContext && !hasResolvedConversationContext');
+  });
+
   test('existing governed agent and mission boundaries remain present behind the new entry flow', async () => {
     const source = await composerSource();
 
