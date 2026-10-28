@@ -919,12 +919,6 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setErrorMessage(null);
     try {
       if (teacherFirstResolution.goalKind === 'prepare') {
-        const discovery = await discoverLibraryCopilotIntent(input);
-        const intent = discovery.status === 'DISCOVERED' ? discovery.intents[0] ?? null : null;
-        if (intent?.actionId !== 'prepare-from-source') {
-          setGuidanceMessage('La preparazione non è disponibile per questo materiale nel contesto scelto.');
-          return;
-        }
         setIsPrepareOpen(true);
         return;
       }
