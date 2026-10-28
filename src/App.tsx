@@ -757,6 +757,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       ...(currentMission.contextRef.lessonId ? { lessonId: currentMission.contextRef.lessonId } : {})
     });
     if (!currentTeachingContext || currentTeachingContext.className !== currentMission.contextRef.className) {
+      missionExecutionGrantsRef.current.delete(currentMission.id);
+      clearMissionRuntime(currentMission.id);
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current,
+        currentMission.id,
+        item => ({ ...item, status: 'archived' })
+      ), 'Incarico non più riprendibile');
       return 'archive';
     }
     const currentPlanningContext = resolvePlanningContextForLibraryRelevance(
