@@ -175,4 +175,23 @@ describe('AIC-07 opportunity resolver behavior', () => {
     expect([...result.primary, ...result.overflow].some(item => item.id === opportunity.id)).toBe(false);
   });
 
+  test('rebuilds a deferred title and proposed mission from current lesson metadata', async () => {
+    const { resolveCopilotOpportunities, input, opportunity } = await deferredCurrentLesson();
+    input.udas[0]!.lessons![0]!.topic = 'Sostenibilità delle risorse';
+    input.library.sources[0]!.title = 'Sostenibilità delle risorse agricole';
+    input.library.sources[0]!.payload.text = 'Sostenibilità delle risorse agricole e uso responsabile.';
+
+    const result = resolveCopilotOpportunities({
+      ...input,
+      deferred: [{ opportunity, contextFingerprint: JSON.stringify(input.context), deferredAt: input.now }]
+    });
+    const refreshed = [...result.primary, ...result.overflow].find(item => item.id === opportunity.id && item.scope === 'later');
+
+    expect(refreshed).toBeDefined();
+    expect(refreshed!.title).toContain('Sostenibilità delle risorse');
+    expect(refreshed!.proposedMission.goal).toContain('Sostenibilità delle risorse');
+    expect(refreshed!.title).not.toContain('Ciclo integrato');
+    expect(refreshed!.proposedMission.goal).not.toContain('Ciclo integrato');
+  });
+
 });
