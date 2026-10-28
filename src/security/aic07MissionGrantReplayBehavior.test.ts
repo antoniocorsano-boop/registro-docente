@@ -63,14 +63,68 @@ describe('AIC-07 mission grant replay behavior', () => {
     expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, { ...allowedStep, className: '2A' }, '2026-10-28T12:05:00.000Z')).toThrow();
   });
 
+  test('runtime authorization rejects material drift that happens after Play and before proposal generation', async () => {
+    const bridge = await loadMissionBridge();
+    const mission: CopilotMissionV1 = {
+      schemaVersion: 1,
+      id: 'mission-runtime-drift',
+      opportunityId: 'opportunity-runtime-drift',
+      kind: 'prepare-current-lesson',
+      goal: 'Prepara la lezione',
+      contextRef: { className: '2C', udaId: 'uda-1', lessonId: 'lesson-1', sourceId: 'source-1' },
+      sourceRefs: ['source-1'],
+      allowedCapabilities: ['prepare'],
+      expectedOutputs: [{ kind: 'activity', label: 'Proposta' }],
+      authority: { persistentProfessionalWrite: false, externalAction: false, scopeExpansion: false },
+      budgetProfile: 'balanced',
+      createdAt: '2026-10-28T12:00:00.000Z',
+      contextFingerprint: 'aic07:material-before-play',
+      semanticExpiry: { kind: 'context' },
+      status: 'authorized'
+    };
+    const grant: CopilotMissionExecutionGrantV1 = {
+      schemaVersion: 1,
+      token: 'grant-runtime-drift',
+      missionId: mission.id,
+      contextFingerprint: mission.contextFingerprint,
+      issuedAt: '2026-10-28T12:00:00.000Z',
+      expiresAt: '2026-10-28T12:15:00.000Z'
+    };
+    const allowedStep = {
+      capability: 'prepare', className: '2C', udaId: 'uda-1', lessonId: 'lesson-1', sourceIds: ['source-1']
+    };
+    bridge.bindMissionRuntime(mission, grant);
+    const assertRuntime = bridge.assertMissionRuntimeExecutionAuthorized as unknown as (
+      missionId: string,
+      step: typeof allowedStep,
+      currentContextFingerprint: string,
+      now: string
+    ) => void;
+
+    expect(() => assertRuntime(
+      mission.id,
+      allowedStep,
+      mission.contextFingerprint,
+      '2026-10-28T12:05:00.000Z'
+    )).not.toThrow();
+    expect(() => assertRuntime(
+      mission.id,
+      allowedStep,
+      'aic07:material-after-play',
+      '2026-10-28T12:05:00.000Z'
+    )).toThrow();
+  });
+
   test('mission PREPARE runtime revalidates authority at the real generation boundary', async () => {
     const [composer, panel] = await Promise.all([
       Bun.file(new URL('../components/LibraryCopilotComposer.tsx', import.meta.url)).text(),
       Bun.file(new URL('../components/LibraryProposalPanel.tsx', import.meta.url)).text()
     ]);
     expect(composer).toContain('assertMissionRuntimeExecutionAuthorized');
+    expect(composer).toContain('buildMissionContextFingerprint');
     expect(panel).toContain('assertMissionRuntimeExecutionAuthorized');
     expect(panel).toContain('generationMissionId');
+    expect(panel).toContain('generationContextFingerprint');
   });
 
 });
