@@ -25,4 +25,23 @@ describe('AIC-07 accepted planning profile mission binding', () => {
     expect(composer).toContain('currentPlanningProfileId');
     expect(composer).toContain('planningProfileId: currentPlanningProfileId');
   });
+
+  test('mission authority uses the canonical library execution surface instead of the ambient opportunity surface', async () => {
+    const [experience, app, composer] = await Promise.all([
+      Bun.file(EXPERIENCE).text(),
+      Bun.file(APP).text(),
+      Bun.file(COMPOSER).text()
+    ]);
+
+    const missionInputsStart = experience.indexOf('const resolveMissionInputs');
+    const missionInputsEnd = experience.indexOf('const resolvePreview', missionInputsStart);
+    expect(missionInputsStart).toBeGreaterThan(-1);
+    expect(missionInputsEnd).toBeGreaterThan(missionInputsStart);
+    const missionInputs = experience.slice(missionInputsStart, missionInputsEnd);
+    expect(missionInputs).toContain("surface: 'library'");
+    expect(missionInputs).not.toContain('surface: projection.surface');
+
+    expect(app).toContain("surface: 'library'");
+    expect(composer).toContain("surface: 'library'");
+  });
 });
