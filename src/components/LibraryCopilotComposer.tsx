@@ -209,6 +209,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const resolutionEpochRef = useRef(0);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const preserveGovernedContinuationOnReopenRef = useRef(false);
 
   const hasLaunchTeachingTarget = Boolean(
     launchRequest?.context.udaId || launchRequest?.context.lessonId
@@ -443,6 +444,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   useEffect(() => {
     if (!openRequestNonce) return;
     const stagedReview = consumeStagedMissionReview();
+    const preserveGovernedContinuation = preserveGovernedContinuationOnReopenRef.current;
+    preserveGovernedContinuationOnReopenRef.current = false;
     if (stagedReview) {
       const reviewSourceId = stagedReview.contextRef.sourceId ?? stagedReview.sourceRefs[0] ?? '';
       const reviewSource = library.sources.find(source => source.id === reviewSourceId) ?? null;
@@ -479,6 +482,21 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       } else {
         setErrorMessage('Il risultato pronto non è più compatibile con il contesto professionale corrente.');
       }
+    } else if (!preserveGovernedContinuation) {
+      resolutionEpochRef.current += 1;
+      setSelectedSourceId('');
+      setMessage('');
+      resetTeacherFirst();
+      setContextOverride('auto');
+      setResolution(null);
+      setIsReviewUnavailableOpen(false);
+      setGuidanceMessage(null);
+      setIsPrepareOpen(false);
+      setIsLinkConfirmationOpen(false);
+      setLinkError(null);
+      setLinkSuccess(null);
+      setErrorMessage(null);
+      setReadyMissionReview(null);
     }
     onSurfaceModeChange('compose');
   }, [openRequestNonce]);
@@ -508,6 +526,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   useEffect(() => {
     if (!launchRequest) return;
 
+    preserveGovernedContinuationOnReopenRef.current = false;
     setMissionLaunchSettledNonce(null);
     setReadyMissionReview(null);
     resetTeacherFirst();
@@ -1077,9 +1096,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           type="button"
           onClick={() => {
             interruptBoundMission();
+            const preserveGovernedContinuation =
+              !isBoundMissionFlow && (isPrepareOpen || isLinkConfirmationOpen);
+            preserveGovernedContinuationOnReopenRef.current = preserveGovernedContinuation;
             setIsPrepareOpen(false);
             resetTeacherFirst();
-            setContextOverride('auto');
+            if (!preserveGovernedContinuation) setContextOverride('auto');
             onSurfaceModeChange('closed');
           }}
           className="min-h-[44px] min-w-[44px] rounded-xl text-slate-400 hover:bg-slate-800 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"

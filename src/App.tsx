@@ -1842,7 +1842,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onSurfaceModeChange={setCopilotSurfaceMode}
           />
           <LibraryCopilotComposer
-              key={`library-copilot-${copilotOpenRequestNonce}`}
               library={library}
               udas={udas}
               planning={planning}
