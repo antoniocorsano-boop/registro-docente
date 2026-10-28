@@ -214,9 +214,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     }
   };
 
-  const emitMissionOutcome = (signal: CopilotPreferenceSignalKind) => {
+  const persistMissionOutcome = async (signal: CopilotPreferenceSignalKind): Promise<void> => {
     if (!missionId || !onMissionOutcome) return;
-    void Promise.resolve(onMissionOutcome({ missionId, signal })).catch(error => {
+    await onMissionOutcome({ missionId, signal });
+  };
+
+  const emitMissionOutcome = (signal: CopilotPreferenceSignalKind) => {
+    void persistMissionOutcome(signal).catch(error => {
       console.error('Copilot mission outcome learning failed', error);
     });
   };
@@ -339,14 +343,20 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     await generateProposal(authorization);
   };
 
-  const leaveProposal = () => {
-    emitMissionOutcome('discarded');
+  const leaveProposal = async () => {
+    setAdoptionError(null);
+    try {
+      await persistMissionOutcome('discarded');
+    } catch (reason) {
+      console.error('Copilot mission discard persistence failed', reason);
+      setAdoptionError('Non sono riuscito ad archiviare il risultato. La proposta resta disponibile per riprovare.');
+      return;
+    }
     adoptionSourceIdRef.current = null;
     adoptionLessonIdRef.current = null;
     setProposal(null);
     setIsEditing(false);
     setEditedContent(null);
-    setAdoptionError(null);
     setBudgetEscalation(null);
     setRemoteConsent(false);
     setRemoteActions([]);

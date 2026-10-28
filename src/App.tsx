@@ -54,7 +54,10 @@ import type { MissionProposalReadyNotification } from './services/libraryProposa
 import type { CopilotPreferenceSignalKind } from './copilot/preferenceLearning';
 import { bindMissionRuntime, clearMissionRuntime } from './components/CopilotMissionBridge';
 import type { CopilotStateV1 } from './copilot/state';
-import type { CopilotOpportunityV1 } from './copilot/opportunityResolver';
+import {
+  buildCopilotOpportunityMaterialFingerprint,
+  type CopilotOpportunityV1
+} from './copilot/opportunityResolver';
 import {
   appendCopilotMission,
   deferCopilotOpportunity,
@@ -645,15 +648,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const handleStartCopilotMission = useCallback(async (
     opportunity: CopilotOpportunityV1,
     preview: CopilotMissionPreviewV1,
-    contextFingerprint: string
+    materialFingerprint: string
   ): Promise<void> => {
-    void contextFingerprint;
     const uda = udasRef.current.find(candidate => candidate.id === opportunity.contextRef.udaId);
     if (!uda) throw new Error('Il contesto della missione non è più disponibile.');
     const sources = libraryRef.current.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
     if (sources.length !== opportunity.proposedMission.sourceRefs.length
       || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
       throw new Error('La fonte professionale della missione non è più disponibile.');
+    }
+    const currentMaterialFingerprint = buildCopilotOpportunityMaterialFingerprint({
+      opportunity,
+      udas: udasRef.current,
+      library: libraryRef.current
+    });
+    if (currentMaterialFingerprint !== materialFingerprint) {
+      throw new Error('Il contesto della missione è cambiato: rivedi l’anteprima prima di avviare.');
     }
     const now = new Date().toISOString();
     const projection = buildCopilotContextProjection({

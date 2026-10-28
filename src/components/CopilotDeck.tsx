@@ -22,9 +22,10 @@ interface CopilotDeckProps {
   opportunities: CopilotOpportunityResolution;
   missions: CopilotMissionV1[];
   resolvePreview: (opportunity: CopilotOpportunityV1) => CopilotMissionPreviewV1 | null;
+  resolveMaterialFingerprint: (opportunity: CopilotOpportunityV1) => string;
   onPutAside: (opportunity: CopilotOpportunityV1) => Promise<void>;
   onIgnore: (opportunity: CopilotOpportunityV1) => Promise<void>;
-  onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1) => Promise<void>;
+  onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1, materialFingerprint: string) => Promise<void>;
   onResume?: (mission: CopilotMissionV1) => Promise<MissionResumeDecision>;
   onOpenConversation: () => void;
 }
@@ -130,6 +131,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
   opportunities,
   missions,
   resolvePreview,
+  resolveMaterialFingerprint,
   onPutAside,
   onIgnore,
   onStart,
@@ -137,7 +139,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
   onOpenConversation
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewBinding, setPreviewBinding] = useState<{ id: string; materialFingerprint: string } | null>(null);
   const [showOverflow, setShowOverflow] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -158,7 +160,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
     setBusyId(id);
     try {
       await action();
-      setPreviewId(null);
+      setPreviewBinding(null);
       if (closeDeckOnSuccess) setIsOpen(false);
     } finally {
       setBusyId(null);
@@ -228,7 +230,9 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                             setBusyId(mission.id);
                             void onResume(mission)
                               .then(decision => {
-                                setPreviewId(decision === 'repreview' ? mission.opportunityId : null);
+                                setPreviewBinding(decision === 'repreview'
+                                  ? { id: mission.opportunityId, materialFingerprint: '' }
+                                  : null);
                                 if (decision === 'resume') setIsOpen(false);
                               })
                               .finally(() => setBusyId(null));
@@ -258,16 +262,28 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                   {group.opportunities.length === 0 ? (
                     <p className="rounded-lg border border-dashed border-slate-800 px-3 py-2 text-xs text-slate-600">Nessuna opportunità forte in questo gruppo.</p>
                   ) : group.opportunities.map(opportunity => {
-                    const preview = previewId === opportunity.id ? resolvePreview(opportunity) : null;
+                    const materialFingerprint = resolveMaterialFingerprint(opportunity);
+                    const preview = previewBinding?.id === opportunity.id
+                      && previewBinding.materialFingerprint === materialFingerprint
+                      ? resolvePreview(opportunity)
+                      : null;
                     const start = onStart && preview
-                      ? () => void run(opportunity.id, () => onStart(opportunity, preview), true)
+                      ? () => void run(
+                          opportunity.id,
+                          () => onStart(opportunity, preview, previewBinding!.materialFingerprint),
+                          true
+                        )
                       : undefined;
                     return (
                       <OpportunityCard
                         key={opportunity.id}
                         opportunity={opportunity}
                         preview={preview}
-                        onPreview={() => setPreviewId(current => current === opportunity.id ? null : opportunity.id)}
+                        onPreview={() => setPreviewBinding(current => (
+                          current?.id === opportunity.id && current.materialFingerprint === materialFingerprint
+                            ? null
+                            : { id: opportunity.id, materialFingerprint }
+                        ))}
                         onPutAside={() => void run(opportunity.id, () => onPutAside(opportunity))}
                         onIgnore={() => void run(opportunity.id, () => onIgnore(opportunity))}
                         onStart={start}

@@ -7,6 +7,8 @@ import { buildCopilotContextProjection } from '../copilot/contextProjection';
 import { normalizeCopilotProactivity } from '../copilot/proactivity';
 import { copilotPreferenceFactor } from '../copilot/preferenceLearning';
 import {
+  buildCopilotOpportunityDismissalFingerprint,
+  buildCopilotOpportunityMaterialFingerprint,
   resolveCopilotOpportunities,
   type CopilotOpportunityV1
 } from '../copilot/opportunityResolver';
@@ -113,14 +115,21 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
       opportunities={opportunities}
       missions={copilotState.missions}
       resolvePreview={resolvePreview}
-      onPutAside={opportunity => onPutAside(opportunity, contextFingerprint)}
-      onIgnore={opportunity => onIgnore(opportunity, contextFingerprint)}
+      resolveMaterialFingerprint={opportunity => buildCopilotOpportunityMaterialFingerprint({ opportunity, udas, library })}
+      onPutAside={opportunity => onPutAside(opportunity, buildCopilotOpportunityDismissalFingerprint({
+        opportunity, context: projection, udas, library
+      }))}
+      onIgnore={opportunity => onIgnore(opportunity, buildCopilotOpportunityDismissalFingerprint({
+        opportunity, context: projection, udas, library
+      }))}
       onResume={onResume}
       onOpenConversation={onOpenConversation}
       {...(onStart ? {
-        onStart: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1) => (
-          onStart(opportunity, preview, contextFingerprint)
-        )
+        onStart: (
+          opportunity: CopilotOpportunityV1,
+          preview: CopilotMissionPreviewV1,
+          materialFingerprint: string
+        ) => onStart(opportunity, preview, materialFingerprint)
       } : {})}
     />
   );

@@ -104,6 +104,121 @@ function clamp(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
+
+function canonicalizeFingerprintValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeFingerprintValue);
+  if (!value || typeof value !== 'object') return value;
+  const record = value as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(record).sort((left, right) => left.localeCompare(right, 'en'))) {
+    const entry = record[key];
+    if (entry !== undefined) result[key] = canonicalizeFingerprintValue(entry);
+  }
+  return result;
+}
+
+function fingerprint64(value: unknown): string {
+  const serialized = JSON.stringify(canonicalizeFingerprintValue(value));
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  for (const byte of new TextEncoder().encode(serialized)) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+function materialSourceProjection(source: LibrarySource): Record<string, unknown> {
+  return {
+    id: source.id,
+    kind: source.kind,
+    title: source.title,
+    capturedAt: source.capturedAt,
+    status: source.status,
+    privacy: source.privacy,
+    origin: source.origin,
+    sourceUrl: source.sourceUrl,
+    extractedText: source.extractedText,
+    notes: source.notes,
+    payload: {
+      mimeType: source.payload.mimeType,
+      text: source.payload.text,
+      dataUrl: source.payload.dataUrl
+    },
+    links: source.links.map(link => ({ targetType: link.targetType, targetId: link.targetId }))
+  };
+}
+
+export function buildCopilotOpportunityMaterialFingerprint(input: {
+  opportunity: CopilotOpportunityV1;
+  udas: UdaRecord[];
+  library: LibraryStateV1;
+}): string {
+  const uda = input.udas.find(candidate => (
+    candidate.id === input.opportunity.contextRef.udaId
+    && candidate.className === input.opportunity.contextRef.className
+  ));
+  const lesson = uda && input.opportunity.contextRef.lessonId
+    ? (uda.lessons ?? []).find(candidate => candidate.id === input.opportunity.contextRef.lessonId)
+    : undefined;
+  const selectedSources = input.opportunity.proposedMission.sourceRefs
+    .map(sourceId => input.library.sources.find(source => source.id === sourceId) ?? null);
+
+  return `aic07-material:${fingerprint64({
+    kind: input.opportunity.kind,
+    contextRef: input.opportunity.contextRef,
+    proposedMission: input.opportunity.proposedMission,
+    uda: uda ? {
+      id: uda.id,
+      title: uda.title,
+      className: uda.className,
+      hours: uda.hours,
+      period: uda.period,
+      startMonth: uda.startMonth,
+      durationMonths: uda.durationMonths,
+      description: uda.description,
+      competencies: uda.competencies,
+      civicEducation: uda.civicEducation,
+      authenticTask: uda.authenticTask,
+      dependencies: uda.dependencies
+    } : null,
+    lesson: lesson ? {
+      id: lesson.id,
+      date: lesson.date,
+      topic: lesson.topic,
+      hours: lesson.hours,
+      notes: lesson.notes,
+      activityType: lesson.activityType
+    } : null,
+    sources: selectedSources.map(source => source ? materialSourceProjection(source) : null)
+  })}`;
+}
+
+export function buildCopilotOpportunityDismissalFingerprint(input: {
+  opportunity: CopilotOpportunityV1;
+  context: CopilotContextProjectionV1;
+  udas: UdaRecord[];
+  library: LibraryStateV1;
+}): string {
+  return `aic07-dismiss:${fingerprint64({
+    context: {
+      schema: input.context.schema,
+      surface: input.context.surface,
+      className: input.context.className,
+      udaId: input.context.udaId,
+      lessonId: input.context.lessonId,
+      sourceId: input.context.sourceId,
+      planningProfileId: input.context.planningProfileId,
+      assessmentId: input.context.assessmentId
+    },
+    material: buildCopilotOpportunityMaterialFingerprint({
+      opportunity: input.opportunity,
+      udas: input.udas,
+      library: input.library
+    })
+  })}`;
+}
+
 function rank(input: Omit<CopilotOpportunityRankV1, 'finalScore'>): CopilotOpportunityRankV1 {
   const finalScore = clamp(
     0.30 * clamp(input.contextualRelevance)
@@ -182,9 +297,16 @@ function isDismissed(
   opportunity: CopilotOpportunityV1,
   input: ResolveCopilotOpportunitiesInput
 ): boolean {
-  const fingerprint = contextFingerprint(input);
+  const materialFingerprint = buildCopilotOpportunityDismissalFingerprint({
+    opportunity,
+    context: input.context,
+    udas: input.udas,
+    library: input.library
+  });
+  const legacyFingerprint = input.contextFingerprint ?? contextFingerprint(input);
   return (input.dismissed ?? []).some(item => (
-    item.opportunityId === opportunity.id && item.contextFingerprint === fingerprint
+    item.opportunityId === opportunity.id
+    && (item.contextFingerprint === materialFingerprint || item.contextFingerprint === legacyFingerprint)
   ));
 }
 
