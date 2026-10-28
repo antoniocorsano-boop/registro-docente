@@ -98,4 +98,24 @@ describe('AIC-07 mission Play handoff', () => {
     expect(bridge).toContain('activeMissionGrants.get(mission.missionId)');
     expect(bridge).toContain('isMissionExecutionGrantValid(');
   });
+
+  test('detaches mission-result attribution when source or teaching context drifts and keeps a second App-side guard', async () => {
+    const [composer, panel, app] = await Promise.all([
+      Bun.file(COMPOSER).text(),
+      Bun.file(PANEL).text(),
+      Bun.file(APP).text()
+    ]);
+    expect(composer).toContain('const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady');
+    expect(composer).toContain('generationMissionId={boundLaunchMissionId}');
+    expect(composer).toContain('missionId={readyMissionReview?.missionId ?? boundLaunchMissionId}');
+    expect(panel).toContain('generationMissionId?: string;');
+    expect(panel).toContain('if (generationMissionId)');
+    expect(panel).toContain('missionId: generationMissionId');
+    expect(app).toContain('canAcceptMissionProposalResult');
+    const handlerStart = app.indexOf('const handleMissionProposalReady');
+    expect(handlerStart).toBeGreaterThan(-1);
+    const handlerFragment = app.slice(handlerStart, handlerStart + 1800);
+    expect(handlerFragment).toContain('canAcceptMissionProposalResult');
+    expect(handlerFragment).toContain('copilotStateRef.current.missions.find');
+  });
 });
