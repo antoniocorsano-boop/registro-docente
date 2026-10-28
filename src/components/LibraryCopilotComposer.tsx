@@ -43,6 +43,10 @@ import {
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { CopilotMissionBridge } from './CopilotMissionBridge';
+import {
+  consumeStagedMissionReview,
+  type MissionReviewHandoffV1
+} from '../copilot/missionReviewHandoff';
 import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
 import type { MissionProposalReadyNotification } from '../services/libraryProposalService';
 import {
@@ -184,6 +188,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [isPrepareOpen, setIsPrepareOpen] = useState(false);
   const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
   const [missionLaunchSettledNonce, setMissionLaunchSettledNonce] = useState<number | null>(null);
+  const [readyMissionReview, setReadyMissionReview] = useState<MissionReviewHandoffV1 | null>(null);
   const resolutionEpochRef = useRef(0);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -348,13 +353,74 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     if (!openRequestNonce) return;
+    const stagedReview = consumeStagedMissionReview();
+    if (stagedReview) {
+      const reviewSourceId = stagedReview.contextRef.sourceId ?? stagedReview.sourceRefs[0] ?? '';
+      const reviewSource = library.sources.find(source => source.id === reviewSourceId) ?? null;
+      const reviewTeachingContext = resolveLibraryTeachingContext(udas, {
+        udaId: stagedReview.contextRef.udaId,
+        ...(stagedReview.contextRef.lessonId ? { lessonId: stagedReview.contextRef.lessonId } : {})
+      });
+
+      resolutionEpochRef.current += 1;
+      setResolution(null);
+      setIsReviewUnavailableOpen(false);
+      setGuidanceMessage(null);
+      setIsPrepareOpen(false);
+      setIsLinkConfirmationOpen(false);
+      setLinkError(null);
+      setLinkSuccess(null);
+      setReadyMissionReview(null);
+
+      if (
+        reviewSource
+        && reviewSource.status === 'ready'
+        && reviewSource.privacy === 'teacher-professional'
+        && reviewTeachingContext
+        && reviewTeachingContext.className === stagedReview.contextRef.className
+      ) {
+        setSelectedSourceId(reviewSourceId);
+        setContextOverride({
+          udaId: stagedReview.contextRef.udaId,
+          ...(stagedReview.contextRef.lessonId ? { lessonId: stagedReview.contextRef.lessonId } : {})
+        });
+        setMessage(stagedReview.goal);
+        setReadyMissionReview(stagedReview);
+        setErrorMessage(null);
+      } else {
+        setErrorMessage('Il risultato pronto non è più compatibile con il contesto professionale corrente.');
+      }
+    }
     setIsOpen(true);
   }, [openRequestNonce]);
+
+  useEffect(() => {
+    if (!readyMissionReview) return;
+    const expectedSourceId = readyMissionReview.contextRef.sourceId ?? readyMissionReview.sourceRefs[0] ?? '';
+    const stillBound = Boolean(
+      selectedSource
+      && selectedSource.id === expectedSourceId
+      && selectedSource.status === 'ready'
+      && selectedSource.privacy === 'teacher-professional'
+      && resolvedTeachingContext
+      && resolvedTeachingContext.udaId === readyMissionReview.contextRef.udaId
+      && resolvedTeachingContext.className === readyMissionReview.contextRef.className
+      && (resolvedTeachingContext.lessonId ?? '') === (readyMissionReview.contextRef.lessonId ?? '')
+    );
+    if (!stillBound) setReadyMissionReview(null);
+  }, [
+    readyMissionReview,
+    selectedSourceId,
+    selectedSource?.status,
+    selectedSource?.privacy,
+    teachingContextFingerprint
+  ]);
 
   useEffect(() => {
     if (!launchRequest) return;
 
     setMissionLaunchSettledNonce(null);
+    setReadyMissionReview(null);
     resolutionEpochRef.current += 1;
     setContextOverride('auto');
     setIsOpen(true);
@@ -1203,21 +1269,28 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
         )}
 
-        {isPrepareOpen && selectedSource && resolvedTeachingContext && proposalUda && (
+        {(isPrepareOpen || readyMissionReview) && selectedSource && resolvedTeachingContext && proposalUda && (
           <div
             data-testid="library-copilot-prepare-disclosure"
             className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-bold text-slate-100">Preparazione assistita</div>
+                <div className="text-sm font-bold text-slate-100">
+                  {readyMissionReview ? 'Risultato dell’incarico' : 'Preparazione assistita'}
+                </div>
                 <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                  La preparazione compare solo dopo una richiesta esplicita. L’invio remoto resta bloccato fino al consenso previsto dal flusso governato.
+                  {readyMissionReview
+                    ? 'Risultato già preparato e salvato: puoi controllarlo, modificarlo o adottarlo senza avviare una nuova generazione.'
+                    : 'La preparazione compare solo dopo una richiesta esplicita. L’invio remoto resta bloccato fino al consenso previsto dal flusso governato.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsPrepareOpen(false)}
+                onClick={() => {
+                  setIsPrepareOpen(false);
+                  setReadyMissionReview(null);
+                }}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
               >
                 Chiudi
@@ -1233,7 +1306,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}
               onAdoptProposalToUda={onAdoptProposalToUda}
-              missionId={launchRequest?.mission?.missionId}
+              initialResult={readyMissionReview?.result ?? null}
+              missionId={readyMissionReview?.missionId ?? launchRequest?.mission?.missionId}
               onMissionProposalReady={onMissionProposalReady}
               onMissionOutcome={onMissionOutcome}
             />

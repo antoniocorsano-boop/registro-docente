@@ -22,6 +22,7 @@ import {
   type AiBudgetProfile
 } from '../copilot/aiBudgetGovernor';
 import { LibraryProposalServiceError } from '../services/libraryProposalErrors';
+import type { CopilotMissionV1 } from '../copilot/mission';
 import { classifyTeachingProposalOutcome } from '../copilot/missionOutcome';
 import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
 import {
@@ -49,6 +50,7 @@ interface LibraryProposalPanelProps {
   onAdoptProposalToUda: (
     input: TeachingProposalOutcomeMutationInput
   ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
+  initialResult?: CopilotMissionV1['result'] | null;
   missionId?: string;
   onMissionProposalReady?: MissionProposalReadyCallback;
   onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
@@ -89,6 +91,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   onUpdate,
   onAddSource,
   onAdoptProposalToUda,
+  initialResult = null,
   missionId,
   onMissionProposalReady,
   onMissionOutcome
@@ -100,7 +103,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   const [providerMetadataAttempt, setProviderMetadataAttempt] = useState(0);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [proposal, setProposal] = useState<TeachingProposalV1 | null>(null);
+  const [proposal, setProposal] = useState<TeachingProposalV1 | null>(initialResult?.proposal ?? null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState<TeachingProposalContent | null>(null);
   const [isAdopting, setIsAdopting] = useState(false);
@@ -121,7 +124,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setRemoteActions([]);
     setIsRemoteLoading(false);
     setIsGenerating(false);
-    setProposal(null);
+    setProposal(initialResult?.proposal ?? null);
     setIsEditing(false);
     setEditedContent(null);
     setIsAdopting(false);
@@ -129,7 +132,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setBudgetEscalation(null);
     setActivityBudgetAuthorization(null);
     setError(null);
-  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId]);
+  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId, initialResult]);
 
   useEffect(() => {
     let cancelled = false;

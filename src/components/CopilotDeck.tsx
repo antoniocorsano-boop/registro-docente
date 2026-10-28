@@ -11,6 +11,7 @@ import {
   X
 } from 'lucide-react';
 import type { CopilotMissionPreviewV1, CopilotMissionV1, MissionResumeDecision } from '../copilot/mission';
+import { stageMissionReview } from '../copilot/missionReviewHandoff';
 import type {
   CopilotOpportunityResolution,
   CopilotOpportunityScope,
@@ -202,7 +203,20 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                     <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Incarico</div>
                     <div className="mt-1 text-sm font-semibold text-slate-100">{mission.goal}</div>
                     {mission.status === 'ready' ? (
-                      <p className="mt-1 text-xs text-emerald-300">Pronta da controllare</p>
+                      <>
+                        <p className="mt-1 text-xs text-emerald-300">Pronta da controllare</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            stageMissionReview(mission);
+                            setIsOpen(false);
+                            onOpenConversation();
+                          }}
+                          className="mt-2 min-h-[44px] rounded-lg border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-100"
+                        >
+                          Controlla risultato
+                        </button>
+                      </>
                     ) : mission.status === 'suspended' ? (
                       <>
                         <p className="mt-1 text-xs text-slate-400">Contesto invariato · il lavoro può essere ripreso.</p>
