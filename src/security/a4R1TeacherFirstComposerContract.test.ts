@@ -31,6 +31,22 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('Dimmi cosa vuoi ottenere');
   });
 
+  test('an explicit teacher-first PREPARE choice opens the governed disclosure without reclassifying the intent', async () => {
+    const source = await composerSource();
+    const handlerStart = source.indexOf('const handleTeacherFirstProceed = async () =>');
+    const handlerEnd = source.indexOf('const handleResolve =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+    const prepareStart = handler.indexOf("if (teacherFirstResolution.goalKind === 'prepare')");
+    const nextResolution = handler.indexOf('const nextResolution', prepareStart);
+    const prepareBranch = handler.slice(prepareStart, nextResolution);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(prepareStart).toBeGreaterThanOrEqual(0);
+    expect(prepareBranch).toContain('setIsPrepareOpen(true)');
+    expect(prepareBranch).not.toContain('discoverLibraryCopilotIntent');
+  });
+
   test('existing governed agent and mission boundaries remain present behind the new entry flow', async () => {
     const source = await composerSource();
 
