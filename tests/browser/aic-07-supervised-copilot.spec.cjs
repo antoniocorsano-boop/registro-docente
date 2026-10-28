@@ -268,10 +268,39 @@ async function closeComposer(page) {
   }
 }
 
+async function openTeacherFirstPrepareForSource(page) {
+  const trigger = page.getByTestId('library-copilot-trigger');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  const deck = page.getByTestId('copilot-deck');
+  await expect(deck).toBeVisible();
+  await deck.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
+
+  const composer = page.getByTestId('library-copilot-composer');
+  await expect(composer).toBeVisible();
+  await composer.getByRole('button', { name: 'Preparare un’attività', exact: true }).click();
+
+  const classChoice = composer.getByTestId('teacher-first-class-choice');
+  await expect(classChoice).toBeVisible();
+  await classChoice.getByRole('button', { name: CLASS_NAME, exact: true }).click();
+
+  const contextSelect = composer.getByTestId('library-copilot-context-select');
+  await expect(contextSelect).toBeVisible();
+  const udaOption = contextSelect.locator('option').filter({ hasText: UDA_TITLE }).first();
+  const udaValue = await udaOption.getAttribute('value');
+  expect(udaValue).toBeTruthy();
+  await contextSelect.selectOption(udaValue);
+
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect).toBeVisible();
+  await sourceSelect.selectOption({ label: SOURCE_TITLE });
+  await expect(composer.getByTestId('teacher-first-preview')).toBeVisible();
+  return composer;
+}
+
 async function classifySourceProfessional(page) {
-  const composer = await launchComposerFromSource(page);
-  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const composer = await openTeacherFirstPrepareForSource(page);
+  await composer.getByTestId('teacher-first-preview').getByRole('button', { name: '▶ Continua', exact: true }).click();
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
@@ -290,12 +319,7 @@ async function setupOpportunityFixture(page, calls, { withMemory = false } = {})
   await classifySourceProfessional(page);
 
   if (withMemory) {
-    const trigger = page.getByTestId('library-copilot-trigger');
-    await trigger.click();
-    await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
-    const composer = page.getByTestId('library-copilot-composer');
-    await expect(composer).toBeVisible();
-    await composer.getByLabel('Fonte della Biblioteca').selectOption({ label: SOURCE_TITLE });
+    const composer = await openTeacherFirstPrepareForSource(page);
     const panel = composer.getByTestId('copilot-memory-panel');
     if (!(await panel.evaluate(element => element.open === true))) {
       await composer.getByTestId('copilot-memory-trigger').click();
