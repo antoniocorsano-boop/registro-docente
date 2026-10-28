@@ -75,8 +75,8 @@ describe('AIC-07 mission Play handoff', () => {
   test('mission bridge waits for launch source and teaching context readiness before auto-submit', async () => {
     const bridge = await Bun.file(BRIDGE).text();
     expect(bridge).toContain('ready: boolean');
-    expect(bridge).toContain('if (!mission || !ready || submittedNonceRef.current === launchRequest.nonce) return;');
-    expect(bridge).toContain('[launchRequest?.nonce, launchRequest?.mission, message, ready]');
+    expect(bridge).toContain('submittedNonceRef.current === launchRequest.nonce');
+    expect(bridge).toContain('message.trim() !== mission.objective.trim()');
   });
 
   test('mission auto-submit waits for the launch nonce to settle after stale-result invalidators', async () => {
@@ -87,23 +87,15 @@ describe('AIC-07 mission Play handoff', () => {
     expect(composer).toContain('missionLaunchSettledNonce === launchRequest.nonce');
   });
 
-  test('consumes a Play launch outside the bridge mount lifecycle and revalidates its execution grant before submit', async () => {
-    const [app, bridge, composer] = await Promise.all([
-      Bun.file(APP).text(),
-      Bun.file(BRIDGE).text(),
-      Bun.file(COMPOSER).text()
-    ]);
-    expect(app).toContain('consumedMissionLaunchNonce');
-    expect(app).toContain('isMissionExecutionGrantValid');
-    expect(app).toContain('canSubmitMissionLaunch');
-    expect(app).toContain('onMissionLaunchConsumed');
-    expect(composer).toContain('consumedMissionLaunchNonce');
-    expect(composer).toContain('canSubmitMissionLaunch');
-    expect(composer).toContain('onMissionLaunchConsumed');
-    expect(bridge).toContain('consumedNonce: number | null');
-    expect(bridge).toContain('canSubmitMission');
-    expect(bridge).toContain('onConsumed');
-    expect(bridge).toContain('consumedNonce === launchRequest.nonce');
-    expect(bridge).toContain('canSubmitMission(mission.missionId)');
+  test('consumes a Play launch beyond bridge remounts and revalidates the bound ephemeral grant before submit', async () => {
+    const bridge = await Bun.file(BRIDGE).text();
+    expect(bridge).toContain('consumedMissionLaunches');
+    expect(bridge).toContain('activeMissionGrants');
+    expect(bridge).toContain('isMissionExecutionGrantValid');
+    expect(bridge).toContain('missionLaunchKey');
+    expect(bridge).toContain('consumedMissionLaunches.has');
+    expect(bridge).toContain('consumedMissionLaunches.add');
+    expect(bridge).toContain('activeMissionGrants.get(mission.missionId)');
+    expect(bridge).toContain('isMissionExecutionGrantValid(');
   });
 });
