@@ -47,6 +47,16 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(prepareBranch).not.toContain('discoverLibraryCopilotIntent');
   });
 
+  test('existing source/context launch keeps known bindings instead of restarting generic teacher-first resolution', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const hasBoundLaunchContext');
+    expect(source).toContain('!isBoundMissionFlow && !hasBoundLaunchContext');
+    expect(source).toContain('data-testid="teacher-first-existing-bindings"');
+    expect(source).toContain('Materiale già disponibile');
+    expect(source).toContain('Contesto già disponibile');
+  });
+
   test('existing governed agent and mission boundaries remain present behind the new entry flow', async () => {
     const source = await composerSource();
 
