@@ -54,6 +54,7 @@ interface LibraryProposalPanelProps {
   initialResult?: CopilotMissionV1['result'] | null;
   missionId?: string;
   generationMissionId?: string;
+  generationContextFingerprint?: string;
   onMissionProposalReady?: MissionProposalReadyCallback;
   onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
 }
@@ -96,6 +97,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   initialResult = null,
   missionId,
   generationMissionId,
+  generationContextFingerprint,
   onMissionProposalReady,
   onMissionOutcome
 }) => {
@@ -135,7 +137,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setBudgetEscalation(null);
     setActivityBudgetAuthorization(null);
     setError(null);
-  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId, initialResult]);
+  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId, initialResult, generationContextFingerprint]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +239,10 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     adoptionLessonIdRef.current = null;
 
     if (generationMissionId) {
+      if (!generationContextFingerprint) {
+        setError('Il contesto materiale dell’incarico non è più disponibile: riprendi esplicitamente la missione.');
+        return;
+      }
       try {
         assertMissionRuntimeExecutionAuthorized(generationMissionId, {
           capability: 'prepare',
@@ -244,7 +250,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
           udaId: teachingContext.udaId,
           ...(teachingContext.lessonId ? { lessonId: teachingContext.lessonId } : {}),
           sourceIds: [source.id]
-        });
+        }, generationContextFingerprint);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : 'Autorizzazione dell’incarico non più valida.');
         return;

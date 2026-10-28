@@ -57,10 +57,10 @@ describe('AIC-07 mission grant replay behavior', () => {
     const allowedStep = {
       capability: 'prepare', className: '2C', udaId: 'uda-1', lessonId: 'lesson-1', sourceIds: ['source-1']
     };
-    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, allowedStep, '2026-10-28T12:14:59.000Z')).not.toThrow();
-    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, allowedStep, '2026-10-28T12:15:01.000Z')).toThrow();
-    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, { ...allowedStep, capability: 'review' }, '2026-10-28T12:05:00.000Z')).toThrow();
-    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, { ...allowedStep, className: '2A' }, '2026-10-28T12:05:00.000Z')).toThrow();
+    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, allowedStep, mission.contextFingerprint, '2026-10-28T12:14:59.000Z')).not.toThrow();
+    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, allowedStep, mission.contextFingerprint, '2026-10-28T12:15:01.000Z')).toThrow();
+    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, { ...allowedStep, capability: 'review' }, mission.contextFingerprint, '2026-10-28T12:05:00.000Z')).toThrow();
+    expect(() => bridge.assertMissionRuntimeExecutionAuthorized(mission.id, { ...allowedStep, className: '2A' }, mission.contextFingerprint, '2026-10-28T12:05:00.000Z')).toThrow();
   });
 
   test('runtime authorization rejects material drift that happens after Play and before proposal generation', async () => {

@@ -1791,6 +1791,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               planning={planning}
               professionalMemory={professionalMemory}
               aiBudgetProfile={settings.aiBudgetProfile}
+              copilotProactivity={settings.copilotProactivity}
               memoryError={professionalMemoryError}
               currentClassName={currentClass?.name ?? null}
               launchRequest={launchRequest}

@@ -47,6 +47,7 @@ export function clearMissionRuntime(missionId: string): void {
 export function assertMissionRuntimeExecutionAuthorized(
   missionId: string,
   step: CopilotMissionStepV1,
+  currentContextFingerprint: string,
   now = new Date().toISOString()
 ): void {
   const activeGrant = activeMissionGrants.get(missionId);
@@ -56,11 +57,11 @@ export function assertMissionRuntimeExecutionAuthorized(
   if (!isMissionExecutionGrantValid(
     activeGrant.grant,
     activeGrant.mission,
-    activeGrant.mission.contextFingerprint,
+    currentContextFingerprint,
     now
   )) {
     activeMissionGrants.delete(missionId);
-    throw new Error('Autorizzazione dell’incarico scaduta: riprendi esplicitamente la missione.');
+    throw new Error('Autorizzazione dell’incarico scaduta o contesto cambiato: riprendi esplicitamente la missione.');
   }
   assertMissionStepWithinScope(activeGrant.mission, step);
 }

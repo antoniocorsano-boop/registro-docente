@@ -43,6 +43,8 @@ import {
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
+import { buildMissionContextFingerprint } from '../copilot/mission';
+import type { CopilotProactivityProfile } from '../copilot/proactivity';
 import {
   consumeStagedMissionReview,
   type MissionReviewHandoffV1
@@ -65,6 +67,7 @@ interface LibraryCopilotComposerProps {
   planning: PlanningStateV1;
   professionalMemory: ProfessionalMemoryStateV1;
   aiBudgetProfile?: AiBudgetProfile;
+  copilotProactivity?: CopilotProactivityProfile;
   memoryError?: string | null;
   currentClassName?: string | null;
   launchRequest?: LibraryCopilotLaunchRequest | null;
@@ -149,6 +152,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   planning,
   professionalMemory,
   aiBudgetProfile,
+  copilotProactivity,
   memoryError = null,
   currentClassName = null,
   launchRequest = null,
@@ -352,15 +356,45 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady
     ? launchRequest.mission.missionId
     : undefined;
+  const generationContextFingerprint = useMemo(() => {
+    if (!boundLaunchMissionId || !selectedSource || !resolvedTeachingContext || !proposalUda) return null;
+    const missionProjection = buildCopilotContextProjection({
+      surface: 'library',
+      className: resolvedTeachingContext.className,
+      udaId: resolvedTeachingContext.udaId,
+      lessonId: resolvedTeachingContext.lessonId,
+      sourceId: selectedSource.id
+    });
+    return buildMissionContextFingerprint({
+      context: missionProjection,
+      uda: proposalUda,
+      sources: [selectedSource],
+      planningProfileId: missionProjection.planningProfileId,
+      missionSettings: {
+        aiBudgetProfile: aiBudgetProfile ?? 'balanced',
+        copilotProactivity: copilotProactivity ?? 'balanced'
+      }
+    });
+  }, [
+    boundLaunchMissionId,
+    selectedSource,
+    resolvedTeachingContext,
+    proposalUda,
+    aiBudgetProfile,
+    copilotProactivity
+  ]);
   const assertBoundMissionPrepareAuthorized = () => {
-    if (!boundLaunchMissionId || !selectedSource || !resolvedTeachingContext) return;
+    if (!boundLaunchMissionId) return;
+    if (!selectedSource || !resolvedTeachingContext || !generationContextFingerprint) {
+      throw new Error('Il contesto materiale dell’incarico non è più disponibile: riprendi esplicitamente la missione.');
+    }
     assertMissionRuntimeExecutionAuthorized(boundLaunchMissionId, {
       capability: 'prepare',
       className: resolvedTeachingContext.className,
       udaId: resolvedTeachingContext.udaId,
       ...(resolvedTeachingContext.lessonId ? { lessonId: resolvedTeachingContext.lessonId } : {}),
       sourceIds: [selectedSource.id]
-    });
+    }, generationContextFingerprint);
   };
   const interruptBoundMission = () => {
     if (!boundLaunchMissionId) return;
@@ -1343,6 +1377,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               initialResult={readyMissionReview?.result ?? null}
               missionId={readyMissionReview?.missionId ?? boundLaunchMissionId}
               generationMissionId={boundLaunchMissionId}
+              {...(boundLaunchMissionId && generationContextFingerprint ? { generationContextFingerprint } : {})}
               onMissionProposalReady={onMissionProposalReady}
               onMissionOutcome={onMissionOutcome}
             />
