@@ -62,6 +62,8 @@ import {
   type LibraryTeachingContext
 } from '../library/teachingContext';
 
+type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
+
 interface LibraryCopilotComposerProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
@@ -91,6 +93,8 @@ interface LibraryCopilotComposerProps {
   onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
   isPending?: boolean;
   showStandaloneTrigger?: boolean;
+  surfaceMode: CopilotSurfaceMode;
+  onSurfaceModeChange: (mode: CopilotSurfaceMode) => void;
 }
 
 type CaptureMode = 'text' | 'web' | 'file';
@@ -174,9 +178,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   onMissionInterrupted,
   onMissionOutcome,
   isPending = false,
-  showStandaloneTrigger = true
+  showStandaloneTrigger = true,
+  surfaceMode,
+  onSurfaceModeChange
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const isOpen = surfaceMode === 'compose';
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [message, setMessage] = useState('');
   const [teacherFirstResolution, setTeacherFirstResolution] = useState<TeacherFirstRequestResolution | null>(null);
@@ -470,7 +476,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         setErrorMessage('Il risultato pronto non è più compatibile con il contesto professionale corrente.');
       }
     }
-    setIsOpen(true);
+    onSurfaceModeChange('compose');
   }, [openRequestNonce]);
 
   useEffect(() => {
@@ -503,7 +509,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resetTeacherFirst();
     resolutionEpochRef.current += 1;
     setContextOverride('auto');
-    setIsOpen(true);
+    onSurfaceModeChange('compose');
     setResolution(null);
     setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
@@ -1024,7 +1030,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       <button
         type="button"
         data-testid="library-copilot-trigger"
-        onClick={() => setIsOpen(true)}
+        onClick={() => onSurfaceModeChange('compose')}
         className="fixed right-4 bottom-36 md:bottom-20 z-[70] min-h-[44px] rounded-full border border-cyan-400/40 bg-slate-950/95 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-2xl backdrop-blur hover:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-400"
         aria-label="Apri Copilota contestuale"
       >
@@ -1058,7 +1064,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             setIsPrepareOpen(false);
             resetTeacherFirst();
             setContextOverride('auto');
-            setIsOpen(false);
+            onSurfaceModeChange('closed');
           }}
           className="min-h-[44px] min-w-[44px] rounded-xl text-slate-400 hover:bg-slate-800 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"
           aria-label="Chiudi Copilota"
