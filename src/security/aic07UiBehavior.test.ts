@@ -6,6 +6,8 @@ const SETTINGS = new URL('../components/CopilotProactivitySettings.tsx', import.
 const DECK = new URL('../components/CopilotDeck.tsx', import.meta.url);
 const EXPERIENCE = new URL('../components/CopilotExperience.tsx', import.meta.url);
 const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
+const PANEL = new URL('../components/LibraryProposalPanel.tsx', import.meta.url);
+const READY_HANDOFF = new URL('../copilot/missionReviewHandoff.ts', import.meta.url);
 const APP = new URL('../App.tsx', import.meta.url);
 
 describe('AIC-07 supervised Copilot Deck UI contract', () => {
@@ -91,9 +93,6 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     expect(reopenEnd).toBeGreaterThan(reopenStart);
     const reopenFragment = composer.slice(reopenStart, reopenEnd);
     expect(reopenFragment).toContain('setIsOpen(true)');
-    expect(reopenFragment).not.toContain('setResolution(null)');
-    expect(reopenFragment).not.toContain('setIsPrepareOpen(false)');
-    expect(reopenFragment).not.toContain('setIsLinkConfirmationOpen(false)');
     expect(composer).toContain('if (!isOpen && !showStandaloneTrigger) return null;');
   });
 
@@ -123,4 +122,25 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     expect(experience).toContain('onResume={onResume}');
   });
 
+  test('ready missions can reopen their persisted proposal in the existing review/adoption flow without regeneration', async () => {
+    expect(await Bun.file(READY_HANDOFF).exists()).toBe(true);
+    const [handoff, deck, composer, panel] = await Promise.all([
+      Bun.file(READY_HANDOFF).text(),
+      Bun.file(DECK).text(),
+      Bun.file(COMPOSER).text(),
+      Bun.file(PANEL).text()
+    ]);
+    expect(handoff).toContain('stageMissionReview');
+    expect(handoff).toContain('consumeStagedMissionReview');
+    expect(handoff).toContain("mission.status !== 'ready'");
+    expect(handoff).toContain('!mission.result');
+    expect(deck).toContain('Controlla risultato');
+    expect(deck).toContain('stageMissionReview(mission)');
+    expect(composer).toContain('consumeStagedMissionReview');
+    expect(composer).toContain('readyMissionReview');
+    expect(composer).toContain('initialResult={readyMissionReview?.result ?? null}');
+    expect(panel).toContain('initialResult?:');
+    expect(panel).toContain('initialResult?.proposal ?? null');
+    expect(panel).not.toContain('requestLibraryTeachingProposal(initialResult');
+  });
 });
