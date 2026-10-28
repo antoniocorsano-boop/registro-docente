@@ -250,6 +250,107 @@ function buildPrepareOpportunity(input: {
   };
 }
 
+function revalidateDeferredOpportunity(
+  deferred: CopilotDeferredOpportunityV1,
+  input: ResolveCopilotOpportunitiesInput,
+  sources: LibrarySource[],
+  preference: (kind: CopilotOpportunityKind) => number
+): CopilotOpportunityV1 | null {
+  const opportunity = deferred.opportunity;
+  const uda = input.udas.find(candidate => (
+    candidate.id === opportunity.contextRef.udaId
+    && candidate.className === opportunity.contextRef.className
+  ));
+  if (!uda) return null;
+
+  const lessonId = opportunity.contextRef.lessonId;
+  const lesson = lessonId
+    ? (uda.lessons ?? []).find(candidate => candidate.id === lessonId)
+    : undefined;
+  if (lessonId && !lesson) return null;
+
+  const requiredSourceIds = opportunity.proposedMission.sourceRefs;
+  if (requiredSourceIds.length === 0) return null;
+  if (requiredSourceIds.some(sourceId => !sources.some(source => source.id === sourceId))) return null;
+
+  const evidenceSourceId = opportunity.contextRef.sourceId ?? requiredSourceIds[0];
+  const source = sources.find(candidate => candidate.id === evidenceSourceId);
+  if (!source) return null;
+
+  const targetType = lessonId ? 'lesson' : 'uda';
+  const targetId = lessonId ?? uda.id;
+  const relevance = resolveLibraryRelevanceTarget({
+    source,
+    udas: input.udas,
+    targetType,
+    targetId
+  });
+  if (!relevance || !relevance.signals.some(signal => (
+    signal === 'SOURCE_TITLE_MATCH' || signal === 'SOURCE_CONTENT_MATCH'
+  ))) return null;
+
+  if (opportunity.validUntil) {
+    const validUntil = Date.parse(opportunity.validUntil);
+    const now = Date.parse(input.now);
+    if (Number.isFinite(validUntil) && Number.isFinite(now) && now > validUntil) return null;
+  }
+
+  const isCurrentContext = input.context.udaId === uda.id
+    && (!lessonId || input.context.lessonId === lessonId);
+  const isToday = Boolean(lesson && lesson.date === input.today);
+  const reason = isToday
+    ? `L’avevi messa da parte e la lezione “${lesson!.topic}” è prevista oggi; la fonte “${source.title}” è ancora pertinente.`
+    : isCurrentContext
+      ? `L’avevi messa da parte e il relativo contesto è di nuovo attivo; la fonte “${source.title}” è ancora pertinente.`
+      : `L’avevi messa da parte; il contesto e la fonte “${source.title}” sono ancora disponibili e pertinenti.`;
+
+  const refreshedEvidence: CopilotOpportunityEvidenceV1[] = [
+    {
+      kind: 'deferred',
+      reason,
+      ref: opportunity.id
+    },
+    {
+      kind: 'source-relevance',
+      reason: `Pertinenza locale verificata di nuovo per “${source.title}”.`,
+      ref: source.id
+    }
+  ];
+  if (isToday && lessonId) {
+    refreshedEvidence.push({
+      kind: 'today',
+      reason: `La lezione “${lesson!.topic}” è prevista oggi.`,
+      ref: lessonId
+    });
+  } else if (isCurrentContext) {
+    refreshedEvidence.push({
+      kind: 'current-context',
+      reason: 'Il contesto professionale collegato è attualmente attivo.',
+      ref: lessonId ?? uda.id
+    });
+  }
+
+  return {
+    ...opportunity,
+    scope: 'later',
+    whyNow: reason,
+    evidence: refreshedEvidence,
+    rank: rank({
+      ...opportunity.rank,
+      contextualRelevance: isCurrentContext
+        ? Math.min(Math.max(opportunity.rank.contextualRelevance, 60), 80)
+        : Math.min(opportunity.rank.contextualRelevance, 60),
+      temporalUrgency: isToday
+        ? Math.max(opportunity.rank.temporalUrgency, 90)
+        : Math.min(opportunity.rank.temporalUrgency, 60),
+      expectedUtility: clamp(70 + Math.min(20, relevance.score / 5)),
+      teacherPreference: clamp(preference(opportunity.kind)),
+      noisePenalty: 0
+    }),
+    createdAt: input.now
+  };
+}
+
 export function resolveCopilotOpportunities(input: ResolveCopilotOpportunitiesInput): CopilotOpportunityResolution {
   const profile = normalizeCopilotProactivity(input.profile);
   const policy = COPILOT_PROACTIVITY_POLICIES[profile];
@@ -313,27 +414,8 @@ export function resolveCopilotOpportunities(input: ResolveCopilotOpportunitiesIn
   }
 
   for (const deferred of input.deferred ?? []) {
-    const opportunity = deferred.opportunity;
-    opportunities.push({
-      ...opportunity,
-      scope: 'later',
-      whyNow: `L’avevi messa da parte e il relativo contesto è di nuovo disponibile.`,
-      evidence: [
-        {
-          kind: 'deferred',
-          reason: `L’avevi messa da parte e il relativo contesto è di nuovo disponibile.`,
-          ref: opportunity.id
-        },
-        ...opportunity.evidence.filter(item => item.kind !== 'deferred')
-      ],
-      rank: rank({
-        ...opportunity.rank,
-        contextualRelevance: Math.min(opportunity.rank.contextualRelevance, 60),
-        temporalUrgency: Math.max(opportunity.rank.temporalUrgency, 50),
-        teacherPreference: clamp(preference(opportunity.kind)),
-        noisePenalty: 0
-      })
-    });
+    const opportunity = revalidateDeferredOpportunity(deferred, input, sources, preference);
+    if (opportunity) opportunities.push(opportunity);
   }
 
   const deferredIds = new Set((input.deferred ?? []).map(item => item.opportunity.id));
