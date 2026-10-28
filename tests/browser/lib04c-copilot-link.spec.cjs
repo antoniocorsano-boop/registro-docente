@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -146,19 +147,15 @@ async function openComposer(page) {
 }
 
 async function addTextSourceFromComposer(composer, title) {
-  const addSource = composer.getByText('Aggiungi una nuova fonte', { exact: true });
-  if (!(await addSource.isVisible().catch(() => false))) {
-    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
-  }
-  await expect(addSource).toBeVisible();
-  await addSource.click();
+  await revealMaterialSourceSelect(composer);
+  await composer.getByText('Aggiungi una nuova fonte', { exact: true }).click();
   await composer.getByRole('button', { name: 'Testo/idea', exact: true }).click();
   await composer.getByPlaceholder('Titolo della fonte').fill(title);
   await composer.getByPlaceholder('Incolla un testo, un appunto o descrivi un’idea…').fill(
     `Contenuto sintetico locale per ${title}: leve, meccanismi e attività didattica.`
   );
   await composer.getByRole('button', { name: 'Salva nella Biblioteca', exact: true }).click();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  const sourceSelect = await revealMaterialSourceSelect(composer);
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 }
 

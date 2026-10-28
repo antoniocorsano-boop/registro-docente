@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -131,7 +132,7 @@ async function openComposerWithoutSource(page) {
     await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   }
   await expect(composer).toBeVisible();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  const sourceSelect = await revealMaterialSourceSelect(composer);
   await sourceSelect.selectOption('');
   await expect(sourceSelect).toHaveValue('');
   return composer;
@@ -145,11 +146,11 @@ async function closeComposer(page) {
   }
 }
 
-function assertMinimizedSourceLessRequest(body, expectedSurface) {
+function assertMinimizedGovernedRequest(body, expectedSurface) {
   expect(body.schema).toBe('registro.agent-routing-request/v1');
   expect(body.explicitTeacherSubmission).toBe(true);
   expect(body.context.surface).toBe(expectedSurface);
-  expect(body.context.hasSelectedSource).toBe(false);
+  expect(body.context.hasSelectedSource).toBe(true);
   expect(Object.keys(body.context).sort()).toEqual([
     'hasCurrentClass',
     'hasCurrentUda',
@@ -240,18 +241,41 @@ async function installIntentRoutes(page, intentRequests, options = {}) {
   };
 }
 
-async function submitSourceLessGoal(page, intentRequests, expectedSurface, message = SOURCELESS_GOAL) {
+async function stageTeacherFirstContextAndSource(page, intentRequests, message = SOURCELESS_GOAL) {
   const composer = await openComposerWithoutSource(page);
   const previousCount = intentRequests.length;
   await composer.getByLabel('Che cosa vuoi farne?').fill(message);
   const submit = composer.getByRole('button', { name: 'Mostra le possibilità', exact: true });
   await expect(submit).toBeEnabled();
   await submit.click();
+  await page.waitForTimeout(150);
+  expect(intentRequests).toHaveLength(previousCount);
+
+  const classChoice = composer.getByTestId('teacher-first-class-choice');
+  await expect(classChoice).toBeVisible();
+  await classChoice.getByRole('button', { name: CLASS_NAME, exact: true }).click();
+
+  const contextSelect = composer.getByLabel('Contesto didattico');
+  await expect(contextSelect).toBeVisible();
+  await contextSelect.selectOption({ label: `${CLASS_NAME} · UDA · ${UDA_TITLE}` });
+
+  const sourceSelect = await revealMaterialSourceSelect(composer);
+  await sourceSelect.selectOption({ label: SOURCE_TITLE });
+  await page.waitForTimeout(150);
+  expect(intentRequests).toHaveLength(previousCount);
+  await expect(composer.getByTestId('library-copilot-agent-guidance')).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  return { composer, previousCount };
+}
+
+async function submitGovernedGoal(composer, intentRequests, expectedSurface) {
+  const previousCount = intentRequests.length;
+  const submit = composer.getByRole('button', { name: 'Mostra le possibilità', exact: true });
+  await expect(submit).toBeEnabled();
+  await submit.click();
   await expect.poll(() => intentRequests.length).toBe(previousCount + 1);
   const body = intentRequests.at(-1);
-  assertMinimizedSourceLessRequest(body, expectedSurface);
-  await expect(composer.getByTestId('library-copilot-agent-guidance')).toContainText('seleziona o aggiungi una fonte');
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  assertMinimizedGovernedRequest(body, expectedSurface);
   return { composer, body };
 }
 
@@ -263,7 +287,7 @@ async function bootstrapProfessionalFixture(page) {
   await addSyntheticSource(page);
 }
 
-test('AIC-04 starts from the current teacher surface without a source and asks for one only when required — desktop 1280x900', async ({ page }) => {
+test('AIC-04 frames locally before projecting an explicitly bound teacher request across surfaces — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const guards = installConsoleGuards(page);
   const intentRequests = [];
@@ -271,31 +295,26 @@ test('AIC-04 starts from the current teacher surface without a source and asks f
   await bootstrapProfessionalFixture(page);
 
   await openClassDashboard(page);
-  const first = await submitSourceLessGoal(page, intentRequests, 'class-dashboard');
+  const firstStaged = await stageTeacherFirstContextAndSource(page, intentRequests);
+  expect(intentRequests).toHaveLength(0);
+  const first = await submitGovernedGoal(firstStaged.composer, intentRequests, 'class-dashboard');
   expect(first.body.context.hasCurrentClass).toBe(true);
-
-  const beforeSelection = intentRequests.length;
-  await first.composer.getByLabel('Fonte della Biblioteca').selectOption({ label: SOURCE_TITLE });
-  await page.waitForTimeout(250);
-  expect(intentRequests).toHaveLength(beforeSelection);
-  await expect(first.composer.getByTestId('library-copilot-agent-guidance')).toHaveCount(0);
-
-  await first.composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect.poll(() => intentRequests.length).toBe(beforeSelection + 1);
-  expect(intentRequests.at(-1).context.hasSelectedSource).toBe(true);
   await expect(first.composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
   await closeComposer(page);
 
   await openDrawerItem(page, 'Programmazione didattica');
-  const planning = await submitSourceLessGoal(page, intentRequests, 'planning', 'Prepara dal contesto di programmazione');
+  const planningStaged = await stageTeacherFirstContextAndSource(page, intentRequests, 'Prepara dal contesto di programmazione');
+  const planning = await submitGovernedGoal(planningStaged.composer, intentRequests, 'planning');
   await closeComposer(page);
 
   await openDrawerItem(page, 'Verifiche online');
-  const tests = await submitSourceLessGoal(page, intentRequests, 'other-teacher-surface', 'Prepara dal contesto delle verifiche online');
+  const testsStaged = await stageTeacherFirstContextAndSource(page, intentRequests, 'Prepara dal contesto delle verifiche online');
+  const tests = await submitGovernedGoal(testsStaged.composer, intentRequests, 'other-teacher-surface');
   await closeComposer(page);
 
   await page.getByRole('button', { name: 'Valutazioni', exact: true }).click();
-  const evaluations = await submitSourceLessGoal(page, intentRequests, 'other-teacher-surface', 'Prepara dal contesto delle valutazioni');
+  const evaluationsStaged = await stageTeacherFirstContextAndSource(page, intentRequests, 'Prepara dal contesto delle valutazioni');
+  const evaluations = await submitGovernedGoal(evaluationsStaged.composer, intentRequests, 'other-teacher-surface');
 
   const composerBox = await evaluations.composer.boundingBox();
   expect(composerBox).not.toBeNull();
@@ -308,8 +327,8 @@ test('AIC-04 starts from the current teacher surface without a source and asks f
     viewport: { width: 1280, height: 900 },
     surfaces: intentRequests.map(request => request.context.surface),
     selectedSourceFlags: intentRequests.map(request => request.context.hasSelectedSource),
-    requestCountAfterSourceSelection: beforeSelection,
-    requestCountAfterExplicitResubmit: beforeSelection + 1,
+    remoteRequestsDuringInitialTeacherFirstFraming: firstStaged.previousCount,
+    explicitGovernedRequestCount: intentRequests.length,
     planningHasSelectedSource: planning.body.context.hasSelectedSource,
     onlineTestsHasSelectedSource: tests.body.context.hasSelectedSource,
     evaluationsHasSelectedSource: evaluations.body.context.hasSelectedSource,
@@ -320,7 +339,7 @@ test('AIC-04 starts from the current teacher surface without a source and asks f
   expect(guards.consoleErrors).toEqual([]);
 });
 
-test('AIC-04 discards delayed source-less guidance after the teacher changes surface — mobile 390x844', async ({ browser }) => {
+test('AIC-04 discards a delayed governed result after the teacher changes surface — mobile 390x844', async ({ browser }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
@@ -331,25 +350,32 @@ test('AIC-04 discards delayed source-less guidance after the teacher changes sur
   await setupFreshVault(page);
   await createSyntheticClassAndStudent(page);
   await createSyntheticUda(page);
+  await addSyntheticSource(page);
   await openDrawerItem(page, 'Programmazione didattica');
 
-  const composer = await openComposerWithoutSource(page);
-  await composer.getByLabel('Che cosa vuoi farne?').fill(SOURCELESS_GOAL);
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  const firstStaged = await stageTeacherFirstContextAndSource(page, intentRequests);
+  expect(intentRequests).toHaveLength(0);
+  const firstSubmit = submitGovernedGoal(firstStaged.composer, intentRequests, 'planning');
   await control.firstRequestSeen;
   expect(intentRequests).toHaveLength(1);
-  assertMinimizedSourceLessRequest(intentRequests[0], 'planning');
+  assertMinimizedGovernedRequest(intentRequests[0], 'planning');
 
   await closeComposer(page);
   await openDrawerItem(page, 'Verifiche online');
   const nextComposer = await openComposerWithoutSource(page);
+  const staleResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/copilot/intent'
+  );
   control.releaseFirst();
-  await expect.poll(async () => nextComposer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).isEnabled()).toBe(true);
+  await staleResponse;
+  await firstSubmit;
   await expect(nextComposer.getByTestId('library-copilot-agent-guidance')).toHaveCount(0);
   await expect(nextComposer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
 
-  const second = await submitSourceLessGoal(page, intentRequests, 'other-teacher-surface', 'Prepara nel nuovo contesto delle verifiche');
+  const secondStaged = await stageTeacherFirstContextAndSource(page, intentRequests, 'Prepara nel nuovo contesto delle verifiche');
+  const second = await submitGovernedGoal(secondStaged.composer, intentRequests, 'other-teacher-surface');
   expect(intentRequests).toHaveLength(2);
+  await expect(second.composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
 
   const composerBox = await second.composer.boundingBox();
   expect(composerBox).not.toBeNull();

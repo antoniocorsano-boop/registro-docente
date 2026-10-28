@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -144,7 +145,7 @@ test('LIB-03C reveals ranked destinations progressively and keeps linking human-
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
+  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
   await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -39,12 +40,8 @@ async function openComposer(page) {
 }
 
 async function addTextSourceFromComposer(page, composer) {
-  const addSource = composer.getByText('Aggiungi una nuova fonte', { exact: true });
-  if (!(await addSource.isVisible().catch(() => false))) {
-    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
-  }
-  await expect(addSource).toBeVisible();
-  await addSource.click();
+  await revealMaterialSourceSelect(composer);
+  await composer.getByText('Aggiungi una nuova fonte', { exact: true }).click();
   await composer.getByRole('button', { name: 'Testo/idea', exact: true }).click();
   await composer.getByPlaceholder('Titolo della fonte').fill(SOURCE_TITLE);
   await composer.getByPlaceholder('Incolla un testo, un appunto o descrivi un’idea…').fill(
@@ -52,7 +49,7 @@ async function addTextSourceFromComposer(page, composer) {
   );
   await composer.getByRole('button', { name: 'Salva nella Biblioteca', exact: true }).click();
 
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  const sourceSelect = await revealMaterialSourceSelect(composer);
   await expect(sourceSelect).not.toHaveValue('');
   await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
 }
@@ -81,7 +78,7 @@ test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop',
 
   await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Dimmi cosa vuoi ottenere: per esempio preparare un’attività, rivedere un materiale o collegarlo a una UDA.', { exact: false })).toBeVisible();
+  await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
   await expect(composer.getByText('Controlla nel contesto', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Collega a una UDA', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
@@ -90,8 +87,8 @@ test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop',
   await reloadAndUnlock(page);
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   composer = await openComposer(page);
-  await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option').filter({ hasText: SOURCE_TITLE })).toHaveCount(1);
+  const reloadedSourceSelect = await revealMaterialSourceSelect(composer);
+  await expect(reloadedSourceSelect.locator('option').filter({ hasText: SOURCE_TITLE })).toHaveCount(1);
 
   await page.screenshot({ path: path.join(evidenceDir, 'lib04b-copilot-composer-desktop.png'), fullPage: true });
   fs.writeFileSync(path.join(evidenceDir, 'lib04b-copilot-composer-desktop.json'), JSON.stringify({

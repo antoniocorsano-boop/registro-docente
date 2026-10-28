@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -98,7 +99,7 @@ async function launchComposer(page) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
+  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
   await expect(composer).toContainText(CLASS_NAME);
   return composer;
 }
@@ -356,7 +357,7 @@ test('AGENT-INTENT-01 falls back locally and remains fail-closed when the agent 
 
   const composer = await bootstrap(page);
   await submit(composer, REAL_PHRASE);
-  await expect(composer.getByText('Dimmi cosa vuoi ottenere: per esempio preparare un’attività, rivedere un materiale o collegarlo a una UDA.', { exact: false })).toBeVisible();
+  await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
   await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
   await expect(composer.getByTestId('library-copilot-review-panel')).toHaveCount(0);

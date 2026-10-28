@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -105,9 +106,7 @@ async function openComposer(page, sourceTitle) {
   await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await expect(sourceSelect).toBeVisible();
+  const sourceSelect = await revealMaterialSourceSelect(composer);
   await sourceSelect.selectOption({ label: sourceTitle });
   return composer;
 }
