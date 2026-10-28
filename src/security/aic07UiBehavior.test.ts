@@ -120,6 +120,8 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     expect(app).toContain('onResume={handleResumeCopilotMission}');
     expect(experience).toContain('onResume:');
     expect(experience).toContain('onResume={onResume}');
+    expect(deck).toContain('const refreshedOpportunity = visibleOpportunities.find');
+    expect(deck).toContain('materialFingerprint: resolveMaterialFingerprint(refreshedOpportunity)');
   });
 
   test('ready missions can reopen their persisted proposal in the existing review/adoption flow without regeneration', async () => {

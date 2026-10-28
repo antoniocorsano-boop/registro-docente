@@ -230,9 +230,19 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                             setBusyId(mission.id);
                             void onResume(mission)
                               .then(decision => {
-                                setPreviewBinding(decision === 'repreview'
-                                  ? { id: mission.opportunityId, materialFingerprint: '' }
-                                  : null);
+                                if (decision === 'repreview') {
+                                  const refreshedOpportunity = visibleOpportunities.find(
+                                    opportunity => opportunity.id === mission.opportunityId
+                                  );
+                                  setPreviewBinding(refreshedOpportunity
+                                    ? {
+                                        id: refreshedOpportunity.id,
+                                        materialFingerprint: resolveMaterialFingerprint(refreshedOpportunity)
+                                      }
+                                    : null);
+                                } else {
+                                  setPreviewBinding(null);
+                                }
                                 if (decision === 'resume') setIsOpen(false);
                               })
                               .finally(() => setBusyId(null));
