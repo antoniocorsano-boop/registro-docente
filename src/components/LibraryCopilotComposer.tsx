@@ -275,7 +275,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     () => library.sources.find(source => source.id === selectedSourceId) ?? null,
     [library.sources, selectedSourceId]
   );
-  const hasResolvedConversationContext = Boolean(selectedSource && resolvedTeachingContext);
+  const hasResolvedConversationContext = Boolean(selectedSource);
 
   const contextualReview = useMemo(() => {
     if (!selectedSource) return null;
@@ -905,7 +905,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     setTeacherFirstResolution({ ...framed, goalKind: goal });
     setTeacherFirstClassName(null);
-    setContextOverride(null);
+    if (goal !== 'material') setContextOverride(null);
   };
 
   const handleTeacherFirstProceed = async () => {
