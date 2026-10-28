@@ -227,6 +227,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   ].map(value => value.trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'it')), [classNames, udas, currentClassName]);
 
   const isBoundMissionFlow = Boolean(launchRequest?.mission || readyMissionReview);
+  const hasBoundLaunchContext = Boolean(
+    launchRequest && (launchRequest.context.sourceId || hasLaunchTeachingTarget)
+  );
 
   const explicitLaunchTeachingContext = useMemo(
     () => resolveLaunchTeachingContext(launchRequest, udas),
@@ -883,13 +886,20 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const chooseTeacherFirstGoal = (goal: TeacherFirstGoalKind, copy: string) => {
     setMessage(copy);
+    setResolution(null);
+    setGuidanceMessage(null);
+    setIsPrepareOpen(false);
+
+    if (hasBoundLaunchContext) {
+      setTeacherFirstResolution(null);
+      setTeacherFirstClassName(null);
+      return;
+    }
+
     const framed = resolveTeacherFirstRequest(copy, knownTeacherClasses);
     setTeacherFirstResolution({ ...framed, goalKind: goal });
     setTeacherFirstClassName(null);
     setContextOverride(null);
-    setResolution(null);
-    setGuidanceMessage(null);
-    setIsPrepareOpen(false);
   };
 
   const handleTeacherFirstProceed = async () => {
@@ -947,7 +957,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const handleResolve = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!isBoundMissionFlow) {
+    if (!isBoundMissionFlow && !hasBoundLaunchContext) {
       frameTeacherFirstObjective(message);
       return;
     }
@@ -1080,6 +1090,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <h3 className="text-sm font-bold text-slate-100">Cosa vuoi fare?</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">Partiamo dal risultato che ti serve. Ti chiederò classe, contesto e materiale solo quando servono.</p>
             </div>
+            {hasBoundLaunchContext && (selectedSource || resolvedTeachingContext) && (
+              <div data-testid="teacher-first-existing-bindings" className="space-y-1 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300">
+                {selectedSource && <div><span className="font-semibold text-slate-200">Materiale già disponibile:</span> {selectedSource.title}</div>}
+                {resolvedTeachingContext && <div><span className="font-semibold text-slate-200">Contesto già disponibile:</span> {contextLabel}</div>}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => chooseTeacherFirstGoal('prepare', 'Preparare un’attività')} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Preparare un’attività</button>
               <button type="button" onClick={() => chooseTeacherFirstGoal('material', 'Lavorare su un materiale')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Lavorare su un materiale</button>
