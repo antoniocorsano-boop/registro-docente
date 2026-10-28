@@ -48,6 +48,7 @@ function isVaultRecordKey(value: IDBValidKey): value is VaultRecordKey {
       'planning',
       'library',
       'professionalMemory',
+      'copilotState',
       'meta'
     ].includes(value)
   );

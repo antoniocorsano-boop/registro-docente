@@ -16,9 +16,15 @@ export interface CopilotLaunchContext {
   teachingContextMode?: 'explicit' | 'proposed';
 }
 
+export interface CopilotMissionLaunchV1 {
+  missionId: string;
+  objective: string;
+}
+
 export interface LibraryCopilotLaunchRequest {
   nonce: number;
   context: CopilotLaunchContext;
+  mission?: CopilotMissionLaunchV1;
 }
 
 export function resolveLaunchTeachingContext(

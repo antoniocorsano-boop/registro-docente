@@ -17,7 +17,7 @@ env:
 jobs:
   browser-qualification:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - name: Checkout exact candidate
@@ -72,6 +72,7 @@ jobs:
           cp tests/browser/aic-04-cross-surface-entry.spec.cjs .browser-tools/aic-04-cross-surface-entry.spec.cjs
           cp tests/browser/aic-05-professional-memory.spec.cjs .browser-tools/aic-05-professional-memory.spec.cjs
           cp tests/browser/aic-06-budget-governor.spec.cjs .browser-tools/aic-06-budget-governor.spec.cjs
+          cp tests/browser/aic-07-supervised-copilot.spec.cjs .browser-tools/aic-07-supervised-copilot.spec.cjs
           cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
           cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
           cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
@@ -121,7 +122,21 @@ jobs:
           cat browser-evidence/server.log
           exit 1
 
-      - name: Run Chromium qualification
+      - name: Run dedicated AIC-07 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            aic-07-supervised-copilot.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/aic-07-test-results
+
+      - name: Run historical Chromium qualification
         shell: bash
         run: |
           set -euo pipefail
@@ -158,6 +173,7 @@ jobs:
             ux-qa-01-navigation.spec.cjs \
             ux-qa-01-review-regressions.spec.cjs \
             ux-qa-02-progressive-disclosure.spec.cjs \
+            --workers=1 \
             --reporter=line \
             --output=../browser-evidence/test-results
 

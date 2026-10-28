@@ -22,10 +22,16 @@ import {
   type AiBudgetProfile
 } from '../copilot/aiBudgetGovernor';
 import { LibraryProposalServiceError } from '../services/libraryProposalErrors';
+import type { CopilotMissionV1 } from '../copilot/mission';
+import { assertMissionRuntimeExecutionAuthorized } from './CopilotMissionBridge';
+import { classifyTeachingProposalOutcome } from '../copilot/missionOutcome';
+import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
 import {
   getLibraryProposalProviderMetadata,
+  notifyMissionProposalReady,
   requestLibraryTeachingProposal,
-  type LibraryProposalProviderMetadata
+  type LibraryProposalProviderMetadata,
+  type MissionProposalReadyCallback
 } from '../services/libraryProposalService';
 import { uid } from '../utils';
 import type {
@@ -45,6 +51,12 @@ interface LibraryProposalPanelProps {
   onAdoptProposalToUda: (
     input: TeachingProposalOutcomeMutationInput
   ) => Promise<TeachingProposalOutcomeCandidate['receipt']>;
+  initialResult?: CopilotMissionV1['result'] | null;
+  missionId?: string;
+  generationMissionId?: string;
+  generationContextFingerprint?: string;
+  onMissionProposalReady?: MissionProposalReadyCallback;
+  onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
 }
 
 type ProviderMetadataStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -81,7 +93,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   isPending,
   onUpdate,
   onAddSource,
-  onAdoptProposalToUda
+  onAdoptProposalToUda,
+  initialResult = null,
+  missionId,
+  generationMissionId,
+  generationContextFingerprint,
+  onMissionProposalReady,
+  onMissionOutcome
 }) => {
   const [remoteConsent, setRemoteConsent] = useState(false);
   const [remoteActions, setRemoteActions] = useState<readonly ResolvedAction[]>([]);
@@ -90,7 +108,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   const [providerMetadataAttempt, setProviderMetadataAttempt] = useState(0);
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [proposal, setProposal] = useState<TeachingProposalV1 | null>(null);
+  const [proposal, setProposal] = useState<TeachingProposalV1 | null>(initialResult?.proposal ?? null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState<TeachingProposalContent | null>(null);
   const [isAdopting, setIsAdopting] = useState(false);
@@ -111,7 +129,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setRemoteActions([]);
     setIsRemoteLoading(false);
     setIsGenerating(false);
-    setProposal(null);
+    setProposal(initialResult?.proposal ?? null);
     setIsEditing(false);
     setEditedContent(null);
     setIsAdopting(false);
@@ -119,7 +137,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setBudgetEscalation(null);
     setActivityBudgetAuthorization(null);
     setError(null);
-  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId]);
+  }, [source.id, source.privacy, source.status, teachingContext.udaId, teachingContext.lessonId, initialResult, generationContextFingerprint]);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +216,17 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     }
   };
 
+  const persistMissionOutcome = async (signal: CopilotPreferenceSignalKind): Promise<void> => {
+    if (!missionId || !onMissionOutcome) return;
+    await onMissionOutcome({ missionId, signal });
+  };
+
+  const emitMissionOutcome = (signal: CopilotPreferenceSignalKind) => {
+    void persistMissionOutcome(signal).catch(error => {
+      console.error('Copilot mission outcome learning failed', error);
+    });
+  };
+
   const generateProposal = async (explicitAuthorization?: AiBudgetAuthorizationV1) => {
     if (!prepareAction || isGenerating || !remoteConsent) return;
 
@@ -208,6 +237,25 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setEditedContent(null);
     adoptionSourceIdRef.current = null;
     adoptionLessonIdRef.current = null;
+
+    if (generationMissionId) {
+      if (!generationContextFingerprint) {
+        setError('Il contesto materiale dell’incarico non è più disponibile: riprendi esplicitamente la missione.');
+        return;
+      }
+      try {
+        assertMissionRuntimeExecutionAuthorized(generationMissionId, {
+          capability: 'prepare',
+          className: teachingContext.className,
+          udaId: teachingContext.udaId,
+          ...(teachingContext.lessonId ? { lessonId: teachingContext.lessonId } : {}),
+          sourceIds: [source.id]
+        }, generationContextFingerprint);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : 'Autorizzazione dell’incarico non più valida.');
+        return;
+      }
+    }
 
     let request;
     try {
@@ -254,6 +302,13 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       const result = await requestLibraryTeachingProposal(request, controller.signal);
       adoptionSourceIdRef.current = uid();
       adoptionLessonIdRef.current = uid();
+      if (generationMissionId) {
+        await notifyMissionProposalReady(onMissionProposalReady, {
+          missionId: generationMissionId,
+          proposal: result.proposal,
+          receipt: result.receipt
+        });
+      }
       setProposal(result.proposal);
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -294,13 +349,20 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     await generateProposal(authorization);
   };
 
-  const leaveProposal = () => {
+  const leaveProposal = async () => {
+    setAdoptionError(null);
+    try {
+      await persistMissionOutcome('discarded');
+    } catch (reason) {
+      console.error('Copilot mission discard persistence failed', reason);
+      setAdoptionError('Non sono riuscito ad archiviare il risultato. La proposta resta disponibile per riprovare.');
+      return;
+    }
     adoptionSourceIdRef.current = null;
     adoptionLessonIdRef.current = null;
     setProposal(null);
     setIsEditing(false);
     setEditedContent(null);
-    setAdoptionError(null);
     setBudgetEscalation(null);
     setRemoteConsent(false);
     setRemoteActions([]);
@@ -337,6 +399,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         capturedAt: new Date().toISOString()
       });
       await onAddSource(adopted);
+      emitMissionOutcome(classifyTeachingProposalOutcome(proposal, content));
+      emitMissionOutcome('saved-to-library');
       clearAdoptedProposal();
     } catch (reason) {
       setAdoptionError(
@@ -368,6 +432,8 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         capturedAt: new Date().toISOString(),
         lessonDate: localDateKey()
       });
+      emitMissionOutcome(classifyTeachingProposalOutcome(proposal, content));
+      emitMissionOutcome('linked-to-uda');
       clearAdoptedProposal();
     } catch (reason) {
       setAdoptionError(

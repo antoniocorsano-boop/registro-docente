@@ -1,4 +1,5 @@
 import type { AiBudgetProfile } from './copilot/aiBudgetGovernor';
+import type { CopilotProactivityProfile } from './copilot/proactivity';
 
 export type EvaluationType = 'test' | 'verifica' | 'orale' | 'disegno' | 'osserv';
 
@@ -125,6 +126,7 @@ export interface AppSettings {
   useWeightedAverage?: boolean; // Se abilitare la media ponderata come calcolo predefinito
   embeddingConfig?: LocalEmbeddingConfig; // Configurazione motore vettoriale / embedding locale
   aiBudgetProfile?: AiBudgetProfile; // Profilo base durevole; le autorizzazioni temporanee non vengono persistite
+  copilotProactivity?: CopilotProactivityProfile; // Quanto il Copilota propone; non modifica autorità o budget IA
 }
 
 

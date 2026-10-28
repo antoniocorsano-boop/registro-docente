@@ -17,6 +17,8 @@ import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
+import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
+import { resolveLibraryTeachingContext } from './library/teachingContext';
 import {
   addLibrarySource,
   linkLibrarySource,
@@ -36,6 +38,36 @@ import {
   type RecordProfessionalMemoryEventInput,
   type RememberProfessionalItemInput
 } from './memory/professionalMemory';
+import { createEmptyCopilotState } from './copilot/emptyCopilotState';
+import { buildCopilotContextProjection } from './copilot/contextProjection';
+import {
+  authorizeCopilotMission,
+  authorizeCopilotMissionResume,
+  buildMissionContextFingerprint,
+  canAcceptMissionProposalResult,
+  resolveMissionResume,
+  suspendCopilotMission,
+  type CopilotMissionExecutionGrantV1,
+  type CopilotMissionPreviewV1,
+  type CopilotMissionV1,
+  type MissionResumeDecision
+} from './copilot/mission';
+import type { MissionProposalReadyNotification } from './services/libraryProposalService';
+import type { CopilotPreferenceSignalKind } from './copilot/preferenceLearning';
+import { bindMissionRuntime, clearMissionRuntime } from './components/CopilotMissionBridge';
+import type { CopilotStateV1 } from './copilot/state';
+import {
+  type CopilotOpportunityV1
+} from './copilot/opportunityResolver';
+import {
+  appendCopilotMission,
+  deferCopilotOpportunity,
+  dismissCopilotOpportunity,
+  recordCopilotMissionOutcome,
+  recordCopilotOutcomeSignal,
+  resetCopilotStatePreferences,
+  updateCopilotMission
+} from './persistence/copilotStateMutation';
 import {
   calcAvg,
   CUSTOM_TESTS_KEY,
@@ -94,14 +126,17 @@ import { StudentsManagementView } from './components/StudentsManagementView';
 import { VerificheOnlineView } from './components/VerificheOnlineView';
 import { UdaGanttView } from './components/UdaGanttView';
 import { SettingsView } from './components/SettingsView';
+import { CopilotProactivitySettings } from './components/CopilotProactivitySettings';
 import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
 import { LibraryView } from './components/LibraryView';
 import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
+import { CopilotExperience } from './components/CopilotExperience';
 import type {
   CopilotLaunchContext,
+  CopilotMissionLaunchV1,
   LibraryCopilotLaunchRequest
 } from './library/copilotLaunchContext';
 
@@ -192,6 +227,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     initialSnapshot.professionalMemory || createEmptyProfessionalMemoryState()
   );
 
+  // 5e. Supervised Copilot state is durable, while execution grants remain session-only outside this state.
+  const [copilotState, setCopilotState] = useState<CopilotStateV1>(() =>
+    initialSnapshot.copilotState ?? createEmptyCopilotState()
+  );
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -208,12 +248,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
+  const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
 
-  const openLibraryCopilot = useCallback((context: CopilotLaunchContext) => {
+  const openLibraryCopilot = useCallback((
+    context: CopilotLaunchContext,
+    mission?: CopilotMissionLaunchV1
+  ) => {
     setLaunchRequest(previous => ({
       nonce: (previous?.nonce ?? 0) + 1,
-      context
+      context,
+      ...(mission ? { mission } : {})
     }));
+  }, []);
+
+  const reopenLibraryCopilot = useCallback(() => {
+    setCopilotOpenRequestNonce(previous => previous + 1);
   }, []);
 
   // Metadata for backup tracking
@@ -229,6 +278,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const planningRef = useRef(planning);
   const libraryRef = useRef(library);
   const professionalMemoryRef = useRef(professionalMemory);
+  const copilotStateRef = useRef(copilotState);
+  const missionExecutionGrantsRef = useRef(new Map<string, CopilotMissionExecutionGrantV1>());
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
@@ -483,6 +534,31 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     });
   }, [mutationCoordinator, secureStorage, toast]);
 
+  const commitCopilotStateMutation = useCallback((
+    derive: (current: CopilotStateV1) => CopilotStateV1,
+    successMessage: string
+  ): Promise<CopilotStateV1> => {
+    return mutationCoordinator.enqueue<{ copilotState: CopilotStateV1; meta: SecureMeta }>({
+      getCommitted: () => ({ copilotState: copilotStateRef.current, meta: metaRef.current }),
+      derive: current => ({
+        copilotState: derive(current.copilotState),
+        meta: incrementBackupChanges(current.meta)
+      }),
+      persist: candidate => secureStorage.saveCopilotStateAndMeta(candidate.copilotState, candidate.meta),
+      publish: candidate => {
+        copilotStateRef.current = candidate.copilotState;
+        metaRef.current = candidate.meta;
+        setCopilotState(candidate.copilotState);
+        setMeta(candidate.meta);
+      },
+      afterCommit: () => toast(successMessage)
+    }).then(candidate => candidate.copilotState).catch(error => {
+      console.error('Supervised Copilot state save failed', error);
+      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      throw error;
+    });
+  }, [mutationCoordinator, secureStorage, toast]);
+
   const handleRememberProfessionalItem = useCallback((
     input: RememberProfessionalItemInput
   ): Promise<void> => commitProfessionalMemoryMutation(
@@ -523,6 +599,276 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     current => removeProfessionalMemoryCategory(current, category),
     'Ricordi della categoria eliminati'
   ).then(() => undefined), [commitProfessionalMemoryMutation]);
+
+  const handlePutAsideCopilotOpportunity = useCallback((
+    opportunity: CopilotOpportunityV1,
+    contextFingerprint: string
+  ): Promise<void> => {
+    const occurredAt = new Date().toISOString();
+    return commitCopilotStateMutation(current => {
+      const deferred = deferCopilotOpportunity(current, {
+        opportunity,
+        contextFingerprint,
+        deferredAt: occurredAt
+      });
+      return recordCopilotOutcomeSignal(deferred, {
+        id: uid(),
+        opportunityKind: opportunity.kind,
+        signal: 'put-aside',
+        occurredAt
+      });
+    }, 'Opportunità messa da parte').then(() => undefined);
+  }, [commitCopilotStateMutation]);
+
+  const handleIgnoreCopilotOpportunity = useCallback((
+    opportunity: CopilotOpportunityV1,
+    contextFingerprint: string
+  ): Promise<void> => {
+    const occurredAt = new Date().toISOString();
+    return commitCopilotStateMutation(current => {
+      const dismissed = dismissCopilotOpportunity(current, {
+        opportunityId: opportunity.id,
+        contextFingerprint
+      });
+      return recordCopilotOutcomeSignal(dismissed, {
+        id: uid(),
+        opportunityKind: opportunity.kind,
+        signal: 'ignore',
+        occurredAt
+      });
+    }, 'Opportunità ignorata').then(() => undefined);
+  }, [commitCopilotStateMutation]);
+
+  const handleResetCopilotPreferences = useCallback((): Promise<void> =>
+    commitCopilotStateMutation(
+      current => resetCopilotStatePreferences(current),
+      'Preferenze del Copilota reimpostate'
+    ).then(() => undefined),
+  [commitCopilotStateMutation]);
+
+  const handleStartCopilotMission = useCallback(async (
+    opportunity: CopilotOpportunityV1,
+    preview: CopilotMissionPreviewV1,
+    materialFingerprint: string
+  ): Promise<void> => {
+    const uda = udasRef.current.find(candidate => candidate.id === opportunity.contextRef.udaId);
+    if (!uda) throw new Error('Il contesto della missione non è più disponibile.');
+    const sources = libraryRef.current.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
+    if (sources.length !== opportunity.proposedMission.sourceRefs.length
+      || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
+      throw new Error('La fonte professionale della missione non è più disponibile.');
+    }
+    const currentTeachingContext = resolveLibraryTeachingContext(udasRef.current, {
+      udaId: opportunity.contextRef.udaId,
+      ...(opportunity.contextRef.lessonId ? { lessonId: opportunity.contextRef.lessonId } : {})
+    });
+    if (!currentTeachingContext || currentTeachingContext.className !== opportunity.contextRef.className) {
+      throw new Error('Il contesto didattico della missione non è più disponibile.');
+    }
+    const currentPlanningContext = resolvePlanningContextForLibraryRelevance(
+      currentTeachingContext,
+      planningRef.current
+    );
+    const currentPlanningProfileId = currentPlanningContext?.status === 'resolved'
+      ? currentPlanningContext.profile.id
+      : null;
+    const now = new Date().toISOString();
+    const projection = buildCopilotContextProjection({
+      surface: 'library',
+      className: opportunity.contextRef.className,
+      udaId: opportunity.contextRef.udaId,
+      lessonId: opportunity.contextRef.lessonId,
+      sourceId: opportunity.contextRef.sourceId ?? opportunity.proposedMission.sourceRefs[0],
+      planningProfileId: currentPlanningProfileId
+    });
+    const currentContextFingerprint = buildMissionContextFingerprint({
+      context: projection,
+      uda,
+      sources,
+      planningProfileId: currentPlanningProfileId,
+      missionSettings: {
+        aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+        copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
+      }
+    });
+    if (currentContextFingerprint !== materialFingerprint) {
+      throw new Error('Il contesto della missione è cambiato: rivedi l’anteprima prima di avviare.');
+    }
+    const { mission, grant } = authorizeCopilotMission(preview, {
+      id: uid(),
+      opportunity,
+      fingerprintInput: {
+        context: projection,
+        uda,
+        sources,
+        planningProfileId: currentPlanningProfileId,
+        missionSettings: {
+          aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+          copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
+        }
+      },
+      budgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+      now
+    });
+    await commitCopilotStateMutation(current => recordCopilotOutcomeSignal(
+      appendCopilotMission(current, mission),
+      {
+        id: uid(),
+        opportunityKind: opportunity.kind,
+        signal: 'play',
+        occurredAt: now
+      }
+    ), 'Incarico del Copilota avviato');
+    missionExecutionGrantsRef.current.set(mission.id, grant);
+    const runtime = bindMissionRuntime(mission, grant);
+    openLibraryCopilot({
+      surface: 'library',
+      className: mission.contextRef.className,
+      udaId: mission.contextRef.udaId,
+      ...(mission.contextRef.lessonId ? { lessonId: mission.contextRef.lessonId } : {}),
+      ...(mission.contextRef.sourceId ? { sourceId: mission.contextRef.sourceId } : {}),
+      teachingContextMode: 'explicit'
+    }, runtime);
+  }, [commitCopilotStateMutation, openLibraryCopilot]);
+
+  const handleResumeCopilotMission = useCallback(async (
+    mission: CopilotMissionV1
+  ): Promise<MissionResumeDecision> => {
+    const currentMission = copilotStateRef.current.missions.find(candidate => candidate.id === mission.id);
+    if (!currentMission || currentMission.status !== 'suspended') return 'archive';
+
+    const uda = udasRef.current.find(candidate => candidate.id === currentMission.contextRef.udaId);
+    const sources = libraryRef.current.sources.filter(source => currentMission.sourceRefs.includes(source.id));
+    if (!uda
+      || sources.length !== currentMission.sourceRefs.length
+      || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
+      missionExecutionGrantsRef.current.delete(currentMission.id);
+      clearMissionRuntime(currentMission.id);
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current,
+        currentMission.id,
+        item => ({ ...item, status: 'archived' })
+      ), 'Incarico non più riprendibile');
+      return 'archive';
+    }
+
+    const currentTeachingContext = resolveLibraryTeachingContext(udasRef.current, {
+      udaId: currentMission.contextRef.udaId,
+      ...(currentMission.contextRef.lessonId ? { lessonId: currentMission.contextRef.lessonId } : {})
+    });
+    if (!currentTeachingContext || currentTeachingContext.className !== currentMission.contextRef.className) {
+      missionExecutionGrantsRef.current.delete(currentMission.id);
+      clearMissionRuntime(currentMission.id);
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current,
+        currentMission.id,
+        item => ({ ...item, status: 'archived' })
+      ), 'Incarico non più riprendibile');
+      return 'archive';
+    }
+    const currentPlanningContext = resolvePlanningContextForLibraryRelevance(
+      currentTeachingContext,
+      planningRef.current
+    );
+    const currentPlanningProfileId = currentPlanningContext?.status === 'resolved'
+      ? currentPlanningContext.profile.id
+      : null;
+    const now = new Date().toISOString();
+    const projection = buildCopilotContextProjection({
+      surface: 'library',
+      className: currentMission.contextRef.className,
+      udaId: currentMission.contextRef.udaId,
+      lessonId: currentMission.contextRef.lessonId,
+      sourceId: currentMission.contextRef.sourceId ?? currentMission.sourceRefs[0],
+      planningProfileId: currentPlanningProfileId
+    });
+    const currentContextFingerprint = buildMissionContextFingerprint({
+      context: projection,
+      uda,
+      sources,
+      planningProfileId: currentPlanningProfileId,
+      missionSettings: {
+        aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+        copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
+      }
+    });
+    const decision = resolveMissionResume(currentMission, currentContextFingerprint, now);
+
+    if (decision !== 'resume') {
+      missionExecutionGrantsRef.current.delete(currentMission.id);
+      clearMissionRuntime(currentMission.id);
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current,
+        currentMission.id,
+        item => ({ ...item, status: 'archived' })
+      ), decision === 'repreview' ? 'Contesto cambiato: controlla la nuova anteprima' : 'Incarico archiviato');
+      return decision;
+    }
+
+    const grant = authorizeCopilotMissionResume(currentMission, currentContextFingerprint, now);
+    await commitCopilotStateMutation(current => updateCopilotMission(
+      current,
+      currentMission.id,
+      item => ({ ...item, status: 'authorized' })
+    ), 'Incarico del Copilota ripreso');
+    missionExecutionGrantsRef.current.set(currentMission.id, grant);
+    const runtime = bindMissionRuntime({ ...currentMission, status: 'authorized' }, grant);
+    openLibraryCopilot({
+      surface: 'library',
+      className: currentMission.contextRef.className,
+      udaId: currentMission.contextRef.udaId,
+      ...(currentMission.contextRef.lessonId ? { lessonId: currentMission.contextRef.lessonId } : {}),
+      ...(currentMission.contextRef.sourceId ? { sourceId: currentMission.contextRef.sourceId } : {}),
+      teachingContextMode: 'explicit'
+    }, runtime);
+    return 'resume';
+  }, [commitCopilotStateMutation, openLibraryCopilot]);
+
+  const handleMissionInterrupted = useCallback((
+    { missionId }: { missionId: string }
+  ): Promise<void> => {
+    const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
+    if (!mission || (mission.status !== 'authorized' && mission.status !== 'running')) {
+      return Promise.resolve();
+    }
+
+    return commitCopilotStateMutation(current => updateCopilotMission(
+      current,
+      missionId,
+      suspendCopilotMission
+    ), '').then(() => {
+      missionExecutionGrantsRef.current.delete(missionId);
+      clearMissionRuntime(missionId);
+    });
+  }, [commitCopilotStateMutation]);
+
+  const handleMissionProposalReady = useCallback(async (
+    { missionId, proposal, receipt }: MissionProposalReadyNotification
+  ): Promise<void> => {
+    const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
+    if (!mission || !canAcceptMissionProposalResult(mission, proposal)) return;
+
+    await commitCopilotStateMutation(current => updateCopilotMission(
+      current,
+      missionId,
+      currentMission => ({ ...currentMission, status: 'ready', result: { proposal, receipt } })
+    ), 'Incarico pronto da controllare');
+    missionExecutionGrantsRef.current.delete(missionId);
+    clearMissionRuntime(missionId);
+  }, [commitCopilotStateMutation]);
+
+  const handleMissionOutcome = useCallback((
+    { missionId, signal }: { missionId: string; signal: CopilotPreferenceSignalKind }
+  ): Promise<void> => {
+    const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
+    if (!mission) return Promise.resolve();
+    return commitCopilotStateMutation(current => recordCopilotMissionOutcome(current, {
+      missionId,
+      signal,
+      signalId: uid(),
+      occurredAt: new Date().toISOString()
+    }), '').then(() => undefined);
+  }, [commitCopilotStateMutation]);
 
   const handleAdoptTeachingProposalToUda = useCallback((
     input: TeachingProposalOutcomeMutationInput
@@ -1138,6 +1484,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
     planning: planningRef.current,
     library: libraryRef.current,
     professionalMemory: professionalMemoryRef.current,
+    copilotState: copilotStateRef.current,
     meta: metaRef.current
   });
 
@@ -1177,6 +1524,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       planningRef.current = restored.planning;
       libraryRef.current = restored.library;
       professionalMemoryRef.current = restored.professionalMemory;
+      copilotStateRef.current = restored.copilotState;
       metaRef.current = restored.meta;
       setAppData(restoredVisibleAppData);
       setSettings(restored.settings);
@@ -1186,6 +1534,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       setPlanning(restored.planning);
       setLibrary(restored.library);
       setProfessionalMemory(restored.professionalMemory);
+      setCopilotState(restored.copilotState);
       setMeta(restored.meta);
       setActiveTab('home');
       toast('Backup cifrato verificato e ripristinato');
@@ -1200,17 +1549,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       const resetPlanning = createEmptyPlanningState();
       const resetLibrary = createEmptyLibraryState();
       const resetProfessionalMemory = createEmptyProfessionalMemoryState();
+      const resetCopilotState = createEmptyCopilotState();
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
       professionalMemoryRef.current = resetProfessionalMemory;
+      copilotStateRef.current = resetCopilotState;
       metaRef.current = resetMeta;
       setAppData(resetAppData);
       setPlanning(resetPlanning);
       setLibrary(resetLibrary);
       setProfessionalMemory(resetProfessionalMemory);
+      setCopilotState(resetCopilotState);
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
@@ -1430,12 +1782,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
         {/* TAB 12: Impostazioni & Tema */}
         {activeTab === 'impostazioni' && (
-          <SettingsView
-            settings={settings}
-            onUpdateSettings={handleUpdateSettings}
-            onExportBackup={handleExportBackup}
-            onImportBackup={handleImportBackup}
-          />
+          <div className="space-y-4">
+            <SettingsView
+              settings={settings}
+              onUpdateSettings={handleUpdateSettings}
+              onExportBackup={handleExportBackup}
+              onImportBackup={handleImportBackup}
+            />
+            <CopilotProactivitySettings
+              settings={settings}
+              onUpdateSettings={handleUpdateSettings}
+              onResetCopilotPreferences={handleResetCopilotPreferences}
+            />
+          </div>
         )}
 
         {/* TAB 13: Privacy First & GDPR */}
@@ -1455,27 +1814,48 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       </main>
 
       {!studentMode.isOpen && (
-        <LibraryCopilotComposer
-          library={library}
-          udas={udas}
-          planning={planning}
-          professionalMemory={professionalMemory}
-          aiBudgetProfile={settings.aiBudgetProfile}
-          memoryError={professionalMemoryError}
-          currentClassName={currentClass?.name ?? null}
-          launchRequest={launchRequest}
-          ambientContext={ambientCopilotContext}
-          onAddSource={handleAddLibrarySource}
-          onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
-          onUpdateSource={handleUpdateLibrarySource}
-          onLink={handleLinkLibrarySource}
-          onRemember={handleRememberProfessionalItem}
-          onCorrectMemoryEntry={handleCorrectMemoryEntry}
-          onRemoveMemoryEntry={handleRemoveMemoryEntry}
-          onSetMemoryCategory={handleSetMemoryCategory}
-          onRemoveMemoryCategory={handleRemoveMemoryCategory}
-          isPending={isLibraryMutationPending}
-        />
+        <>
+          <CopilotExperience
+            settings={settings}
+            copilotState={copilotState}
+            library={library}
+            udas={udas}
+            planning={planning}
+            ambientContext={ambientCopilotContext}
+            onPutAside={handlePutAsideCopilotOpportunity}
+            onIgnore={handleIgnoreCopilotOpportunity}
+            onResume={handleResumeCopilotMission}
+            onStart={handleStartCopilotMission}
+            onOpenConversation={reopenLibraryCopilot}
+          />
+          <LibraryCopilotComposer
+              library={library}
+              udas={udas}
+              planning={planning}
+              professionalMemory={professionalMemory}
+              aiBudgetProfile={settings.aiBudgetProfile}
+              copilotProactivity={settings.copilotProactivity}
+              memoryError={professionalMemoryError}
+              currentClassName={currentClass?.name ?? null}
+              launchRequest={launchRequest}
+              openRequestNonce={copilotOpenRequestNonce}
+              ambientContext={ambientCopilotContext}
+              showStandaloneTrigger={false}
+              onAddSource={handleAddLibrarySource}
+              onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
+              onUpdateSource={handleUpdateLibrarySource}
+              onLink={handleLinkLibrarySource}
+              onRemember={handleRememberProfessionalItem}
+              onCorrectMemoryEntry={handleCorrectMemoryEntry}
+              onRemoveMemoryEntry={handleRemoveMemoryEntry}
+              onSetMemoryCategory={handleSetMemoryCategory}
+              onRemoveMemoryCategory={handleRemoveMemoryCategory}
+              onMissionProposalReady={handleMissionProposalReady}
+              onMissionInterrupted={handleMissionInterrupted}
+              onMissionOutcome={handleMissionOutcome}
+              isPending={isLibraryMutationPending}
+            />
+        </>
       )}
 
       {/* Persistence confirmation modal */}

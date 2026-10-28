@@ -5,6 +5,12 @@ import type {
   OnlineTest,
   UdaRecord
 } from '../types';
+import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
+import {
+  isCopilotStateV1,
+  normalizeLoadedCopilotState,
+  type CopilotStateV1
+} from '../copilot/state';
 import type { LibraryStateV1 } from '../library/types';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import type { ProfessionalMemoryStateV1 } from '../memory/types';
@@ -43,6 +49,7 @@ export interface SecureAppSnapshot {
   planning: PlanningStateV1 | null;
   library: LibraryStateV1 | null;
   professionalMemory: ProfessionalMemoryStateV1;
+  copilotState: CopilotStateV1;
   meta: SecureMeta | null;
 }
 
@@ -55,8 +62,14 @@ export interface CompleteSecureAppSnapshot {
   planning: PlanningStateV1;
   library: LibraryStateV1;
   professionalMemory?: ProfessionalMemoryStateV1;
+  copilotState?: CopilotStateV1;
   meta: SecureMeta;
 }
+
+type CanonicalCompleteSecureAppSnapshot = CompleteSecureAppSnapshot & {
+  professionalMemory: ProfessionalMemoryStateV1;
+  copilotState: CopilotStateV1;
+};
 
 const SNAPSHOT_KEYS = [
   'appData',
@@ -67,12 +80,13 @@ const SNAPSHOT_KEYS = [
   'planning',
   'library',
   'professionalMemory',
+  'copilotState',
   'meta'
 ] as const;
 
 function canonicalizeCompleteSnapshot(
   snapshot: CompleteSecureAppSnapshot
-): CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 } {
+): CanonicalCompleteSecureAppSnapshot {
   return {
     appData: snapshot.appData,
     settings: sanitizePersistedSettings(snapshot.settings),
@@ -82,6 +96,7 @@ function canonicalizeCompleteSnapshot(
     planning: snapshot.planning,
     library: snapshot.library,
     professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState(),
+    copilotState: normalizeLoadedCopilotState(snapshot.copilotState ?? createEmptyCopilotState()),
     meta: snapshot.meta
   };
 }
@@ -90,15 +105,13 @@ function snapshotEquals(left: SecureAppSnapshot, right: SecureAppSnapshot): bool
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CompleteSecureAppSnapshot & {
-  professionalMemory: ProfessionalMemoryStateV1;
-} {
+function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CanonicalCompleteSecureAppSnapshot {
   for (const key of SNAPSHOT_KEYS) {
     if (snapshot[key] === null) {
       throw new Error(`Restore non verificabile: record ${key} mancante nel readback.`);
     }
   }
-  return snapshot as CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 };
+  return snapshot as CanonicalCompleteSecureAppSnapshot;
 }
 
 export function decideVaultBootstrap(input: VaultBootstrapInput): VaultGateState {
@@ -130,6 +143,7 @@ export class SecureAppStorage {
       planning,
       library,
       professionalMemory,
+      storedCopilotState,
       meta
     ] = await Promise.all([
       this.vault.get<AppData>('appData'),
@@ -140,8 +154,13 @@ export class SecureAppStorage {
       this.vault.get<PlanningStateV1>('planning'),
       this.vault.get<LibraryStateV1>('library'),
       this.vault.get<ProfessionalMemoryStateV1>('professionalMemory'),
+      this.vault.get<CopilotStateV1>('copilotState'),
       this.vault.get<SecureMeta>('meta')
     ]);
+
+    const copilotState = isCopilotStateV1(storedCopilotState)
+      ? normalizeLoadedCopilotState(storedCopilotState)
+      : createEmptyCopilotState();
 
     return {
       appData,
@@ -152,6 +171,7 @@ export class SecureAppStorage {
       planning,
       library,
       professionalMemory: professionalMemory ?? createEmptyProfessionalMemoryState(),
+      copilotState,
       meta
     };
   }
@@ -255,6 +275,17 @@ export class SecureAppStorage {
     ]);
   }
 
+  saveCopilotState(copilotState: CopilotStateV1): Promise<void> {
+    return this.vault.put('copilotState', copilotState);
+  }
+
+  saveCopilotStateAndMeta(copilotState: CopilotStateV1, meta: SecureMeta): Promise<void> {
+    return this.vault.putMany([
+      { key: 'copilotState', value: copilotState },
+      { key: 'meta', value: meta }
+    ]);
+  }
+
   saveMeta(value: SecureMeta): Promise<void> {
     return this.vault.put('meta', value);
   }
@@ -270,6 +301,7 @@ export class SecureAppStorage {
       { key: 'planning', value: sanitized.planning },
       { key: 'library', value: sanitized.library },
       { key: 'professionalMemory', value: sanitized.professionalMemory },
+      { key: 'copilotState', value: sanitized.copilotState },
       { key: 'meta', value: sanitized.meta }
     ]);
   }
@@ -284,6 +316,7 @@ export class SecureAppStorage {
       ['planning', snapshot.planning],
       ['library', snapshot.library],
       ['professionalMemory', snapshot.professionalMemory],
+      ['copilotState', snapshot.copilotState],
       ['meta', snapshot.meta]
     ];
 
@@ -301,7 +334,7 @@ export class SecureAppStorage {
   async restoreSnapshotVerified(
     candidate: CompleteSecureAppSnapshot,
     previousLogical?: CompleteSecureAppSnapshot
-  ): Promise<CompleteSecureAppSnapshot & { professionalMemory: ProfessionalMemoryStateV1 }> {
+  ): Promise<CanonicalCompleteSecureAppSnapshot> {
     const previousPhysical = previousLogical ? null : await this.loadSnapshot();
     const canonicalCandidate = canonicalizeCompleteSnapshot(candidate);
     const canonicalPrevious = previousLogical ? canonicalizeCompleteSnapshot(previousLogical) : null;

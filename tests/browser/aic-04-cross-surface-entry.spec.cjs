@@ -127,6 +127,8 @@ async function openComposerWithoutSource(page) {
   const composer = page.getByTestId('library-copilot-composer');
   if (!(await composer.isVisible().catch(() => false))) {
     await page.getByTestId('library-copilot-trigger').click();
+    await expect(page.getByTestId('copilot-deck')).toBeVisible();
+    await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   }
   await expect(composer).toBeVisible();
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');

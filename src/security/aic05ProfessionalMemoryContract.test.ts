@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import { setAutoRememberCategory } from '../memory/professionalMemory';
 import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
@@ -38,6 +39,7 @@ function currentSnapshotWithMemory() {
     planning: emptyPlanning,
     library: emptyLibrary,
     professionalMemory: createEmptyProfessionalMemoryState(),
+    copilotState: createEmptyCopilotState(),
     meta: { changes: 0, lastBackup: null }
   };
 }
@@ -92,15 +94,19 @@ describe('AIC-05 professional memory foundation contract', () => {
     expect(appStorage).toContain('saveProfessionalMemoryAndMeta(');
   });
 
-  test('backup v5 round-trips professional memory and older v4 normalizes it to empty', () => {
+  test('current backup v6 round-trips professional memory and older v4 normalizes it to empty', () => {
     const current = currentSnapshotWithMemory();
     const payload = createBackupPayload(current as any, '2026-10-27T09:00:00.000Z');
 
-    expect(payload.backupDataVersion).toBe(5);
+    expect(payload.backupDataVersion).toBe(6);
     expect(payload.snapshot.professionalMemory).toEqual(current.professionalMemory);
     expect(normalizeBackupPayload(payload, current as any).professionalMemory).toEqual(current.professionalMemory);
 
-    const { professionalMemory: _memory, ...snapshotV4 } = current;
+    const {
+      professionalMemory: _memory,
+      copilotState: _copilotState,
+      ...snapshotV4
+    } = current;
     const normalizedV4 = normalizeBackupPayload({
       app: 'registro-docente',
       backupDataVersion: 4,
@@ -109,9 +115,10 @@ describe('AIC-05 professional memory foundation contract', () => {
     }, current as any) as any;
 
     expect(normalizedV4.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
+    expect(normalizedV4.copilotState).toEqual(createEmptyCopilotState());
   });
 
-  test('backup v5 rejects malformed or denied professional memory instead of treating it as an old version', () => {
+  test('legacy backup v5 rejects malformed or denied professional memory instead of treating it as an old version', () => {
     const current = currentSnapshotWithMemory();
     const invalidMemory = {
       ...createEmptyProfessionalMemoryState(),
@@ -126,12 +133,13 @@ describe('AIC-05 professional memory foundation contract', () => {
         privacyClassification: 'STUDENT_PERSONAL'
       }]
     };
+    const { copilotState: _copilotState, ...snapshotV5 } = current;
 
     expect(() => normalizeBackupPayload({
       app: 'registro-docente',
       backupDataVersion: 5,
       exportedAt: '2026-10-27T09:00:00.000Z',
-      snapshot: { ...current, professionalMemory: invalidMemory }
+      snapshot: { ...snapshotV5, professionalMemory: invalidMemory }
     }, current as any)).toThrow(/memory|memoria|privacy/i);
   });
 });

@@ -12,13 +12,27 @@ on:
 permissions:
   contents: read
 
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   verify:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Candidate SHA: ${CANDIDATE_SHA}"
+          echo "Checkout SHA:  ${actual_sha}"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

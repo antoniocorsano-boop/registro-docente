@@ -42,6 +42,15 @@ import {
 } from '../library/contextualDidacticReview';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
+import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
+import { buildMissionContextFingerprint } from '../copilot/mission';
+import type { CopilotProactivityProfile } from '../copilot/proactivity';
+import {
+  consumeStagedMissionReview,
+  type MissionReviewHandoffV1
+} from '../copilot/missionReviewHandoff';
+import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
+import type { MissionProposalReadyNotification } from '../services/libraryProposalService';
 import {
   ProfessionalMemoryPanel,
   type ProfessionalMemoryRememberCandidate
@@ -58,9 +67,11 @@ interface LibraryCopilotComposerProps {
   planning: PlanningStateV1;
   professionalMemory: ProfessionalMemoryStateV1;
   aiBudgetProfile?: AiBudgetProfile;
+  copilotProactivity?: CopilotProactivityProfile;
   memoryError?: string | null;
   currentClassName?: string | null;
   launchRequest?: LibraryCopilotLaunchRequest | null;
+  openRequestNonce?: number;
   ambientContext?: CopilotLaunchContext;
   onAddSource: (source: LibrarySource) => Promise<void>;
   onAdoptProposalToUda: (
@@ -73,7 +84,11 @@ interface LibraryCopilotComposerProps {
   onRemoveMemoryEntry: (entryId: string) => Promise<void>;
   onSetMemoryCategory: (category: ProfessionalMemoryCategory, enabled: boolean) => Promise<void>;
   onRemoveMemoryCategory: (category: ProfessionalMemoryCategory) => Promise<void>;
+  onMissionProposalReady?: (input: MissionProposalReadyNotification) => Promise<void> | void;
+  onMissionInterrupted?: (input: { missionId: string }) => Promise<void> | void;
+  onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
   isPending?: boolean;
+  showStandaloneTrigger?: boolean;
 }
 
 type CaptureMode = 'text' | 'web' | 'file';
@@ -137,9 +152,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   planning,
   professionalMemory,
   aiBudgetProfile,
+  copilotProactivity,
   memoryError = null,
   currentClassName = null,
   launchRequest = null,
+  openRequestNonce = 0,
   ambientContext,
   onAddSource,
   onAdoptProposalToUda,
@@ -150,7 +167,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   onRemoveMemoryEntry,
   onSetMemoryCategory,
   onRemoveMemoryCategory,
-  isPending = false
+  onMissionProposalReady,
+  onMissionInterrupted,
+  onMissionOutcome,
+  isPending = false,
+  showStandaloneTrigger = true
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState('');
@@ -172,6 +193,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [linkSuccess, setLinkSuccess] = useState<string | null>(null);
   const [isPrepareOpen, setIsPrepareOpen] = useState(false);
   const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
+  const [missionLaunchSettledNonce, setMissionLaunchSettledNonce] = useState<number | null>(null);
+  const [readyMissionReview, setReadyMissionReview] = useState<MissionReviewHandoffV1 | null>(null);
   const resolutionEpochRef = useRef(0);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -324,10 +347,139 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+  const missionLaunchBindingsReady = !launchRequest?.mission || Boolean(
+    (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
+    && (!launchRequest.context.className || resolvedTeachingContext?.className === launchRequest.context.className)
+    && (!launchRequest.context.udaId || resolvedTeachingContext?.udaId === launchRequest.context.udaId)
+    && (!launchRequest.context.lessonId || resolvedTeachingContext?.lessonId === launchRequest.context.lessonId)
+  );
+  const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady
+    ? launchRequest.mission.missionId
+    : undefined;
+  const currentPlanningProfileId = resolvedPlanningContext?.status === 'resolved'
+    ? resolvedPlanningContext.profile.id
+    : null;
+  const generationContextFingerprint = useMemo(() => {
+    if (!boundLaunchMissionId || !selectedSource || !resolvedTeachingContext || !proposalUda) return null;
+    const missionProjection = buildCopilotContextProjection({
+      surface: 'library',
+      className: resolvedTeachingContext.className,
+      udaId: resolvedTeachingContext.udaId,
+      lessonId: resolvedTeachingContext.lessonId,
+      sourceId: selectedSource.id,
+      planningProfileId: currentPlanningProfileId
+    });
+    return buildMissionContextFingerprint({
+      context: missionProjection,
+      uda: proposalUda,
+      sources: [selectedSource],
+      planningProfileId: currentPlanningProfileId,
+      missionSettings: {
+        aiBudgetProfile: aiBudgetProfile ?? 'balanced',
+        copilotProactivity: copilotProactivity ?? 'balanced'
+      }
+    });
+  }, [
+    boundLaunchMissionId,
+    selectedSource,
+    resolvedTeachingContext,
+    proposalUda,
+    currentPlanningProfileId,
+    aiBudgetProfile,
+    copilotProactivity
+  ]);
+  const assertBoundMissionPrepareAuthorized = () => {
+    if (!boundLaunchMissionId) return;
+    if (!selectedSource || !resolvedTeachingContext || !generationContextFingerprint) {
+      throw new Error('Il contesto materiale dell’incarico non è più disponibile: riprendi esplicitamente la missione.');
+    }
+    assertMissionRuntimeExecutionAuthorized(boundLaunchMissionId, {
+      capability: 'prepare',
+      className: resolvedTeachingContext.className,
+      udaId: resolvedTeachingContext.udaId,
+      ...(resolvedTeachingContext.lessonId ? { lessonId: resolvedTeachingContext.lessonId } : {}),
+      sourceIds: [selectedSource.id]
+    }, generationContextFingerprint);
+  };
+  const interruptBoundMission = () => {
+    if (!boundLaunchMissionId) return;
+    void onMissionInterrupted?.({ missionId: boundLaunchMissionId });
+  };
+  const missionLaunchReady = !launchRequest?.mission || Boolean(
+    missionLaunchBindingsReady
+    && missionLaunchSettledNonce === launchRequest.nonce
+  );
+
+  useEffect(() => {
+    if (!openRequestNonce) return;
+    const stagedReview = consumeStagedMissionReview();
+    if (stagedReview) {
+      const reviewSourceId = stagedReview.contextRef.sourceId ?? stagedReview.sourceRefs[0] ?? '';
+      const reviewSource = library.sources.find(source => source.id === reviewSourceId) ?? null;
+      const reviewTeachingContext = resolveLibraryTeachingContext(udas, {
+        udaId: stagedReview.contextRef.udaId,
+        ...(stagedReview.contextRef.lessonId ? { lessonId: stagedReview.contextRef.lessonId } : {})
+      });
+
+      resolutionEpochRef.current += 1;
+      setResolution(null);
+      setIsReviewUnavailableOpen(false);
+      setGuidanceMessage(null);
+      setIsPrepareOpen(false);
+      setIsLinkConfirmationOpen(false);
+      setLinkError(null);
+      setLinkSuccess(null);
+      setReadyMissionReview(null);
+
+      if (
+        reviewSource
+        && reviewSource.status === 'ready'
+        && reviewSource.privacy === 'teacher-professional'
+        && reviewTeachingContext
+        && reviewTeachingContext.className === stagedReview.contextRef.className
+      ) {
+        setSelectedSourceId(reviewSourceId);
+        setContextOverride({
+          udaId: stagedReview.contextRef.udaId,
+          ...(stagedReview.contextRef.lessonId ? { lessonId: stagedReview.contextRef.lessonId } : {})
+        });
+        setMessage(stagedReview.goal);
+        setReadyMissionReview(stagedReview);
+        setErrorMessage(null);
+      } else {
+        setErrorMessage('Il risultato pronto non è più compatibile con il contesto professionale corrente.');
+      }
+    }
+    setIsOpen(true);
+  }, [openRequestNonce]);
+
+  useEffect(() => {
+    if (!readyMissionReview) return;
+    const expectedSourceId = readyMissionReview.contextRef.sourceId ?? readyMissionReview.sourceRefs[0] ?? '';
+    const stillBound = Boolean(
+      selectedSource
+      && selectedSource.id === expectedSourceId
+      && selectedSource.status === 'ready'
+      && selectedSource.privacy === 'teacher-professional'
+      && resolvedTeachingContext
+      && resolvedTeachingContext.udaId === readyMissionReview.contextRef.udaId
+      && resolvedTeachingContext.className === readyMissionReview.contextRef.className
+      && (resolvedTeachingContext.lessonId ?? '') === (readyMissionReview.contextRef.lessonId ?? '')
+    );
+    if (!stillBound) setReadyMissionReview(null);
+  }, [
+    readyMissionReview,
+    selectedSourceId,
+    selectedSource?.status,
+    selectedSource?.privacy,
+    teachingContextFingerprint
+  ]);
 
   useEffect(() => {
     if (!launchRequest) return;
 
+    setMissionLaunchSettledNonce(null);
+    setReadyMissionReview(null);
     resolutionEpochRef.current += 1;
     setContextOverride('auto');
     setIsOpen(true);
@@ -338,6 +490,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
+    if (launchRequest.mission) setMessage(launchRequest.mission.objective);
 
     if (requestedLaunchSourceId) {
       const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
@@ -411,6 +564,22 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
   }, [selectedSource?.privacy, selectedSource?.status]);
+
+
+  useEffect(() => {
+    if (!launchRequest?.mission || !missionLaunchBindingsReady) {
+      setMissionLaunchSettledNonce(null);
+      return;
+    }
+    setMissionLaunchSettledNonce(launchRequest.nonce);
+  }, [
+    launchRequest?.nonce,
+    launchRequest?.mission,
+    missionLaunchBindingsReady,
+    selectedSource?.privacy,
+    selectedSource?.status,
+    teachingContextFingerprint
+  ]);
 
   const contextIsProposed = contextOverride === 'auto' && (
     launchTeachingContextIsProposed
@@ -501,9 +670,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
   };
 
-  const handleResolve = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!message.trim() || isResolving) return;
+  const resolveObjective = async (objective: string) => {
+    const normalizedObjective = objective.trim();
+    if (!normalizedObjective || isResolving) return;
 
     const resolutionEpoch = ++resolutionEpochRef.current;
     const resolutionSnapshot = currentResolutionSnapshot;
@@ -533,7 +702,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         source: selectedSource,
         teachingContext: resolvedTeachingContext,
         planningContext: resolvedPlanningContext,
-        message: message.trim()
+        message: normalizedObjective
       };
       const discovery = await discoverLibraryCopilotIntent(input);
       if (!requestIsCurrent()) return;
@@ -561,7 +730,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
           return;
         }
+        assertBoundMissionPrepareAuthorized();
         setIsPrepareOpen(true);
+        return;
+      }
+
+      if (boundLaunchMissionId) {
+        setGuidanceMessage('L’incarico autorizzato consente solo la preparazione prevista. Per un’altra azione avvia una nuova richiesta esplicita.');
         return;
       }
 
@@ -579,7 +754,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     try {
       try {
-        const agentRequest = buildAgentRoutingRequestFromProjection(message.trim(), copilotContextProjection);
+        const agentRequest = buildAgentRoutingRequestFromProjection(normalizedObjective, copilotContextProjection);
         const envelope = await interpretCopilotIntent(agentRequest);
         if (!requestIsCurrent()) return;
 
@@ -615,7 +790,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
             return;
           }
+          assertBoundMissionPrepareAuthorized();
           setIsPrepareOpen(true);
+          return;
+        }
+
+        if (boundLaunchMissionId) {
+          setGuidanceMessage('L’incarico autorizzato consente solo la preparazione prevista. Per un’altra azione avvia una nuova richiesta esplicita.');
           return;
         }
 
@@ -639,6 +820,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
   };
 
+
+  const handleResolve = (event: React.FormEvent) => {
+    event.preventDefault();
+    void resolveObjective(message);
+  };
   const handleBeginLink = async () => {
     if (!selectedSource || isLinkPending || isPending) return;
     if (!resolution?.actions.some(action => action.id === 'link-source-to-uda')) return;
@@ -709,6 +895,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
   };
 
+  if (!isOpen && !showStandaloneTrigger) return null;
+
   if (!isOpen) {
     return (
       <button
@@ -744,6 +932,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         <button
           type="button"
           onClick={() => {
+            interruptBoundMission();
             setIsPrepareOpen(false);
             setIsOpen(false);
           }}
@@ -922,6 +1111,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             )}
           </div>
         </details>
+
+        <CopilotMissionBridge launchRequest={launchRequest} message={message} ready={missionLaunchReady} />
 
         <form onSubmit={handleResolve} className="space-y-3">
           <div>
@@ -1150,21 +1341,29 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
         )}
 
-        {isPrepareOpen && selectedSource && resolvedTeachingContext && proposalUda && (
+        {(isPrepareOpen || readyMissionReview) && selectedSource && resolvedTeachingContext && proposalUda && (
           <div
             data-testid="library-copilot-prepare-disclosure"
             className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-bold text-slate-100">Preparazione assistita</div>
+                <div className="text-sm font-bold text-slate-100">
+                  {readyMissionReview ? 'Risultato dell’incarico' : 'Preparazione assistita'}
+                </div>
                 <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                  La preparazione compare solo dopo una richiesta esplicita. L’invio remoto resta bloccato fino al consenso previsto dal flusso governato.
+                  {readyMissionReview
+                    ? 'Risultato già preparato e salvato: puoi controllarlo, modificarlo o adottarlo senza avviare una nuova generazione.'
+                    : 'La preparazione compare solo dopo una richiesta esplicita. L’invio remoto resta bloccato fino al consenso previsto dal flusso governato.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsPrepareOpen(false)}
+                onClick={() => {
+                  interruptBoundMission();
+                  setIsPrepareOpen(false);
+                  setReadyMissionReview(null);
+                }}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 hover:border-slate-500"
               >
                 Chiudi
@@ -1180,6 +1379,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               onUpdate={onUpdateSource}
               onAddSource={onAddSource}
               onAdoptProposalToUda={onAdoptProposalToUda}
+              initialResult={readyMissionReview?.result ?? null}
+              missionId={readyMissionReview?.missionId ?? boundLaunchMissionId}
+              generationMissionId={boundLaunchMissionId}
+              {...(boundLaunchMissionId && generationContextFingerprint ? { generationContextFingerprint } : {})}
+              onMissionProposalReady={onMissionProposalReady}
+              onMissionOutcome={onMissionOutcome}
             />
           </div>
         )}

@@ -9,6 +9,7 @@ export type VaultRecordKey =
   | 'planning'
   | 'library'
   | 'professionalMemory'
+  | 'copilotState'
   | 'meta';
 
 export interface VaultKdfParametersV1 {
