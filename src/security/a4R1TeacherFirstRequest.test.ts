@@ -21,6 +21,15 @@ describe('A4-R1 teacher-first local request framing', () => {
     expect(result.needsClassChoice).toBe(false);
   });
 
+  test('canonical register class labels remain intact so spaced labels still bind to the stored UDA identity', () => {
+    const result = resolveTeacherFirstRequest('Prepara un’attività per la 3ª A', ['3ª A', '3ª  A', '3C']);
+
+    expect(result.goalKind).toBe('prepare');
+    expect(result.classCandidates).toEqual(['3ª A']);
+    expect(result.needsClassChoice).toBe(false);
+    expect(result.reason).toBe('READY');
+  });
+
   test('unknown teacher wording stays local and asks for a goal instead of inventing one', () => {
     const result = resolveTeacherFirstRequest('Vorrei sistemare un po’ di cose', ['1A', '1C']);
 
