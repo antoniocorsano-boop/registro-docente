@@ -410,9 +410,9 @@ test('AIC-07 Deck is evidence-backed, grouped and silent before Play — desktop
   await setupOpportunityFixture(page, calls);
 
   const deck = await openDeck(page);
-  for (const label of ['Qui', 'Oggi', 'Più tardi']) {
-    await expect(deck.getByRole('heading', { name: label, exact: true })).toBeVisible();
-  }
+  await expect(deck.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
+  await expect(deck.getByRole('heading', { name: 'Qui', exact: true })).toHaveCount(0);
+  await expect(deck.getByRole('heading', { name: 'Più tardi', exact: true })).toHaveCount(0);
   const card = opportunityCard(todaySection(deck));
   await expect(card).toBeVisible();
   await expect(card.getByText('Perché:', { exact: true })).toBeVisible();
@@ -556,11 +556,7 @@ test('AIC-07 proactivity persists independently and preference reset preserves B
 
   await openLibrary(page);
   await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
-  const trigger = page.getByTestId('library-copilot-trigger');
-  await trigger.click();
-  await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
-  const composer = page.getByTestId('library-copilot-composer');
-  await composer.getByLabel('Fonte della Biblioteca').selectOption({ label: SOURCE_TITLE });
+  const composer = await openTeacherFirstPrepareForSource(page);
   const panel = composer.getByTestId('copilot-memory-panel');
   if (!(await panel.evaluate(element => element.open === true))) await composer.getByTestId('copilot-memory-trigger').click();
   await expect(panel.getByText(MANUAL_MEMORY, { exact: true })).toBeVisible();
