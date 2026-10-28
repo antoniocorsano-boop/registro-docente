@@ -890,13 +890,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setGuidanceMessage(null);
     setIsPrepareOpen(false);
 
+    const framed = resolveTeacherFirstRequest(copy, knownTeacherClasses);
+    if (hasBoundLaunchContext && goal === 'material') {
+      setTeacherFirstResolution({ ...framed, goalKind: goal });
+      setTeacherFirstClassName(null);
+      return;
+    }
     if (hasBoundLaunchContext) {
       setTeacherFirstResolution(null);
       setTeacherFirstClassName(null);
       return;
     }
 
-    const framed = resolveTeacherFirstRequest(copy, knownTeacherClasses);
     setTeacherFirstResolution({ ...framed, goalKind: goal });
     setTeacherFirstClassName(null);
     setContextOverride(null);
