@@ -57,6 +57,17 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('Contesto già disponibile');
   });
 
+  test('a bound launch can disclose material controls explicitly without dropping the existing teaching binding', async () => {
+    const source = await composerSource();
+    const handlerStart = source.indexOf('const chooseTeacherFirstGoal =');
+    const handlerEnd = source.indexOf('const handleTeacherFirstProceed =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+
+    expect(handler).toContain("if (hasBoundLaunchContext && goal === 'material')");
+    expect(handler).toContain('setTeacherFirstResolution({ ...framed, goalKind: goal })');
+    expect(handler).not.toContain("if (hasBoundLaunchContext && goal === 'material') {\n      setContextOverride(null)");
+  });
+
   test('existing governed agent and mission boundaries remain present behind the new entry flow', async () => {
     const source = await composerSource();
 
