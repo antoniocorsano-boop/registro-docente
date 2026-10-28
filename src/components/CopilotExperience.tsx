@@ -103,7 +103,7 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
       ? planningContext.profile.id
       : null;
     const context = buildCopilotContextProjection({
-      surface: projection.surface,
+      surface: 'library',
       className: opportunity.contextRef.className,
       udaId: opportunity.contextRef.udaId,
       lessonId: opportunity.contextRef.lessonId,
