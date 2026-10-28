@@ -60,6 +60,36 @@ async function authorizedMission() {
   });
 }
 
+function proposal(overrides: {
+  sourceId?: string;
+  udaId?: string;
+  lessonId?: string | null;
+} = {}) {
+  const lessonId = overrides.lessonId === undefined ? 'lesson-1' : overrides.lessonId;
+  return {
+    schemaVersion: 1 as const,
+    kind: 'activity' as const,
+    title: 'Attività',
+    objective: 'Obiettivo',
+    teacherSetup: 'Preparazione',
+    studentTask: 'Compito',
+    steps: ['Passo 1'],
+    questions: ['Domanda 1'],
+    adaptationHint: 'Adattamento',
+    sourceId: overrides.sourceId ?? 'source-1',
+    context: {
+      udaId: overrides.udaId ?? 'uda-1',
+      ...(lessonId ? { lessonId } : {})
+    },
+    provenance: {
+      mode: 'remote' as const,
+      provider: 'fixture',
+      model: 'fixture-model',
+      generatedAt: NOW
+    }
+  };
+}
+
 describe('AIC-07 mission behavior', () => {
   test('execution grant is valid only for the exact mission/fingerprint and expires after 15 minutes', async () => {
     const { isMissionExecutionGrantValid } = await loadMission();
@@ -112,5 +142,22 @@ describe('AIC-07 mission behavior', () => {
     expect(() => assertMissionStepWithinScope(mission, {
       capability: 'review', className: '2C', udaId: 'uda-1', lessonId: 'lesson-1', sourceIds: ['source-1']
     })).toThrow();
+  });
+
+  test('a generated proposal can complete only an active mission with the exact authorized source and teaching target', async () => {
+    const missionModule = await loadMission();
+    expect(typeof missionModule.canAcceptMissionProposalResult).toBe('function');
+    const { mission } = await authorizedMission();
+    const canAccept = missionModule.canAcceptMissionProposalResult as (
+      mission: typeof mission,
+      proposal: ReturnType<typeof proposal>
+    ) => boolean;
+
+    expect(canAccept(mission, proposal())).toBe(true);
+    expect(canAccept(mission, proposal({ sourceId: 'source-2' }))).toBe(false);
+    expect(canAccept(mission, proposal({ udaId: 'uda-2' }))).toBe(false);
+    expect(canAccept(mission, proposal({ lessonId: 'lesson-2' }))).toBe(false);
+    expect(canAccept({ ...mission, status: 'ready' }, proposal())).toBe(false);
+    expect(canAccept({ ...mission, status: 'archived' }, proposal())).toBe(false);
   });
 });
