@@ -82,6 +82,7 @@ interface LibraryCopilotComposerProps {
   onSetMemoryCategory: (category: ProfessionalMemoryCategory, enabled: boolean) => Promise<void>;
   onRemoveMemoryCategory: (category: ProfessionalMemoryCategory) => Promise<void>;
   onMissionProposalReady?: (input: MissionProposalReadyNotification) => Promise<void> | void;
+  onMissionInterrupted?: (input: { missionId: string }) => Promise<void> | void;
   onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
   isPending?: boolean;
   showStandaloneTrigger?: boolean;
@@ -163,6 +164,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   onSetMemoryCategory,
   onRemoveMemoryCategory,
   onMissionProposalReady,
+  onMissionInterrupted,
   onMissionOutcome,
   isPending = false,
   showStandaloneTrigger = true
@@ -350,6 +352,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady
     ? launchRequest.mission.missionId
     : undefined;
+  const interruptBoundMission = () => {
+    if (!boundLaunchMissionId) return;
+    void onMissionInterrupted?.({ missionId: boundLaunchMissionId });
+  };
   const missionLaunchReady = !launchRequest?.mission || Boolean(
     missionLaunchBindingsReady
     && missionLaunchSettledNonce === launchRequest.nonce
@@ -865,6 +871,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         <button
           type="button"
           onClick={() => {
+            interruptBoundMission();
             setIsPrepareOpen(false);
             setIsOpen(false);
           }}
@@ -1292,6 +1299,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  interruptBoundMission();
                   setIsPrepareOpen(false);
                   setReadyMissionReview(null);
                 }}
