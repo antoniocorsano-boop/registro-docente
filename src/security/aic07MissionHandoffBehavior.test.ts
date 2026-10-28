@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 const APP = new URL('../App.tsx', import.meta.url);
 const LAUNCH = new URL('../library/copilotLaunchContext.ts', import.meta.url);
 const BRIDGE = new URL('../components/CopilotMissionBridge.tsx', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 const SERVICE = new URL('../services/libraryProposalService.ts', import.meta.url);
 const PANEL = new URL('../components/LibraryProposalPanel.tsx', import.meta.url);
 
@@ -76,6 +77,15 @@ describe('AIC-07 mission Play handoff', () => {
     expect(bridge).toContain('ready: boolean');
     expect(bridge).toContain('if (!mission || !ready || submittedNonceRef.current === launchRequest.nonce) return;');
     expect(bridge).toContain('[launchRequest?.nonce, launchRequest?.mission, message, ready]');
+  });
+
+
+  test('mission auto-submit waits for the launch nonce to settle after stale-result invalidators', async () => {
+    const composer = await Bun.file(COMPOSER).text();
+    expect(composer).toContain('missionLaunchSettledNonce');
+    expect(composer).toContain('setMissionLaunchSettledNonce(launchRequest.nonce)');
+    expect(composer).toContain('missionLaunchBindingsReady');
+    expect(composer).toContain('missionLaunchSettledNonce === launchRequest.nonce');
   });
 
 });

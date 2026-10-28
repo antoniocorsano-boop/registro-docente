@@ -183,6 +183,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [linkSuccess, setLinkSuccess] = useState<string | null>(null);
   const [isPrepareOpen, setIsPrepareOpen] = useState(false);
   const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
+  const [missionLaunchSettledNonce, setMissionLaunchSettledNonce] = useState<number | null>(null);
   const resolutionEpochRef = useRef(0);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -335,10 +336,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
-  const missionLaunchReady = !launchRequest?.mission || Boolean(
+  const missionLaunchBindingsReady = !launchRequest?.mission || Boolean(
     (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
     && (!launchRequest.context.udaId || resolvedTeachingContext?.udaId === launchRequest.context.udaId)
     && (!launchRequest.context.lessonId || resolvedTeachingContext?.lessonId === launchRequest.context.lessonId)
+  );
+  const missionLaunchReady = !launchRequest?.mission || Boolean(
+    missionLaunchBindingsReady
+    && missionLaunchSettledNonce === launchRequest.nonce
   );
 
   useEffect(() => {
@@ -349,6 +354,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   useEffect(() => {
     if (!launchRequest) return;
 
+    setMissionLaunchSettledNonce(null);
     resolutionEpochRef.current += 1;
     setContextOverride('auto');
     setIsOpen(true);
@@ -433,6 +439,22 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
   }, [selectedSource?.privacy, selectedSource?.status]);
+
+
+  useEffect(() => {
+    if (!launchRequest?.mission || !missionLaunchBindingsReady) {
+      setMissionLaunchSettledNonce(null);
+      return;
+    }
+    setMissionLaunchSettledNonce(launchRequest.nonce);
+  }, [
+    launchRequest?.nonce,
+    launchRequest?.mission,
+    missionLaunchBindingsReady,
+    selectedSource?.privacy,
+    selectedSource?.status,
+    teachingContextFingerprint
+  ]);
 
   const contextIsProposed = contextOverride === 'auto' && (
     launchTeachingContextIsProposed
