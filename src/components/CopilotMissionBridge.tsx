@@ -12,8 +12,19 @@ const activeMissionGrants = new Map<string, {
   grant: CopilotMissionExecutionGrantV1;
 }>();
 
-function missionLaunchKey(missionId: string, nonce: number): string {
-  return `${missionId}:${nonce}`;
+function missionLaunchKey(missionId: string, nonce: number, grantToken: string): string {
+  return `${missionId}:${grantToken}:${nonce}`;
+}
+
+export function claimMissionLaunch(
+  missionId: string,
+  nonce: number,
+  grantToken: string
+): boolean {
+  const launchKey = missionLaunchKey(missionId, nonce, grantToken);
+  if (consumedMissionLaunches.has(launchKey)) return false;
+  consumedMissionLaunches.add(launchKey);
+  return true;
 }
 
 export function bindMissionRuntime(
@@ -39,9 +50,6 @@ export const CopilotMissionBridge: React.FC<{
     if (!mission || !ready || submittedNonceRef.current === launchRequest.nonce) return;
     if (message.trim() !== mission.objective.trim()) return;
 
-    const launchKey = missionLaunchKey(mission.missionId, launchRequest.nonce);
-    if (consumedMissionLaunches.has(launchKey)) return;
-
     const activeGrant = activeMissionGrants.get(mission.missionId);
     if (!activeGrant) return;
     if (!isMissionExecutionGrantValid(
@@ -54,9 +62,9 @@ export const CopilotMissionBridge: React.FC<{
     const control = document.getElementById('copilot-message') as HTMLTextAreaElement | null;
     const form = control?.form;
     if (!form) return;
+    if (!claimMissionLaunch(mission.missionId, launchRequest.nonce, activeGrant.grant.token)) return;
 
     submittedNonceRef.current = launchRequest.nonce;
-    consumedMissionLaunches.add(launchKey);
     form.requestSubmit();
   }, [launchRequest?.nonce, launchRequest?.mission, message, ready]);
 
