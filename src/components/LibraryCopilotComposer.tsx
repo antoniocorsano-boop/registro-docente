@@ -256,7 +256,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     : [], [udas, teacherFirstClassName]);
   const teacherFirstGoalKind: TeacherFirstGoalKind | null = teacherFirstResolution?.goalKind ?? null;
   const showTeachingContextControls = isBoundMissionFlow || Boolean(teacherFirstClassName);
-  const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(teacherFirstClassName && resolvedTeachingContext);
+  const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassName && resolvedTeachingContext);
 
   const teachingContextFingerprint = [
     resolvedTeachingContext?.udaId ?? '',
