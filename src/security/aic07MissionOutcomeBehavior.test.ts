@@ -80,4 +80,10 @@ describe('AIC-07 mission outcome behavior', () => {
     expect(next.missions[0]?.status).toBe('ready');
     expect(next.preferences.signals[0]?.signal).toBe('small-edits');
   });
+
+  test('App routes the mission-specific outcome through the durable lifecycle mutation', async () => {
+    const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
+    expect(appSource).toContain('recordCopilotMissionOutcome');
+    expect(appSource).toMatch(/recordCopilotMissionOutcome\(current,\s*\{\s*missionId,\s*signal,\s*signalId:\s*uid\(\),\s*occurredAt:/s);
+  });
 });
