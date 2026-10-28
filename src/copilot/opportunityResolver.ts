@@ -336,7 +336,9 @@ export function resolveCopilotOpportunities(input: ResolveCopilotOpportunitiesIn
     });
   }
 
+  const deferredIds = new Set((input.deferred ?? []).map(item => item.opportunity.id));
   const eligible = opportunities
+    .filter(opportunity => opportunity.scope === 'later' || !deferredIds.has(opportunity.id))
     .filter(opportunity => !isDismissed(opportunity, input))
     .filter(opportunity => opportunity.rank.finalScore >= policy.threshold)
     .sort(compareOpportunities);

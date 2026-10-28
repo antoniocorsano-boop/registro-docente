@@ -122,7 +122,7 @@ jobs:
           cat browser-evidence/server.log
           exit 1
 
-      - name: Run Chromium qualification
+      - name: Run historical Chromium qualification
         shell: bash
         run: |
           set -euo pipefail
@@ -139,7 +139,6 @@ jobs:
             aic-04-cross-surface-entry.spec.cjs \
             aic-05-professional-memory.spec.cjs \
             aic-06-budget-governor.spec.cjs \
-            aic-07-supervised-copilot.spec.cjs \
             lib01-private-library-qualification.spec.cjs \
             lib01b-contextual-core-qualification.spec.cjs \
             lib01c-teaching-context-qualification.spec.cjs \
@@ -162,6 +161,20 @@ jobs:
             ux-qa-02-progressive-disclosure.spec.cjs \
             --reporter=line \
             --output=../browser-evidence/test-results
+
+      - name: Run dedicated AIC-07 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            aic-07-supervised-copilot.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/aic-07-test-results
 
       - name: Analyze UX navigation evidence
         shell: bash

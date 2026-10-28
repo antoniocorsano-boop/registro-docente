@@ -10,7 +10,12 @@ import {
   resolveCopilotOpportunities,
   type CopilotOpportunityV1
 } from '../copilot/opportunityResolver';
-import { buildCopilotMissionPreview, type CopilotMissionPreviewV1 } from '../copilot/mission';
+import {
+  buildCopilotMissionPreview,
+  type CopilotMissionPreviewV1,
+  type CopilotMissionV1,
+  type MissionResumeDecision
+} from '../copilot/mission';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import { CopilotDeck } from './CopilotDeck';
 
@@ -23,6 +28,7 @@ interface CopilotExperienceProps {
   ambientContext: CopilotLaunchContext;
   onPutAside: (opportunity: CopilotOpportunityV1, contextFingerprint: string) => Promise<void>;
   onIgnore: (opportunity: CopilotOpportunityV1, contextFingerprint: string) => Promise<void>;
+  onResume: (mission: CopilotMissionV1) => Promise<MissionResumeDecision>;
   onOpenConversation: () => void;
   onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1, contextFingerprint: string) => Promise<void>;
 }
@@ -43,6 +49,7 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
   ambientContext,
   onPutAside,
   onIgnore,
+  onResume,
   onOpenConversation,
   onStart
 }) => {
@@ -108,6 +115,7 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
       resolvePreview={resolvePreview}
       onPutAside={opportunity => onPutAside(opportunity, contextFingerprint)}
       onIgnore={opportunity => onIgnore(opportunity, contextFingerprint)}
+      onResume={onResume}
       onOpenConversation={onOpenConversation}
       {...(onStart ? {
         onStart: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1) => (

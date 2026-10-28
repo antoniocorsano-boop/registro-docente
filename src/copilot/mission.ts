@@ -272,6 +272,26 @@ export function authorizeCopilotMission(
   return { mission, grant };
 }
 
+export function authorizeCopilotMissionResume(
+  mission: CopilotMissionV1,
+  currentContextFingerprint: string,
+  now: string
+): CopilotMissionExecutionGrantV1 {
+  if (resolveMissionResume(mission, currentContextFingerprint, now) !== 'resume') {
+    throw new Error('La missione richiede una nuova anteprima prima di essere ripresa.');
+  }
+  const issuedAtMs = Date.parse(now);
+  if (!Number.isFinite(issuedAtMs)) throw new Error('Data di ripresa missione non valida.');
+  return {
+    schemaVersion: 1,
+    token: createEphemeralToken(mission.id, now),
+    missionId: mission.id,
+    contextFingerprint: currentContextFingerprint,
+    issuedAt: now,
+    expiresAt: new Date(issuedAtMs + EXECUTION_GRANT_TTL_MS).toISOString()
+  };
+}
+
 export function isMissionExecutionGrantValid(
   grant: CopilotMissionExecutionGrantV1,
   mission: CopilotMissionV1,

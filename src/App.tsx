@@ -38,7 +38,16 @@ import {
 } from './memory/professionalMemory';
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
-import { authorizeCopilotMission, type CopilotMissionExecutionGrantV1, type CopilotMissionPreviewV1 } from './copilot/mission';
+import {
+  authorizeCopilotMission,
+  authorizeCopilotMissionResume,
+  buildMissionContextFingerprint,
+  resolveMissionResume,
+  type CopilotMissionExecutionGrantV1,
+  type CopilotMissionPreviewV1,
+  type CopilotMissionV1,
+  type MissionResumeDecision
+} from './copilot/mission';
 import type { MissionProposalReadyNotification } from './services/libraryProposalService';
 import type { CopilotPreferenceSignalKind } from './copilot/preferenceLearning';
 import { bindMissionRuntime } from './components/CopilotMissionBridge';
@@ -686,6 +695,75 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       ...(mission.contextRef.sourceId ? { sourceId: mission.contextRef.sourceId } : {}),
       teachingContextMode: 'explicit'
     }, runtime);
+  }, [commitCopilotStateMutation, openLibraryCopilot]);
+
+  const handleResumeCopilotMission = useCallback(async (
+    mission: CopilotMissionV1
+  ): Promise<MissionResumeDecision> => {
+    const currentMission = copilotStateRef.current.missions.find(candidate => candidate.id === mission.id);
+    if (!currentMission || currentMission.status !== 'suspended') return 'archive';
+
+    const uda = udasRef.current.find(candidate => candidate.id === currentMission.contextRef.udaId);
+    const sources = libraryRef.current.sources.filter(source => currentMission.sourceRefs.includes(source.id));
+    if (!uda
+      || sources.length !== currentMission.sourceRefs.length
+      || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
+      missionExecutionGrantsRef.current.delete(currentMission.id);
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current,
+        currentMission.id,
+        item => ({ ...item, status: 'archived' })
+      ), 'Incarico non più riprendibile');
+      return 'archive';
+    }
+
+    const now = new Date().toISOString();
+    const projection = buildCopilotContextProjection({
+      surface: 'library',
+      className: currentMission.contextRef.className,
+      udaId: currentMission.contextRef.udaId,
+      lessonId: currentMission.contextRef.lessonId,
+      sourceId: currentMission.contextRef.sourceId ?? currentMission.sourceRefs[0]
+    });
+    const currentContextFingerprint = buildMissionContextFingerprint({
+      context: projection,
+      uda,
+      sources,
+      planningProfileId: projection.planningProfileId,
+      missionSettings: {
+        aiBudgetProfile: settingsRef.current.aiBudgetProfile ?? 'balanced',
+        copilotProactivity: settingsRef.current.copilotProactivity ?? 'balanced'
+      }
+    });
+    const decision = resolveMissionResume(currentMission, currentContextFingerprint, now);
+
+    if (decision !== 'resume') {
+      missionExecutionGrantsRef.current.delete(currentMission.id);
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current,
+        currentMission.id,
+        item => ({ ...item, status: 'archived' })
+      ), decision === 'repreview' ? 'Contesto cambiato: controlla la nuova anteprima' : 'Incarico archiviato');
+      return decision;
+    }
+
+    const grant = authorizeCopilotMissionResume(currentMission, currentContextFingerprint, now);
+    await commitCopilotStateMutation(current => updateCopilotMission(
+      current,
+      currentMission.id,
+      item => ({ ...item, status: 'authorized' })
+    ), 'Incarico del Copilota ripreso');
+    missionExecutionGrantsRef.current.set(currentMission.id, grant);
+    const runtime = bindMissionRuntime({ ...currentMission, status: 'authorized' }, grant);
+    openLibraryCopilot({
+      surface: 'library',
+      className: currentMission.contextRef.className,
+      udaId: currentMission.contextRef.udaId,
+      ...(currentMission.contextRef.lessonId ? { lessonId: currentMission.contextRef.lessonId } : {}),
+      ...(currentMission.contextRef.sourceId ? { sourceId: currentMission.contextRef.sourceId } : {}),
+      teachingContextMode: 'explicit'
+    }, runtime);
+    return 'resume';
   }, [commitCopilotStateMutation, openLibraryCopilot]);
 
   const handleMissionProposalReady = useCallback(async (
@@ -1666,6 +1744,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             ambientContext={ambientCopilotContext}
             onPutAside={handlePutAsideCopilotOpportunity}
             onIgnore={handleIgnoreCopilotOpportunity}
+            onResume={handleResumeCopilotMission}
             onStart={handleStartCopilotMission}
             onOpenConversation={reopenLibraryCopilot}
           />

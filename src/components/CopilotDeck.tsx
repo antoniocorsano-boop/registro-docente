@@ -10,7 +10,7 @@ import {
   Target,
   X
 } from 'lucide-react';
-import type { CopilotMissionPreviewV1, CopilotMissionV1 } from '../copilot/mission';
+import type { CopilotMissionPreviewV1, CopilotMissionV1, MissionResumeDecision } from '../copilot/mission';
 import type {
   CopilotOpportunityResolution,
   CopilotOpportunityScope,
@@ -24,7 +24,7 @@ interface CopilotDeckProps {
   onPutAside: (opportunity: CopilotOpportunityV1) => Promise<void>;
   onIgnore: (opportunity: CopilotOpportunityV1) => Promise<void>;
   onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1) => Promise<void>;
-  onResume?: (mission: CopilotMissionV1) => Promise<void>;
+  onResume?: (mission: CopilotMissionV1) => Promise<MissionResumeDecision>;
   onOpenConversation: () => void;
 }
 
@@ -208,7 +208,15 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                         <button
                           type="button"
                           disabled={!onResume || busyId === mission.id}
-                          onClick={() => onResume && void run(mission.id, () => onResume(mission))}
+                          onClick={() => {
+                            if (!onResume || busyId) return;
+                            setBusyId(mission.id);
+                            void onResume(mission)
+                              .then(decision => {
+                                setPreviewId(decision === 'repreview' ? mission.opportunityId : null);
+                              })
+                              .finally(() => setBusyId(null));
+                          }}
                           className="mt-2 min-h-[44px] rounded-lg border border-cyan-700 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-45"
                         >
                           ▶ Riprendi

@@ -15,19 +15,20 @@ export function bindMissionRuntime(
 export const CopilotMissionBridge: React.FC<{
   launchRequest: LibraryCopilotLaunchRequest | null;
   message: string;
-}> = ({ launchRequest, message }) => {
+  ready: boolean;
+}> = ({ launchRequest, message, ready }) => {
   const submittedNonceRef = useRef<number | null>(null);
 
   useEffect(() => {
     const mission = launchRequest?.mission;
-    if (!mission || submittedNonceRef.current === launchRequest.nonce) return;
+    if (!mission || !ready || submittedNonceRef.current === launchRequest.nonce) return;
     if (message.trim() !== mission.objective.trim()) return;
     const control = document.getElementById('copilot-message') as HTMLTextAreaElement | null;
     const form = control?.form;
     if (!form) return;
     submittedNonceRef.current = launchRequest.nonce;
     form.requestSubmit();
-  }, [launchRequest?.nonce, launchRequest?.mission, message]);
+  }, [launchRequest?.nonce, launchRequest?.mission, message, ready]);
 
   return null;
 };

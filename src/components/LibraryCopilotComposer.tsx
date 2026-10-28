@@ -335,6 +335,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+  const missionLaunchReady = !launchRequest?.mission || Boolean(
+    (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
+    && (!launchRequest.context.udaId || resolvedTeachingContext?.udaId === launchRequest.context.udaId)
+    && (!launchRequest.context.lessonId || resolvedTeachingContext?.lessonId === launchRequest.context.lessonId)
+  );
 
   useEffect(() => {
     if (!openRequestNonce) return;
@@ -947,7 +952,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </div>
         </details>
 
-        <CopilotMissionBridge launchRequest={launchRequest} message={message} />
+        <CopilotMissionBridge launchRequest={launchRequest} message={message} ready={missionLaunchReady} />
 
         <form onSubmit={handleResolve} className="space-y-3">
           <div>
