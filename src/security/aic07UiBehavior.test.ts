@@ -5,6 +5,7 @@ const PROACTIVITY = new URL('../copilot/proactivity.ts', import.meta.url);
 const SETTINGS = new URL('../components/CopilotProactivitySettings.tsx', import.meta.url);
 const DECK = new URL('../components/CopilotDeck.tsx', import.meta.url);
 const EXPERIENCE = new URL('../components/CopilotExperience.tsx', import.meta.url);
+const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 const APP = new URL('../App.tsx', import.meta.url);
 
 describe('AIC-07 supervised Copilot Deck UI contract', () => {
@@ -67,13 +68,20 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     }
   });
 
-  test('App commits copilotState through the durable coordinator before publishing and Deck owns the floating entry', async () => {
-    const app = await Bun.file(APP).text();
+  test('App commits copilotState through the durable coordinator and Deck structurally owns the only floating entry', async () => {
+    const [app, composer] = await Promise.all([
+      Bun.file(APP).text(),
+      Bun.file(COMPOSER).text()
+    ]);
     expect(app).toContain('initialSnapshot.copilotState ?? createEmptyCopilotState()');
     expect(app).toContain('const copilotStateRef = useRef(copilotState)');
     expect(app).toContain('secureStorage.saveCopilotStateAndMeta');
     expect(app).toContain('<CopilotExperience');
-    expect(app).toContain('aic07-hide-legacy-copilot-trigger');
+    expect(app).toContain('showStandaloneTrigger={false}');
+    expect(app).not.toContain('aic07-hide-legacy-copilot-trigger');
+    expect(composer).toContain('showStandaloneTrigger?: boolean;');
+    expect(composer).toContain('showStandaloneTrigger = true');
+    expect(composer).toContain('if (!isOpen && !showStandaloneTrigger) return null;');
   });
 
   test('preference reset is scoped to copilotState preferences only', async () => {
