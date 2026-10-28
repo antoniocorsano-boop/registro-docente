@@ -58,6 +58,7 @@ import {
   appendCopilotMission,
   deferCopilotOpportunity,
   dismissCopilotOpportunity,
+  recordCopilotMissionOutcome,
   recordCopilotOutcomeSignal,
   resetCopilotStatePreferences,
   updateCopilotMission
@@ -786,10 +787,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   ): Promise<void> => {
     const mission = copilotStateRef.current.missions.find(candidate => candidate.id === missionId);
     if (!mission) return Promise.resolve();
-    return commitCopilotStateMutation(current => recordCopilotOutcomeSignal(current, {
-      id: uid(),
-      opportunityKind: mission.kind,
+    return commitCopilotStateMutation(current => recordCopilotMissionOutcome(current, {
+      missionId,
       signal,
+      signalId: uid(),
       occurredAt: new Date().toISOString()
     }), '').then(() => undefined);
   }, [commitCopilotStateMutation]);
