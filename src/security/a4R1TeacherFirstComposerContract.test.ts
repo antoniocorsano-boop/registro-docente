@@ -84,6 +84,16 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('!isBoundMissionFlow && !hasBoundLaunchContext && !hasResolvedConversationContext');
   });
 
+  test('an explicitly selected source keeps material controls disclosed after free-text editing without exposing bound-launch plumbing by default', async () => {
+    const source = await composerSource();
+    const controlsStart = source.indexOf('const showMaterialControls =');
+    const controlsEnd = source.indexOf(';', controlsStart);
+    const controls = source.slice(controlsStart, controlsEnd + 1);
+
+    expect(controlsStart).toBeGreaterThanOrEqual(0);
+    expect(controls).toContain('Boolean(selectedSourceId && !hasBoundLaunchContext)');
+  });
+
   test('existing governed agent and mission boundaries remain present behind the new entry flow', async () => {
     const source = await composerSource();
 
