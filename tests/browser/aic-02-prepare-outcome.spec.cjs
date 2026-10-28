@@ -246,7 +246,7 @@ async function launchComposer(page, { lesson = false } = {}) {
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, {
     sourceTitle: SOURCE_TITLE,
-    contextText: lesson ? LESSON_TOPIC : UDA_TITLE
+    contextText: CLASS_NAME
   });
   return composer;
 }

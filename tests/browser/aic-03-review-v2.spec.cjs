@@ -228,7 +228,7 @@ async function launchComposerFor(page, sourceTitle) {
 
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle, contextText: LESSON_TOPIC });
+  await expectExistingCopilotBindings(composer, { sourceTitle, contextText: CLASS_NAME });
   return composer;
 }
 
