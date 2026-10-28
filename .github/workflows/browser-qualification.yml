@@ -75,6 +75,7 @@ jobs:
           cp tests/browser/aic-06-budget-governor.spec.cjs .browser-tools/aic-06-budget-governor.spec.cjs
           cp tests/browser/aic-07-supervised-copilot.spec.cjs .browser-tools/aic-07-supervised-copilot.spec.cjs
           cp tests/browser/a4-r1-teacher-first.spec.cjs .browser-tools/a4-r1-teacher-first.spec.cjs
+          cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
           cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
           cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
           cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
