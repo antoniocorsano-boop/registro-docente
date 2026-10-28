@@ -110,4 +110,17 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     expect(fragment).not.toContain('setUdas(');
     expect(fragment).not.toContain('setAppData(');
   });
+
+  test('wires supervised resume through App and Experience using the canonical resume decision', async () => {
+    const [app, experience] = await Promise.all([
+      Bun.file(APP).text(),
+      Bun.file(EXPERIENCE).text()
+    ]);
+    expect(app).toContain('resolveMissionResume');
+    expect(app).toContain('const handleResumeCopilotMission');
+    expect(app).toContain('onResume={handleResumeCopilotMission}');
+    expect(experience).toContain('onResume:');
+    expect(experience).toContain('onResume={onResume}');
+  });
+
 });

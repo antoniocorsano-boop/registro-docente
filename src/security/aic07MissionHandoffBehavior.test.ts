@@ -70,4 +70,12 @@ describe('AIC-07 mission Play handoff', () => {
     expect(fragment).not.toContain('reasoning');
     expect(fragment).not.toContain('chainOfThought');
   });
+
+  test('mission bridge waits for launch source and teaching context readiness before auto-submit', async () => {
+    const bridge = await Bun.file(BRIDGE).text();
+    expect(bridge).toContain('ready: boolean');
+    expect(bridge).toContain('if (!mission || !ready || submittedNonceRef.current === launchRequest.nonce) return;');
+    expect(bridge).toContain('[launchRequest?.nonce, launchRequest?.mission, message, ready]');
+  });
+
 });

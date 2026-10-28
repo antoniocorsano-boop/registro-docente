@@ -103,4 +103,24 @@ describe('AIC-07 opportunity resolver behavior', () => {
     expect(essential.primary.length).toBeLessThanOrEqual(2);
     expect(present.primary.length + present.overflow.length).toBeGreaterThanOrEqual(balanced.primary.length);
   });
+
+  test('put-aside moves the exact opportunity to later instead of duplicating the current candidate', async () => {
+    const { resolveCopilotOpportunities } = await loadResolver();
+    const input = baseInput();
+    const initial = resolveCopilotOpportunities(input);
+    const opportunity = initial.primary.find((item: { kind: string }) => item.kind === 'prepare-current-lesson');
+    expect(opportunity).toBeDefined();
+    const result = resolveCopilotOpportunities({
+      ...input,
+      deferred: [{
+        opportunity: opportunity!,
+        contextFingerprint: JSON.stringify(input.context),
+        deferredAt: input.now
+      }]
+    });
+    const all = [...result.primary, ...result.overflow];
+    expect(all.filter(item => item.id === opportunity!.id && item.scope !== 'later')).toHaveLength(0);
+    expect(all.filter(item => item.id === opportunity!.id && item.scope === 'later')).toHaveLength(1);
+  });
+
 });
