@@ -23,7 +23,12 @@ async function createClassAndReturnHome(page, className) {
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
   await closePersistenceConfirmation(page);
-  await page.goBack();
+
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const drawer = page.getByRole('complementary');
+  const classesButton = drawer.getByRole('button', { name: 'Classi', exact: true });
+  await expect(classesButton).toBeVisible();
+  await classesButton.click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
