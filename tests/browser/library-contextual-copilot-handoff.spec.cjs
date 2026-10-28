@@ -163,7 +163,7 @@ test('contextual Copilot handoff makes disclosure intent-owned and keeps provide
   await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
   await expect(prepareDisclosure).toHaveCount(0);
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
+  await expect(composer.getByText('Dimmi cosa vuoi ottenere: per esempio preparare un’attività, rivedere un materiale o collegarlo a una UDA.', { exact: false })).toBeVisible();
   await expect(reviewPanel).toHaveCount(0);
   await expect(linkAction).toHaveCount(0);
   await expect(prepareDisclosure).toHaveCount(0);
