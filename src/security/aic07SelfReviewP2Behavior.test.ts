@@ -68,12 +68,12 @@ describe('AIC-07 self-review P2 regressions', () => {
     expect([...reconsidered.primary, ...reconsidered.overflow].some(item => item.id === opportunity!.id)).toBe(true);
   });
 
-  test('Play compares the previewed material fingerprint with current committed material before authorization', async () => {
+  test('Play compares the previewed mission fingerprint with current committed authority inputs before authorization', async () => {
     const [experience, app] = await Promise.all([
       Bun.file(new URL('../components/CopilotExperience.tsx', import.meta.url)).text(),
       Bun.file(new URL('../App.tsx', import.meta.url)).text()
     ]);
-    expect(experience).toContain('buildCopilotOpportunityMaterialFingerprint');
+    expect(experience).toContain('buildMissionContextFingerprint');
     expect(experience).toContain('buildCopilotOpportunityDismissalFingerprint');
     const start = app.indexOf('const handleStartCopilotMission');
     const end = app.indexOf('const handleResumeCopilotMission', start);
@@ -81,7 +81,8 @@ describe('AIC-07 self-review P2 regressions', () => {
     expect(end).toBeGreaterThan(start);
     const fragment = app.slice(start, end);
     expect(fragment).not.toContain('void contextFingerprint');
-    expect(fragment).toContain('buildCopilotOpportunityMaterialFingerprint');
+    expect(fragment).toContain('buildMissionContextFingerprint');
+    expect(fragment).toContain('currentContextFingerprint');
     expect(fragment).toContain('materialFingerprint');
     expect(fragment).toContain('Il contesto della missione è cambiato');
   });
