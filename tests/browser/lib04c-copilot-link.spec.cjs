@@ -146,7 +146,12 @@ async function openComposer(page) {
 }
 
 async function addTextSourceFromComposer(composer, title) {
-  await composer.getByText('Aggiungi una nuova fonte', { exact: true }).click();
+  const addSource = composer.getByText('Aggiungi una nuova fonte', { exact: true });
+  if (!(await addSource.isVisible().catch(() => false))) {
+    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
+  }
+  await expect(addSource).toBeVisible();
+  await addSource.click();
   await composer.getByRole('button', { name: 'Testo/idea', exact: true }).click();
   await composer.getByPlaceholder('Titolo della fonte').fill(title);
   await composer.getByPlaceholder('Incolla un testo, un appunto o descrivi un’idea…').fill(

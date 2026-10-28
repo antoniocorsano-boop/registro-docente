@@ -146,8 +146,7 @@ test('LIB-01B hands contextual source actions to Copilot and gates durable UDA l
   await currentUda.selectOption({ label: UDA_TITLE });
   trackContextualRequests = true;
   let composer = await handoffToComposer(page, card);
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
 
   await assertReviewOnlyPossibility(composer);
   await resolveLinkPossibility(composer);
@@ -241,8 +240,7 @@ test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-fre
   const handoff = card.getByRole('button', { name: 'Usa con Copilota', exact: true });
   await assertAtLeast44(handoff, 'mobile source-to-Copilot handoff');
   const composer = await handoffToComposer(page, card);
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
 
   const submit = composer.getByRole('button', { name: 'Mostra le possibilità', exact: true });
   await assertAtLeast44(submit, 'mobile Copilot possibilities submit');

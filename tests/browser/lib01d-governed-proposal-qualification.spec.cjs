@@ -145,6 +145,10 @@ async function openComposer(page) {
 
 async function selectComposerSource(composer, title) {
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  if (!(await sourceSelect.isVisible().catch(() => false))) {
+    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
+  }
+  await expect(sourceSelect).toBeVisible();
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 }
@@ -261,7 +265,7 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   let composer = page.locator('[data-testid=\"library-copilot-composer\"]');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
   expect(proposalBodies).toHaveLength(0);
   let disclosure = await openPrepareFromIntent(composer);
   await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
@@ -394,7 +398,7 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.locator('[data-testid=\"library-copilot-composer\"]');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
   await assertAtLeast44(composer.getByLabel('Che cosa vuoi farne?'), 'mobile prepare request');
   await assertAtLeast44(composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }), 'mobile prepare submit');
   const disclosure = await openPrepareFromIntent(composer);

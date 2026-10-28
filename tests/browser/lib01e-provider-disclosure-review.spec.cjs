@@ -99,6 +99,10 @@ async function openComposer(page) {
 
 async function selectComposerSource(composer) {
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  if (!(await sourceSelect.isVisible().catch(() => false))) {
+    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
+  }
+  await expect(sourceSelect).toBeVisible();
   await sourceSelect.selectOption({ label: SOURCE_TITLE });
   await expect(sourceSelect.locator('option:checked')).toHaveText(SOURCE_TITLE);
 }

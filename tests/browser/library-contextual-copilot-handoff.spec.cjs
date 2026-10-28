@@ -89,7 +89,7 @@ async function launchFromCard(page, title) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(title);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${title}`);
   await expect(composer).toContainText(CLASS_NAME);
   await expect(composer).toContainText('UDA corrente');
   return composer;
@@ -153,7 +153,9 @@ test('contextual Copilot handoff makes disclosure intent-owned and keeps provide
   await expect(linkAction).toHaveCount(0);
   expect(proposalRequests).toHaveLength(0);
 
+  await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect).toBeVisible();
   await sourceSelect.selectOption({ label: SECOND_SOURCE_TITLE });
   await expect(prepareDisclosure).toHaveCount(0);
   await sourceSelect.selectOption({ label: SOURCE_TITLE });
@@ -162,7 +164,7 @@ test('contextual Copilot handoff makes disclosure intent-owned and keeps provide
   await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
   await expect(prepareDisclosure).toHaveCount(0);
   await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Non ho riconosciuto una richiesta tra revisione, collegamento e preparazione.', { exact: false })).toBeVisible();
+  await expect(composer.getByText('Dimmi cosa vuoi ottenere: per esempio preparare un’attività, rivedere un materiale o collegarlo a una UDA.', { exact: false })).toBeVisible();
   await expect(reviewPanel).toHaveCount(0);
   await expect(linkAction).toHaveCount(0);
   await expect(prepareDisclosure).toHaveCount(0);

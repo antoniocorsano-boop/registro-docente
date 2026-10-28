@@ -238,7 +238,7 @@ async function launchComposer(page, { lesson = false } = {}) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
   if (lesson) {
     await composer.getByLabel('Contesto didattico').selectOption({ label: `${CLASS_NAME} · Lezione · ${LESSON_TOPIC}` });
   }

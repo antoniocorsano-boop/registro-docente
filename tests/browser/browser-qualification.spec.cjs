@@ -159,20 +159,25 @@ test('UXT-A compact Vault and operational controls are touch-safe — mobile 390
 
   await setupFreshUxVault(page);
 
-  const mobileAutoLock = page.locator('#vault-auto-lock-mobile');
-  const mobileVault = mobileAutoLock.locator('..');
-  const mobileLock = mobileVault.getByRole('button', { name: 'Blocca Registro' });
+  const mobileSettings = page.getByRole('button', { name: 'Imposta blocco automatico', exact: true });
+  const mobileLock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
+  const mobileVault = mobileLock.locator('..');
   const desktopAutoLock = page.locator('#vault-auto-lock-desktop');
 
   await expect(mobileVault).toBeVisible();
+  await expect(page.locator('#vault-auto-lock-mobile')).toHaveCount(0);
   await expect(desktopAutoLock).toBeHidden();
   const vaultBox = await mobileVault.boundingBox();
   expect(vaultBox).not.toBeNull();
   expect(vaultBox.width, 'mobile Vault cluster width').toBeLessThanOrEqual(200);
+  await assertAtLeast44(mobileSettings, 'mobile auto-lock disclosure');
+  await assertAtLeast44(mobileLock, 'mobile lock button');
+  await mobileSettings.click();
+  const mobileAutoLock = page.locator('#vault-auto-lock-mobile');
+  await expect(mobileAutoLock).toBeVisible();
   const autoLockBox = await mobileAutoLock.boundingBox();
   expect(autoLockBox).not.toBeNull();
   expect(autoLockBox.height, 'mobile auto-lock height').toBeGreaterThanOrEqual(44);
-  await assertAtLeast44(mobileLock, 'mobile lock button');
 
   await createSyntheticClassAndStudent(page);
 

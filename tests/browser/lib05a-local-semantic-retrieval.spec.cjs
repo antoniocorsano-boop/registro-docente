@@ -115,9 +115,7 @@ async function classifyProfessional(page, title) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await sourceSelect.selectOption({ label: title });
-  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${title}`);
 
   const disclosure = await openPrepareFromIntent(composer);
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
@@ -131,6 +129,10 @@ async function classifyProfessional(page, title) {
 async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
   const composer = await openComposer(page);
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  if (!(await sourceSelect.isVisible().catch(() => false))) {
+    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
+  }
+  await expect(sourceSelect).toBeVisible();
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 

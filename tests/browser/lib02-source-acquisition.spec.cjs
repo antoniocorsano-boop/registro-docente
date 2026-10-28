@@ -61,8 +61,7 @@ async function handoffToComposer(card, page, title) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${title}`);
   return composer;
 }
 

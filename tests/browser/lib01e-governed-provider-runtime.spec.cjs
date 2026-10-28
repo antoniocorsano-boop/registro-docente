@@ -150,6 +150,10 @@ async function openComposer(page) {
 
 async function selectComposerSource(composer, title) {
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  if (!(await sourceSelect.isVisible().catch(() => false))) {
+    await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
+  }
+  await expect(sourceSelect).toBeVisible();
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 }
@@ -321,7 +325,7 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
   const disclosure = await openPrepareFromIntent(composer);
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
 
@@ -488,7 +492,7 @@ test('LIB-01E pending result is discarded after teaching-context change — mobi
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   let composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
+  await expect(composer.getByTestId('teacher-first-existing-bindings')).toContainText(`Materiale già disponibile: ${SOURCE_TITLE}`);
   const disclosure = await openPrepareFromIntent(composer);
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
 

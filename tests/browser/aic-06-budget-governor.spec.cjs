@@ -105,7 +105,10 @@ async function openComposer(page, sourceTitle) {
   await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await composer.getByLabel('Fonte della Biblioteca').selectOption({ label: sourceTitle });
+  await composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true }).click();
+  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  await expect(sourceSelect).toBeVisible();
+  await sourceSelect.selectOption({ label: sourceTitle });
   return composer;
 }
 
