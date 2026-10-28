@@ -54,6 +54,25 @@ describe('AIC-07 interrupted mission behavior', () => {
     expect(appSource).toContain('onMissionInterrupted={handleMissionInterrupted}');
   });
 
+  test('Resume durably archives a suspended mission when its teaching target has become invalid', async () => {
+    const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
+    const start = appSource.indexOf('const handleResumeCopilotMission');
+    const end = appSource.indexOf('const handleMissionInterrupted', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const fragment = appSource.slice(start, end);
+    const invalidContextStart = fragment.indexOf('if (!currentTeachingContext');
+    expect(invalidContextStart).toBeGreaterThan(-1);
+    const invalidContextEnd = fragment.indexOf('const currentPlanningContext', invalidContextStart);
+    expect(invalidContextEnd).toBeGreaterThan(invalidContextStart);
+    const invalidContextBranch = fragment.slice(invalidContextStart, invalidContextEnd);
+    expect(invalidContextBranch).toContain('commitCopilotStateMutation');
+    expect(invalidContextBranch).toContain("status: 'archived'");
+    expect(invalidContextBranch).toContain('missionExecutionGrantsRef.current.delete');
+    expect(invalidContextBranch).toContain('clearMissionRuntime');
+    expect(invalidContextBranch).toContain("return 'archive'");
+  });
+
   test('closing either the preparation disclosure or the Composer reports the bound unfinished mission interruption', async () => {
     const composerSource = await Bun.file(new URL('../components/LibraryCopilotComposer.tsx', import.meta.url)).text();
     expect(composerSource).toContain('onMissionInterrupted?: (input: { missionId: string }) => Promise<void> | void;');
