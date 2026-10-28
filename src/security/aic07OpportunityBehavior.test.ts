@@ -53,6 +53,15 @@ function baseInput(sourcePrivacy: 'teacher-professional' | 'student-personal' | 
   };
 }
 
+async function deferredCurrentLesson() {
+  const { resolveCopilotOpportunities } = await loadResolver();
+  const input = baseInput();
+  const initial = resolveCopilotOpportunities(input);
+  const opportunity = initial.primary.find((item: { kind: string }) => item.kind === 'prepare-current-lesson');
+  expect(opportunity).toBeDefined();
+  return { resolveCopilotOpportunities, input, opportunity: opportunity! };
+}
+
 describe('AIC-07 opportunity resolver behavior', () => {
   test('proposes current lesson PREPARE only from a ready teacher-professional relevant source', async () => {
     const { resolveCopilotOpportunities } = await loadResolver();
@@ -105,22 +114,65 @@ describe('AIC-07 opportunity resolver behavior', () => {
   });
 
   test('put-aside moves the exact opportunity to later instead of duplicating the current candidate', async () => {
-    const { resolveCopilotOpportunities } = await loadResolver();
-    const input = baseInput();
-    const initial = resolveCopilotOpportunities(input);
-    const opportunity = initial.primary.find((item: { kind: string }) => item.kind === 'prepare-current-lesson');
-    expect(opportunity).toBeDefined();
+    const { resolveCopilotOpportunities, input, opportunity } = await deferredCurrentLesson();
     const result = resolveCopilotOpportunities({
       ...input,
       deferred: [{
-        opportunity: opportunity!,
+        opportunity,
         contextFingerprint: JSON.stringify(input.context),
         deferredAt: input.now
       }]
     });
     const all = [...result.primary, ...result.overflow];
-    expect(all.filter(item => item.id === opportunity!.id && item.scope !== 'later')).toHaveLength(0);
-    expect(all.filter(item => item.id === opportunity!.id && item.scope === 'later')).toHaveLength(1);
+    expect(all.filter(item => item.id === opportunity.id && item.scope !== 'later')).toHaveLength(0);
+    expect(all.filter(item => item.id === opportunity.id && item.scope === 'later')).toHaveLength(1);
+  });
+
+  test('drops a deferred opportunity when its UDA or lesson no longer exists', async () => {
+    const { resolveCopilotOpportunities, input, opportunity } = await deferredCurrentLesson();
+    const result = resolveCopilotOpportunities({
+      ...input,
+      udas: [],
+      deferred: [{ opportunity, contextFingerprint: JSON.stringify(input.context), deferredAt: input.now }]
+    });
+    expect([...result.primary, ...result.overflow].some(item => item.id === opportunity.id)).toBe(false);
+  });
+
+  test('drops a deferred opportunity when its source is missing or no longer teacher-professional', async () => {
+    const { resolveCopilotOpportunities, input, opportunity } = await deferredCurrentLesson();
+    const missing = resolveCopilotOpportunities({
+      ...input,
+      library: { ...input.library, sources: [] },
+      deferred: [{ opportunity, contextFingerprint: JSON.stringify(input.context), deferredAt: input.now }]
+    });
+    expect([...missing.primary, ...missing.overflow].some(item => item.id === opportunity.id)).toBe(false);
+
+    const restricted = resolveCopilotOpportunities({
+      ...input,
+      library: {
+        ...input.library,
+        sources: input.library.sources.map(source => ({ ...source, privacy: 'student-personal' as const }))
+      },
+      deferred: [{ opportunity, contextFingerprint: JSON.stringify(input.context), deferredAt: input.now }]
+    });
+    expect([...restricted.primary, ...restricted.overflow].some(item => item.id === opportunity.id)).toBe(false);
+  });
+
+  test('drops a deferred opportunity when current source relevance no longer supports the exact target', async () => {
+    const { resolveCopilotOpportunities, input, opportunity } = await deferredCurrentLesson();
+    const result = resolveCopilotOpportunities({
+      ...input,
+      library: {
+        ...input.library,
+        sources: input.library.sources.map(source => ({
+          ...source,
+          title: 'Geometria descrittiva',
+          payload: { text: 'Proiezioni ortogonali e assonometria.' }
+        }))
+      },
+      deferred: [{ opportunity, contextFingerprint: JSON.stringify(input.context), deferredAt: input.now }]
+    });
+    expect([...result.primary, ...result.overflow].some(item => item.id === opportunity.id)).toBe(false);
   });
 
 });
