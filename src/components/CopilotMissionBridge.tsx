@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import {
+  assertMissionStepWithinScope,
   isMissionExecutionGrantValid,
   type CopilotMissionExecutionGrantV1,
+  type CopilotMissionStepV1,
   type CopilotMissionV1
 } from '../copilot/mission';
 import type { CopilotMissionLaunchV1, LibraryCopilotLaunchRequest } from '../library/copilotLaunchContext';
@@ -36,6 +38,31 @@ export function bindMissionRuntime(
   }
   activeMissionGrants.set(mission.id, { mission, grant });
   return { missionId: mission.id, objective: mission.goal };
+}
+
+export function clearMissionRuntime(missionId: string): void {
+  activeMissionGrants.delete(missionId);
+}
+
+export function assertMissionRuntimeExecutionAuthorized(
+  missionId: string,
+  step: CopilotMissionStepV1,
+  now = new Date().toISOString()
+): void {
+  const activeGrant = activeMissionGrants.get(missionId);
+  if (!activeGrant) {
+    throw new Error('Autorizzazione dell’incarico non disponibile: riprendi esplicitamente la missione.');
+  }
+  if (!isMissionExecutionGrantValid(
+    activeGrant.grant,
+    activeGrant.mission,
+    activeGrant.mission.contextFingerprint,
+    now
+  )) {
+    activeMissionGrants.delete(missionId);
+    throw new Error('Autorizzazione dell’incarico scaduta: riprendi esplicitamente la missione.');
+  }
+  assertMissionStepWithinScope(activeGrant.mission, step);
 }
 
 export const CopilotMissionBridge: React.FC<{

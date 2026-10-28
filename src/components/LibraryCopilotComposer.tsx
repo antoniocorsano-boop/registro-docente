@@ -42,7 +42,7 @@ import {
 } from '../library/contextualDidacticReview';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
-import { CopilotMissionBridge } from './CopilotMissionBridge';
+import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
 import {
   consumeStagedMissionReview,
   type MissionReviewHandoffV1
@@ -352,6 +352,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const boundLaunchMissionId = launchRequest?.mission && missionLaunchBindingsReady
     ? launchRequest.mission.missionId
     : undefined;
+  const assertBoundMissionPrepareAuthorized = () => {
+    if (!boundLaunchMissionId || !selectedSource || !resolvedTeachingContext) return;
+    assertMissionRuntimeExecutionAuthorized(boundLaunchMissionId, {
+      capability: 'prepare',
+      className: resolvedTeachingContext.className,
+      udaId: resolvedTeachingContext.udaId,
+      ...(resolvedTeachingContext.lessonId ? { lessonId: resolvedTeachingContext.lessonId } : {}),
+      sourceIds: [selectedSource.id]
+    });
+  };
   const interruptBoundMission = () => {
     if (!boundLaunchMissionId) return;
     void onMissionInterrupted?.({ missionId: boundLaunchMissionId });
@@ -681,7 +691,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
           return;
         }
+        assertBoundMissionPrepareAuthorized();
         setIsPrepareOpen(true);
+        return;
+      }
+
+      if (boundLaunchMissionId) {
+        setGuidanceMessage('L’incarico autorizzato consente solo la preparazione prevista. Per un’altra azione avvia una nuova richiesta esplicita.');
         return;
       }
 
@@ -735,7 +751,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             setErrorMessage('Per preparare una proposta serve un contesto didattico univoco con una UDA corrente.');
             return;
           }
+          assertBoundMissionPrepareAuthorized();
           setIsPrepareOpen(true);
+          return;
+        }
+
+        if (boundLaunchMissionId) {
+          setGuidanceMessage('L’incarico autorizzato consente solo la preparazione prevista. Per un’altra azione avvia una nuova richiesta esplicita.');
           return;
         }
 

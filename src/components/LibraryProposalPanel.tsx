@@ -23,6 +23,7 @@ import {
 } from '../copilot/aiBudgetGovernor';
 import { LibraryProposalServiceError } from '../services/libraryProposalErrors';
 import type { CopilotMissionV1 } from '../copilot/mission';
+import { assertMissionRuntimeExecutionAuthorized } from './CopilotMissionBridge';
 import { classifyTeachingProposalOutcome } from '../copilot/missionOutcome';
 import type { CopilotPreferenceSignalKind } from '../copilot/preferenceLearning';
 import {
@@ -230,6 +231,21 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
     setEditedContent(null);
     adoptionSourceIdRef.current = null;
     adoptionLessonIdRef.current = null;
+
+    if (generationMissionId) {
+      try {
+        assertMissionRuntimeExecutionAuthorized(generationMissionId, {
+          capability: 'prepare',
+          className: teachingContext.className,
+          udaId: teachingContext.udaId,
+          ...(teachingContext.lessonId ? { lessonId: teachingContext.lessonId } : {}),
+          sourceIds: [source.id]
+        });
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : 'Autorizzazione dell’incarico non più valida.');
+        return;
+      }
+    }
 
     let request;
     try {

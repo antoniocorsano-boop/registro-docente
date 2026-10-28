@@ -52,7 +52,7 @@ import {
 } from './copilot/mission';
 import type { MissionProposalReadyNotification } from './services/libraryProposalService';
 import type { CopilotPreferenceSignalKind } from './copilot/preferenceLearning';
-import { bindMissionRuntime } from './components/CopilotMissionBridge';
+import { bindMissionRuntime, clearMissionRuntime } from './components/CopilotMissionBridge';
 import type { CopilotStateV1 } from './copilot/state';
 import type { CopilotOpportunityV1 } from './copilot/opportunityResolver';
 import {
@@ -712,6 +712,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       || sources.length !== currentMission.sourceRefs.length
       || sources.some(source => source.status !== 'ready' || source.privacy !== 'teacher-professional')) {
       missionExecutionGrantsRef.current.delete(currentMission.id);
+      clearMissionRuntime(currentMission.id);
       await commitCopilotStateMutation(current => updateCopilotMission(
         current,
         currentMission.id,
@@ -742,6 +743,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
 
     if (decision !== 'resume') {
       missionExecutionGrantsRef.current.delete(currentMission.id);
+      clearMissionRuntime(currentMission.id);
       await commitCopilotStateMutation(current => updateCopilotMission(
         current,
         currentMission.id,
@@ -783,6 +785,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       suspendCopilotMission
     ), '').then(() => {
       missionExecutionGrantsRef.current.delete(missionId);
+      clearMissionRuntime(missionId);
     });
   }, [commitCopilotStateMutation]);
 
@@ -798,6 +801,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
       currentMission => ({ ...currentMission, status: 'ready', result: { proposal, receipt } })
     ), 'Incarico pronto da controllare');
     missionExecutionGrantsRef.current.delete(missionId);
+    clearMissionRuntime(missionId);
   }, [commitCopilotStateMutation]);
 
   const handleMissionOutcome = useCallback((
