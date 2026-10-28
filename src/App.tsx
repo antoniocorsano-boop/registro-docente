@@ -1664,8 +1664,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onStart={handleStartCopilotMission}
             onOpenConversation={() => openLibraryCopilot(ambientCopilotContext)}
           />
-          <div className="aic07-hide-legacy-copilot-trigger contents">
-            <LibraryCopilotComposer
+          <LibraryCopilotComposer
               library={library}
               udas={udas}
               planning={planning}
@@ -1675,6 +1674,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               currentClassName={currentClass?.name ?? null}
               launchRequest={launchRequest}
               ambientContext={ambientCopilotContext}
+              showStandaloneTrigger={false}
               onAddSource={handleAddLibrarySource}
               onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
               onUpdateSource={handleUpdateLibrarySource}
@@ -1688,8 +1688,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               onMissionOutcome={handleMissionOutcome}
               isPending={isLibraryMutationPending}
             />
-          </div>
-          <style>{`.aic07-hide-legacy-copilot-trigger [data-testid="library-copilot-trigger"] { display: none !important; }`}</style>
         </>
       )}
 

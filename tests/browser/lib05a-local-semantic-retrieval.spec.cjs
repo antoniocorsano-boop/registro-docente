@@ -93,6 +93,8 @@ async function openComposer(page) {
   const trigger = page.locator('[data-testid="library-copilot-trigger"]');
   await expect(trigger).toBeVisible();
   await trigger.click();
+  await expect(page.getByTestId('copilot-deck')).toBeVisible();
+  await page.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
   return composer;

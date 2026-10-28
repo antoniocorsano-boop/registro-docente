@@ -79,6 +79,7 @@ interface LibraryCopilotComposerProps {
   onMissionProposalReady?: (input: MissionProposalReadyNotification) => Promise<void> | void;
   onMissionOutcome?: (input: { missionId: string; signal: CopilotPreferenceSignalKind }) => Promise<void> | void;
   isPending?: boolean;
+  showStandaloneTrigger?: boolean;
 }
 
 type CaptureMode = 'text' | 'web' | 'file';
@@ -157,7 +158,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   onRemoveMemoryCategory,
   onMissionProposalReady,
   onMissionOutcome,
-  isPending = false
+  isPending = false,
+  showStandaloneTrigger = true
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState('');
@@ -721,6 +723,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       setIsLinkPending(false);
     }
   };
+
+  if (!isOpen && !showStandaloneTrigger) return null;
 
   if (!isOpen) {
     return (
