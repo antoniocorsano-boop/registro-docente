@@ -17,7 +17,7 @@ env:
 jobs:
   browser-qualification:
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - name: Checkout exact candidate
@@ -122,6 +122,20 @@ jobs:
           cat browser-evidence/server.log
           exit 1
 
+      - name: Run dedicated AIC-07 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            aic-07-supervised-copilot.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/aic-07-test-results
+
       - name: Run historical Chromium qualification
         shell: bash
         run: |
@@ -159,22 +173,9 @@ jobs:
             ux-qa-01-navigation.spec.cjs \
             ux-qa-01-review-regressions.spec.cjs \
             ux-qa-02-progressive-disclosure.spec.cjs \
-            --reporter=line \
-            --output=../browser-evidence/test-results
-
-      - name: Run dedicated AIC-07 Chromium qualification
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd .browser-tools
-          BASE_URL="http://127.0.0.1:${PORT}" \
-          EVIDENCE_DIR="../browser-evidence" \
-          CANDIDATE_SHA="${CANDIDATE_SHA}" \
-          ./node_modules/.bin/playwright test \
-            aic-07-supervised-copilot.spec.cjs \
             --workers=1 \
             --reporter=line \
-            --output=../browser-evidence/aic-07-test-results
+            --output=../browser-evidence/test-results
 
       - name: Analyze UX navigation evidence
         shell: bash
