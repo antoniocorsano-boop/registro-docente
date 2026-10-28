@@ -2,10 +2,11 @@ const { expect } = require('@playwright/test');
 
 async function revealMaterialSourceSelect(composer) {
   const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  if (!(await sourceSelect.isVisible().catch(() => false))) {
-    const materialStart = composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true });
-    await expect(materialStart).toBeVisible();
+  const materialStart = composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true });
+  if (await materialStart.isVisible().catch(() => false)) {
     await materialStart.click();
+  } else {
+    await expect(sourceSelect).toBeVisible();
   }
   await expect(composer.getByTestId('teacher-first-material-step')).toBeVisible();
   await expect(sourceSelect).toBeVisible();
