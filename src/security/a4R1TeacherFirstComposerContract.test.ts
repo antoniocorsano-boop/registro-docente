@@ -68,10 +68,19 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(handler).not.toContain("if (hasBoundLaunchContext && goal === 'material') {\n      setContextOverride(null)");
   });
 
-  test('after staged source and teaching context resolution free text returns to governed conversational interpretation', async () => {
+  test('selecting the material quick start preserves an already unambiguous automatic teaching context', async () => {
+    const source = await composerSource();
+    const handlerStart = source.indexOf('const chooseTeacherFirstGoal =');
+    const handlerEnd = source.indexOf('const handleTeacherFirstProceed =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+
+    expect(handler).toContain("if (goal !== 'material') setContextOverride(null);");
+  });
+
+  test('after an explicit source selection free text returns to governed conversational interpretation even when no UDA is required yet', async () => {
     const source = await composerSource();
 
-    expect(source).toContain('const hasResolvedConversationContext = Boolean(selectedSource && resolvedTeachingContext);');
+    expect(source).toContain('const hasResolvedConversationContext = Boolean(selectedSource);');
     expect(source).toContain('!isBoundMissionFlow && !hasBoundLaunchContext && !hasResolvedConversationContext');
   });
 
