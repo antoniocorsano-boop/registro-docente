@@ -46,8 +46,9 @@ describe('A4-R1 one Copilot surface coordination', () => {
     expect(vault).toContain('aria-label="Blocca Registro"');
   });
 
-  test('an ordinary Copilot reopen starts a fresh session instead of inheriting a prior launch or local draft', async () => {
+  test('ordinary reopen clears stale front-door state while an already-open governed continuation can resume', async () => {
     const app = await source(APP);
+    const composer = await source(COMPOSER);
 
     const reopenStart = app.indexOf('const reopenLibraryCopilot = useCallback(() => {');
     const reopenEnd = app.indexOf('}, []);', reopenStart);
@@ -56,6 +57,11 @@ describe('A4-R1 one Copilot surface coordination', () => {
     expect(reopen).toContain('setLaunchRequest(null)');
     expect(reopen).toContain('setCopilotOpenRequestNonce(previous => previous + 1)');
 
-    expect(app).toContain('key={`library-copilot-${copilotOpenRequestNonce}`}');
+    expect(app).not.toContain('key={`library-copilot-${copilotOpenRequestNonce}`}');
+    expect(composer).toContain('const preserveGovernedContinuationOnReopenRef = useRef(false);');
+    expect(composer).toContain('!isBoundMissionFlow && (isPrepareOpen || isLinkConfirmationOpen)');
+    expect(composer).toContain('if (!preserveGovernedContinuation)');
+    expect(composer).toContain("setSelectedSourceId('');");
+    expect(composer).toContain("setMessage('');");
   });
 });
