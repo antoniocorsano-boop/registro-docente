@@ -19,9 +19,10 @@ export type CanonicalClassResolution =
 
 const COMPACT_OR_SPACED_CLASS = /^([1-3])\s*([a-z])$/i;
 const ORDINAL_CLASS = /^([1-3])\s*[ªº°]\s*([a-z])$/i;
+const SHIPPED_LOWER_SECONDARY_SUFFIX = /\s*-\s*secondaria\s+i\s+grado\s*$/i;
 
 export function parseLowerSecondaryClassSemanticKey(label: string): string | null {
-  const normalized = label.trim();
+  const normalized = label.trim().replace(SHIPPED_LOWER_SECONDARY_SUFFIX, '').trim();
   if (!normalized) return null;
 
   const match = ORDINAL_CLASS.exec(normalized) ?? COMPACT_OR_SPACED_CLASS.exec(normalized);

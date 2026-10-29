@@ -121,3 +121,41 @@ test('A4-R2A mixed ordinal and compact class references preserve every requested
   await expect(remoteCalls).toEqual([]);
 });
 
+test('A4-R2A untouched shipped default class keeps its legacy UDA available through the real Registro class identity', async ({ page }) => {
+  const remoteCalls = [];
+  await blockPrePlayRemoteCalls(page, remoteCalls);
+  await setupFreshVault(page, 'a4-r2-canonical-class-browser-4');
+
+  const composer = await openTeacherFirstComposer(page);
+  await composer.getByPlaceholder('Per esempio: attività per le classi prime').fill('Attività per 3ª A');
+  await composer.locator('button[type="submit"]').click();
+
+  await expect(composer.getByText('Su quale lavoro?', { exact: true })).toBeVisible();
+  await expect(composer.getByText(/non c’è ancora una UDA disponibile/)).toHaveCount(0);
+  const contextSelect = composer.getByTestId('library-copilot-context-select');
+  await expect(contextSelect).toBeVisible();
+  await expect(contextSelect.locator('option').filter({ hasText: 'UDA 1: Transizione Energetica e Fonti Rinnovabili' })).toHaveCount(1);
+  await expect(remoteCalls).toEqual([]);
+});
+
+test('A4-R2A spaced and compact class references preserve both requested canonical Registro classes', async ({ page }) => {
+  const remoteCalls = [];
+  await blockPrePlayRemoteCalls(page, remoteCalls);
+  await setupFreshVault(page, 'a4-r2-canonical-class-browser-5');
+  await deleteClassByName(page, '3ª A - Secondaria I Grado');
+  await createClassAndReturnHome(page, '3A');
+  await createClassAndReturnHome(page, '3C');
+
+  const composer = await openTeacherFirstComposer(page);
+  await composer.getByPlaceholder('Per esempio: attività per le classi prime').fill('Attività per 3 A e 3C');
+  await composer.locator('button[type="submit"]').click();
+
+  const classChoice = composer.getByTestId('teacher-first-class-choice');
+  await expect(classChoice).toBeVisible();
+  await expect(classChoice.getByRole('button', { name: '3A', exact: true })).toBeVisible();
+  await expect(classChoice.getByRole('button', { name: '3C', exact: true })).toBeVisible();
+  await expect(classChoice.getByRole('button', { name: '3 A', exact: true })).toHaveCount(0);
+  await expect(classChoice.getByRole('button')).toHaveCount(2);
+  await expect(remoteCalls).toEqual([]);
+});
+

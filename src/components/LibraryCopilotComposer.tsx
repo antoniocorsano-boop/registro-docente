@@ -230,9 +230,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     [classes, udas]
   );
   const knownTeacherClasses = useMemo(() => Array.from(new Set([
+    ...teacherFirstCatalog.classes.map(entry => entry.label),
     ...teacherFirstCatalog.classes.flatMap(entry => entry.aliases),
     ...teacherFirstCatalog.ambiguities.flatMap(ambiguity => ambiguity.candidates.map(candidate => candidate.label))
-  ])).sort((left, right) => left.localeCompare(right, 'it')), [teacherFirstCatalog]);
+  ])), [teacherFirstCatalog]);
   const teacherFirstClassChoices = useMemo(() => {
     const requestedLabels = new Set(teacherFirstResolution?.classCandidates ?? []);
     const requestedCanonicalClassIds = new Set(
