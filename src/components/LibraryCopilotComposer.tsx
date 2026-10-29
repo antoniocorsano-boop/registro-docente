@@ -832,7 +832,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             setIsReviewUnavailableOpen(true);
             return;
           }
-          setGuidanceMessage('Ho compreso la richiesta, ma il Core non autorizza questa azione nel contesto corrente.');
+          setGuidanceMessage('Ho compreso la richiesta, ma questa azione non è disponibile nel contesto corrente.');
           return;
         }
         if (routed.kind === 'PREPARE') {
@@ -1015,7 +1015,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
 
     setIsLinkConfirmationOpen(false);
-    setLinkError('Il Core non autorizza questo collegamento nel contesto corrente.');
+    setLinkError('Questo collegamento non è disponibile nel contesto corrente.');
   };
 
   const handleConfirmLink = async () => {
