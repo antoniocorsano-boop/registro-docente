@@ -1494,7 +1494,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             )}
             {resolution.reason === 'INTENT_PORT_UNAVAILABLE' && (
               <p className="text-xs leading-relaxed text-slate-400">
-                L’interpretazione automatica dell’intento non è attiva. Sono mostrate soltanto le azioni che il Core condiviso autorizza già per questa fonte e questo contesto.
+                In questo momento posso proporti solo i passaggi già disponibili per il materiale e il contesto scelti.
               </p>
             )}
             {resolution.actions.some(action => action.id === 'review-source') && selectedSource && contextualReview && (
