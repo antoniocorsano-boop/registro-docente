@@ -1099,6 +1099,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             const preserveGovernedContinuation =
               !isBoundMissionFlow && (isPrepareOpen || isLinkConfirmationOpen);
             preserveGovernedContinuationOnReopenRef.current = preserveGovernedContinuation;
+            if (preserveGovernedContinuation && resolvedTeachingContext) {
+              setContextOverride({
+                udaId: resolvedTeachingContext.udaId,
+                ...(resolvedTeachingContext.lessonId
+                  ? { lessonId: resolvedTeachingContext.lessonId }
+                  : {})
+              });
+            }
             setIsPrepareOpen(false);
             resetTeacherFirst();
             if (!preserveGovernedContinuation) setContextOverride('auto');
