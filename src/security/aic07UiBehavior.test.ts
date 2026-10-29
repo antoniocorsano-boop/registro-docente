@@ -92,7 +92,7 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     const reopenEnd = composer.indexOf('}, [openRequestNonce]);', reopenStart);
     expect(reopenEnd).toBeGreaterThan(reopenStart);
     const reopenFragment = composer.slice(reopenStart, reopenEnd);
-    expect(reopenFragment).toContain('setIsOpen(true)');
+    expect(reopenFragment).toContain("onSurfaceModeChange('compose')");
     expect(composer).toContain('if (!isOpen && !showStandaloneTrigger) return null;');
   });
 

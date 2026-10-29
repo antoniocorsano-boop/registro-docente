@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -133,8 +134,7 @@ async function handOffToComposer(page, card, title) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+  await expectExistingCopilotBindings(composer, { sourceTitle: title });
   return composer;
 }
 

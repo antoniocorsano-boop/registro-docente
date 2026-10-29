@@ -65,6 +65,7 @@ jobs:
             "@playwright/test@${PLAYWRIGHT_VERSION}"
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+          cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
           cp tests/browser/agent-intent-01-routing.spec.cjs .browser-tools/agent-intent-01-routing.spec.cjs
           cp tests/browser/aic-01-context-projection.spec.cjs .browser-tools/aic-01-context-projection.spec.cjs
           cp tests/browser/aic-02-prepare-outcome.spec.cjs .browser-tools/aic-02-prepare-outcome.spec.cjs
@@ -73,6 +74,7 @@ jobs:
           cp tests/browser/aic-05-professional-memory.spec.cjs .browser-tools/aic-05-professional-memory.spec.cjs
           cp tests/browser/aic-06-budget-governor.spec.cjs .browser-tools/aic-06-budget-governor.spec.cjs
           cp tests/browser/aic-07-supervised-copilot.spec.cjs .browser-tools/aic-07-supervised-copilot.spec.cjs
+          cp tests/browser/a4-r1-teacher-first.spec.cjs .browser-tools/a4-r1-teacher-first.spec.cjs
           cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
           cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
           cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
@@ -145,6 +147,7 @@ jobs:
           EVIDENCE_DIR="../browser-evidence" \
           CANDIDATE_SHA="${CANDIDATE_SHA}" \
           ./node_modules/.bin/playwright test \
+            a4-r1-teacher-first.spec.cjs \
             browser-qualification.spec.cjs \
             agent-intent-01-routing.spec.cjs \
             aic-01-context-projection.spec.cjs \

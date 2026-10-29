@@ -44,6 +44,7 @@ export const SecureRegistroRoot: React.FC = () => {
   const [snapshot, setSnapshot] = useState<SecureAppSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(() => readAutoLockMinutes());
+  const [isCopilotSurfaceOpen, setIsCopilotSurfaceOpen] = useState(false);
   const storeRef = useRef<IndexedDbVaultStore | null>(null);
   const vaultRef = useRef<SecureVault | null>(null);
   const storageRef = useRef<SecureAppStorage | null>(null);
@@ -229,11 +230,13 @@ export const SecureRegistroRoot: React.FC = () => {
             initialSnapshot={snapshot}
             secureStorage={storageRef.current}
             onFactoryReset={handleFactoryReset}
+            onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
           />
           <VaultControls
             autoLockMinutes={autoLockMinutes}
             onAutoLockChange={handleAutoLockChange}
             onLock={handleLock}
+            copilotSurfaceOpen={isCopilotSurfaceOpen}
           />
         </>
       ) : null}

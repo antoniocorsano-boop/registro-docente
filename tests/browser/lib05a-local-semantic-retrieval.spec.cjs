@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -115,9 +116,7 @@ async function classifyProfessional(page, title) {
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
-  await sourceSelect.selectOption({ label: title });
-  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
+  await expectExistingCopilotBindings(composer, { sourceTitle: title });
 
   const disclosure = await openPrepareFromIntent(composer);
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
@@ -130,7 +129,7 @@ async function classifyProfessional(page, title) {
 
 async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
   const composer = await openComposer(page);
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  const sourceSelect = await revealMaterialSourceSelect(composer);
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 

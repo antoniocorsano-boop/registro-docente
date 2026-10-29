@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -235,13 +236,18 @@ async function launchComposer(page, { lesson = false } = {}) {
     await card.getByRole('button', { name: 'Cambia', exact: true }).click();
   }
   await udaSelect.selectOption({ label: UDA_TITLE });
+  if (lesson) {
+    const lessonSelect = card.getByLabel('Lezione corrente');
+    await expect(lessonSelect).toBeVisible();
+    await lessonSelect.selectOption({ label: LESSON_TOPIC });
+  }
   await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expect(composer.getByLabel('Fonte della Biblioteca').locator('option:checked')).toHaveText(SOURCE_TITLE);
-  if (lesson) {
-    await composer.getByLabel('Contesto didattico').selectOption({ label: `${CLASS_NAME} · Lezione · ${LESSON_TOPIC}` });
-  }
+  await expectExistingCopilotBindings(composer, {
+    sourceTitle: SOURCE_TITLE,
+    contextText: CLASS_NAME
+  });
   return composer;
 }
 

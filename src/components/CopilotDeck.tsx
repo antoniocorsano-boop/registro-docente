@@ -18,6 +18,8 @@ import type {
   CopilotOpportunityV1
 } from '../copilot/opportunityResolver';
 
+type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
+
 interface CopilotDeckProps {
   opportunities: CopilotOpportunityResolution;
   missions: CopilotMissionV1[];
@@ -28,6 +30,8 @@ interface CopilotDeckProps {
   onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1, materialFingerprint: string) => Promise<void>;
   onResume?: (mission: CopilotMissionV1) => Promise<MissionResumeDecision>;
   onOpenConversation: () => void;
+  surfaceMode: CopilotSurfaceMode;
+  onSurfaceModeChange: (mode: CopilotSurfaceMode) => void;
 }
 
 const GROUPS: Array<{
@@ -136,9 +140,11 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
   onIgnore,
   onStart,
   onResume,
-  onOpenConversation
+  onOpenConversation,
+  surfaceMode,
+  onSurfaceModeChange
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const isOpen = surfaceMode === 'home';
   const [previewBinding, setPreviewBinding] = useState<{ id: string; materialFingerprint: string } | null>(null);
   const [showOverflow, setShowOverflow] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -161,7 +167,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
     try {
       await action();
       setPreviewBinding(null);
-      if (closeDeckOnSuccess) setIsOpen(false);
+      if (closeDeckOnSuccess) onSurfaceModeChange('compose');
     } finally {
       setBusyId(null);
     }
@@ -169,17 +175,19 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
 
   return (
     <>
-      <button
-        type="button"
-        data-testid="library-copilot-trigger"
-        aria-label="Apri Copilota"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen(true)}
-        className="fixed right-4 bottom-36 md:bottom-20 z-[72] min-h-[44px] rounded-full border border-cyan-400/50 bg-slate-950/95 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-2xl backdrop-blur"
-      >
-        <Sparkles className="mr-2 inline h-4 w-4" aria-hidden="true" />
-        Copilota
-      </button>
+      {surfaceMode === 'closed' && (
+        <button
+          type="button"
+          data-testid="library-copilot-trigger"
+          aria-label="Apri Copilota"
+          aria-expanded={false}
+          onClick={() => onSurfaceModeChange('home')}
+          className="fixed right-4 bottom-36 md:bottom-20 z-[72] min-h-[44px] rounded-full border border-cyan-400/50 bg-slate-950/95 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-2xl backdrop-blur"
+        >
+          <Sparkles className="mr-2 inline h-4 w-4" aria-hidden="true" />
+          Copilota
+        </button>
+      )}
 
       {isOpen && (
         <section
@@ -192,7 +200,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
               <h2 className="text-sm font-bold text-slate-100">Copilota</h2>
               <p className="mt-0.5 text-xs text-slate-400">Poche opportunità motivate. L’AI parte solo quando premi Play.</p>
             </div>
-            <button type="button" aria-label="Chiudi opportunità del Copilota" onClick={() => setIsOpen(false)} className="min-h-[44px] min-w-[44px] rounded-lg p-2 text-slate-400 hover:text-white">
+            <button type="button" aria-label="Chiudi opportunità del Copilota" onClick={() => onSurfaceModeChange('closed')} className="min-h-[44px] min-w-[44px] rounded-lg p-2 text-slate-400 hover:text-white">
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </header>
@@ -211,7 +219,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                           type="button"
                           onClick={() => {
                             stageMissionReview(mission);
-                            setIsOpen(false);
+                            onSurfaceModeChange('compose');
                             onOpenConversation();
                           }}
                           className="mt-2 min-h-[44px] rounded-lg border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-100"
@@ -243,7 +251,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                                 } else {
                                   setPreviewBinding(null);
                                 }
-                                if (decision === 'resume') setIsOpen(false);
+                                if (decision === 'resume') onSurfaceModeChange('compose');
                               })
                               .finally(() => setBusyId(null));
                           }}
@@ -261,7 +269,12 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
               </section>
             )}
 
-            {groups.map(group => {
+            {visibleOpportunities.length === 0 ? (
+              <p className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-3 text-xs leading-relaxed text-slate-400">
+                Non vedo qualcosa di urgente adesso. Posso comunque aiutarti con una classe, una UDA o un materiale.
+              </p>
+            ) : groups.map(group => {
+              if (group.opportunities.length === 0) return null;
               const Icon = group.icon;
               return (
                 <section key={group.scope} aria-labelledby={`copilot-group-${group.scope}`} className="space-y-2">
@@ -269,9 +282,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
                     <Icon className="h-4 w-4 text-slate-400" aria-hidden={true} />
                     <h3 id={`copilot-group-${group.scope}`} className="text-xs font-bold uppercase tracking-wider text-slate-300">{group.label}</h3>
                   </div>
-                  {group.opportunities.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-slate-800 px-3 py-2 text-xs text-slate-600">Nessuna opportunità forte in questo gruppo.</p>
-                  ) : group.opportunities.map(opportunity => {
+                  {group.opportunities.map(opportunity => {
                     const materialFingerprint = resolveMaterialFingerprint(opportunity);
                     const preview = previewBinding?.id === opportunity.id
                       && previewBinding.materialFingerprint === materialFingerprint
@@ -318,7 +329,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
             <button
               type="button"
               onClick={() => {
-                setIsOpen(false);
+                onSurfaceModeChange('compose');
                 onOpenConversation();
               }}
               className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200"

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -151,7 +152,7 @@ async function closeComposer(page) {
 }
 
 async function selectComposerSource(composer, title) {
-  const sourceSelect = composer.getByLabel('Fonte della Biblioteca');
+  const sourceSelect = await revealMaterialSourceSelect(composer);
   await sourceSelect.selectOption({ label: title });
   await expect(sourceSelect.locator('option:checked')).toHaveText(title);
 }

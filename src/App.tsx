@@ -142,13 +142,16 @@ import type {
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
+export type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
+
 export interface AppProps {
   initialSnapshot: SecureAppSnapshot;
   secureStorage: SecureAppStorage;
   onFactoryReset: () => Promise<void>;
+  onCopilotSurfaceOpenChange?: (isOpen: boolean) => void;
 }
 
-export default function App({ initialSnapshot, secureStorage, onFactoryReset }: AppProps) {
+export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange }: AppProps) {
   // 1. Settings & Theme
   const [settings, setSettings] = useState<AppSettings>(() => {
     const persisted = initialSnapshot.settings;
@@ -249,11 +252,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
   const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
+  const [copilotSurfaceMode, setCopilotSurfaceMode] = useState<CopilotSurfaceMode>('closed');
+
+  useEffect(() => {
+    onCopilotSurfaceOpenChange?.(copilotSurfaceMode !== 'closed');
+  }, [copilotSurfaceMode, onCopilotSurfaceOpenChange]);
 
   const openLibraryCopilot = useCallback((
     context: CopilotLaunchContext,
     mission?: CopilotMissionLaunchV1
   ) => {
+    setCopilotSurfaceMode('compose');
     setLaunchRequest(previous => ({
       nonce: (previous?.nonce ?? 0) + 1,
       context,
@@ -262,6 +271,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
   }, []);
 
   const reopenLibraryCopilot = useCallback(() => {
+    setLaunchRequest(null);
+    setCopilotSurfaceMode('compose');
     setCopilotOpenRequestNonce(previous => previous + 1);
   }, []);
 
@@ -1827,6 +1838,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
             onResume={handleResumeCopilotMission}
             onStart={handleStartCopilotMission}
             onOpenConversation={reopenLibraryCopilot}
+            surfaceMode={copilotSurfaceMode}
+            onSurfaceModeChange={setCopilotSurfaceMode}
           />
           <LibraryCopilotComposer
               library={library}
@@ -1837,10 +1850,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset }: 
               copilotProactivity={settings.copilotProactivity}
               memoryError={professionalMemoryError}
               currentClassName={currentClass?.name ?? null}
+              classNames={appData.classes.map(classItem => classItem.name)}
               launchRequest={launchRequest}
               openRequestNonce={copilotOpenRequestNonce}
               ambientContext={ambientCopilotContext}
               showStandaloneTrigger={false}
+              surfaceMode={copilotSurfaceMode}
+              onSurfaceModeChange={setCopilotSurfaceMode}
               onAddSource={handleAddLibrarySource}
               onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
               onUpdateSource={handleUpdateLibrarySource}

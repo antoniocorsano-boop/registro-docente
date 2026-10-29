@@ -23,6 +23,8 @@ import { resolvePlanningContextForLibraryRelevance } from '../library/relevanceP
 import { resolveLibraryTeachingContext } from '../library/teachingContext';
 import { CopilotDeck } from './CopilotDeck';
 
+type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
+
 interface CopilotExperienceProps {
   settings: AppSettings;
   copilotState: CopilotStateV1;
@@ -34,6 +36,8 @@ interface CopilotExperienceProps {
   onIgnore: (opportunity: CopilotOpportunityV1, contextFingerprint: string) => Promise<void>;
   onResume: (mission: CopilotMissionV1) => Promise<MissionResumeDecision>;
   onOpenConversation: () => void;
+  surfaceMode: CopilotSurfaceMode;
+  onSurfaceModeChange: (mode: CopilotSurfaceMode) => void;
   onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1, contextFingerprint: string) => Promise<void>;
 }
 
@@ -55,6 +59,8 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
   onIgnore,
   onResume,
   onOpenConversation,
+  surfaceMode,
+  onSurfaceModeChange,
   onStart
 }) => {
   const projection = useMemo(() => buildCopilotContextProjection({
@@ -157,6 +163,8 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
       }))}
       onResume={onResume}
       onOpenConversation={onOpenConversation}
+      surfaceMode={surfaceMode}
+      onSurfaceModeChange={onSurfaceModeChange}
       {...(onStart ? {
         onStart: (
           opportunity: CopilotOpportunityV1,

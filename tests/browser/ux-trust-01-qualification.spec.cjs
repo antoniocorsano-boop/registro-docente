@@ -34,14 +34,17 @@ test('UXT-A compact Vault stays touch-safe above mobile workflow navigation — 
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await closePersistenceConfirmation(page);
 
-  const autoLock = page.locator('#vault-auto-lock-mobile');
-  const lockButton = page.locator('button[aria-label="Blocca Registro"]');
-  const cluster = autoLock.locator('..');
+  const lockButton = page.getByRole('button', { name: 'Blocca Registro', exact: true });
+  const cluster = lockButton.locator('..');
+  const autoLockToggle = cluster.getByRole('button', { name: 'Imposta blocco automatico', exact: true });
   const bottomNavButton = page.getByRole('button', { name: 'Riepilogo', exact: true });
 
-  await expect(autoLock).toBeVisible();
   await expect(lockButton).toBeVisible();
+  await expect(autoLockToggle).toBeVisible();
   await expect(bottomNavButton).toBeVisible();
+  await autoLockToggle.click();
+  const autoLock = page.locator('#vault-auto-lock-mobile');
+  await expect(autoLock).toBeVisible();
 
   const clusterBox = await cluster.boundingBox();
   const autoLockBox = await autoLock.boundingBox();
