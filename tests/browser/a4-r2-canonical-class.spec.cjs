@@ -28,6 +28,15 @@ async function createClassAndReturnHome(page, className) {
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
+async function deleteClassByName(page, className) {
+  const manage = page.getByRole('button', { name: `Gestisci classe ${className}`, exact: true });
+  await expect(manage).toBeVisible();
+  await manage.click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: `Elimina classe ${className}`, exact: true }).click();
+  await expect(page.getByRole('button', { name: `Apri classe ${className}`, exact: true })).toHaveCount(0);
+}
+
 async function openTeacherFirstComposer(page) {
   const trigger = page.getByTestId('library-copilot-trigger');
   await expect(trigger).toBeVisible();
@@ -54,6 +63,7 @@ test('A4-R2A legacy ordinal UDA is available through the real compact Registro c
   const remoteCalls = [];
   await blockPrePlayRemoteCalls(page, remoteCalls);
   await setupFreshVault(page, 'a4-r2-canonical-class-browser-1');
+  await deleteClassByName(page, '3ª A - Secondaria I Grado');
   await createClassAndReturnHome(page, '3A');
 
   const composer = await openTeacherFirstComposer(page);
