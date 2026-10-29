@@ -39,6 +39,15 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('In questo momento posso proporti solo i passaggi già disponibili per il materiale e il contesto scelti.');
   });
 
+  test('teacher-facing denial guidance keeps Core implementation language underneath the presentation', async () => {
+    const source = await composerSource();
+
+    expect(source).not.toContain('Ho compreso la richiesta, ma il Core non autorizza questa azione nel contesto corrente.');
+    expect(source).not.toContain('Il Core non autorizza questo collegamento nel contesto corrente.');
+    expect(source).toContain('Ho compreso la richiesta, ma questa azione non è disponibile nel contesto corrente.');
+    expect(source).toContain('Questo collegamento non è disponibile nel contesto corrente.');
+  });
+
   test('an explicit teacher-first PREPARE choice opens the governed disclosure without reclassifying the intent', async () => {
     const source = await composerSource();
     const handlerStart = source.indexOf('const handleTeacherFirstProceed = async () =>');
