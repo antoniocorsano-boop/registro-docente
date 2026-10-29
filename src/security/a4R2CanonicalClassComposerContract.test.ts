@@ -23,6 +23,15 @@ describe('A4-R2A canonical class Composer wiring', () => {
     expect(app).toContain('classes={appData.classes}');
   });
 
+  test('legacy class aliases participate in request interpretation but never become stored class identity', async () => {
+    const composer = await read(COMPOSER);
+
+    expect(composer).toContain('...teacherFirstCatalog.classes.flatMap(entry => entry.aliases)');
+    expect(composer).toContain('entry.aliases.some(alias => requestedLabels.has(alias))');
+    expect(composer).toContain('entry.label === framed.classCandidates[0] || entry.aliases.includes(framed.classCandidates[0])');
+    expect(composer).not.toContain('setTeacherFirstClassId(framed.classCandidates[0])');
+  });
+
   test('the canonical repair does not add persistence or provider authority', async () => {
     const composer = await read(COMPOSER);
 
