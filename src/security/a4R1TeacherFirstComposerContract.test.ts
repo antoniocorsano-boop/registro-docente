@@ -31,6 +31,14 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('Dimmi cosa vuoi ottenere');
   });
 
+  test('teacher-facing unavailable-intent guidance does not expose runtime taxonomy', async () => {
+    const source = await composerSource();
+
+    expect(source).not.toContain('L’interpretazione automatica dell’intento non è attiva.');
+    expect(source).not.toContain('Core condiviso');
+    expect(source).toContain('In questo momento posso proporti solo i passaggi già disponibili per il materiale e il contesto scelti.');
+  });
+
   test('an explicit teacher-first PREPARE choice opens the governed disclosure without reclassifying the intent', async () => {
     const source = await composerSource();
     const handlerStart = source.indexOf('const handleTeacherFirstProceed = async () =>');
