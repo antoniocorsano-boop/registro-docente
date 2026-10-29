@@ -99,3 +99,25 @@ test('A4-R2A two real records with the same semantic class fail closed and requi
   await expect(composer.getByTestId('library-copilot-context-select')).toHaveCount(0);
   await expect(remoteCalls).toEqual([]);
 });
+
+test('A4-R2A mixed ordinal and compact class references preserve every requested real class without exposing alias duplicates', async ({ page }) => {
+  const remoteCalls = [];
+  await blockPrePlayRemoteCalls(page, remoteCalls);
+  await setupFreshVault(page, 'a4-r2-canonical-class-browser-3');
+  await deleteClassByName(page, '3ª A - Secondaria I Grado');
+  await createClassAndReturnHome(page, '3A');
+  await createClassAndReturnHome(page, '3C');
+
+  const composer = await openTeacherFirstComposer(page);
+  await composer.getByPlaceholder('Per esempio: attività per le classi prime').fill('Attività per 3ª A e 3C');
+  await composer.locator('button[type="submit"]').click();
+
+  const classChoice = composer.getByTestId('teacher-first-class-choice');
+  await expect(classChoice).toBeVisible();
+  await expect(classChoice.getByRole('button', { name: '3A', exact: true })).toBeVisible();
+  await expect(classChoice.getByRole('button', { name: '3C', exact: true })).toBeVisible();
+  await expect(classChoice.getByRole('button', { name: '3ª A', exact: true })).toHaveCount(0);
+  await expect(classChoice.getByRole('button')).toHaveCount(2);
+  await expect(remoteCalls).toEqual([]);
+});
+

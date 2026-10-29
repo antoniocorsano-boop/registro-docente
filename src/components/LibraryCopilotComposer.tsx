@@ -230,11 +230,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     [classes, udas]
   );
   const knownTeacherClasses = useMemo(() => Array.from(new Set([
-    ...teacherFirstCatalog.classes.map(entry => entry.label),
+    ...teacherFirstCatalog.classes.flatMap(entry => entry.aliases),
     ...teacherFirstCatalog.ambiguities.flatMap(ambiguity => ambiguity.candidates.map(candidate => candidate.label))
   ])).sort((left, right) => left.localeCompare(right, 'it')), [teacherFirstCatalog]);
   const teacherFirstClassChoices = useMemo(() => {
     const requestedLabels = new Set(teacherFirstResolution?.classCandidates ?? []);
+    const requestedCanonicalClassIds = new Set(
+      teacherFirstCatalog.classes
+        .filter(entry => entry.aliases.some(alias => requestedLabels.has(alias)))
+        .map(entry => entry.classId)
+    );
     const requestedAmbiguousKeys = new Set(
       teacherFirstCatalog.ambiguities
         .filter(ambiguity => ambiguity.candidates.some(candidate => requestedLabels.has(candidate.label)))
@@ -256,7 +261,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     ];
     if (requestedLabels.size === 0) return choices.sort((left, right) => left.label.localeCompare(right.label, 'it'));
     return choices
-      .filter(choice => requestedLabels.has(choice.label) || Boolean(choice.semanticKey && requestedAmbiguousKeys.has(choice.semanticKey)))
+      .filter(choice => requestedLabels.has(choice.label)
+        || requestedCanonicalClassIds.has(choice.classId)
+        || Boolean(choice.semanticKey && requestedAmbiguousKeys.has(choice.semanticKey)))
       .sort((left, right) => left.label.localeCompare(right.label, 'it'));
   }, [teacherFirstCatalog, teacherFirstResolution]);
   const selectedTeacherFirstClass = useMemo(
@@ -937,7 +944,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     }
 
     if (framed.classCandidates.length === 1) {
-      const automaticClass = teacherFirstCatalog.classes.find(entry => entry.label === framed.classCandidates[0]);
+      const automaticClass = teacherFirstCatalog.classes.find(entry => entry.label === framed.classCandidates[0] || entry.aliases.includes(framed.classCandidates[0]));
       if (automaticClass) {
         setTeacherFirstClassId(automaticClass.classId);
         setContextOverride(null);
