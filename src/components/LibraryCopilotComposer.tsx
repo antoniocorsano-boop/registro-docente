@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'lucide-react';
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
-import type { UdaRecord } from '../types';
+import type { ClassData, UdaRecord } from '../types';
 import type { AiBudgetProfile } from '../copilot/aiBudgetGovernor';
 import type { PlanningStateV1 } from '../planning/types';
 import type { ProfessionalMemoryCategory, ProfessionalMemoryStateV1 } from '../memory/types';
@@ -45,6 +45,10 @@ import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
 import { buildMissionContextFingerprint } from '../copilot/mission';
 import { resolveTeacherFirstRequest, type TeacherFirstRequestResolution, type TeacherFirstGoalKind } from '../copilot/teacherFirstRequest';
+import {
+  buildTeacherFirstTeachingCatalog,
+  udasForCanonicalClass
+} from '../copilot/teacherFirstTeachingCatalog';
 import type { CopilotProactivityProfile } from '../copilot/proactivity';
 import {
   consumeStagedMissionReview,
@@ -73,7 +77,7 @@ interface LibraryCopilotComposerProps {
   copilotProactivity?: CopilotProactivityProfile;
   memoryError?: string | null;
   currentClassName?: string | null;
-  classNames?: string[];
+  classes?: ClassData[];
   launchRequest?: LibraryCopilotLaunchRequest | null;
   openRequestNonce?: number;
   ambientContext?: CopilotLaunchContext;
@@ -161,7 +165,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   copilotProactivity,
   memoryError = null,
   currentClassName = null,
-  classNames = [],
+  classes = [],
   launchRequest = null,
   openRequestNonce = 0,
   ambientContext,
@@ -186,7 +190,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [message, setMessage] = useState('');
   const [teacherFirstResolution, setTeacherFirstResolution] = useState<TeacherFirstRequestResolution | null>(null);
-  const [teacherFirstClassName, setTeacherFirstClassName] = useState<string | null>(null);
+  const [teacherFirstClassId, setTeacherFirstClassId] = useState<string | null>(null);
   const [captureMode, setCaptureMode] = useState<CaptureMode | null>(null);
   const [captureTitle, setCaptureTitle] = useState('');
   const [captureText, setCaptureText] = useState('');
@@ -221,11 +225,49 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     ?? ambientContext?.className
     ?? currentClassName;
 
+  const teacherFirstCatalog = useMemo(
+    () => buildTeacherFirstTeachingCatalog({ classes, udas }),
+    [classes, udas]
+  );
   const knownTeacherClasses = useMemo(() => Array.from(new Set([
-    ...classNames,
-    ...udas.map(uda => uda.className),
-    ...(currentClassName ? [currentClassName] : [])
-  ].map(value => value.trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right, 'it')), [classNames, udas, currentClassName]);
+    ...teacherFirstCatalog.classes.map(entry => entry.label),
+    ...teacherFirstCatalog.ambiguities.flatMap(ambiguity => ambiguity.candidates.map(candidate => candidate.label))
+  ])).sort((left, right) => left.localeCompare(right, 'it')), [teacherFirstCatalog]);
+  const teacherFirstClassChoices = useMemo(() => {
+    const requestedLabels = new Set(teacherFirstResolution?.classCandidates ?? []);
+    const requestedAmbiguousKeys = new Set(
+      teacherFirstCatalog.ambiguities
+        .filter(ambiguity => ambiguity.candidates.some(candidate => requestedLabels.has(candidate.label)))
+        .map(ambiguity => ambiguity.semanticKey)
+    );
+    const choices = [
+      ...teacherFirstCatalog.classes.map(entry => ({
+        classId: entry.classId,
+        label: entry.label,
+        semanticKey: entry.semanticKey,
+        ambiguous: false
+      })),
+      ...teacherFirstCatalog.ambiguities.flatMap(ambiguity => ambiguity.candidates.map(candidate => ({
+        classId: candidate.classId,
+        label: candidate.label,
+        semanticKey: ambiguity.semanticKey,
+        ambiguous: true
+      })))
+    ];
+    if (requestedLabels.size === 0) return choices.sort((left, right) => left.label.localeCompare(right.label, 'it'));
+    return choices
+      .filter(choice => requestedLabels.has(choice.label) || Boolean(choice.semanticKey && requestedAmbiguousKeys.has(choice.semanticKey)))
+      .sort((left, right) => left.label.localeCompare(right.label, 'it'));
+  }, [teacherFirstCatalog, teacherFirstResolution]);
+  const selectedTeacherFirstClass = useMemo(
+    () => teacherFirstClassId ? classes.find(classItem => classItem.id === teacherFirstClassId) ?? null : null,
+    [classes, teacherFirstClassId]
+  );
+  const teacherFirstClassName = selectedTeacherFirstClass?.name ?? null;
+  const teacherFirstClassIsAmbiguous = useMemo(
+    () => Boolean(teacherFirstClassId && teacherFirstCatalog.ambiguities.some(ambiguity => ambiguity.classIds.includes(teacherFirstClassId))),
+    [teacherFirstCatalog, teacherFirstClassId]
+  );
 
   const isBoundMissionFlow = Boolean(launchRequest?.mission || readyMissionReview);
   const hasBoundLaunchContext = Boolean(
@@ -252,12 +294,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       : resolveLibraryTeachingContext(udas, teachingSuggestion?.context ?? null))
     : resolveLibraryTeachingContext(udas, contextOverride);
 
-  const teacherFirstClassUdas = useMemo(() => teacherFirstClassName
-    ? udas.filter(uda => uda.className === teacherFirstClassName)
-    : [], [udas, teacherFirstClassName]);
+  const teacherFirstClassUdas = useMemo(() => teacherFirstClassId
+    ? udasForCanonicalClass(teacherFirstCatalog, teacherFirstClassId)
+    : [], [teacherFirstCatalog, teacherFirstClassId]);
   const teacherFirstGoalKind: TeacherFirstGoalKind | null = teacherFirstResolution?.goalKind ?? null;
-  const showTeachingContextControls = isBoundMissionFlow || Boolean(teacherFirstClassName);
-  const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassName && resolvedTeachingContext);
+  const showTeachingContextControls = isBoundMissionFlow || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous);
+  const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous && resolvedTeachingContext);
 
   const teachingContextFingerprint = [
     resolvedTeachingContext?.udaId ?? '',
@@ -873,7 +915,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const resetTeacherFirst = () => {
     setTeacherFirstResolution(null);
-    setTeacherFirstClassName(null);
+    setTeacherFirstClassId(null);
   };
 
   const frameTeacherFirstObjective = (objective: string) => {
@@ -888,19 +930,22 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkSuccess(null);
 
     if (framed.goalKind === 'unknown') {
-      setTeacherFirstClassName(null);
+      setTeacherFirstClassId(null);
       setContextOverride(null);
       setGuidanceMessage('Dimmi cosa vuoi ottenere: posso aiutarti a preparare un’attività, lavorare su un materiale, collegarlo a una UDA o rivederlo nel contesto didattico.');
       return;
     }
 
     if (framed.classCandidates.length === 1) {
-      setTeacherFirstClassName(framed.classCandidates[0]);
-      setContextOverride(null);
-      return;
+      const automaticClass = teacherFirstCatalog.classes.find(entry => entry.label === framed.classCandidates[0]);
+      if (automaticClass) {
+        setTeacherFirstClassId(automaticClass.classId);
+        setContextOverride(null);
+        return;
+      }
     }
 
-    setTeacherFirstClassName(null);
+    setTeacherFirstClassId(null);
     setContextOverride(null);
   };
 
@@ -913,17 +958,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     const framed = resolveTeacherFirstRequest(copy, knownTeacherClasses);
     if (hasBoundLaunchContext && goal === 'material') {
       setTeacherFirstResolution({ ...framed, goalKind: goal });
-      setTeacherFirstClassName(null);
+      setTeacherFirstClassId(null);
       return;
     }
     if (hasBoundLaunchContext) {
       setTeacherFirstResolution(null);
-      setTeacherFirstClassName(null);
+      setTeacherFirstClassId(null);
       return;
     }
 
     setTeacherFirstResolution({ ...framed, goalKind: goal });
-    setTeacherFirstClassName(null);
+    setTeacherFirstClassId(null);
     if (goal !== 'material') setContextOverride(null);
   };
 
@@ -1175,23 +1220,25 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </button>
             </form>
 
-            {teacherFirstResolution && teacherFirstResolution.goalKind !== 'unknown' && !teacherFirstClassName && teacherFirstResolution.goalKind !== 'material' && (
+            {teacherFirstResolution && teacherFirstResolution.goalKind !== 'unknown' && !teacherFirstClassId && teacherFirstResolution.goalKind !== 'material' && (
               <div className="space-y-2" data-testid="teacher-first-class-choice">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Per quale classe?</div>
                 <div className="flex flex-wrap gap-2">
-                  {(teacherFirstResolution.classCandidates.length > 0 ? teacherFirstResolution.classCandidates : knownTeacherClasses).map(className => (
+                  {teacherFirstClassChoices.map(classChoice => (
                     <button
-                      key={className}
+                      key={classChoice.classId}
                       type="button"
                       onClick={() => {
-                        setTeacherFirstClassName(className);
+                        setTeacherFirstClassId(classChoice.classId);
                         setContextOverride(null);
-                        setGuidanceMessage(null);
+                        setGuidanceMessage(classChoice.ambiguous
+                          ? 'Nel Registro esiste un’altra voce che rappresenta la stessa classe. Mantengo la scelta, ma non collegherò automaticamente una UDA finché le identità non saranno riconciliate.'
+                          : null);
                         setResolution(null);
                       }}
                       className="min-h-[44px] rounded-lg border border-cyan-800 px-4 py-2 text-sm font-semibold text-cyan-100"
                     >
-                      {className}
+                      {classChoice.label}
                     </button>
                   ))}
                 </div>
@@ -1201,7 +1248,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               </div>
             )}
 
-            {teacherFirstClassName && teacherFirstClassUdas.length === 0 && teacherFirstGoalKind !== 'material' && (
+            {teacherFirstClassName && teacherFirstClassIsAmbiguous && teacherFirstGoalKind !== 'material' && (
+              <p className="rounded-lg border border-amber-900/60 bg-amber-950/20 p-3 text-xs text-amber-200">La voce {teacherFirstClassName} coincide con un’altra identità di classe nel Registro. Scegli la voce corretta, ma nessuna UDA viene collegata automaticamente finché la duplicazione non è riconciliata.</p>
+            )}
+            {teacherFirstClassName && !teacherFirstClassIsAmbiguous && teacherFirstClassUdas.length === 0 && teacherFirstGoalKind !== 'material' && (
               <p className="rounded-lg border border-amber-900/60 bg-amber-950/20 p-3 text-xs text-amber-200">Per {teacherFirstClassName} non c’è ancora una UDA disponibile: scegli o crea prima il contesto didattico.</p>
             )}
           </section>
