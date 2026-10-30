@@ -12,12 +12,13 @@ import type { ClassData, UdaRecord } from '../types';
 
 const FINGERPRINT = 'a'.repeat(64);
 const SECOND_FINGERPRINT = 'b'.repeat(64);
+const PROJECTED_UDA_ID = 'docente-os:section-1a:plan-generation-1:1-01';
 
 function classData(id: string, name: string): ClassData {
   return { id, name, students: [], grades: [], behaviors: [] };
 }
 
-function localUda(): UdaRecord {
+function localUda(overrides: Partial<UdaRecord> = {}): UdaRecord {
   return {
     id: 'local-uda-1',
     title: 'Materiali e risorse',
@@ -25,7 +26,8 @@ function localUda(): UdaRecord {
     hours: 6,
     period: 'Q1',
     startMonth: 0,
-    durationMonths: 2
+    durationMonths: 2,
+    ...overrides
   };
 }
 
@@ -68,7 +70,7 @@ function acceptedProjection(
         },
         udas: [{
           sourceUdaRef: '1-01',
-          projectedUdaId: 'docente-os:section-1a:plan-generation-1:1-01',
+          projectedUdaId: PROJECTED_UDA_ID,
           title: 'Tecnologia, bisogni, risorse e sistemi',
           focus: 'Bisogni, risorse e sistemi',
           plannedHours: 8,
@@ -101,7 +103,7 @@ describe('A4-R2B unified read-only UDA catalog behavior', () => {
     expect(catalog).toHaveLength(2);
     expect(catalog.map(candidate => candidate.classId)).toEqual(['class-1a', 'class-1a']);
     expect(catalog.map(candidate => candidate.origin).sort()).toEqual(['docente-os', 'registro']);
-    expect(resolveTeachingUdaCandidate('docente-os:section-1a:plan-generation-1:1-01', catalog))
+    expect(resolveTeachingUdaCandidate(PROJECTED_UDA_ID, catalog))
       .toMatchObject({ origin: 'docente-os', writableByRegistro: false, periodLabel: 'Settembre/Ottobre' });
   });
 
@@ -161,6 +163,32 @@ describe('A4-R2B unified read-only UDA catalog behavior', () => {
         [FINGERPRINT]: first.classReconciliation,
         [SECOND_FINGERPRINT]: second.classReconciliation
       },
+      classes: [classData('class-1a', '1A')]
+    });
+
+    expect(catalog).toEqual([]);
+  });
+
+  test('projected UDA with a stale canonical generation fails closed at catalog read time', () => {
+    const accepted = acceptedProjection();
+    accepted.projection.classes[0]!.udas[0]!.canonicalGenerationId = 'stale-generation';
+
+    const catalog = buildTeachingUdaCatalog({
+      localUdas: [],
+      acceptedProjections: [accepted],
+      classReconciliation: reconciliationMap(accepted.classReconciliation),
+      classes: [classData('class-1a', '1A')]
+    });
+
+    expect(catalog).toEqual([]);
+  });
+
+  test('local and projected UDA id collision excludes both identities instead of preferring array order', () => {
+    const accepted = acceptedProjection();
+    const catalog = buildTeachingUdaCatalog({
+      localUdas: [localUda({ id: PROJECTED_UDA_ID, period: 'Settembre/Ottobre' })],
+      acceptedProjections: [accepted],
+      classReconciliation: reconciliationMap(accepted.classReconciliation),
       classes: [classData('class-1a', '1A')]
     });
 
