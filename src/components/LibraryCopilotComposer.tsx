@@ -246,6 +246,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     classReconciliation: docenteOsClassReconciliation,
     classes
   }), [udas, planning.docenteOsProjections, docenteOsClassReconciliation, classes]);
+  const selectableLocalUdas = useMemo(() => teachingUdaCatalog.flatMap(candidate =>
+    candidate.origin === 'registro' && candidate.localUda ? [candidate.localUda] : []
+  ), [teachingUdaCatalog]);
   const knownTeacherClasses = useMemo(() => Array.from(new Set([
     ...teacherFirstCatalog.classes.map(entry => entry.label),
     ...teacherFirstCatalog.classes.flatMap(entry => entry.aliases),
@@ -309,11 +312,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const teachingSuggestion = useMemo(() => {
     if (contextOverride !== 'auto' || hasLaunchTeachingTarget) return null;
     return suggestLibraryTeachingContext({
-      udas,
+      udas: selectableLocalUdas,
       currentClassName: effectiveClassName ?? null,
       today: localDateKey()
     });
-  }, [udas, effectiveClassName, hasLaunchTeachingTarget, contextOverride]);
+  }, [selectableLocalUdas, effectiveClassName, hasLaunchTeachingTarget, contextOverride]);
 
   const resolvedTeachingContext = contextOverride === 'auto'
     ? (hasLaunchTeachingTarget
@@ -359,11 +362,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     if (!selectedSource) return null;
     return resolveContextualDidacticReview({
       source: selectedSource,
-      udas,
+      udas: selectableLocalUdas,
+      teachingUdaCatalog,
       teachingContext: resolvedTeachingContext,
       planningContext: resolvedPlanningContext
     });
-  }, [selectedSource, udas, teachingContextFingerprint, resolvedPlanningContext]);
+  }, [selectedSource, selectableLocalUdas, teachingUdaCatalog, teachingContextFingerprint, resolvedPlanningContext]);
 
   const copilotProjectionSurface = resolveCopilotProjectionSurface({
     ambientSurface: ambientContext?.surface,

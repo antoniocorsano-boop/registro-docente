@@ -1,4 +1,5 @@
 import type { UdaRecord } from '../types';
+import type { TeachingUdaCandidate } from '../teaching/teachingUdaCatalog';
 import type { LibraryPlanningContextResolution } from './planningContextBridge';
 import {
   resolveLibraryRelevance,
@@ -68,6 +69,7 @@ export type ContextualDidacticReviewResolution =
 export interface ResolveContextualDidacticReviewInput {
   source: LibrarySource;
   udas: UdaRecord[];
+  teachingUdaCatalog?: readonly TeachingUdaCandidate[];
   teachingContext: ResolvedLibraryTeachingContext | null;
   planningContext: LibraryPlanningContextResolution | null;
 }
@@ -175,6 +177,40 @@ function currentTarget(teachingContext: ResolvedLibraryTeachingContext): {
   return teachingContext.lessonId
     ? { targetType: 'lesson', targetId: teachingContext.lessonId }
     : { targetType: 'uda', targetId: teachingContext.udaId };
+}
+
+function projectedCurrentTargetEvidence(
+  source: LibrarySource,
+  teachingContext: ResolvedLibraryTeachingContext,
+  teachingUdaCatalog: readonly TeachingUdaCandidate[] | undefined
+): LibraryRelevanceCandidate | null {
+  if (teachingContext.udaOrigin !== 'docente-os' || teachingContext.lessonId) return null;
+
+  const candidate = teachingUdaCatalog?.find(item =>
+    item.id === teachingContext.udaId
+    && item.origin === 'docente-os'
+  );
+  if (!candidate || candidate.writableByRegistro || candidate.className !== teachingContext.className) return null;
+
+  const candidateTerms = mergeTerms(candidate.title, candidate.focus);
+  const titleMatches = intersect(tokenize(source.title), candidateTerms);
+  const contentMatches = intersect(
+    mergeTerms(source.extractedText, source.payload.text, source.notes),
+    candidateTerms
+  );
+  const signals: LibraryRelevanceSignal[] = ['CURRENT_UDA', 'CURRENT_CLASS'];
+  if (titleMatches.length > 0) signals.push('SOURCE_TITLE_MATCH');
+  if (contentMatches.length > 0) signals.push('SOURCE_CONTENT_MATCH');
+
+  return {
+    targetType: 'uda',
+    targetId: candidate.id,
+    udaId: candidate.id,
+    score: 110 + titleMatches.length * 20 + contentMatches.length * 6,
+    signals,
+    matchedTerms: [...new Set([...titleMatches, ...contentMatches])]
+      .sort((left, right) => left.localeCompare(right, 'it'))
+  };
 }
 
 function relevanceLevel(
@@ -364,6 +400,7 @@ function unavailable(
 export function resolveContextualDidacticReview({
   source,
   udas,
+  teachingUdaCatalog,
   teachingContext,
   planningContext
 }: ResolveContextualDidacticReviewInput): ContextualDidacticReviewResolution {
@@ -389,14 +426,16 @@ export function resolveContextualDidacticReview({
   }
 
   const target = currentTarget(teachingContext);
-  const evidence = resolveLibraryRelevanceTarget({
-    source,
-    udas,
-    teachingContext,
-    planningContext,
-    targetType: target.targetType,
-    targetId: target.targetId
-  });
+  const evidence = teachingContext.udaOrigin === 'docente-os'
+    ? projectedCurrentTargetEvidence(source, teachingContext, teachingUdaCatalog)
+    : resolveLibraryRelevanceTarget({
+        source,
+        udas,
+        teachingContext,
+        planningContext,
+        targetType: target.targetType,
+        targetId: target.targetId
+      });
 
   if (!evidence) {
     return unavailable(
