@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "guardedRoots": [
+    "src/",
+    "tests/browser/",
+    ".github/workflows/",
+    "vendor/",
+    "public/",
+    "server.ts",
+    "package.json",
+    "bun.lock",
+    "vite.config.ts",
+    "index.html",
+    "qualification/",
+    "scripts/qualification/"
+  ],
+  "invariants": [
+    {
+      "id": "A4-R2A-I01",
+      "owner": "A4-R2A",
+      "statement": "Equivalent lower-secondary class labels resolve to the unique real Registro ClassData.id, while duplicate semantic identities fail closed.",
+      "impactPaths": [
+        "src/teaching/",
+        "src/copilot/teacherFirstTeachingCatalog.ts",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/security/a4R2CanonicalClassIdentity.test.ts",
+        "src/security/a4R2TeacherFirstTeachingCatalog.test.ts",
+        "src/security/a4R2CanonicalClassComposerContract.test.ts",
+        "src/security/a4R2ShippedClassAliasContract.test.ts"
+      ],
+      "tests": [
+        "src/security/a4R2CanonicalClassIdentity.test.ts",
+        "src/security/a4R2TeacherFirstTeachingCatalog.test.ts",
+        "src/security/a4R2CanonicalClassComposerContract.test.ts",
+        "src/security/a4R2ShippedClassAliasContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "A4-R2A-I02",
+      "owner": "A4-R2A",
+      "statement": "A local UDA bound to one real class by an exact stored class name remains selectable even when that display name has no semantic class key; semantic collisions still fail closed.",
+      "impactPaths": [
+        "src/copilot/teacherFirstTeachingCatalog.ts",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/teaching/",
+        "src/security/a4R2TeacherFirstTeachingCatalog.test.ts"
+      ],
+      "tests": [
+        "src/security/a4R2TeacherFirstTeachingCatalog.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "A4-R1-I01",
+      "owner": "A4-R1",
+      "statement": "The teacher uses one coordinated Copilot surface and teacher-first preparation preserves explicit class and UDA authority without inventing targets.",
+      "impactPaths": [
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/App.tsx"
+      ],
+      "tests": [
+        "src/security/a4R1TeacherFirstComposerContract.test.ts",
+        "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts",
+        "src/security/a4R1TeacherFirstRequest.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "AIC-03-I01",
+      "owner": "AIC-03",
+      "statement": "Contextual didactic REVIEW remains local and read-only, requires real evidence, and never fabricates curriculum alignment or a target.",
+      "impactPaths": [
+        "src/library/contextualDidacticReview.ts"
+      ],
+      "tests": [
+        "src/security/aic03ReviewV2Contract.test.ts",
+        "src/library/contextualDidacticReview.test.ts",
+        "src/library/contextualDidacticReviewReviewFindings.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/aic-03-review-v2.spec.cjs"
+      ]
+    },
+    {
+      "id": "PERSIST-01H-I01",
+      "owner": "PERSIST-01H",
+      "statement": "Professional mutations are serialized, persisted before publication, and rejected writes cannot publish success or overwrite later intent.",
+      "impactPaths": [
+        "src/persistence/",
+        "src/security/secureAppStorage.ts",
+        "src/App.tsx"
+      ],
+      "tests": [
+        "src/security/persist01hCoordinatorContract.test.ts",
+        "src/security/persist01hStorageContract.test.ts",
+        "src/security/durableMutationCoordinator.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "QUAL-INVARIANT-I01",
+      "owner": "QUAL-INVARIANT-01",
+      "statement": "Every guarded change is mapped to stable invariants and executable evidence; qualification is exact-SHA and the fast compatibility smoke precedes expensive browser regression.",
+      "impactPaths": [
+        "qualification/",
+        "scripts/qualification/",
+        ".github/workflows/predeploy-security-qualification.yml",
+        ".github/workflows/browser-qualification.yml",
+        ".github/workflows/qualification-invariants.yml",
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "src/security/qualificationInvariantFramework.test.ts"
+      ],
+      "tests": [
+        "src/security/qualificationInvariantFramework.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    }
+  ]
+}

@@ -14,6 +14,7 @@ permissions:
 
 env:
   CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
 
 jobs:
   verify:
@@ -24,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
 
       - name: Verify exact candidate checkout
         shell: bash
@@ -39,6 +41,48 @@ jobs:
 
       - name: Install dependencies from lockfile
         run: bun install --frozen-lockfile
+
+      - name: Resolve qualification base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${BASE_SHA}"
+          if [[ -z "${base}" || "${base}" =~ ^0+$ ]]; then
+            base="$(git rev-parse "${CANDIDATE_SHA}^")"
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "QUALIFICATION_BASE_SHA=${base}" >> "${GITHUB_ENV}"
+          echo "Qualification base SHA: ${base}"
+
+      - name: Validate invariant registry
+        id: invariants
+        continue-on-error: true
+        run: bun scripts/qualification/check-invariants.mjs
+
+      - name: Derive invariant impact and manifest
+        id: impact
+        continue-on-error: true
+        run: |
+          bun scripts/qualification/impact.mjs \
+            "${QUALIFICATION_BASE_SHA}" \
+            "${CANDIDATE_SHA}" \
+            --manifest qualification-manifest.json
+
+      - name: Run inherited invariant contracts
+        id: inherited
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests="$(bun scripts/qualification/impact.mjs "${QUALIFICATION_BASE_SHA}" "${CANDIDATE_SHA}" --tests)"
+          if [[ -z "${tests}" ]]; then
+            echo "No inherited invariant tests selected."
+            exit 0
+          fi
+          read -r -a selected <<< "${tests}"
+          printf 'Inherited invariant tests:\n'
+          printf ' - %s\n' "${selected[@]}"
+          bun test "${selected[@]}"
 
       - name: Typecheck
         id: typecheck
@@ -69,8 +113,32 @@ jobs:
           fi
           exit "$code"
 
+      - name: Stamp exact-SHA qualification manifest
+        if: steps.invariants.outcome == 'success' && steps.impact.outcome == 'success' && steps.inherited.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun -e '
+            const path = "qualification-manifest.json";
+            const manifest = await Bun.file(path).json();
+            manifest.qualificationStatus = "INVARIANTS_PASS";
+            manifest.verifiedCandidateSha = process.env.CANDIDATE_SHA;
+            manifest.verifiedBaseSha = process.env.QUALIFICATION_BASE_SHA;
+            await Bun.write(path, JSON.stringify(manifest, null, 2) + "\n");
+          '
+          cat qualification-manifest.json
+
+      - name: Upload exact-SHA qualification manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualification-invariants-${{ env.CANDIDATE_SHA }}
+          path: qualification-manifest.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Preserve qualification gates
-        if: steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure' || steps.library.outcome == 'failure'
+        if: steps.invariants.outcome == 'failure' || steps.impact.outcome == 'failure' || steps.inherited.outcome == 'failure' || steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure' || steps.library.outcome == 'failure'
         run: |
           echo "At least one PREDEPLOY qualification gate failed."
           exit 1

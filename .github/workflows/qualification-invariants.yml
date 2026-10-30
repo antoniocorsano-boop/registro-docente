@@ -1,0 +1,99 @@
+name: Qualification Invariants
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+
+jobs:
+  qualify-invariants:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact candidate with history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Candidate SHA: ${CANDIDATE_SHA}"
+          echo "Checkout SHA:  ${actual_sha}"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Validate invariant registry
+        run: bun scripts/qualification/check-invariants.mjs
+
+      - name: Resolve qualification base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${BASE_SHA}"
+          if [[ -z "${base}" ]]; then
+            base="$(git rev-parse "${CANDIDATE_SHA}^")"
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "QUALIFICATION_BASE_SHA=${base}" >> "${GITHUB_ENV}"
+          echo "Qualification base SHA: ${base}"
+
+      - name: Derive invariant impact and manifest
+        run: |
+          bun scripts/qualification/impact.mjs \
+            "${QUALIFICATION_BASE_SHA}" \
+            "${CANDIDATE_SHA}" \
+            --manifest qualification-manifest.json
+
+      - name: Run inherited invariant contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests="$(bun scripts/qualification/impact.mjs "${QUALIFICATION_BASE_SHA}" "${CANDIDATE_SHA}" --tests)"
+          if [[ -z "${tests}" ]]; then
+            echo "No inherited invariant tests selected."
+            exit 0
+          fi
+          read -r -a selected <<< "${tests}"
+          printf 'Inherited invariant tests:\n'
+          printf ' - %s\n' "${selected[@]}"
+          bun test "${selected[@]}"
+
+      - name: Stamp exact-SHA qualification manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun -e '
+            const path = "qualification-manifest.json";
+            const manifest = await Bun.file(path).json();
+            manifest.qualificationStatus = "PASS";
+            manifest.verifiedCandidateSha = process.env.CANDIDATE_SHA;
+            manifest.verifiedBaseSha = process.env.QUALIFICATION_BASE_SHA;
+            await Bun.write(path, JSON.stringify(manifest, null, 2) + "\n");
+          '
+          cat qualification-manifest.json
+
+      - name: Upload qualification manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualification-invariants-${{ env.CANDIDATE_SHA }}
+          path: qualification-manifest.json
+          if-no-files-found: error
+          retention-days: 14
