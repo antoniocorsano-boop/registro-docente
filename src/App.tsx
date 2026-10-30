@@ -597,7 +597,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setCopilotState(candidate.copilotState);
         setMeta(candidate.meta);
       },
-      afterCommit: () => toast(successMessage)
+      afterCommit: () => {
+        if (successMessage) toast(successMessage);
+      }
     }).then(candidate => candidate.copilotState).catch(error => {
       console.error('Supervised Copilot state save failed', error);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
