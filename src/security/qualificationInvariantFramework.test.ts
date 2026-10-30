@@ -23,6 +23,7 @@ describe('QUAL-INVARIANT-01 canonical qualification invariant framework', () => 
 
     const registry = JSON.parse(readFileSync(path, 'utf8')) as {
       schemaVersion?: number;
+      guardedRoots?: string[];
       invariants?: Array<{ id?: string; tests?: string[]; impactPaths?: string[] }>;
     };
     expect(registry.schemaVersion).toBe(1);
@@ -35,6 +36,24 @@ describe('QUAL-INVARIANT-01 canonical qualification invariant framework', () => 
       expect(invariant.tests?.length ?? 0).toBeGreaterThan(0);
       expect(invariant.impactPaths?.length ?? 0).toBeGreaterThan(0);
     }
+  });
+
+  test('all product source, browser qualification and workflow changes are fail-closed until classified', () => {
+    const registry = JSON.parse(readFileSync('qualification/invariants.v1.json', 'utf8')) as {
+      guardedRoots?: string[];
+    };
+    const roots = new Set(registry.guardedRoots ?? []);
+    expect(roots.has('src/')).toBe(true);
+    expect(roots.has('tests/browser/')).toBe(true);
+    expect(roots.has('.github/workflows/')).toBe(true);
+    expect(roots.has('vendor/')).toBe(true);
+  });
+
+  test('published invariant ids cannot disappear or silently change owner or statement relative to the base registry', () => {
+    const source = readFileSync('scripts/qualification/impact.mjs', 'utf8');
+    expect(source).toContain('QUAL_INVARIANT_REMOVED');
+    expect(source).toContain('QUAL_INVARIANT_SEMANTICS_CHANGED');
+    expect(source).toContain('git show');
   });
 
   test('PREDEPLOY derives exact-SHA impact, runs inherited contracts and emits an inspectable manifest', () => {
