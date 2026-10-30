@@ -65,16 +65,17 @@ function validSecondaryProfile() {
 }
 
 describe('EDU-PLAN-01A planning domain', () => {
-  test('creates the canonical empty planning state v1', async () => {
+  test('creates the canonical empty planning state v2', async () => {
     const { createEmptyPlanningState } = await loadPlanningModule();
 
     expect(createEmptyPlanningState()).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       profiles: [],
       arenaContexts: [],
       resources: [],
       masterPrograms: [],
-      classInstances: []
+      classInstances: [],
+      docenteOsProjections: []
     });
   });
 

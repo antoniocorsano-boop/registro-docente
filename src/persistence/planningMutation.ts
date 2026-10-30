@@ -1,8 +1,8 @@
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 
 export function applyPlanningMutation(
-  current: PlanningStateV1,
-  derive: (current: PlanningStateV1) => PlanningStateV1
-): PlanningStateV1 {
+  current: PlanningState,
+  derive: (current: PlanningState) => PlanningState
+): PlanningState {
   return derive(current);
 }

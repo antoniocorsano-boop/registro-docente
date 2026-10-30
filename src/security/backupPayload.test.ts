@@ -4,13 +4,19 @@ import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalM
 import type { CompleteSecureAppSnapshot } from './secureAppStorage';
 import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
 
-const emptyPlanning = {
+const legacyPlanningV1 = {
   schemaVersion: 1 as const,
   profiles: [],
   arenaContexts: [],
   resources: [],
   masterPrograms: [],
   classInstances: []
+};
+
+const emptyPlanningV2 = {
+  ...legacyPlanningV1,
+  schemaVersion: 2 as const,
+  docenteOsProjections: []
 };
 
 const emptyLibrary = { schemaVersion: 1 as const, sources: [] };
@@ -22,11 +28,18 @@ function currentSnapshot(): CompleteSecureAppSnapshot {
     udas: [{ id: 'uda-current', title: 'Current', startMonth: 0, durationMonths: 1, hours: 1 } as any],
     customTests: {},
     submissions: [],
-    planning: { ...emptyPlanning, profiles: [{ id: 'profile-current' } as any] },
+    planning: { ...emptyPlanningV2, profiles: [{ id: 'profile-current' } as any] },
     library: emptyLibrary,
     professionalMemory: createEmptyProfessionalMemoryState(),
     copilotState: createEmptyCopilotState(),
     meta: { changes: 4, lastBackup: null }
+  };
+}
+
+function historicalPlanningFrom(snapshot: CompleteSecureAppSnapshot) {
+  return {
+    ...legacyPlanningV1,
+    profiles: snapshot.planning.profiles
   };
 }
 
@@ -40,7 +53,10 @@ function v4Payload(snapshot: CompleteSecureAppSnapshot) {
     app: 'registro-docente' as const,
     backupDataVersion: 4 as const,
     exportedAt: '2026-10-24T10:00:00.000Z',
-    snapshot: snapshotV4
+    snapshot: {
+      ...snapshotV4,
+      planning: historicalPlanningFrom(snapshot)
+    }
   };
 }
 
@@ -58,7 +74,7 @@ describe('SEC-1 backup application payload', () => {
     ]);
   });
 
-  test('accepts a complete v6 payload and keeps unsupported versions fail-closed', () => {
+  test('accepts a complete current v6 payload and keeps unsupported versions fail-closed', () => {
     const current = currentSnapshot();
     const payload = createBackupPayload(current);
 
@@ -66,7 +82,7 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload({ ...payload, backupDataVersion: 99 }, current)).toThrow(/versione/i);
   });
 
-  test('normalizes a valid v4 payload with empty professional memory and Copilot state', () => {
+  test('normalizes a valid historical v4 payload to current planning v2 with empty professional memory and Copilot state', () => {
     const current = currentSnapshot();
     const normalized = normalizeBackupPayload(v4Payload(current), current);
 
@@ -76,14 +92,13 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.copilotState).toEqual(createEmptyCopilotState());
   });
 
-  test('normalizes a valid v3 payload with empty private library, professional memory and Copilot state', () => {
+  test('normalizes a valid historical v3 payload to current planning v2 with empty private library, professional memory and Copilot state', () => {
     const current = currentSnapshot();
+    const historicalV4 = v4Payload(current).snapshot;
     const {
       library: _library,
-      professionalMemory: _professionalMemory,
-      copilotState: _copilotState,
       ...snapshotV3
-    } = current;
+    } = historicalV4;
     const normalized = normalizeBackupPayload({
       app: 'registro-docente',
       backupDataVersion: 3,
@@ -197,7 +212,7 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload(corrupted, current)).toThrow(/backup v4|library|biblioteca/i);
   });
 
-  test('normalizes legacy classes/settings backup while preserving old datasets and resetting planning', () => {
+  test('normalizes legacy classes/settings backup while preserving old datasets and resetting planning to current v2', () => {
     const current = currentSnapshot();
     const legacy = {
       app: 'registro-docente',
@@ -213,7 +228,7 @@ describe('SEC-1 backup application payload', () => {
     expect(normalized.udas).toEqual(current.udas);
     expect(normalized.customTests).toEqual(current.customTests);
     expect(normalized.submissions).toEqual(current.submissions);
-    expect(normalized.planning).toEqual(emptyPlanning);
+    expect(normalized.planning).toEqual(emptyPlanningV2);
     expect(normalized.library).toEqual(emptyLibrary);
     expect(normalized.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
     expect(normalized.copilotState).toEqual(createEmptyCopilotState());

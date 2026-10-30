@@ -1,3 +1,4 @@
+import type { TeachingUdaCandidate } from '../teaching/teachingUdaCatalog';
 import type { UdaActivityType, UdaRecord } from '../types';
 
 export interface LibraryTeachingContext {
@@ -8,9 +9,11 @@ export interface LibraryTeachingContext {
 export interface ResolvedLibraryTeachingContext {
   udaId: string;
   className: string;
-  period: UdaRecord['period'];
+  period: string;
   lessonId?: string;
   activityType?: UdaActivityType;
+  udaOrigin?: TeachingUdaCandidate['origin'];
+  writableByRegistro?: boolean;
 }
 
 export type TeachingContextSuggestionReason =
@@ -58,6 +61,42 @@ export function resolveLibraryTeachingContext(
     period: uda.period,
     lessonId: lesson.id,
     ...(lesson.activityType ? { activityType: lesson.activityType } : {})
+  };
+}
+
+export function resolveLibraryTeachingContextFromCatalog(
+  catalog: readonly TeachingUdaCandidate[],
+  context: LibraryTeachingContext | null
+): ResolvedLibraryTeachingContext | null {
+  if (!context?.udaId) return null;
+
+  const matches = catalog.filter(candidate => candidate.id === context.udaId);
+  if (matches.length !== 1) return null;
+  const uda = matches[0];
+  if (!uda) return null;
+
+  if (!context.lessonId) {
+    return {
+      udaId: uda.id,
+      className: uda.classLabel,
+      period: uda.periodLabel,
+      udaOrigin: uda.origin,
+      writableByRegistro: uda.writableByRegistro
+    };
+  }
+
+  if (uda.origin !== 'registro') return null;
+  const lesson = uda.lessons.find(candidate => candidate.id === context.lessonId);
+  if (!lesson) return null;
+
+  return {
+    udaId: uda.id,
+    className: uda.classLabel,
+    period: uda.periodLabel,
+    lessonId: lesson.id,
+    ...(lesson.activityType ? { activityType: lesson.activityType } : {}),
+    udaOrigin: uda.origin,
+    writableByRegistro: uda.writableByRegistro
   };
 }
 

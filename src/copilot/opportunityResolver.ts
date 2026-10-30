@@ -1,6 +1,6 @@
 import type { UdaRecord } from '../types';
 import type { LibrarySource, LibraryStateV1 } from '../library/types';
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import { resolveLibraryRelevanceTarget } from '../library/relevanceResolver';
 import type { CopilotContextProjectionV1 } from './contextProjection';
 import {
@@ -87,7 +87,7 @@ export interface ResolveCopilotOpportunitiesInput {
   context: CopilotContextProjectionV1;
   udas: UdaRecord[];
   library: LibraryStateV1;
-  planning: PlanningStateV1;
+  planning: PlanningState;
   preferenceFactor?: (kind: CopilotOpportunityKind) => number;
   dismissed?: CopilotOpportunityDismissalV1[];
   deferred?: CopilotDeferredOpportunityV1[];

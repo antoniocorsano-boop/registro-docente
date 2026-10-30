@@ -1,0 +1,1312 @@
+{
+  "schema": "docente-os-registro-teaching-projection-negative-corpus/v1",
+  "cases": [
+    {
+      "id": "wrong-contract",
+      "expectedCode": "INVALID_CONTRACT",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V2",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "wrong-version",
+      "expectedCode": "INVALID_CONTRACT",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 2,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "wrong-source-product",
+      "expectedCode": "INVALID_PRODUCT_BOUNDARY",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "REGISTRO_DOCENTE",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "wrong-target-product",
+      "expectedCode": "INVALID_PRODUCT_BOUNDARY",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "DOCENTE_OS",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "wrong-import-mode",
+      "expectedCode": "INVALID_AUTHORITY_BOUNDARY",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "SYNC",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "acceptance-disabled",
+      "expectedCode": "INVALID_AUTHORITY_BOUNDARY",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": false,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "automatic-write-enabled",
+      "expectedCode": "INVALID_AUTHORITY_BOUNDARY",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": true,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-school-year",
+      "expectedCode": "INVALID_METADATA",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-generated-at",
+      "expectedCode": "INVALID_METADATA",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "not-a-timestamp",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "malformed-source-commit",
+      "expectedCode": "INVALID_PROVENANCE",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "ABC",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "malformed-fingerprint",
+      "expectedCode": "INVALID_FINGERPRINT",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "xyz"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "privacy-mismatch",
+      "expectedCode": "INVALID_PRIVACY_CLASS",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-grade",
+      "expectedCode": "INVALID_CLASS",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 4,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-section-code",
+      "expectedCode": "INVALID_CLASS",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A@",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-compact-label",
+      "expectedCode": "INVALID_CLASS",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1-A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-display-label",
+      "expectedCode": "INVALID_CLASS",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "Classe A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "duplicate-source-section",
+      "expectedCode": "DUPLICATE_SOURCE_SECTION_ID",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          },
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "duplicate-projected-uda",
+      "expectedCode": "DUPLICATE_PROJECTED_UDA_ID",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              },
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "generation-mismatch",
+      "expectedCode": "INVALID_UDA_GENERATION",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "other-generation"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "invalid-projected-uda-id",
+      "expectedCode": "INVALID_PROJECTED_UDA_ID",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:wrong",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "unexpected-root-property",
+      "expectedCode": "INVALID_ROOT_SHAPE",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL",
+        "unexpected": true
+      }
+    },
+    {
+      "id": "student-personal-class-property",
+      "expectedCode": "INVALID_CLASS_SHAPE",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1"
+              }
+            ],
+            "studentName": "Mario Rossi"
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    },
+    {
+      "id": "student-personal-uda-property",
+      "expectedCode": "INVALID_UDA_SHAPE",
+      "payload": {
+        "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+        "contractVersion": 1,
+        "sourceProduct": "DOCENTE_OS",
+        "targetProduct": "REGISTRO_DOCENTE",
+        "importMode": "READ_ONLY_PROJECTION",
+        "acceptanceRequired": true,
+        "automaticWriteAllowed": false,
+        "schoolYear": "2026/2027",
+        "disciplineName": "Tecnologia",
+        "generatedAt": "2026-10-30T05:30:00.000Z",
+        "projectionFingerprint": {
+          "algorithm": "SHA-256",
+          "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+        },
+        "provenance": {
+          "repository": "antoniocorsano-boop/docente-os-2026-27",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "sourceBranch": "develop"
+        },
+        "classes": [
+          {
+            "sourceSectionId": "section-1a",
+            "grade": 1,
+            "sectionCode": "A",
+            "compactLabel": "1A",
+            "displayLabel": "1ª A",
+            "sectionStatus": "CONFERMATA",
+            "canonicalPlan": {
+              "code": "CAN-PLAN-1",
+              "assetId": "plan-asset-1",
+              "generationId": "plan-generation-1"
+            },
+            "udas": [
+              {
+                "sourceUdaRef": "1-01",
+                "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+                "title": "Tecnologia, bisogni, risorse e sistemi",
+                "focus": "Bisogni, risorse e sistemi",
+                "plannedHours": 8,
+                "period": "Settembre/Ottobre",
+                "packRefs": [
+                  "CAN-PACK-1A"
+                ],
+                "canonicalGenerationId": "plan-generation-1",
+                "studentId": "student-1"
+              }
+            ]
+          }
+        ],
+        "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+      }
+    }
+  ]
+}

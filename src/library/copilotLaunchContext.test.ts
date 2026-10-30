@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { UdaRecord } from '../types';
 import {
   resolveLaunchTeachingContext,
+  resolveLaunchTeachingContextFromCatalog,
   type CopilotLaunchContext,
   type LibraryCopilotLaunchRequest
 } from './copilotLaunchContext';
@@ -81,6 +82,35 @@ describe('single contextual Copilot launch context', () => {
       udaId: 'uda-energia',
       className: '3C',
       period: 'Q1'
+    });
+  });
+
+
+  test('resolves a projected Docente OS UDA from the unified catalog for a non-mission launch', () => {
+    expect(resolveLaunchTeachingContextFromCatalog(request({
+      surface: 'library',
+      sourceId: 'source-1',
+      className: '1A',
+      udaId: 'docente-os:section-1a:plan-generation-1:1-01'
+    }), [{
+      id: 'docente-os:section-1a:plan-generation-1:1-01',
+      origin: 'docente-os',
+      classId: 'class-1a',
+      classLabel: '1A',
+      className: '1A',
+      title: 'Tecnologia, bisogni, risorse e sistemi',
+      periodLabel: 'Settembre/Ottobre',
+      period: 'Settembre/Ottobre',
+      plannedHours: 8,
+      sourceRef: '1-01',
+      writableByRegistro: false,
+      lessons: []
+    }])).toEqual({
+      udaId: 'docente-os:section-1a:plan-generation-1:1-01',
+      className: '1A',
+      period: 'Settembre/Ottobre',
+      udaOrigin: 'docente-os',
+      writableByRegistro: false
     });
   });
 

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { AppSettings, UdaRecord } from '../types';
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import type { LibraryStateV1 } from '../library/types';
 import type { CopilotStateV1 } from '../copilot/state';
 import { buildCopilotContextProjection } from '../copilot/contextProjection';
@@ -30,7 +30,7 @@ interface CopilotExperienceProps {
   copilotState: CopilotStateV1;
   library: LibraryStateV1;
   udas: UdaRecord[];
-  planning: PlanningStateV1;
+  planning: PlanningState;
   ambientContext: CopilotLaunchContext;
   onPutAside: (opportunity: CopilotOpportunityV1, contextFingerprint: string) => Promise<void>;
   onIgnore: (opportunity: CopilotOpportunityV1, contextFingerprint: string) => Promise<void>;

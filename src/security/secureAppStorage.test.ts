@@ -43,6 +43,12 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const normalizedEmptyPlanning = {
+  ...emptyPlanning,
+  schemaVersion: 2 as const,
+  docenteOsProjections: []
+};
+
 function bootstrap(overrides: Partial<VaultBootstrapInput>): VaultBootstrapInput {
   return {
     metadataState: null,
@@ -74,7 +80,7 @@ describe('SEC-1 vault bootstrap decision', () => {
 });
 
 describe('SEC-1 secure application storage', () => {
-  test('persists and loads all eight logical datasets through the vault', async () => {
+  test('persists legacy planning and loads all logical datasets through the vault with planning normalized to v2', async () => {
     const vault = new SecureVault(new MemoryVaultStore());
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
@@ -84,7 +90,7 @@ describe('SEC-1 secure application storage', () => {
     await storage.saveUdas([]);
     await storage.saveCustomTests({});
     await storage.saveSubmissions([]);
-    await storage.savePlanning(emptyPlanning);
+    await (storage as any).savePlanning(emptyPlanning);
     await storage.saveLibrary({ schemaVersion: 1, sources: [] });
     await storage.saveMeta({ changes: 2, lastBackup: null });
 
@@ -95,7 +101,7 @@ describe('SEC-1 secure application storage', () => {
     expect(snapshot.udas).toEqual([]);
     expect(snapshot.customTests).toEqual({});
     expect(snapshot.submissions).toEqual([]);
-    expect(snapshot.planning).toEqual(emptyPlanning);
+    expect(snapshot.planning).toEqual(normalizedEmptyPlanning);
     expect(snapshot.library).toEqual({ schemaVersion: 1, sources: [] });
     expect(snapshot.meta).toEqual({ changes: 2, lastBackup: null });
   });

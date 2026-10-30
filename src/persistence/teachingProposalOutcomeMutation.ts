@@ -5,6 +5,7 @@ import {
   type TeachingProposalUdaAdoptionReceipt
 } from '../library/teachingProposalOutcome';
 import type { LibraryStateV1 } from '../library/types';
+import { isDocenteOsProjectedUdaId } from '../teaching/teachingUdaCatalog';
 import type { UdaRecord } from '../types';
 import type { SecureMeta } from '../security/secureAppStorage';
 import { incrementBackupChanges } from './backupCheckpoint';
@@ -19,14 +20,27 @@ export interface TeachingProposalOutcomeCandidate extends TeachingProposalOutcom
   receipt: TeachingProposalUdaAdoptionReceipt;
 }
 
-export type TeachingProposalOutcomeMutationInput = Omit<TeachingProposalUdaAdoptionInput, 'udas'>;
+export type TeachingProposalOutcomeMutationInput = Omit<TeachingProposalUdaAdoptionInput, 'udas'> & {
+  targetWritableByRegistro?: boolean;
+};
 
 export function deriveTeachingProposalOutcomeCandidate(
   current: TeachingProposalOutcomeState,
   input: TeachingProposalOutcomeMutationInput
 ): TeachingProposalOutcomeCandidate {
+  const { targetWritableByRegistro, ...adoptionInput } = input;
+  const targetUdaId = input.teachingContext.udaId;
+  const localTargetMatches = current.udas.filter(uda => uda.id === targetUdaId);
+  if (
+    isDocenteOsProjectedUdaId(targetUdaId)
+    || targetWritableByRegistro === false
+    || localTargetMatches.length !== 1
+  ) {
+    throw new Error('A4_R2_PROJECTED_UDA_READ_ONLY');
+  }
+
   const outcome = buildTeachingProposalUdaAdoption({
-    ...input,
+    ...adoptionInput,
     udas: current.udas
   });
 

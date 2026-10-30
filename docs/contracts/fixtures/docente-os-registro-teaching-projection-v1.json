@@ -1,0 +1,51 @@
+{
+  "contract": "DOCENTE_OS_REGISTRO_TEACHING_PROJECTION_V1",
+  "contractVersion": 1,
+  "sourceProduct": "DOCENTE_OS",
+  "targetProduct": "REGISTRO_DOCENTE",
+  "importMode": "READ_ONLY_PROJECTION",
+  "acceptanceRequired": true,
+  "automaticWriteAllowed": false,
+  "schoolYear": "2026/2027",
+  "disciplineName": "Tecnologia",
+  "generatedAt": "2026-10-30T05:30:00.000Z",
+  "projectionFingerprint": {
+    "algorithm": "SHA-256",
+    "hash": "fa666e46ffc75c862e52a177ae568d463d242a1fd7b0657c88da4fdfb38b5e21"
+  },
+  "provenance": {
+    "repository": "antoniocorsano-boop/docente-os-2026-27",
+    "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+    "sourceBranch": "develop"
+  },
+  "classes": [
+    {
+      "sourceSectionId": "section-1a",
+      "grade": 1,
+      "sectionCode": "A",
+      "compactLabel": "1A",
+      "displayLabel": "1ª A",
+      "sectionStatus": "CONFERMATA",
+      "canonicalPlan": {
+        "code": "CAN-PLAN-1",
+        "assetId": "plan-asset-1",
+        "generationId": "plan-generation-1"
+      },
+      "udas": [
+        {
+          "sourceUdaRef": "1-01",
+          "projectedUdaId": "docente-os:section-1a:plan-generation-1:1-01",
+          "title": "Tecnologia, bisogni, risorse e sistemi",
+          "focus": "Bisogni, risorse e sistemi",
+          "plannedHours": 8,
+          "period": "Settembre/Ottobre",
+          "packRefs": [
+            "CAN-PACK-1A"
+          ],
+          "canonicalGenerationId": "plan-generation-1"
+        }
+      ]
+    }
+  ],
+  "privacyClass": "PROFESSIONAL_NON_PERSONAL"
+}

@@ -1,4 +1,4 @@
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import type { UdaRecord } from '../types';
 import {
   normalizeSchoolYear,
@@ -28,7 +28,7 @@ function normalizeSubject(value: string): string {
 
 export function resolvePlanningContextForLibraryRelevance(
   teachingContext: ResolvedLibraryTeachingContext | null,
-  planning: PlanningStateV1
+  planning: PlanningState
 ): LibraryPlanningContextResolution | null {
   if (!teachingContext) return null;
 

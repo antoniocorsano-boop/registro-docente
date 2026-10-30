@@ -1,6 +1,6 @@
 import type {
   ArenaPlanningContext,
-  PlanningStateV1,
+  PlanningState,
   TeachingProfile
 } from '../planning/types';
 import type { ResolvedLibraryTeachingContext } from './teachingContext';
@@ -15,7 +15,7 @@ export type LibraryPlanningContextReason =
 
 export interface ResolveLibraryPlanningContextInput {
   teachingContext: ResolvedLibraryTeachingContext | null;
-  planning: PlanningStateV1;
+  planning: PlanningState;
   schoolYear: string;
   subjectCode: string;
 }

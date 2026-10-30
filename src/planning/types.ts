@@ -1,3 +1,5 @@
+import type { DocenteOsTeachingProjectionV1 } from './docenteOsTeachingProjection';
+
 export type SchoolOrder = 'primary' | 'lower_secondary';
 
 export interface AssessmentPeriodDefinition {
@@ -155,11 +157,38 @@ export interface ClassProgramInstance {
   localOverrideRefs?: string[];
 }
 
-export interface PlanningStateV1 {
-  schemaVersion: 1;
+interface PlanningStateFields {
   profiles: TeachingProfile[];
   arenaContexts: ArenaPlanningContext[];
   resources: PrivateTeachingResource[];
   masterPrograms: MasterProgram[];
   classInstances: ClassProgramInstance[];
 }
+
+export interface PlanningStateV1 extends PlanningStateFields {
+  schemaVersion: 1;
+}
+
+export type DocenteOsProjectionClassReconciliation =
+  | {
+      sourceSectionId: string;
+      status: 'resolved';
+      registroClassId: string;
+    }
+  | {
+      sourceSectionId: string;
+      status: 'ambiguous' | 'unresolved';
+    };
+
+export interface AcceptedDocenteOsTeachingProjection {
+  projection: DocenteOsTeachingProjectionV1;
+  acceptedAt: string;
+  classReconciliation: DocenteOsProjectionClassReconciliation[];
+}
+
+export interface PlanningStateV2 extends PlanningStateFields {
+  schemaVersion: 2;
+  docenteOsProjections: AcceptedDocenteOsTeachingProjection[];
+}
+
+export type PlanningState = PlanningStateV2;

@@ -11,10 +11,16 @@ import {
   Student,
   UdaRecord
 } from './types';
-import type { ArenaPlanningContextPreview, PlanningStateV1, TeachingProfile } from './planning/types';
+import type { ArenaPlanningContextPreview, PlanningState, TeachingProfile } from './planning/types';
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
+import { previewDocenteOsTeachingProjection } from './planning/docenteOsTeachingProjection';
+import {
+  bindAcceptedDocenteOsTeachingProjection,
+  findAcceptedDocenteOsTeachingProjectionForSlot,
+  reconcileDocenteOsTeachingProjectionClasses
+} from './planning/docenteOsProjectionReconciliation';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
 import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
@@ -216,7 +222,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   );
 
   // 5b. Annual planning domain (separate from legacy UDA/Gantt until migration is qualified)
-  const [planning, setPlanning] = useState<PlanningStateV1>(() =>
+  const [planning, setPlanning] = useState<PlanningState>(() =>
     initialSnapshot.planning || createEmptyPlanningState()
   );
 
@@ -418,9 +424,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   }, [mutationCoordinator, secureStorage, toast]);
 
   const commitPlanningMutation = useCallback((
-    derive: (current: PlanningStateV1) => PlanningStateV1
-  ): Promise<PlanningStateV1> => {
-    return mutationCoordinator.enqueue<{ planning: PlanningStateV1; meta: SecureMeta }>({
+    derive: (current: PlanningState) => PlanningState
+  ): Promise<PlanningState> => {
+    return mutationCoordinator.enqueue<{ planning: PlanningState; meta: SecureMeta }>({
       getCommitted: () => ({ planning: planningRef.current, meta: metaRef.current }),
       derive: current => ({
         planning: applyPlanningMutation(current.planning, derive),
@@ -440,6 +446,32 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
+
+  const handleAcceptDocenteOsTeachingProjection = useCallback((payload: unknown): Promise<PlanningState> => {
+    const preview = previewDocenteOsTeachingProjection(payload);
+    if (!preview.ok) {
+      return Promise.reject(new Error(`Proiezione Docente OS non valida (${preview.code}).`));
+    }
+
+    return commitPlanningMutation(current => {
+      const previousAcceptedProjection = findAcceptedDocenteOsTeachingProjectionForSlot(
+        current,
+        preview.projection
+      );
+      const reconciliation = reconcileDocenteOsTeachingProjectionClasses(
+        preview.projection,
+        appDataRef.current.classes,
+        previousAcceptedProjection?.classReconciliation
+      );
+
+      return bindAcceptedDocenteOsTeachingProjection(
+        current,
+        preview.projection,
+        reconciliation,
+        { status: 'accepted', acceptedAt: new Date().toISOString() }
+      );
+    });
+  }, [commitPlanningMutation]);
 
   const commitLibraryMutation = useCallback((
     derive: (current: LibraryStateV1) => LibraryStateV1,
@@ -1764,6 +1796,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <LibraryView
             library={library}
             udas={udas}
+            classes={appData.classes}
             planning={planning}
             currentClassName={currentClass?.name ?? null}
             embeddingConfig={settings.embeddingConfig}
