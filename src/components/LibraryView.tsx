@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FilePlus2, Link2, Search, X } from 'lucide-react';
 import type { PlanningState } from '../planning/types';
-import type { LocalEmbeddingConfig, UdaRecord } from '../types';
+import type { ClassData, LocalEmbeddingConfig, UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibraryTeachingContext } from '../library/teachingContext';
+import {
+  buildTeachingUdaCatalog,
+  buildTeachingUdaClassReconciliationIndex
+} from '../teaching/teachingUdaCatalog';
 import { searchLibrarySources } from '../library/libraryState';
 import { createFileSource, createTextSource, createWebSource } from '../library/intake';
 import { retrieveLibrarySourcesByMeaning } from '../library/semanticRetrieval';
@@ -16,6 +20,7 @@ import { LibrarySourceCard } from './LibrarySourceCard';
 interface LibraryViewProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
+  classes: ClassData[];
   planning: PlanningState;
   currentClassName?: string | null;
   embeddingConfig?: LocalEmbeddingConfig;
@@ -52,6 +57,7 @@ function semanticUnavailableCopy(resolution: SemanticLibraryResolution | null): 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   library,
   udas,
+  classes,
   planning,
   currentClassName = null,
   embeddingConfig,
@@ -99,6 +105,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       .map(candidate => byId.get(candidate.sourceId))
       .filter((source): source is LibrarySource => Boolean(source));
   }, [library.sources, semanticResolution]);
+
+  const docenteOsClassReconciliation = useMemo(
+    () => buildTeachingUdaClassReconciliationIndex(planning.docenteOsProjections),
+    [planning.docenteOsProjections]
+  );
+  const teachingUdaCatalog = useMemo(() => buildTeachingUdaCatalog({
+    localUdas: udas,
+    acceptedProjections: planning.docenteOsProjections,
+    classReconciliation: docenteOsClassReconciliation,
+    classes
+  }), [udas, planning.docenteOsProjections, docenteOsClassReconciliation, classes]);
 
   useEffect(() => {
     semanticRequestRef.current += 1;
@@ -363,6 +380,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <LibrarySourceCard
                         source={source}
                         udas={udas}
+                        teachingUdaCatalog={teachingUdaCatalog}
                         planning={planning}
                         currentClassName={currentClassName}
                         lastExplicitTeachingContext={lastExplicitTeachingContext}
@@ -418,6 +436,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               key={source.id}
               source={source}
               udas={udas}
+              teachingUdaCatalog={teachingUdaCatalog}
               planning={planning}
               currentClassName={currentClassName}
               lastExplicitTeachingContext={lastExplicitTeachingContext}
