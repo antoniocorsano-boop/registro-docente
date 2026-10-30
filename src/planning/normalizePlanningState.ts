@@ -85,6 +85,10 @@ function isAcceptedProjection(value: unknown): value is AcceptedDocenteOsTeachin
   return reconciledIds.size === sourceSectionIds.size;
 }
 
+function projectionSlotKey(accepted: AcceptedDocenteOsTeachingProjection): string {
+  return `${accepted.projection.schoolYear}\u0000${accepted.projection.disciplineName.trim().toLocaleLowerCase('it')}`;
+}
+
 function assertPlanningV1(value: Record<string, unknown>): void {
   if (!hasExactKeys(value, V1_KEYS) || value.schemaVersion !== 1 || !hasPlanningArrays(value)) {
     throw new Error('Stato planning v1 non valido.');
@@ -102,6 +106,7 @@ function assertPlanningV2(value: Record<string, unknown>): void {
   }
 
   const fingerprints = new Set<string>();
+  const slots = new Set<string>();
   for (const accepted of value.docenteOsProjections) {
     if (!isAcceptedProjection(accepted)) {
       throw new Error('Proiezione Docente OS accettata non valida.');
@@ -111,6 +116,12 @@ function assertPlanningV2(value: Record<string, unknown>): void {
       throw new Error('Proiezione Docente OS accettata duplicata.');
     }
     fingerprints.add(fingerprint);
+
+    const slot = projectionSlotKey(accepted);
+    if (slots.has(slot)) {
+      throw new Error('Slot proiezione Docente OS accettata duplicato.');
+    }
+    slots.add(slot);
   }
 }
 
