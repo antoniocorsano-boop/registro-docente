@@ -1796,6 +1796,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <LibraryView
             library={library}
             udas={udas}
+            classes={appData.classes}
             planning={planning}
             currentClassName={currentClass?.name ?? null}
             embeddingConfig={settings.embeddingConfig}
