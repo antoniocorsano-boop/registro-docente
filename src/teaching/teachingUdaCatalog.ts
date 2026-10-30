@@ -23,8 +23,10 @@ export interface TeachingUdaCandidate {
   origin: 'registro' | 'docente-os';
   classId: string;
   classLabel: string;
+  className: string;
   title: string;
   periodLabel: string;
+  period: string;
   plannedHours: number;
   sourceRef: string;
   writableByRegistro: boolean;
@@ -50,8 +52,10 @@ function localCandidate(uda: UdaRecord, classes: readonly ClassData[]): Teaching
     origin: 'registro',
     classId: resolution.classId,
     classLabel: resolution.label,
+    className: resolution.label,
     title: uda.title,
     periodLabel: uda.period,
+    period: uda.period,
     plannedHours: uda.hours,
     sourceRef: uda.id,
     writableByRegistro: true,
@@ -117,8 +121,10 @@ export function buildTeachingUdaCatalog({
           origin: 'docente-os',
           classId: reconciliation.registroClassId,
           classLabel: currentResolution.label,
+          className: currentResolution.label,
           title: projectedUda.title,
           periodLabel: projectedUda.period,
+          period: projectedUda.period,
           plannedHours: projectedUda.plannedHours,
           sourceRef: projectedUda.sourceUdaRef,
           writableByRegistro: false,
