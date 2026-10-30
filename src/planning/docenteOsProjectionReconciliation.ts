@@ -77,13 +77,6 @@ export function reconcileDocenteOsTeachingProjectionClasses(
       return { sourceSectionId: section.sourceSectionId, status: 'unresolved' };
     }
 
-    if (prior?.status === 'ambiguous') {
-      return { sourceSectionId: section.sourceSectionId, status: 'ambiguous' };
-    }
-    if (prior?.status === 'unresolved') {
-      return { sourceSectionId: section.sourceSectionId, status: 'unresolved' };
-    }
-
     return toStoredReconciliation(section.sourceSectionId, current);
   });
 }
