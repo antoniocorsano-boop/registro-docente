@@ -9,6 +9,7 @@
     "src/security/secureAppStorage.ts",
     "qualification/",
     "scripts/qualification/",
+    ".github/workflows/predeploy-security-qualification.yml",
     ".github/workflows/browser-qualification.yml",
     ".github/workflows/qualification-invariants.yml"
   ],
@@ -111,6 +112,7 @@
       "impactPaths": [
         "qualification/",
         "scripts/qualification/",
+        ".github/workflows/predeploy-security-qualification.yml",
         ".github/workflows/browser-qualification.yml",
         ".github/workflows/qualification-invariants.yml",
         "tests/browser/qualification-invariant-smoke.spec.cjs",

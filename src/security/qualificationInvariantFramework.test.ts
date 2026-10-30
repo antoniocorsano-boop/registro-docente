@@ -37,6 +37,16 @@ describe('QUAL-INVARIANT-01 canonical qualification invariant framework', () => 
     }
   });
 
+  test('PREDEPLOY derives exact-SHA impact, runs inherited contracts and emits an inspectable manifest', () => {
+    const source = readFileSync('.github/workflows/predeploy-security-qualification.yml', 'utf8');
+    expect(source).toContain('fetch-depth: 0');
+    expect(source).toContain('Validate invariant registry');
+    expect(source).toContain('Derive invariant impact and manifest');
+    expect(source).toContain('Run inherited invariant contracts');
+    expect(source).toContain('qualification-manifest.json');
+    expect(source).toContain('CANDIDATE_SHA');
+  });
+
   test('the full browser qualification runs the fast invariant smoke before the expensive AIC-07 suite', () => {
     const path = '.github/workflows/browser-qualification.yml';
     const source = readFileSync(path, 'utf8');
