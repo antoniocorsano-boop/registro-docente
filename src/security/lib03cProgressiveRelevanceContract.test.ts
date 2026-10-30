@@ -13,10 +13,10 @@ describe('LIB-03C progressive relevance contract', () => {
     const card = await Bun.file(SOURCE_CARD).text();
 
     expect(app).toContain('planning={planning}');
-    expect(view).toContain("import type { PlanningStateV1 } from '../planning/types'");
-    expect(view).toContain('planning: PlanningStateV1');
+    expect(view).toContain("import type { PlanningState } from '../planning/types'");
+    expect(view).toContain('planning: PlanningState');
     expect(view).toContain('planning={planning}');
-    expect(card).toContain('planning?: PlanningStateV1 | null');
+    expect(card).toContain('planning?: PlanningState | null');
     expect(card).toContain('planning={planning}');
   });
 

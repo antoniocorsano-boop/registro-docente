@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
@@ -18,7 +18,7 @@ import { LibraryRelevancePanel } from './LibraryRelevancePanel';
 interface LibrarySourceCardProps {
   source: LibrarySource;
   udas: UdaRecord[];
-  planning?: PlanningStateV1 | null;
+  planning?: PlanningState | null;
   currentClassName?: string | null;
   lastExplicitTeachingContext?: LibraryTeachingContext | null;
   onExplicitTeachingContextChange: (context: LibraryTeachingContext) => void;
