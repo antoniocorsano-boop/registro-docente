@@ -5,6 +5,8 @@ import type {
 import type { ClassData, UdaLesson, UdaRecord } from '../types';
 import { resolveCanonicalRegistroClass } from './classIdentity';
 
+const DOCENTE_OS_PROJECTED_UDA_PREFIX = 'docente-os:';
+
 export type TeachingUdaClassReconciliation = Readonly<
   Record<string, readonly DocenteOsProjectionClassReconciliation[]>
 >;
@@ -41,6 +43,10 @@ export interface BuildTeachingUdaCatalogInput {
   acceptedProjections: readonly AcceptedDocenteOsTeachingProjection[];
   classReconciliation: TeachingUdaClassReconciliation;
   classes: ClassData[];
+}
+
+export function isDocenteOsProjectedUdaId(udaId: string): boolean {
+  return udaId.startsWith(DOCENTE_OS_PROJECTED_UDA_PREFIX);
 }
 
 function projectionFingerprintCounts(
@@ -128,10 +134,13 @@ export function buildTeachingUdaCatalog({
 }: BuildTeachingUdaCatalogInput): TeachingUdaCandidate[] {
   const catalog: TeachingUdaCandidate[] = [];
   const seenIds = new Set<string>();
+  const localIds = new Set(localUdas.map(uda => uda.id));
   const fingerprintCounts = projectionFingerprintCounts(acceptedProjections);
   const projectedIdCounts = projectedUdaIdCounts(acceptedProjections);
+  const projectedIds = new Set(projectedIdCounts.keys());
 
   for (const uda of localUdas) {
+    if (projectedIds.has(uda.id)) continue;
     const candidate = localCandidate(uda, classes);
     if (!candidate || seenIds.has(candidate.id)) continue;
     seenIds.add(candidate.id);
@@ -160,7 +169,9 @@ export function buildTeachingUdaCatalog({
       }
 
       for (const projectedUda of projectedClass.udas) {
+        if (projectedUda.canonicalGenerationId !== projectedClass.canonicalPlan.generationId) continue;
         if (projectedIdCounts.get(projectedUda.projectedUdaId) !== 1) continue;
+        if (localIds.has(projectedUda.projectedUdaId)) continue;
         if (seenIds.has(projectedUda.projectedUdaId)) continue;
         seenIds.add(projectedUda.projectedUdaId);
         catalog.push({
