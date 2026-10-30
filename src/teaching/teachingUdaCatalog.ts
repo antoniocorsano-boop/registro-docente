@@ -40,10 +40,36 @@ export interface BuildTeachingUdaCatalogInput {
   localUdas: readonly UdaRecord[];
   acceptedProjections: readonly AcceptedDocenteOsTeachingProjection[];
   classReconciliation: TeachingUdaClassReconciliation;
-  classes: readonly ClassData[];
+  classes: ClassData[];
 }
 
-function localCandidate(uda: UdaRecord, classes: readonly ClassData[]): TeachingUdaCandidate | null {
+function projectionFingerprintCounts(
+  acceptedProjections: readonly AcceptedDocenteOsTeachingProjection[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const accepted of acceptedProjections) {
+    const fingerprint = accepted.projection.projectionFingerprint.hash;
+    counts.set(fingerprint, (counts.get(fingerprint) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function buildTeachingUdaClassReconciliationIndex(
+  acceptedProjections: readonly AcceptedDocenteOsTeachingProjection[]
+): TeachingUdaClassReconciliation {
+  const counts = projectionFingerprintCounts(acceptedProjections);
+  const entries: Array<[string, readonly DocenteOsProjectionClassReconciliation[]]> = [];
+
+  for (const accepted of acceptedProjections) {
+    const fingerprint = accepted.projection.projectionFingerprint.hash;
+    if (counts.get(fingerprint) !== 1) continue;
+    entries.push([fingerprint, accepted.classReconciliation]);
+  }
+
+  return Object.fromEntries(entries);
+}
+
+function localCandidate(uda: UdaRecord, classes: ClassData[]): TeachingUdaCandidate | null {
   const resolution = resolveCanonicalRegistroClass(uda.className, classes);
   if (resolution.status !== 'resolved') return null;
 
@@ -85,6 +111,7 @@ export function buildTeachingUdaCatalog({
 }: BuildTeachingUdaCatalogInput): TeachingUdaCandidate[] {
   const catalog: TeachingUdaCandidate[] = [];
   const seenIds = new Set<string>();
+  const fingerprintCounts = projectionFingerprintCounts(acceptedProjections);
 
   for (const uda of localUdas) {
     const candidate = localCandidate(uda, classes);
@@ -96,6 +123,7 @@ export function buildTeachingUdaCatalog({
   for (const accepted of acceptedProjections) {
     const projection = accepted.projection;
     const fingerprint = projection.projectionFingerprint.hash;
+    if (fingerprintCounts.get(fingerprint) !== 1) continue;
 
     for (const projectedClass of projection.classes) {
       const reconciliation = resolvedProjectionClass(
