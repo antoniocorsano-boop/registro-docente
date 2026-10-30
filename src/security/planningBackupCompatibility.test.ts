@@ -157,6 +157,18 @@ describe('EDU-PLAN-01A planning backup compatibility', () => {
     expect(restored.copilotState).toEqual(createEmptyCopilotState());
   });
 
+  test('keeps historical v5 planning contract strict to v1 and rejects planning v2 projections', async () => {
+    const backup = await loadBackupModule();
+    const { copilotState: _copilotState, ...v5WithPlanningV2 } = currentPlanningSnapshot;
+
+    expect(() => backup.normalizeBackupPayload({
+      app: 'registro-docente',
+      backupDataVersion: 5,
+      exportedAt: '2026-10-29T10:00:00.000Z',
+      snapshot: v5WithPlanningV2
+    }, currentPlanningSnapshot as any)).toThrow(/backup v5|planning/i);
+  });
+
   test('keeps unsupported application backup versions fail-closed', async () => {
     const backup = await loadBackupModule();
 
