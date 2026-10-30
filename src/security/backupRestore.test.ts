@@ -53,13 +53,14 @@ class RestoreTestStore implements VaultStore {
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }
 }
 
-const emptyPlanning = {
-  schemaVersion: 1 as const,
+const emptyPlanningV2 = {
+  schemaVersion: 2 as const,
   profiles: [],
   arenaContexts: [],
   resources: [],
   masterPrograms: [],
-  classInstances: []
+  classInstances: [],
+  docenteOsProjections: []
 };
 
 function libraryFor(label: string) {
@@ -78,7 +79,7 @@ function libraryFor(label: string) {
   };
 }
 
-function snapshot(label: string): CompleteSecureAppSnapshot {
+function snapshot(label: string, planning: any = emptyPlanningV2): CompleteSecureAppSnapshot {
   return {
     appData: { classes: [], currentClassId: null },
     settings: {
@@ -99,11 +100,27 @@ function snapshot(label: string): CompleteSecureAppSnapshot {
     udas: [],
     customTests: {},
     submissions: [],
-    planning: emptyPlanning,
+    planning,
     library: libraryFor(label),
     professionalMemory: createEmptyProfessionalMemoryState(),
     copilotState: createEmptyCopilotState(),
     meta: { changes: label === 'old' ? 3 : 0, lastBackup: null }
+  };
+}
+
+async function acceptedProjectionPlanning() {
+  const projection = await Bun.file('docs/contracts/fixtures/docente-os-registro-teaching-projection-v1.json').json();
+  return {
+    ...emptyPlanningV2,
+    docenteOsProjections: [{
+      projection,
+      acceptedAt: '2026-10-30T09:50:00.000Z',
+      classReconciliation: [{
+        sourceSectionId: 'section-1a',
+        status: 'resolved' as const,
+        registroClassId: 'class-real-1a'
+      }]
+    }]
   };
 }
 
@@ -121,7 +138,7 @@ describe('SEC-1 verified vault backup restore', () => {
     expect(restored.professionalMemory).toEqual(createEmptyProfessionalMemoryState());
     expect(restored.copilotState).toEqual(createEmptyCopilotState());
     expect(restored.settings.embeddingConfig?.apiKey).toBeUndefined();
-    expect(restored.planning).toEqual(emptyPlanning);
+    expect(restored.planning).toEqual(emptyPlanningV2);
     expect((await storage.loadSnapshot()).settings?.school).toBe('IC new');
   });
 
@@ -139,11 +156,29 @@ describe('SEC-1 verified vault backup restore', () => {
 
     const afterFailure = await storage.loadSnapshot();
     expect(afterFailure.settings?.school).toBe('IC old');
-    expect(afterFailure.planning).toEqual(emptyPlanning);
+    expect(afterFailure.planning).toEqual(emptyPlanningV2);
     expect(afterFailure.professionalMemory).toEqual(previous.professionalMemory);
     expect(afterFailure.copilotState).toEqual(previous.copilotState);
     expect(afterFailure.meta).toEqual(previous.meta);
     expect(afterFailure.settings?.embeddingConfig?.apiKey).toBeUndefined();
+  });
+
+  test('failed restore preserves the previously accepted Docente OS projection exactly', async () => {
+    const store = new RestoreTestStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('password');
+    const storage = new SecureAppStorage(vault);
+    const previousPlanning = await acceptedProjectionPlanning();
+    const previous = snapshot('old', previousPlanning);
+
+    await storage.restoreSnapshotVerified(previous);
+    store.armOneReadCorruption('appData', 10);
+
+    await expect(storage.restoreSnapshotVerified(snapshot('new'))).rejects.toBeDefined();
+
+    const afterFailure = await storage.loadSnapshot();
+    expect(afterFailure.planning).toEqual(previousPlanning);
+    expect(afterFailure.planning?.docenteOsProjections).toEqual(previousPlanning.docenteOsProjections);
   });
 
   test('returns an initially empty vault to logically empty memory and Copilot state when a restore readback fails', async () => {
