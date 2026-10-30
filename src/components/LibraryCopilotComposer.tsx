@@ -12,6 +12,7 @@ import {
 } from '../memory/professionalMemory';
 import {
   resolveLaunchTeachingContext,
+  resolveLaunchTeachingContextFromCatalog,
   type CopilotLaunchContext,
   type LibraryCopilotLaunchRequest
 } from '../library/copilotLaunchContext';
@@ -299,8 +300,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   );
 
   const explicitLaunchTeachingContext = useMemo(
-    () => resolveLaunchTeachingContext(launchRequest, udas),
-    [launchRequest?.nonce, udas]
+    () => launchRequest?.mission
+      ? resolveLaunchTeachingContext(launchRequest, udas)
+      : resolveLaunchTeachingContextFromCatalog(launchRequest, teachingUdaCatalog),
+    [launchRequest?.nonce, launchRequest?.mission, udas, teachingUdaCatalog]
   );
 
   const teachingSuggestion = useMemo(() => {

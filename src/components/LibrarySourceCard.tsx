@@ -115,6 +115,9 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         }
       : null
   );
+  const selectableLocalUdas = udas.filter(uda =>
+    teachingUdaCatalog.some(candidate => candidate.origin === 'registro' && candidate.id === uda.id)
+  );
 
   useLayoutEffect(() => {
     if (!isSelected) {
@@ -129,7 +132,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     if (initializedSourceIdRef.current === source.id) return;
 
     const suggestion = suggestLibraryTeachingContext({
-      udas,
+      udas: selectableLocalUdas,
       currentClassName,
       lastExplicitChoice: lastExplicitTeachingContext,
       today: localDateKey()
@@ -142,7 +145,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setWebCaptureOpen(false);
     setWebCapturedText('');
     setWebCaptureError(null);
-  }, [isSelected, source.id, udas, currentClassName, lastExplicitTeachingContext]);
+  }, [isSelected, source.id, udas, teachingUdaCatalog, currentClassName, lastExplicitTeachingContext]);
 
   const handleRename = async () => {
     const title = prompt('Nuovo titolo della fonte:', source.title)?.trim();
@@ -476,7 +479,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
 
           <LibraryRelevancePanel
             source={source}
-            udas={udas}
+            udas={selectableLocalUdas}
             planning={planning}
             teachingContext={resolvedTeachingContext}
             isPending={isPending}
