@@ -94,7 +94,7 @@ function canonicalizeCompleteSnapshot(
     udas: snapshot.udas,
     customTests: snapshot.customTests,
     submissions: snapshot.submissions,
-    planning: snapshot.planning,
+    planning: normalizePlanningState(snapshot.planning),
     library: snapshot.library,
     professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState(),
     copilotState: normalizeLoadedCopilotState(snapshot.copilotState ?? createEmptyCopilotState()),
