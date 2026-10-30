@@ -48,9 +48,7 @@ export function resolveLibraryTeachingContext(
     return {
       udaId: uda.id,
       className: uda.className,
-      period: uda.period,
-      udaOrigin: 'registro',
-      writableByRegistro: true
+      period: uda.period
     };
   }
 
@@ -62,9 +60,7 @@ export function resolveLibraryTeachingContext(
     className: uda.className,
     period: uda.period,
     lessonId: lesson.id,
-    ...(lesson.activityType ? { activityType: lesson.activityType } : {}),
-    udaOrigin: 'registro',
-    writableByRegistro: true
+    ...(lesson.activityType ? { activityType: lesson.activityType } : {})
   };
 }
 
