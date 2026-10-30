@@ -34,13 +34,19 @@ class MemoryVaultStore implements VaultStore {
   async clearAll(): Promise<void> { this.metadata = null; this.records.clear(); }
 }
 
-const emptyPlanning = {
+const legacyPlanningV1 = {
   schemaVersion: 1 as const,
   profiles: [],
   arenaContexts: [],
   resources: [],
   masterPrograms: [],
   classInstances: []
+};
+
+const emptyPlanningV2 = {
+  ...legacyPlanningV1,
+  schemaVersion: 2 as const,
+  docenteOsProjections: []
 };
 
 function makeSource(
@@ -69,7 +75,7 @@ function completeSnapshot(library: LibraryStateV1): CompleteSecureAppSnapshot {
     udas: [],
     customTests: {},
     submissions: [],
-    planning: emptyPlanning,
+    planning: emptyPlanningV2,
     library,
     meta: { changes: 1, lastBackup: null }
   };
@@ -99,7 +105,7 @@ describe('LIB-01A integrated persistence, backup and sequencing contract', () =>
     ]);
   });
 
-  test('backup v4 normalize and verified restore preserve a linked private source', async () => {
+  test('backup v6 normalize and verified restore preserve a linked private source', async () => {
     const source = makeSource('backup');
     const library = linkLibrarySource(
       addLibrarySource(createEmptyLibraryState(), source),
@@ -122,9 +128,18 @@ describe('LIB-01A integrated persistence, backup and sequencing contract', () =>
     ]);
   });
 
-  test('valid v3 backup remains readable and starts with an empty private library', () => {
+  test('valid historical v3 backup remains readable, normalizes planning to v2 and starts with an empty private library', () => {
     const current = completeSnapshot(addLibrarySource(createEmptyLibraryState(), makeSource('current')));
-    const { library: _library, ...snapshotV3 } = current;
+    const {
+      library: _library,
+      professionalMemory: _professionalMemory,
+      copilotState: _copilotState,
+      ...currentWithoutNewerDatasets
+    } = current;
+    const snapshotV3 = {
+      ...currentWithoutNewerDatasets,
+      planning: legacyPlanningV1
+    };
 
     const restored = normalizeBackupPayload({
       app: 'registro-docente',
@@ -134,7 +149,7 @@ describe('LIB-01A integrated persistence, backup and sequencing contract', () =>
     }, current);
 
     expect(restored.library).toEqual(createEmptyLibraryState());
-    expect(restored.planning).toEqual(current.planning);
+    expect(restored.planning).toEqual(emptyPlanningV2);
   });
 
   test('failed durable save leaves the committed library and backup metadata unchanged', async () => {
