@@ -2,12 +2,13 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { PlanningState } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
+import type { TeachingUdaCandidate } from '../teaching/teachingUdaCatalog';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { buildCapturedWebTextPatch } from '../library/intake';
 import {
-  resolveLibraryTeachingContext,
+  resolveLibraryTeachingContextFromCatalog,
   suggestLibraryTeachingContext,
   type LibraryTeachingContext,
   type TeachingContextSuggestion,
@@ -18,6 +19,7 @@ import { LibraryRelevancePanel } from './LibraryRelevancePanel';
 interface LibrarySourceCardProps {
   source: LibrarySource;
   udas: UdaRecord[];
+  teachingUdaCatalog: readonly TeachingUdaCandidate[];
   planning?: PlanningState | null;
   currentClassName?: string | null;
   lastExplicitTeachingContext?: LibraryTeachingContext | null;
@@ -75,6 +77,7 @@ function localDateKey(date = new Date()): string {
 export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   source,
   udas,
+  teachingUdaCatalog,
   planning = null,
   currentClassName = null,
   lastExplicitTeachingContext = null,
@@ -100,11 +103,11 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
 
-  const selectedContextUda = udas.find(uda => uda.id === contextUdaId);
+  const selectedContextUda = teachingUdaCatalog.find(candidate => candidate.id === contextUdaId);
   const contextLessons = selectedContextUda?.lessons ?? [];
   const selectedContextLesson = contextLessons.find(lesson => lesson.id === contextLessonId);
-  const resolvedTeachingContext = resolveLibraryTeachingContext(
-    udas,
+  const resolvedTeachingContext = resolveLibraryTeachingContextFromCatalog(
+    teachingUdaCatalog,
     contextUdaId
       ? {
           udaId: contextUdaId,
@@ -290,11 +293,15 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                   id={`link-${source.id}`}
                   value={targetUdaId}
                   onChange={event => setTargetUdaId(event.target.value)}
-                  disabled={isPending || udas.length === 0}
+                  disabled={isPending || teachingUdaCatalog.length === 0}
                   className="min-h-[44px] flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
                 >
                   <option value="">Seleziona UDA</option>
-                  {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}
+                  {teachingUdaCatalog.map(candidate => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.title}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+                    </option>
+                  ))}
                 </select>
                 <button
                   type="button"
@@ -313,10 +320,13 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                 <p className="text-xs text-slate-400">Collegamenti</p>
                 {source.links.map(link => {
                   const linkedLesson = link.targetType === 'lesson'
-                    ? udas.flatMap(uda => uda.lessons ?? []).find(lesson => lesson.id === link.targetId)
+                    ? teachingUdaCatalog.flatMap(candidate => candidate.lessons).find(lesson => lesson.id === link.targetId)
+                    : undefined;
+                  const linkedUda = link.targetType === 'uda'
+                    ? teachingUdaCatalog.find(candidate => candidate.id === link.targetId)
                     : undefined;
                   const label = link.targetType === 'uda'
-                    ? udas.find(uda => uda.id === link.targetId)?.title || link.targetId
+                    ? `${linkedUda?.title || link.targetId}${linkedUda?.origin === 'docente-os' ? ' · Da Docente OS' : ''}`
                     : linkedLesson?.topic || link.targetId;
                   return (
                     <div key={`${link.targetType}:${link.targetId}`} className="flex items-center justify-between gap-2 text-xs bg-slate-900 rounded-md px-2 py-1.5">
@@ -405,6 +415,12 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               <strong className="block text-sm text-slate-100">Scegli dove usarla</strong>
             )}
 
+            {selectedContextUda?.origin === 'docente-os' && (
+              <p className="text-xs text-sky-200">
+                Da Docente OS · sola lettura · riferimento {selectedContextUda.sourceRef}
+              </p>
+            )}
+
             {(contextChooserOpen || !contextSuggestion) && (
               <>
                 <label className="block text-xs text-slate-300" htmlFor={`context-uda-${source.id}`}>
@@ -414,11 +430,15 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                   id={`context-uda-${source.id}`}
                   value={contextUdaId}
                   onChange={event => selectExplicitUda(event.target.value)}
-                  disabled={isPending || udas.length === 0}
+                  disabled={isPending || teachingUdaCatalog.length === 0}
                   className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
                 >
                   <option value="">Seleziona UDA</option>
-                  {udas.map(uda => <option key={uda.id} value={uda.id}>{uda.title}</option>)}
+                  {teachingUdaCatalog.map(candidate => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.title}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+                    </option>
+                  ))}
                 </select>
 
                 {selectedContextUda && contextLessons.length > 0 && (
