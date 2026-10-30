@@ -27,6 +27,13 @@ function sameProjectionSlot(
     && left.disciplineName.trim().toLocaleLowerCase('it') === right.disciplineName.trim().toLocaleLowerCase('it');
 }
 
+export function findAcceptedDocenteOsTeachingProjectionForSlot(
+  current: PlanningStateV2,
+  projection: DocenteOsTeachingProjectionV1
+) {
+  return current.docenteOsProjections.find(item => sameProjectionSlot(item.projection, projection));
+}
+
 function toStoredReconciliation(
   sourceSectionId: string,
   resolution: ReturnType<typeof resolveCanonicalRegistroClass>

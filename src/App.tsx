@@ -18,6 +18,7 @@ import { createEmptyPlanningState } from './planning/emptyPlanningState';
 import { previewDocenteOsTeachingProjection } from './planning/docenteOsTeachingProjection';
 import {
   bindAcceptedDocenteOsTeachingProjection,
+  findAcceptedDocenteOsTeachingProjectionForSlot,
   reconcileDocenteOsTeachingProjectionClasses
 } from './planning/docenteOsProjectionReconciliation';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
@@ -452,18 +453,24 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       return Promise.reject(new Error(`Proiezione Docente OS non valida (${preview.code}).`));
     }
 
-    const reconciliation = reconcileDocenteOsTeachingProjectionClasses(
-      preview.projection,
-      appDataRef.current.classes
-    );
-    const acceptedAt = new Date().toISOString();
+    return commitPlanningMutation(current => {
+      const previousAcceptedProjection = findAcceptedDocenteOsTeachingProjectionForSlot(
+        current,
+        preview.projection
+      );
+      const reconciliation = reconcileDocenteOsTeachingProjectionClasses(
+        preview.projection,
+        appDataRef.current.classes,
+        previousAcceptedProjection?.classReconciliation
+      );
 
-    return commitPlanningMutation(current => bindAcceptedDocenteOsTeachingProjection(
-      current,
-      preview.projection,
-      reconciliation,
-      { status: 'accepted', acceptedAt }
-    ));
+      return bindAcceptedDocenteOsTeachingProjection(
+        current,
+        preview.projection,
+        reconciliation,
+        { status: 'accepted', acceptedAt: new Date().toISOString() }
+      );
+    });
   }, [commitPlanningMutation]);
 
   const commitLibraryMutation = useCallback((
