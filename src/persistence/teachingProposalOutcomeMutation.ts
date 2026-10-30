@@ -19,14 +19,21 @@ export interface TeachingProposalOutcomeCandidate extends TeachingProposalOutcom
   receipt: TeachingProposalUdaAdoptionReceipt;
 }
 
-export type TeachingProposalOutcomeMutationInput = Omit<TeachingProposalUdaAdoptionInput, 'udas'>;
+export type TeachingProposalOutcomeMutationInput = Omit<TeachingProposalUdaAdoptionInput, 'udas'> & {
+  targetWritableByRegistro?: boolean;
+};
 
 export function deriveTeachingProposalOutcomeCandidate(
   current: TeachingProposalOutcomeState,
   input: TeachingProposalOutcomeMutationInput
 ): TeachingProposalOutcomeCandidate {
+  const { targetWritableByRegistro, ...adoptionInput } = input;
+  if (targetWritableByRegistro === false) {
+    throw new Error('A4_R2_PROJECTED_UDA_READ_ONLY');
+  }
+
   const outcome = buildTeachingProposalUdaAdoption({
-    ...input,
+    ...adoptionInput,
     udas: current.udas
   });
 
