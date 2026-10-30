@@ -2,23 +2,32 @@ import React, { useState } from 'react';
 import type {
   ArenaPlanningContext,
   ArenaPlanningContextPreview,
+  PlanningState,
   TeachingProfile
 } from '../../planning/types';
+import type { ClassData } from '../../types';
 import { ArenaPlanningContextPanel } from './ArenaPlanningContextPanel';
+import { DocenteOsProjectionPanel } from './DocenteOsProjectionPanel';
 import { PlanningProfileEditor } from './PlanningProfileEditor';
 
 interface PlanningProfileViewProps {
   profiles: TeachingProfile[];
   arenaContexts: ArenaPlanningContext[];
+  planning: PlanningState;
+  classes: ClassData[];
   onSaveProfile: (profile: TeachingProfile) => Promise<void>;
   onAcceptArenaContext: (context: ArenaPlanningContextPreview) => Promise<void>;
+  onAcceptDocenteOsProjection: (payload: unknown) => Promise<PlanningState>;
 }
 
 export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   profiles,
   arenaContexts,
+  planning,
+  classes,
   onSaveProfile,
-  onAcceptArenaContext
+  onAcceptArenaContext,
+  onAcceptDocenteOsProjection
 }) => {
   const [selectedId, setSelectedId] = useState<string | null>(profiles[0]?.id ?? null);
   const resolvedSelectedId = selectedId && profiles.some(profile => profile.id === selectedId)
@@ -47,6 +56,11 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           onAccept={onAcceptArenaContext}
         />
       )}
+      <DocenteOsProjectionPanel
+        planning={planning}
+        classes={classes}
+        onAccept={onAcceptDocenteOsProjection}
+      />
     </section>
   );
 };

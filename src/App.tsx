@@ -463,6 +463,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         appDataRef.current.classes,
         previousAcceptedProjection?.classReconciliation
       );
+      if (reconciliation.some(item => item.status !== 'resolved')) {
+        throw new Error('Riconciliazione classi Docente OS incompleta: verifica le classi prima di accettare.');
+      }
 
       return bindAcceptedDocenteOsTeachingProjection(
         current,
@@ -594,7 +597,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setCopilotState(candidate.copilotState);
         setMeta(candidate.meta);
       },
-      afterCommit: () => toast(successMessage)
+      afterCommit: () => {
+        if (successMessage) toast(successMessage);
+      }
     }).then(candidate => candidate.copilotState).catch(error => {
       console.error('Supervised Copilot state save failed', error);
       alert(DURABLE_SAVE_FAILURE_MESSAGE);
@@ -1786,8 +1791,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <PlanningProfileView
             profiles={planning.profiles}
             arenaContexts={planning.arenaContexts}
+            planning={planning}
+            classes={appData.classes}
             onSaveProfile={handleSaveTeachingProfile}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
+            onAcceptDocenteOsProjection={handleAcceptDocenteOsTeachingProjection}
           />
         )}
 

@@ -228,6 +228,25 @@
         "src/library/copilotLaunchContext.test.ts",
         "src/security/lib03cProgressiveRelevanceContract.test.ts"
       ]
+    },
+    {
+      "id": "A4-R2B-I06",
+      "owner": "A4-R2B",
+      "statement": "Docente OS teaching projections enter Registro only through explicit local JSON import and teacher-facing preview; strict validation and canonical class reconciliation remain fail-closed, unresolved or ambiguous mappings cannot be committed after queue-time drift, and success is shown only after durable acceptance.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/planning/DocenteOsProjectionPanel.tsx",
+        "src/components/planning/PlanningProfileView.tsx",
+        "src/security/a4R2ProjectionImportUiContract.test.ts"
+      ],
+      "tests": [
+        "src/security/a4R2ProjectionImportUiContract.test.ts",
+        "src/security/a4R2ProjectionAcceptancePersistence.test.ts",
+        "src/security/a4R2DocenteOsProjectionContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
     }
   ]
 }
