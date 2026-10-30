@@ -50,4 +50,11 @@ describe('A4-R2B projected Library-to-Copilot launch authority', () => {
     expect(source).toContain('resolveLaunchTeachingContext(launchRequest, udas)');
     expect(source).toContain('resolveLaunchTeachingContextFromCatalog(launchRequest, teachingUdaCatalog)');
   });
+
+  test('automatic Copilot suggestions use only local UDA that survived the fail-closed unified catalog', async () => {
+    const source = await Bun.file(new URL('../components/LibraryCopilotComposer.tsx', import.meta.url)).text();
+    expect(source).toContain("candidate.origin === 'registro' && candidate.localUda");
+    expect(source).toContain('udas: selectableLocalUdas');
+    expect(source).not.toContain("suggestLibraryTeachingContext({\n      udas,\n      currentClassName: effectiveClassName");
+  });
 });
