@@ -125,6 +125,109 @@
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
       ]
+    },
+    {
+      "id": "A4-R2B-I01",
+      "owner": "A4-R2B",
+      "statement": "Docente OS teaching projection input is accepted only through the versioned V1 allowlisted contract with valid fingerprint, provenance and professional non-personal content; parsing alone grants no persistence authority.",
+      "impactPaths": [
+        "src/planning/docenteOsTeachingProjection.ts",
+        "src/security/a4R2DocenteOsProjectionContract.test.ts"
+      ],
+      "tests": [
+        "src/security/a4R2DocenteOsProjectionContract.test.ts"
+      ]
+    },
+    {
+      "id": "A4-R2B-I02",
+      "owner": "A4-R2B",
+      "statement": "Accepted Docente OS projections remain inside Planning V2 in the existing encrypted planning record, normalize safely from historical planning state, round-trip through supported backups, and never become canonical Registro UDA records.",
+      "impactPaths": [
+        "src/planning/emptyPlanningState.ts",
+        "src/planning/normalizePlanningState.test.ts",
+        "src/planning/normalizePlanningState.ts",
+        "src/planning/types.ts",
+        "src/security/a4R2PlanningStateV2Contract.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/backupPayload.ts",
+        "src/security/backupRestore.test.ts",
+        "src/security/planningBackupCompatibility.test.ts",
+        "src/security/planningDomain.test.ts",
+        "src/security/planningPersistence.test.ts",
+        "src/security/secureAppStorage.test.ts"
+      ],
+      "tests": [
+        "src/security/a4R2PlanningStateV2Contract.test.ts",
+        "src/security/planningBackupCompatibility.test.ts",
+        "src/security/planningPersistence.test.ts",
+        "src/security/backupPayload.test.ts"
+      ]
+    },
+    {
+      "id": "A4-R2B-I03",
+      "owner": "A4-R2B",
+      "statement": "Projection acceptance reconciles classes through canonical Registro identity inside the commit-first planning mutation boundary; ambiguity and unresolved identity fail closed, resolved bindings cannot silently retarget, and explicit replacement remains slot-scoped.",
+      "impactPaths": [
+        "src/planning/docenteOsProjectionReconciliation.test.ts",
+        "src/planning/docenteOsProjectionReconciliation.ts",
+        "src/security/a4R2ProjectionAcceptancePersistence.test.ts"
+      ],
+      "tests": [
+        "src/planning/docenteOsProjectionReconciliation.test.ts",
+        "src/security/a4R2ProjectionAcceptancePersistence.test.ts"
+      ]
+    },
+    {
+      "id": "A4-R2B-I04",
+      "owner": "A4-R2B",
+      "statement": "Projected Docente OS UDA remain derived read-only professional context under canonical Registro class identity; local UDA retain write authority, projected targets cannot receive Registro professional writes, and collisions or stale bindings fail closed.",
+      "impactPaths": [
+        "src/teaching/",
+        "src/security/a4R2LibraryCatalogFailClosed.test.ts",
+        "src/security/a4R2ProjectedUdaAuthorityContract.test.ts",
+        "src/security/a4R2UnifiedUdaCatalogBehavior.test.ts",
+        "src/security/a4R2UnifiedUdaCatalogCompatibility.test.ts"
+      ],
+      "tests": [
+        "src/teaching/teachingUdaCatalog.test.ts",
+        "src/security/a4R2LibraryCatalogFailClosed.test.ts",
+        "src/security/a4R2ProjectedUdaAuthorityContract.test.ts",
+        "src/security/a4R2UnifiedUdaCatalogBehavior.test.ts",
+        "src/security/a4R2UnifiedUdaCatalogCompatibility.test.ts"
+      ]
+    },
+    {
+      "id": "A4-R2B-I05",
+      "owner": "A4-R2B",
+      "statement": "Projected UDA may participate as read-only professional context across Copilot, Biblioteca, relevance and REVIEW without gaining local mutation, mission-completion or adoption authority.",
+      "impactPaths": [
+        "src/components/CopilotExperience.tsx",
+        "src/components/LibraryProposalPanel.tsx",
+        "src/components/LibraryRelevancePanel.tsx",
+        "src/components/LibrarySourceCard.tsx",
+        "src/components/LibraryView.tsx",
+        "src/copilot/opportunityResolver.ts",
+        "src/library/contextualDidacticReviewProjected.test.ts",
+        "src/library/copilotLaunchContext.test.ts",
+        "src/library/copilotLaunchContext.ts",
+        "src/library/planningContextBridge.ts",
+        "src/library/relevancePresentation.ts",
+        "src/library/teachingContext.ts",
+        "src/library/teachingProposal.ts",
+        "src/security/a4R2LibraryProjectedUdaIntegration.test.ts",
+        "src/security/a4R2ProjectedCopilotLaunchContract.test.ts",
+        "src/security/a4R2ProjectedUdaAuthorityContract.test.ts",
+        "src/security/lib01IntegratedContract.test.ts",
+        "src/security/lib03cProgressiveRelevanceContract.test.ts"
+      ],
+      "tests": [
+        "src/security/a4R2LibraryProjectedUdaIntegration.test.ts",
+        "src/security/a4R2ProjectedCopilotLaunchContract.test.ts",
+        "src/security/a4R2ProjectedUdaAuthorityContract.test.ts",
+        "src/library/contextualDidacticReviewProjected.test.ts",
+        "src/library/copilotLaunchContext.test.ts",
+        "src/security/lib03cProgressiveRelevanceContract.test.ts"
+      ]
     }
   ]
 }
