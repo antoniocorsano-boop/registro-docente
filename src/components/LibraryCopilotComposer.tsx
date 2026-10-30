@@ -45,11 +45,14 @@ import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
 import { buildMissionContextFingerprint } from '../copilot/mission';
 import { resolveTeacherFirstRequest, type TeacherFirstRequestResolution, type TeacherFirstGoalKind } from '../copilot/teacherFirstRequest';
-import { buildTeacherFirstTeachingCatalog } from '../copilot/teacherFirstTeachingCatalog';
+import {
+  buildTeacherFirstTeachingCatalog,
+  udasForCanonicalClass
+} from '../copilot/teacherFirstTeachingCatalog';
 import {
   buildTeachingUdaCatalog,
-  resolveTeachingUdaCandidate,
-  type TeachingUdaClassReconciliation
+  buildTeachingUdaClassReconciliationIndex,
+  resolveTeachingUdaCandidate
 } from '../teaching/teachingUdaCatalog';
 import type { CopilotProactivityProfile } from '../copilot/proactivity';
 import {
@@ -232,12 +235,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     () => buildTeacherFirstTeachingCatalog({ classes, udas }),
     [classes, udas]
   );
-  const docenteOsClassReconciliation = useMemo<TeachingUdaClassReconciliation>(() => Object.fromEntries(
-    planning.docenteOsProjections.map(accepted => [
-      accepted.projection.projectionFingerprint.hash,
-      accepted.classReconciliation
-    ])
-  ), [planning.docenteOsProjections]);
+  const docenteOsClassReconciliation = useMemo(
+    () => buildTeachingUdaClassReconciliationIndex(planning.docenteOsProjections),
+    [planning.docenteOsProjections]
+  );
   const teachingUdaCatalog = useMemo(() => buildTeachingUdaCatalog({
     localUdas: udas,
     acceptedProjections: planning.docenteOsProjections,
@@ -317,9 +318,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       : resolveLibraryTeachingContextFromCatalog(teachingUdaCatalog, teachingSuggestion?.context ?? null))
     : resolveLibraryTeachingContextFromCatalog(teachingUdaCatalog, contextOverride);
 
-  const teacherFirstClassUdas = useMemo(() => teacherFirstClassId
-    ? teachingUdaCatalog.filter(candidate => candidate.classId === teacherFirstClassId)
-    : [], [teachingUdaCatalog, teacherFirstClassId]);
+  const localTeacherFirstClassUdas = useMemo(() => teacherFirstClassId
+    ? udasForCanonicalClass(teacherFirstCatalog, teacherFirstClassId)
+    : [], [teacherFirstCatalog, teacherFirstClassId]);
+  const teacherFirstClassUdas = useMemo(() => {
+    if (!teacherFirstClassId) return [];
+    const localIds = new Set(localTeacherFirstClassUdas.map(uda => uda.id));
+    return teachingUdaCatalog.filter(candidate =>
+      candidate.classId === teacherFirstClassId
+      && (candidate.origin === 'docente-os' || localIds.has(candidate.id))
+    );
+  }, [teachingUdaCatalog, teacherFirstClassId, localTeacherFirstClassUdas]);
   const teacherFirstGoalKind: TeacherFirstGoalKind | null = teacherFirstResolution?.goalKind ?? null;
   const showTeachingContextControls = isBoundMissionFlow || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous);
   const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous && resolvedTeachingContext);
