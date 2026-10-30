@@ -1,5 +1,5 @@
 import type { RemoteProfessionalMemoryProjectionV1 } from '../memory/types';
-import type { UdaActivityType, UdaRecord } from '../types';
+import type { UdaActivityType, UdaLesson } from '../types';
 import {
   buildAiBudgetActivityKey,
   normalizeAiBudgetProfile,
@@ -41,6 +41,14 @@ export interface LibraryProposalRequestV1 {
     authorization?: AiBudgetAuthorizationV1;
   };
   professionalMemory?: RemoteProfessionalMemoryProjectionV1;
+}
+
+export interface TeachingProposalUdaContext {
+  id: string;
+  title: string;
+  className: string;
+  period: string;
+  lessons?: readonly UdaLesson[];
 }
 
 export interface TeachingProposalContent {
@@ -259,7 +267,7 @@ export function measureLibraryProposalBudget(request: LibraryProposalRequestV1):
 export function buildLibraryProposalRequest(input: {
   source: LibrarySource;
   teachingContext: ResolvedLibraryTeachingContext;
-  uda: UdaRecord;
+  uda: TeachingProposalUdaContext;
   explicitTeacherOptIn: boolean;
   professionalMemory?: RemoteProfessionalMemoryProjectionV1;
   aiBudgetProfile?: AiBudgetProfile;
