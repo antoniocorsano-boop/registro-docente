@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { normalizePlanningState } from './normalizePlanningState';
+import { computeDocenteOsTeachingProjectionFingerprint } from './docenteOsTeachingProjection';
 
 const legacyV1 = {
   schemaVersion: 1 as const,
@@ -80,5 +81,43 @@ describe('A4-R2B planning state v2 normalization', () => {
         classReconciliation: []
       }]
     })).toThrow();
+  });
+
+  test('fails closed when two different accepted projections occupy the same school-year and discipline slot', async () => {
+    const first = await frozenProjection() as Record<string, any>;
+    const second = structuredClone(first);
+    second.generatedAt = '2026-10-30T06:30:00.000Z';
+    second.classes[0].udas[0].title = `${second.classes[0].udas[0].title} — aggiornamento`;
+    const { projectionFingerprint: _projectionFingerprint, ...fingerprintInput } = second;
+    second.projectionFingerprint = {
+      algorithm: 'SHA-256',
+      hash: computeDocenteOsTeachingProjectionFingerprint(fingerprintInput as any)
+    };
+
+    expect(second.projectionFingerprint.hash).not.toBe(first.projectionFingerprint.hash);
+    expect(() => normalizePlanningState({
+      ...legacyV1,
+      schemaVersion: 2,
+      docenteOsProjections: [
+        {
+          projection: first,
+          acceptedAt: '2026-10-30T09:50:00.000Z',
+          classReconciliation: [{
+            sourceSectionId: 'section-1a',
+            status: 'resolved',
+            registroClassId: 'class-real-1a'
+          }]
+        },
+        {
+          projection: second,
+          acceptedAt: '2026-10-30T10:50:00.000Z',
+          classReconciliation: [{
+            sourceSectionId: 'section-1a',
+            status: 'resolved',
+            registroClassId: 'class-real-1a'
+          }]
+        }
+      ]
+    })).toThrow('Slot proiezione Docente OS accettata duplicato.');
   });
 });
