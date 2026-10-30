@@ -54,6 +54,23 @@ function projectionFingerprintCounts(
   return counts;
 }
 
+function projectedUdaIdCounts(
+  acceptedProjections: readonly AcceptedDocenteOsTeachingProjection[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const accepted of acceptedProjections) {
+    for (const projectedClass of accepted.projection.classes) {
+      for (const projectedUda of projectedClass.udas) {
+        counts.set(
+          projectedUda.projectedUdaId,
+          (counts.get(projectedUda.projectedUdaId) ?? 0) + 1
+        );
+      }
+    }
+  }
+  return counts;
+}
+
 export function buildTeachingUdaClassReconciliationIndex(
   acceptedProjections: readonly AcceptedDocenteOsTeachingProjection[]
 ): TeachingUdaClassReconciliation {
@@ -112,6 +129,7 @@ export function buildTeachingUdaCatalog({
   const catalog: TeachingUdaCandidate[] = [];
   const seenIds = new Set<string>();
   const fingerprintCounts = projectionFingerprintCounts(acceptedProjections);
+  const projectedIdCounts = projectedUdaIdCounts(acceptedProjections);
 
   for (const uda of localUdas) {
     const candidate = localCandidate(uda, classes);
@@ -142,6 +160,7 @@ export function buildTeachingUdaCatalog({
       }
 
       for (const projectedUda of projectedClass.udas) {
+        if (projectedIdCounts.get(projectedUda.projectedUdaId) !== 1) continue;
         if (seenIds.has(projectedUda.projectedUdaId)) continue;
         seenIds.add(projectedUda.projectedUdaId);
         catalog.push({
