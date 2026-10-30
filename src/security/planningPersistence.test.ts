@@ -38,6 +38,12 @@ const emptyPlanning = {
   classInstances: []
 };
 
+const normalizedEmptyPlanning = {
+  ...emptyPlanning,
+  schemaVersion: 2 as const,
+  docenteOsProjections: []
+};
+
 function requireMethod<T extends (...args: any[]) => Promise<void>>(storage: SecureAppStorage, name: string): T {
   const method = (storage as unknown as Record<string, unknown>)[name];
   expect(typeof method).toBe('function');
@@ -51,32 +57,28 @@ describe('EDU-PLAN-01A planning persistence', () => {
     const modulePath = '../persistence/' + 'planningMutation';
     const { applyPlanningMutation } = await import(modulePath);
 
-    const next = applyPlanningMutation(emptyPlanning, (current: typeof emptyPlanning) => ({
+    const next = applyPlanningMutation(normalizedEmptyPlanning, (current: typeof normalizedEmptyPlanning) => ({
       ...current,
       profiles: [{ id: 'profile-1' }]
     }));
 
     expect(next.profiles).toEqual([{ id: 'profile-1' }]);
-    expect(emptyPlanning.profiles).toEqual([]);
+    expect(normalizedEmptyPlanning.profiles).toEqual([]);
   });
 
   test('normalizes historical encrypted planning v1 to current v2 without fabricating projections', async () => {
     const modulePath = '../planning/' + 'normalizePlanningState';
     const { normalizePlanningState } = await import(modulePath);
 
-    expect(normalizePlanningState(emptyPlanning)).toEqual({
-      ...emptyPlanning,
-      schemaVersion: 2,
-      docenteOsProjections: []
-    });
+    expect(normalizePlanningState(emptyPlanning)).toEqual(normalizedEmptyPlanning);
   });
 
-  test('persists planning and meta through one encrypted vault batch', async () => {
+  test('persists historical planning v1 and reads it back as v2 through the same encrypted vault record', async () => {
     const store = new PlanningStore();
     const vault = new SecureVault(store);
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
-    const savePlanningAndMeta = requireMethod<(planning: typeof emptyPlanning, meta: { changes: number; lastBackup: string | null }) => Promise<void>>(
+    const savePlanningAndMeta = requireMethod<(planning: any, meta: { changes: number; lastBackup: string | null }) => Promise<void>>(
       storage,
       'savePlanningAndMeta'
     );
@@ -84,7 +86,7 @@ describe('EDU-PLAN-01A planning persistence', () => {
     await savePlanningAndMeta(emptyPlanning, { changes: 1, lastBackup: null });
     const snapshot = await storage.loadSnapshot() as unknown as Record<string, unknown>;
 
-    expect(snapshot.planning).toEqual(emptyPlanning);
+    expect(snapshot.planning).toEqual(normalizedEmptyPlanning);
     expect(snapshot.meta).toEqual({ changes: 1, lastBackup: null });
     expect(store.batchKeys.at(-1)).toEqual(['planning', 'meta']);
   });
@@ -102,12 +104,12 @@ describe('EDU-PLAN-01A planning persistence', () => {
     await savePlanningAndMeta(emptyPlanning, { changes: 1, lastBackup: null });
     store.failNextBatch = true;
     await expect(savePlanningAndMeta(
-      { ...emptyPlanning, profiles: [{ id: 'should-not-commit' }] },
+      { ...normalizedEmptyPlanning, profiles: [{ id: 'should-not-commit' }] },
       { changes: 2, lastBackup: null }
     )).rejects.toThrow('forced planning batch failure');
 
     const snapshot = await storage.loadSnapshot() as unknown as Record<string, any>;
-    expect(snapshot.planning).toEqual(emptyPlanning);
+    expect(snapshot.planning).toEqual(normalizedEmptyPlanning);
     expect(snapshot.meta).toEqual({ changes: 1, lastBackup: null });
   });
 
