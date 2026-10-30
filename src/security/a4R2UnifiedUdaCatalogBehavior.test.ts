@@ -11,6 +11,7 @@ import {
 import type { ClassData, UdaRecord } from '../types';
 
 const FINGERPRINT = 'a'.repeat(64);
+const SECOND_FINGERPRINT = 'b'.repeat(64);
 
 function classData(id: string, name: string): ClassData {
   return { id, name, students: [], grades: [], behaviors: [] };
@@ -140,6 +141,26 @@ describe('A4-R2B unified read-only UDA catalog behavior', () => {
       localUdas: [],
       acceptedProjections: [resolved, conflicting],
       classReconciliation: reconciliationMap(resolved.classReconciliation),
+      classes: [classData('class-1a', '1A')]
+    });
+
+    expect(catalog).toEqual([]);
+  });
+
+  test('same projected UDA id from distinct accepted fingerprints fails closed', () => {
+    const first = acceptedProjection();
+    const second = structuredClone(first);
+    second.projection.projectionFingerprint.hash = SECOND_FINGERPRINT;
+    second.projection.provenance.sourceCommit = 'fedcba9876543210fedcba9876543210fedcba98';
+    second.acceptedAt = '2026-10-30T10:01:00.000Z';
+
+    const catalog = buildTeachingUdaCatalog({
+      localUdas: [],
+      acceptedProjections: [first, second],
+      classReconciliation: {
+        [FINGERPRINT]: first.classReconciliation,
+        [SECOND_FINGERPRINT]: second.classReconciliation
+      },
       classes: [classData('class-1a', '1A')]
     });
 
