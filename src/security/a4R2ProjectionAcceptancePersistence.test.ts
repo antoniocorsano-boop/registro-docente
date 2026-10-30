@@ -93,6 +93,28 @@ describe('A4-R2B class reconciliation authority', () => {
       { sourceSectionId: 'section-1a', status: 'unresolved' }
     ]);
   });
+
+  test('previous unresolved mapping can heal when one real Registro class later becomes available', () => {
+    const projection = loadProjection();
+    expect(reconcileDocenteOsTeachingProjectionClasses(
+      projection,
+      [{ id: 'class-1a', name: '1A' }],
+      [{ sourceSectionId: 'section-1a', status: 'unresolved' }]
+    )).toEqual([
+      { sourceSectionId: 'section-1a', status: 'resolved', registroClassId: 'class-1a' }
+    ]);
+  });
+
+  test('previous ambiguity can heal when duplicate semantic class identities are removed', () => {
+    const projection = loadProjection();
+    expect(reconcileDocenteOsTeachingProjectionClasses(
+      projection,
+      [{ id: 'class-1a', name: '1A' }],
+      [{ sourceSectionId: 'section-1a', status: 'ambiguous' }]
+    )).toEqual([
+      { sourceSectionId: 'section-1a', status: 'resolved', registroClassId: 'class-1a' }
+    ]);
+  });
 });
 
 describe('A4-R2B accepted projection binding authority', () => {
