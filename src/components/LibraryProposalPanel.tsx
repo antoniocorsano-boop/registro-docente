@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ResolvedAction } from '@trama/contextual-copilot-core';
-import type { UdaRecord } from '../types';
 import type { RemoteProfessionalMemoryProjectionV1 } from '../memory/types';
 import type { LibrarySource } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
@@ -10,6 +9,7 @@ import {
   createInternalSourceFromTeachingProposal,
   measureLibraryProposalBudget,
   type TeachingProposalContent,
+  type TeachingProposalUdaContext,
   type TeachingProposalV1
 } from '../library/teachingProposal';
 import { resolveLibraryRemoteProposalActions } from '../library/contextualCoreAdapter';
@@ -41,7 +41,8 @@ import type {
 
 interface LibraryProposalPanelProps {
   source: LibrarySource;
-  uda: UdaRecord;
+  uda: TeachingProposalUdaContext;
+  writableByRegistro: boolean;
   teachingContext: ResolvedLibraryTeachingContext;
   professionalMemory: RemoteProfessionalMemoryProjectionV1;
   aiBudgetProfile?: AiBudgetProfile;
@@ -87,6 +88,7 @@ function contentFromProposal(proposal: TeachingProposalV1): TeachingProposalCont
 export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   source,
   uda,
+  writableByRegistro,
   teachingContext,
   professionalMemory,
   aiBudgetProfile,
@@ -414,7 +416,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
   };
 
   const adoptUdaContent = async (content: TeachingProposalContent) => {
-    if (!proposal || isAdopting) return;
+    if (!proposal || isAdopting || !writableByRegistro) return;
     const sourceId = adoptionSourceIdRef.current ?? uid();
     const lessonId = adoptionLessonIdRef.current ?? uid();
     adoptionSourceIdRef.current = sourceId;
@@ -429,6 +431,7 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
         teachingContext,
         sourceId,
         lessonId,
+        targetWritableByRegistro: writableByRegistro,
         capturedAt: new Date().toISOString(),
         lessonDate: localDateKey()
       });
@@ -590,6 +593,12 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
       {error && <p role="alert" className="text-xs text-amber-200">{error}</p>}
       {adoptionError && <p role="alert" className="text-xs text-amber-200">{adoptionError}</p>}
 
+      {!writableByRegistro && proposal && (
+        <p data-testid="projected-uda-read-only-notice" className="rounded-md border border-sky-800/60 bg-sky-950/20 p-2 text-xs text-sky-100">
+          UDA proveniente da Docente OS: puoi usare il contesto per preparare e salvare materiali in Biblioteca, ma il Registro non può modificare questa UDA.
+        </p>
+      )}
+
       {proposal && !isEditing && (
         <section className="rounded-lg border border-violet-700/60 bg-slate-950/55 p-3 space-y-3" aria-label="Proposta didattica">
           <div>
@@ -636,14 +645,16 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
             >
               {isAdopting ? 'Salvo…' : 'Adotta in Biblioteca'}
             </button>
-            <button
-              type="button"
-              onClick={() => void adoptUdaContent(contentFromProposal(proposal))}
-              disabled={isPending || isAdopting}
-              className="min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50"
-            >
-              {isAdopting ? 'Salvo…' : "Adotta e aggiungi all'UDA"}
-            </button>
+            {writableByRegistro && (
+              <button
+                type="button"
+                onClick={() => void adoptUdaContent(contentFromProposal(proposal))}
+                disabled={isPending || isAdopting}
+                className="min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50"
+              >
+                {isAdopting ? 'Salvo…' : "Adotta e aggiungi all'UDA"}
+              </button>
+            )}
             <button
               type="button"
               onClick={startEditing}
@@ -744,14 +755,16 @@ export const LibraryProposalPanel: React.FC<LibraryProposalPanelProps> = ({
             >
               {isAdopting ? 'Salvo…' : 'Adotta in Biblioteca'}
             </button>
-            <button
-              type="button"
-              onClick={() => void adoptUdaContent(editedContent)}
-              disabled={isPending || isAdopting}
-              className="min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50"
-            >
-              {isAdopting ? 'Salvo…' : "Adotta e aggiungi all'UDA"}
-            </button>
+            {writableByRegistro && (
+              <button
+                type="button"
+                onClick={() => void adoptUdaContent(editedContent)}
+                disabled={isPending || isAdopting}
+                className="min-h-[44px] px-3 rounded-md border border-violet-600 text-violet-100 font-semibold text-sm disabled:opacity-50"
+              >
+                {isAdopting ? 'Salvo…' : "Adotta e aggiungi all'UDA"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
