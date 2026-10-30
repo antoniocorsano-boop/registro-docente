@@ -27,6 +27,55 @@ function gitDiffNames(base, head) {
   return Array.from(new Set(output.split(/\r?\n/).map(value => value.trim()).filter(Boolean))).sort();
 }
 
+function registryAtCommit(commitSha) {
+  const object = `${commitSha}:${REGISTRY_PATH}`;
+  try {
+    execFileSync('git', ['cat-file', '-e', object], {
+      stdio: ['ignore', 'ignore', 'ignore']
+    });
+  } catch {
+    return null;
+  }
+
+  // Read the published baseline registry with `git show <baseSha>:<path>`.
+  const source = execFileSync('git', ['show', object], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  return JSON.parse(source);
+}
+
+function enforcePublishedInvariantStability(baseRegistry, candidateRegistry) {
+  if (!baseRegistry) return [];
+
+  const candidateById = new Map(
+    (candidateRegistry.invariants ?? []).map(invariant => [invariant.id, invariant])
+  );
+  const checked = [];
+  let failed = false;
+
+  for (const published of baseRegistry.invariants ?? []) {
+    const candidate = candidateById.get(published.id);
+    if (!candidate) {
+      console.error(`QUAL_INVARIANT_REMOVED ${published.id}`);
+      failed = true;
+      continue;
+    }
+
+    checked.push(published.id);
+    if (candidate.owner !== published.owner || candidate.statement !== published.statement) {
+      console.error(`QUAL_INVARIANT_SEMANTICS_CHANGED ${published.id}`);
+      failed = true;
+    }
+  }
+
+  if (failed) process.exit(1);
+  return checked.sort();
+}
+
+const baseRegistry = registryAtCommit(baseSha);
+const stableInvariantIdsChecked = enforcePublishedInvariantStability(baseRegistry, registry);
+
 let changedPaths;
 try {
   changedPaths = gitDiffNames(baseSha, candidateSha);
@@ -70,6 +119,8 @@ const manifest = {
   schemaVersion: 1,
   baseSha,
   candidateSha,
+  baseRegistryPresent: Boolean(baseRegistry),
+  stableInvariantIdsChecked,
   changedPaths,
   affectedInvariantIds,
   testFiles,

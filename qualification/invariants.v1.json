@@ -1,17 +1,18 @@
 {
   "schemaVersion": 1,
   "guardedRoots": [
-    "src/teaching/",
-    "src/copilot/teacherFirstTeachingCatalog.ts",
-    "src/components/LibraryCopilotComposer.tsx",
-    "src/library/contextualDidacticReview.ts",
-    "src/persistence/",
-    "src/security/secureAppStorage.ts",
+    "src/",
+    "tests/browser/",
+    ".github/workflows/",
+    "vendor/",
+    "public/",
+    "server.ts",
+    "package.json",
+    "bun.lock",
+    "vite.config.ts",
+    "index.html",
     "qualification/",
-    "scripts/qualification/",
-    ".github/workflows/predeploy-security-qualification.yml",
-    ".github/workflows/browser-qualification.yml",
-    ".github/workflows/qualification-invariants.yml"
+    "scripts/qualification/"
   ],
   "invariants": [
     {
