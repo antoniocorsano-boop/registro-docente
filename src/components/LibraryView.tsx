@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FilePlus2, Link2, Search, X } from 'lucide-react';
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import type { LocalEmbeddingConfig, UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
@@ -16,7 +16,7 @@ import { LibrarySourceCard } from './LibrarySourceCard';
 interface LibraryViewProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
-  planning: PlanningStateV1;
+  planning: PlanningState;
   currentClassName?: string | null;
   embeddingConfig?: LocalEmbeddingConfig;
   isPending: boolean;

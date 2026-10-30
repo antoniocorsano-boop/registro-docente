@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import type { UdaRecord } from '../types';
 import { dispatchLibraryContextAction } from '../library/contextualCoreAdapter';
 import {
@@ -21,7 +21,7 @@ import type { LibrarySource, LibrarySourceLink } from '../library/types';
 interface LibraryRelevancePanelProps {
   source: LibrarySource;
   udas: UdaRecord[];
-  planning?: PlanningStateV1 | null;
+  planning?: PlanningState | null;
   teachingContext: ResolvedLibraryTeachingContext | null;
   isPending: boolean;
   onLink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
@@ -53,7 +53,7 @@ function resolveCurrentRelevance(
   source: LibrarySource,
   udas: UdaRecord[],
   teachingContext: ResolvedLibraryTeachingContext | null,
-  planning?: PlanningStateV1 | null
+  planning?: PlanningState | null
 ): LibraryRelevanceResolution {
   const planningContext = planning
     ? resolvePlanningContextForLibraryRelevance(teachingContext, planning)

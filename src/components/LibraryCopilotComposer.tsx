@@ -3,7 +3,7 @@ import { BookOpen, FilePlus2, Link2, MessageCircle, Send, Upload, X } from 'luci
 import type { CopilotRequestResolution } from '@trama/contextual-copilot-core';
 import type { ClassData, UdaRecord } from '../types';
 import type { AiBudgetProfile } from '../copilot/aiBudgetGovernor';
-import type { PlanningStateV1 } from '../planning/types';
+import type { PlanningState } from '../planning/types';
 import type { ProfessionalMemoryCategory, ProfessionalMemoryStateV1 } from '../memory/types';
 import {
   selectProfessionalMemoryWorkingSet,
@@ -71,7 +71,7 @@ type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
 interface LibraryCopilotComposerProps {
   library: LibraryStateV1;
   udas: UdaRecord[];
-  planning: PlanningStateV1;
+  planning: PlanningState;
   professionalMemory: ProfessionalMemoryStateV1;
   aiBudgetProfile?: AiBudgetProfile;
   copilotProactivity?: CopilotProactivityProfile;
