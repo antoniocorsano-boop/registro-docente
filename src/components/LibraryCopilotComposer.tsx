@@ -45,10 +45,12 @@ import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
 import { buildMissionContextFingerprint } from '../copilot/mission';
 import { resolveTeacherFirstRequest, type TeacherFirstRequestResolution, type TeacherFirstGoalKind } from '../copilot/teacherFirstRequest';
+import { buildTeacherFirstTeachingCatalog } from '../copilot/teacherFirstTeachingCatalog';
 import {
-  buildTeacherFirstTeachingCatalog,
-  udasForCanonicalClass
-} from '../copilot/teacherFirstTeachingCatalog';
+  buildTeachingUdaCatalog,
+  resolveTeachingUdaCandidate,
+  type TeachingUdaClassReconciliation
+} from '../teaching/teachingUdaCatalog';
 import type { CopilotProactivityProfile } from '../copilot/proactivity';
 import {
   consumeStagedMissionReview,
@@ -62,6 +64,7 @@ import {
 } from './ProfessionalMemoryPanel';
 import {
   resolveLibraryTeachingContext,
+  resolveLibraryTeachingContextFromCatalog,
   suggestLibraryTeachingContext,
   type LibraryTeachingContext
 } from '../library/teachingContext';
@@ -229,6 +232,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     () => buildTeacherFirstTeachingCatalog({ classes, udas }),
     [classes, udas]
   );
+  const docenteOsClassReconciliation = useMemo<TeachingUdaClassReconciliation>(() => Object.fromEntries(
+    planning.docenteOsProjections.map(accepted => [
+      accepted.projection.projectionFingerprint.hash,
+      accepted.classReconciliation
+    ])
+  ), [planning.docenteOsProjections]);
+  const teachingUdaCatalog = useMemo(() => buildTeachingUdaCatalog({
+    localUdas: udas,
+    acceptedProjections: planning.docenteOsProjections,
+    classReconciliation: docenteOsClassReconciliation,
+    classes
+  }), [udas, planning.docenteOsProjections, docenteOsClassReconciliation, classes]);
   const knownTeacherClasses = useMemo(() => Array.from(new Set([
     ...teacherFirstCatalog.classes.map(entry => entry.label),
     ...teacherFirstCatalog.classes.flatMap(entry => entry.aliases),
@@ -299,12 +314,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const resolvedTeachingContext = contextOverride === 'auto'
     ? (hasLaunchTeachingTarget
       ? explicitLaunchTeachingContext
-      : resolveLibraryTeachingContext(udas, teachingSuggestion?.context ?? null))
-    : resolveLibraryTeachingContext(udas, contextOverride);
+      : resolveLibraryTeachingContextFromCatalog(teachingUdaCatalog, teachingSuggestion?.context ?? null))
+    : resolveLibraryTeachingContextFromCatalog(teachingUdaCatalog, contextOverride);
 
   const teacherFirstClassUdas = useMemo(() => teacherFirstClassId
-    ? udasForCanonicalClass(teacherFirstCatalog, teacherFirstClassId)
-    : [], [teacherFirstCatalog, teacherFirstClassId]);
+    ? teachingUdaCatalog.filter(candidate => candidate.classId === teacherFirstClassId)
+    : [], [teachingUdaCatalog, teacherFirstClassId]);
   const teacherFirstGoalKind: TeacherFirstGoalKind | null = teacherFirstResolution?.goalKind ?? null;
   const showTeachingContextControls = isBoundMissionFlow || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous);
   const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous && resolvedTeachingContext);
@@ -375,11 +390,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     },
     activeCanonicalRefs: [
       ...library.sources.map(source => `source:${source.id}`),
-      ...udas.map(uda => `uda:${uda.id}`),
-      ...udas.flatMap(uda => (uda.lessons ?? []).map(lesson => `lesson:${lesson.id}`)),
+      ...teachingUdaCatalog.map(uda => `uda:${uda.id}`),
+      ...teachingUdaCatalog.flatMap(uda => uda.lessons.map(lesson => `lesson:${lesson.id}`)),
       ...planning.profiles.map(profile => `planning:${profile.id}`)
     ]
-  }), [professionalMemory, copilotContextProjection, library.sources, udas, planning.profiles]);
+  }), [professionalMemory, copilotContextProjection, library.sources, teachingUdaCatalog, planning.profiles]);
 
   const remoteProfessionalMemory = useMemo(
     () => toRemoteProfessionalMemoryProjection(professionalMemoryWorkingSet),
@@ -406,8 +421,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const proposalUda = useMemo(() => {
     if (!resolvedTeachingContext) return null;
-    return udas.find(candidate => candidate.id === resolvedTeachingContext.udaId) ?? null;
-  }, [resolvedTeachingContext, udas]);
+    return resolveTeachingUdaCandidate(resolvedTeachingContext.udaId, teachingUdaCatalog);
+  }, [resolvedTeachingContext, teachingUdaCatalog]);
 
   const currentResolutionSnapshot = JSON.stringify({
     sourceRequest: selectedSource
@@ -441,7 +456,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     ? resolvedPlanningContext.profile.id
     : null;
   const generationContextFingerprint = useMemo(() => {
-    if (!boundLaunchMissionId || !selectedSource || !resolvedTeachingContext || !proposalUda) return null;
+    if (
+      !boundLaunchMissionId
+      || !selectedSource
+      || !resolvedTeachingContext
+      || !proposalUda
+      || proposalUda.origin !== 'registro'
+      || !proposalUda.localUda
+    ) return null;
     const missionProjection = buildCopilotContextProjection({
       surface: 'library',
       className: resolvedTeachingContext.className,
@@ -452,7 +474,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     });
     return buildMissionContextFingerprint({
       context: missionProjection,
-      uda: proposalUda,
+      uda: proposalUda.localUda,
       sources: [selectedSource],
       planningProfileId: currentPlanningProfileId,
       missionSettings: {
@@ -697,12 +719,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const linkTargetLabel = useMemo(() => {
     if (!resolvedTeachingContext) return null;
-    const uda = udas.find(candidate => candidate.id === resolvedTeachingContext.udaId);
+    const uda = resolveTeachingUdaCandidate(resolvedTeachingContext.udaId, teachingUdaCatalog);
     if (!uda) return null;
     if (!resolvedTeachingContext.lessonId) return `UDA · ${uda.title}`;
-    const lesson = (uda.lessons ?? []).find(candidate => candidate.id === resolvedTeachingContext.lessonId);
+    const lesson = uda.lessons.find(candidate => candidate.id === resolvedTeachingContext.lessonId);
     return lesson ? `Lezione · ${lesson.topic}` : null;
-  }, [resolvedTeachingContext, udas]);
+  }, [resolvedTeachingContext, teachingUdaCatalog]);
 
   const clearCapture = () => {
     setCaptureMode(null);
@@ -1296,10 +1318,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
           >
             <option value="">Nessun contesto</option>
-            {(isBoundMissionFlow ? udas : teacherFirstClassUdas).map(uda => (
+            {(isBoundMissionFlow
+              ? teachingUdaCatalog.filter(uda => uda.origin === 'registro')
+              : teacherFirstClassUdas
+            ).map(uda => (
               <React.Fragment key={uda.id}>
-                <option value={uda.id}>{uda.className} · UDA · {uda.title}</option>
-                {(uda.lessons ?? []).map(lesson => (
+                <option value={uda.id}>
+                  {uda.className} · UDA · {uda.title}{uda.origin === 'docente-os' ? ' · Docente OS · sola lettura' : ''}
+                </option>
+                {uda.lessons.map(lesson => (
                   <option key={lesson.id} value={`${uda.id}::${lesson.id}`}>
                     {uda.className} · Lezione · {lesson.topic}
                   </option>
@@ -1310,6 +1337,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           {contextIsProposed && resolvedTeachingContext && (
             <p className="mt-1.5 text-xs leading-relaxed text-amber-300/90">
               Contesto proposto: puoi cambiarlo o scegliere Nessun contesto prima di continuare.
+            </p>
+          )}
+          {proposalUda?.origin === 'docente-os' && proposalUda.provenance && (
+            <p data-testid="docente-os-uda-provenance" className="mt-1.5 text-xs leading-relaxed text-sky-200">
+              Docente OS · sola lettura · riferimento {proposalUda.sourceRef} · revisione sorgente {proposalUda.provenance.sourceCommit.slice(0, 7)}
             </p>
           )}
             </div>
@@ -1723,6 +1755,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             <LibraryProposalPanel
               source={selectedSource}
               uda={proposalUda}
+              writableByRegistro={proposalUda.writableByRegistro}
               teachingContext={resolvedTeachingContext}
               professionalMemory={remoteProfessionalMemory}
               aiBudgetProfile={aiBudgetProfile}
