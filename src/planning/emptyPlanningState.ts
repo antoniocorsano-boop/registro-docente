@@ -1,12 +1,13 @@
-import type { PlanningStateV1 } from './types';
+import type { PlanningState } from './types';
 
-export function createEmptyPlanningState(): PlanningStateV1 {
+export function createEmptyPlanningState(): PlanningState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     profiles: [],
     arenaContexts: [],
     resources: [],
     masterPrograms: [],
-    classInstances: []
+    classInstances: [],
+    docenteOsProjections: []
   };
 }
