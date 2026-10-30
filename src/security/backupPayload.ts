@@ -10,7 +10,8 @@ import type { LibraryStateV1 } from '../library/types';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import type { ProfessionalMemoryStateV1 } from '../memory/types';
 import { createEmptyPlanningState } from '../planning/emptyPlanningState';
-import type { PlanningStateV1 } from '../planning/types';
+import { normalizePlanningState } from '../planning/normalizePlanningState';
+import type { PlanningStateV1, PlanningStateV2 } from '../planning/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 
 export const BACKUP_DATA_VERSION_V2 = 2;
@@ -36,11 +37,21 @@ interface SecureBackupSnapshotV4 extends SecureBackupSnapshotV3 {
   library: LibraryStateV1;
 }
 
-type SecureBackupSnapshotV5 = Omit<CompleteSecureAppSnapshot, 'professionalMemory' | 'copilotState'> & {
+type BackupPlanningState = PlanningStateV1 | PlanningStateV2;
+
+type SecureBackupSnapshotV5 = Omit<
+  CompleteSecureAppSnapshot,
+  'planning' | 'professionalMemory' | 'copilotState'
+> & {
+  planning: BackupPlanningState;
   professionalMemory: ProfessionalMemoryStateV1;
 };
 
-type SecureBackupSnapshotV6 = Omit<CompleteSecureAppSnapshot, 'professionalMemory' | 'copilotState'> & {
+type SecureBackupSnapshotV6 = Omit<
+  CompleteSecureAppSnapshot,
+  'planning' | 'professionalMemory' | 'copilotState'
+> & {
+  planning: BackupPlanningState;
   professionalMemory: ProfessionalMemoryStateV1;
   copilotState: CopilotStateV1;
 };
@@ -116,6 +127,15 @@ function isPlanningStateV1(value: unknown): value is PlanningStateV1 {
     && Array.isArray(value.resources)
     && Array.isArray(value.masterPrograms)
     && Array.isArray(value.classInstances);
+}
+
+function isBackupPlanningState(value: unknown): value is BackupPlanningState {
+  try {
+    normalizePlanningState(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isSnapshotV2(value: unknown): value is SecureBackupSnapshotV2 {
@@ -349,15 +369,25 @@ function isSnapshotV4(value: unknown): value is SecureBackupSnapshotV4 {
     && isLibraryStateV1(value.library);
 }
 
+function hasPlanningAndLibrary(value: unknown): value is SecureBackupSnapshotV2 & {
+  planning: BackupPlanningState;
+  library: LibraryStateV1;
+} {
+  return isSnapshotV2(value)
+    && isRecord(value)
+    && isBackupPlanningState(value.planning)
+    && isLibraryStateV1(value.library);
+}
+
 function isSnapshotV5(value: unknown): value is SecureBackupSnapshotV5 {
-  return isSnapshotV4(value)
+  return hasPlanningAndLibrary(value)
     && isRecord(value)
     && isProfessionalMemoryStateV1(value.professionalMemory);
 }
 
 function isSnapshotV6(value: unknown): value is SecureBackupSnapshotV6 {
   if (!isRecord(value) || !isSnapshotV5(value)) return false;
-  return isCopilotStateV1((value as Record<string, unknown>).copilotState);
+  return isCopilotStateV1(value.copilotState);
 }
 
 export function createBackupPayload(
@@ -398,6 +428,7 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
+        planning: normalizePlanningState(payload.snapshot.planning),
         copilotState: normalizeLoadedCopilotState(payload.snapshot.copilotState)
       };
     }
@@ -408,6 +439,7 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
+        planning: normalizePlanningState(payload.snapshot.planning),
         copilotState: createEmptyCopilotState()
       };
     }
@@ -418,6 +450,7 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
+        planning: normalizePlanningState(payload.snapshot.planning),
         professionalMemory: createEmptyProfessionalMemoryState(),
         copilotState: createEmptyCopilotState()
       };
@@ -429,6 +462,7 @@ export function normalizeBackupPayload(
       }
       return {
         ...payload.snapshot,
+        planning: normalizePlanningState(payload.snapshot.planning),
         library: createEmptyLibraryState(),
         professionalMemory: createEmptyProfessionalMemoryState(),
         copilotState: createEmptyCopilotState()
