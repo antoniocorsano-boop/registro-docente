@@ -1850,7 +1850,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               copilotProactivity={settings.copilotProactivity}
               memoryError={professionalMemoryError}
               currentClassName={currentClass?.name ?? null}
-              classNames={appData.classes.map(classItem => classItem.name)}
+              classes={appData.classes}
               launchRequest={launchRequest}
               openRequestNonce={copilotOpenRequestNonce}
               ambientContext={ambientCopilotContext}

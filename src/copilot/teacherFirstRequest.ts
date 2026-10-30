@@ -1,3 +1,5 @@
+import { parseLowerSecondaryClassSemanticKey } from '../teaching/classIdentity';
+
 export type TeacherFirstGoalKind =
   | 'prepare'
   | 'review'
@@ -38,8 +40,11 @@ function uniqueClassNames(classNames: string[]): string[] {
   const result: string[] = [];
   for (const className of classNames) {
     const canonical = className.trim();
-    const normalized = normalizeClassName(canonical);
-    if (!normalized || seen.has(normalized)) continue;
+    const semanticKey = parseLowerSecondaryClassSemanticKey(canonical);
+    const normalized = semanticKey
+      ? `semantic:${semanticKey}`
+      : `literal:${normalizeClassName(canonical)}`;
+    if (!canonical || seen.has(normalized)) continue;
     seen.add(normalized);
     result.push(canonical);
   }
@@ -55,9 +60,16 @@ function resolveGoalKind(message: string): TeacherFirstGoalKind {
 }
 
 function explicitClassCandidates(message: string, classNames: string[]): string[] {
+  const upperMessage = message.toLocaleUpperCase('it');
   return classNames.filter(className => {
+    const semanticKey = parseLowerSecondaryClassSemanticKey(className);
+    if (semanticKey) {
+      const [grade, section] = semanticKey.split(':');
+      return new RegExp(`(^|[^0-9A-Z])${grade}\\s*(?:[ªº°]\\s*)?${section}([^0-9A-Z]|$)`, 'i')
+        .test(upperMessage);
+    }
     const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[^0-9A-Z])${escaped}([^0-9A-Z]|$)`, 'i').test(message.toLocaleUpperCase('it'));
+    return new RegExp(`(^|[^0-9A-Z])${escaped}([^0-9A-Z]|$)`, 'i').test(upperMessage);
   });
 }
 
