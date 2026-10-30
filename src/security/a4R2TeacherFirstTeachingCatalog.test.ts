@@ -20,6 +20,25 @@ describe('A4-R2A PREDEPLOY teacher-first catalog contract', () => {
     expect(udasForCanonicalClass(catalog, 'class-1a').map(item => item.id)).toEqual(['uda-legacy']);
   });
 
+  test('a unique exact descriptive real-class name remains authoritative even without a semantic class key', () => {
+    const className = '2C Sintetica QUAL-SMOKE';
+    const catalog = buildTeacherFirstTeachingCatalog({
+      classes: [realClass('class-descriptive', className)],
+      udas: [uda('uda-descriptive', className)]
+    });
+
+    expect(catalog.ambiguities).toEqual([]);
+    expect(catalog.unresolvedUdaIds).toEqual([]);
+    expect(catalog.classes).toHaveLength(1);
+    expect(catalog.classes[0]).toMatchObject({
+      classId: 'class-descriptive',
+      label: className,
+      semanticKey: null,
+      udaIds: ['uda-descriptive']
+    });
+    expect(udasForCanonicalClass(catalog, 'class-descriptive').map(item => item.id)).toEqual(['uda-descriptive']);
+  });
+
   test('a semantic collision between two real class ids is fail-closed', () => {
     const catalog = buildTeacherFirstTeachingCatalog({
       classes: [realClass('class-3a-compact', '3A'), realClass('class-3a-ordinal', '3ª A')],
