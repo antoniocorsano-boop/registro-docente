@@ -28,7 +28,8 @@ export function deriveTeachingProposalOutcomeCandidate(
   input: TeachingProposalOutcomeMutationInput
 ): TeachingProposalOutcomeCandidate {
   const { targetWritableByRegistro, ...adoptionInput } = input;
-  if (targetWritableByRegistro === false) {
+  const localTargetMatches = current.udas.filter(uda => uda.id === input.teachingContext.udaId);
+  if (targetWritableByRegistro === false || localTargetMatches.length !== 1) {
     throw new Error('A4_R2_PROJECTED_UDA_READ_ONLY');
   }
 
