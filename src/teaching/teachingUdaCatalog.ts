@@ -94,14 +94,25 @@ export function buildTeachingUdaClassReconciliationIndex(
 
 function localCandidate(uda: UdaRecord, classes: ClassData[]): TeachingUdaCandidate | null {
   const resolution = resolveCanonicalRegistroClass(uda.className, classes);
-  if (resolution.status !== 'resolved') return null;
+  if (resolution.status === 'ambiguous') return null;
+
+  const resolvedClass = resolution.status === 'resolved'
+    ? { classId: resolution.classId, label: resolution.label }
+    : (() => {
+        const exactMatches = classes.filter(classData => classData.name === uda.className);
+        if (exactMatches.length !== 1) return null;
+        const [exact] = exactMatches;
+        return exact ? { classId: exact.id, label: exact.name } : null;
+      })();
+
+  if (!resolvedClass) return null;
 
   return {
     id: uda.id,
     origin: 'registro',
-    classId: resolution.classId,
-    classLabel: resolution.label,
-    className: resolution.label,
+    classId: resolvedClass.classId,
+    classLabel: resolvedClass.label,
+    className: resolvedClass.label,
     title: uda.title,
     periodLabel: uda.period,
     period: uda.period,
