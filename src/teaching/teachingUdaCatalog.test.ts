@@ -157,17 +157,16 @@ describe('A4-R2B Task 6 unified UDA catalog', () => {
     expect(catalog).toEqual([]);
   });
 
-  test('re-imported projected ID is deduplicated without cloning a local UDA', () => {
-    const accepted = acceptedProjection();
+  test('duplicate accepted fingerprint fails closed instead of selecting overwritten authority', () => {
+    const resolved = acceptedProjection();
+    const conflicting = acceptedProjection([{ sourceSectionId: 'section-1a', status: 'ambiguous' }]);
     const catalog = buildTeachingUdaCatalog({
       localUdas: [],
-      acceptedProjections: [accepted, structuredClone(accepted)],
-      classReconciliation: reconciliationMap(accepted.classReconciliation),
+      acceptedProjections: [resolved, conflicting],
+      classReconciliation: reconciliationMap(resolved.classReconciliation),
       classes: [classData('class-1a', '1A')]
     });
 
-    expect(catalog).toHaveLength(1);
-    expect(catalog[0]?.id).toBe('docente-os:section-1a:plan-generation-1:1-01');
-    expect(catalog[0]?.origin).toBe('docente-os');
+    expect(catalog).toEqual([]);
   });
 });
