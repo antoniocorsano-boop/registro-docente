@@ -7,6 +7,8 @@ import type { SecureMeta } from './secureAppStorage';
 import { deriveTeachingProposalOutcomeCandidate } from '../persistence/teachingProposalOutcomeMutation';
 import { assertTeachingUdaWritableByRegistro, type TeachingUdaCandidate } from '../teaching/teachingUdaCatalog';
 
+const PROJECTED_UDA_ID = 'docente-os:section-1a:plan-generation-1:1-01';
+
 const content: TeachingProposalContent = {
   title: 'Attività sui sistemi tecnologici',
   objective: 'Riconoscere relazioni tra bisogni, risorse e sistemi.',
@@ -22,7 +24,7 @@ const proposal: TeachingProposalV1 = {
   kind: 'activity',
   ...content,
   sourceId: 'source-origin',
-  context: { udaId: 'docente-os:section-1a:plan-generation-1:1-01' },
+  context: { udaId: PROJECTED_UDA_ID },
   provenance: {
     mode: 'remote',
     provider: 'provider-test',
@@ -32,13 +34,13 @@ const proposal: TeachingProposalV1 = {
 };
 
 const teachingContext: ResolvedLibraryTeachingContext = {
-  udaId: 'docente-os:section-1a:plan-generation-1:1-01',
+  udaId: PROJECTED_UDA_ID,
   className: '1A',
   period: 'Settembre/Ottobre'
 };
 
 const projectedCandidate: TeachingUdaCandidate = {
-  id: 'docente-os:section-1a:plan-generation-1:1-01',
+  id: PROJECTED_UDA_ID,
   origin: 'docente-os',
   classId: 'class-1a',
   classLabel: '1A',
@@ -60,10 +62,10 @@ const projectedCandidate: TeachingUdaCandidate = {
   }
 };
 
-function currentState(): { library: LibraryStateV1; udas: UdaRecord[]; meta: SecureMeta } {
+function currentState(udas: UdaRecord[] = []): { library: LibraryStateV1; udas: UdaRecord[]; meta: SecureMeta } {
   return {
     library: { schemaVersion: 1, sources: [] },
-    udas: [],
+    udas,
     meta: { changes: 7, lastBackup: '2026-10-20T10:00:00.000Z' }
   };
 }
@@ -103,6 +105,34 @@ describe('A4-R2B projected UDA authority', () => {
       sourceId: 'adopted-source-bypass',
       lessonId: 'adopted-lesson-bypass',
       capturedAt: '2026-10-30T10:06:00.000Z',
+      lessonDate: '2026-10-30',
+      targetWritableByRegistro: true
+    })).toThrow('A4_R2_PROJECTED_UDA_READ_ONLY');
+
+    expect(current).toEqual(snapshot);
+  });
+
+  test('reserved Docente OS identity cannot become writable through a colliding local UDA id', () => {
+    const collidingLocalUda: UdaRecord = {
+      id: PROJECTED_UDA_ID,
+      title: 'Collisione locale',
+      className: '1A',
+      hours: 1,
+      period: 'Settembre/Ottobre',
+      startMonth: 0,
+      durationMonths: 1,
+      lessons: []
+    };
+    const current = currentState([collidingLocalUda]);
+    const snapshot = structuredClone(current);
+
+    expect(() => deriveTeachingProposalOutcomeCandidate(current, {
+      proposal,
+      content,
+      teachingContext,
+      sourceId: 'adopted-source-collision',
+      lessonId: 'adopted-lesson-collision',
+      capturedAt: '2026-10-30T10:07:00.000Z',
       lessonDate: '2026-10-30',
       targetWritableByRegistro: true
     })).toThrow('A4_R2_PROJECTED_UDA_READ_ONLY');
