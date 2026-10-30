@@ -187,12 +187,20 @@ describe('A4-R2B commit-first projection acceptance boundary', () => {
     expect(committedPlanning.docenteOsProjections).toEqual([]);
   });
 
-  test('App routes explicit projection acceptance through the existing commit-first planning mutation', () => {
+  test('App reconciles at serialized execution time and reuses the prior accepted mapping before replacement', () => {
     const appSource = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
+    const start = appSource.indexOf('const handleAcceptDocenteOsTeachingProjection = useCallback');
+    const end = appSource.indexOf('const commitLibraryMutation = useCallback', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const handlerSource = appSource.slice(start, end);
 
-    expect(appSource).toContain('const handleAcceptDocenteOsTeachingProjection = useCallback');
-    expect(appSource).toContain('reconcileDocenteOsTeachingProjectionClasses');
-    expect(appSource).toContain('bindAcceptedDocenteOsTeachingProjection');
-    expect(appSource).toContain('commitPlanningMutation(current =>');
+    const commitIndex = handlerSource.indexOf('commitPlanningMutation(current => {');
+    const reconciliationIndex = handlerSource.indexOf('reconcileDocenteOsTeachingProjectionClasses');
+    expect(commitIndex).toBeGreaterThanOrEqual(0);
+    expect(reconciliationIndex).toBeGreaterThan(commitIndex);
+    expect(handlerSource).toContain('previousAcceptedProjection');
+    expect(handlerSource).toContain('previousAcceptedProjection?.classReconciliation');
+    expect(handlerSource).toContain('bindAcceptedDocenteOsTeachingProjection');
   });
 });
