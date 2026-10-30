@@ -75,4 +75,21 @@ describe('A4-R2B projection import/preview UI contract', () => {
     expect(app).toContain('planning={planning}');
     expect(app).toContain('classes={appData.classes}');
   });
+
+  test('rechecks class resolution inside the serialized commit and refuses stale unresolved authority', () => {
+    const app = read('../App.tsx');
+    const start = app.indexOf('const handleAcceptDocenteOsTeachingProjection = useCallback');
+    const end = app.indexOf('const commitLibraryMutation = useCallback', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const handler = app.slice(start, end);
+    const reconcileIndex = handler.indexOf('reconcileDocenteOsTeachingProjectionClasses');
+    const guardIndex = handler.indexOf("reconciliation.some(item => item.status !== 'resolved')");
+    const bindIndex = handler.indexOf('return bindAcceptedDocenteOsTeachingProjection');
+
+    expect(reconcileIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeGreaterThan(reconcileIndex);
+    expect(bindIndex).toBeGreaterThan(guardIndex);
+    expect(handler).toContain('Riconciliazione classi Docente OS incompleta');
+  });
 });
