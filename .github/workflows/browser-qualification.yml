@@ -64,6 +64,7 @@ jobs:
             --package-lock=false \
             "@playwright/test@${PLAYWRIGHT_VERSION}"
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
           cp tests/browser/agent-intent-01-routing.spec.cjs .browser-tools/agent-intent-01-routing.spec.cjs
@@ -124,6 +125,20 @@ jobs:
           echo "Production server did not become ready within 30 seconds."
           cat browser-evidence/server.log
           exit 1
+
+      - name: Run qualification invariant smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            qualification-invariant-smoke.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/qualification-invariant-smoke-results
 
       - name: Run dedicated AIC-07 Chromium qualification
         shell: bash
