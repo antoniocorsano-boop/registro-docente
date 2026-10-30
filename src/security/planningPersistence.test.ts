@@ -60,6 +60,17 @@ describe('EDU-PLAN-01A planning persistence', () => {
     expect(emptyPlanning.profiles).toEqual([]);
   });
 
+  test('normalizes historical encrypted planning v1 to current v2 without fabricating projections', async () => {
+    const modulePath = '../planning/' + 'normalizePlanningState';
+    const { normalizePlanningState } = await import(modulePath);
+
+    expect(normalizePlanningState(emptyPlanning)).toEqual({
+      ...emptyPlanning,
+      schemaVersion: 2,
+      docenteOsProjections: []
+    });
+  });
+
   test('persists planning and meta through one encrypted vault batch', async () => {
     const store = new PlanningStore();
     const vault = new SecureVault(store);
