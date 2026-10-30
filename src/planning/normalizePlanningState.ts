@@ -85,13 +85,13 @@ function isAcceptedProjection(value: unknown): value is AcceptedDocenteOsTeachin
   return reconciledIds.size === sourceSectionIds.size;
 }
 
-function assertPlanningV1(value: Record<string, unknown>): asserts value is PlanningStateV1 {
+function assertPlanningV1(value: Record<string, unknown>): void {
   if (!hasExactKeys(value, V1_KEYS) || value.schemaVersion !== 1 || !hasPlanningArrays(value)) {
     throw new Error('Stato planning v1 non valido.');
   }
 }
 
-function assertPlanningV2(value: Record<string, unknown>): asserts value is PlanningStateV2 {
+function assertPlanningV2(value: Record<string, unknown>): void {
   if (
     !hasExactKeys(value, V2_KEYS)
     || value.schemaVersion !== 2
@@ -119,20 +119,21 @@ export function normalizePlanningState(value: unknown): PlanningStateV2 {
 
   if (value.schemaVersion === 1) {
     assertPlanningV1(value);
+    const legacy = value as unknown as PlanningStateV1;
     return {
       schemaVersion: 2,
-      profiles: value.profiles,
-      arenaContexts: value.arenaContexts,
-      resources: value.resources,
-      masterPrograms: value.masterPrograms,
-      classInstances: value.classInstances,
+      profiles: legacy.profiles,
+      arenaContexts: legacy.arenaContexts,
+      resources: legacy.resources,
+      masterPrograms: legacy.masterPrograms,
+      classInstances: legacy.classInstances,
       docenteOsProjections: []
     };
   }
 
   if (value.schemaVersion === 2) {
     assertPlanningV2(value);
-    return value;
+    return value as unknown as PlanningStateV2;
   }
 
   throw new Error(`Versione planning non supportata: ${String(value.schemaVersion)}.`);
