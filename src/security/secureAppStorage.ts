@@ -14,7 +14,8 @@ import {
 import type { LibraryStateV1 } from '../library/types';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import type { ProfessionalMemoryStateV1 } from '../memory/types';
-import type { PlanningStateV1 } from '../planning/types';
+import { normalizePlanningState } from '../planning/normalizePlanningState';
+import type { PlanningState } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
 import { SecureVault } from './secureVault';
@@ -46,7 +47,7 @@ export interface SecureAppSnapshot {
   udas: UdaRecord[] | null;
   customTests: Record<string, OnlineTest> | null;
   submissions: OnlineSubmission[] | null;
-  planning: PlanningStateV1 | null;
+  planning: PlanningState | null;
   library: LibraryStateV1 | null;
   professionalMemory: ProfessionalMemoryStateV1;
   copilotState: CopilotStateV1;
@@ -59,7 +60,7 @@ export interface CompleteSecureAppSnapshot {
   udas: UdaRecord[];
   customTests: Record<string, OnlineTest>;
   submissions: OnlineSubmission[];
-  planning: PlanningStateV1;
+  planning: PlanningState;
   library: LibraryStateV1;
   professionalMemory?: ProfessionalMemoryStateV1;
   copilotState?: CopilotStateV1;
@@ -140,7 +141,7 @@ export class SecureAppStorage {
       udas,
       customTests,
       submissions,
-      planning,
+      storedPlanning,
       library,
       professionalMemory,
       storedCopilotState,
@@ -151,13 +152,14 @@ export class SecureAppStorage {
       this.vault.get<UdaRecord[]>('udas'),
       this.vault.get<Record<string, OnlineTest>>('customTests'),
       this.vault.get<OnlineSubmission[]>('submissions'),
-      this.vault.get<PlanningStateV1>('planning'),
+      this.vault.get<unknown>('planning'),
       this.vault.get<LibraryStateV1>('library'),
       this.vault.get<ProfessionalMemoryStateV1>('professionalMemory'),
       this.vault.get<CopilotStateV1>('copilotState'),
       this.vault.get<SecureMeta>('meta')
     ]);
 
+    const planning = storedPlanning === null ? null : normalizePlanningState(storedPlanning);
     const copilotState = isCopilotStateV1(storedCopilotState)
       ? normalizeLoadedCopilotState(storedCopilotState)
       : createEmptyCopilotState();
@@ -231,11 +233,11 @@ export class SecureAppStorage {
     ]);
   }
 
-  savePlanning(value: PlanningStateV1): Promise<void> {
+  savePlanning(value: PlanningState): Promise<void> {
     return this.vault.put('planning', value);
   }
 
-  savePlanningAndMeta(planning: PlanningStateV1, meta: SecureMeta): Promise<void> {
+  savePlanningAndMeta(planning: PlanningState, meta: SecureMeta): Promise<void> {
     return this.vault.putMany([
       { key: 'planning', value: planning },
       { key: 'meta', value: meta }
