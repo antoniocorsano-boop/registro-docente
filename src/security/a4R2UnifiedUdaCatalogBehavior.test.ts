@@ -131,17 +131,18 @@ describe('A4-R2B unified read-only UDA catalog behavior', () => {
     expect(catalog).toEqual([]);
   });
 
-  test('same projected id is deduplicated across an idempotent re-import', () => {
-    const accepted = acceptedProjection();
+  test('duplicate accepted fingerprint fails closed even when the reconciliation index says resolved', () => {
+    const resolved = acceptedProjection();
+    const conflicting = acceptedProjection([
+      { sourceSectionId: 'section-1a', status: 'ambiguous' }
+    ]);
     const catalog = buildTeachingUdaCatalog({
       localUdas: [],
-      acceptedProjections: [accepted, structuredClone(accepted)],
-      classReconciliation: reconciliationMap(accepted.classReconciliation),
+      acceptedProjections: [resolved, conflicting],
+      classReconciliation: reconciliationMap(resolved.classReconciliation),
       classes: [classData('class-1a', '1A')]
     });
 
-    expect(catalog).toHaveLength(1);
-    expect(catalog[0]?.id).toBe('docente-os:section-1a:plan-generation-1:1-01');
-    expect(catalog[0]?.origin).toBe('docente-os');
+    expect(catalog).toEqual([]);
   });
 });
