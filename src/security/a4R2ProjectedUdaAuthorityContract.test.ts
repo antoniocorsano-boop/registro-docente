@@ -42,15 +42,21 @@ const projectedCandidate: TeachingUdaCandidate = {
   origin: 'docente-os',
   classId: 'class-1a',
   classLabel: '1A',
+  className: '1A',
   title: 'Tecnologia, bisogni, risorse e sistemi',
   periodLabel: 'Settembre/Ottobre',
+  period: 'Settembre/Ottobre',
   plannedHours: 8,
   sourceRef: '1-01',
   writableByRegistro: false,
+  lessons: [],
   provenance: {
     sourceSectionId: 'section-1a',
     sourceCommit: '0123456789abcdef0123456789abcdef01234567',
-    projectionFingerprint: 'a'.repeat(64)
+    sourceRepository: 'antoniocorsano-boop/docente-os-2026-27',
+    sourceBranch: 'develop',
+    projectionFingerprint: 'a'.repeat(64),
+    canonicalGenerationId: 'plan-generation-1'
   }
 };
 
@@ -81,6 +87,24 @@ describe('A4-R2B projected UDA authority', () => {
       capturedAt: '2026-10-30T10:05:00.000Z',
       lessonDate: '2026-10-30',
       targetWritableByRegistro: false
+    })).toThrow('A4_R2_PROJECTED_UDA_READ_ONLY');
+
+    expect(current).toEqual(snapshot);
+  });
+
+  test('durable boundary rejects a non-local projected target even when caller claims it is writable', () => {
+    const current = currentState();
+    const snapshot = structuredClone(current);
+
+    expect(() => deriveTeachingProposalOutcomeCandidate(current, {
+      proposal,
+      content,
+      teachingContext,
+      sourceId: 'adopted-source-bypass',
+      lessonId: 'adopted-lesson-bypass',
+      capturedAt: '2026-10-30T10:06:00.000Z',
+      lessonDate: '2026-10-30',
+      targetWritableByRegistro: true
     })).toThrow('A4_R2_PROJECTED_UDA_READ_ONLY');
 
     expect(current).toEqual(snapshot);
