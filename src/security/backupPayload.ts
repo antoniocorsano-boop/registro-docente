@@ -380,14 +380,16 @@ function hasPlanningAndLibrary(value: unknown): value is SecureBackupSnapshotV2 
 }
 
 function isSnapshotV5(value: unknown): value is SecureBackupSnapshotV5 {
-  return hasPlanningAndLibrary(value)
+  return isSnapshotV4(value)
     && isRecord(value)
     && isProfessionalMemoryStateV1(value.professionalMemory);
 }
 
 function isSnapshotV6(value: unknown): value is SecureBackupSnapshotV6 {
-  if (!isRecord(value) || !isSnapshotV5(value)) return false;
-  return isCopilotStateV1((value as Record<string, unknown>).copilotState);
+  return hasPlanningAndLibrary(value)
+    && isRecord(value)
+    && isProfessionalMemoryStateV1(value.professionalMemory)
+    && isCopilotStateV1(value.copilotState);
 }
 
 export function createBackupPayload(
