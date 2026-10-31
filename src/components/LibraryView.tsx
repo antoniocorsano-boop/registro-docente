@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FilePlus2, Link2, Search, X } from 'lucide-react';
+import type { LocalSemanticMemoryPort } from '../../vendor/contextual-copilot-semantic-memory/index';
 import type { PlanningState } from '../planning/types';
 import type { ClassData, LocalEmbeddingConfig, UdaRecord } from '../types';
 import type { LibrarySource, LibrarySourceKind, LibrarySourceLink, LibraryStateV1 } from '../library/types';
@@ -14,8 +15,14 @@ import { searchLibrarySources } from '../library/libraryState';
 import { createFileSource, createTextSource, createWebSource } from '../library/intake';
 import { retrieveLibrarySourcesByMeaning } from '../library/semanticRetrieval';
 import type { SemanticLibraryResolution } from '../library/semanticRetrieval';
+import { retrieveLibrarySourcesFromSemanticMemory } from '../semanticMemory/libraryRetrieval';
 import { uid } from '../utils';
 import { LibrarySourceCard } from './LibrarySourceCard';
+import {
+  SemanticMemorySettings,
+  type SemanticMemoryConnectInput,
+  type SemanticMemorySessionView
+} from './SemanticMemorySettings';
 
 interface LibraryViewProps {
   library: LibraryStateV1;
@@ -24,6 +31,9 @@ interface LibraryViewProps {
   planning: PlanningState;
   currentClassName?: string | null;
   embeddingConfig?: LocalEmbeddingConfig;
+  semanticMemoryPort?: LocalSemanticMemoryPort | null;
+  semanticMemorySession: SemanticMemorySessionView;
+  isSemanticMemorySyncing: boolean;
   isPending: boolean;
   errorMessage: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -32,6 +42,9 @@ interface LibraryViewProps {
   onUnlinkSource: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
+  onConnectSemanticMemory: (input: SemanticMemoryConnectInput) => Promise<boolean>;
+  onDisconnectSemanticMemory: () => void;
+  onSyncSemanticMemory: () => Promise<void>;
 }
 
 type LibraryFilter = 'recent' | 'linked' | 'review';
@@ -61,6 +74,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   planning,
   currentClassName = null,
   embeddingConfig,
+  semanticMemoryPort = null,
+  semanticMemorySession,
+  isSemanticMemorySyncing,
   isPending,
   errorMessage,
   onAddSource,
@@ -68,7 +84,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onLinkSource,
   onUnlinkSource,
   onDeleteSource,
-  onOpenCopilot
+  onOpenCopilot,
+  onConnectSemanticMemory,
+  onDisconnectSemanticMemory,
+  onSyncSemanticMemory
 }) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('recent');
@@ -122,7 +141,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setSemanticResolution(null);
     setSemanticError(null);
     setIsSemanticPending(false);
-  }, [query, library, embeddingConfig]);
+  }, [query, library, embeddingConfig, semanticMemoryPort, semanticMemorySession.status]);
 
   useEffect(() => () => {
     semanticRequestRef.current += 1;
@@ -197,7 +216,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
   const handleRunSemanticSearch = async () => {
-    if (!embeddingConfig || !query.trim() || isSemanticPending) return;
+    if ((!semanticMemoryPort && !embeddingConfig) || !query.trim() || isSemanticPending) return;
     const requestId = semanticRequestRef.current + 1;
     semanticRequestRef.current = requestId;
     setIsSemanticPending(true);
@@ -205,11 +224,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setSemanticError(null);
 
     try {
-      const result = await retrieveLibrarySourcesByMeaning({
-        query,
-        sources: library.sources,
-        config: embeddingConfig
-      });
+      const result = semanticMemoryPort
+        ? await retrieveLibrarySourcesFromSemanticMemory({
+            query,
+            port: semanticMemoryPort,
+            library
+          })
+        : await retrieveLibrarySourcesByMeaning({
+            query,
+            sources: library.sources,
+            config: embeddingConfig as LocalEmbeddingConfig
+          });
       if (semanticRequestRef.current !== requestId) return;
       setSemanticResolution(result);
     } catch {
@@ -356,11 +381,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <p className="text-xs leading-relaxed text-slate-400">
               Usa il motore locale configurato e non invia automaticamente i materiali a servizi remoti. Sono considerate solo fonti classificate come professionali.
             </p>
+
+            <SemanticMemorySettings
+              session={semanticMemorySession}
+              isSyncing={isSemanticMemorySyncing}
+              onConnect={onConnectSemanticMemory}
+              onDisconnect={onDisconnectSemanticMemory}
+              onSync={onSyncSemanticMemory}
+            />
+
             <button
               type="button"
               data-testid="library-semantic-search-run"
               onClick={() => void handleRunSemanticSearch()}
-              disabled={!embeddingConfig || !query.trim() || isSemanticPending}
+              disabled={(!semanticMemoryPort && !embeddingConfig) || !query.trim() || isSemanticPending}
               className="min-h-[44px] px-4 rounded-lg border border-[var(--primary)] text-[var(--primary)] font-semibold text-sm disabled:opacity-50"
             >
               {isSemanticPending ? 'Ricerca in corso…' : 'Cerca per significato'}
