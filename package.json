@@ -19,6 +19,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@trama/contextual-copilot-core": "file:vendor/contextual-copilot-core",
     "@trama/contextual-copilot-intent-embedding": "file:vendor/contextual-copilot-intent-embedding",
+    "@trama/contextual-copilot-semantic-memory": "file:vendor/contextual-copilot-semantic-memory",
     "@vitejs/plugin-react": "^6.1.1",
     "canvas-confetti": "^1.9.4",
     "dotenv": "^17.2.3",

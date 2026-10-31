@@ -228,6 +228,21 @@
         "src/library/copilotLaunchContext.test.ts",
         "src/security/lib03cProgressiveRelevanceContract.test.ts"
       ]
+    },
+    {
+      "id": "LSM-01C-I01",
+      "owner": "LSM-01C-A",
+      "statement": "Registro consumes the exact qualified shared semantic-memory contract as a vendored local package; the package remains derived/provider-neutral and adds no build-time network or external-registry dependency.",
+      "impactPaths": [
+        "vendor/contextual-copilot-semantic-memory/",
+        "vendor/contextual-copilot-semantic-memory.provenance.json",
+        "package.json",
+        "bun.lock",
+        "src/security/lsm01cSemanticMemoryVendorContract.test.ts"
+      ],
+      "tests": [
+        "src/security/lsm01cSemanticMemoryVendorContract.test.ts"
+      ]
     }
   ]
 }
