@@ -254,6 +254,25 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(consent).toHaveCount(1);
   await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
 
+  const dockPositionBeforeScroll = await consent.boundingBox();
+  expect(dockPositionBeforeScroll).toBeTruthy();
+  await expect(consent).toHaveCSS('position', 'fixed');
+  const scrollMetrics = await composerScroll.evaluate(element => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+    scrollTop: element.scrollTop
+  }));
+  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+  await composerScroll.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(async () => composerScroll.evaluate(element => element.scrollTop)).toBeGreaterThan(scrollMetrics.scrollTop);
+  const dockPositionAfterScroll = await consent.boundingBox();
+  expect(dockPositionAfterScroll).toBeTruthy();
+  expect(Math.abs(dockPositionAfterScroll.y - dockPositionBeforeScroll.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(dockPositionAfterScroll.x - dockPositionBeforeScroll.x)).toBeLessThanOrEqual(1);
+  expect(dockPositionAfterScroll.y + dockPositionAfterScroll.height).toBeLessThanOrEqual(844);
+
   await composerClose.click();
   await expect(composer).toBeHidden();
   await expect(useSurface).toHaveAttribute('role', 'dialog');
