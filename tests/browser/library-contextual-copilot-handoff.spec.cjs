@@ -174,7 +174,7 @@ test('contextual Copilot direct REVIEW gates professional classification before 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
   await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
-  const reviewAction = libraryUseAction(card, 'review');
+  const reviewAction = libraryUseAction(card, 'review', { autoClassify: false });
   await assertAtLeast44(reviewAction, 'Library REVIEW action');
   await reviewAction.click();
 
