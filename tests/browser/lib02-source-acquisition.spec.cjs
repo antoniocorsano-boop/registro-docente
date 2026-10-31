@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -63,16 +63,8 @@ async function handoffToComposer(card, page, title) {
   await libraryUseAction(card, 'prepare').click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: title });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', sourceCard: card });
   return composer;
-}
-
-async function openPrepareFromIntent(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  await expect(disclosure).toBeVisible();
-  return disclosure;
 }
 
 test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce il testo — desktop 1280x900', async ({ page }) => {

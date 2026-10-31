@@ -1,6 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { configureNeutralCopilotContext } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -90,14 +89,20 @@ async function sourceCard(page) {
 }
 
 async function launchComposer(page) {
-  const card = await sourceCard(page);
-  await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
-  await libraryUseAction(card, 'review').click();
+  const trigger = page.getByTestId('library-copilot-trigger');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  const deck = page.getByTestId('copilot-deck');
+  await expect(deck).toBeVisible();
+  await deck.getByRole('button', { name: 'Parla con il Copilota', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
-  await expect(composer).toContainText(CLASS_NAME);
+  await configureNeutralCopilotContext(composer, {
+    goal: 'review',
+    className: CLASS_NAME,
+    udaTitle: UDA_TITLE,
+    sourceTitle: SOURCE_TITLE
+  });
   return composer;
 }
 

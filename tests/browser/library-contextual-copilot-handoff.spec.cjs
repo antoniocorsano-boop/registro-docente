@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
-const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -79,23 +79,18 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
-async function launchFromCard(page, title) {
+async function launchFromCard(page, title, { targetTitle = UDA_TITLE, intent = 'review' } = {}) {
   const card = await sourceCard(page, title);
-  await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const udaSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
-  await expect(udaSelect).toBeVisible();
-  await libraryUseAction(card, 'review').click();
+  const useSurface = card.getByTestId('library-source-use-surface');
+  if (!(await useSurface.isVisible().catch(() => false))) {
+    await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  }
+  await expect(useSurface).toBeVisible();
+  await selectLibraryUseTarget(card, { udaTitle: targetTitle });
+  await libraryUseAction(card, intent).click();
   const composer = page.getByTestId('library-copilot-composer');
-  await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: title });
-  await expect(composer).toContainText(CLASS_NAME);
-  await expect(composer).toContainText('UDA corrente');
-  return composer;
-}
-
-async function submitIntent(composer, message) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill(message);
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
+  await expectDirectCopilotLaunch(composer, { intent, contextText: CLASS_NAME, sourceCard: card });
+  return { card, composer };
 }
 
 async function assertAtLeast44(locator, label) {
@@ -106,7 +101,7 @@ async function assertAtLeast44(locator, label) {
   expect(box.width, `${label} width`).toBeGreaterThanOrEqual(44);
 }
 
-test('contextual Copilot handoff makes disclosure intent-owned and keeps provider calls gated — desktop 1280x900', async ({ page }) => {
+test('contextual Copilot direct Library actions are intent-owned and keep provider calls gated — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
   const proposalRequests = [];
@@ -126,62 +121,40 @@ test('contextual Copilot handoff makes disclosure intent-owned and keeps provide
   await openLibrary(page);
   await addSource(page, SOURCE_TITLE, 'Una fonte sulle trasformazioni energetiche per la didattica.');
   await addSource(page, SECOND_SOURCE_TITLE, 'Una seconda fonte per verificare la cancellazione dello stato.');
-  const composer = await launchFromCard(page, SOURCE_TITLE);
-  const prepareDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+
+  let { composer } = await launchFromCard(page, SOURCE_TITLE, { intent: 'review' });
   const reviewPanel = composer.getByTestId('library-copilot-review-panel');
-  const linkAction = composer.getByTestId('library-copilot-link-action');
-
-  await expect(prepareDisclosure).toHaveCount(0);
-  expect(proposalRequests).toHaveLength(0);
-
-  await submitIntent(composer, 'rivedi questa fonte nel contesto della programmazione');
   await expect(reviewPanel).toBeVisible();
   await expect(reviewPanel.getByText('Revisione nel contesto', { exact: true })).toBeVisible();
-  await expect(linkAction).toHaveCount(0);
-  await expect(prepareDisclosure).toHaveCount(0);
-
-  await submitIntent(composer, 'collega questa fonte alla UDA');
-  await expect(linkAction).toBeVisible();
-  await expect(reviewPanel).toHaveCount(0);
-  await expect(prepareDisclosure).toHaveCount(0);
-
-  await submitIntent(composer, 'crea una proposta didattica a partire da questo materiale');
-  await expect(prepareDisclosure).toBeVisible();
-  await expect(reviewPanel).toHaveCount(0);
-  await expect(linkAction).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
   expect(proposalRequests).toHaveLength(0);
-
-  const sourceSelect = await revealMaterialSourceSelect(composer);
-  await sourceSelect.selectOption({ label: SECOND_SOURCE_TITLE });
-  await expect(prepareDisclosure).toHaveCount(0);
-  await sourceSelect.selectOption({ label: SOURCE_TITLE });
-  await expect(prepareDisclosure).toHaveCount(0);
-
-  await composer.getByLabel('Che cosa vuoi farne?').fill('riassumi questa fonte');
-  await expect(prepareDisclosure).toHaveCount(0);
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Dimmi cosa vuoi ottenere: per esempio preparare un’attività, rivedere un materiale o collegarlo a una UDA.', { exact: false })).toBeVisible();
-  await expect(reviewPanel).toHaveCount(0);
-  await expect(linkAction).toHaveCount(0);
-  await expect(prepareDisclosure).toHaveCount(0);
-  expect(proposalRequests).toHaveLength(0);
-
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
-  const relaunchedCard = await sourceCard(page, SOURCE_TITLE);
-  const contextSelect = await selectLibraryUseTarget(relaunchedCard, { udaTitle: SECOND_UDA_TITLE });
-  await expect(contextSelect).toBeVisible();
-  await libraryUseAction(relaunchedCard, 'review').click();
-  await expect(composer).toBeVisible();
-  await expect(reviewPanel).toBeVisible();
-  await expect(linkAction).toHaveCount(0);
-  await expect(prepareDisclosure).toHaveCount(0);
+
+  ({ composer } = await launchFromCard(page, SOURCE_TITLE, { intent: 'link' }));
+  await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-review-panel')).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  expect(proposalRequests).toHaveLength(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+
+  ({ composer } = await launchFromCard(page, SOURCE_TITLE, { intent: 'prepare' }));
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-review-panel')).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
+  expect(proposalRequests).toHaveLength(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+
+  ({ composer } = await launchFromCard(page, SOURCE_TITLE, { targetTitle: SECOND_UDA_TITLE, intent: 'review' }));
+  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
+  expect(proposalRequests).toHaveLength(0);
 
   await page.screenshot({ path: path.join(evidenceDir, 'library-contextual-copilot-handoff-desktop.png'), fullPage: true });
   fs.writeFileSync(path.join(evidenceDir, 'library-contextual-copilot-handoff-desktop.json'), JSON.stringify({ candidateSha: process.env.CANDIDATE_SHA || null, viewport: { width: 1280, height: 900 }, proposalRequestCount: proposalRequests.length, pageErrors }, null, 2) + '\n');
   expect(pageErrors).toEqual([]);
 });
 
-test('contextual Copilot handoff stays touch-safe and intent-owned — mobile 390x844', async ({ browser }) => {
+test('contextual Copilot direct REVIEW handoff stays touch-safe — mobile 390x844', async ({ browser }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
@@ -192,13 +165,15 @@ test('contextual Copilot handoff stays touch-safe and intent-owned — mobile 39
   await createSyntheticUda(page, UDA_TITLE);
   await openLibrary(page);
   await addSource(page, SOURCE_TITLE, 'Fonte mobile sulle trasformazioni energetiche.');
-  const composer = await launchFromCard(page, SOURCE_TITLE);
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
-  const message = composer.getByLabel('Che cosa vuoi farne?');
-  const submit = composer.getByRole('button', { name: 'Mostra le possibilità', exact: true });
-  await assertAtLeast44(message, 'Copilot message');
-  await assertAtLeast44(submit, 'Copilot submit');
-  await submitIntent(composer, 'rivedi questa fonte nel contesto della programmazione');
+
+  const card = await sourceCard(page, SOURCE_TITLE);
+  await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  const reviewAction = libraryUseAction(card, 'review');
+  await assertAtLeast44(reviewAction, 'Library REVIEW action');
+  await reviewAction.click();
+  const composer = page.getByTestId('library-copilot-composer');
+  await expectDirectCopilotLaunch(composer, { intent: 'review', contextText: CLASS_NAME, sourceCard: card });
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
   await assertAtLeast44(composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }), 'Copilot close');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
-const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { revealMaterialSourceSelect, expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -111,9 +111,10 @@ async function classifyProfessional(page, title) {
   await libraryUseAction(card, 'prepare').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: title });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', sourceCard: card });
 
-  const disclosure = await openPrepareFromIntent(composer);
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await classify.click();

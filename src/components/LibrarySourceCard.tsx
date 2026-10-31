@@ -321,7 +321,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   };
 
   return (
-    <article className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm space-y-3">
+    <article data-source-id={source.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm space-y-3">
       <div className="flex gap-3 items-start">
         {source.kind === 'image' && source.payload.dataUrl ? (
           <img

@@ -282,8 +282,6 @@
         "src/components/LibraryCopilotComposer.tsx",
         "src/components/LibrarySourceCard.tsx",
         "src/library/copilotLaunchContext.ts",
-        "tests/browser/library-use-surface-helpers.cjs",
-        "tests/browser/lsm-01c-consumer.spec.cjs",
         "tests/browser/agent-intent-01-routing.spec.cjs",
         "tests/browser/aic-02-prepare-outcome.spec.cjs",
         "tests/browser/aic-03-review-v2.spec.cjs",
@@ -294,7 +292,10 @@
         "tests/browser/lib02-source-acquisition.spec.cjs",
         "tests/browser/lib03c-progressive-relevance.spec.cjs",
         "tests/browser/lib05a-local-semantic-retrieval.spec.cjs",
-        "tests/browser/library-contextual-copilot-handoff.spec.cjs"
+        "tests/browser/library-contextual-copilot-handoff.spec.cjs",
+        "tests/browser/library-use-surface-helpers.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs",
+        "tests/browser/teacher-first-copilot-helpers.cjs"
       ],
       "tests": [
         "src/library/copilotLaunchContext.test.ts"

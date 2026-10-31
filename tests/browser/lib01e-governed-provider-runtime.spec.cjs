@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
-const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { revealMaterialSourceSelect, expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -311,7 +311,7 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
   await libraryUseAction(card, 'prepare').click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
@@ -475,7 +475,7 @@ test('LIB-01E pending result is discarded after teaching-context change — mobi
   await libraryUseAction(card, 'prepare').click();
   let composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();

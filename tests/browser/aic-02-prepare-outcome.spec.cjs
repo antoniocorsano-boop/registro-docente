@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -239,16 +239,11 @@ async function launchComposer(page, { lesson = false } = {}) {
   await libraryUseAction(card, 'prepare').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, {
-    sourceTitle: SOURCE_TITLE,
-    contextText: CLASS_NAME
-  });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   return composer;
 }
 
 async function generateProposal(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill(REAL_PHRASE);
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
