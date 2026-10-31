@@ -219,6 +219,7 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(useSurface).not.toHaveAttribute('aria-modal', 'true');
   await expect(useSurface).toHaveAttribute('aria-hidden', 'true');
   await expect(useSurface).toHaveAttribute('inert', '');
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
   const composerClose = composer.getByRole('button', { name: 'Chiudi Copilota', exact: true });
   await expect(composerClose).toBeFocused();
   await page.keyboard.press('Shift+Tab');
@@ -252,6 +253,7 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(useSurface).toHaveAttribute('aria-modal', 'true');
   await expect(useSurface).not.toHaveAttribute('aria-hidden', 'true');
   await expect(useSurface).not.toHaveAttribute('inert', '');
+  await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
   await expect(card.getByRole('button', { name: 'Prepara un’attività', exact: true })).toBeFocused();
   await expect(useSurface).toBeVisible();
   await expect(useSurface).toHaveCSS('position', 'fixed');
@@ -339,10 +341,10 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
 
 test('LSM-01C-B Library classifies an unknown professional source locally without opening Copilot', async ({ page }) => {
   const classificationTitle = 'Fonte classificazione locale LSM-01C-B';
-  const proposalRequests = [];
+  const copilotPostRequests = [];
   page.on('request', request => {
     const pathname = new URL(request.url()).pathname;
-    if (request.method() === 'POST' && pathname === '/api/copilot/library-proposal') proposalRequests.push(request.url());
+    if (request.method() === 'POST' && pathname.startsWith('/api/copilot/')) copilotPostRequests.push(request.url());
   });
 
   await setupFreshVault(page);
@@ -365,6 +367,6 @@ test('LSM-01C-B Library classifies an unknown professional source locally withou
   await expect(card.getByText('Professionale', { exact: true })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
-  expect(proposalRequests).toEqual([]);
+  expect(copilotPostRequests).toEqual([]);
 });
 
