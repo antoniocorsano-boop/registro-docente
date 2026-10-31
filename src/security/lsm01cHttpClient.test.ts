@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import '../semanticMemory/syncLedger.test';
+import '../semanticMemory/sync.test';
 import {
   SemanticMemoryHttpError,
   SemanticMemoryRevisionConflictError,
