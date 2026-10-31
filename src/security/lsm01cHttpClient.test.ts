@@ -85,65 +85,6 @@ function memoryState(entries: ProfessionalMemoryEntryV1[]): ProfessionalMemorySt
   };
 }
 
-async function writeProjectionDiagnostic(): Promise<void> {
-  const path = 'qualification-manifest.json';
-  const manifestFile = Bun.file(path);
-  if (!(await manifestFile.exists())) return;
-
-  const manifest = await manifestFile.json() as Record<string, unknown>;
-  const diagnostic: Record<string, unknown> = {};
-
-  try {
-    diagnostic.library = await buildLibrarySemanticMemoryProjections([
-      librarySource(),
-      librarySource({ id: 'student', privacy: 'student-personal' }),
-      librarySource({ id: 'unknown', privacy: 'unknown' }),
-      librarySource({ id: 'restricted', status: 'restricted' }),
-      librarySource({ id: 'failed', status: 'failed' }),
-      librarySource({ id: 'empty', title: ' ', extractedText: ' ', payload: { text: ' ' }, notes: ' ' }),
-    ]);
-  } catch (error) {
-    diagnostic.libraryError = error instanceof Error
-      ? { name: error.name, message: error.message, stack: error.stack }
-      : String(error);
-  }
-
-  try {
-    diagnostic.professionalMemory = await buildProfessionalMemoryProjections(memoryState([
-      memoryEntry('teacher', 'TEACHER_PROFESSIONAL'),
-      memoryEntry('curricolo', 'CURRICULUM_PLANNING'),
-      memoryEntry('public', 'PUBLIC_EXTERNAL_CONTENT'),
-      memoryEntry('aggregate', 'AGGREGATED_NON_IDENTIFIABLE'),
-      memoryEntry('stale', 'TEACHER_PROFESSIONAL', { status: 'stale' }),
-    ]));
-  } catch (error) {
-    diagnostic.professionalMemoryError = error instanceof Error
-      ? { name: error.name, message: error.message, stack: error.stack }
-      : String(error);
-  }
-
-  try {
-    const source = librarySource();
-    const [first] = await buildLibrarySemanticMemoryProjections([source]);
-    const [same] = await buildLibrarySemanticMemoryProjections([{ ...source }]);
-    const [changed] = await buildLibrarySemanticMemoryProjections([{ ...source, notes: 'Nota modificata' }]);
-    diagnostic.revision = {
-      first: first?.revision ?? null,
-      same: same?.revision ?? null,
-      changed: changed?.revision ?? null,
-      deterministic: first?.revision === same?.revision,
-      changesWithContent: first?.revision !== changed?.revision,
-    };
-  } catch (error) {
-    diagnostic.revisionError = error instanceof Error
-      ? { name: error.name, message: error.message, stack: error.stack }
-      : String(error);
-  }
-
-  manifest.lsmProjectionDiagnostic = diagnostic;
-  await Bun.write(path, JSON.stringify(manifest, null, 2) + '\n');
-}
-
 describe('LSM-01C-A session-only semantic memory HTTP client', () => {
   test('rejects non-loopback and non-http endpoints before any fetch', () => {
     let calls = 0;
@@ -296,11 +237,6 @@ describe('LSM-01C-A session-only semantic memory HTTP client', () => {
 });
 
 describe('LSM-01C-A governed Registro projections', () => {
-  test('writes temporary exact-SHA projection diagnostics into the qualification artifact', async () => {
-    await writeProjectionDiagnostic();
-    expect(true).toBe(true);
-  });
-
   test('Library projection is teacher-professional only and preserves the qualified semantic text order', async () => {
     const eligible = librarySource();
     const projections = await buildLibrarySemanticMemoryProjections([
