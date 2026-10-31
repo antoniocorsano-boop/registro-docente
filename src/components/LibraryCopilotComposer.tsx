@@ -1294,7 +1294,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       data-testid="library-copilot-composer"
       data-agent-intent-fallback-code={agentFallbackCodeRef.current ?? undefined}
       aria-label="Copilota contestuale"
-      className="fixed inset-x-3 bottom-36 md:inset-x-auto md:right-6 md:bottom-20 z-[70] max-h-[calc(100dvh-10rem)] md:w-[430px] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950/98 shadow-2xl backdrop-blur"
+      className="fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden rounded-none border border-slate-700 bg-slate-950/98 shadow-2xl backdrop-blur md:inset-x-auto md:inset-y-auto md:right-6 md:bottom-20 md:h-auto md:max-h-[calc(100dvh-10rem)] md:w-[430px] md:rounded-2xl"
     >
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
         <div className="min-w-0">
@@ -1331,7 +1331,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         </button>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div data-testid="library-copilot-scroll" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {!hasCompleteDirectLaunch && !isBoundMissionFlow && (
           <section className="space-y-3" data-testid="teacher-first-copilot-entry">
             <div>
