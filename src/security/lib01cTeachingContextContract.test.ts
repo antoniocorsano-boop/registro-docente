@@ -334,10 +334,12 @@ describe('LIB-01C teaching context contract', () => {
     expect(cardSource).toContain('resolveLibraryTeachingContext');
     expect(cardSource).toContain('suggestLibraryTeachingContext');
     expect(cardSource).toContain('onExplicitTeachingContextChange');
-    expect(cardSource).toContain("setContextLessonId('')");
+    expect(cardSource).toContain("value.split('::')");
+    expect(cardSource).toContain('setContextLessonId(lessonId)');
     expect(cardSource).toContain('onOpenCopilot');
-    expect(cardSource).toContain('udaId: resolvedTeachingContext?.udaId');
-    expect(cardSource).toContain('lessonId: resolvedTeachingContext?.lessonId');
+    expect(cardSource).toContain('udaId: resolvedTeachingContext.udaId');
+    expect(cardSource).toContain('lessonId: resolvedTeachingContext.lessonId');
+    expect(cardSource).toContain('intent');
     expect(cardSource).not.toContain('resolveLibraryContextActions');
     expect(cardSource).not.toContain('dispatchLibraryContextAction');
     expect(cardSource).not.toContain('UDA di destinazione');

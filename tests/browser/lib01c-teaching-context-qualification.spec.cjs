@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -131,21 +132,11 @@ async function assertAtLeast44(locator, label) {
 }
 
 async function handOffToComposer(page, card, title) {
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'link').click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: title });
+  await expectDirectCopilotLaunch(composer, { intent: 'link', sourceCard: card });
   return composer;
-}
-
-async function resolveCopilotPossibilities(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill('Collega questa fonte al lavoro didattico corrente.');
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
-  await expect(composer.getByText('Rivedi nel contesto', { exact: true })).toHaveCount(0);
-  await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
-  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
-  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
 }
 
 test('LIB-01C proposes deterministic teaching context but persists the teacher override — desktop 1280x900', async ({ page }) => {
@@ -184,13 +175,11 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
   await expect(card.getByRole('button', { name: 'Prepara materiale', exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Sintetizza la fonte', exact: true })).toHaveCount(0);
 
-  await card.getByRole('button', { name: 'Cambia', exact: true }).click();
-  await expect(card.getByLabel('UDA corrente')).toHaveValue(/.+/);
-  await card.getByLabel('UDA corrente').selectOption({ label: OVERRIDE_UDA_TITLE });
-  await expect(card.getByLabel('Lezione corrente')).toHaveCount(0);
+  const overrideTarget = await selectLibraryUseTarget(card, { udaTitle: OVERRIDE_UDA_TITLE });
+  await expect(overrideTarget).toHaveValue(/.+/);
+  await expect(overrideTarget.locator('option:checked')).not.toContainText(LESSON_TOPIC);
 
   let composer = await handOffToComposer(page, card, SOURCE_TITLE);
-  await resolveCopilotPossibilities(composer);
 
   const linkAction = composer.getByTestId('library-copilot-link-action');
   await expect(linkAction).toBeVisible();
@@ -208,7 +197,6 @@ test('LIB-01C proposes deterministic teaching context but persists the teacher o
   await card.getByText('Gestisci', { exact: true }).click();
 
   composer = await handOffToComposer(page, card, SOURCE_TITLE);
-  await resolveCopilotPossibilities(composer);
   await composer.getByTestId('library-copilot-link-action').click();
   const confirmationAgain = composer.getByTestId('library-copilot-link-confirmation');
   await expect(confirmationAgain).toBeVisible();
@@ -272,14 +260,12 @@ test('LIB-01C falls back to manual context when no deterministic suggestion exis
   await expect(card.getByText('Contesto proposto', { exact: true })).toHaveCount(0);
   await expect(card.getByText('Scegli dove usarla', { exact: true })).toBeVisible();
 
-  const udaSelect = card.getByLabel('UDA corrente');
-  await assertAtLeast44(udaSelect, 'mobile UDA context select');
-  await udaSelect.selectOption({ label: UDA_TITLE });
+  const udaSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await assertAtLeast44(udaSelect, 'mobile teaching target select');
 
-  const handoff = card.getByRole('button', { name: 'Usa con Copilota', exact: true });
+  const handoff = libraryUseAction(card, 'link');
   await assertAtLeast44(handoff, 'mobile Copilot handoff');
   const composer = await handOffToComposer(page, card, MANUAL_SOURCE_TITLE);
-  await resolveCopilotPossibilities(composer);
   await assertAtLeast44(composer.getByTestId('library-copilot-link-action'), 'mobile Copilot LINK action');
 
   const overflow = await page.evaluate(() => ({

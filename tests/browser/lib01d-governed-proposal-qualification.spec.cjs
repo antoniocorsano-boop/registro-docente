@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
+const { revealMaterialSourceSelect, expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -256,26 +257,41 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
+  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
 
   expect(proposalBodies).toHaveLength(0);
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   let composer = page.locator('[data-testid=\"library-copilot-composer\"]');
-  await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   expect(proposalBodies).toHaveLength(0);
-  let disclosure = await openPrepareFromIntent(composer);
+  let disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
   await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
   expect(proposalBodies).toHaveLength(0);
 
-  await selectComposerSource(composer, SECOND_SOURCE_TITLE);
-  await expect(disclosure).toHaveCount(0);
-  await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toHaveCount(0);
+  // Changing source now happens explicitly in the Library; the previous direct launch is discarded.
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  const secondCard = await sourceCard(page, SECOND_SOURCE_TITLE);
+  await secondCard.getByRole('button', { name: 'Usa', exact: true }).click();
+  await selectLibraryUseTarget(secondCard, { udaTitle: UDA_TITLE });
+  await libraryUseAction(secondCard, 'prepare').click();
+  composer = page.locator('[data-testid=\"library-copilot-composer\"]');
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: secondCard });
+  const secondDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(secondDisclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
-  await selectComposerSource(composer, SOURCE_TITLE);
-  await openPrepareFromIntent(composer);
+  const originalUseSurface = card.getByTestId('library-source-use-surface');
+  if (!(await originalUseSurface.isVisible().catch(() => false))) {
+    await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  }
+  await expect(originalUseSurface).toBeVisible();
+  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await libraryUseAction(card, 'prepare').click();
+  composer = page.locator('[data-testid=\"library-copilot-composer\"]');
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
+  disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
   await expect(disclosure.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
@@ -389,16 +405,12 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const contextSelect = card.getByLabel('UDA corrente');
-  await contextSelect.selectOption({ label: UDA_TITLE });
+  let contextSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
 
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.locator('[data-testid=\"library-copilot-composer\"]');
-  await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
-  await assertAtLeast44(composer.getByLabel('Che cosa vuoi farne?'), 'mobile prepare request');
-  await assertAtLeast44(composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }), 'mobile prepare submit');
-  const disclosure = await openPrepareFromIntent(composer);
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
 
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await assertAtLeast44(classify, 'mobile professional classification');
@@ -417,11 +429,10 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   await assertAtLeast44(disclosure.getByRole('button', { name: 'Lascia', exact: true }), 'mobile leave');
 
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
-  await contextSelect.selectOption({ label: ALT_UDA_TITLE });
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  contextSelect = await selectLibraryUseTarget(card, { udaTitle: ALT_UDA_TITLE });
+  await libraryUseAction(card, 'prepare').click();
   await expect(composer).toBeVisible();
-  await expect(disclosure).toHaveCount(0);
-  await openPrepareFromIntent(composer);
+  await expect(disclosure).toBeVisible();
   await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(1);
 

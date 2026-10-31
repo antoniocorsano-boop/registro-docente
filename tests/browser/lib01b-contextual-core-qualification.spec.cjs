@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -74,37 +75,11 @@ async function assertAtLeast44(locator, label) {
   expect(box.width, `${label} width`).toBeGreaterThanOrEqual(44);
 }
 
-async function handoffToComposer(page, card) {
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+async function handoffToComposer(page, card, intent = 'review') {
+  await libraryUseAction(card, intent).click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
-  await expect(composer).toBeVisible();
+  await expectDirectCopilotLaunch(composer, { intent, sourceCard: card });
   return composer;
-}
-
-async function assertReviewOnlyPossibility(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill(
-    'rivedi questa fonte nel contesto della programmazione'
-  );
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
-  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
-  await expect(composer.getByText('Revisione nel contesto', { exact: true })).toBeVisible();
-  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
-  await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
-  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
-  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
-}
-
-async function resolveLinkPossibility(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill(
-    'Collega questa fonte al lavoro didattico corrente.'
-  );
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
-  await expect(composer.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
-  await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
-  await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
-  await expect(composer.getByTestId('library-copilot-link-action')).toBeVisible();
 }
 
 test('LIB-01B hands contextual source actions to Copilot and gates durable UDA linking — desktop 1280x900', async ({ page }) => {
@@ -130,28 +105,26 @@ test('LIB-01B hands contextual source actions to Copilot and gates durable UDA l
   await reloadAndUnlock(page);
   await openLibrary(page);
   const card = await sourceCard(page);
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toHaveCount(0);
-  await expect(card.getByLabel('UDA corrente')).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
+  await expect(card.getByLabel('Dove vuoi usarlo?')).toHaveCount(0);
+  await expect(libraryUseAction(card, 'prepare')).toHaveCount(0);
+  await expect(libraryUseAction(card, 'review')).toHaveCount(0);
+  await expect(libraryUseAction(card, 'link')).toHaveCount(0);
   await expect(page.locator('[data-testid="library-copilot-composer"]')).toHaveCount(0);
 
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const currentUda = card.getByLabel('UDA corrente');
-  await expect(currentUda).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
-
-  // Select the teaching context explicitly before handing the source to the shared Copilot.
-  await currentUda.selectOption({ label: UDA_TITLE });
+  const currentTarget = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await expect(currentTarget).toBeVisible();
+  await expect(libraryUseAction(card, 'prepare')).toBeVisible();
+  await expect(libraryUseAction(card, 'review')).toBeVisible();
+  await expect(libraryUseAction(card, 'link')).toBeVisible();
   trackContextualRequests = true;
-  let composer = await handoffToComposer(page, card);
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
+  let composer = await handoffToComposer(page, card, 'review');
+  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
+  await expect(composer.getByTestId('library-copilot-link-action')).toHaveCount(0);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
-  await assertReviewOnlyPossibility(composer);
-  await resolveLinkPossibility(composer);
-
+  composer = await handoffToComposer(page, card, 'link');
   const linkAction = composer.getByTestId('library-copilot-link-action');
   await linkAction.click();
   const confirmation = composer.getByTestId('library-copilot-link-confirmation');
@@ -234,22 +207,18 @@ test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-fre
 
   const card = await sourceCard(page);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const currentUda = card.getByLabel('UDA corrente');
-  await expect(currentUda).toBeVisible();
-  await currentUda.selectOption({ label: UDA_TITLE });
+  const currentTarget = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await expect(currentTarget).toBeVisible();
 
-  const handoff = card.getByRole('button', { name: 'Usa con Copilota', exact: true });
-  await assertAtLeast44(handoff, 'mobile source-to-Copilot handoff');
-  const composer = await handoffToComposer(page, card);
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
+  const handoff = libraryUseAction(card, 'review');
+  await assertAtLeast44(handoff, 'mobile REVIEW handoff');
+  let composer = await handoffToComposer(page, card, 'review');
+  await assertAtLeast44(composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }), 'mobile Copilot close after REVIEW');
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
-  const submit = composer.getByRole('button', { name: 'Mostra le possibilità', exact: true });
-  await assertAtLeast44(submit, 'mobile Copilot possibilities submit');
-  await composer.getByLabel('Che cosa vuoi farne?').fill(
-    'Collega questa fonte al lavoro didattico corrente.'
-  );
-  await submit.click();
-  await expect(composer.getByText('Possibilità autorizzate', { exact: true })).toBeVisible();
+  const linkHandoff = libraryUseAction(card, 'link');
+  await assertAtLeast44(linkHandoff, 'mobile LINK handoff');
+  composer = await handoffToComposer(page, card, 'link');
   const linkAction = composer.getByTestId('library-copilot-link-action');
   await assertAtLeast44(linkAction, 'mobile Copilot LINK action');
   await linkAction.click();
@@ -271,6 +240,10 @@ test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-fre
   await cancelButton.click();
   await expect(confirmation).toBeHidden();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  const useSurface = card.getByTestId('library-source-use-surface');
+  await expect(useSurface).toBeVisible();
+  await useSurface.getByRole('button', { name: 'Chiudi uso materiale', exact: true }).click();
+  await expect(useSurface).toBeHidden();
   await card.getByText('Gestisci', { exact: true }).click();
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
 

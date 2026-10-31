@@ -117,6 +117,29 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>, container: HTMLElement | null): void {
+  if (event.key !== 'Tab' || !container) return;
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(element => !element.hasAttribute('hidden') && element.getClientRects().length > 0);
+
+  if (focusable.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 const ACTION_HELP: Record<string, string> = {
   'review-source': 'Rivedi la fonte nel contesto didattico corrente.',
   'link-source-to-uda': 'Collega la fonte a una UDA con conferma del docente.',
@@ -217,10 +240,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
   const [missionLaunchSettledNonce, setMissionLaunchSettledNonce] = useState<number | null>(null);
   const [readyMissionReview, setReadyMissionReview] = useState<MissionReviewHandoffV1 | null>(null);
+  const [isMobileDialog, setIsMobileDialog] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
   const resolutionEpochRef = useRef(0);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const preserveGovernedContinuationOnReopenRef = useRef(false);
+  const directLaunchResolutionKeyRef = useRef<string | null>(null);
+  const composerDialogRef = useRef<HTMLElement | null>(null);
+  const composerCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const composerPreviousFocusRef = useRef<HTMLElement | null>(null);
 
   const hasLaunchTeachingTarget = Boolean(
     launchRequest?.context.udaId || launchRequest?.context.lessonId
@@ -308,6 +338,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       : resolveLaunchTeachingContextFromCatalog(launchRequest, teachingUdaCatalog),
     [launchRequest?.nonce, launchRequest?.mission, udas, teachingUdaCatalog]
   );
+  const directLaunchIntent = launchRequest?.context.intent ?? null;
+  const hasCompleteDirectLaunch = Boolean(
+    launchRequest
+    && !launchRequest.mission
+    && directLaunchIntent
+    && launchRequest.context.sourceId
+    && hasLaunchTeachingTarget
+    && explicitLaunchTeachingContext
+  );
 
   const teachingSuggestion = useMemo(() => {
     if (contextOverride !== 'auto' || hasLaunchTeachingTarget) return null;
@@ -351,6 +390,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolvedTeachingContext,
     planning
   ), [resolvedTeachingContext, planning]);
+  const planningContextFingerprint = JSON.stringify(resolvedPlanningContext);
 
   const selectedSource = useMemo(
     () => library.sources.find(source => source.id === selectedSourceId) ?? null,
@@ -459,6 +499,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+  const directLaunchBindingsReady = Boolean(
+    hasCompleteDirectLaunch
+    && requestedLaunchSourceId
+    && selectedSource?.id === requestedLaunchSourceId
+    && explicitLaunchTeachingContext
+    && resolvedTeachingContext?.udaId === explicitLaunchTeachingContext.udaId
+    && (resolvedTeachingContext?.lessonId ?? '') === (explicitLaunchTeachingContext.lessonId ?? '')
+  );
+  const directPrepareLaunchIsBound = Boolean(
+    directLaunchIntent === 'prepare'
+    && directLaunchBindingsReady
+  );
   const missionLaunchBindingsReady = !launchRequest?.mission || Boolean(
     (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
     && (!launchRequest.context.className || resolvedTeachingContext?.className === launchRequest.context.className)
@@ -528,6 +580,30 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     missionLaunchBindingsReady
     && missionLaunchSettledNonce === launchRequest.nonce
   );
+
+  useLayoutEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const syncMobileDialog = () => setIsMobileDialog(query.matches);
+    syncMobileDialog();
+    query.addEventListener('change', syncMobileDialog);
+    return () => query.removeEventListener('change', syncMobileDialog);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !isMobileDialog) return;
+    composerPreviousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    composerCloseButtonRef.current?.focus();
+
+    return () => {
+      const previous = composerPreviousFocusRef.current;
+      composerPreviousFocusRef.current = null;
+      requestAnimationFrame(() => {
+        if (previous?.isConnected) previous.focus();
+      });
+    };
+  }, [isOpen, isMobileDialog]);
 
   useEffect(() => {
     if (!openRequestNonce) return;
@@ -628,7 +704,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-    if (launchRequest.mission) setMessage(launchRequest.mission.objective);
+    if (launchRequest.mission) {
+      setMessage(launchRequest.mission.objective);
+    } else if (hasCompleteDirectLaunch) {
+      setMessage(
+        directLaunchIntent === 'prepare'
+          ? 'Prepara una attività da questa fonte nel contesto didattico corrente.'
+          : directLaunchIntent === 'review'
+            ? 'Rivedi questa fonte nel contesto didattico corrente.'
+            : 'Collega questa fonte al lavoro didattico corrente.'
+      );
+    }
 
     if (requestedLaunchSourceId) {
       const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
@@ -649,6 +735,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     // A launch is an event identified by nonce. Library/source mutations must not replay it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchRequest?.nonce]);
+
+  useEffect(() => {
+    if (!directPrepareLaunchIsBound) return;
+    setIsPrepareOpen(true);
+  }, [launchRequest?.nonce, directPrepareLaunchIsBound]);
 
   useEffect(() => {
     if (!launchRequest || !requestedLaunchSourceId) return;
@@ -684,14 +775,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
-    setIsPrepareOpen(false);
+    if (!directPrepareLaunchIsBound) setIsPrepareOpen(false);
     setResolution(null);
     setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-  }, [selectedSourceId, teachingContextFingerprint]);
+  }, [selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound]);
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
@@ -702,6 +793,110 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
   }, [selectedSource?.privacy, selectedSource?.status]);
+
+  useEffect(() => {
+    if (
+      !hasCompleteDirectLaunch
+      || !launchRequest
+      || !selectedSource
+      || !resolvedTeachingContext
+      || !directLaunchBindingsReady
+      || directLaunchIntent === 'prepare'
+    ) return;
+
+    const actionId = directLaunchIntent === 'review'
+      ? 'review-source'
+      : directLaunchIntent === 'link'
+        ? 'link-source-to-uda'
+        : null;
+    if (!actionId) return;
+
+    const resolutionKey = [
+      launchRequest.nonce,
+      directLaunchIntent,
+      selectedSource.id,
+      selectedSource.privacy,
+      selectedSource.status,
+      teachingContextFingerprint,
+      planningContextFingerprint
+    ].join('|');
+    if (directLaunchResolutionKeyRef.current === resolutionKey) {
+      return;
+    }
+    directLaunchResolutionKeyRef.current = resolutionKey;
+
+    const canonicalMessage = directLaunchIntent === 'review'
+      ? 'Rivedi questa fonte nel contesto didattico corrente.'
+      : 'Collega questa fonte al lavoro didattico corrente.';
+    const input = {
+      source: selectedSource,
+      teachingContext: resolvedTeachingContext,
+      planningContext: resolvedPlanningContext,
+      message: canonicalMessage
+    };
+    let cancelled = false;
+    let resolutionCompleted = false;
+
+    setIsResolving(true);
+    setGuidanceMessage(null);
+    setErrorMessage(null);
+    setResolution(null);
+    setIsReviewUnavailableOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+
+    void resolveLibraryCopilotRequest(input)
+      .then(nextResolution => {
+        if (cancelled) return;
+        resolutionCompleted = true;
+        const requestedAction = nextResolution.actions.find(action => action.id === actionId) ?? null;
+        if (
+          directLaunchIntent === 'review'
+          && contextualReview?.status === 'unavailable'
+          && !requestedAction
+        ) {
+          setIsReviewUnavailableOpen(true);
+        }
+        setResolution({
+          ...nextResolution,
+          actions: requestedAction ? [requestedAction] : []
+        });
+        if (!requestedAction && directLaunchIntent === 'link') {
+          setGuidanceMessage('Questo collegamento non è disponibile nel contesto corrente.');
+        }
+      })
+      .catch(error => {
+        if (cancelled) return;
+        if (directLaunchResolutionKeyRef.current === resolutionKey) {
+          directLaunchResolutionKeyRef.current = null;
+        }
+        setErrorMessage(error instanceof Error ? error.message : 'Il Copilota non può completare questo passaggio nel contesto corrente.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsResolving(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (!resolutionCompleted && directLaunchResolutionKeyRef.current === resolutionKey) {
+        directLaunchResolutionKeyRef.current = null;
+      }
+      setIsResolving(false);
+    };
+  }, [
+    launchRequest?.nonce,
+    hasCompleteDirectLaunch,
+    directLaunchBindingsReady,
+    directLaunchIntent,
+    selectedSource?.id,
+    selectedSource?.privacy,
+    selectedSource?.status,
+    teachingContextFingerprint,
+    planningContextFingerprint,
+    resolvedPlanningContext,
+    contextualReview
+  ]);
 
 
   useEffect(() => {
@@ -1170,20 +1365,33 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   return (
     <section
+      ref={composerDialogRef}
       data-testid="library-copilot-composer"
+      data-source-id={selectedSource?.id ?? ''}
+      data-teaching-target={resolvedTeachingContext
+        ? `${resolvedTeachingContext.udaId}${resolvedTeachingContext.lessonId ? `::${resolvedTeachingContext.lessonId}` : ''}`
+        : ''}
       data-agent-intent-fallback-code={agentFallbackCodeRef.current ?? undefined}
-      aria-label="Copilota contestuale"
-      className="fixed inset-x-3 bottom-36 md:inset-x-auto md:right-6 md:bottom-20 z-[70] max-h-[calc(100dvh-10rem)] md:w-[430px] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950/98 shadow-2xl backdrop-blur"
+      role={isMobileDialog ? 'dialog' : undefined}
+      aria-modal={isMobileDialog ? true : undefined}
+      aria-labelledby={isMobileDialog ? 'library-copilot-dialog-title' : undefined}
+      aria-label={isMobileDialog ? undefined : 'Copilota contestuale'}
+      tabIndex={isMobileDialog ? -1 : undefined}
+      onKeyDown={event => {
+        if (isMobileDialog) trapDialogFocus(event, composerDialogRef.current);
+      }}
+      className="fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden rounded-none border border-slate-700 bg-slate-950/98 shadow-2xl backdrop-blur md:inset-x-auto md:inset-y-auto md:right-6 md:bottom-20 md:h-auto md:max-h-[calc(100dvh-10rem)] md:w-[430px] md:rounded-2xl"
     >
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-100">
+          <div id="library-copilot-dialog-title" className="flex items-center gap-2 text-sm font-bold text-slate-100">
             <MessageCircle size={18} className="text-cyan-300" aria-hidden="true" />
             Copilota
           </div>
           <p className="mt-0.5 truncate text-xs text-slate-400">{contextLabel}</p>
         </div>
         <button
+          ref={composerCloseButtonRef}
           type="button"
           onClick={() => {
             interruptBoundMission();
@@ -1210,8 +1418,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         </button>
       </div>
 
-      <div className="space-y-4 p-4">
-        {!isBoundMissionFlow && (
+      <div data-testid="library-copilot-scroll" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {!hasCompleteDirectLaunch && !isBoundMissionFlow && (
           <section className="space-y-3" data-testid="teacher-first-copilot-entry">
             <div>
               <h3 className="text-sm font-bold text-slate-100">Cosa vuoi fare?</h3>
