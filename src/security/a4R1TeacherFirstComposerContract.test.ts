@@ -203,4 +203,27 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(privacyEffect).not.toContain('setIsPrepareOpen(false)');
   });
 
+
+  test('direct REVIEW/LINK cancellation clears the in-flight key so the current request can retry', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('if (directLaunchResolutionKeyRef.current === resolutionKey) {');
+    expect(source).toContain('directLaunchResolutionKeyRef.current = null;');
+    expect(source).toContain('setIsResolving(false);');
+  });
+
+  test('mobile full-screen Library surfaces expose modal semantics and focus containment hooks', async () => {
+    const composer = await composerSource();
+    const card = await sourceCardSource();
+
+    expect(composer).toContain("role={isMobileDialog ? 'dialog' : undefined}");
+    expect(composer).toContain('aria-modal={isMobileDialog ? true : undefined}');
+    expect(composer).toContain('trapDialogFocus(event, composerDialogRef.current)');
+    expect(composer).toContain('composerCloseButtonRef.current?.focus()');
+    expect(card).toContain("role={isMobileDialog ? 'dialog' : undefined}");
+    expect(card).toContain('aria-modal={isMobileDialog ? true : undefined}');
+    expect(card).toContain('trapDialogFocus(event, useSurfaceRef.current)');
+    expect(card).toContain('useSurfaceCloseButtonRef.current?.focus()');
+  });
+
 });
