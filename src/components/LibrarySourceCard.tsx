@@ -3,7 +3,7 @@ import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 
 import type { PlanningState } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
 import type { TeachingUdaCandidate } from '../teaching/teachingUdaCatalog';
-import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
+import type { CopilotLaunchContext, LibraryLaunchIntent } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { buildCapturedWebTextPatch } from '../library/intake';
@@ -81,6 +81,12 @@ const SUGGESTION_COPY: Record<TeachingContextSuggestionReason, string> = {
   'current-class-active-uda': "Ti propongo questa UDA perché è l'unica attiva per la classe corrente in questo periodo.",
   'session-last-choice': "Ti propongo l'ultimo contesto che hai scelto in questa sessione."
 };
+
+const LIBRARY_USE_ACTIONS: readonly { intent: LibraryLaunchIntent; label: string }[] = [
+  { intent: 'prepare', label: 'Prepara un’attività' },
+  { intent: 'review', label: 'Rivedi nel contesto' },
+  { intent: 'link', label: 'Collega alla UDA' }
+];
 
 function localDateKey(date = new Date()): string {
   const year = date.getFullYear();
@@ -202,24 +208,35 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     }
   };
 
-  const selectExplicitUda = (udaId: string) => {
-    setContextUdaId(udaId);
-    setContextLessonId('');
-    setContextSuggestion(null);
-    setContextChooserOpen(true);
-    if (udaId) onExplicitTeachingContextChange({ udaId });
-  };
+  const contextSelectionValue = contextUdaId
+    ? (contextLessonId ? `${contextUdaId}::${contextLessonId}` : contextUdaId)
+    : '';
 
-  const selectExplicitLesson = (lessonId: string) => {
+  const selectTeachingTarget = (value: string) => {
+    const [udaId = '', lessonId = ''] = value.split('::');
+    setContextUdaId(udaId);
     setContextLessonId(lessonId);
     setContextSuggestion(null);
     setContextChooserOpen(true);
-    if (contextUdaId) {
+    if (udaId) {
       onExplicitTeachingContextChange({
-        udaId: contextUdaId,
+        udaId,
         ...(lessonId ? { lessonId } : {})
       });
     }
+  };
+
+  const openCopilotForIntent = (intent: LibraryLaunchIntent) => {
+    if (!resolvedTeachingContext) return;
+    onOpenCopilot({
+      surface: 'library',
+      sourceId: source.id,
+      className: resolvedTeachingContext.className,
+      udaId: resolvedTeachingContext.udaId,
+      lessonId: resolvedTeachingContext.lessonId,
+      teachingContextMode: contextSuggestion ? 'proposed' : 'explicit',
+      intent
+    });
   };
 
   const selectRelevanceTeachingContext = (context: LibraryTeachingContext) => {
@@ -412,22 +429,6 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onOpenCopilot({
-              surface: 'library',
-              sourceId: source.id,
-              className: resolvedTeachingContext?.className ?? currentClassName ?? undefined,
-              udaId: resolvedTeachingContext?.udaId,
-              lessonId: resolvedTeachingContext?.lessonId,
-              teachingContextMode: contextSuggestion ? 'proposed' : 'explicit'
-            })}
-            disabled={isPending}
-            className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
-          >
-            Usa con Copilota
-          </button>
-
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
             {contextSuggestion ? (
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -468,50 +469,34 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               </p>
             )}
 
+            <label className="block text-xs font-semibold text-slate-200" htmlFor={`context-target-${source.id}`}>
+              Dove vuoi usarlo?
+            </label>
+
             {(contextChooserOpen || !contextSuggestion) && (
-              <>
-                <label className="block text-xs text-slate-300" htmlFor={`context-uda-${source.id}`}>
-                  UDA corrente
-                </label>
-                <select
-                  id={`context-uda-${source.id}`}
-                  value={contextUdaId}
-                  onChange={event => selectExplicitUda(event.target.value)}
-                  disabled={isPending || teachingUdaCatalog.length === 0}
-                  className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
-                >
-                  <option value="">Seleziona UDA</option>
-                  {teachingUdaCatalog.map(candidate => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.title}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+              <select
+                id={`context-target-${source.id}`}
+                value={contextSelectionValue}
+                onChange={event => selectTeachingTarget(event.target.value)}
+                disabled={isPending || teachingUdaCatalog.length === 0}
+                className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+              >
+                <option value="">Seleziona UDA o lezione</option>
+                {teachingUdaCatalog.flatMap(candidate => [
+                  <option key={`${candidate.id}::uda`} value={candidate.id}>
+                    {candidate.title} · Intera UDA{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+                  </option>,
+                  ...candidate.lessons.map(lesson => (
+                    <option key={`${candidate.id}::${lesson.id}`} value={`${candidate.id}::${lesson.id}`}>
+                      {candidate.title} · {lesson.topic}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
                     </option>
-                  ))}
-                </select>
+                  ))
+                ])}
+              </select>
+            )}
 
-                {selectedContextUda && contextLessons.length > 0 && (
-                  <>
-                    <label className="block text-xs text-slate-300" htmlFor={`context-lesson-${source.id}`}>
-                      Lezione corrente
-                    </label>
-                    <select
-                      id={`context-lesson-${source.id}`}
-                      value={contextLessonId}
-                      onChange={event => selectExplicitLesson(event.target.value)}
-                      disabled={isPending}
-                      className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
-                    >
-                      <option value="">Intera UDA</option>
-                      {contextLessons.map(lesson => (
-                        <option key={lesson.id} value={lesson.id}>{lesson.topic}</option>
-                      ))}
-                    </select>
-                  </>
-                )}
-
-                {!contextUdaId && (
-                  <p className="text-xs text-slate-400">Seleziona un’UDA per usare la fonte nel contesto didattico.</p>
-                )}
-              </>
+            {!resolvedTeachingContext && (
+              <p className="text-xs text-slate-400">Seleziona un’UDA o una lezione per continuare.</p>
             )}
 
             {selectedContextLesson?.activityType && (
@@ -519,6 +504,23 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                 Tipo di attività: <strong className="text-slate-100">{ACTIVITY_LABELS[selectedContextLesson.activityType]}</strong>
               </p>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <strong className="block text-sm text-cyan-100">Cosa vuoi fare?</strong>
+            <div className="grid gap-2">
+              {LIBRARY_USE_ACTIONS.map(action => (
+                <button
+                  key={action.intent}
+                  type="button"
+                  onClick={() => openCopilotForIntent(action.intent)}
+                  disabled={isPending || !resolvedTeachingContext}
+                  className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <LibraryRelevancePanel
