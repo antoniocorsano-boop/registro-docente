@@ -245,6 +245,7 @@ describe('A4-R1 teacher-first Composer contract', () => {
 
     expect(source).toContain("if (!directPrepareLaunchIsBound) return;\n    setIsPrepareOpen(true);");
     expect(source).toContain("}, [launchRequest?.nonce, directPrepareLaunchIsBound]);");
+    expect(source).toContain('if (!directPrepareLaunchIsBound) setIsPrepareOpen(false);');
 
     const launchEffectStart = source.indexOf('useEffect(() => {\n    if (!launchRequest) return;');
     const launchEffectEnd = source.indexOf('}, [launchRequest?.nonce]);', launchEffectStart);
