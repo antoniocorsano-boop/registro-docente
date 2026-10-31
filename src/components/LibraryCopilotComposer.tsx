@@ -498,14 +498,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
-  const directPrepareLaunchIsBound = Boolean(
+  const directLaunchBindingsReady = Boolean(
     hasCompleteDirectLaunch
-    && directLaunchIntent === 'prepare'
     && requestedLaunchSourceId
     && selectedSource?.id === requestedLaunchSourceId
     && explicitLaunchTeachingContext
     && resolvedTeachingContext?.udaId === explicitLaunchTeachingContext.udaId
     && (resolvedTeachingContext?.lessonId ?? '') === (explicitLaunchTeachingContext.lessonId ?? '')
+  );
+  const directPrepareLaunchIsBound = Boolean(
+    directLaunchIntent === 'prepare'
+    && directLaunchBindingsReady
   );
   const missionLaunchBindingsReady = !launchRequest?.mission || Boolean(
     (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
@@ -794,6 +797,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       || !launchRequest
       || !selectedSource
       || !resolvedTeachingContext
+      || !directLaunchBindingsReady
       || directLaunchIntent === 'prepare'
     ) return;
 
@@ -874,6 +878,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [
     launchRequest?.nonce,
     hasCompleteDirectLaunch,
+    directLaunchBindingsReady,
     directLaunchIntent,
     selectedSource?.id,
     selectedSource?.privacy,
