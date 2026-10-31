@@ -213,6 +213,15 @@ describe('A4-R1 teacher-first Composer contract', () => {
   });
 
 
+  test('direct REVIEW/LINK preserves a completed resolution key across canonical source updates', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('let resolutionCompleted = false;');
+    expect(source).toContain('resolutionCompleted = true;');
+    expect(source).toContain('if (!resolutionCompleted && directLaunchResolutionKeyRef.current === resolutionKey) {');
+  });
+
+
   test('direct REVIEW/LINK waits for the exact requested source and teaching target before resolving', async () => {
     const source = await composerSource();
 
