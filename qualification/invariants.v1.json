@@ -61,7 +61,8 @@
       "statement": "The teacher uses one coordinated Copilot surface and teacher-first preparation preserves explicit class and UDA authority without inventing targets.",
       "impactPaths": [
         "src/components/LibraryCopilotComposer.tsx",
-        "src/App.tsx"
+        "src/App.tsx",
+        "src/security/a4R1TeacherFirstComposerContract.test.ts"
       ],
       "tests": [
         "src/security/a4R1TeacherFirstComposerContract.test.ts",
