@@ -171,7 +171,15 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await addSyntheticSource(page);
 
   const card = await sourceCard(page, SOURCE_TITLE);
-  await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  const useButton = card.getByRole('button', { name: 'Usa', exact: true });
+  await useButton.click();
+  const useSurface = card.getByTestId('library-source-use-surface');
+  await expect(useSurface).toHaveAttribute('role', 'dialog');
+  await expect(useSurface).toHaveAttribute('aria-modal', 'true');
+  const useClose = useSurface.getByRole('button', { name: 'Chiudi uso materiale', exact: true });
+  await expect(useClose).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(await useSurface.evaluate(element => element.contains(document.activeElement))).toBe(true);
   await expect(card.getByText('Dove vuoi usarlo?', { exact: true })).toBeVisible();
 
   const changeContext = card.getByRole('button', { name: 'Cambia', exact: true });
@@ -191,6 +199,12 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await card.getByRole('button', { name: 'Prepara un’attività', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
+  await expect(composer).toHaveAttribute('role', 'dialog');
+  await expect(composer).toHaveAttribute('aria-modal', 'true');
+  const composerClose = composer.getByRole('button', { name: 'Chiudi Copilota', exact: true });
+  await expect(composerClose).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(await composer.evaluate(element => element.contains(document.activeElement))).toBe(true);
   await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
   await expect(composer).toHaveCSS('position', 'fixed');
   const composerBox = await composer.boundingBox();
@@ -214,15 +228,18 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(consent).toHaveCount(1);
   await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
 
-  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await composerClose.click();
   await expect(composer).toBeHidden();
-  const useSurface = card.getByTestId('library-source-use-surface');
+  await expect(card.getByRole('button', { name: 'Prepara un’attività', exact: true })).toBeFocused();
   await expect(useSurface).toBeVisible();
   await expect(useSurface).toHaveCSS('position', 'fixed');
   const useSurfaceBox = await useSurface.boundingBox();
   expect(useSurfaceBox).toBeTruthy();
   expect(Math.abs(useSurfaceBox.height - 844)).toBeLessThanOrEqual(2);
   expect(Math.abs(useSurfaceBox.y)).toBeLessThanOrEqual(2);
-  await expect(useSurface.getByRole('button', { name: 'Chiudi uso materiale', exact: true })).toBeVisible();
+  await expect(useClose).toBeVisible();
+  await useClose.click();
+  await expect(useSurface).toBeHidden();
+  await expect(useButton).toBeFocused();
 });
 
