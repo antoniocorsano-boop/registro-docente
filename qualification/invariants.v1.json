@@ -243,6 +243,18 @@
       "tests": [
         "src/security/lsm01cSemanticMemoryVendorContract.test.ts"
       ]
+    },
+    {
+      "id": "LSM-01C-I02",
+      "owner": "LSM-01C-A",
+      "statement": "Registro reaches semantic memory only through an explicit session-scoped HTTP loopback boundary: construction performs no network request, non-loopback endpoints fail before fetch, POST operations require bearer authentication, redirects/caching/credentials are disabled, and every shared envelope is validated.",
+      "impactPaths": [
+        "src/semanticMemory/",
+        "src/security/lsm01cHttpClient.test.ts"
+      ],
+      "tests": [
+        "src/security/lsm01cHttpClient.test.ts"
+      ]
     }
   ]
 }
