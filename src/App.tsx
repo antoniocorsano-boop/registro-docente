@@ -118,6 +118,13 @@ import {
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
+import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
+import {
+  createSemanticMemoryHttpClient,
+  SemanticMemoryHttpError
+} from './semanticMemory/httpClient';
+import { buildRegistroSemanticMemorySnapshot } from './semanticMemory/projections';
+import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
@@ -140,6 +147,10 @@ import { PlanningProfileView } from './components/planning/PlanningProfileView';
 import { LibraryView } from './components/LibraryView';
 import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
 import { CopilotExperience } from './components/CopilotExperience';
+import type {
+  SemanticMemoryConnectInput,
+  SemanticMemorySessionView
+} from './components/SemanticMemorySettings';
 import type {
   CopilotLaunchContext,
   CopilotMissionLaunchV1,
@@ -241,6 +252,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     initialSnapshot.copilotState ?? createEmptyCopilotState()
   );
 
+  // 5f. Local semantic memory connection is explicitly session-only and never enters AppSettings or the vault.
+  const [semanticMemorySession, setSemanticMemorySession] = useState<SemanticMemorySessionView>({
+    status: 'disconnected',
+    endpoint: null,
+    health: null,
+    sync: null
+  });
+  const [isSemanticMemorySyncing, setIsSemanticMemorySyncing] = useState(false);
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const navigationVersionRef = useRef(0);
@@ -296,10 +316,92 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const libraryRef = useRef(library);
   const professionalMemoryRef = useRef(professionalMemory);
   const copilotStateRef = useRef(copilotState);
+  const semanticMemoryPortRef = useRef<LocalSemanticMemoryPort | null>(null);
   const missionExecutionGrantsRef = useRef(new Map<string, CopilotMissionExecutionGrantV1>());
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
+
+  const handleConnectSemanticMemory = useCallback(async ({
+    endpoint,
+    token
+  }: SemanticMemoryConnectInput): Promise<boolean> => {
+    setSemanticMemorySession({
+      status: 'connecting',
+      endpoint: null,
+      health: null,
+      sync: null
+    });
+    try {
+      const client = createSemanticMemoryHttpClient({ endpointUrl: endpoint, token });
+      const health = await client.health();
+      semanticMemoryPortRef.current = client;
+      setSemanticMemorySession({
+        status: health.status,
+        endpoint: new URL(endpoint).origin,
+        health,
+        sync: null
+      });
+      return true;
+    } catch (error) {
+      semanticMemoryPortRef.current = null;
+      setSemanticMemorySession({
+        status: 'error',
+        endpoint: null,
+        health: null,
+        sync: null,
+        errorCode: error instanceof SemanticMemoryHttpError ? error.code : 'CONNECTION_FAILED'
+      });
+      return false;
+    }
+  }, []);
+
+  const handleDisconnectSemanticMemory = useCallback(() => {
+    semanticMemoryPortRef.current = null;
+    setSemanticMemorySession({
+      status: 'disconnected',
+      endpoint: null,
+      health: null,
+      sync: null
+    });
+    setIsSemanticMemorySyncing(false);
+  }, []);
+
+  const handleSyncSemanticMemory = useCallback(async (): Promise<void> => {
+    const port = semanticMemoryPortRef.current;
+    const endpoint = semanticMemorySession.endpoint;
+    const usable = semanticMemorySession.status === 'ready' || semanticMemorySession.status === 'degraded';
+    if (!port || !endpoint || !usable || isSemanticMemorySyncing) return;
+
+    setIsSemanticMemorySyncing(true);
+    try {
+      const projections = await buildRegistroSemanticMemorySnapshot({
+        librarySources: libraryRef.current.sources,
+        professionalMemory: professionalMemoryRef.current
+      });
+      const result = await syncRegistroSemanticMemory({
+        port,
+        endpoint,
+        projections
+      });
+      setSemanticMemorySession(previous => ({
+        ...previous,
+        status: result.status === 'rebuild-required' ? 'rebuild-required' : previous.status,
+        sync: result,
+        ...(result.status === 'failed' || result.status === 'reconciliation-required'
+          ? { errorCode: result.errorCode }
+          : { errorCode: undefined })
+      }));
+    } catch {
+      setSemanticMemorySession(previous => ({
+        ...previous,
+        sync: null,
+        errorCode: 'SYNC_FAILED'
+      }));
+    } finally {
+      setIsSemanticMemorySyncing(false);
+    }
+  }, [isSemanticMemorySyncing, semanticMemorySession.endpoint, semanticMemorySession.status]);
 
   const handleNavigateTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
@@ -1800,6 +1902,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             planning={planning}
             currentClassName={currentClass?.name ?? null}
             embeddingConfig={settings.embeddingConfig}
+            semanticMemoryPort={
+              semanticMemorySession.status === 'ready' || semanticMemorySession.status === 'degraded'
+                ? semanticMemoryPortRef.current
+                : null
+            }
+            semanticMemorySession={semanticMemorySession}
+            isSemanticMemorySyncing={isSemanticMemorySyncing}
+            onConnectSemanticMemory={handleConnectSemanticMemory}
+            onDisconnectSemanticMemory={handleDisconnectSemanticMemory}
+            onSyncSemanticMemory={handleSyncSemanticMemory}
             onAddSource={handleAddLibrarySource}
             onUpdateSource={handleUpdateLibrarySource}
             onLinkSource={handleLinkLibrarySource}
