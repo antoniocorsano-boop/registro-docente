@@ -10,6 +10,7 @@ import type {
   SemanticMemoryUpsertRequestV1,
 } from '../../vendor/contextual-copilot-semantic-memory/index';
 import type { LibrarySource, LibraryStateV1 } from '../library/types';
+import { buildLibrarySemanticMemoryProjections } from './projections';
 import { retrieveLibrarySourcesFromSemanticMemory } from './libraryRetrieval';
 
 function source(id: string, title: string, overrides: Partial<LibrarySource> = {}): LibrarySource {
@@ -30,9 +31,15 @@ function state(sources: LibrarySource[]): LibraryStateV1 {
   return { schemaVersion: 1, sources };
 }
 
+async function revisionMap(sources: LibrarySource[]): Promise<Map<string, string>> {
+  const projections = await buildLibrarySemanticMemoryProjections(sources);
+  return new Map(projections.map(projection => [projection.sourceId, projection.revision]));
+}
+
 function hit(input: {
   sourceId: string;
   score: number;
+  revision?: string;
   chunkId?: string;
   namespace?: string;
   sourceAppId?: string;
@@ -43,7 +50,7 @@ function hit(input: {
     sourceAppId: input.sourceAppId ?? 'registro-docente',
     sourceType: input.sourceType ?? 'library-source',
     sourceId: input.sourceId,
-    revision: `rev-${input.sourceId}`,
+    revision: input.revision ?? `stale-${input.sourceId}`,
     namespace: input.namespace ?? 'registro/library',
     canonicalRef: `registro://library/source/${input.sourceId}`,
     chunkId: input.chunkId ?? `${input.sourceId}-chunk`,
@@ -77,18 +84,20 @@ class SearchPort implements LocalSemanticMemoryPort {
 
 describe('LSM-01C-A Library retrieval through canonical state', () => {
   test('uses the bounded Library namespace/class request and deduplicates chunks by top score', async () => {
+    const librarySources = [
+      source('alpha', 'Alfa'),
+      source('beta', 'Beta'),
+    ];
+    const revisions = await revisionMap(librarySources);
     const port = new SearchPort({
       schema: 'trama.semantic-memory-search-response/v1',
       hits: [
-        hit({ sourceId: 'beta', score: 0.72, chunkId: 'beta-low' }),
-        hit({ sourceId: 'alpha', score: 0.91, chunkId: 'alpha-top' }),
-        hit({ sourceId: 'beta', score: 0.88, chunkId: 'beta-top' }),
+        hit({ sourceId: 'beta', revision: revisions.get('beta'), score: 0.72, chunkId: 'beta-low' }),
+        hit({ sourceId: 'alpha', revision: revisions.get('alpha'), score: 0.91, chunkId: 'alpha-top' }),
+        hit({ sourceId: 'beta', revision: revisions.get('beta'), score: 0.88, chunkId: 'beta-top' }),
       ],
     });
-    const library = state([
-      source('alpha', 'Alfa'),
-      source('beta', 'Beta'),
-    ]);
+    const library = state(librarySources);
 
     const result = await retrieveLibrarySourcesFromSemanticMemory({
       query: 'energia e acqua',
@@ -113,19 +122,21 @@ describe('LSM-01C-A Library retrieval through canonical state', () => {
   });
 
   test('orders equal top scores deterministically by current canonical title then id', async () => {
-    const port = new SearchPort({
-      schema: 'trama.semantic-memory-search-response/v1',
-      hits: [
-        hit({ sourceId: 'zeta', score: 0.8 }),
-        hit({ sourceId: 'alpha', score: 0.8 }),
-        hit({ sourceId: 'beta', score: 0.8 }),
-      ],
-    });
-    const library = state([
+    const librarySources = [
       source('zeta', 'Zeta'),
       source('beta', 'Alfa'),
       source('alpha', 'Alfa'),
-    ]);
+    ];
+    const revisions = await revisionMap(librarySources);
+    const port = new SearchPort({
+      schema: 'trama.semantic-memory-search-response/v1',
+      hits: [
+        hit({ sourceId: 'zeta', revision: revisions.get('zeta'), score: 0.8 }),
+        hit({ sourceId: 'alpha', revision: revisions.get('alpha'), score: 0.8 }),
+        hit({ sourceId: 'beta', revision: revisions.get('beta'), score: 0.8 }),
+      ],
+    });
+    const library = state(librarySources);
 
     const result = await retrieveLibrarySourcesFromSemanticMemory({ query: 'tema', port, library });
     expect(result).toEqual({
@@ -139,32 +150,52 @@ describe('LSM-01C-A Library retrieval through canonical state', () => {
   });
 
   test('ignores deleted, privacy-changed, restricted and foreign hits even when their score is higher', async () => {
-    const port = new SearchPort({
-      schema: 'trama.semantic-memory-search-response/v1',
-      hits: [
-        hit({ sourceId: 'deleted', score: 0.99 }),
-        hit({ sourceId: 'student', score: 0.98 }),
-        hit({ sourceId: 'restricted', score: 0.97 }),
-        hit({ sourceId: 'foreign-app', score: 0.96, sourceAppId: 'another-app' }),
-        hit({ sourceId: 'foreign-type', score: 0.95, sourceType: 'professional-memory-entry' }),
-        hit({ sourceId: 'foreign-namespace', score: 0.94, namespace: 'registro/professional-memory' }),
-        hit({ sourceId: 'eligible', score: 0.7 }),
-      ],
-    });
-    const library = state([
+    const librarySources = [
       source('student', 'Studente', { privacy: 'student-personal' }),
       source('restricted', 'Riservato', { status: 'restricted' }),
       source('foreign-app', 'Foreign app'),
       source('foreign-type', 'Foreign type'),
       source('foreign-namespace', 'Foreign namespace'),
       source('eligible', 'Valido'),
-    ]);
+    ];
+    const revisions = await revisionMap(librarySources);
+    const port = new SearchPort({
+      schema: 'trama.semantic-memory-search-response/v1',
+      hits: [
+        hit({ sourceId: 'deleted', score: 0.99 }),
+        hit({ sourceId: 'student', score: 0.98 }),
+        hit({ sourceId: 'restricted', score: 0.97 }),
+        hit({ sourceId: 'foreign-app', revision: revisions.get('foreign-app'), score: 0.96, sourceAppId: 'another-app' }),
+        hit({ sourceId: 'foreign-type', revision: revisions.get('foreign-type'), score: 0.95, sourceType: 'professional-memory-entry' }),
+        hit({ sourceId: 'foreign-namespace', revision: revisions.get('foreign-namespace'), score: 0.94, namespace: 'registro/professional-memory' }),
+        hit({ sourceId: 'eligible', revision: revisions.get('eligible'), score: 0.7 }),
+      ],
+    });
+    const library = state(librarySources);
 
     const result = await retrieveLibrarySourcesFromSemanticMemory({ query: 'tema', port, library });
     expect(result).toEqual({
       status: 'ranked',
       candidates: [{ sourceId: 'eligible', similarity: 0.7 }],
     });
+  });
+
+  test('rejects a hit whose indexed revision no longer matches current canonical source content', async () => {
+    const beforeEdit = source('one', 'Uno', { notes: 'Nota precedente' });
+    const [oldProjection] = await buildLibrarySemanticMemoryProjections([beforeEdit]);
+    const afterEdit = { ...beforeEdit, notes: 'Nota aggiornata dopo la sincronizzazione' };
+    const port = new SearchPort({
+      schema: 'trama.semantic-memory-search-response/v1',
+      hits: [hit({ sourceId: 'one', revision: oldProjection.revision, score: 0.99 })],
+    });
+
+    const result = await retrieveLibrarySourcesFromSemanticMemory({
+      query: 'tema',
+      port,
+      library: state([afterEdit]),
+    });
+
+    expect(result).toEqual({ status: 'unavailable', reason: 'NO_SEMANTIC_MATCH', candidates: [] });
   });
 
   test('empty query and empty or fully stale hits return NO_SEMANTIC_MATCH', async () => {
