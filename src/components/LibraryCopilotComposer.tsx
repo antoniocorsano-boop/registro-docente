@@ -221,6 +221,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const preserveGovernedContinuationOnReopenRef = useRef(false);
+  const directLaunchResolutionKeyRef = useRef<string | null>(null);
 
   const hasLaunchTeachingTarget = Boolean(
     launchRequest?.context.udaId || launchRequest?.context.lessonId
@@ -307,6 +308,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       ? resolveLaunchTeachingContext(launchRequest, udas)
       : resolveLaunchTeachingContextFromCatalog(launchRequest, teachingUdaCatalog),
     [launchRequest?.nonce, launchRequest?.mission, udas, teachingUdaCatalog]
+  );
+  const directLaunchIntent = launchRequest?.context.intent ?? null;
+  const hasCompleteDirectLaunch = Boolean(
+    launchRequest
+    && !launchRequest.mission
+    && directLaunchIntent
+    && launchRequest.context.sourceId
+    && hasLaunchTeachingTarget
+    && explicitLaunchTeachingContext
   );
 
   const teachingSuggestion = useMemo(() => {
@@ -459,6 +469,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [currentResolutionSnapshot]);
 
   const requestedLaunchSourceId = launchRequest?.context.sourceId ?? null;
+  const directPrepareLaunchIsBound = Boolean(
+    hasCompleteDirectLaunch
+    && directLaunchIntent === 'prepare'
+    && requestedLaunchSourceId
+    && selectedSource?.id === requestedLaunchSourceId
+    && explicitLaunchTeachingContext
+    && resolvedTeachingContext?.udaId === explicitLaunchTeachingContext.udaId
+    && (resolvedTeachingContext?.lessonId ?? '') === (explicitLaunchTeachingContext.lessonId ?? '')
+  );
   const missionLaunchBindingsReady = !launchRequest?.mission || Boolean(
     (!requestedLaunchSourceId || selectedSourceId === requestedLaunchSourceId)
     && (!launchRequest.context.className || resolvedTeachingContext?.className === launchRequest.context.className)
@@ -628,7 +647,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-    if (launchRequest.mission) setMessage(launchRequest.mission.objective);
+    if (launchRequest.mission) {
+      setMessage(launchRequest.mission.objective);
+    } else if (hasCompleteDirectLaunch) {
+      setMessage(
+        directLaunchIntent === 'prepare'
+          ? 'Prepara una attività da questa fonte nel contesto didattico corrente.'
+          : directLaunchIntent === 'review'
+            ? 'Rivedi questa fonte nel contesto didattico corrente.'
+            : 'Collega questa fonte al lavoro didattico corrente.'
+      );
+    }
 
     if (requestedLaunchSourceId) {
       const sourceExists = library.sources.some(source => source.id === requestedLaunchSourceId);
@@ -645,6 +674,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       return;
     }
 
+    if (hasCompleteDirectLaunch && directLaunchIntent === 'prepare') {
+      setIsPrepareOpen(true);
+    }
     setErrorMessage(null);
     // A launch is an event identified by nonce. Library/source mutations must not replay it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -684,14 +716,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
-    setIsPrepareOpen(false);
+    if (!directPrepareLaunchIsBound) setIsPrepareOpen(false);
     setResolution(null);
     setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
     setIsLinkConfirmationOpen(false);
     setLinkError(null);
     setLinkSuccess(null);
-  }, [selectedSourceId, teachingContextFingerprint]);
+  }, [selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound]);
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
@@ -702,6 +734,95 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setLinkError(null);
     setLinkSuccess(null);
   }, [selectedSource?.privacy, selectedSource?.status]);
+
+  useEffect(() => {
+    if (
+      !hasCompleteDirectLaunch
+      || !launchRequest
+      || !selectedSource
+      || !resolvedTeachingContext
+      || directLaunchIntent === 'prepare'
+    ) return;
+
+    const actionId = directLaunchIntent === 'review'
+      ? 'review-source'
+      : directLaunchIntent === 'link'
+        ? 'link-source-to-uda'
+        : null;
+    if (!actionId) return;
+
+    const resolutionKey = [
+      launchRequest.nonce,
+      directLaunchIntent,
+      selectedSource.id,
+      selectedSource.privacy,
+      selectedSource.status,
+      teachingContextFingerprint
+    ].join('|');
+    if (directLaunchResolutionKeyRef.current === resolutionKey) return;
+    directLaunchResolutionKeyRef.current = resolutionKey;
+
+    const canonicalMessage = directLaunchIntent === 'review'
+      ? 'Rivedi questa fonte nel contesto didattico corrente.'
+      : 'Collega questa fonte al lavoro didattico corrente.';
+    const input = {
+      source: selectedSource,
+      teachingContext: resolvedTeachingContext,
+      planningContext: resolvedPlanningContext,
+      message: canonicalMessage
+    };
+    let cancelled = false;
+
+    setIsResolving(true);
+    setGuidanceMessage(null);
+    setErrorMessage(null);
+    setResolution(null);
+    setIsReviewUnavailableOpen(false);
+    setIsLinkConfirmationOpen(false);
+    setLinkError(null);
+    setLinkSuccess(null);
+
+    void resolveLibraryCopilotRequest(input)
+      .then(nextResolution => {
+        if (cancelled) return;
+        const requestedAction = nextResolution.actions.find(action => action.id === actionId) ?? null;
+        if (
+          directLaunchIntent === 'review'
+          && contextualReview?.status === 'unavailable'
+          && !requestedAction
+        ) {
+          setIsReviewUnavailableOpen(true);
+        }
+        setResolution({
+          ...nextResolution,
+          actions: requestedAction ? [requestedAction] : []
+        });
+        if (!requestedAction && directLaunchIntent === 'link') {
+          setGuidanceMessage('Questo collegamento non è disponibile nel contesto corrente.');
+        }
+      })
+      .catch(error => {
+        if (cancelled) return;
+        setErrorMessage(error instanceof Error ? error.message : 'Il Copilota non può completare questo passaggio nel contesto corrente.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsResolving(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    launchRequest?.nonce,
+    hasCompleteDirectLaunch,
+    directLaunchIntent,
+    selectedSource?.id,
+    selectedSource?.privacy,
+    selectedSource?.status,
+    teachingContextFingerprint,
+    resolvedPlanningContext,
+    contextualReview
+  ]);
 
 
   useEffect(() => {
@@ -1211,7 +1332,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       </div>
 
       <div className="space-y-4 p-4">
-        {!isBoundMissionFlow && (
+        {!hasCompleteDirectLaunch && !isBoundMissionFlow && (
           <section className="space-y-3" data-testid="teacher-first-copilot-entry">
             <div>
               <h3 className="text-sm font-bold text-slate-100">Cosa vuoi fare?</h3>
