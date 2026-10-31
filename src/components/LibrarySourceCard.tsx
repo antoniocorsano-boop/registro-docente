@@ -154,6 +154,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const useSurfaceRef = useRef<HTMLDivElement | null>(null);
   const useSurfaceCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const useButtonRef = useRef<HTMLButtonElement | null>(null);
+  const useActionButtonRefs = useRef<Partial<Record<LibraryLaunchIntent, HTMLButtonElement | null>>>({});
   const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
@@ -313,6 +314,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     if (!pendingUseIntent || professionalClassification !== 'Professionale' || !resolvedTeachingContext) return;
     const intent = pendingUseIntent;
     setPendingUseIntent(null);
+    const returnFocusTarget = useActionButtonRefs.current[intent];
+    if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
     openCopilotForIntent(intent);
   }, [
     pendingUseIntent,
@@ -645,6 +648,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                 {LIBRARY_USE_ACTIONS.map(action => (
                   <button
                     key={action.intent}
+                    ref={element => { useActionButtonRefs.current[action.intent] = element; }}
                     type="button"
                     onClick={() => requestCopilotForIntent(action.intent)}
                     disabled={isPending || !resolvedTeachingContext}
