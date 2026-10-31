@@ -185,13 +185,36 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
   await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
+  await expect(composer).toHaveCSS('position', 'fixed');
+  const composerBox = await composer.boundingBox();
+  expect(composerBox).toBeTruthy();
+  expect(Math.abs(composerBox.height - 844)).toBeLessThanOrEqual(2);
+  expect(Math.abs(composerBox.y)).toBeLessThanOrEqual(2);
+  const composerScroll = composer.getByTestId('library-copilot-scroll');
+  await expect(composerScroll).toHaveCount(1);
+  await expect(composerScroll).toHaveCSS('overflow-y', 'auto');
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+
   const classify = composer.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
   await expect(classify).toBeVisible();
   await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
 
   await classify.click();
   await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
-  await expect(composer.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
+  const consent = composer.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
+  await expect(consent).toBeVisible();
+  await expect(consent).toHaveCount(1);
   await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
+
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  await expect(composer).toBeHidden();
+  const useSurface = card.getByTestId('library-source-use-surface');
+  await expect(useSurface).toBeVisible();
+  await expect(useSurface).toHaveCSS('position', 'fixed');
+  const useSurfaceBox = await useSurface.boundingBox();
+  expect(useSurfaceBox).toBeTruthy();
+  expect(Math.abs(useSurfaceBox.height - 844)).toBeLessThanOrEqual(2);
+  expect(Math.abs(useSurfaceBox.y)).toBeLessThanOrEqual(2);
+  await expect(useSurface.getByRole('button', { name: 'Chiudi uso materiale', exact: true })).toBeVisible();
 });
 
