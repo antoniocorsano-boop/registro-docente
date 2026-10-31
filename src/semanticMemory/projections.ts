@@ -3,10 +3,11 @@ import type {
   ProfessionalMemoryAllowedClassification,
   ProfessionalMemoryStateV1,
 } from '../memory/types';
-import {
-  type SemanticMemoryProjectionV1,
-  validateSemanticMemoryProjection,
-} from '../../vendor/contextual-copilot-semantic-memory';
+import type { SemanticMemoryProjectionV1 } from '../../vendor/contextual-copilot-semantic-memory/index';
+import { validateSemanticMemoryProjection as validateSemanticMemoryProjectionRuntime } from '../../vendor/contextual-copilot-semantic-memory/src/index.js';
+
+type ValidateSemanticMemoryProjection = typeof import('../../vendor/contextual-copilot-semantic-memory/index').validateSemanticMemoryProjection;
+const validateSemanticMemoryProjection = validateSemanticMemoryProjectionRuntime as ValidateSemanticMemoryProjection;
 
 const SOURCE_APP_ID = 'registro-docente';
 const LIBRARY_NAMESPACE = 'registro/library';
