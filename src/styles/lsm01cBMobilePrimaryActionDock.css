@@ -3,9 +3,23 @@
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)) !important;
   }
 
-  [data-testid="library-copilot-composer"]
+  [data-testid="library-copilot-composer"]:has([data-testid="library-copilot-prepare-disclosure"])
     [data-testid="library-copilot-prepare-disclosure"]
-    :is(button.border-violet-700, button.bg-violet-200, button.bg-amber-200) {
+    > div:nth-child(2) > button.border-violet-700,
+  [data-testid="library-copilot-composer"]:has([data-testid="library-copilot-prepare-disclosure"])
+    [data-testid="library-copilot-prepare-disclosure"]
+    button.bg-violet-200,
+  [data-testid="library-copilot-composer"]:has([data-testid="library-copilot-prepare-disclosure"])
+    [data-testid="library-copilot-prepare-disclosure"]
+    button.bg-amber-200,
+  [data-testid="library-copilot-composer"]:not(:has([data-testid="library-copilot-prepare-disclosure"])):has([data-testid="library-copilot-link-confirmation"])
+    [data-testid="library-copilot-link-confirmation"] button.bg-cyan-600,
+  [data-testid="library-copilot-composer"]:not(:has([data-testid="library-copilot-prepare-disclosure"])):not(:has([data-testid="library-copilot-link-confirmation"]))
+    [data-testid="library-copilot-link-action"],
+  [data-testid="library-copilot-composer"]:not(:has([data-testid="library-copilot-prepare-disclosure"])):not(:has([data-testid="library-copilot-link-confirmation"])):not(:has([data-testid="library-copilot-link-action"]))
+    [data-testid="teacher-first-preview"] button.bg-cyan-500,
+  [data-testid="library-copilot-composer"]:not(:has([data-testid="library-copilot-prepare-disclosure"])):not(:has([data-testid="library-copilot-link-confirmation"])):not(:has([data-testid="library-copilot-link-action"])):not(:has([data-testid="teacher-first-preview"]))
+    form button[type="submit"].bg-cyan-600 {
     position: fixed;
     left: 1rem;
     right: 1rem;
