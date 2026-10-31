@@ -215,6 +215,10 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(composer).toBeVisible();
   await expect(composer).toHaveAttribute('role', 'dialog');
   await expect(composer).toHaveAttribute('aria-modal', 'true');
+  await expect(useSurface).not.toHaveAttribute('role', 'dialog');
+  await expect(useSurface).not.toHaveAttribute('aria-modal', 'true');
+  await expect(useSurface).toHaveAttribute('aria-hidden', 'true');
+  await expect(useSurface).toHaveAttribute('inert', '');
   const composerClose = composer.getByRole('button', { name: 'Chiudi Copilota', exact: true });
   await expect(composerClose).toBeFocused();
   await page.keyboard.press('Shift+Tab');
@@ -244,6 +248,10 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
 
   await composerClose.click();
   await expect(composer).toBeHidden();
+  await expect(useSurface).toHaveAttribute('role', 'dialog');
+  await expect(useSurface).toHaveAttribute('aria-modal', 'true');
+  await expect(useSurface).not.toHaveAttribute('aria-hidden', 'true');
+  await expect(useSurface).not.toHaveAttribute('inert', '');
   await expect(card.getByRole('button', { name: 'Prepara un’attività', exact: true })).toBeFocused();
   await expect(useSurface).toBeVisible();
   await expect(useSurface).toHaveCSS('position', 'fixed');

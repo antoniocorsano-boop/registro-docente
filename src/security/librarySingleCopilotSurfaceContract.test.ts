@@ -138,6 +138,17 @@ describe('single contextual Copilot surface contract', () => {
     expect(composerSource).not.toContain('[selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound, copilotContextFingerprint]');
   });
 
+  test('mobile Library use surface becomes assistive-technology inert while the Copilot modal is open', () => {
+    expect(appSource).toContain("isCopilotOpen={copilotSurfaceMode === 'compose'}");
+    expect(libraryViewSource).toContain('isCopilotOpen');
+    expect(libraryViewSource).toContain('isCopilotOpen={isCopilotOpen}');
+    expect(sourceCardSource).toContain('isCopilotOpen: boolean;');
+    expect(sourceCardSource).toContain("role={isMobileDialog && !isCopilotOpen ? 'dialog' : undefined}");
+    expect(sourceCardSource).toContain('aria-modal={isMobileDialog && !isCopilotOpen ? true : undefined}');
+    expect(sourceCardSource).toContain('aria-hidden={isCopilotOpen ? true : undefined}');
+    expect(sourceCardSource).toContain('inert={isCopilotOpen ? true : undefined}');
+  });
+
   test('LibrarySourceCard is no longer a second transformation engine', () => {
     expect(sourceCardSource).not.toContain("import { LibraryProposalPanel } from './LibraryProposalPanel'");
     expect(sourceCardSource).not.toContain('resolveLibraryContextActions');
