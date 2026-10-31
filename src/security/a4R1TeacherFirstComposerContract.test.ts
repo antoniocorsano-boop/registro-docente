@@ -180,4 +180,25 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain("intent: 'review'");
     expect(source).toContain("intent: 'link'");
   });
+
+  test('complete Library action launch bypasses a second teacher-first confirmation and preserves direct PREPARE bindings', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const directLaunchIntent = launchRequest?.context.intent ?? null;');
+    expect(source).toContain('const hasCompleteDirectLaunch = Boolean(');
+    expect(source).toContain("directLaunchIntent === 'prepare'");
+    expect(source).toContain('setIsPrepareOpen(true)');
+    expect(source).toContain('const directPrepareLaunchIsBound = Boolean(');
+    expect(source).toContain('!hasCompleteDirectLaunch && !isBoundMissionFlow');
+    expect(source).toContain("directLaunchIntent === 'review'");
+    expect(source).toContain("directLaunchIntent === 'link'");
+
+    const privacyEffectStart = source.indexOf("useEffect(() => {
+    resolutionEpochRef.current += 1;
+    setResolution(null);", source.indexOf('selectedSource?.privacy'));
+    const privacyEffectEnd = source.indexOf('}, [selectedSource?.privacy, selectedSource?.status]);', privacyEffectStart);
+    const privacyEffect = source.slice(privacyEffectStart, privacyEffectEnd);
+    expect(privacyEffect).not.toContain('setIsPrepareOpen(false)');
+  });
+
 });
