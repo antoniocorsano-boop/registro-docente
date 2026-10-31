@@ -52,6 +52,21 @@ const STATUS_LABELS: Record<LibrarySource['status'], string> = {
   failed: 'Da riprovare'
 };
 
+type ProfessionalClassificationLabel = 'Da classificare' | 'Professionale' | 'Da rivedere';
+
+function professionalClassificationLabel(source: LibrarySource): ProfessionalClassificationLabel {
+  if (
+    source.privacy === 'student-personal' ||
+    source.status === 'needs-review' ||
+    source.status === 'restricted' ||
+    source.status === 'failed'
+  ) {
+    return 'Da rivedere';
+  }
+  if (source.privacy === 'teacher-professional') return 'Professionale';
+  return 'Da classificare';
+}
+
 const ACTIVITY_LABELS: Record<UdaActivityType, string> = {
   teoria: 'Teoria',
   laboratorio: 'Laboratorio',
@@ -102,6 +117,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
+  const professionalClassification = professionalClassificationLabel(source);
 
   const selectedContextUda = teachingUdaCatalog.find(candidate => candidate.id === contextUdaId);
   const contextLessons = selectedContextUda?.lessons ?? [];
@@ -146,6 +162,16 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setWebCapturedText('');
     setWebCaptureError(null);
   }, [isSelected, source.id, udas, teachingUdaCatalog, currentClassName, lastExplicitTeachingContext]);
+
+  const handleProfessionalClassification = async () => {
+    if (professionalClassification !== 'Da classificare') return;
+    if (!confirm('Confermo che è materiale professionale del docente e non contiene dati personali degli studenti.')) return;
+    try {
+      await onUpdate(source.id, { privacy: 'teacher-professional' });
+    } catch {
+      // The parent keeps the committed source and exposes the durable error state.
+    }
+  };
 
   const handleRename = async () => {
     const title = prompt('Nuovo titolo della fonte:', source.title)?.trim();
@@ -240,6 +266,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             <span>{KIND_LABELS[source.kind]}</span>
             <span aria-hidden="true">·</span>
             <span>{STATUS_LABELS[source.status]}</span>
+            <span aria-hidden="true">·</span>
+            <span>{professionalClassification}</span>
           </div>
           <h3 className="font-semibold text-white leading-snug break-words">{source.title}</h3>
           {source.origin && <p className="text-xs text-slate-400 mt-1 break-words">{source.origin}</p>}
@@ -278,6 +306,22 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             Gestisci
           </summary>
           <div className="mt-2 p-3 rounded-lg border border-[var(--border)] bg-slate-950/70 space-y-3">
+            {professionalClassification === 'Da classificare' && (
+              <div className="rounded-md border border-amber-700/60 bg-amber-950/20 p-3 space-y-2">
+                <p className="text-xs text-amber-100">
+                  Prima di usare questa fonte nei flussi professionali, conferma che il materiale è del docente e non contiene dati personali degli studenti.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleProfessionalClassification()}
+                  disabled={isPending}
+                  className="min-h-[44px] w-full px-3 rounded-md border border-amber-600 text-sm font-semibold text-amber-100 disabled:opacity-50"
+                >
+                  Classifica come materiale professionale
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => void handleRename()}
