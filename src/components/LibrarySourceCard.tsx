@@ -95,6 +95,29 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>, container: HTMLElement | null): void {
+  if (event.key !== 'Tab' || !container) return;
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(element => !element.hasAttribute('hidden') && element.getClientRects().length > 0);
+
+  if (focusable.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   source,
   udas,
@@ -122,6 +145,13 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [webCapturedText, setWebCapturedText] = useState('');
   const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
   const [isUseSurfaceOpen, setIsUseSurfaceOpen] = useState(false);
+  const [isMobileDialog, setIsMobileDialog] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
+  const useSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const useSurfaceCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const useButtonRef = useRef<HTMLButtonElement | null>(null);
+  const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
   const professionalClassification = professionalClassificationLabel(source);
@@ -141,6 +171,30 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const selectableLocalUdas = udas.filter(uda =>
     teachingUdaCatalog.some(candidate => candidate.origin === 'registro' && candidate.id === uda.id)
   );
+
+  useLayoutEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const syncMobileDialog = () => setIsMobileDialog(query.matches);
+    syncMobileDialog();
+    query.addEventListener('change', syncMobileDialog);
+    return () => query.removeEventListener('change', syncMobileDialog);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isSelected || !isUseSurfaceOpen || !isMobileDialog) return;
+    useSurfacePreviousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : useButtonRef.current;
+    useSurfaceCloseButtonRef.current?.focus();
+
+    return () => {
+      const previous = useSurfacePreviousFocusRef.current ?? useButtonRef.current;
+      useSurfacePreviousFocusRef.current = null;
+      requestAnimationFrame(() => {
+        if (previous?.isConnected) previous.focus();
+      });
+    };
+  }, [isSelected, isUseSurfaceOpen, isMobileDialog]);
 
   useLayoutEffect(() => {
     if (!isSelected) {
@@ -311,6 +365,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
 
       <div className="flex gap-2 items-center">
         <button
+          ref={useButtonRef}
           type="button"
           onClick={() => {
             onUse(source.id);
@@ -429,15 +484,24 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
 
       {isSelected && isUseSurfaceOpen && (
         <div
+          ref={useSurfaceRef}
           data-testid="library-source-use-surface"
+          role={isMobileDialog ? 'dialog' : undefined}
+          aria-modal={isMobileDialog ? true : undefined}
+          aria-labelledby={isMobileDialog ? `library-source-use-title-${source.id}` : undefined}
+          tabIndex={isMobileDialog ? -1 : undefined}
+          onKeyDown={event => {
+            if (isMobileDialog) trapDialogFocus(event, useSurfaceRef.current);
+          }}
           className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
         >
           <div className="sticky top-0 z-10 -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] flex items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
             <div>
-              <strong className="block">Che cosa vuoi farne?</strong>
+              <strong id={`library-source-use-title-${source.id}`} className="block">Che cosa vuoi farne?</strong>
               <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
             </div>
             <button
+              ref={useSurfaceCloseButtonRef}
               type="button"
               onClick={() => setIsUseSurfaceOpen(false)}
               className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 md:hidden"
