@@ -257,6 +257,14 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   const dockPositionBeforeScroll = await consent.boundingBox();
   expect(dockPositionBeforeScroll).toBeTruthy();
   await expect(consent).toHaveCSS('position', 'fixed');
+  await composerScroll.evaluate(element => {
+    const spacer = document.createElement('div');
+    spacer.dataset.testid = 'library-copilot-dock-scroll-fixture';
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.height = '1200px';
+    spacer.style.pointerEvents = 'none';
+    element.appendChild(spacer);
+  });
   const scrollMetrics = await composerScroll.evaluate(element => ({
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight,
