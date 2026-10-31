@@ -121,6 +121,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [webCaptureOpen, setWebCaptureOpen] = useState(false);
   const [webCapturedText, setWebCapturedText] = useState('');
   const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
+  const [isUseSurfaceOpen, setIsUseSurfaceOpen] = useState(false);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
   const professionalClassification = professionalClassificationLabel(source);
@@ -146,6 +147,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       initializedSourceIdRef.current = null;
       setContextSuggestion(null);
       setContextChooserOpen(false);
+      setIsUseSurfaceOpen(false);
       setWebCaptureOpen(false);
       setWebCapturedText('');
       setWebCaptureError(null);
@@ -310,7 +312,10 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       <div className="flex gap-2 items-center">
         <button
           type="button"
-          onClick={() => onUse(source.id)}
+          onClick={() => {
+            onUse(source.id);
+            setIsUseSurfaceOpen(true);
+          }}
           disabled={isPending}
           className="min-h-[44px] px-4 rounded-lg bg-[var(--primary)] text-slate-950 font-semibold text-sm disabled:opacity-50"
         >
@@ -422,7 +427,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         </details>
       </div>
 
-      {isSelected && (
+      {isSelected && isUseSurfaceOpen && (
         <div
           data-testid="library-source-use-surface"
           className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
@@ -434,7 +439,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => onUse('')}
+              onClick={() => setIsUseSurfaceOpen(false)}
               className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 md:hidden"
               aria-label="Chiudi uso materiale"
             >
