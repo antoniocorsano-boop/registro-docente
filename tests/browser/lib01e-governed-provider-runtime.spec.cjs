@@ -279,14 +279,6 @@ async function assertFailureConsumedConsent({
   expect(requests).toHaveLength(beforeCount + 1);
 }
 
-async function openPrepareFromIntent(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill('crea una proposta didattica a partire da questo materiale');
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
-  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  await expect(disclosure).toBeVisible();
-  return disclosure;
-}
-
 test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manual recovery persists — desktop 1280x900', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const pageErrors = [];
@@ -320,7 +312,8 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
-  const disclosure = await openPrepareFromIntent(composer);
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
 
   await expect(disclosure.getByText('Browser Provider LIB-01E', { exact: true })).toBeVisible();
@@ -483,7 +476,8 @@ test('LIB-01E pending result is discarded after teaching-context change — mobi
   let composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
-  const disclosure = await openPrepareFromIntent(composer);
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
   await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
 
   await expect(disclosure.getByText('Browser Provider LIB-01E', { exact: true })).toBeVisible();
