@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
 const SOURCE_CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
+const LAUNCH_CONTEXT = new URL('../library/copilotLaunchContext.ts', import.meta.url);
 
 async function composerSource(): Promise<string> {
   return Bun.file(COMPOSER).text();
@@ -9,6 +10,10 @@ async function composerSource(): Promise<string> {
 
 async function sourceCardSource(): Promise<string> {
   return Bun.file(SOURCE_CARD).text();
+}
+
+async function launchContextSource(): Promise<string> {
+  return Bun.file(LAUNCH_CONTEXT).text();
 }
 
 describe('A4-R1 teacher-first Composer contract', () => {
@@ -155,5 +160,24 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(handlerEnd).toBeGreaterThan(handlerStart);
     expect(handler).toContain("onUpdate(source.id, { privacy: 'teacher-professional' })");
     expect(handler).not.toContain('onOpenCopilot');
+  });
+
+  test('library use surface exposes one teaching target selector and three explicit governed actions', async () => {
+    const source = await sourceCardSource();
+    const launch = await launchContextSource();
+
+    expect(source).toContain('Dove vuoi usarlo?');
+    expect(source).toContain('Prepara un’attività');
+    expect(source).toContain('Rivedi nel contesto');
+    expect(source).toContain('Collega alla UDA');
+    expect(source).toContain('::');
+    expect(source).not.toContain('UDA corrente');
+    expect(source).not.toContain('Lezione corrente');
+
+    expect(launch).toContain("export type LibraryLaunchIntent = 'prepare' | 'review' | 'link';");
+    expect(launch).toContain('intent?: LibraryLaunchIntent;');
+    expect(source).toContain("intent: 'prepare'");
+    expect(source).toContain("intent: 'review'");
+    expect(source).toContain("intent: 'link'");
   });
 });
