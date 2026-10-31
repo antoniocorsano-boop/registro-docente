@@ -1002,7 +1002,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setIsPrepareOpen(false);
 
     const framed = resolveTeacherFirstRequest(copy, knownTeacherClasses);
-    if (hasBoundLaunchContext && goal === 'material') {
+    if (hasBoundLaunchContext && (goal === 'material' || goal === 'prepare')) {
       setTeacherFirstResolution({ ...framed, goalKind: goal });
       setTeacherFirstClassId(null);
       return;
