@@ -183,8 +183,10 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
 
   const card = await sourceCard(page, SOURCE_TITLE);
   const useButton = card.getByRole('button', { name: 'Usa', exact: true });
-  await useButton.click();
   const useSurface = card.getByTestId('library-source-use-surface');
+  await expect(useSurface).toBeHidden();
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  await useButton.click();
   await expect(useSurface).toHaveAttribute('role', 'dialog');
   await expect(useSurface).toHaveAttribute('aria-modal', 'true');
   const useClose = useSurface.getByRole('button', { name: 'Chiudi uso materiale', exact: true });
@@ -205,6 +207,7 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
     await contextSelect.selectOption(target.value);
   }
   await expect(contextSelect.locator('option:checked')).toContainText(MOBILE_CLASS_NAME);
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
   expect(proposalRequests).toEqual([]);
 
   await card.getByRole('button', { name: 'Prepara un’attività', exact: true }).click();
@@ -280,6 +283,7 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
     }
     await expect(surface).toBeVisible();
     const select = await selectLibraryUseTarget(card, { udaTitle });
+    await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
     return { surface, target: await select.inputValue() };
   }
 
@@ -324,3 +328,35 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
   await expect(confirmation).toBeVisible();
   await expect(confirmation.getByText(`Destinazione: UDA · ${ALT_UDA_TITLE}`, { exact: true })).toBeVisible();
 });
+
+test('LSM-01C-B Library classifies an unknown professional source locally without opening Copilot', async ({ page }) => {
+  const classificationTitle = 'Fonte classificazione locale LSM-01C-B';
+  const proposalRequests = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && pathname === '/api/copilot/library-proposal') proposalRequests.push(request.url());
+  });
+
+  await setupFreshVault(page);
+  await openLibrary(page);
+  await addNamedSyntheticSource(page, classificationTitle, 'Materiale professionale sintetico senza dati personali degli studenti.');
+
+  const card = await sourceCard(page, classificationTitle);
+  await expect(card.getByText('Da classificare', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  await card.getByText('Gestisci', { exact: true }).click();
+  const classify = card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await expect(classify).toBeVisible();
+
+  page.once('dialog', dialog => {
+    expect(dialog.message()).toBe('Confermo che è materiale professionale del docente e non contiene dati personali degli studenti.');
+    void dialog.accept();
+  });
+  await classify.click();
+
+  await expect(card.getByText('Professionale', { exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  expect(proposalRequests).toEqual([]);
+});
+

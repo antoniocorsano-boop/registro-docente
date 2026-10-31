@@ -833,6 +833,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       message: canonicalMessage
     };
     let cancelled = false;
+    let resolutionCompleted = false;
 
     setIsResolving(true);
     setGuidanceMessage(null);
@@ -846,6 +847,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     void resolveLibraryCopilotRequest(input)
       .then(nextResolution => {
         if (cancelled) return;
+        resolutionCompleted = true;
         const requestedAction = nextResolution.actions.find(action => action.id === actionId) ?? null;
         if (
           directLaunchIntent === 'review'
@@ -864,6 +866,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       })
       .catch(error => {
         if (cancelled) return;
+        if (directLaunchResolutionKeyRef.current === resolutionKey) {
+          directLaunchResolutionKeyRef.current = null;
+        }
         setErrorMessage(error instanceof Error ? error.message : 'Il Copilota non può completare questo passaggio nel contesto corrente.');
       })
       .finally(() => {
@@ -872,7 +877,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     return () => {
       cancelled = true;
-      if (directLaunchResolutionKeyRef.current === resolutionKey) {
+      if (!resolutionCompleted && directLaunchResolutionKeyRef.current === resolutionKey) {
         directLaunchResolutionKeyRef.current = null;
       }
       setIsResolving(false);

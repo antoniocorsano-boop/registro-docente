@@ -240,6 +240,10 @@ test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-fre
   await cancelButton.click();
   await expect(confirmation).toBeHidden();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+  const useSurface = card.getByTestId('library-source-use-surface');
+  await expect(useSurface).toBeVisible();
+  await useSurface.getByRole('button', { name: 'Chiudi uso materiale', exact: true }).click();
+  await expect(useSurface).toBeHidden();
   await card.getByText('Gestisci', { exact: true }).click();
   await expect(card.getByRole('button', { name: 'Scollega', exact: true })).toHaveCount(0);
 
