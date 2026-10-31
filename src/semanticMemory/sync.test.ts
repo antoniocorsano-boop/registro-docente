@@ -132,6 +132,54 @@ describe('LSM-01C-A explicit CAS synchronization', () => {
     ]?.revision).toBe('rev-2');
   });
 
+  test('rejects desired projections outside the Registro consumer authority before mutation', async () => {
+    const port = new RecordingPort();
+    const foreignProjection: SemanticMemoryProjectionV1 = {
+      ...projection('foreign-source', 'rev-foreign'),
+      sourceAppId: 'another-consumer',
+      canonicalRef: 'another://library/source/foreign-source',
+    };
+
+    const result = await syncRegistroSemanticMemory({
+      port,
+      endpoint: ENDPOINT,
+      projections: [foreignProjection],
+      storage: new MemoryStorage(),
+    });
+
+    expect(result.status).toBe('failed');
+    expect(result.errorCode).toBe('FOREIGN_SOURCE');
+    expect(port.upsertCalls).toHaveLength(0);
+    expect(port.removeCalls).toHaveLength(0);
+  });
+
+  test('ignores foreign-consumer ledger entries instead of issuing cross-consumer removals', async () => {
+    const storage = new MemoryStorage();
+    const foreignKey = semanticMemorySourceKey({
+      sourceAppId: 'another-consumer',
+      sourceType: 'library-source',
+      sourceId: 'foreign-source',
+    });
+    storage.setItem('registro.semantic-memory-sync-ledger.v1:http%3A%2F%2F127.0.0.1%3A8765', JSON.stringify({
+      schema: 'registro.semantic-memory-sync-ledger/v1',
+      endpoint: ENDPOINT,
+      sources: { [foreignKey]: { revision: 'foreign-revision' } },
+    }));
+    const port = new RecordingPort();
+
+    const result = await syncRegistroSemanticMemory({
+      port,
+      endpoint: ENDPOINT,
+      projections: [],
+      storage,
+    });
+
+    expect(result.status).toBe('synced');
+    expect(port.upsertCalls).toHaveLength(0);
+    expect(port.removeCalls).toHaveLength(0);
+    expect(loadSemanticMemorySyncLedger(ENDPOINT, storage).sources).toEqual({});
+  });
+
   test('unchanged receipt is accepted and stale desired absence removes with CAS', async () => {
     const storage = new MemoryStorage();
     const source = { sourceAppId: 'registro-docente', sourceType: 'library-source', sourceId: 'source-1' };
