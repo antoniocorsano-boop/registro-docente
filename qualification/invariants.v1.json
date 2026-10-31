@@ -62,12 +62,18 @@
       "impactPaths": [
         "src/components/LibraryCopilotComposer.tsx",
         "src/App.tsx",
-        "src/security/a4R1TeacherFirstComposerContract.test.ts"
+        "src/security/a4R1TeacherFirstComposerContract.test.ts",
+        "src/security/lib01bContextualCoreContract.test.ts",
+        "src/security/lib01cTeachingContextContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts"
       ],
       "tests": [
         "src/security/a4R1TeacherFirstComposerContract.test.ts",
         "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts",
-        "src/security/a4R1TeacherFirstRequest.test.ts"
+        "src/security/a4R1TeacherFirstRequest.test.ts",
+        "src/security/lib01bContextualCoreContract.test.ts",
+        "src/security/lib01cTeachingContextContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
