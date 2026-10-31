@@ -502,11 +502,11 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                 <option value="">Seleziona UDA o lezione</option>
                 {teachingUdaCatalog.flatMap(candidate => [
                   <option key={`${candidate.id}::uda`} value={candidate.id}>
-                    {candidate.title} · Intera UDA{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+                    {candidate.className} · {candidate.title} · Intera UDA{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
                   </option>,
                   ...candidate.lessons.map(lesson => (
                     <option key={`${candidate.id}::${lesson.id}`} value={`${candidate.id}::${lesson.id}`}>
-                      {candidate.title} · {lesson.topic}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+                      {candidate.className} · {candidate.title} · {lesson.topic}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
                     </option>
                   ))
                 ])}
