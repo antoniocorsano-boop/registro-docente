@@ -8,6 +8,8 @@ const vaultPassword = 'lsm01c-browser-qualification';
 const tokenSentinel = 'lsm01c-session-token-sentinel';
 const SOURCE_TITLE = 'Fonte sintetica LSM-01C';
 const SOURCE_TEXT = 'Materiale professionale sintetico per verificare la continuità della ricerca testuale.';
+const MOBILE_CLASS_NAME = 'Classe Sintetica LSM-01C-B';
+const MOBILE_UDA_TITLE = 'UDA Sintetica LSM-01C-B';
 
 test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
 test.setTimeout(120000);
@@ -44,6 +46,46 @@ async function addSyntheticSource(page) {
   await page.getByLabel('Contenuto').fill(SOURCE_TEXT);
   await page.getByRole('button', { name: 'Salva in biblioteca', exact: true }).click();
   await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
+}
+
+async function closePersistenceConfirmation(page) {
+  const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  await expect(heading).toBeVisible();
+  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(heading).toBeHidden();
+}
+
+async function openDrawerItem(page, label) {
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
+  await expect(item).toBeVisible();
+  await item.click();
+}
+
+async function createMobileSyntheticClass(page) {
+  page.once('dialog', dialog => dialog.accept(MOBILE_CLASS_NAME));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${MOBILE_CLASS_NAME}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
+}
+
+async function createMobileSyntheticUda(page) {
+  await openDrawerItem(page, 'UDA');
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
+  await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(MOBILE_UDA_TITLE);
+  await dialog.getByRole('combobox', { name: 'Classe', exact: true }).selectOption({ label: MOBILE_CLASS_NAME });
+  await dialog.getByLabel('Mese Inizio').selectOption('0');
+  await dialog.getByLabel('Durata Mesi').fill('10');
+  await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
+  await expect(page.getByText(MOBILE_UDA_TITLE, { exact: true }).first()).toBeVisible();
+}
+
+async function sourceCard(page, title) {
+  const heading = page.getByRole('heading', { name: title, exact: true });
+  await expect(heading).toBeVisible();
+  return heading.locator('xpath=ancestor::article');
 }
 
 test('LSM-01C connection is explicit, session-only and fails safely without device loopback', async ({ page }) => {
@@ -114,3 +156,42 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
 
   expect(pageErrors).toEqual([]);
 });
+
+test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Continua', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setupFreshVault(page);
+  await createMobileSyntheticClass(page);
+  await createMobileSyntheticUda(page);
+  await openLibrary(page);
+  await addSyntheticSource(page);
+
+  const card = await sourceCard(page, SOURCE_TITLE);
+  await card.getByRole('button', { name: 'Usa', exact: true }).click();
+  await expect(card.getByText('Dove vuoi usarlo?', { exact: true })).toBeVisible();
+
+  const changeContext = card.getByRole('button', { name: 'Cambia', exact: true });
+  if (await changeContext.isVisible().catch(() => false)) await changeContext.click();
+  const contextSelect = card.getByLabel('Dove vuoi usarlo?');
+  await expect(contextSelect).toHaveCount(1);
+  await expect(contextSelect).toBeVisible();
+  if (!(await contextSelect.inputValue())) {
+    const options = await contextSelect.locator('option').evaluateAll(nodes => nodes.map(node => ({ value: node.value, text: node.textContent || '' })));
+    const target = options.find(option => option.value && option.text.includes(MOBILE_UDA_TITLE));
+    expect(target).toBeTruthy();
+    await contextSelect.selectOption(target.value);
+  }
+
+  await card.getByRole('button', { name: 'Prepara un’attività', exact: true }).click();
+  const composer = page.getByTestId('library-copilot-composer');
+  await expect(composer).toBeVisible();
+  await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
+  const classify = composer.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await expect(classify).toBeVisible();
+  await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
+
+  await classify.click();
+  await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
+  await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
+});
+
