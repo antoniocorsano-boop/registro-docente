@@ -11,6 +11,7 @@ import {
 import {
   clearSemanticMemorySyncLedger,
   createEmptySemanticMemorySyncLedger,
+  isRegistroSemanticMemorySource,
   loadSemanticMemorySyncLedger,
   parseSemanticMemorySourceKey,
   saveSemanticMemorySyncLedger,
@@ -47,6 +48,13 @@ export interface SyncRegistroSemanticMemoryInput {
   storage?: Storage;
 }
 
+const PROFESSIONAL_MEMORY_DATA_CLASSES = new Set<SemanticMemoryProjectionV1['dataClass']>([
+  'TEACHER_PROFESSIONAL',
+  'CURRICOLO',
+  'PUBLIC_APP',
+  'AGGREGATED_NON_IDENTIFIABLE',
+]);
+
 function emptyCounts(): SemanticMemorySyncCounts {
   return { inserted: 0, replaced: 0, unchanged: 0, removed: 0, absent: 0 };
 }
@@ -57,6 +65,25 @@ function sourceOf(projection: SemanticMemoryProjectionV1): SemanticMemorySourceR
     sourceType: projection.sourceType,
     sourceId: projection.sourceId,
   };
+}
+
+function projectionBelongsToRegistro(projection: SemanticMemoryProjectionV1): boolean {
+  const source = sourceOf(projection);
+  if (!isRegistroSemanticMemorySource(source)) return false;
+
+  if (projection.sourceType === 'library-source') {
+    return projection.namespace === 'registro/library'
+      && projection.dataClass === 'TEACHER_PROFESSIONAL'
+      && projection.canonicalRef === `registro://library/source/${projection.sourceId}`;
+  }
+
+  if (projection.sourceType === 'professional-memory-entry') {
+    return projection.namespace === 'registro/professional-memory'
+      && PROFESSIONAL_MEMORY_DATA_CLASSES.has(projection.dataClass)
+      && projection.canonicalRef === `registro://professional-memory/entry/${projection.sourceId}`;
+  }
+
+  return false;
 }
 
 function sameSource(left: SemanticMemorySourceRefV1, right: SemanticMemorySourceRefV1): boolean {
@@ -127,6 +154,16 @@ export async function syncRegistroSemanticMemory(
     return failureResult(error, health, counts);
   }
 
+  if (input.projections.some(projection => !projectionBelongsToRegistro(projection))) {
+    return {
+      status: 'failed',
+      healthStatus: health.status,
+      indexRevision: health.indexRevision,
+      counts,
+      errorCode: 'FOREIGN_SOURCE',
+    };
+  }
+
   const ordered = [...input.projections].sort((left, right) => {
     return semanticMemorySourceKey(sourceOf(left)).localeCompare(semanticMemorySourceKey(sourceOf(right)));
   });
@@ -178,7 +215,7 @@ export async function syncRegistroSemanticMemory(
     for (const key of staleKeys) {
       const source = parseSemanticMemorySourceKey(key);
       const expectedRevision = ledger.sources[key]?.revision ?? null;
-      if (!source || expectedRevision === null) {
+      if (!source || !isRegistroSemanticMemorySource(source) || expectedRevision === null) {
         return {
           status: 'failed',
           healthStatus: health.status,
