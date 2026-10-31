@@ -1,0 +1,18 @@
+@media (max-width: 767px) {
+  [data-testid="library-copilot-composer"] [data-testid="library-copilot-scroll"] {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  [data-testid="library-copilot-composer"]
+    [data-testid="library-copilot-prepare-disclosure"]
+    :is(button.border-violet-700, button.bg-violet-200, button.bg-amber-200) {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 110;
+    width: calc(100% - 2rem);
+    min-height: 48px;
+    box-shadow: 0 -1rem 2.5rem 1rem rgba(2, 6, 23, 0.94);
+  }
+}
