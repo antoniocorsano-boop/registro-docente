@@ -147,9 +147,10 @@ import { PlanningProfileView } from './components/planning/PlanningProfileView';
 import { LibraryView } from './components/LibraryView';
 import { LibraryCopilotComposer } from './components/LibraryCopilotComposer';
 import { CopilotExperience } from './components/CopilotExperience';
-import type {
-  SemanticMemoryConnectInput,
-  SemanticMemorySessionView
+import {
+  SemanticMemorySettings,
+  type SemanticMemoryConnectInput,
+  type SemanticMemorySessionView
 } from './components/SemanticMemorySettings';
 import type {
   CopilotLaunchContext,
@@ -1907,11 +1908,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 ? semanticMemoryPortRef.current
                 : null
             }
-            semanticMemorySession={semanticMemorySession}
-            isSemanticMemorySyncing={isSemanticMemorySyncing}
-            onConnectSemanticMemory={handleConnectSemanticMemory}
-            onDisconnectSemanticMemory={handleDisconnectSemanticMemory}
-            onSyncSemanticMemory={handleSyncSemanticMemory}
             onAddSource={handleAddLibrarySource}
             onUpdateSource={handleUpdateLibrarySource}
             onLinkSource={handleLinkLibrarySource}
@@ -1944,6 +1940,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               onUpdateSettings={handleUpdateSettings}
               onExportBackup={handleExportBackup}
               onImportBackup={handleImportBackup}
+            />
+            <SemanticMemorySettings
+              session={semanticMemorySession}
+              isSyncing={isSemanticMemorySyncing}
+              onConnect={handleConnectSemanticMemory}
+              onDisconnect={handleDisconnectSemanticMemory}
+              onSync={handleSyncSemanticMemory}
             />
             <CopilotProactivitySettings
               settings={settings}

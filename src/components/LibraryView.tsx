@@ -18,11 +18,6 @@ import type { SemanticLibraryResolution } from '../library/semanticRetrieval';
 import { retrieveLibrarySourcesFromSemanticMemory } from '../semanticMemory/libraryRetrieval';
 import { uid } from '../utils';
 import { LibrarySourceCard } from './LibrarySourceCard';
-import {
-  SemanticMemorySettings,
-  type SemanticMemoryConnectInput,
-  type SemanticMemorySessionView
-} from './SemanticMemorySettings';
 
 interface LibraryViewProps {
   library: LibraryStateV1;
@@ -32,8 +27,6 @@ interface LibraryViewProps {
   currentClassName?: string | null;
   embeddingConfig?: LocalEmbeddingConfig;
   semanticMemoryPort?: LocalSemanticMemoryPort | null;
-  semanticMemorySession: SemanticMemorySessionView;
-  isSemanticMemorySyncing: boolean;
   isPending: boolean;
   errorMessage: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -42,9 +35,6 @@ interface LibraryViewProps {
   onUnlinkSource: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
-  onConnectSemanticMemory: (input: SemanticMemoryConnectInput) => Promise<boolean>;
-  onDisconnectSemanticMemory: () => void;
-  onSyncSemanticMemory: () => Promise<void>;
 }
 
 type LibraryFilter = 'recent' | 'linked' | 'review';
@@ -75,8 +65,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   currentClassName = null,
   embeddingConfig,
   semanticMemoryPort = null,
-  semanticMemorySession,
-  isSemanticMemorySyncing,
   isPending,
   errorMessage,
   onAddSource,
@@ -84,10 +72,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onLinkSource,
   onUnlinkSource,
   onDeleteSource,
-  onOpenCopilot,
-  onConnectSemanticMemory,
-  onDisconnectSemanticMemory,
-  onSyncSemanticMemory
+  onOpenCopilot
 }) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('recent');
@@ -141,7 +126,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setSemanticResolution(null);
     setSemanticError(null);
     setIsSemanticPending(false);
-  }, [query, library, embeddingConfig, semanticMemoryPort, semanticMemorySession.status]);
+  }, [query, library, embeddingConfig, semanticMemoryPort]);
 
   useEffect(() => () => {
     semanticRequestRef.current += 1;
@@ -381,14 +366,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <p className="text-xs leading-relaxed text-slate-400">
               Usa il motore locale configurato e non invia automaticamente i materiali a servizi remoti. Sono considerate solo fonti classificate come professionali.
             </p>
-
-            <SemanticMemorySettings
-              session={semanticMemorySession}
-              isSyncing={isSemanticMemorySyncing}
-              onConnect={onConnectSemanticMemory}
-              onDisconnect={onDisconnectSemanticMemory}
-              onSync={onSyncSemanticMemory}
-            />
 
             <button
               type="button"

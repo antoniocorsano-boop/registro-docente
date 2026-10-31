@@ -28,6 +28,14 @@ async function openLibrary(page) {
   await expect(page.getByRole('heading', { name: 'Biblioteca privata', exact: true })).toBeVisible();
 }
 
+async function openSettings(page) {
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const item = page.getByRole('complementary').getByRole('button', { name: 'Impostazioni', exact: true });
+  await expect(item).toBeVisible();
+  await item.click();
+  await expect(page.getByTestId('semantic-memory-settings')).toBeVisible();
+}
+
 async function addSyntheticSource(page) {
   await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
   await page.getByRole('button', { name: 'Testo o idea', exact: true }).click();
@@ -53,14 +61,9 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
   });
 
   await setupFreshVault(page);
-  await openLibrary(page);
-
-  const disclosure = page.getByTestId('library-semantic-search-disclosure');
-  await expect(disclosure).toBeVisible();
-  await expect(disclosure).not.toHaveAttribute('open', '');
   expect(loopbackRequests).toHaveLength(0);
 
-  await disclosure.locator('summary').click();
+  await openSettings(page);
   const settings = page.getByTestId('semantic-memory-settings');
   await expect(settings).toBeVisible();
   await expect(settings.getByLabel('Endpoint locale')).toHaveValue('http://127.0.0.1:8765');
@@ -79,6 +82,13 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
 
   const localStorageSnapshot = await page.evaluate(() => JSON.stringify({ ...window.localStorage }));
   expect(localStorageSnapshot).not.toContain(tokenSentinel);
+
+  await openLibrary(page);
+  const disclosure = page.getByTestId('library-semantic-search-disclosure');
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  await disclosure.locator('summary').click();
+  await expect(page.getByTestId('semantic-memory-settings')).toHaveCount(0);
 
   await addSyntheticSource(page);
   const search = page.locator('#library-search');
