@@ -254,14 +254,16 @@
         "src/components/LibraryView.tsx",
         "src/App.tsx",
         "src/security/lsm01cHttpClient.test.ts",
-        "src/security/lsm01cUiAdoptionContract.test.ts"
+        "src/security/lsm01cUiAdoptionContract.test.ts",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ],
       "tests": [
         "src/security/lsm01cHttpClient.test.ts",
         "src/security/lsm01cUiAdoptionContract.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/qualification-invariant-smoke.spec.cjs"
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
     }
   ]
