@@ -247,13 +247,21 @@
     {
       "id": "LSM-01C-I02",
       "owner": "LSM-01C-A",
-      "statement": "Registro reaches semantic memory only through an explicit session-scoped HTTP loopback boundary: construction performs no network request, non-loopback endpoints fail before fetch, POST operations require bearer authentication, redirects/caching/credentials are disabled, and every shared envelope is validated.",
+      "statement": "Registro reaches semantic memory only through an explicit session-scoped HTTP loopback boundary: construction and rendering perform no network request, non-loopback endpoints fail before fetch, POST operations require bearer authentication, redirects/caching/credentials are disabled, shared envelopes are validated, connection and synchronization require explicit teacher actions, and the existing local Library fallback remains available when no usable LSM session exists.",
       "impactPaths": [
         "src/semanticMemory/",
-        "src/security/lsm01cHttpClient.test.ts"
+        "src/components/SemanticMemorySettings.tsx",
+        "src/components/LibraryView.tsx",
+        "src/App.tsx",
+        "src/security/lsm01cHttpClient.test.ts",
+        "src/security/lsm01cUiAdoptionContract.test.ts"
       ],
       "tests": [
-        "src/security/lsm01cHttpClient.test.ts"
+        "src/security/lsm01cHttpClient.test.ts",
+        "src/security/lsm01cUiAdoptionContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
       ]
     }
   ]
