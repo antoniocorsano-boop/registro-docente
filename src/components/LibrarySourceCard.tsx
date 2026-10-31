@@ -32,6 +32,7 @@ interface LibrarySourceCardProps {
   onUnlink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDelete: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
+  isCopilotOpen: boolean;
 }
 
 const KIND_LABELS: Record<LibrarySource['kind'], string> = {
@@ -133,7 +134,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   onLink,
   onUnlink,
   onDelete,
-  onOpenCopilot
+  onOpenCopilot,
+  isCopilotOpen
 }) => {
   const [targetUdaId, setTargetUdaId] = useState('');
   const [contextUdaId, setContextUdaId] = useState('');
@@ -491,12 +493,14 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         <div
           ref={useSurfaceRef}
           data-testid="library-source-use-surface"
-          role={isMobileDialog ? 'dialog' : undefined}
-          aria-modal={isMobileDialog ? true : undefined}
-          aria-labelledby={isMobileDialog ? `library-source-use-title-${source.id}` : undefined}
-          tabIndex={isMobileDialog ? -1 : undefined}
+          role={isMobileDialog && !isCopilotOpen ? 'dialog' : undefined}
+          aria-modal={isMobileDialog && !isCopilotOpen ? true : undefined}
+          aria-labelledby={isMobileDialog && !isCopilotOpen ? `library-source-use-title-${source.id}` : undefined}
+          aria-hidden={isCopilotOpen ? true : undefined}
+          inert={isCopilotOpen ? true : undefined}
+          tabIndex={isMobileDialog && !isCopilotOpen ? -1 : undefined}
           onKeyDown={event => {
-            if (isMobileDialog) trapDialogFocus(event, useSurfaceRef.current);
+            if (isMobileDialog && !isCopilotOpen) trapDialogFocus(event, useSurfaceRef.current);
           }}
           className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
         >

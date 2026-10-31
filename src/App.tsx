@@ -1919,6 +1919,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onUnlinkSource={handleUnlinkLibrarySource}
             onDeleteSource={handleDeleteLibrarySource}
             onOpenCopilot={openLibraryCopilot}
+            isCopilotOpen={copilotSurfaceMode === 'compose'}
             isPending={isLibraryMutationPending}
             errorMessage={libraryMutationError}
           />

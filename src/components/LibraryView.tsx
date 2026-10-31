@@ -35,6 +35,7 @@ interface LibraryViewProps {
   onUnlinkSource: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
+  isCopilotOpen: boolean;
 }
 
 type LibraryFilter = 'recent' | 'linked' | 'review';
@@ -72,7 +73,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onLinkSource,
   onUnlinkSource,
   onDeleteSource,
-  onOpenCopilot
+  onOpenCopilot,
+  isCopilotOpen
 }) => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('recent');
@@ -460,6 +462,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               onUnlink={onUnlinkSource}
               onDelete={onDeleteSource}
               onOpenCopilot={onOpenCopilot}
+              isCopilotOpen={isCopilotOpen}
             />
           ))}
         </div>
