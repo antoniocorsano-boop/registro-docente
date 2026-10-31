@@ -1,9 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 
 const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
+const SOURCE_CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
+const LAUNCH_CONTEXT = new URL('../library/copilotLaunchContext.ts', import.meta.url);
 
 async function composerSource(): Promise<string> {
   return Bun.file(COMPOSER).text();
+}
+
+async function sourceCardSource(): Promise<string> {
+  return Bun.file(SOURCE_CARD).text();
+}
+
+async function launchContextSource(): Promise<string> {
+  return Bun.file(LAUNCH_CONTEXT).text();
 }
 
 describe('A4-R1 teacher-first Composer contract', () => {
@@ -80,9 +90,21 @@ describe('A4-R1 teacher-first Composer contract', () => {
     const handlerEnd = source.indexOf('const handleTeacherFirstProceed =', handlerStart);
     const handler = source.slice(handlerStart, handlerEnd);
 
-    expect(handler).toContain("if (hasBoundLaunchContext && goal === 'material')");
+    expect(handler).toContain("if (hasBoundLaunchContext && (goal === 'material' || goal === 'prepare'))");
     expect(handler).toContain('setTeacherFirstResolution({ ...framed, goalKind: goal })');
     expect(handler).not.toContain("if (hasBoundLaunchContext && goal === 'material') {\n      setContextOverride(null)");
+  });
+
+  test('a bound source/context PREPARE choice stays in the teacher-first governed handoff', async () => {
+    const source = await composerSource();
+    const handlerStart = source.indexOf('const chooseTeacherFirstGoal =');
+    const handlerEnd = source.indexOf('const handleTeacherFirstProceed =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(handler).toMatch(/hasBoundLaunchContext[^\n]*goal === 'prepare'/);
+    expect(handler).toContain('setTeacherFirstResolution({ ...framed, goalKind: goal })');
   });
 
   test('selecting the material quick start preserves an already unambiguous automatic teaching context', async () => {
@@ -119,4 +141,149 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('assertMissionRuntimeExecutionAuthorized');
     expect(source).toContain('LibraryProposalPanel');
   });
+
+  test('library source card exposes local professional classification without entering Copilot', async () => {
+    const source = await sourceCardSource();
+
+    expect(source).toContain('Da classificare');
+    expect(source).toContain('Professionale');
+    expect(source).toContain('Da rivedere');
+    expect(source).toContain('Classifica come materiale professionale');
+    expect(source).toContain("privacy: 'teacher-professional'");
+    expect(source).toContain('non contiene dati personali degli studenti');
+
+    const handlerStart = source.indexOf('const handleProfessionalClassification = async () =>');
+    const handlerEnd = source.indexOf('const handleRename =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(handler).toContain("onUpdate(source.id, { privacy: 'teacher-professional' })");
+    expect(handler).not.toContain('onOpenCopilot');
+  });
+
+  test('library use surface exposes one teaching target selector and three explicit governed actions', async () => {
+    const source = await sourceCardSource();
+    const launch = await launchContextSource();
+
+    expect(source).toContain('Dove vuoi usarlo?');
+    expect(source).toContain('{candidate.className} · {candidate.title} · Intera UDA');
+    expect(source).toContain('{candidate.className} · {candidate.title} · {lesson.topic}');
+    expect(source).toContain('Prepara un’attività');
+    expect(source).toContain('Rivedi nel contesto');
+    expect(source).toContain('Collega alla UDA');
+    expect(source).toContain('::');
+    expect(source).not.toContain('UDA corrente');
+    expect(source).not.toContain('Lezione corrente');
+
+    expect(launch).toContain("export type LibraryLaunchIntent = 'prepare' | 'review' | 'link';");
+    expect(launch).toContain('intent?: LibraryLaunchIntent;');
+    expect(source).toContain("intent: 'prepare'");
+    expect(source).toContain("intent: 'review'");
+    expect(source).toContain("intent: 'link'");
+  });
+
+  test('complete Library action launch bypasses a second teacher-first confirmation and preserves direct PREPARE bindings', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const directLaunchIntent = launchRequest?.context.intent ?? null;');
+    expect(source).toContain('const hasCompleteDirectLaunch = Boolean(');
+    expect(source).toContain("directLaunchIntent === 'prepare'");
+    expect(source).toContain('setIsPrepareOpen(true)');
+    expect(source).toContain('const directPrepareLaunchIsBound = Boolean(');
+    expect(source).toContain('!hasCompleteDirectLaunch && !isBoundMissionFlow');
+    expect(source).toContain("directLaunchIntent === 'review'");
+    expect(source).toContain("directLaunchIntent === 'link'");
+
+    const privacyEffectStart = source.indexOf(`useEffect(() => {
+    resolutionEpochRef.current += 1;
+    setResolution(null);`, source.indexOf('selectedSource?.privacy'));
+    const privacyEffectEnd = source.indexOf('}, [selectedSource?.privacy, selectedSource?.status]);', privacyEffectStart);
+    const privacyEffect = source.slice(privacyEffectStart, privacyEffectEnd);
+    expect(privacyEffect).not.toContain('setIsPrepareOpen(false)');
+  });
+
+
+  test('direct REVIEW/LINK cancellation clears the in-flight key so the current request can retry', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('if (directLaunchResolutionKeyRef.current === resolutionKey) {');
+    expect(source).toContain('directLaunchResolutionKeyRef.current = null;');
+    expect(source).toContain('setIsResolving(false);');
+  });
+
+
+  test('direct REVIEW/LINK preserves a completed resolution key across canonical source updates', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('let resolutionCompleted = false;');
+    expect(source).toContain('resolutionCompleted = true;');
+    expect(source).toContain('if (!resolutionCompleted && directLaunchResolutionKeyRef.current === resolutionKey) {');
+  });
+
+
+  test('direct REVIEW/LINK invalidates a completed resolution when Planning Context changes', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const planningContextFingerprint = JSON.stringify(resolvedPlanningContext);');
+    const keyStart = source.indexOf('const resolutionKey = [');
+    const keyEnd = source.indexOf('].join('|');', keyStart);
+    const key = source.slice(keyStart, keyEnd);
+
+    expect(keyStart).toBeGreaterThanOrEqual(0);
+    expect(keyEnd).toBeGreaterThan(keyStart);
+    expect(key).toContain('planningContextFingerprint');
+  });
+
+
+  test('direct REVIEW/LINK waits for the exact requested source and teaching target before resolving', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const directLaunchBindingsReady = Boolean(');
+    expect(source).toContain('selectedSource?.id === requestedLaunchSourceId');
+    expect(source).toContain('resolvedTeachingContext?.udaId === explicitLaunchTeachingContext.udaId');
+    expect(source).toContain("(resolvedTeachingContext?.lessonId ?? '') === (explicitLaunchTeachingContext.lessonId ?? '')");
+
+    const directResolverStart = source.indexOf("const actionId = directLaunchIntent === 'review'");
+    const directResolverEnd = source.indexOf('const resolutionKey = [', directResolverStart);
+    const directResolverGuard = source.slice(Math.max(0, directResolverStart - 280), directResolverEnd);
+
+    expect(directResolverStart).toBeGreaterThanOrEqual(0);
+    expect(directResolverEnd).toBeGreaterThan(directResolverStart);
+    expect(directResolverGuard).toContain('!directLaunchBindingsReady');
+  });
+
+
+  test('direct PREPARE waits for exact bindings and opens when the requested binding settles', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain("if (!directPrepareLaunchIsBound) return;\n    setIsPrepareOpen(true);");
+    expect(source).toContain("}, [launchRequest?.nonce, directPrepareLaunchIsBound]);");
+    expect(source).toContain('if (!directPrepareLaunchIsBound) setIsPrepareOpen(false);');
+
+    const launchEffectStart = source.indexOf('useEffect(() => {\n    if (!launchRequest) return;');
+    const launchEffectEnd = source.indexOf('}, [launchRequest?.nonce]);', launchEffectStart);
+    const launchEffect = source.slice(launchEffectStart, launchEffectEnd);
+
+    expect(launchEffectStart).toBeGreaterThanOrEqual(0);
+    expect(launchEffectEnd).toBeGreaterThan(launchEffectStart);
+    expect(launchEffect).not.toContain("if (hasCompleteDirectLaunch && directLaunchIntent === 'prepare')");
+  });
+
+  test('mobile full-screen Library surfaces expose modal semantics and focus containment hooks', async () => {
+    const composer = await composerSource();
+    const card = await sourceCardSource();
+
+    expect(composer).toContain("role={isMobileDialog ? 'dialog' : undefined}");
+    expect(composer).toContain('aria-modal={isMobileDialog ? true : undefined}');
+    expect(composer).toContain('trapDialogFocus(event, composerDialogRef.current)');
+    expect(composer).toContain('composerCloseButtonRef.current?.focus()');
+    expect(card).toContain("role={isMobileDialog && !isCopilotOpen ? 'dialog' : undefined}");
+    expect(card).toContain('aria-modal={isMobileDialog && !isCopilotOpen ? true : undefined}');
+    expect(card).toContain('aria-hidden={isCopilotOpen ? true : undefined}');
+    expect(card).toContain('inert={isCopilotOpen ? true : undefined}');
+    expect(card).toContain('trapDialogFocus(event, useSurfaceRef.current)');
+    expect(card).toContain('useSurfaceCloseButtonRef.current?.focus()');
+  });
+
 });

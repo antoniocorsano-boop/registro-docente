@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -142,11 +143,11 @@ test('LIB-03C reveals ranked destinations progressively and keeps linking human-
   await prepareCandidate.getByRole('button', { name: 'Usa per preparare', exact: true }).click();
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
 
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', sourceCard: card });
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
   await expect(card.getByText(`UDA · ${UDA_TITLES[2]}`, { exact: true })).toBeVisible();
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 

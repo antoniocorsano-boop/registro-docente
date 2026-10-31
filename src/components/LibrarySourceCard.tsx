@@ -3,7 +3,7 @@ import { ExternalLink, Image as ImageIcon, Link2, MoreHorizontal, Trash2 } from 
 import type { PlanningState } from '../planning/types';
 import type { UdaActivityType, UdaRecord } from '../types';
 import type { TeachingUdaCandidate } from '../teaching/teachingUdaCatalog';
-import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
+import type { CopilotLaunchContext, LibraryLaunchIntent } from '../library/copilotLaunchContext';
 import type { LibrarySource, LibrarySourceLink } from '../library/types';
 import type { LibrarySourcePatch } from '../library/libraryState';
 import { buildCapturedWebTextPatch } from '../library/intake';
@@ -32,6 +32,7 @@ interface LibrarySourceCardProps {
   onUnlink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDelete: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
+  isCopilotOpen: boolean;
 }
 
 const KIND_LABELS: Record<LibrarySource['kind'], string> = {
@@ -52,6 +53,21 @@ const STATUS_LABELS: Record<LibrarySource['status'], string> = {
   failed: 'Da riprovare'
 };
 
+type ProfessionalClassificationLabel = 'Da classificare' | 'Professionale' | 'Da rivedere';
+
+function professionalClassificationLabel(source: LibrarySource): ProfessionalClassificationLabel {
+  if (
+    source.privacy === 'student-personal' ||
+    source.status === 'needs-review' ||
+    source.status === 'restricted' ||
+    source.status === 'failed'
+  ) {
+    return 'Da rivedere';
+  }
+  if (source.privacy === 'teacher-professional') return 'Professionale';
+  return 'Da classificare';
+}
+
 const ACTIVITY_LABELS: Record<UdaActivityType, string> = {
   teoria: 'Teoria',
   laboratorio: 'Laboratorio',
@@ -67,11 +83,40 @@ const SUGGESTION_COPY: Record<TeachingContextSuggestionReason, string> = {
   'session-last-choice': "Ti propongo l'ultimo contesto che hai scelto in questa sessione."
 };
 
+const LIBRARY_USE_ACTIONS: readonly { intent: LibraryLaunchIntent; label: string }[] = [
+  { intent: 'prepare', label: 'Prepara un’attività' },
+  { intent: 'review', label: 'Rivedi nel contesto' },
+  { intent: 'link', label: 'Collega alla UDA' }
+];
+
 function localDateKey(date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>, container: HTMLElement | null): void {
+  if (event.key !== 'Tab' || !container) return;
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(element => !element.hasAttribute('hidden') && element.getClientRects().length > 0);
+
+  if (focusable.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
@@ -89,7 +134,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   onLink,
   onUnlink,
   onDelete,
-  onOpenCopilot
+  onOpenCopilot,
+  isCopilotOpen
 }) => {
   const [targetUdaId, setTargetUdaId] = useState('');
   const [contextUdaId, setContextUdaId] = useState('');
@@ -100,8 +146,20 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [webCaptureOpen, setWebCaptureOpen] = useState(false);
   const [webCapturedText, setWebCapturedText] = useState('');
   const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
+  const [isUseSurfaceOpen, setIsUseSurfaceOpen] = useState(false);
+  const [pendingUseIntent, setPendingUseIntent] = useState<LibraryLaunchIntent | null>(null);
+  const [isMobileDialog, setIsMobileDialog] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
+  const useSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const useSurfaceCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const useButtonRef = useRef<HTMLButtonElement | null>(null);
+  const useActionButtonRefs = useRef<Partial<Record<LibraryLaunchIntent, HTMLButtonElement | null>>>({});
+  const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
+  const professionalClassification = professionalClassificationLabel(source);
+  const shouldShowProfessionalClassification = professionalClassification !== STATUS_LABELS[source.status];
 
   const selectedContextUda = teachingUdaCatalog.find(candidate => candidate.id === contextUdaId);
   const contextLessons = selectedContextUda?.lessons ?? [];
@@ -120,10 +178,36 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   );
 
   useLayoutEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const syncMobileDialog = () => setIsMobileDialog(query.matches);
+    syncMobileDialog();
+    query.addEventListener('change', syncMobileDialog);
+    return () => query.removeEventListener('change', syncMobileDialog);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isSelected || !isUseSurfaceOpen || !isMobileDialog) return;
+    useSurfacePreviousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : useButtonRef.current;
+    useSurfaceCloseButtonRef.current?.focus();
+
+    return () => {
+      const previous = useSurfacePreviousFocusRef.current ?? useButtonRef.current;
+      useSurfacePreviousFocusRef.current = null;
+      requestAnimationFrame(() => {
+        if (previous?.isConnected) previous.focus();
+      });
+    };
+  }, [isSelected, isUseSurfaceOpen, isMobileDialog]);
+
+  useLayoutEffect(() => {
     if (!isSelected) {
       initializedSourceIdRef.current = null;
       setContextSuggestion(null);
       setContextChooserOpen(false);
+      setIsUseSurfaceOpen(false);
+      setPendingUseIntent(null);
       setWebCaptureOpen(false);
       setWebCapturedText('');
       setWebCaptureError(null);
@@ -146,6 +230,16 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     setWebCapturedText('');
     setWebCaptureError(null);
   }, [isSelected, source.id, udas, teachingUdaCatalog, currentClassName, lastExplicitTeachingContext]);
+
+  const handleProfessionalClassification = async () => {
+    if (professionalClassification !== 'Da classificare') return;
+    if (!confirm('Confermo che è materiale professionale del docente e non contiene dati personali degli studenti.')) return;
+    try {
+      await onUpdate(source.id, { privacy: 'teacher-professional' });
+    } catch {
+      // The parent keeps the committed source and exposes the durable error state.
+    }
+  };
 
   const handleRename = async () => {
     const title = prompt('Nuovo titolo della fonte:', source.title)?.trim();
@@ -176,25 +270,59 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     }
   };
 
-  const selectExplicitUda = (udaId: string) => {
-    setContextUdaId(udaId);
-    setContextLessonId('');
-    setContextSuggestion(null);
-    setContextChooserOpen(true);
-    if (udaId) onExplicitTeachingContextChange({ udaId });
-  };
+  const contextSelectionValue = contextUdaId
+    ? (contextLessonId ? `${contextUdaId}::${contextLessonId}` : contextUdaId)
+    : '';
 
-  const selectExplicitLesson = (lessonId: string) => {
+  const selectTeachingTarget = (value: string) => {
+    const [udaId = '', lessonId = ''] = value.split('::');
+    setContextUdaId(udaId);
     setContextLessonId(lessonId);
     setContextSuggestion(null);
     setContextChooserOpen(true);
-    if (contextUdaId) {
+    if (udaId) {
       onExplicitTeachingContextChange({
-        udaId: contextUdaId,
+        udaId,
         ...(lessonId ? { lessonId } : {})
       });
     }
   };
+
+  const openCopilotForIntent = (intent: LibraryLaunchIntent) => {
+    if (!resolvedTeachingContext) return;
+    onOpenCopilot({
+      surface: 'library',
+      sourceId: source.id,
+      className: resolvedTeachingContext.className,
+      udaId: resolvedTeachingContext.udaId,
+      lessonId: resolvedTeachingContext.lessonId,
+      teachingContextMode: contextSuggestion ? 'proposed' : 'explicit',
+      intent
+    });
+  };
+
+  const requestCopilotForIntent = (intent: LibraryLaunchIntent) => {
+    if (!resolvedTeachingContext) return;
+    if (professionalClassification === 'Da classificare') {
+      setPendingUseIntent(intent);
+      return;
+    }
+    openCopilotForIntent(intent);
+  };
+
+  useLayoutEffect(() => {
+    if (!pendingUseIntent || professionalClassification !== 'Professionale' || !resolvedTeachingContext) return;
+    const intent = pendingUseIntent;
+    setPendingUseIntent(null);
+    const returnFocusTarget = useActionButtonRefs.current[intent];
+    if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
+    openCopilotForIntent(intent);
+  }, [
+    pendingUseIntent,
+    professionalClassification,
+    resolvedTeachingContext?.udaId,
+    resolvedTeachingContext?.lessonId
+  ]);
 
   const selectRelevanceTeachingContext = (context: LibraryTeachingContext) => {
     setContextUdaId(context.udaId);
@@ -221,7 +349,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   };
 
   return (
-    <article className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm space-y-3">
+    <article data-source-id={source.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm space-y-3">
       <div className="flex gap-3 items-start">
         {source.kind === 'image' && source.payload.dataUrl ? (
           <img
@@ -240,6 +368,12 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             <span>{KIND_LABELS[source.kind]}</span>
             <span aria-hidden="true">·</span>
             <span>{STATUS_LABELS[source.status]}</span>
+            {shouldShowProfessionalClassification && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{professionalClassification}</span>
+              </>
+            )}
           </div>
           <h3 className="font-semibold text-white leading-snug break-words">{source.title}</h3>
           {source.origin && <p className="text-xs text-slate-400 mt-1 break-words">{source.origin}</p>}
@@ -264,8 +398,12 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
 
       <div className="flex gap-2 items-center">
         <button
+          ref={useButtonRef}
           type="button"
-          onClick={() => onUse(source.id)}
+          onClick={() => {
+            onUse(source.id);
+            setIsUseSurfaceOpen(true);
+          }}
           disabled={isPending}
           className="min-h-[44px] px-4 rounded-lg bg-[var(--primary)] text-slate-950 font-semibold text-sm disabled:opacity-50"
         >
@@ -278,6 +416,22 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             Gestisci
           </summary>
           <div className="mt-2 p-3 rounded-lg border border-[var(--border)] bg-slate-950/70 space-y-3">
+            {professionalClassification === 'Da classificare' && (
+              <div className="rounded-md border border-amber-700/60 bg-amber-950/20 p-3 space-y-2">
+                <p className="text-xs text-amber-100">
+                  Prima di usare questa fonte nei flussi professionali, conferma che il materiale è del docente e non contiene dati personali degli studenti.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleProfessionalClassification()}
+                  disabled={isPending}
+                  className="min-h-[44px] w-full px-3 rounded-md border border-amber-600 text-sm font-semibold text-amber-100 disabled:opacity-50"
+                >
+                  Classifica come materiale professionale
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => void handleRename()}
@@ -361,28 +515,36 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         </details>
       </div>
 
-      {isSelected && (
-        <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-3 text-sm text-cyan-100 space-y-3">
-          <div>
-            <strong className="block">Che cosa vuoi farne?</strong>
-            <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
+      {isSelected && isUseSurfaceOpen && (
+        <div
+          ref={useSurfaceRef}
+          data-testid="library-source-use-surface"
+          role={isMobileDialog && !isCopilotOpen ? 'dialog' : undefined}
+          aria-modal={isMobileDialog && !isCopilotOpen ? true : undefined}
+          aria-labelledby={isMobileDialog && !isCopilotOpen ? `library-source-use-title-${source.id}` : undefined}
+          aria-hidden={isCopilotOpen ? true : undefined}
+          inert={isCopilotOpen ? true : undefined}
+          tabIndex={isMobileDialog && !isCopilotOpen ? -1 : undefined}
+          onKeyDown={event => {
+            if (isMobileDialog && !isCopilotOpen) trapDialogFocus(event, useSurfaceRef.current);
+          }}
+          className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
+        >
+          <div className="sticky top-0 z-10 -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] flex items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <div>
+              <strong id={`library-source-use-title-${source.id}`} className="block">Che cosa vuoi farne?</strong>
+              <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
+            </div>
+            <button
+              ref={useSurfaceCloseButtonRef}
+              type="button"
+              onClick={() => setIsUseSurfaceOpen(false)}
+              className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 md:hidden"
+              aria-label="Chiudi uso materiale"
+            >
+              Chiudi
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => onOpenCopilot({
-              surface: 'library',
-              sourceId: source.id,
-              className: resolvedTeachingContext?.className ?? currentClassName ?? undefined,
-              udaId: resolvedTeachingContext?.udaId,
-              lessonId: resolvedTeachingContext?.lessonId,
-              teachingContextMode: contextSuggestion ? 'proposed' : 'explicit'
-            })}
-            disabled={isPending}
-            className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
-          >
-            Usa con Copilota
-          </button>
 
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
             {contextSuggestion ? (
@@ -424,56 +586,78 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               </p>
             )}
 
+            <label className="block text-xs font-semibold text-slate-200" htmlFor={`context-target-${source.id}`}>
+              Dove vuoi usarlo?
+            </label>
+
             {(contextChooserOpen || !contextSuggestion) && (
-              <>
-                <label className="block text-xs text-slate-300" htmlFor={`context-uda-${source.id}`}>
-                  UDA corrente
-                </label>
-                <select
-                  id={`context-uda-${source.id}`}
-                  value={contextUdaId}
-                  onChange={event => selectExplicitUda(event.target.value)}
-                  disabled={isPending || teachingUdaCatalog.length === 0}
-                  className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
-                >
-                  <option value="">Seleziona UDA</option>
-                  {teachingUdaCatalog.map(candidate => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.title}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+              <select
+                id={`context-target-${source.id}`}
+                value={contextSelectionValue}
+                onChange={event => selectTeachingTarget(event.target.value)}
+                disabled={isPending || teachingUdaCatalog.length === 0}
+                className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+              >
+                <option value="">Seleziona UDA o lezione</option>
+                {teachingUdaCatalog.flatMap(candidate => [
+                  <option key={`${candidate.id}::uda`} value={candidate.id}>
+                    {candidate.className} · {candidate.title} · Intera UDA{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
+                  </option>,
+                  ...candidate.lessons.map(lesson => (
+                    <option key={`${candidate.id}::${lesson.id}`} value={`${candidate.id}::${lesson.id}`}>
+                      {candidate.className} · {candidate.title} · {lesson.topic}{candidate.origin === 'docente-os' ? ' · Da Docente OS · sola lettura' : ''}
                     </option>
-                  ))}
-                </select>
+                  ))
+                ])}
+              </select>
+            )}
 
-                {selectedContextUda && contextLessons.length > 0 && (
-                  <>
-                    <label className="block text-xs text-slate-300" htmlFor={`context-lesson-${source.id}`}>
-                      Lezione corrente
-                    </label>
-                    <select
-                      id={`context-lesson-${source.id}`}
-                      value={contextLessonId}
-                      onChange={event => selectExplicitLesson(event.target.value)}
-                      disabled={isPending}
-                      className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
-                    >
-                      <option value="">Intera UDA</option>
-                      {contextLessons.map(lesson => (
-                        <option key={lesson.id} value={lesson.id}>{lesson.topic}</option>
-                      ))}
-                    </select>
-                  </>
-                )}
-
-                {!contextUdaId && (
-                  <p className="text-xs text-slate-400">Seleziona un’UDA per usare la fonte nel contesto didattico.</p>
-                )}
-              </>
+            {!resolvedTeachingContext && (
+              <p className="text-xs text-slate-400">Seleziona un’UDA o una lezione per continuare.</p>
             )}
 
             {selectedContextLesson?.activityType && (
               <p className="text-xs text-slate-300">
                 Tipo di attività: <strong className="text-slate-100">{ACTIVITY_LABELS[selectedContextLesson.activityType]}</strong>
               </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <strong className="block text-sm text-cyan-100">Cosa vuoi fare?</strong>
+            {pendingUseIntent && professionalClassification === 'Da classificare' ? (
+              <div
+                data-testid="library-professional-classification-gate"
+                className="rounded-lg border border-amber-700/60 bg-amber-950/20 p-3 space-y-2"
+              >
+                <strong className="block text-sm text-amber-100">Prima di continuare</strong>
+                <p className="text-xs text-amber-100">
+                  Conferma che questa fonte è materiale professionale del docente e non contiene dati personali degli studenti.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleProfessionalClassification()}
+                  disabled={isPending}
+                  className="min-h-[44px] w-full rounded-lg border border-amber-600 px-3 text-sm font-semibold text-amber-100 disabled:opacity-50"
+                >
+                  Classifica come materiale professionale
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {LIBRARY_USE_ACTIONS.map(action => (
+                  <button
+                    key={action.intent}
+                    ref={element => { useActionButtonRefs.current[action.intent] = element; }}
+                    type="button"
+                    onClick={() => requestCopilotForIntent(action.intent)}
+                    disabled={isPending || !resolvedTeachingContext}
+                    className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 

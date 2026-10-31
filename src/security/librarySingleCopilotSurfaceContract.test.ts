@@ -34,9 +34,14 @@ describe('single contextual Copilot surface contract', () => {
     expect(libraryViewSource).toContain('onOpenCopilot');
     expect(sourceCardSource).toContain('onOpenCopilot');
     expect(sourceCardSource).toContain('sourceId: source.id');
-    expect(sourceCardSource).toContain('udaId: resolvedTeachingContext?.udaId');
-    expect(sourceCardSource).toContain('lessonId: resolvedTeachingContext?.lessonId');
-    expect(sourceCardSource).toContain('Usa con Copilota');
+    expect(sourceCardSource).toContain('udaId: resolvedTeachingContext.udaId');
+    expect(sourceCardSource).toContain('lessonId: resolvedTeachingContext.lessonId');
+    expect(sourceCardSource).toContain('openCopilotForIntent');
+    expect(sourceCardSource).toContain('Prepara un’attività');
+    expect(sourceCardSource).toContain('Rivedi nel contesto');
+    expect(sourceCardSource).toContain('Collega alla UDA');
+    expect(launchContextSource).toContain("export type LibraryLaunchIntent = 'prepare' | 'review' | 'link';");
+    expect(launchContextSource).toContain('intent?: LibraryLaunchIntent;');
   });
 
   test('Library handoff preserves whether Teaching Context is proposed or explicit', () => {
@@ -129,8 +134,19 @@ describe('single contextual Copilot surface contract', () => {
   test('ambient surface participates in async stale identity without clearing an already-resolved disclosure', () => {
     expect(composerSource).toContain('copilotContextFingerprint');
     expect(composerSource).toContain('contextProjection: copilotContextProjection');
-    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint]');
-    expect(composerSource).not.toContain('[selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]');
+    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound]');
+    expect(composerSource).not.toContain('[selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound, copilotContextFingerprint]');
+  });
+
+  test('mobile Library use surface becomes assistive-technology inert while the Copilot modal is open', () => {
+    expect(appSource).toContain("isCopilotOpen={copilotSurfaceMode === 'compose'}");
+    expect(libraryViewSource).toContain('isCopilotOpen');
+    expect(libraryViewSource).toContain('isCopilotOpen={isCopilotOpen}');
+    expect(sourceCardSource).toContain('isCopilotOpen: boolean;');
+    expect(sourceCardSource).toContain("role={isMobileDialog && !isCopilotOpen ? 'dialog' : undefined}");
+    expect(sourceCardSource).toContain('aria-modal={isMobileDialog && !isCopilotOpen ? true : undefined}');
+    expect(sourceCardSource).toContain('aria-hidden={isCopilotOpen ? true : undefined}');
+    expect(sourceCardSource).toContain('inert={isCopilotOpen ? true : undefined}');
   });
 
   test('LibrarySourceCard is no longer a second transformation engine', () => {

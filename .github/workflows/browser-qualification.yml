@@ -67,6 +67,7 @@ jobs:
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
+          cp tests/browser/library-use-surface-helpers.cjs .browser-tools/library-use-surface-helpers.cjs
           cp tests/browser/agent-intent-01-routing.spec.cjs .browser-tools/agent-intent-01-routing.spec.cjs
           cp tests/browser/aic-01-context-projection.spec.cjs .browser-tools/aic-01-context-projection.spec.cjs
           cp tests/browser/aic-02-prepare-outcome.spec.cjs .browser-tools/aic-02-prepare-outcome.spec.cjs
@@ -89,6 +90,7 @@ jobs:
           cp tests/browser/lib04c-copilot-link.spec.cjs .browser-tools/lib04c-copilot-link.spec.cjs
           cp tests/browser/lib04d-copilot-prepare.spec.cjs .browser-tools/lib04d-copilot-prepare.spec.cjs
           cp tests/browser/lib05a-local-semantic-retrieval.spec.cjs .browser-tools/lib05a-local-semantic-retrieval.spec.cjs
+          cp tests/browser/lsm-01c-consumer.spec.cjs .browser-tools/lsm-01c-consumer.spec.cjs
           cp tests/browser/library-contextual-copilot-handoff.spec.cjs .browser-tools/library-contextual-copilot-handoff.spec.cjs
           cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
           cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
@@ -139,6 +141,20 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/qualification-invariant-smoke-results
+
+      - name: Run LSM-01C consumer Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            lsm-01c-consumer.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/lsm-01c-test-results
 
       - name: Run dedicated AIC-07 Chromium qualification
         shell: bash
