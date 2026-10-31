@@ -1,9 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
 const COMPOSER = new URL('../components/LibraryCopilotComposer.tsx', import.meta.url);
+const SOURCE_CARD = new URL('../components/LibrarySourceCard.tsx', import.meta.url);
 
 async function composerSource(): Promise<string> {
   return Bun.file(COMPOSER).text();
+}
+
+async function sourceCardSource(): Promise<string> {
+  return Bun.file(SOURCE_CARD).text();
 }
 
 describe('A4-R1 teacher-first Composer contract', () => {
@@ -130,5 +135,25 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('CopilotMissionBridge');
     expect(source).toContain('assertMissionRuntimeExecutionAuthorized');
     expect(source).toContain('LibraryProposalPanel');
+  });
+
+  test('library source card exposes local professional classification without entering Copilot', async () => {
+    const source = await sourceCardSource();
+
+    expect(source).toContain('Da classificare');
+    expect(source).toContain('Professionale');
+    expect(source).toContain('Da rivedere');
+    expect(source).toContain('Classifica come materiale professionale');
+    expect(source).toContain("privacy: 'teacher-professional'");
+    expect(source).toContain('non contiene dati personali degli studenti');
+
+    const handlerStart = source.indexOf('const handleProfessionalClassification = async () =>');
+    const handlerEnd = source.indexOf('const handleRename =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(handler).toContain("onUpdate(source.id, { privacy: 'teacher-professional' })");
+    expect(handler).not.toContain('onOpenCopilot');
   });
 });
