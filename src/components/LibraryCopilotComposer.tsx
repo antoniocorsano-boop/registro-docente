@@ -1358,6 +1358,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       ref={composerDialogRef}
       data-testid="library-copilot-composer"
       data-source-id={selectedSource?.id ?? ''}
+      data-teaching-target={resolvedTeachingContext
+        ? `${resolvedTeachingContext.udaId}${resolvedTeachingContext.lessonId ? `::${resolvedTeachingContext.lessonId}` : ''}`
+        : ''}
       data-agent-intent-fallback-code={agentFallbackCodeRef.current ?? undefined}
       role={isMobileDialog ? 'dialog' : undefined}
       aria-modal={isMobileDialog ? true : undefined}

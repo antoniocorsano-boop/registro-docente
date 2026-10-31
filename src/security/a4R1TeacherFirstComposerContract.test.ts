@@ -230,6 +230,22 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(directResolverGuard).toContain('!directLaunchBindingsReady');
   });
 
+
+  test('direct PREPARE waits for exact bindings and opens when the requested binding settles', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain("if (!directPrepareLaunchIsBound) return;\n    setIsPrepareOpen(true);");
+    expect(source).toContain("}, [launchRequest?.nonce, directPrepareLaunchIsBound]);");
+
+    const launchEffectStart = source.indexOf('useEffect(() => {\n    if (!launchRequest) return;');
+    const launchEffectEnd = source.indexOf('}, [launchRequest?.nonce]);', launchEffectStart);
+    const launchEffect = source.slice(launchEffectStart, launchEffectEnd);
+
+    expect(launchEffectStart).toBeGreaterThanOrEqual(0);
+    expect(launchEffectEnd).toBeGreaterThan(launchEffectStart);
+    expect(launchEffect).not.toContain("if (hasCompleteDirectLaunch && directLaunchIntent === 'prepare')");
+  });
+
   test('mobile full-screen Library surfaces expose modal semantics and focus containment hooks', async () => {
     const composer = await composerSource();
     const card = await sourceCardSource();

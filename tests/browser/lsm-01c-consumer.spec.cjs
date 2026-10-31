@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -10,6 +11,8 @@ const SOURCE_TITLE = 'Fonte sintetica LSM-01C';
 const SOURCE_TEXT = 'Materiale professionale sintetico per verificare la continuità della ricerca testuale.';
 const MOBILE_CLASS_NAME = 'Classe Sintetica LSM-01C-B';
 const MOBILE_UDA_TITLE = 'UDA Sintetica LSM-01C-B';
+const ALT_UDA_TITLE = 'UDA Alternativa LSM-01C-B';
+const ALT_SOURCE_TITLE = 'Fonte alternativa LSM-01C-B';
 
 test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
 test.setTimeout(120000);
@@ -38,14 +41,18 @@ async function openSettings(page) {
   await expect(page.getByTestId('semantic-memory-settings')).toBeVisible();
 }
 
-async function addSyntheticSource(page) {
+async function addNamedSyntheticSource(page, title, text = SOURCE_TEXT) {
   await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
   await page.getByRole('button', { name: 'Testo o idea', exact: true }).click();
   await page.getByLabel('Tipo').selectOption('concept');
-  await page.getByLabel('Titolo').fill(SOURCE_TITLE);
-  await page.getByLabel('Contenuto').fill(SOURCE_TEXT);
+  await page.getByLabel('Titolo').fill(title);
+  await page.getByLabel('Contenuto').fill(text);
   await page.getByRole('button', { name: 'Salva in biblioteca', exact: true }).click();
-  await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+}
+
+async function addSyntheticSource(page) {
+  await addNamedSyntheticSource(page, SOURCE_TITLE);
 }
 
 async function closePersistenceConfirmation(page) {
@@ -69,17 +76,21 @@ async function createMobileSyntheticClass(page) {
   await closePersistenceConfirmation(page);
 }
 
-async function createMobileSyntheticUda(page) {
+async function createSyntheticUda(page, title = MOBILE_UDA_TITLE) {
   await openDrawerItem(page, 'UDA');
   await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(MOBILE_UDA_TITLE);
+  await page.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità').fill(title);
   await dialog.getByRole('combobox', { name: 'Classe', exact: true }).selectOption({ label: MOBILE_CLASS_NAME });
   await dialog.getByLabel('Mese Inizio').selectOption('0');
   await dialog.getByLabel('Durata Mesi').fill('10');
   await page.getByRole('button', { name: 'Crea UDA', exact: true }).click();
-  await expect(page.getByText(MOBILE_UDA_TITLE, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+}
+
+async function createMobileSyntheticUda(page) {
+  await createSyntheticUda(page, MOBILE_UDA_TITLE);
 }
 
 async function sourceCard(page, title) {
@@ -243,3 +254,73 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(useButton).toBeFocused();
 });
 
+
+
+test('LSM-01C-B direct launches settle exact source and teaching target across PREPARE REVIEW and LINK', async ({ page }) => {
+  await setupFreshVault(page);
+  await createMobileSyntheticClass(page);
+  await createSyntheticUda(page, MOBILE_UDA_TITLE);
+  await createSyntheticUda(page, ALT_UDA_TITLE);
+  await openLibrary(page);
+  await addNamedSyntheticSource(page, SOURCE_TITLE);
+  await addNamedSyntheticSource(page, ALT_SOURCE_TITLE, 'Seconda fonte sintetica per forzare il cambio di binding tra lanci diretti.');
+
+  const firstCard = await sourceCard(page, SOURCE_TITLE);
+  const secondCard = await sourceCard(page, ALT_SOURCE_TITLE);
+  const firstSourceId = await firstCard.getAttribute('data-source-id');
+  const secondSourceId = await secondCard.getAttribute('data-source-id');
+  expect(firstSourceId).toBeTruthy();
+  expect(secondSourceId).toBeTruthy();
+  expect(firstSourceId).not.toBe(secondSourceId);
+
+  async function openUse(card, udaTitle) {
+    const surface = card.getByTestId('library-source-use-surface');
+    if (!(await surface.isVisible().catch(() => false))) {
+      await card.getByRole('button', { name: 'Usa', exact: true }).click();
+    }
+    await expect(surface).toBeVisible();
+    const select = await selectLibraryUseTarget(card, { udaTitle });
+    return { surface, target: await select.inputValue() };
+  }
+
+  async function expectBinding(composer, card, target) {
+    await expect(composer).toBeVisible();
+    await expect(composer).toHaveAttribute('data-source-id', await card.getAttribute('data-source-id'));
+    await expect(composer).toHaveAttribute('data-teaching-target', target);
+  }
+
+  // Establish an initial binding, then force PREPARE to switch both source and UDA.
+  let use = await openUse(firstCard, MOBILE_UDA_TITLE);
+  await libraryUseAction(firstCard, 'prepare').click();
+  let composer = page.getByTestId('library-copilot-composer');
+  await expectBinding(composer, firstCard, use.target);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+
+  use = await openUse(secondCard, ALT_UDA_TITLE);
+  await libraryUseAction(secondCard, 'prepare').click();
+  composer = page.getByTestId('library-copilot-composer');
+  await expectBinding(composer, secondCard, use.target);
+  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+
+  // REVIEW must wait until the first source/target are rebound, not reuse the second launch.
+  use = await openUse(firstCard, MOBILE_UDA_TITLE);
+  await libraryUseAction(firstCard, 'review').click();
+  composer = page.getByTestId('library-copilot-composer');
+  await expectBinding(composer, firstCard, use.target);
+  await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
+  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
+
+  // LINK switches both bindings again and the human-confirmation destination must be the requested UDA.
+  use = await openUse(secondCard, ALT_UDA_TITLE);
+  await libraryUseAction(secondCard, 'link').click();
+  composer = page.getByTestId('library-copilot-composer');
+  await expectBinding(composer, secondCard, use.target);
+  const linkAction = composer.getByTestId('library-copilot-link-action');
+  await expect(linkAction).toBeVisible();
+  await linkAction.click();
+  const confirmation = composer.getByTestId('library-copilot-link-confirmation');
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByText(`Destinazione: UDA · ${ALT_UDA_TITLE}`, { exact: true })).toBeVisible();
+});
