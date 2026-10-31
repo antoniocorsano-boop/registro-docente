@@ -9,6 +9,8 @@ export interface SemanticMemorySyncLedgerV1 {
 const LEDGER_SCHEMA = 'registro.semantic-memory-sync-ledger/v1' as const;
 const STORAGE_PREFIX = 'registro.semantic-memory-sync-ledger.v1:';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+const REGISTRO_SOURCE_APP_ID = 'registro-docente';
+const REGISTRO_SOURCE_TYPES = new Set(['library-source', 'professional-memory-entry']);
 
 function nonBlank(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -52,6 +54,12 @@ function resolveStorage(storage?: Storage): Storage {
 function hasOnlyKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
   const allowedSet = new Set(allowed);
   return Object.keys(record).every(key => allowedSet.has(key));
+}
+
+export function isRegistroSemanticMemorySource(source: SemanticMemorySourceRefV1): boolean {
+  return source.sourceAppId === REGISTRO_SOURCE_APP_ID
+    && REGISTRO_SOURCE_TYPES.has(source.sourceType)
+    && nonBlank(source.sourceId);
 }
 
 export function semanticMemorySourceKey(source: SemanticMemorySourceRefV1): string {
@@ -105,7 +113,8 @@ function parseLedger(input: unknown, endpoint: string): SemanticMemorySyncLedger
   const sources: Record<string, { revision: string }> = {};
 
   for (const [key, value] of Object.entries(sourcesInput)) {
-    if (parseSemanticMemorySourceKey(key) === null) return null;
+    const source = parseSemanticMemorySourceKey(key);
+    if (!source || !isRegistroSemanticMemorySource(source)) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const revisionRecord = value as Record<string, unknown>;
     if (!hasOnlyKeys(revisionRecord, ['revision']) || !nonBlank(revisionRecord.revision)) return null;
