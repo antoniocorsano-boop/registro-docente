@@ -80,7 +80,7 @@ describe('A4-R1 teacher-first Composer contract', () => {
     const handlerEnd = source.indexOf('const handleTeacherFirstProceed =', handlerStart);
     const handler = source.slice(handlerStart, handlerEnd);
 
-    expect(handler).toContain("if (hasBoundLaunchContext && goal === 'material')");
+    expect(handler).toContain("if (hasBoundLaunchContext && (goal === 'material' || goal === 'prepare'))");
     expect(handler).toContain('setTeacherFirstResolution({ ...framed, goalKind: goal })');
     expect(handler).not.toContain("if (hasBoundLaunchContext && goal === 'material') {\n      setContextOverride(null)");
   });
