@@ -18,16 +18,21 @@ describe('LSM-01C-B mobile primary action dock contract', () => {
       .toBeGreaterThan(main.indexOf("import './index.css';"));
   });
 
-  test('mobile Copilot reserves bottom space and fixes exactly the PREPARE primary action above the safe area', async () => {
+  test('mobile Copilot reserves bottom space and fixes exactly one current primary action above the safe area', async () => {
     const css = await source(MOBILE_DOCK_STYLES);
 
     expect(css).toContain('@media (max-width: 767px)');
     expect(css).toContain('[data-testid="library-copilot-scroll"]');
     expect(css).toContain('padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)) !important;');
     expect(css).toContain('[data-testid="library-copilot-prepare-disclosure"]');
-    expect(css).toContain('button.border-violet-700');
+    expect(css).toContain('> div:nth-child(2) > button.border-violet-700');
     expect(css).toContain('button.bg-violet-200');
     expect(css).toContain('button.bg-amber-200');
+    expect(css).toContain('[data-testid="library-copilot-link-confirmation"]');
+    expect(css).toContain('[data-testid="library-copilot-link-action"]');
+    expect(css).toContain('[data-testid="teacher-first-preview"]');
+    expect(css).toContain('button[type="submit"].bg-cyan-600');
+    expect(css).toContain(':not(:has([data-testid="library-copilot-prepare-disclosure"]))');
     expect(css).toContain('position: fixed;');
     expect(css).toContain('bottom: max(1rem, env(safe-area-inset-bottom));');
     expect(css).toContain('z-index: 110;');
