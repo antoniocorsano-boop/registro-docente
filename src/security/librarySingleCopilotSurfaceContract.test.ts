@@ -134,8 +134,8 @@ describe('single contextual Copilot surface contract', () => {
   test('ambient surface participates in async stale identity without clearing an already-resolved disclosure', () => {
     expect(composerSource).toContain('copilotContextFingerprint');
     expect(composerSource).toContain('contextProjection: copilotContextProjection');
-    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint]');
-    expect(composerSource).not.toContain('[selectedSourceId, teachingContextFingerprint, copilotContextFingerprint]');
+    expect(composerSource).toContain('[selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound]');
+    expect(composerSource).not.toContain('[selectedSourceId, teachingContextFingerprint, directPrepareLaunchIsBound, copilotContextFingerprint]');
   });
 
   test('LibrarySourceCard is no longer a second transformation engine', () => {
