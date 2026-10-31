@@ -222,6 +222,20 @@ describe('A4-R1 teacher-first Composer contract', () => {
   });
 
 
+  test('direct REVIEW/LINK invalidates a completed resolution when Planning Context changes', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const planningContextFingerprint = JSON.stringify(resolvedPlanningContext);');
+    const keyStart = source.indexOf('const resolutionKey = [');
+    const keyEnd = source.indexOf('].join('|');', keyStart);
+    const key = source.slice(keyStart, keyEnd);
+
+    expect(keyStart).toBeGreaterThanOrEqual(0);
+    expect(keyEnd).toBeGreaterThan(keyStart);
+    expect(key).toContain('planningContextFingerprint');
+  });
+
+
   test('direct REVIEW/LINK waits for the exact requested source and teaching target before resolving', async () => {
     const source = await composerSource();
 
