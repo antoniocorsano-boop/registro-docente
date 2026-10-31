@@ -406,6 +406,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         onUnlink={onUnlinkSource}
                         onDelete={onDeleteSource}
                         onOpenCopilot={onOpenCopilot}
+                        isCopilotOpen={isCopilotOpen}
                       />
                     </div>
                   ))}
