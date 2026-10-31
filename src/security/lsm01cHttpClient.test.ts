@@ -4,6 +4,16 @@ import {
   SemanticMemoryRevisionConflictError,
   createSemanticMemoryHttpClient,
 } from '../semanticMemory/httpClient';
+import {
+  buildLibrarySemanticMemoryProjections,
+  buildProfessionalMemoryProjections,
+} from '../semanticMemory/projections';
+import type { LibrarySource } from '../library/types';
+import type {
+  ProfessionalMemoryAllowedClassification,
+  ProfessionalMemoryEntryV1,
+  ProfessionalMemoryStateV1,
+} from '../memory/types';
 
 const READY_HEALTH = {
   schema: 'trama.semantic-memory-health/v1' as const,
@@ -19,6 +29,60 @@ function jsonResponse(payload: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
+}
+
+function librarySource(overrides: Partial<LibrarySource> = {}): LibrarySource {
+  return {
+    id: 'source-1',
+    kind: 'text',
+    title: 'Energia idroelettrica',
+    capturedAt: '2026-10-31T05:30:00.000Z',
+    payload: { text: 'Payload energia acqua' },
+    extractedText: 'Estratto turbine generatori',
+    status: 'ready',
+    privacy: 'teacher-professional',
+    links: [],
+    notes: 'Nota professionale',
+    ...overrides,
+  };
+}
+
+function memoryEntry(
+  id: string,
+  privacyClassification: ProfessionalMemoryAllowedClassification,
+  overrides: Partial<ProfessionalMemoryEntryV1> = {},
+): ProfessionalMemoryEntryV1 {
+  return {
+    id,
+    category: 'didactic-pattern',
+    summary: `Sintesi ${id}`,
+    provenance: { kind: 'teacher-explicit' },
+    sourceEventIds: [],
+    canonicalRefs: [],
+    createdAt: '2026-10-31T04:00:00.000Z',
+    updatedAt: '2026-10-31T05:00:00.000Z',
+    status: 'active',
+    context: {},
+    privacyClassification,
+    ...overrides,
+  };
+}
+
+function memoryState(entries: ProfessionalMemoryEntryV1[]): ProfessionalMemoryStateV1 {
+  return {
+    schemaVersion: 1,
+    events: [],
+    entries,
+    settings: {
+      autoRemember: {
+        'format-preference': false,
+        'didactic-pattern': false,
+        'material-reuse': false,
+        'planning-continuity': false,
+        'workflow-preference': false,
+      },
+    },
+  };
 }
 
 describe('LSM-01C-A session-only semantic memory HTTP client', () => {
@@ -168,6 +232,74 @@ describe('LSM-01C-A session-only semantic memory HTTP client', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(SemanticMemoryHttpError);
       expect((error as SemanticMemoryHttpError).code).toBe('INVALID_RESPONSE');
+    }
+  });
+});
+
+describe('LSM-01C-A governed Registro projections', () => {
+  test('Library projection is teacher-professional only and preserves the qualified semantic text order', async () => {
+    const eligible = librarySource();
+    const projections = await buildLibrarySemanticMemoryProjections([
+      eligible,
+      librarySource({ id: 'student', privacy: 'student-personal' }),
+      librarySource({ id: 'unknown', privacy: 'unknown' }),
+      librarySource({ id: 'restricted', status: 'restricted' }),
+      librarySource({ id: 'failed', status: 'failed' }),
+      librarySource({ id: 'empty', title: ' ', extractedText: ' ', payload: { text: ' ' }, notes: ' ' }),
+    ]);
+
+    expect(projections).toHaveLength(1);
+    expect(projections[0]).toMatchObject({
+      schema: 'trama.semantic-memory-projection/v1',
+      sourceAppId: 'registro-docente',
+      sourceType: 'library-source',
+      sourceId: 'source-1',
+      namespace: 'registro/library',
+      title: 'Energia idroelettrica',
+      text: 'Energia idroelettrica Estratto turbine generatori Payload energia acqua Nota professionale',
+      dataClass: 'TEACHER_PROFESSIONAL',
+      canonicalRef: 'registro://library/source/source-1',
+      updatedAt: eligible.capturedAt,
+      metadata: { kind: 'text', privacy: 'teacher-professional' },
+    });
+    expect(projections[0].revision).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test('Library revision is deterministic, changes with semantic content, and privacy downgrade removes the projection', async () => {
+    const source = librarySource();
+    const [first] = await buildLibrarySemanticMemoryProjections([source]);
+    const [same] = await buildLibrarySemanticMemoryProjections([{ ...source }]);
+    const [changed] = await buildLibrarySemanticMemoryProjections([{ ...source, notes: 'Nota modificata' }]);
+    const downgraded = await buildLibrarySemanticMemoryProjections([{ ...source, privacy: 'student-personal' }]);
+
+    expect(first.revision).toBe(same.revision);
+    expect(changed.revision).not.toBe(first.revision);
+    expect(downgraded).toEqual([]);
+  });
+
+  test('Professional Memory projects active entries only with explicit LSM data-class mapping', async () => {
+    const state = memoryState([
+      memoryEntry('teacher', 'TEACHER_PROFESSIONAL'),
+      memoryEntry('curricolo', 'CURRICULUM_PLANNING'),
+      memoryEntry('public', 'PUBLIC_EXTERNAL_CONTENT'),
+      memoryEntry('aggregate', 'AGGREGATED_NON_IDENTIFIABLE'),
+      memoryEntry('stale', 'TEACHER_PROFESSIONAL', { status: 'stale' }),
+    ]);
+
+    const projections = await buildProfessionalMemoryProjections(state);
+    expect(projections.map(item => [item.sourceId, item.dataClass])).toEqual([
+      ['aggregate', 'AGGREGATED_NON_IDENTIFIABLE'],
+      ['curricolo', 'CURRICOLO'],
+      ['public', 'PUBLIC_APP'],
+      ['teacher', 'TEACHER_PROFESSIONAL'],
+    ]);
+    for (const projection of projections) {
+      expect(projection.sourceAppId).toBe('registro-docente');
+      expect(projection.sourceType).toBe('professional-memory-entry');
+      expect(projection.namespace).toBe('registro/professional-memory');
+      expect(projection.canonicalRef).toBe(`registro://professional-memory/entry/${projection.sourceId}`);
+      expect(projection.revision).toMatch(/^[0-9a-f]{64}$/);
+      expect(projection.metadata).toMatchObject({ category: 'didactic-pattern', provenanceKind: 'teacher-explicit' });
     }
   });
 });
