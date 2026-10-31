@@ -263,8 +263,10 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(composer).toContain('aria-modal={isMobileDialog ? true : undefined}');
     expect(composer).toContain('trapDialogFocus(event, composerDialogRef.current)');
     expect(composer).toContain('composerCloseButtonRef.current?.focus()');
-    expect(card).toContain("role={isMobileDialog ? 'dialog' : undefined}");
-    expect(card).toContain('aria-modal={isMobileDialog ? true : undefined}');
+    expect(card).toContain("role={isMobileDialog && !isCopilotOpen ? 'dialog' : undefined}");
+    expect(card).toContain('aria-modal={isMobileDialog && !isCopilotOpen ? true : undefined}');
+    expect(card).toContain('aria-hidden={isCopilotOpen ? true : undefined}');
+    expect(card).toContain('inert={isCopilotOpen ? true : undefined}');
     expect(card).toContain('trapDialogFocus(event, useSurfaceRef.current)');
     expect(card).toContain('useSurfaceCloseButtonRef.current?.focus()');
   });
