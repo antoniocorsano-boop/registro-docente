@@ -34,9 +34,14 @@ describe('single contextual Copilot surface contract', () => {
     expect(libraryViewSource).toContain('onOpenCopilot');
     expect(sourceCardSource).toContain('onOpenCopilot');
     expect(sourceCardSource).toContain('sourceId: source.id');
-    expect(sourceCardSource).toContain('udaId: resolvedTeachingContext?.udaId');
-    expect(sourceCardSource).toContain('lessonId: resolvedTeachingContext?.lessonId');
-    expect(sourceCardSource).toContain('Usa con Copilota');
+    expect(sourceCardSource).toContain('udaId: resolvedTeachingContext.udaId');
+    expect(sourceCardSource).toContain('lessonId: resolvedTeachingContext.lessonId');
+    expect(sourceCardSource).toContain('openCopilotForIntent');
+    expect(sourceCardSource).toContain('Prepara un’attività');
+    expect(sourceCardSource).toContain('Rivedi nel contesto');
+    expect(sourceCardSource).toContain('Collega alla UDA');
+    expect(launchContextSource).toContain("export type LibraryLaunchIntent = 'prepare' | 'review' | 'link';");
+    expect(launchContextSource).toContain('intent?: LibraryLaunchIntent;');
   });
 
   test('Library handoff preserves whether Teaching Context is proposed or explicit', () => {
