@@ -193,9 +193,9 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain("directLaunchIntent === 'review'");
     expect(source).toContain("directLaunchIntent === 'link'");
 
-    const privacyEffectStart = source.indexOf("useEffect(() => {
+    const privacyEffectStart = source.indexOf(`useEffect(() => {
     resolutionEpochRef.current += 1;
-    setResolution(null);", source.indexOf('selectedSource?.privacy'));
+    setResolution(null);`, source.indexOf('selectedSource?.privacy'));
     const privacyEffectEnd = source.indexOf('}, [selectedSource?.privacy, selectedSource?.status]);', privacyEffectStart);
     const privacyEffect = source.slice(privacyEffectStart, privacyEffectEnd);
     expect(privacyEffect).not.toContain('setIsPrepareOpen(false)');
