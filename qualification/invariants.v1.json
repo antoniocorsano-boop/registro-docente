@@ -272,6 +272,37 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
+    },
+    {
+      "id": "LSM-01C-I03",
+      "owner": "LSM-01C-B",
+      "statement": "Library reuse remains explicitly teacher-triggered through one unified teaching-target selector and explicit PREPARE, REVIEW, or LINK actions; direct actions preserve the selected target and selection alone never opens the reuse surface.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/components/LibrarySourceCard.tsx",
+        "src/library/copilotLaunchContext.ts",
+        "tests/browser/library-use-surface-helpers.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs",
+        "tests/browser/agent-intent-01-routing.spec.cjs",
+        "tests/browser/aic-02-prepare-outcome.spec.cjs",
+        "tests/browser/aic-03-review-v2.spec.cjs",
+        "tests/browser/lib01b-contextual-core-qualification.spec.cjs",
+        "tests/browser/lib01c-teaching-context-qualification.spec.cjs",
+        "tests/browser/lib01d-governed-proposal-qualification.spec.cjs",
+        "tests/browser/lib01e-governed-provider-runtime.spec.cjs",
+        "tests/browser/lib02-source-acquisition.spec.cjs",
+        "tests/browser/lib03c-progressive-relevance.spec.cjs",
+        "tests/browser/lib05a-local-semantic-retrieval.spec.cjs",
+        "tests/browser/library-contextual-copilot-handoff.spec.cjs"
+      ],
+      "tests": [
+        "src/library/copilotLaunchContext.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ]
     }
   ]
 }
