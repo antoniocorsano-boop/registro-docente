@@ -167,6 +167,8 @@ describe('A4-R1 teacher-first Composer contract', () => {
     const launch = await launchContextSource();
 
     expect(source).toContain('Dove vuoi usarlo?');
+    expect(source).toContain('{candidate.className} · {candidate.title} · Intera UDA');
+    expect(source).toContain('{candidate.className} · {candidate.title} · {lesson.topic}');
     expect(source).toContain('Prepara un’attività');
     expect(source).toContain('Rivedi nel contesto');
     expect(source).toContain('Collega alla UDA');
