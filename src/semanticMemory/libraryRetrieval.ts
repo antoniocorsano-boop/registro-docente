@@ -9,6 +9,7 @@ import type {
   LibrarySource,
   LibraryStateV1,
 } from '../library/types';
+import { buildLibrarySemanticMemoryProjections } from './projections';
 
 const LIBRARY_NAMESPACE = 'registro/library';
 const LIBRARY_SOURCE_APP_ID = 'registro-docente';
@@ -71,13 +72,19 @@ export async function retrieveLibrarySourcesFromSemanticMemory(input: {
   if (response.hits.length === 0) return unavailable();
 
   const currentSources = new Map(input.library.sources.map(source => [source.id, source]));
+  const currentProjections = await buildLibrarySemanticMemoryProjections(input.library.sources);
+  const currentProjectionBySource = new Map(
+    currentProjections.map(projection => [projection.sourceId, projection]),
+  );
   const bestScoreBySource = new Map<string, number>();
 
   for (const hit of response.hits) {
     if (!hitMatchesCanonicalLibraryBoundary(hit)) continue;
 
     const source = currentSources.get(hit.sourceId);
-    if (!source || !sourceIsCurrentlyEligible(source)) continue;
+    const currentProjection = currentProjectionBySource.get(hit.sourceId);
+    if (!source || !currentProjection || !sourceIsCurrentlyEligible(source)) continue;
+    if (hit.revision !== currentProjection.revision) continue;
 
     const previous = bestScoreBySource.get(source.id);
     if (previous === undefined || hit.score > previous) {
