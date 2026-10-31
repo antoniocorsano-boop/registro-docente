@@ -117,6 +117,29 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function trapDialogFocus(event: React.KeyboardEvent<HTMLElement>, container: HTMLElement | null): void {
+  if (event.key !== 'Tab' || !container) return;
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(element => !element.hasAttribute('hidden') && element.getClientRects().length > 0);
+
+  if (focusable.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 const ACTION_HELP: Record<string, string> = {
   'review-source': 'Rivedi la fonte nel contesto didattico corrente.',
   'link-source-to-uda': 'Collega la fonte a una UDA con conferma del docente.',
@@ -217,11 +240,17 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const [contextOverride, setContextOverride] = useState<LibraryTeachingContext | 'auto' | null>('auto');
   const [missionLaunchSettledNonce, setMissionLaunchSettledNonce] = useState<number | null>(null);
   const [readyMissionReview, setReadyMissionReview] = useState<MissionReviewHandoffV1 | null>(null);
+  const [isMobileDialog, setIsMobileDialog] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
   const resolutionEpochRef = useRef(0);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const preserveGovernedContinuationOnReopenRef = useRef(false);
   const directLaunchResolutionKeyRef = useRef<string | null>(null);
+  const composerDialogRef = useRef<HTMLElement | null>(null);
+  const composerCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const composerPreviousFocusRef = useRef<HTMLElement | null>(null);
 
   const hasLaunchTeachingTarget = Boolean(
     launchRequest?.context.udaId || launchRequest?.context.lessonId
@@ -548,6 +577,30 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     && missionLaunchSettledNonce === launchRequest.nonce
   );
 
+  useLayoutEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const syncMobileDialog = () => setIsMobileDialog(query.matches);
+    syncMobileDialog();
+    query.addEventListener('change', syncMobileDialog);
+    return () => query.removeEventListener('change', syncMobileDialog);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !isMobileDialog) return;
+    composerPreviousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    composerCloseButtonRef.current?.focus();
+
+    return () => {
+      const previous = composerPreviousFocusRef.current;
+      composerPreviousFocusRef.current = null;
+      requestAnimationFrame(() => {
+        if (previous?.isConnected) previous.focus();
+      });
+    };
+  }, [isOpen, isMobileDialog]);
+
   useEffect(() => {
     if (!openRequestNonce) return;
     const stagedReview = consumeStagedMissionReview();
@@ -759,7 +812,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       selectedSource.status,
       teachingContextFingerprint
     ].join('|');
-    if (directLaunchResolutionKeyRef.current === resolutionKey) return;
+    if (directLaunchResolutionKeyRef.current === resolutionKey) {
+      return;
+    }
     directLaunchResolutionKeyRef.current = resolutionKey;
 
     const canonicalMessage = directLaunchIntent === 'review'
@@ -811,6 +866,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
     return () => {
       cancelled = true;
+      if (directLaunchResolutionKeyRef.current === resolutionKey) {
+        directLaunchResolutionKeyRef.current = null;
+      }
+      setIsResolving(false);
     };
   }, [
     launchRequest?.nonce,
@@ -1291,20 +1350,29 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   return (
     <section
+      ref={composerDialogRef}
       data-testid="library-copilot-composer"
       data-agent-intent-fallback-code={agentFallbackCodeRef.current ?? undefined}
-      aria-label="Copilota contestuale"
+      role={isMobileDialog ? 'dialog' : undefined}
+      aria-modal={isMobileDialog ? true : undefined}
+      aria-labelledby={isMobileDialog ? 'library-copilot-dialog-title' : undefined}
+      aria-label={isMobileDialog ? undefined : 'Copilota contestuale'}
+      tabIndex={isMobileDialog ? -1 : undefined}
+      onKeyDown={event => {
+        if (isMobileDialog) trapDialogFocus(event, composerDialogRef.current);
+      }}
       className="fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden rounded-none border border-slate-700 bg-slate-950/98 shadow-2xl backdrop-blur md:inset-x-auto md:inset-y-auto md:right-6 md:bottom-20 md:h-auto md:max-h-[calc(100dvh-10rem)] md:w-[430px] md:rounded-2xl"
     >
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-100">
+          <div id="library-copilot-dialog-title" className="flex items-center gap-2 text-sm font-bold text-slate-100">
             <MessageCircle size={18} className="text-cyan-300" aria-hidden="true" />
             Copilota
           </div>
           <p className="mt-0.5 truncate text-xs text-slate-400">{contextLabel}</p>
         </div>
         <button
+          ref={composerCloseButtonRef}
           type="button"
           onClick={() => {
             interruptBoundMission();
