@@ -147,6 +147,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const [webCapturedText, setWebCapturedText] = useState('');
   const [webCaptureError, setWebCaptureError] = useState<string | null>(null);
   const [isUseSurfaceOpen, setIsUseSurfaceOpen] = useState(false);
+  const [pendingUseIntent, setPendingUseIntent] = useState<LibraryLaunchIntent | null>(null);
   const [isMobileDialog, setIsMobileDialog] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   );
@@ -205,6 +206,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       setContextSuggestion(null);
       setContextChooserOpen(false);
       setIsUseSurfaceOpen(false);
+      setPendingUseIntent(null);
       setWebCaptureOpen(false);
       setWebCapturedText('');
       setWebCaptureError(null);
@@ -297,6 +299,27 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       intent
     });
   };
+
+  const requestCopilotForIntent = (intent: LibraryLaunchIntent) => {
+    if (!resolvedTeachingContext) return;
+    if (professionalClassification === 'Da classificare') {
+      setPendingUseIntent(intent);
+      return;
+    }
+    openCopilotForIntent(intent);
+  };
+
+  useLayoutEffect(() => {
+    if (!pendingUseIntent || professionalClassification !== 'Professionale' || !resolvedTeachingContext) return;
+    const intent = pendingUseIntent;
+    setPendingUseIntent(null);
+    openCopilotForIntent(intent);
+  }, [
+    pendingUseIntent,
+    professionalClassification,
+    resolvedTeachingContext?.udaId,
+    resolvedTeachingContext?.lessonId
+  ]);
 
   const selectRelevanceTeachingContext = (context: LibraryTeachingContext) => {
     setContextUdaId(context.udaId);
@@ -599,19 +622,39 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
 
           <div className="space-y-2">
             <strong className="block text-sm text-cyan-100">Cosa vuoi fare?</strong>
-            <div className="grid gap-2">
-              {LIBRARY_USE_ACTIONS.map(action => (
+            {pendingUseIntent && professionalClassification === 'Da classificare' ? (
+              <div
+                data-testid="library-professional-classification-gate"
+                className="rounded-lg border border-amber-700/60 bg-amber-950/20 p-3 space-y-2"
+              >
+                <strong className="block text-sm text-amber-100">Prima di continuare</strong>
+                <p className="text-xs text-amber-100">
+                  Conferma che questa fonte è materiale professionale del docente e non contiene dati personali degli studenti.
+                </p>
                 <button
-                  key={action.intent}
                   type="button"
-                  onClick={() => openCopilotForIntent(action.intent)}
-                  disabled={isPending || !resolvedTeachingContext}
-                  className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
+                  onClick={() => void handleProfessionalClassification()}
+                  disabled={isPending}
+                  className="min-h-[44px] w-full rounded-lg border border-amber-600 px-3 text-sm font-semibold text-amber-100 disabled:opacity-50"
                 >
-                  {action.label}
+                  Classifica come materiale professionale
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {LIBRARY_USE_ACTIONS.map(action => (
+                  <button
+                    key={action.intent}
+                    type="button"
+                    onClick={() => requestCopilotForIntent(action.intent)}
+                    disabled={isPending || !resolvedTeachingContext}
+                    className="min-h-[44px] w-full rounded-lg border border-cyan-500/50 bg-cyan-950/50 px-3 text-sm font-semibold text-cyan-100 hover:border-cyan-300 disabled:opacity-50"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <LibraryRelevancePanel

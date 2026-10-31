@@ -88,6 +88,11 @@ async function launchFromCard(page, title, { targetTitle = UDA_TITLE, intent = '
   await expect(useSurface).toBeVisible();
   await selectLibraryUseTarget(card, { udaTitle: targetTitle });
   await libraryUseAction(card, intent).click();
+  const classificationGate = card.getByTestId('library-professional-classification-gate');
+  if (await classificationGate.isVisible().catch(() => false)) {
+    page.once('dialog', dialog => dialog.accept());
+    await classificationGate.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  }
   const composer = page.getByTestId('library-copilot-composer');
   await expectDirectCopilotLaunch(composer, { intent, contextText: CLASS_NAME, sourceCard: card });
   return { card, composer };
