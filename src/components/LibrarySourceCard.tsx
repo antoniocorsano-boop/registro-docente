@@ -423,10 +423,23 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       </div>
 
       {isSelected && (
-        <div className="rounded-lg border border-cyan-800/60 bg-cyan-950/30 px-3 py-3 text-sm text-cyan-100 space-y-3">
-          <div>
-            <strong className="block">Che cosa vuoi farne?</strong>
-            <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
+        <div
+          data-testid="library-source-use-surface"
+          className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
+        >
+          <div className="sticky top-0 z-10 -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] flex items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <div>
+              <strong className="block">Che cosa vuoi farne?</strong>
+              <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onUse('')}
+              className="min-h-[44px] min-w-[44px] shrink-0 rounded-lg border border-slate-700 px-3 text-sm font-semibold text-slate-200 md:hidden"
+              aria-label="Chiudi uso materiale"
+            >
+              Chiudi
+            </button>
           </div>
 
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
