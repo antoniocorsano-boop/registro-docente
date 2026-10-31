@@ -390,6 +390,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     resolvedTeachingContext,
     planning
   ), [resolvedTeachingContext, planning]);
+  const planningContextFingerprint = JSON.stringify(resolvedPlanningContext);
 
   const selectedSource = useMemo(
     () => library.sources.find(source => source.id === selectedSourceId) ?? null,
@@ -816,7 +817,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       selectedSource.id,
       selectedSource.privacy,
       selectedSource.status,
-      teachingContextFingerprint
+      teachingContextFingerprint,
+      planningContextFingerprint
     ].join('|');
     if (directLaunchResolutionKeyRef.current === resolutionKey) {
       return;
@@ -891,6 +893,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     selectedSource?.privacy,
     selectedSource?.status,
     teachingContextFingerprint,
+    planningContextFingerprint,
     resolvedPlanningContext,
     contextualReview
   ]);
