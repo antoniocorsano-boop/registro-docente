@@ -274,6 +274,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
+  const saveIndicatorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
@@ -424,9 +425,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   );
 
   const toast = useCallback((msg: string) => {
+    if (saveIndicatorResetTimerRef.current !== null) {
+      clearTimeout(saveIndicatorResetTimerRef.current);
+    }
     setSaveIndicatorText(msg);
-    setTimeout(() => {
+    saveIndicatorResetTimerRef.current = setTimeout(() => {
       setSaveIndicatorText('Sincronizzato');
+      saveIndicatorResetTimerRef.current = null;
     }, 2800);
   }, []);
 
