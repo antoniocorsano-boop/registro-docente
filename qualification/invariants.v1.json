@@ -61,7 +61,8 @@
       "statement": "The teacher uses one coordinated Copilot surface and teacher-first preparation preserves explicit class and UDA authority without inventing targets.",
       "impactPaths": [
         "src/components/LibraryCopilotComposer.tsx",
-        "src/App.tsx"
+        "src/App.tsx",
+        "src/security/a4R1TeacherFirstComposerContract.test.ts"
       ],
       "tests": [
         "src/security/a4R1TeacherFirstComposerContract.test.ts",
@@ -227,6 +228,43 @@
         "src/library/contextualDidacticReviewProjected.test.ts",
         "src/library/copilotLaunchContext.test.ts",
         "src/security/lib03cProgressiveRelevanceContract.test.ts"
+      ]
+    },
+    {
+      "id": "LSM-01C-I01",
+      "owner": "LSM-01C-A",
+      "statement": "Registro consumes the exact qualified shared semantic-memory contract as a vendored local package; the package remains derived/provider-neutral and adds no build-time network or external-registry dependency.",
+      "impactPaths": [
+        "vendor/contextual-copilot-semantic-memory/",
+        "vendor/contextual-copilot-semantic-memory.provenance.json",
+        "package.json",
+        "bun.lock",
+        "src/security/lsm01cSemanticMemoryVendorContract.test.ts"
+      ],
+      "tests": [
+        "src/security/lsm01cSemanticMemoryVendorContract.test.ts"
+      ]
+    },
+    {
+      "id": "LSM-01C-I02",
+      "owner": "LSM-01C-A",
+      "statement": "Registro reaches semantic memory only through an explicit session-scoped HTTP loopback boundary: construction and rendering perform no network request, non-loopback endpoints fail before fetch, POST operations require bearer authentication, redirects/caching/credentials are disabled, shared envelopes are validated, connection and synchronization require explicit teacher actions, and the existing local Library fallback remains available when no usable LSM session exists.",
+      "impactPaths": [
+        "src/semanticMemory/",
+        "src/components/SemanticMemorySettings.tsx",
+        "src/components/LibraryView.tsx",
+        "src/App.tsx",
+        "src/security/lsm01cHttpClient.test.ts",
+        "src/security/lsm01cUiAdoptionContract.test.ts",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ],
+      "tests": [
+        "src/security/lsm01cHttpClient.test.ts",
+        "src/security/lsm01cUiAdoptionContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
     }
   ]
