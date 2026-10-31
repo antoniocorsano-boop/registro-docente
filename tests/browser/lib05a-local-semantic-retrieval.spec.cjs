@@ -115,27 +115,15 @@ async function classifyProfessional(page, title) {
 
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
-  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
-  await expect(classify).toBeVisible();
-  await classify.click();
-  await expect(classify).toHaveCount(0);
+  await expect(disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await expect(composer).toBeHidden();
 }
 
 async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
-  const composer = await openComposer(page);
-  const sourceSelect = await revealMaterialSourceSelect(composer);
-  await sourceSelect.selectOption({ label: title });
-  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
-
-  const disclosure = await openPrepareFromIntent(composer);
-  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
-  await expect(classify).toBeVisible();
-  await classify.click();
-  await expect(classify).toHaveCount(0);
-  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
-  await expect(composer).toBeHidden();
+  // Professional classification is source-owned and must happen in the Library use surface,
+  // never inside the Copilot. Reuse the canonical direct Library journey.
+  await classifyProfessional(page, title);
 }
 
 async function assertAtLeast44(locator, label) {

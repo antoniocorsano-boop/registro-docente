@@ -314,7 +314,7 @@ test('LIB-01E 429/504/503 consume one-shot consent, never auto-retry, then manua
   await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
-  await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  await expect(disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
 
   await expect(disclosure.getByText('Browser Provider LIB-01E', { exact: true })).toBeVisible();
   await expect(disclosure).toContainText('browser-fixture-v1');
@@ -478,7 +478,7 @@ test('LIB-01E pending result is discarded after teaching-context change — mobi
   await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
-  await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  await expect(disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
 
   await expect(disclosure.getByText('Browser Provider LIB-01E', { exact: true })).toBeVisible();
   const consent = disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });

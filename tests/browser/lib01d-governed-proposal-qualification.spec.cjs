@@ -265,8 +265,8 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   expect(proposalBodies).toHaveLength(0);
   let disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  await expect(disclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
-  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
+  await expect(disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
+  await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
 
   // Changing source now happens explicitly in the Library; the previous direct launch is discarded.
@@ -278,7 +278,8 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   composer = page.locator('[data-testid=\"library-copilot-composer\"]');
   await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: secondCard });
   const secondDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  await expect(secondDisclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
+  await expect(secondDisclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
+  await expect(secondDisclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
 
@@ -292,7 +293,7 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
   composer = page.locator('[data-testid=\"library-copilot-composer\"]');
   await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
-  await disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  await expect(disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
   await expect(disclosure.getByText('Prepara una proposta didattica', { exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(0);
 
@@ -413,8 +414,7 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
 
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
-  await assertAtLeast44(classify, 'mobile professional classification');
-  await classify.click();
+  await expect(classify).toHaveCount(0);
 
   const consent = disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
   await assertAtLeast44(consent, 'mobile one-shot consent');
