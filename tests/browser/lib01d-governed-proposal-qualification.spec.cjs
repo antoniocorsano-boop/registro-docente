@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -256,10 +257,10 @@ test('LIB-01D source → governed proposal → leave/adapt/adopt → durable rel
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
+  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
 
   expect(proposalBodies).toHaveLength(0);
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   let composer = page.locator('[data-testid=\"library-copilot-composer\"]');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
@@ -389,10 +390,9 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
 
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const contextSelect = card.getByLabel('UDA corrente');
-  await contextSelect.selectOption({ label: UDA_TITLE });
+  let contextSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
 
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.locator('[data-testid=\"library-copilot-composer\"]');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
@@ -417,11 +417,10 @@ test('LIB-01D proposal disclosure is touch-safe and context changes revoke conse
   await assertAtLeast44(disclosure.getByRole('button', { name: 'Lascia', exact: true }), 'mobile leave');
 
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
-  await contextSelect.selectOption({ label: ALT_UDA_TITLE });
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  contextSelect = await selectLibraryUseTarget(card, { udaTitle: ALT_UDA_TITLE });
+  await libraryUseAction(card, 'prepare').click();
   await expect(composer).toBeVisible();
-  await expect(disclosure).toHaveCount(0);
-  await openPrepareFromIntent(composer);
+  await expect(disclosure).toBeVisible();
   await expect(disclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toBeVisible();
   expect(proposalBodies).toHaveLength(1);
 

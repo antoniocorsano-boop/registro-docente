@@ -155,6 +155,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
   const professionalClassification = professionalClassificationLabel(source);
+  const shouldShowProfessionalClassification = professionalClassification !== STATUS_LABELS[source.status];
 
   const selectedContextUda = teachingUdaCatalog.find(candidate => candidate.id === contextUdaId);
   const contextLessons = selectedContextUda?.lessons ?? [];
@@ -339,8 +340,12 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             <span>{KIND_LABELS[source.kind]}</span>
             <span aria-hidden="true">·</span>
             <span>{STATUS_LABELS[source.status]}</span>
-            <span aria-hidden="true">·</span>
-            <span>{professionalClassification}</span>
+            {shouldShowProfessionalClassification && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{professionalClassification}</span>
+              </>
+            )}
           </div>
           <h3 className="font-semibold text-white leading-snug break-words">{source.title}</h3>
           {source.origin && <p className="text-xs text-slate-400 mt-1 break-words">{source.origin}</p>}

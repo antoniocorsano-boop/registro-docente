@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -81,13 +82,9 @@ async function sourceCard(page, title) {
 async function launchFromCard(page, title) {
   const card = await sourceCard(page, title);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const udaSelect = card.getByLabel('UDA corrente');
-  if (!(await udaSelect.isVisible().catch(() => false))) {
-    await card.getByRole('button', { name: 'Cambia', exact: true }).click();
-  }
+  const udaSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
   await expect(udaSelect).toBeVisible();
-  await udaSelect.selectOption({ label: UDA_TITLE });
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'review').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: title });
@@ -171,12 +168,11 @@ test('contextual Copilot handoff makes disclosure intent-owned and keeps provide
 
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   const relaunchedCard = await sourceCard(page, SOURCE_TITLE);
-  const contextSelect = relaunchedCard.getByLabel('UDA corrente');
+  const contextSelect = await selectLibraryUseTarget(relaunchedCard, { udaTitle: SECOND_UDA_TITLE });
   await expect(contextSelect).toBeVisible();
-  await contextSelect.selectOption({ label: SECOND_UDA_TITLE });
-  await relaunchedCard.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(relaunchedCard, 'review').click();
   await expect(composer).toBeVisible();
-  await expect(reviewPanel).toHaveCount(0);
+  await expect(reviewPanel).toBeVisible();
   await expect(linkAction).toHaveCount(0);
   await expect(prepareDisclosure).toHaveCount(0);
 

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -59,7 +60,7 @@ async function sourceCard(page, title) {
 }
 
 async function handoffToComposer(card, page, title) {
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: title });
@@ -106,17 +107,16 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
   await expect(card.getByText('Da rivedere', { exact: true })).toBeVisible();
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
 
-  const udaChooser = card.getByLabel('UDA corrente');
+  const udaChooser = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
   await expect(udaChooser).toBeVisible();
-  await udaChooser.selectOption({ label: UDA_TITLE });
 
   await expect(card.getByText('Contenuto web non ancora acquisito', { exact: true })).toBeVisible();
   await expect(card.getByText('Prepara una proposta didattica', { exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
+  await expect(libraryUseAction(card, 'prepare')).toBeVisible();
 
   let composer = await handoffToComposer(card, page, WEB_TITLE);
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
-  const incompleteDisclosure = await openPrepareFromIntent(composer);
+  const incompleteDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(incompleteDisclosure).toBeVisible();
   await expect(incompleteDisclosure.getByText('Prima verifica la natura della fonte', { exact: true })).toBeVisible();
   await expect(incompleteDisclosure.getByRole('button', { name: 'Consenti per questa richiesta', exact: true })).toHaveCount(0);
   expect(proposalRequests).toEqual([]);
@@ -137,12 +137,11 @@ test('LIB-02 URL incompleta resta fail-closed finché il docente non acquisisce 
   await expect(card.getByText(CAPTURED_TEXT, { exact: true })).toBeVisible();
 
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  await card.getByLabel('UDA corrente').selectOption({ label: UDA_TITLE });
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
+  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await expect(libraryUseAction(card, 'prepare')).toBeVisible();
 
   composer = await handoffToComposer(card, page, WEB_TITLE);
-  await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toHaveCount(0);
-  const completeDisclosure = await openPrepareFromIntent(composer);
+  const completeDisclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(completeDisclosure).toBeVisible();
   await expect(composer.getByRole('region', { name: 'Proposta didattica' })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: 'Chiudi Copilota', exact: true })).toBeVisible();

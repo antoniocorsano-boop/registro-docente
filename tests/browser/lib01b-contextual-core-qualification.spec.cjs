@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -75,7 +76,7 @@ async function assertAtLeast44(locator, label) {
 }
 
 async function handoffToComposer(page, card) {
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'review').click();
   const composer = page.locator('[data-testid="library-copilot-composer"]');
   await expect(composer).toBeVisible();
   return composer;
@@ -130,21 +131,18 @@ test('LIB-01B hands contextual source actions to Copilot and gates durable UDA l
   await reloadAndUnlock(page);
   await openLibrary(page);
   const card = await sourceCard(page);
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toHaveCount(0);
-  await expect(card.getByLabel('UDA corrente')).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
+  await expect(card.getByLabel('Dove vuoi usarlo?')).toHaveCount(0);
+  await expect(libraryUseAction(card, 'prepare')).toHaveCount(0);
+  await expect(libraryUseAction(card, 'review')).toHaveCount(0);
+  await expect(libraryUseAction(card, 'link')).toHaveCount(0);
   await expect(page.locator('[data-testid="library-copilot-composer"]')).toHaveCount(0);
 
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const currentUda = card.getByLabel('UDA corrente');
-  await expect(currentUda).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Usa con Copilota', exact: true })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Controlla nel contesto', exact: true })).toHaveCount(0);
-  await expect(card.getByRole('button', { name: 'Collega a una UDA', exact: true })).toHaveCount(0);
-
-  // Select the teaching context explicitly before handing the source to the shared Copilot.
-  await currentUda.selectOption({ label: UDA_TITLE });
+  const currentTarget = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await expect(currentTarget).toBeVisible();
+  await expect(libraryUseAction(card, 'prepare')).toBeVisible();
+  await expect(libraryUseAction(card, 'review')).toBeVisible();
+  await expect(libraryUseAction(card, 'link')).toBeVisible();
   trackContextualRequests = true;
   let composer = await handoffToComposer(page, card);
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
@@ -234,11 +232,10 @@ test('LIB-01B Copilot handoff and LINK controls stay touch-safe and overflow-fre
 
   const card = await sourceCard(page);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const currentUda = card.getByLabel('UDA corrente');
-  await expect(currentUda).toBeVisible();
-  await currentUda.selectOption({ label: UDA_TITLE });
+  const currentTarget = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await expect(currentTarget).toBeVisible();
 
-  const handoff = card.getByRole('button', { name: 'Usa con Copilota', exact: true });
+  const handoff = libraryUseAction(card, 'review');
   await assertAtLeast44(handoff, 'mobile source-to-Copilot handoff');
   const composer = await handoffToComposer(page, card);
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -104,16 +105,10 @@ async function openComposer(page) {
 async function classifyProfessional(page, title) {
   const card = await sourceCard(page, title);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const udaSelect = card.getByLabel('UDA corrente');
-  if (!(await udaSelect.isVisible().catch(() => false))) {
-    const changeContext = card.getByRole('button', { name: 'Cambia', exact: true });
-    await expect(changeContext).toBeVisible();
-    await changeContext.click();
-  }
+  const udaSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
   await expect(udaSelect).toBeVisible();
-  await udaSelect.selectOption({ label: UDA_TITLE });
 
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: title });

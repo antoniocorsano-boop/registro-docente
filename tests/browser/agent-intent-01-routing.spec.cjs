@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -91,12 +92,8 @@ async function sourceCard(page) {
 async function launchComposer(page) {
   const card = await sourceCard(page);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const udaSelect = card.getByLabel('UDA corrente');
-  if (!(await udaSelect.isVisible().catch(() => false))) {
-    await card.getByRole('button', { name: 'Cambia', exact: true }).click();
-  }
-  await udaSelect.selectOption({ label: UDA_TITLE });
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
+  await libraryUseAction(card, 'review').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
   await expectExistingCopilotBindings(composer, { sourceTitle: SOURCE_TITLE });
