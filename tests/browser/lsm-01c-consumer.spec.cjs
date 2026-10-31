@@ -211,6 +211,16 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   expect(proposalRequests).toEqual([]);
 
   await card.getByRole('button', { name: 'Prepara un’attività', exact: true }).click();
+  const classificationGate = card.getByTestId('library-professional-classification-gate');
+  await expect(classificationGate).toBeVisible();
+  await expect(classificationGate.getByText('Prima di continuare', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  page.once('dialog', dialog => {
+    expect(dialog.message()).toBe('Confermo che è materiale professionale del docente e non contiene dati personali degli studenti.');
+    void dialog.accept();
+  });
+  await classificationGate.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
   await expect(composer).toHaveAttribute('role', 'dialog');
@@ -235,11 +245,8 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(composerScroll).toHaveCSS('overflow-y', 'auto');
   await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
 
-  const classify = composer.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
-  await expect(classify).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: /^Continua$/ })).toHaveCount(0);
-
-  await classify.click();
   await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
   expect(proposalRequests).toEqual([]);
   const consent = composer.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
@@ -303,9 +310,21 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
     await expect(composer).toHaveAttribute('data-teaching-target', target);
   }
 
+  async function completeClassificationGateIfPresent(card) {
+    const gate = card.getByTestId('library-professional-classification-gate');
+    if (!(await gate.isVisible().catch(() => false))) return;
+    await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+    page.once('dialog', dialog => {
+      expect(dialog.message()).toBe('Confermo che è materiale professionale del docente e non contiene dati personali degli studenti.');
+      void dialog.accept();
+    });
+    await gate.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+  }
+
   // Establish an initial binding, then force PREPARE to switch both source and UDA.
   let use = await openUse(firstCard, MOBILE_UDA_TITLE);
   await libraryUseAction(firstCard, 'prepare').click();
+  await completeClassificationGateIfPresent(firstCard);
   let composer = page.getByTestId('library-copilot-composer');
   await expectBinding(composer, firstCard, use.target);
   await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
@@ -313,6 +332,7 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
 
   use = await openUse(secondCard, ALT_UDA_TITLE);
   await libraryUseAction(secondCard, 'prepare').click();
+  await completeClassificationGateIfPresent(secondCard);
   composer = page.getByTestId('library-copilot-composer');
   await expectBinding(composer, secondCard, use.target);
   await expect(composer.getByTestId('library-copilot-prepare-disclosure')).toBeVisible();
@@ -321,6 +341,7 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
   // REVIEW must wait until the first source/target are rebound, not reuse the second launch.
   use = await openUse(firstCard, MOBILE_UDA_TITLE);
   await libraryUseAction(firstCard, 'review').click();
+  await completeClassificationGateIfPresent(firstCard);
   composer = page.getByTestId('library-copilot-composer');
   await expectBinding(composer, firstCard, use.target);
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
@@ -329,6 +350,7 @@ test('LSM-01C-B direct launches settle exact source and teaching target across P
   // LINK switches both bindings again and the human-confirmation destination must be the requested UDA.
   use = await openUse(secondCard, ALT_UDA_TITLE);
   await libraryUseAction(secondCard, 'link').click();
+  await completeClassificationGateIfPresent(secondCard);
   composer = page.getByTestId('library-copilot-composer');
   await expectBinding(composer, secondCard, use.target);
   const linkAction = composer.getByTestId('library-copilot-link-action');
