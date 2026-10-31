@@ -154,7 +154,7 @@ test('contextual Copilot direct Library actions are intent-owned and keep provid
   expect(pageErrors).toEqual([]);
 });
 
-test('contextual Copilot direct REVIEW handoff stays touch-safe — mobile 390x844', async ({ browser }) => {
+test('contextual Copilot direct REVIEW gates professional classification before handoff — mobile 390x844', async ({ browser }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
@@ -172,7 +172,19 @@ test('contextual Copilot direct REVIEW handoff stays touch-safe — mobile 390x8
   const reviewAction = libraryUseAction(card, 'review');
   await assertAtLeast44(reviewAction, 'Library REVIEW action');
   await reviewAction.click();
+
   const composer = page.getByTestId('library-copilot-composer');
+  const classificationGate = card.getByTestId('library-professional-classification-gate');
+  await expect(classificationGate).toBeVisible();
+  await expect(classificationGate.getByText('Prima di continuare', { exact: true })).toBeVisible();
+  await expect(composer).toHaveCount(0);
+
+  page.once('dialog', async dialog => {
+    expect(dialog.message()).toContain('Confermo che è materiale professionale del docente');
+    await dialog.accept();
+  });
+  await classificationGate.getByRole('button', { name: 'Classifica come materiale professionale', exact: true }).click();
+
   await expectDirectCopilotLaunch(composer, { intent: 'review', contextText: CLASS_NAME, sourceCard: card });
   await expect(composer.getByTestId('library-copilot-review-panel')).toBeVisible();
   await assertAtLeast44(composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }), 'Copilot close');
