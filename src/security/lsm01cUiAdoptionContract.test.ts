@@ -27,7 +27,7 @@ describe('LSM-01C-A explicit session-only UI adoption', () => {
     expect(settings).not.toContain('fetch(');
   });
 
-  test('App owns the ephemeral client and performs health/sync only in explicit handlers', async () => {
+  test('App owns the ephemeral client and exposes its controls only from the Settings surface', async () => {
     const app = await Bun.file(APP).text();
 
     expect(app).toContain("from './semanticMemory/httpClient'");
@@ -40,20 +40,25 @@ describe('LSM-01C-A explicit session-only UI adoption', () => {
     expect(app).toContain('handleSyncSemanticMemory');
     expect(app).toContain('buildRegistroSemanticMemorySnapshot');
     expect(app).toContain('syncRegistroSemanticMemory');
+    expect(app).toContain("activeTab === 'impostazioni'");
+    expect(app).toContain('<SemanticMemorySettings');
     expect(app).not.toContain('semanticMemoryToken');
     expect(app).not.toContain('setSemanticMemoryToken');
   });
 
-  test('Library keeps textual search and existing local semantic fallback while preferring a ready LSM session', async () => {
+  test('Library keeps textual and semantic retrieval but does not duplicate connection or synchronization controls', async () => {
     const view = await Bun.file(LIBRARY_VIEW).text();
 
     expect(view).toContain('searchLibrarySources(library, query)');
     expect(view).toContain("retrieveLibrarySourcesByMeaning");
     expect(view).toContain("retrieveLibrarySourcesFromSemanticMemory");
     expect(view).toContain('semanticMemoryPort');
-    expect(view).toContain('semanticMemorySession');
-    expect(view).toContain('<SemanticMemorySettings');
     expect(view).toContain('semanticMemoryPort\n        ? await retrieveLibrarySourcesFromSemanticMemory');
+    expect(view).not.toContain('semanticMemorySession');
+    expect(view).not.toContain('<SemanticMemorySettings');
+    expect(view).not.toContain('onConnectSemanticMemory');
+    expect(view).not.toContain('onDisconnectSemanticMemory');
+    expect(view).not.toContain('onSyncSemanticMemory');
     expect(view).not.toContain('onChange={event => void handleRunSemanticSearch');
   });
 
