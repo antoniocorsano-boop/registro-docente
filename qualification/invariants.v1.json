@@ -309,6 +309,26 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
+    },
+    {
+      "id": "LSM-01C-I04",
+      "owner": "LSM-01C-B",
+      "statement": "On mobile, the Library Copilot keeps exactly the current PREPARE primary action reachable above the safe area while preserving a single scroll body, desktop layout, explicit consent, authorization and persistence governance.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/main.tsx",
+        "src/styles/lsm01cBMobilePrimaryActionDock.css",
+        "src/security/lsm01cBMobilePrimaryActionDockContract.test.ts",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/components/LibraryProposalPanel.tsx"
+      ],
+      "tests": [
+        "src/security/lsm01cBMobilePrimaryActionDockContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ]
     }
   ]
 }
