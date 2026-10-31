@@ -158,6 +158,11 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
 });
 
 test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Continua', async ({ page }) => {
+  const proposalRequests = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && pathname === '/api/copilot/library-proposal') proposalRequests.push(request.url());
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await setupFreshVault(page);
   await createMobileSyntheticClass(page);
@@ -180,6 +185,8 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
     expect(target).toBeTruthy();
     await contextSelect.selectOption(target.value);
   }
+  await expect(contextSelect.locator('option:checked')).toContainText(MOBILE_CLASS_NAME);
+  expect(proposalRequests).toEqual([]);
 
   await card.getByRole('button', { name: 'Prepara un’attività', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
@@ -201,6 +208,7 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
 
   await classify.click();
   await expect(composer.getByText('Preparazione assistita', { exact: true })).toBeVisible();
+  expect(proposalRequests).toEqual([]);
   const consent = composer.getByRole('button', { name: 'Consenti per questa richiesta', exact: true });
   await expect(consent).toBeVisible();
   await expect(consent).toHaveCount(1);
