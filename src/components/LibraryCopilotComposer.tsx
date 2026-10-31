@@ -730,13 +730,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       return;
     }
 
-    if (hasCompleteDirectLaunch && directLaunchIntent === 'prepare') {
-      setIsPrepareOpen(true);
-    }
     setErrorMessage(null);
     // A launch is an event identified by nonce. Library/source mutations must not replay it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchRequest?.nonce]);
+
+  useEffect(() => {
+    if (!directPrepareLaunchIsBound) return;
+    setIsPrepareOpen(true);
+  }, [launchRequest?.nonce, directPrepareLaunchIsBound]);
 
   useEffect(() => {
     if (!launchRequest || !requestedLaunchSourceId) return;
@@ -772,7 +774,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
-    if (!directPrepareLaunchIsBound) setIsPrepareOpen(false);
+    if (!(hasCompleteDirectLaunch && directLaunchIntent === 'prepare')) setIsPrepareOpen(false);
     setResolution(null);
     setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
