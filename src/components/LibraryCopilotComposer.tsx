@@ -774,7 +774,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   useEffect(() => {
     resolutionEpochRef.current += 1;
-    if (!(hasCompleteDirectLaunch && directLaunchIntent === 'prepare')) setIsPrepareOpen(false);
+    if (!directPrepareLaunchIsBound) setIsPrepareOpen(false);
     setResolution(null);
     setIsReviewUnavailableOpen(false);
     setGuidanceMessage(null);
