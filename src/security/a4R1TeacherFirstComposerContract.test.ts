@@ -85,6 +85,18 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(handler).not.toContain("if (hasBoundLaunchContext && goal === 'material') {\n      setContextOverride(null)");
   });
 
+  test('a bound source/context PREPARE choice stays in the teacher-first governed handoff', async () => {
+    const source = await composerSource();
+    const handlerStart = source.indexOf('const chooseTeacherFirstGoal =');
+    const handlerEnd = source.indexOf('const handleTeacherFirstProceed =', handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(handler).toMatch(/hasBoundLaunchContext[^\n]*goal === 'prepare'/);
+    expect(handler).toContain('setTeacherFirstResolution({ ...framed, goalKind: goal })');
+  });
+
   test('selecting the material quick start preserves an already unambiguous automatic teaching context', async () => {
     const source = await composerSource();
     const handlerStart = source.indexOf('const chooseTeacherFirstGoal =');
