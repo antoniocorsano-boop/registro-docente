@@ -212,6 +212,24 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).toContain('setIsResolving(false);');
   });
 
+
+  test('direct REVIEW/LINK waits for the exact requested source and teaching target before resolving', async () => {
+    const source = await composerSource();
+
+    expect(source).toContain('const directLaunchBindingsReady = Boolean(');
+    expect(source).toContain('selectedSource?.id === requestedLaunchSourceId');
+    expect(source).toContain('resolvedTeachingContext?.udaId === explicitLaunchTeachingContext.udaId');
+    expect(source).toContain("(resolvedTeachingContext?.lessonId ?? '') === (explicitLaunchTeachingContext.lessonId ?? '')");
+
+    const directResolverStart = source.indexOf("const actionId = directLaunchIntent === 'review'");
+    const directResolverEnd = source.indexOf('const resolutionKey = [', directResolverStart);
+    const directResolverGuard = source.slice(Math.max(0, directResolverStart - 280), directResolverEnd);
+
+    expect(directResolverStart).toBeGreaterThanOrEqual(0);
+    expect(directResolverEnd).toBeGreaterThan(directResolverStart);
+    expect(directResolverGuard).toContain('!directLaunchBindingsReady');
+  });
+
   test('mobile full-screen Library surfaces expose modal semantics and focus containment hooks', async () => {
     const composer = await composerSource();
     const card = await sourceCardSource();

@@ -282,6 +282,7 @@
         "src/components/LibraryCopilotComposer.tsx",
         "src/components/LibrarySourceCard.tsx",
         "src/library/copilotLaunchContext.ts",
+        "src/security/a4R1TeacherFirstComposerContract.test.ts",
         "tests/browser/agent-intent-01-routing.spec.cjs",
         "tests/browser/aic-02-prepare-outcome.spec.cjs",
         "tests/browser/aic-03-review-v2.spec.cjs",
@@ -298,7 +299,8 @@
         "tests/browser/teacher-first-copilot-helpers.cjs"
       ],
       "tests": [
-        "src/library/copilotLaunchContext.test.ts"
+        "src/library/copilotLaunchContext.test.ts",
+        "src/security/a4R1TeacherFirstComposerContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs",
