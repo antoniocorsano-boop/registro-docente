@@ -54,7 +54,7 @@ export class SemanticMemoryRevisionConflictError extends SemanticMemoryHttpError
   }
 }
 
-function normalizeLoopbackEndpoint(rawEndpoint: string): string {
+export function normalizeLoopbackEndpoint(rawEndpoint: string): string {
   const trimmed = rawEndpoint.trim();
   if (!trimmed) {
     throw new TypeError('Semantic memory endpoint is required');
