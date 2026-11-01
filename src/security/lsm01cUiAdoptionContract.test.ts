@@ -54,11 +54,15 @@ describe('LSM-01C-A explicit session-only UI adoption', () => {
     expect(view).toContain("retrieveLibrarySourcesFromSemanticMemory");
     expect(view).toContain('semanticMemoryPort');
     expect(view).toContain('semanticMemoryPort\n        ? await retrieveLibrarySourcesFromSemanticMemory');
-    expect(view).not.toContain('semanticMemorySession');
+    expect(view).toContain('semanticMemorySessionErrorCode');
+    expect(view).toContain('onSemanticMemorySessionExpired');
     expect(view).not.toContain('<SemanticMemorySettings');
     expect(view).not.toContain('onConnectSemanticMemory');
     expect(view).not.toContain('onDisconnectSemanticMemory');
     expect(view).not.toContain('onSyncSemanticMemory');
+    expect(view).not.toContain('activateSemanticMemorySession');
+    expect(view).not.toContain('createSemanticMemoryHttpClient');
+    expect(view).not.toContain('bootstrap.token');
     expect(view).not.toContain('onChange={event => void handleRunSemanticSearch');
   });
 
