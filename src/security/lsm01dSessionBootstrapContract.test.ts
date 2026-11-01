@@ -124,3 +124,25 @@ describe('LSM-01D zero-token session bootstrap', () => {
     }
   });
 });
+
+describe('LSM-01D zero-token activation UI contract', () => {
+  test('removes token entry and exposes one explicit activation gesture', async () => {
+    const settingsSource = await Bun.file(new URL('../components/SemanticMemorySettings.tsx', import.meta.url)).text();
+
+    expect(settingsSource).not.toContain('Token di sessione');
+    expect(settingsSource).not.toContain('type="password"');
+    expect(settingsSource).not.toContain('token: string');
+    expect(settingsSource).toContain('Attiva memoria locale');
+    expect(settingsSource).toContain("onConnect({ endpoint })");
+    expect(settingsSource).toContain('Sincronizza');
+  });
+
+  test('App bootstraps an ephemeral session before constructing the existing LSM client', async () => {
+    const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
+
+    expect(appSource).toContain('activateSemanticMemorySession');
+    expect(appSource).toContain('createSemanticMemoryHttpClient({ endpointUrl: endpoint, token: bootstrap.token })');
+    expect(appSource).not.toContain('SemanticMemoryConnectInput): Promise<boolean> => {\n    setSemanticMemorySession');
+    expect(appSource).not.toMatch(/localStorage|sessionStorage/);
+  });
+});
