@@ -338,15 +338,19 @@
         "qualification/invariants.v1.json",
         "src/semanticMemory/",
         "src/components/SemanticMemorySettings.tsx",
+        "src/components/LibraryView.tsx",
         "src/App.tsx",
         "src/security/lsm01dSessionBootstrapContract.test.ts",
-        "tests/browser/lsm-01d-zero-token.spec.cjs"
+        "src/security/lsm01dSessionExpiryContract.test.ts",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ],
       "tests": [
-        "src/security/lsm01dSessionBootstrapContract.test.ts"
+        "src/security/lsm01dSessionBootstrapContract.test.ts",
+        "src/security/lsm01dSessionExpiryContract.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/qualification-invariant-smoke.spec.cjs"
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
     }
   ]
