@@ -6,7 +6,7 @@ const path = require('node:path');
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence');
 const vaultPassword = 'lsm01c-browser-qualification';
-const tokenSentinel = 'lsm01c-session-token-sentinel';
+const capabilitySentinel = 'lsm01d-ephemeral-capability-sentinel';
 const SOURCE_TITLE = 'Fonte sintetica LSM-01C';
 const SOURCE_TEXT = 'Materiale professionale sintetico per verificare la continuità della ricerca testuale.';
 const MOBILE_CLASS_NAME = 'Classe Sintetica LSM-01C-B';
@@ -99,16 +99,18 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
-test('LSM-01C connection is explicit, session-only and fails safely without device loopback', async ({ page }) => {
+test('LSM-01C connection remains explicit and fails safely without device loopback', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const loopbackRequests = [];
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
 
   await page.route('http://127.0.0.1:8765/**', async route => {
+    const request = route.request();
     loopbackRequests.push({
-      method: route.request().method(),
-      url: route.request().url(),
+      method: request.method(),
+      url: request.url(),
+      authorization: request.headers().authorization || null,
     });
     await route.abort('connectionrefused');
   });
@@ -120,21 +122,20 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
   const settings = page.getByTestId('semantic-memory-settings');
   await expect(settings).toBeVisible();
   await expect(settings.getByLabel('Endpoint locale')).toHaveValue('http://127.0.0.1:8765');
-  const tokenInput = settings.getByLabel('Token di sessione');
-  await expect(tokenInput).toHaveAttribute('type', 'password');
-  await tokenInput.fill(tokenSentinel);
+  await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
+  await expect(settings.locator('input[type="password"]')).toHaveCount(0);
   expect(loopbackRequests).toHaveLength(0);
 
   const syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
   await expect(syncButton).toBeDisabled();
-  await settings.getByRole('button', { name: 'Connetti memoria locale', exact: true }).click();
+  await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
 
   await expect(settings.getByText('Connessione locale non disponibile. Controlla Termux e riprova.', { exact: true })).toBeVisible();
-  expect(loopbackRequests.length).toBeGreaterThan(0);
+  expect(loopbackRequests).toHaveLength(1);
+  expect(loopbackRequests[0].method).toBe('POST');
+  expect(new URL(loopbackRequests[0].url).pathname).toBe('/v1/session');
+  expect(loopbackRequests[0].authorization).toBeNull();
   await expect(syncButton).toBeDisabled();
-
-  const localStorageSnapshot = await page.evaluate(() => JSON.stringify({ ...window.localStorage }));
-  expect(localStorageSnapshot).not.toContain(tokenSentinel);
 
   await openLibrary(page);
   const disclosure = page.getByTestId('library-semantic-search-disclosure');
@@ -149,18 +150,110 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
   await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
 
   await page.screenshot({
-    path: path.join(evidenceDir, 'lsm-01c-consumer-explicit-loopback.png'),
+    path: path.join(evidenceDir, 'lsm-01d-consumer-explicit-loopback-failure.png'),
     fullPage: true,
   });
   fs.writeFileSync(
-    path.join(evidenceDir, 'lsm-01c-consumer-explicit-loopback.json'),
+    path.join(evidenceDir, 'lsm-01d-consumer-explicit-loopback-failure.json'),
     JSON.stringify({
       candidateSha: process.env.CANDIDATE_SHA || null,
       loopbackRequestsBeforeGesture: 0,
       loopbackRequestsAfterGesture: loopbackRequests.length,
-      loopbackMethods: loopbackRequests.map(request => request.method),
-      tokenPersistedToLocalStorage: localStorageSnapshot.includes(tokenSentinel),
+      bootstrapPath: new URL(loopbackRequests[0].url).pathname,
+      bootstrapAuthorizationHeader: loopbackRequests[0].authorization,
+      tokenFieldExposed: false,
       textualLibraryContinuity: true,
+      pageErrors,
+    }, null, 2),
+  );
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('LSM-01D activation obtains one ephemeral capability without persistence or automatic sync', async ({ page }) => {
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const loopbackRequests = [];
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error)));
+
+  await page.route('http://127.0.0.1:8765/**', async route => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    loopbackRequests.push({
+      method: request.method(),
+      url: request.url(),
+      authorization: request.headers().authorization || null,
+    });
+    if (pathname !== '/v1/session') {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': new URL(baseURL).origin,
+        'Cache-Control': 'no-store',
+      },
+      body: JSON.stringify({
+        schema: 'trama.semantic-memory-session/v1',
+        token: capabilitySentinel,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        health: {
+          schema: 'trama.semantic-memory-health/v1',
+          status: 'ready',
+          protocolVersion: 1,
+          modelId: 'embeddinggemma-2-local',
+          dimensions: 768,
+          indexRevision: '1',
+        },
+      }),
+    });
+  });
+
+  await setupFreshVault(page);
+  expect(loopbackRequests).toHaveLength(0);
+  await openSettings(page);
+  const settings = page.getByTestId('semantic-memory-settings');
+  await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
+  const syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
+  await expect(syncButton).toBeDisabled();
+  expect(loopbackRequests).toHaveLength(0);
+
+  await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
+  await expect(settings.getByText('Memoria locale connessa e pronta.', { exact: true })).toBeVisible();
+  await expect(syncButton).toBeEnabled();
+  await expect(settings.getByRole('button', { name: 'Disconnetti', exact: true })).toBeVisible();
+
+  expect(loopbackRequests).toHaveLength(1);
+  expect(loopbackRequests[0].method).toBe('POST');
+  expect(new URL(loopbackRequests[0].url).pathname).toBe('/v1/session');
+  expect(loopbackRequests[0].authorization).toBeNull();
+
+  await page.waitForTimeout(150);
+  expect(loopbackRequests).toHaveLength(1);
+  const storageSnapshots = await page.evaluate(() => ({
+    local: JSON.stringify({ ...window.localStorage }),
+    session: JSON.stringify({ ...window.sessionStorage }),
+  }));
+  expect(storageSnapshots.local).not.toContain(capabilitySentinel);
+  expect(storageSnapshots.session).not.toContain(capabilitySentinel);
+
+  await page.screenshot({
+    path: path.join(evidenceDir, 'lsm-01d-consumer-zero-token-ready.png'),
+    fullPage: true,
+  });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'lsm-01d-consumer-zero-token-ready.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      loopbackRequestsBeforeGesture: 0,
+      bootstrapRequests: loopbackRequests.length,
+      bootstrapPath: new URL(loopbackRequests[0].url).pathname,
+      bootstrapAuthorizationHeader: loopbackRequests[0].authorization,
+      capabilityPersistedToLocalStorage: storageSnapshots.local.includes(capabilitySentinel),
+      capabilityPersistedToSessionStorage: storageSnapshots.session.includes(capabilitySentinel),
+      automaticSyncRequests: loopbackRequests.length - 1,
       pageErrors,
     }, null, 2),
   );

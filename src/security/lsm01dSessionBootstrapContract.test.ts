@@ -140,9 +140,13 @@ describe('LSM-01D zero-token activation UI contract', () => {
   test('App bootstraps an ephemeral session before constructing the existing LSM client', async () => {
     const appSource = await Bun.file(new URL('../App.tsx', import.meta.url)).text();
 
-    expect(appSource).toContain('activateSemanticMemorySession');
-    expect(appSource).toContain('createSemanticMemoryHttpClient({ endpointUrl: endpoint, token: bootstrap.token })');
-    expect(appSource).not.toContain('SemanticMemoryConnectInput): Promise<boolean> => {\n    setSemanticMemorySession');
+    const bootstrapCall = 'const bootstrap = await activateSemanticMemorySession({ endpointUrl: endpoint })';
+    const clientCall = 'const client = createSemanticMemoryHttpClient({ endpointUrl: endpoint, token: bootstrap.token })';
+    const bootstrapIndex = appSource.indexOf(bootstrapCall);
+    const clientIndex = appSource.indexOf(clientCall, bootstrapIndex + bootstrapCall.length);
+
+    expect(bootstrapIndex).toBeGreaterThanOrEqual(0);
+    expect(clientIndex).toBeGreaterThan(bootstrapIndex);
     expect(appSource).not.toMatch(/localStorage|sessionStorage/);
   });
 });
