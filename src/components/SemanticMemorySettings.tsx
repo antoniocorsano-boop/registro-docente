@@ -20,7 +20,6 @@ export interface SemanticMemorySessionView {
 
 export interface SemanticMemoryConnectInput {
   endpoint: string;
-  token: string;
 }
 
 interface SemanticMemorySettingsProps {
@@ -75,18 +74,16 @@ export const SemanticMemorySettings: React.FC<SemanticMemorySettingsProps> = ({
   onSync,
 }) => {
   const [endpoint, setEndpoint] = useState(DEFAULT_ENDPOINT);
-  const [token, setToken] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const canSync = session.status === 'ready' || session.status === 'degraded';
   const connected = canSync || session.status === 'rebuild-required';
   const resultCopy = syncCopy(session.sync);
 
   const handleConnect = async () => {
-    if (!endpoint.trim() || !token.trim() || isConnecting) return;
+    if (!endpoint.trim() || isConnecting) return;
     setIsConnecting(true);
     try {
-      const connectedNow = await onConnect({ endpoint, token });
-      if (connectedNow) setToken('');
+      await onConnect({ endpoint });
     } finally {
       setIsConnecting(false);
     }
@@ -98,7 +95,7 @@ export const SemanticMemorySettings: React.FC<SemanticMemorySettingsProps> = ({
         <div>
           <p className="text-sm font-semibold text-slate-100">Memoria semantica locale</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Collegamento facoltativo a Termux. Il token resta solo sul dispositivo e solo per questa sessione.
+            Collegamento facoltativo a Termux. L’attivazione crea una credenziale locale effimera valida solo per questa sessione.
           </p>
         </div>
         <span className="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300">
@@ -108,24 +105,13 @@ export const SemanticMemorySettings: React.FC<SemanticMemorySettingsProps> = ({
 
       <p className="mt-2 text-xs text-slate-400" aria-live="polite">{sessionCopy(session)}</p>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="text-xs text-slate-400">
           Endpoint locale
           <input
             value={endpoint}
             onChange={event => setEndpoint(event.target.value)}
             inputMode="url"
-            autoComplete="off"
-            disabled={isConnecting || connected}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 disabled:opacity-60"
-          />
-        </label>
-        <label className="text-xs text-slate-400">
-          Token di sessione
-          <input
-            type="password"
-            value={token}
-            onChange={event => setToken(event.target.value)}
             autoComplete="off"
             disabled={isConnecting || connected}
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 disabled:opacity-60"
@@ -144,10 +130,10 @@ export const SemanticMemorySettings: React.FC<SemanticMemorySettingsProps> = ({
             <button
               type="button"
               onClick={() => void handleConnect()}
-              disabled={!endpoint.trim() || !token.trim() || isConnecting}
+              disabled={!endpoint.trim() || isConnecting}
               className="min-h-11 rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isConnecting ? 'Connessione…' : 'Connetti memoria locale'}
+              {isConnecting ? 'Attivazione…' : 'Attiva memoria locale'}
             </button>
           )}
         </div>

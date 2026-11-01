@@ -15,10 +15,10 @@ describe('LSM-01C-A explicit session-only UI adoption', () => {
 
     expect(settings.length).toBeGreaterThan(0);
     expect(settings).toContain("http://127.0.0.1:8765");
-    expect(settings).toContain('Connetti memoria locale');
+    expect(settings).toContain('Attiva memoria locale');
     expect(settings).toContain('Sincronizza');
-    expect(settings).toContain('type="password"');
-    expect(settings).toContain('solo sul dispositivo');
+    expect(settings).not.toContain('type="password"');
+    expect(settings).toContain('credenziale locale effimera');
     expect(settings).not.toContain('localStorage');
     expect(settings).not.toContain('sessionStorage');
     expect(settings).not.toContain('AppSettings');
@@ -36,7 +36,7 @@ describe('LSM-01C-A explicit session-only UI adoption', () => {
     expect(app).toContain('semanticMemoryPortRef');
     expect(app).toContain('handleConnectSemanticMemory');
     expect(app).toContain('createSemanticMemoryHttpClient');
-    expect(app).toContain('await client.health()');
+    expect(app).toContain('bootstrap.health');
     expect(app).toContain('handleSyncSemanticMemory');
     expect(app).toContain('buildRegistroSemanticMemorySnapshot');
     expect(app).toContain('syncRegistroSemanticMemory');
@@ -67,7 +67,7 @@ describe('LSM-01C-A explicit session-only UI adoption', () => {
 
     expect(settings).toContain("session.status === 'ready' || session.status === 'degraded'");
     expect(settings).toContain('disabled={!canSync || isSyncing}');
-    expect(settings).toContain('onConnect({ endpoint, token })');
+    expect(settings).toContain('onConnect({ endpoint })');
     expect(settings).toContain('onSync()');
   });
 });

@@ -123,6 +123,10 @@ import {
   createSemanticMemoryHttpClient,
   SemanticMemoryHttpError
 } from './semanticMemory/httpClient';
+import {
+  activateSemanticMemorySession,
+  SemanticMemorySessionBootstrapError
+} from './semanticMemory/sessionBootstrap';
 import { buildRegistroSemanticMemorySnapshot } from './semanticMemory/projections';
 import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 
@@ -325,8 +329,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const libraryMutationPendingCountRef = useRef(0);
 
   const handleConnectSemanticMemory = useCallback(async ({
-    endpoint,
-    token
+    endpoint
   }: SemanticMemoryConnectInput): Promise<boolean> => {
     setSemanticMemorySession({
       status: 'connecting',
@@ -335,8 +338,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       sync: null
     });
     try {
-      const client = createSemanticMemoryHttpClient({ endpointUrl: endpoint, token });
-      const health = await client.health();
+      const bootstrap = await activateSemanticMemorySession({ endpointUrl: endpoint });
+      const client = createSemanticMemoryHttpClient({ endpointUrl: endpoint, token: bootstrap.token });
+      const health = bootstrap.health;
       semanticMemoryPortRef.current = client;
       setSemanticMemorySession({
         status: health.status,
@@ -352,7 +356,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         endpoint: null,
         health: null,
         sync: null,
-        errorCode: error instanceof SemanticMemoryHttpError ? error.code : 'CONNECTION_FAILED'
+        errorCode: error instanceof SemanticMemorySessionBootstrapError
+          ? error.code
+          : error instanceof SemanticMemoryHttpError
+            ? error.code
+            : 'CONNECTION_FAILED'
       });
       return false;
     }
