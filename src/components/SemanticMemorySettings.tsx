@@ -14,6 +14,7 @@ export interface SemanticMemorySessionView {
   status: SemanticMemorySessionStatus;
   endpoint: string | null;
   health: SemanticMemoryHealthV1 | null;
+  expiresAt: string | null;
   sync: SemanticMemorySyncResult | null;
   errorCode?: string;
 }
@@ -33,6 +34,9 @@ interface SemanticMemorySettingsProps {
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:8765';
 
 function sessionCopy(session: SemanticMemorySessionView): string {
+  if (session.errorCode === 'SESSION_EXPIRED') {
+    return 'La sessione locale è scaduta. Attiva di nuovo la memoria locale.';
+  }
   switch (session.status) {
     case 'connecting':
       return 'Verifica della memoria locale in corso…';

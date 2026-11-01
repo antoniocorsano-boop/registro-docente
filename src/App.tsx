@@ -262,6 +262,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     status: 'disconnected',
     endpoint: null,
     health: null,
+    expiresAt: null,
     sync: null
   });
   const [isSemanticMemorySyncing, setIsSemanticMemorySyncing] = useState(false);
@@ -335,6 +336,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       status: 'connecting',
       endpoint: null,
       health: null,
+      expiresAt: null,
       sync: null
     });
     try {
@@ -346,6 +348,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         status: health.status,
         endpoint: new URL(endpoint).origin,
         health,
+        expiresAt: bootstrap.expiresAt,
         sync: null
       });
       return true;
@@ -355,6 +358,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         status: 'error',
         endpoint: null,
         health: null,
+        expiresAt: null,
         sync: null,
         errorCode: error instanceof SemanticMemorySessionBootstrapError
           ? error.code
@@ -372,7 +376,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       status: 'disconnected',
       endpoint: null,
       health: null,
+      expiresAt: null,
       sync: null
+    });
+    setIsSemanticMemorySyncing(false);
+  }, []);
+
+  const invalidateSemanticMemorySession = useCallback(() => {
+    semanticMemoryPortRef.current = null;
+    setSemanticMemorySession({
+      status: 'disconnected',
+      endpoint: null,
+      health: null,
+      expiresAt: null,
+      sync: null,
+      errorCode: 'SESSION_EXPIRED'
     });
     setIsSemanticMemorySyncing(false);
   }, []);
@@ -394,6 +412,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         endpoint,
         projections
       });
+      if (result.status === 'failed' && result.errorCode === 'HTTP_401') {
+        invalidateSemanticMemorySession();
+        return;
+      }
       setSemanticMemorySession(previous => ({
         ...previous,
         status: result.status === 'rebuild-required' ? 'rebuild-required' : previous.status,
@@ -411,7 +433,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } finally {
       setIsSemanticMemorySyncing(false);
     }
-  }, [isSemanticMemorySyncing, semanticMemorySession.endpoint, semanticMemorySession.status]);
+  }, [invalidateSemanticMemorySession, isSemanticMemorySyncing, semanticMemorySession.endpoint, semanticMemorySession.status]);
 
   const handleNavigateTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
@@ -1921,6 +1943,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 ? semanticMemoryPortRef.current
                 : null
             }
+            semanticMemorySessionErrorCode={semanticMemorySession.errorCode ?? null}
+            onSemanticMemorySessionExpired={invalidateSemanticMemorySession}
             onAddSource={handleAddLibrarySource}
             onUpdateSource={handleUpdateLibrarySource}
             onLinkSource={handleLinkLibrarySource}
