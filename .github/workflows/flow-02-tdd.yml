@@ -1,0 +1,51 @@
+name: FLOW-02 TDD
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/conduct/**'
+      - 'src/components/ConductLessonPanel.tsx'
+      - 'src/components/DashboardView.tsx'
+      - 'src/App.tsx'
+      - 'src/library/copilotLaunchContext.ts'
+      - 'src/today/todayRouter.ts'
+      - 'src/security/flow02*.test.ts'
+      - '.github/workflows/flow-02-tdd.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  focused-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Run FLOW-02 focused contracts
+        shell: bash
+        run: |
+          shopt -s nullglob
+          tests=(src/security/flow02*.test.ts)
+          if (( ${#tests[@]} == 0 )); then
+            echo 'No FLOW-02 contracts found.'
+            exit 1
+          fi
+          bun test "${tests[@]}"
+
+      - name: Typecheck
+        run: bun run lint
