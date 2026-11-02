@@ -89,8 +89,8 @@ workspace = replaceOnce(
 
 workspace = replaceOnce(
   workspace,
-  `          <LegacyUdaGanttView classes={classes} udas={udas} settings={settings} tests={tests} onSaveUdas={onSaveUdas} onNavigateTab={onNavigateTab} />`,
-  `          <LegacyUdaGanttView\n            classes={classes}\n            udas={udas}\n            settings={settings}\n            tests={tests}\n            onSaveUdas={onSaveUdas}\n            onNavigateTab={onNavigateTab}\n            recordLessonPrefill={recordLessonPrefill}\n            onRecordLessonCommitted={onRecordLessonCommitted}\n          />`,
+  `          <p className="mt-1 text-sm text-slate-400">Cronoprogramma, propedeuticità e gestione dettagliata delle UDA.</p>\n          </div>\n          <LegacyUdaGanttView classes={classes} udas={udas} settings={settings} tests={tests} onSaveUdas={onSaveUdas} onNavigateTab={onNavigateTab} />\n        </section>\n      )}\n\n      {activeView === 'analysis' && (`,
+  `          <p className="mt-1 text-sm text-slate-400">Cronoprogramma, propedeuticità e gestione dettagliata delle UDA.</p>\n          </div>\n          <LegacyUdaGanttView\n            classes={classes}\n            udas={udas}\n            settings={settings}\n            tests={tests}\n            onSaveUdas={onSaveUdas}\n            onNavigateTab={onNavigateTab}\n            recordLessonPrefill={recordLessonPrefill}\n            onRecordLessonCommitted={onRecordLessonCommitted}\n          />\n        </section>\n      )}\n\n      {activeView === 'analysis' && (`,
   'workspace planning Gantt handoff'
 );
 
