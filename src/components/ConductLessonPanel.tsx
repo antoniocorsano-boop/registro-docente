@@ -102,28 +102,30 @@ export const ConductLessonPanel: React.FC<ConductLessonPanelProps> = ({
         />
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+      <div className="pr-24 sm:pr-0">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+          <button
+            type="button"
+            onClick={onTogglePrivacyShield}
+            aria-pressed={privacyShieldActive}
+            className={`${actionClass} flex flex-1 items-center justify-between gap-3`}
+          >
+            <span>Privacy Shield</span>
+            <span className="text-xs font-bold uppercase tracking-wide">
+              {privacyShieldActive ? 'Attivo' : 'Disattivo'}
+            </span>
+          </button>
+          <button type="button" onClick={onOpenCopilot} className={`${actionClass} flex-1`}>Chiedi supporto</button>
+        </div>
+
         <button
           type="button"
-          onClick={onTogglePrivacyShield}
-          aria-pressed={privacyShieldActive}
-          className={`${actionClass} flex flex-1 items-center justify-between gap-3`}
+          onClick={onGoToRecord}
+          className="mt-4 min-h-[44px] w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
         >
-          <span>Privacy Shield</span>
-          <span className="text-xs font-bold uppercase tracking-wide">
-            {privacyShieldActive ? 'Attivo' : 'Disattivo'}
-          </span>
+          Vai a Registra
         </button>
-        <button type="button" onClick={onOpenCopilot} className={`${actionClass} flex-1`}>Chiedi supporto</button>
       </div>
-
-      <button
-        type="button"
-        onClick={onGoToRecord}
-        className="mt-4 min-h-[44px] w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-      >
-        Vai a Registra
-      </button>
     </section>
   );
 };
