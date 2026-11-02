@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { revealMaterialSourceSelect, expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
+const { revealMaterialSourceSelect, expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -104,42 +105,25 @@ async function openComposer(page) {
 async function classifyProfessional(page, title) {
   const card = await sourceCard(page, title);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const udaSelect = card.getByLabel('UDA corrente');
-  if (!(await udaSelect.isVisible().catch(() => false))) {
-    const changeContext = card.getByRole('button', { name: 'Cambia', exact: true });
-    await expect(changeContext).toBeVisible();
-    await changeContext.click();
-  }
+  const udaSelect = await selectLibraryUseTarget(card, { udaTitle: UDA_TITLE });
   await expect(udaSelect).toBeVisible();
-  await udaSelect.selectOption({ label: UDA_TITLE });
 
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, { sourceTitle: title });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', sourceCard: card });
 
-  const disclosure = await openPrepareFromIntent(composer);
-  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
-  await expect(classify).toBeVisible();
-  await classify.click();
-  await expect(classify).toHaveCount(0);
+  const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true })).toHaveCount(0);
   await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
   await expect(composer).toBeHidden();
 }
 
 async function classifyProfessionalUsingCurrentCopilotContext(page, title) {
-  const composer = await openComposer(page);
-  const sourceSelect = await revealMaterialSourceSelect(composer);
-  await sourceSelect.selectOption({ label: title });
-  await expect(sourceSelect.locator('option:checked')).toHaveText(title);
-
-  const disclosure = await openPrepareFromIntent(composer);
-  const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
-  await expect(classify).toBeVisible();
-  await classify.click();
-  await expect(classify).toHaveCount(0);
-  await composer.getByRole('button', { name: 'Chiudi Copilota', exact: true }).click();
-  await expect(composer).toBeHidden();
+  // Professional classification is source-owned and must happen in the Library use surface,
+  // never inside the Copilot. Reuse the canonical direct Library journey.
+  await classifyProfessional(page, title);
 }
 
 async function assertAtLeast44(locator, label) {

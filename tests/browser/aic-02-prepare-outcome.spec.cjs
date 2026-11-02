@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { expectExistingCopilotBindings } = require('./teacher-first-copilot-helpers.cjs');
+const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
+const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -231,29 +232,18 @@ async function sourceCard(page, title) {
 async function launchComposer(page, { lesson = false } = {}) {
   const card = await sourceCard(page, SOURCE_TITLE);
   await card.getByRole('button', { name: 'Usa', exact: true }).click();
-  const udaSelect = card.getByLabel('UDA corrente');
-  if (!(await udaSelect.isVisible().catch(() => false))) {
-    await card.getByRole('button', { name: 'Cambia', exact: true }).click();
-  }
-  await udaSelect.selectOption({ label: UDA_TITLE });
-  if (lesson) {
-    const lessonSelect = card.getByLabel('Lezione corrente');
-    await expect(lessonSelect).toBeVisible();
-    await lessonSelect.selectOption({ label: LESSON_TOPIC });
-  }
-  await card.getByRole('button', { name: 'Usa con Copilota', exact: true }).click();
+  await selectLibraryUseTarget(card, {
+    udaTitle: UDA_TITLE,
+    ...(lesson ? { lessonTopic: LESSON_TOPIC } : {})
+  });
+  await libraryUseAction(card, 'prepare').click();
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
-  await expectExistingCopilotBindings(composer, {
-    sourceTitle: SOURCE_TITLE,
-    contextText: CLASS_NAME
-  });
+  await expectDirectCopilotLaunch(composer, { intent: 'prepare', contextText: CLASS_NAME, sourceCard: card });
   return composer;
 }
 
 async function generateProposal(composer) {
-  await composer.getByLabel('Che cosa vuoi farne?').fill(REAL_PHRASE);
-  await composer.getByRole('button', { name: 'Mostra le possibilità', exact: true }).click();
   const disclosure = composer.getByTestId('library-copilot-prepare-disclosure');
   await expect(disclosure).toBeVisible();
   const classify = disclosure.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });

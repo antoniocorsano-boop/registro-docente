@@ -67,6 +67,7 @@ jobs:
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
+          cp tests/browser/library-use-surface-helpers.cjs .browser-tools/library-use-surface-helpers.cjs
           cp tests/browser/agent-intent-01-routing.spec.cjs .browser-tools/agent-intent-01-routing.spec.cjs
           cp tests/browser/aic-01-context-projection.spec.cjs .browser-tools/aic-01-context-projection.spec.cjs
           cp tests/browser/aic-02-prepare-outcome.spec.cjs .browser-tools/aic-02-prepare-outcome.spec.cjs

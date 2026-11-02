@@ -137,7 +137,10 @@ describe('LIB-01B shared Contextual Copilot Core integration', () => {
     const card = await Bun.file(CARD).text();
     const composer = await Bun.file(COMPOSER).text();
 
-    expect(card).toContain('Usa con Copilota');
+    expect(card).toContain('openCopilotForIntent');
+    expect(card).toContain('Prepara un’attività');
+    expect(card).toContain('Rivedi nel contesto');
+    expect(card).toContain('Collega alla UDA');
     expect(card).not.toContain('resolveLibraryContextActions');
     expect(card).not.toContain('dispatchLibraryContextAction');
     expect(composer).toContain('resolveLibraryCopilotRequest');
