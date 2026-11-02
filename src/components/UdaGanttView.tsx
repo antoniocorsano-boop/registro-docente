@@ -55,6 +55,15 @@ import {
 import { createUdaSnapshotMutation } from '../persistence/udaSnapshotMutation';
 import { getSchoolMonthIndex, getUdaGapSeverity, getUdaRemediationCopy } from '../analytics/udaSemantics';
 
+export interface RecordLessonPrefill {
+  className: string;
+  udaId?: string;
+  date: string;
+  topic?: string;
+  notes?: string;
+  navigationVersion: number;
+}
+
 interface UdaGanttViewProps {
   classes: ClassData[];
   udas: UdaRecord[];
@@ -62,6 +71,8 @@ interface UdaGanttViewProps {
   tests?: Record<string, OnlineTest>;
   onSaveUdas: (udas: UdaRecord[]) => Promise<void>;
   onNavigateTab?: (tab: any) => void;
+  recordLessonPrefill?: RecordLessonPrefill;
+  onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
 }
 
 // Internal planning coefficients for the UDA activity index; not a normative scale
@@ -444,7 +455,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   settings,
   tests = {},
   onSaveUdas,
-  onNavigateTab
+  onNavigateTab,
+  recordLessonPrefill,
+  onRecordLessonCommitted
 }) => {
   // Master class filter at the top bar that keeps all views aligned
   const [selectedMasterClass, setSelectedMasterClass] = useState<string>('all');
@@ -785,6 +798,41 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const [newLessonHours, setNewLessonHours] = useState(2);
   const [newLessonNotes, setNewLessonNotes] = useState('');
   const [newLessonType, setNewLessonType] = useState<UdaActivityType>('teoria');
+  const recordLessonPrefillSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!recordLessonPrefill) return;
+
+    const signature = JSON.stringify([
+      recordLessonPrefill.className,
+      recordLessonPrefill.udaId ?? null,
+      recordLessonPrefill.date,
+      recordLessonPrefill.topic ?? null,
+      recordLessonPrefill.notes ?? null,
+      recordLessonPrefill.navigationVersion
+    ]);
+    if (recordLessonPrefillSignatureRef.current === signature) return;
+    recordLessonPrefillSignatureRef.current = signature;
+
+    setSelectedMasterClass(recordLessonPrefill.className);
+    setClassFilter(recordLessonPrefill.className);
+    setGapClassFilter(recordLessonPrefill.className);
+    setSummaryClassFilter(recordLessonPrefill.className);
+
+    const safeTarget = recordLessonPrefill.udaId
+      ? udas.find(uda => uda.id === recordLessonPrefill.udaId && uda.className === recordLessonPrefill.className)
+      : undefined;
+
+    if (!safeTarget) {
+      setSelectedUdaForDetail(null);
+      return;
+    }
+
+    setSelectedUdaForDetail(safeTarget);
+    setNewLessonDate(recordLessonPrefill.date);
+    setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
+    setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
+  }, [recordLessonPrefill, udas]);
 
   // Months full Italian naming
   const MONTHS_FULL_NAMES = [
@@ -1113,6 +1161,13 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       setNewLessonTopic('');
       setNewLessonNotes('');
       showStatus('Attività registrata nel diario');
+      if (
+        recordLessonPrefill &&
+        recordLessonPrefill.className === updatedUda.className &&
+        (!recordLessonPrefill.udaId || recordLessonPrefill.udaId === updatedUda.id)
+      ) {
+        onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);
+      }
     });
   };
 
@@ -3026,6 +3081,14 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  <textarea
+                    rows={2}
+                    value={newLessonNotes}
+                    onChange={e => setNewLessonNotes(e.target.value)}
+                    placeholder="Note professionali opzionali sulla lezione..."
+                    className="w-full p-2 rounded bg-slate-950 border border-slate-800 text-white resize-y"
+                  />
                 </form>
 
                 {/* Lessons list */}

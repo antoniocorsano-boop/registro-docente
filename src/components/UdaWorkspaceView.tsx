@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AppSettings, ClassData, OnlineTest, UdaRecord } from '../types';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import { uid } from '../utils';
 import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';
+import type { RecordLessonPrefill } from './UdaGanttView.tsx';
 
 type WorkspaceView = 'uda' | 'progress' | 'planning' | 'analysis';
 
@@ -13,6 +14,8 @@ interface UdaWorkspaceViewProps {
   tests?: Record<string, OnlineTest>;
   onSaveUdas: (udas: UdaRecord[]) => Promise<void>;
   onNavigateTab?: (tab: any) => void;
+  recordLessonPrefill?: RecordLessonPrefill;
+  onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   onOpenCopilot?: (context: CopilotLaunchContext) => void;
 }
 
@@ -32,6 +35,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   tests,
   onSaveUdas,
   onNavigateTab,
+  recordLessonPrefill,
+  onRecordLessonCommitted,
   onOpenCopilot
 }) => {
   const [activeView, setActiveView] = useState<WorkspaceView>('uda');
@@ -46,6 +51,12 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recordLessonPrefill) return;
+    setActiveView('planning');
+    setClassFilter(recordLessonPrefill.className);
+  }, [recordLessonPrefill]);
 
   const filteredUdas = useMemo(
     () => classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),
@@ -203,7 +214,16 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
             <h3 className="font-semibold text-cyan-200">Pianificazione</h3>
             <p className="mt-1 text-sm text-slate-400">Cronoprogramma, propedeuticità e gestione dettagliata delle UDA.</p>
           </div>
-          <LegacyUdaGanttView classes={classes} udas={udas} settings={settings} tests={tests} onSaveUdas={onSaveUdas} onNavigateTab={onNavigateTab} />
+          <LegacyUdaGanttView
+            classes={classes}
+            udas={udas}
+            settings={settings}
+            tests={tests}
+            onSaveUdas={onSaveUdas}
+            onNavigateTab={onNavigateTab}
+            recordLessonPrefill={recordLessonPrefill}
+            onRecordLessonCommitted={onRecordLessonCommitted}
+          />
         </section>
       )}
 

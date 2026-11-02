@@ -290,6 +290,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setRecordSession(next);
   }, []);
   const navigationVersionRef = useRef(0);
+  const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const setActiveTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
@@ -1424,6 +1425,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const route = routeForRecordEvidence(kind);
     setTodayAction('record');
     setActiveTab(route.tab);
+    recordSpecialistNavigationVersionRef.current = navigationVersionRef.current;
 
     try {
       const classId = currentClassIdRef.current;
@@ -1433,6 +1435,24 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       history.pushState({ classId, tab: route.tab }, '', `?${params.toString()}`);
     } catch (e) {}
   }, [publishRecordSession, setActiveTab]);
+
+  const handleRecordLessonCommitted = useCallback((udaId: string, navigationVersionAtSave: number) => {
+    const session = recordSessionRef.current;
+    if (
+      !session ||
+      session.status !== 'editing' ||
+      session.evidenceKind !== 'lesson-log' ||
+      session.context.classId !== currentClassIdRef.current ||
+      (session.context.udaId && session.context.udaId !== udaId)
+    ) {
+      return;
+    }
+
+    const completed = completeRecordFlow('lesson-log', navigationVersionAtSave);
+    if (completed) {
+      recordSpecialistNavigationVersionRef.current = null;
+    }
+  }, [completeRecordFlow]);
 
   const handleUpdateRecordStagedNote = useCallback((note: string) => {
     const session = recordSessionRef.current;
@@ -2192,6 +2212,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             tests={tests}
             onSaveUdas={handleSaveUdas}
             onNavigateTab={handleNavigateTab}
+            recordLessonPrefill={recordSession?.status === 'editing' && recordSession.evidenceKind === 'lesson-log'
+              && recordSession.context.classId === currentClass?.id
+              && recordSpecialistNavigationVersionRef.current !== null
+              ? {
+                  className: recordSession.context.className,
+                  udaId: recordSession.context.udaId,
+                  date: today(),
+                  topic: recordSession.context.activityLabel,
+                  notes: recordSession.stagedNote,
+                  navigationVersion: recordSpecialistNavigationVersionRef.current
+                }
+              : undefined}
+            onRecordLessonCommitted={handleRecordLessonCommitted}
             onOpenCopilot={openLibraryCopilot}
           />
         )}
