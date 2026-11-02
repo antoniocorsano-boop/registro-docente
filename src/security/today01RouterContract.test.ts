@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const ROUTER_MODULE_URL = new URL('../today/todayRouter.ts', import.meta.url);
 const ROUTER_MODULE_PATH = fileURLToPath(ROUTER_MODULE_URL);
 const ACTIONS = ['prepare', 'conduct', 'record', 'review'] as const;
+const CONTINUATION_ACTIONS = ['conduct', 'record', 'review'] as const;
 
 const routerExists = () => existsSync(ROUTER_MODULE_PATH);
 
@@ -50,16 +51,10 @@ describe('TODAY-01 routing contract', () => {
     });
   });
 
-  test('exposes only existing authoritative continuation surfaces in stable order', async () => {
+  test('keeps non-Prepara continuation surfaces authoritative and stable', async () => {
     const router = await loadRouter();
     if (!router) return;
 
-    expect(router.getTodayContinuationOptions('prepare').map(option => option.tab)).toEqual([
-      'uda-gantt',
-      'programmazione',
-      'biblioteca',
-      'verifiche-online'
-    ]);
     expect(router.getTodayContinuationOptions('conduct').map(option => option.tab)).toEqual([
       'uda-gantt',
       'verifiche-online'
@@ -76,11 +71,11 @@ describe('TODAY-01 routing contract', () => {
     ]);
   });
 
-  test('continuation metadata is navigation-only', async () => {
+  test('non-Prepara continuation metadata remains navigation-only', async () => {
     const router = await loadRouter();
     if (!router) return;
 
-    for (const action of ACTIONS) {
+    for (const action of CONTINUATION_ACTIONS) {
       for (const option of router.getTodayContinuationOptions(action)) {
         expect(Object.keys(option).sort()).toEqual(['label', 'tab']);
         expect(option.label.trim().length).toBeGreaterThan(0);
