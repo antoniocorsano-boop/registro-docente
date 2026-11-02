@@ -24,7 +24,7 @@ describe('CTX-01 qualification invariant', () => {
     expect(invariant?.statement).toContain('fail closed');
   });
 
-  test('covers product wiring and every CTX-01 contract test', () => {
+  test('covers product wiring, CTX-01 contracts and inherited context/privacy contracts', () => {
     const invariant = registry.invariants.find(entry => entry.id === 'CTX-01-I01');
     const impactPaths = new Set(invariant?.impactPaths ?? []);
     const tests = new Set(invariant?.tests ?? []);
@@ -35,9 +35,13 @@ describe('CTX-01 qualification invariant', () => {
     expect(impactPaths.has('src/security/ctx01ProfessionalContext.test.ts')).toBe(true);
     expect(impactPaths.has('src/security/ctx01AppIntegrationContract.test.ts')).toBe(true);
     expect(impactPaths.has('src/security/ctx01QualificationContract.test.ts')).toBe(true);
+    expect(impactPaths.has('src/security/librarySingleCopilotSurfaceContract.test.ts')).toBe(true);
+    expect(impactPaths.has('src/security/aic01ContextPrivacyContract.test.ts')).toBe(true);
 
     expect(tests.has('src/security/ctx01ProfessionalContext.test.ts')).toBe(true);
     expect(tests.has('src/security/ctx01AppIntegrationContract.test.ts')).toBe(true);
     expect(tests.has('src/security/ctx01QualificationContract.test.ts')).toBe(true);
+    expect(tests.has('src/security/librarySingleCopilotSurfaceContract.test.ts')).toBe(true);
+    expect(tests.has('src/security/aic01ContextPrivacyContract.test.ts')).toBe(true);
   });
 });
