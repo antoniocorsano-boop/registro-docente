@@ -1,6 +1,7 @@
 import type { ActiveTab } from '../types';
 
 export type TodayAction = 'prepare' | 'conduct' | 'record' | 'review';
+export type TodayContinuationAction = Exclude<TodayAction, 'prepare'>;
 
 export type TodayRouteDecision =
   | { status: 'needs-class'; action: TodayAction }
@@ -11,13 +12,7 @@ export interface TodayContinuationOption {
   label: string;
 }
 
-const CONTINUATION_OPTIONS: Record<TodayAction, readonly TodayContinuationOption[]> = {
-  prepare: [
-    { tab: 'uda-gantt', label: 'UDA' },
-    { tab: 'programmazione', label: 'Programmazione' },
-    { tab: 'biblioteca', label: 'Biblioteca' },
-    { tab: 'verifiche-online', label: 'Verifiche online' }
-  ],
+const CONTINUATION_OPTIONS: Record<TodayContinuationAction, readonly TodayContinuationOption[]> = {
   conduct: [
     { tab: 'uda-gantt', label: 'UDA' },
     { tab: 'verifiche-online', label: 'Verifiche online' }
@@ -52,7 +47,7 @@ export function resolveTodayRoute(
 }
 
 export function getTodayContinuationOptions(
-  action: TodayAction
+  action: TodayContinuationAction
 ): readonly TodayContinuationOption[] {
   return CONTINUATION_OPTIONS[action];
 }

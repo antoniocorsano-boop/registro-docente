@@ -13,21 +13,25 @@ function sectionBetween(text: string, start: string, end: string) {
 }
 
 describe('TODAY-01 Dashboard continuation contract', () => {
-  test('extends Dashboard only with navigation-only Oggi continuation props', async () => {
+  test('extends Dashboard with one FLOW-01 prepare panel and navigation-only Oggi continuation props', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
+    expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
     expect(dashboard).toContain("import { getTodayContinuationOptions, type TodayAction } from '../today/todayRouter';");
     expect(dashboard).toContain('todayAction?: TodayAction | null;');
     expect(dashboard).toContain('onContinueToday?: (tab: ActiveTab) => void;');
     expect(dashboard).toContain('onDismissToday?: () => void;');
+    expect(dashboard).toContain('onOpenPreparationCopilot?: () => void;');
     expect(dashboard).not.toContain('onSaveToday');
     expect(dashboard).not.toContain('onCreateToday');
   });
 
-  test('renders a compact continuation block only from the pure router options', async () => {
+  test('delegates prepare while keeping compact generic continuations for the other TODAY actions', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
-    expect(dashboard).toContain('todayAction && (');
+    expect(dashboard).toContain("todayAction === 'prepare'");
+    expect(dashboard).toContain('<PreparationRouterPanel');
+    expect(dashboard).toContain("todayAction && todayAction !== 'prepare'");
     expect(dashboard).toContain('getTodayContinuationOptions(todayAction)');
     expect(dashboard).toContain('Continua:');
     expect(dashboard).toContain('min-h-[44px]');

@@ -2,21 +2,17 @@ import React from 'react';
 import { ActiveTab, ClassData } from '../types';
 import { calcAvg, formatGrade, TYPES_LABEL } from '../utils';
 import { Sparkline } from './Sparkline';
+import { PreparationRouterPanel } from './PreparationRouterPanel';
 import { getTodayContinuationOptions, type TodayAction } from '../today/todayRouter';
 import {
   ClipboardList,
   Sparkles,
   Table,
   BarChart3,
-  Users,
-  GraduationCap,
-  Calendar,
-  CheckCircle,
-  AlertCircle
+  Calendar
 } from 'lucide-react';
 
-const TODAY_ACTION_LABELS: Record<TodayAction, string> = {
-  prepare: 'Prepara',
+const TODAY_ACTION_LABELS: Record<Exclude<TodayAction, 'prepare'>, string> = {
   conduct: 'Conduci',
   record: 'Registra',
   review: 'Rivedi'
@@ -29,6 +25,7 @@ interface DashboardViewProps {
   todayAction?: TodayAction | null;
   onContinueToday?: (tab: ActiveTab) => void;
   onDismissToday?: () => void;
+  onOpenPreparationCopilot?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -37,7 +34,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onEditBatch,
   todayAction = null,
   onContinueToday,
-  onDismissToday
+  onDismissToday,
+  onOpenPreparationCopilot
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
@@ -80,7 +78,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {todayAction && (
+      {todayAction === 'prepare' && (
+        <PreparationRouterPanel
+          className={currentClass.name}
+          onNavigateTab={(tab) => onContinueToday?.(tab)}
+          onOpenCopilot={() => onOpenPreparationCopilot?.()}
+          onDismiss={() => onDismissToday?.()}
+        />
+      )}
+
+      {todayAction && todayAction !== 'prepare' && (
         <section className="neon-card p-4" aria-label={`Continua: ${TODAY_ACTION_LABELS[todayAction]}`}>
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
