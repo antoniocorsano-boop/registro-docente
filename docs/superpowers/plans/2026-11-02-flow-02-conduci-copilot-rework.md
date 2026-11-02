@@ -40,7 +40,7 @@
 - Consumes: `LibraryCopilotComposer.tsx` source and `LibraryLaunchIntent` contract.
 - Produces: executable copy/presentation contract for the `conduct` entry.
 
-- [ ] **Step 1: Write failing source contract**
+- [x] **Step 1: Write failing source contract**
 
 Assert that the composer contains:
 - `const isConductLaunch = directLaunchIntent === 'conduct';`
@@ -50,13 +50,13 @@ Assert that the composer contains:
 - a conduct branch that does not render the generic four-goal grid;
 - conduct context label without `contesto UDA non univoco`.
 
-- [ ] **Step 2: Run focused contract and verify RED**
+- [x] **Step 2: Run focused contract and verify RED**
 
 Run: `bun test src/security/flow02ConductCopilotUxContract.test.ts`
 
 Expected: FAIL because the conduct-specific presentation branch is absent.
 
-- [ ] **Step 3: Commit the RED contract**
+- [x] **Step 3: Commit the RED contract**
 
 Commit message: `test: define FLOW-02 conduct Copilot UX rework`
 
@@ -75,26 +75,26 @@ Commit message: `test: define FLOW-02 conduct Copilot UX rework`
 - Consumes: `launchRequest.context.intent`, existing `handleResolve`, `resolveObjective`, `routeAgentIntent` result kinds.
 - Produces: conduct-specific copy and submission path; no new external API.
 
-- [ ] **Step 1: Implement `isConductLaunch` presentation branch**
+- [x] **Step 1: Implement `isConductLaunch` presentation branch**
 
 Keep generic entry unchanged for non-conduct launches. For conduct launches use the exact copy from the spec and hide the four-goal grid.
 
-- [ ] **Step 2: Route conduct submissions through `resolveObjective()`**
+- [x] **Step 2: Route conduct submissions through `resolveObjective()`**
 
 In `handleResolve`, bypass `frameTeacherFirstObjective()` when `isConductLaunch` is true. Do not alter non-conduct routing.
 
-- [ ] **Step 3: Add conduct-specific `SOURCE_REQUIRED` and `UNSUPPORTED` guidance**
+- [x] **Step 3: Add conduct-specific `SOURCE_REQUIRED` and `UNSUPPORTED` guidance**
 
 Use the exact strings from the spec only when `isConductLaunch`; preserve generic messages otherwise.
 
-- [ ] **Step 4: Run focused and regression contracts**
+- [x] **Step 4: Run focused and regression contracts**
 
 Run:
 `bun test src/security/flow02ConductCopilotUxContract.test.ts src/security/flow02AppIntegrationContract.test.ts src/security/a4R1TeacherFirstComposerContract.test.ts src/security/librarySingleCopilotSurfaceContract.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit message: `fix: contextualize Copilot for FLOW-02 conduct`
 
@@ -111,7 +111,7 @@ Commit message: `fix: contextualize Copilot for FLOW-02 conduct`
 - Consumes: Task 2 conduct-specific UI.
 - Produces: exact-SHA browser evidence and invariant coverage for the new UX contract.
 
-- [ ] **Step 1: Extend FLOW-02 Chromium assertions**
+- [x] **Step 1: Extend FLOW-02 Chromium assertions**
 
 When the Copilot opens from `Conduci`, assert:
 - `Supporto durante la lezione` visible;
@@ -120,11 +120,11 @@ When the Copilot opens from `Conduci`, assert:
 - `contesto UDA non univoco` is absent;
 - rapid-note text remains absent.
 
-- [ ] **Step 2: Register the new source contract under `FLOW-02-I01`**
+- [x] **Step 2: Register the new source contract under `FLOW-02-I01`**
 
 Add `src/security/flow02ConductCopilotUxContract.test.ts` to both `impactPaths` and `tests`, and extend `flow02QualificationContract.test.ts` accordingly.
 
-- [ ] **Step 3: Run focused qualification contract**
+- [x] **Step 3: Run focused qualification contract**
 
 Run: `bun test src/security/flow02QualificationContract.test.ts src/security/flow02ConductCopilotUxContract.test.ts`
 
@@ -149,3 +149,16 @@ Require `0 Critical / 0 Important` before returning to Human Product/UX Review.
 
 State the final exact SHA, fresh run IDs, evidence digest and status:
 `ENGINEERING QUALIFIED / FINAL INDEPENDENT REVIEW PASS / HUMAN PRODUCT-UX REVIEW PENDING / DRAFT / NO MERGE / NO DEPLOY`.
+
+
+## Implementation receipt before final exact-SHA requalification
+
+- Human Product/UX requested the Conduct Copilot rework after the first FLOW-02 engineering qualification.
+- Focused RED: PREDEPLOY #1457 on `63f9266739e55e55e9d3208340195b28965c280e` failed only the newly introduced `flow02ConductCopilotUxContract.test.ts`.
+- Focused GREEN: PREDEPLOY #1459 on `0659022ef1e6a8cf9b2be4a3e278f0fcdda786df` passed the new contract together with typecheck, security, Library, build and startup smoke.
+- Browser/invariant evidence was extended in `3749a88a0421b0f821f096d14deb45e90b21df9e`.
+- Temporary TDD workflow and temporary PREDEPLOY instrumentation were removed in `aa7ec8663186b7b5c59831d7344ad2a0d8f96dec`; canonical workflow content is restored.
+- Qualification Invariants #210 on `aa7ec8663186b7b5c59831d7344ad2a0d8f96dec` is PASS and FLOW-02 Chromium has already passed in Browser #1134.
+- Manual PREDEPLOY #1462 on the cleanup commit is not a product failure: `workflow_dispatch` had no PR base SHA and therefore compared the cleanup commit only with its parent, interpreting deletion of the temporary TDD workflow as an uncovered guarded path. All substantive checks in that run passed (827 security tests, 113 Library tests, typecheck, build and startup smoke).
+- The final canonical qualification remains pending on the documentation-only closure candidate created from this clean parent.
+- No merge and no deploy were performed.
