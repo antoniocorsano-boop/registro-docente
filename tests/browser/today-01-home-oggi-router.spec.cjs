@@ -62,7 +62,9 @@ test.describe('TODAY-01 desktop qualification', () => {
     await page.getByRole('button', { name: 'Prepara', exact: true }).click();
     const pending = page.getByRole('status');
     await expect(pending).toContainText('Per continuare con Prepara, scegli una classe.');
-    await expect(page.getByRole('button', { name: /^Apri classe / })).toHaveCount(0);
+    const classChoices = page.getByRole('button', { name: /^Apri classe / });
+    expect(await classChoices.count()).toBeGreaterThan(0);
+    await expect(page.getByRole('region', { name: 'Continua: Prepara' })).toHaveCount(0);
     await pending.getByRole('button', { name: 'Annulla azione di oggi' }).click();
     await expect(pending).toBeHidden();
 
