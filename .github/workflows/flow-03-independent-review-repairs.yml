@@ -7,6 +7,7 @@ on:
     paths:
       - scripts/flow03-independent-review-repairs.mjs
       - .github/workflows/flow-03-independent-review-repairs.yml
+      - src/security/flow03RecordSessionContract.test.ts
 
 permissions:
   contents: write
