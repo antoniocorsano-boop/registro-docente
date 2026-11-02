@@ -94,7 +94,7 @@ describe('FLOW-03 UDA diary handoff contract', () => {
     expect(app).toContain('const handleRecordLessonCommitted = useCallback((udaId: string, navigationVersionAtSave: number) => {');
     expect(app).toContain("session.evidenceKind !== 'lesson-log'");
     expect(app).toContain('session.context.udaId && session.context.udaId !== udaId');
-    expect(app).toContain("completeRecordFlow('lesson-log', navigationVersionAtSave);");
+    expect(app).toContain("completeRecordFlow('lesson-log', navigationVersionAtSave, session, session.context.classId);");
 
     const render = sectionBetween(app, "{activeTab === 'uda-gantt' && (", '{/* TAB 12: Impostazioni & Tema */}');
     expect(render).toContain("recordLessonPrefill={recordSession?.status === 'editing' && recordSession.evidenceKind === 'lesson-log'");
