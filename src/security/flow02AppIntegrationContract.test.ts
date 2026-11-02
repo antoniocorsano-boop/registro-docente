@@ -88,14 +88,22 @@ describe('FLOW-02 App integration contract', () => {
     expect(deck).toContain("showClosedTrigger && surfaceMode === 'closed' && (");
   });
 
-  test('hands off to Registra by changing only session intent', async () => {
+  test('hands the explicit conduct note to the session-only Registra orchestrator without durable writes', async () => {
     const app = await source('src/App.tsx');
     const handler = sectionBetween(
       app,
-      'const handleContinueFromConductToRecord = useCallback(() => {',
-      'const handleStartTodayAction'
+      'const handleContinueFromConductToRecord = useCallback((stagedNote?: string) => {',
+      'const completeRecordFlow'
     );
 
+    expect(handler).toContain('const selectedClass = appDataRef.current.classes.find(');
+    expect(handler).toContain('candidate => candidate.id === currentClassIdRef.current');
+    expect(handler).toContain('buildRecordSession({');
+    expect(handler).toContain('classId: selectedClass.id');
+    expect(handler).toContain('className: selectedClass.name');
+    expect(handler).toContain('conductContext');
+    expect(handler).toContain('stagedNote');
+    expect(handler).toContain('publishRecordSession(session)');
     expect(handler).toContain("setTodayAction('record')");
     expect(handler).not.toContain('currentClassIdRef.current =');
     expect(handler).not.toContain('setAppData(');
