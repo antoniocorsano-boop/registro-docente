@@ -204,6 +204,11 @@ test.describe('FLOW-02 desktop qualification', () => {
     await assertNoHorizontalOverflow(page);
     await assertSelectedClassStillVisible(page);
     await page.screenshot({ path: evidencePath('flow-02-desktop-conduct.png'), fullPage: true });
+
+    await panel.getByRole('button', { name: 'Materiali', exact: true }).click();
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId('library-copilot-trigger')).toBeVisible();
+    await assertSelectedClassStillVisible(page);
   });
 });
 
