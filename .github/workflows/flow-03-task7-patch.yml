@@ -1,3 +1,4 @@
+# Trigger the fail-closed Task 7 patch on the staged candidate.
 name: FLOW-03 Task 7 Patch
 
 on:
