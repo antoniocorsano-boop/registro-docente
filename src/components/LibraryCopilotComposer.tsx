@@ -342,7 +342,11 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const hasCompleteDirectLaunch = Boolean(
     launchRequest
     && !launchRequest.mission
-    && directLaunchIntent
+    && (
+      directLaunchIntent === 'prepare'
+      || directLaunchIntent === 'review'
+      || directLaunchIntent === 'link'
+    )
     && launchRequest.context.sourceId
     && hasLaunchTeachingTarget
     && explicitLaunchTeachingContext
