@@ -339,23 +339,28 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     [launchRequest?.nonce, launchRequest?.mission, udas, teachingUdaCatalog]
   );
   const directLaunchIntent = launchRequest?.context.intent ?? null;
+  const isConductLaunch = directLaunchIntent === 'conduct';
   const hasCompleteDirectLaunch = Boolean(
     launchRequest
     && !launchRequest.mission
-    && directLaunchIntent
+    && (
+      directLaunchIntent === 'prepare'
+      || directLaunchIntent === 'review'
+      || directLaunchIntent === 'link'
+    )
     && launchRequest.context.sourceId
     && hasLaunchTeachingTarget
     && explicitLaunchTeachingContext
   );
 
   const teachingSuggestion = useMemo(() => {
-    if (contextOverride !== 'auto' || hasLaunchTeachingTarget) return null;
+    if (contextOverride !== 'auto' || hasLaunchTeachingTarget || isConductLaunch) return null;
     return suggestLibraryTeachingContext({
       udas: selectableLocalUdas,
       currentClassName: effectiveClassName ?? null,
       today: localDateKey()
     });
-  }, [selectableLocalUdas, effectiveClassName, hasLaunchTeachingTarget, contextOverride]);
+  }, [selectableLocalUdas, effectiveClassName, hasLaunchTeachingTarget, contextOverride, isConductLaunch]);
 
   const resolvedTeachingContext = contextOverride === 'auto'
     ? (hasLaunchTeachingTarget
@@ -922,11 +927,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     ? `${resolvedTeachingContext.udaId}${resolvedTeachingContext.lessonId ? `::${resolvedTeachingContext.lessonId}` : ''}`
     : '';
 
-  const contextLabel = resolvedTeachingContext
-    ? `${contextIsProposed ? 'Contesto proposto · ' : ''}${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
-    : effectiveClassName
-      ? `${effectiveClassName} · contesto UDA non univoco`
-      : 'Dimmi cosa vuoi ottenere';
+  const contextLabel = isConductLaunch
+    ? (effectiveClassName
+      ? `${effectiveClassName} · supporto durante la lezione${resolvedTeachingContext?.lessonId ? ' · lezione di oggi' : ''}`
+      : 'Supporto durante la lezione')
+    : resolvedTeachingContext
+      ? `${contextIsProposed ? 'Contesto proposto · ' : ''}${resolvedTeachingContext.className} · UDA corrente${resolvedTeachingContext.lessonId ? ' · lezione di oggi' : ''}${resolvedPlanningContext?.status === 'resolved' ? ' · programmazione' : ''}`
+      : effectiveClassName
+        ? `${effectiveClassName} · contesto UDA non univoco`
+        : 'Dimmi cosa vuoi ottenere';
 
   const linkTargetLabel = useMemo(() => {
     if (!resolvedTeachingContext) return null;
@@ -1103,11 +1112,15 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           return;
         }
         if (routed.kind === 'SOURCE_REQUIRED') {
-          setGuidanceMessage('Per questa richiesta serve una fonte professionale: seleziona o aggiungi una fonte qui nel Copilota, poi invia di nuovo l’obiettivo.');
+          setGuidanceMessage(isConductLaunch
+            ? 'Per questa richiesta serve un materiale. Apri Materiali da Conduci, scegli la fonte e poi torna al Copilota.'
+            : 'Per questa richiesta serve una fonte professionale: seleziona o aggiungi una fonte qui nel Copilota, poi invia di nuovo l’obiettivo.');
           return;
         }
         if (routed.kind === 'UNSUPPORTED') {
-          setGuidanceMessage('Ho compreso la richiesta, ma questa capacità non è ancora disponibile nel Copilota corrente.');
+          setGuidanceMessage(isConductLaunch
+            ? 'Ho capito che ti serve supporto durante la lezione, ma questa risposta non è ancora disponibile nel Copilota corrente. Posso continuare a usare il contesto della classe senza modificare registrazioni o valutazioni.'
+            : 'Ho compreso la richiesta, ma questa capacità non è ancora disponibile nel Copilota corrente.');
           return;
         }
         if (routed.kind === 'DENIED') {
@@ -1268,6 +1281,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
   const handleResolve = (event: React.FormEvent) => {
     event.preventDefault();
+    if (isConductLaunch) {
+      void resolveObjective(message);
+      return;
+    }
     if (!isBoundMissionFlow && !hasBoundLaunchContext && !hasResolvedConversationContext) {
       frameTeacherFirstObjective(message);
       return;
@@ -1422,8 +1439,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         {!hasCompleteDirectLaunch && !isBoundMissionFlow && (
           <section className="space-y-3" data-testid="teacher-first-copilot-entry">
             <div>
-              <h3 className="text-sm font-bold text-slate-100">Cosa vuoi fare?</h3>
-              <p className="mt-1 text-xs leading-relaxed text-slate-400">Partiamo dal risultato che ti serve. Ti chiederò classe, contesto e materiale solo quando servono.</p>
+              <h3 className="text-sm font-bold text-slate-100">{isConductLaunch ? 'Supporto durante la lezione' : 'Cosa vuoi fare?'}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                {isConductLaunch
+                  ? 'La classe è già impostata. Descrivi ciò che ti serve adesso; il Copilota userà solo il contesto professionale già disponibile.'
+                  : 'Partiamo dal risultato che ti serve. Ti chiederò classe, contesto e materiale solo quando servono.'}
+              </p>
             </div>
             {hasBoundLaunchContext && (selectedSource || resolvedTeachingContext) && (
               <div data-testid="teacher-first-existing-bindings" className="space-y-1 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300">
@@ -1431,16 +1452,18 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 {resolvedTeachingContext && <div><span className="font-semibold text-slate-200">Contesto già disponibile:</span> {contextLabel}</div>}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => chooseTeacherFirstGoal('prepare', 'Preparare un’attività')} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Preparare un’attività</button>
-              <button type="button" onClick={() => chooseTeacherFirstGoal('material', 'Lavorare su un materiale')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Lavorare su un materiale</button>
-              <button type="button" onClick={() => chooseTeacherFirstGoal('link', 'Collegare un materiale a una UDA')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Collegare a una UDA</button>
-              <button type="button" onClick={() => chooseTeacherFirstGoal('review', 'Rivedere un materiale nel contesto didattico')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Rivedere qualcosa</button>
-            </div>
+            {!isConductLaunch && (
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => chooseTeacherFirstGoal('prepare', 'Preparare un’attività')} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Preparare un’attività</button>
+                <button type="button" onClick={() => chooseTeacherFirstGoal('material', 'Lavorare su un materiale')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Lavorare su un materiale</button>
+                <button type="button" onClick={() => chooseTeacherFirstGoal('link', 'Collegare un materiale a una UDA')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Collegare a una UDA</button>
+                <button type="button" onClick={() => chooseTeacherFirstGoal('review', 'Rivedere un materiale nel contesto didattico')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Rivedere qualcosa</button>
+              </div>
+            )}
             <form onSubmit={handleResolve} className="space-y-3">
           <div>
             <label htmlFor="copilot-message" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Descrivi ciò che vuoi ottenere
+              {isConductLaunch ? 'Che cosa ti serve adesso?' : 'Descrivi ciò che vuoi ottenere'}
             </label>
             <textarea
               id="copilot-message"
@@ -1457,7 +1480,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 setLinkError(null);
                 setLinkSuccess(null);
               }}
-              placeholder="Per esempio: attività per le classi prime" aria-label="Che cosa vuoi farne?"
+              placeholder={isConductLaunch
+                ? 'Per esempio: aiutami a spiegare questo passaggio in modo più semplice'
+                : 'Per esempio: attività per le classi prime'}
+              aria-label={isConductLaunch ? 'Che cosa ti serve adesso?' : 'Che cosa vuoi farne?'}
               className="min-h-24 w-full resize-y rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
             />
           </div>

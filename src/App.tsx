@@ -49,6 +49,7 @@ import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
+import { resolveConductContext } from './conduct/conductSession';
 import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
@@ -1283,6 +1284,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  const conductContext = currentClass
+    ? resolveConductContext({
+        className: currentClass.name,
+        udas,
+        todayIsoDate: today()
+      })
+    : null;
   const ambientCopilotSurface =
     activeTab === 'home' ? 'home'
       : activeTab === 'dashboard' ? 'class-dashboard'
@@ -1338,6 +1346,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!launchContext) return;
     openLibraryCopilot(launchContext);
   }, [currentClass, openLibraryCopilot]);
+
+  const handleOpenConductCopilot = useCallback(() => {
+    if (!conductContext) return;
+    const launchContext: CopilotLaunchContext = {
+      surface: 'class-dashboard',
+      className: conductContext.className,
+      intent: 'conduct',
+      ...(conductContext.status === 'resolved'
+        ? {
+            udaId: conductContext.udaId,
+            ...(conductContext.lessonId ? { lessonId: conductContext.lessonId } : {})
+          }
+        : {})
+    };
+    openLibraryCopilot(launchContext);
+  }, [conductContext, openLibraryCopilot]);
+
+  const handleContinueFromConductToRecord = useCallback(() => {
+    setTodayAction('record');
+  }, []);
 
   const handleStartTodayAction = useCallback((action: TodayAction) => {
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
@@ -1876,6 +1904,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onContinueToday={handleContinueToday}
             onDismissToday={handleCancelTodayAction}
             onOpenPreparationCopilot={handleOpenPreparationCopilot}
+            conductContext={conductContext}
+            privacyShieldActive={isPrivacyShieldActive}
+            onTogglePrivacyShield={handleTogglePrivacyShield}
+            onOpenConductCopilot={handleOpenConductCopilot}
+            onGoToRecord={handleContinueFromConductToRecord}
           />
         )}
 
@@ -2092,6 +2125,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
+            showClosedTrigger={todayAction !== 'conduct'}
           />
           <LibraryCopilotComposer
               library={library}

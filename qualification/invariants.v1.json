@@ -455,6 +455,55 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/flow-01-prepara.spec.cjs"
       ]
+    },
+    {
+      "id": "FLOW-02-I01",
+      "owner": "FLOW-02",
+      "statement": "Conduci is a mobile-first session orchestrator: it preserves the explicitly selected class, resolves lesson context deterministically, keeps rapid observations transient, exposes existing Privacy Shield and specialist tools, hands off explicitly to Registra, and performs no durable professional write.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/conduct/",
+        "src/components/ConductLessonPanel.tsx",
+        "src/components/DashboardView.tsx",
+        "src/components/CopilotExperience.tsx",
+        "src/components/CopilotDeck.tsx",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/library/copilotLaunchContext.ts",
+        "src/today/todayRouter.ts",
+        "src/security/flow02ConductSessionContract.test.ts",
+        "src/security/flow02ConductUiContract.test.ts",
+        "src/security/flow02ConductCopilotUxContract.test.ts",
+        "src/security/flow02AppIntegrationContract.test.ts",
+        "src/security/flow02DashboardIntegrationContract.test.ts",
+        "src/security/flow02BrowserQualificationContract.test.ts",
+        "src/security/flow02QualificationContract.test.ts",
+        "src/security/today01ContinuationContract.test.ts",
+        "src/security/today01RouterContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "tests/browser/flow-01-prepara.spec.cjs",
+        "tests/browser/flow-02-conduci.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/flow02ConductSessionContract.test.ts",
+        "src/security/flow02ConductUiContract.test.ts",
+        "src/security/flow02ConductCopilotUxContract.test.ts",
+        "src/security/flow02AppIntegrationContract.test.ts",
+        "src/security/flow02DashboardIntegrationContract.test.ts",
+        "src/security/flow02BrowserQualificationContract.test.ts",
+        "src/security/flow02QualificationContract.test.ts",
+        "src/security/today01ContinuationContract.test.ts",
+        "src/security/today01RouterContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/a4R1TeacherFirstMobileContract.test.ts",
+        "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/flow-01-prepara.spec.cjs",
+        "tests/browser/flow-02-conduci.spec.cjs"
+      ]
     }
   ]
 }
