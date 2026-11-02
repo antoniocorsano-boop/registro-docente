@@ -47,6 +47,7 @@ import {
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
+import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
@@ -270,6 +271,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
+  const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
   const navigationVersionRef = useRef(0);
   const setActiveTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
@@ -439,6 +441,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleNavigateTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
+    if (tab !== 'dashboard') {
+      setTodayAction(null);
+    }
     const classId = currentClassIdRef.current;
     try {
       const state = { classId, tab };
@@ -1320,10 +1325,30 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const nextCurrentClassId = e.state?.classId || null;
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
+      setTodayAction(null);
       setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleStartTodayAction = useCallback((action: TodayAction) => {
+    const decision = resolveTodayRoute(action, currentClassIdRef.current);
+    setTodayAction(action);
+    if (decision.status === 'needs-class') {
+      setActiveTab('home');
+      return;
+    }
+    handleNavigateTab(decision.target);
+  }, [handleNavigateTab, setActiveTab]);
+
+  const handleContinueToday = useCallback((tab: ActiveTab) => {
+    setTodayAction(null);
+    handleNavigateTab(tab);
+  }, [handleNavigateTab]);
+
+  const handleCancelTodayAction = useCallback(() => {
+    setTodayAction(null);
   }, []);
 
   // Handle Class selection
@@ -1340,6 +1365,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   const handleNavigateHome = () => {
+    setTodayAction(null);
     currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
     setActiveTab('home');
@@ -1722,6 +1748,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
       currentClassIdRef.current = null;
+      setTodayAction(null);
       settingsRef.current = restored.settings;
       udasRef.current = restored.udas;
       testsRef.current = restored.customTests;
@@ -1758,6 +1785,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const resetMeta: SecureMeta = { changes: 0, lastBackup: null };
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
+      setTodayAction(null);
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
       professionalMemoryRef.current = resetProfessionalMemory;
@@ -1825,6 +1853,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onExportBackup={handleExportBackup}
             lastBackupDate={meta.lastBackup}
             unsavedChangesCount={meta.changes || 0}
+            onStartTodayAction={handleStartTodayAction}
+            pendingTodayAction={todayAction}
+            onCancelTodayAction={handleCancelTodayAction}
           />
         )}
 
@@ -1834,6 +1865,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
+            todayAction={todayAction}
+            onContinueToday={handleContinueToday}
+            onDismissToday={handleCancelTodayAction}
           />
         )}
 

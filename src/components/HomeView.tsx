@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ClassData } from '../types';
+import type { TodayAction } from '../today/todayRouter';
 import { calcAvg, formatGrade } from '../utils';
 import { Sparkline } from './Sparkline';
 import {
@@ -21,6 +22,9 @@ interface HomeViewProps {
   onExportBackup: () => void;
   lastBackupDate: string | null;
   unsavedChangesCount: number;
+  onStartTodayAction: (action: TodayAction) => void;
+  pendingTodayAction: TodayAction | null;
+  onCancelTodayAction: () => void;
 }
 
 type HomeViewMode = 'classes' | 'summary' | 'comparison';
@@ -35,6 +39,13 @@ const CLASS_ACCENTS = [
   '#818cf8'
 ] as const;
 
+const TODAY_ACTION_LABELS: Record<TodayAction, string> = {
+  prepare: 'Prepara',
+  conduct: 'Conduci',
+  record: 'Registra',
+  review: 'Rivedi'
+};
+
 export const HomeView: React.FC<HomeViewProps> = ({
   classes,
   onSelectClass,
@@ -42,11 +53,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onDeleteClass,
   onExportBackup,
   lastBackupDate,
-  unsavedChangesCount
+  unsavedChangesCount,
+  onStartTodayAction,
+  pendingTodayAction,
+  onCancelTodayAction
 }) => {
   const [activeView, setActiveView] = useState<HomeViewMode>('classes');
   const [isClassMutationPending, setIsClassMutationPending] = useState(false);
   const [managedClassId, setManagedClassId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pendingTodayAction) {
+      setActiveView('classes');
+    }
+  }, [pendingTodayAction]);
 
   const handleAddClass = async () => {
     if (isClassMutationPending) return;
@@ -109,12 +129,60 @@ export const HomeView: React.FC<HomeViewProps> = ({
         : 'bg-[var(--surface-variant)] text-slate-300 border-[var(--border)] hover:text-white hover:border-[var(--primary)]'
     }`;
 
+  const todayActionClass =
+    'min-h-[44px] px-3 py-3 rounded-xl border border-[var(--border)] bg-[var(--surface-variant)] text-left text-sm font-bold text-white hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors';
+
   return (
     <div className="space-y-4">
-      <section className="neon-card neon-card-highlight p-4 sm:p-5">
+      <section className="neon-card neon-card-highlight p-4 sm:p-5" aria-labelledby="today-heading">
+        <div>
+          <h2 id="today-heading" className="text-xl font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
+            Oggi
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Da dove vuoi iniziare? Scegli il lavoro da fare; la classe resta sempre una tua scelta esplicita.
+          </p>
+        </div>
+
+        <div role="group" aria-label="Azioni di oggi" className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+          <button type="button" onClick={() => onStartTodayAction('prepare')} className={todayActionClass}>
+            Prepara
+          </button>
+          <button type="button" onClick={() => onStartTodayAction('conduct')} className={todayActionClass}>
+            Conduci
+          </button>
+          <button type="button" onClick={() => onStartTodayAction('record')} className={todayActionClass}>
+            Registra
+          </button>
+          <button type="button" onClick={() => onStartTodayAction('review')} className={todayActionClass}>
+            Rivedi
+          </button>
+        </div>
+
+        {pendingTodayAction && (
+          <div
+            role="status"
+            className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-[var(--primary)]/40 bg-[var(--surface-variant)] p-3"
+          >
+            <p className="text-sm text-slate-200">
+              Per continuare con <b>{TODAY_ACTION_LABELS[pendingTodayAction]}</b>, scegli una classe.
+            </p>
+            <button
+              type="button"
+              onClick={onCancelTodayAction}
+              className="min-h-[44px] px-3 py-2 rounded-lg border border-[var(--border)] text-xs font-semibold text-slate-300 hover:text-white hover:border-[var(--primary)]"
+              aria-label="Annulla azione di oggi"
+            >
+              Annulla
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="neon-card p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
+            <h2 className="text-lg font-bold text-white">
               Le mie classi
             </h2>
             <p className="text-xs text-slate-400 mt-1">

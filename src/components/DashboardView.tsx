@@ -2,6 +2,7 @@ import React from 'react';
 import { ActiveTab, ClassData } from '../types';
 import { calcAvg, formatGrade, TYPES_LABEL } from '../utils';
 import { Sparkline } from './Sparkline';
+import { getTodayContinuationOptions, type TodayAction } from '../today/todayRouter';
 import {
   ClipboardList,
   Sparkles,
@@ -14,16 +15,29 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+const TODAY_ACTION_LABELS: Record<TodayAction, string> = {
+  prepare: 'Prepara',
+  conduct: 'Conduci',
+  record: 'Registra',
+  review: 'Rivedi'
+};
+
 interface DashboardViewProps {
   currentClass: ClassData;
   onNavigateTab: (tab: ActiveTab) => void;
   onEditBatch: (batchId: string) => void;
+  todayAction?: TodayAction | null;
+  onContinueToday?: (tab: ActiveTab) => void;
+  onDismissToday?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   currentClass,
   onNavigateTab,
-  onEditBatch
+  onEditBatch,
+  todayAction = null,
+  onContinueToday,
+  onDismissToday
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
@@ -66,6 +80,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-4">
+      {todayAction && (
+        <section className="neon-card p-4" aria-label={`Continua: ${TODAY_ACTION_LABELS[todayAction]}`}>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Oggi</p>
+                <h3 className="text-sm font-bold text-white">Continua: {TODAY_ACTION_LABELS[todayAction]}</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Scegli una superficie già esistente per la classe {currentClass.name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onDismissToday?.()}
+                className="min-h-[44px] px-3 py-2 rounded-lg border border-[var(--border)] text-xs font-semibold text-slate-300 hover:text-white hover:border-[var(--primary)] shrink-0"
+                aria-label="Chiudi continuazione di oggi"
+              >
+                Chiudi
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {getTodayContinuationOptions(todayAction).map(option => (
+                <button
+                  key={option.tab}
+                  type="button"
+                  onClick={() => onContinueToday?.(option.tab)}
+                  className="min-h-[44px] px-3 py-2 rounded-lg border border-[var(--primary)]/50 bg-[var(--surface-variant)] text-xs font-semibold text-[var(--primary)] hover:border-[var(--primary)] hover:bg-slate-800 transition-colors"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Overview & KPIs */}
       <div className="neon-card neon-card-highlight p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
