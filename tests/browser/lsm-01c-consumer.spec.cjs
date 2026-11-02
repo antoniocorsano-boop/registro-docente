@@ -6,7 +6,7 @@ const path = require('node:path');
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence');
 const vaultPassword = 'lsm01c-browser-qualification';
-const tokenSentinel = 'lsm01c-session-token-sentinel';
+const capabilitySentinel = 'lsm01d-ephemeral-capability-sentinel';
 const SOURCE_TITLE = 'Fonte sintetica LSM-01C';
 const SOURCE_TEXT = 'Materiale professionale sintetico per verificare la continuità della ricerca testuale.';
 const MOBILE_CLASS_NAME = 'Classe Sintetica LSM-01C-B';
@@ -22,6 +22,16 @@ async function setupFreshVault(page) {
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
   await page.locator('#vault-password').fill(vaultPassword);
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+}
+
+async function reloadAndUnlock(page) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
+  if (await unlockHeading.isVisible().catch(() => false)) {
+    await page.locator('#vault-password').fill(vaultPassword);
+    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
+  }
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
@@ -99,16 +109,18 @@ async function sourceCard(page, title) {
   return heading.locator('xpath=ancestor::article');
 }
 
-test('LSM-01C connection is explicit, session-only and fails safely without device loopback', async ({ page }) => {
+test('LSM-01C connection remains explicit and fails safely without device loopback', async ({ page }) => {
   fs.mkdirSync(evidenceDir, { recursive: true });
   const loopbackRequests = [];
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(String(error)));
 
   await page.route('http://127.0.0.1:8765/**', async route => {
+    const request = route.request();
     loopbackRequests.push({
-      method: route.request().method(),
-      url: route.request().url(),
+      method: request.method(),
+      url: request.url(),
+      authorization: request.headers().authorization || null,
     });
     await route.abort('connectionrefused');
   });
@@ -120,21 +132,20 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
   const settings = page.getByTestId('semantic-memory-settings');
   await expect(settings).toBeVisible();
   await expect(settings.getByLabel('Endpoint locale')).toHaveValue('http://127.0.0.1:8765');
-  const tokenInput = settings.getByLabel('Token di sessione');
-  await expect(tokenInput).toHaveAttribute('type', 'password');
-  await tokenInput.fill(tokenSentinel);
+  await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
+  await expect(settings.locator('input[type="password"]')).toHaveCount(0);
   expect(loopbackRequests).toHaveLength(0);
 
   const syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
   await expect(syncButton).toBeDisabled();
-  await settings.getByRole('button', { name: 'Connetti memoria locale', exact: true }).click();
+  await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
 
   await expect(settings.getByText('Connessione locale non disponibile. Controlla Termux e riprova.', { exact: true })).toBeVisible();
-  expect(loopbackRequests.length).toBeGreaterThan(0);
+  expect(loopbackRequests).toHaveLength(1);
+  expect(loopbackRequests[0].method).toBe('POST');
+  expect(new URL(loopbackRequests[0].url).pathname).toBe('/v1/session');
+  expect(loopbackRequests[0].authorization).toBeNull();
   await expect(syncButton).toBeDisabled();
-
-  const localStorageSnapshot = await page.evaluate(() => JSON.stringify({ ...window.localStorage }));
-  expect(localStorageSnapshot).not.toContain(tokenSentinel);
 
   await openLibrary(page);
   const disclosure = page.getByTestId('library-semantic-search-disclosure');
@@ -149,18 +160,317 @@ test('LSM-01C connection is explicit, session-only and fails safely without devi
   await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
 
   await page.screenshot({
-    path: path.join(evidenceDir, 'lsm-01c-consumer-explicit-loopback.png'),
+    path: path.join(evidenceDir, 'lsm-01d-consumer-explicit-loopback-failure.png'),
     fullPage: true,
   });
   fs.writeFileSync(
-    path.join(evidenceDir, 'lsm-01c-consumer-explicit-loopback.json'),
+    path.join(evidenceDir, 'lsm-01d-consumer-explicit-loopback-failure.json'),
     JSON.stringify({
       candidateSha: process.env.CANDIDATE_SHA || null,
       loopbackRequestsBeforeGesture: 0,
       loopbackRequestsAfterGesture: loopbackRequests.length,
-      loopbackMethods: loopbackRequests.map(request => request.method),
-      tokenPersistedToLocalStorage: localStorageSnapshot.includes(tokenSentinel),
+      bootstrapPath: new URL(loopbackRequests[0].url).pathname,
+      bootstrapAuthorizationHeader: loopbackRequests[0].authorization,
+      tokenFieldExposed: false,
       textualLibraryContinuity: true,
+      pageErrors,
+    }, null, 2),
+  );
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('LSM-01D activation obtains one ephemeral capability without persistence or automatic sync', async ({ page }) => {
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const loopbackRequests = [];
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error)));
+
+  await page.route('http://127.0.0.1:8765/**', async route => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    loopbackRequests.push({
+      method: request.method(),
+      url: request.url(),
+      authorization: request.headers().authorization || null,
+    });
+    if (pathname !== '/v1/session') {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': new URL(baseURL).origin,
+        'Cache-Control': 'no-store',
+      },
+      body: JSON.stringify({
+        schema: 'trama.semantic-memory-session/v1',
+        token: capabilitySentinel,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        health: {
+          schema: 'trama.semantic-memory-health/v1',
+          status: 'ready',
+          protocolVersion: 1,
+          modelId: 'embeddinggemma-2-local',
+          dimensions: 768,
+          indexRevision: '1',
+        },
+      }),
+    });
+  });
+
+  await setupFreshVault(page);
+  expect(loopbackRequests).toHaveLength(0);
+  await openSettings(page);
+  const settings = page.getByTestId('semantic-memory-settings');
+  await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
+  const syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
+  await expect(syncButton).toBeDisabled();
+  expect(loopbackRequests).toHaveLength(0);
+
+  await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
+  await expect(settings.getByText('Memoria locale connessa e pronta.', { exact: true })).toBeVisible();
+  await expect(syncButton).toBeEnabled();
+  await expect(settings.getByRole('button', { name: 'Disconnetti', exact: true })).toBeVisible();
+
+  expect(loopbackRequests).toHaveLength(1);
+  expect(loopbackRequests[0].method).toBe('POST');
+  expect(new URL(loopbackRequests[0].url).pathname).toBe('/v1/session');
+  expect(loopbackRequests[0].authorization).toBeNull();
+
+  await page.waitForTimeout(150);
+  expect(loopbackRequests).toHaveLength(1);
+  const storageSnapshots = await page.evaluate(() => ({
+    local: JSON.stringify({ ...window.localStorage }),
+    session: JSON.stringify({ ...window.sessionStorage }),
+  }));
+  expect(storageSnapshots.local).not.toContain(capabilitySentinel);
+  expect(storageSnapshots.session).not.toContain(capabilitySentinel);
+
+  await page.screenshot({
+    path: path.join(evidenceDir, 'lsm-01d-consumer-zero-token-ready.png'),
+    fullPage: true,
+  });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'lsm-01d-consumer-zero-token-ready.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      loopbackRequestsBeforeGesture: 0,
+      bootstrapRequests: loopbackRequests.length,
+      bootstrapPath: new URL(loopbackRequests[0].url).pathname,
+      bootstrapAuthorizationHeader: loopbackRequests[0].authorization,
+      capabilityPersistedToLocalStorage: storageSnapshots.local.includes(capabilitySentinel),
+      capabilityPersistedToSessionStorage: storageSnapshots.session.includes(capabilitySentinel),
+      automaticSyncRequests: loopbackRequests.length - 1,
+      pageErrors,
+    }, null, 2),
+  );
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('LSM-01D mobile activation sync and reload remain explicit and zero-token', async ({ page }) => {
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const appRequests = [];
+  const preflightRequests = [];
+  const upsertRequests = [];
+  const issuedCapabilities = [];
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error)));
+  const allowedOrigin = new URL(baseURL).origin;
+  let currentCapability = null;
+
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    'Access-Control-Allow-Private-Network': 'true',
+    'Cache-Control': 'no-store',
+  };
+
+  await page.route('http://127.0.0.1:8765/**', async route => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    const record = {
+      method: request.method(),
+      path: pathname,
+      authorization: request.headers().authorization || null,
+    };
+
+    if (request.method() === 'OPTIONS') {
+      preflightRequests.push(record);
+      await route.fulfill({ status: 204, headers: corsHeaders, body: '' });
+      return;
+    }
+
+    appRequests.push(record);
+    if (pathname === '/v1/session' && request.method() === 'POST') {
+      currentCapability = `${capabilitySentinel}-${issuedCapabilities.length + 1}`;
+      issuedCapabilities.push(currentCapability);
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({
+          schema: 'trama.semantic-memory-session/v1',
+          token: currentCapability,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          health: {
+            schema: 'trama.semantic-memory-health/v1',
+            status: 'ready',
+            protocolVersion: 1,
+            modelId: 'embeddinggemma-2-local',
+            dimensions: 768,
+            indexRevision: '1',
+          },
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/v1/health' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({
+          schema: 'trama.semantic-memory-health/v1',
+          status: 'ready',
+          protocolVersion: 1,
+          modelId: 'embeddinggemma-2-local',
+          dimensions: 768,
+          indexRevision: '1',
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/v1/projections/upsert' && request.method() === 'POST') {
+      const payload = request.postDataJSON();
+      upsertRequests.push({
+        authorization: record.authorization,
+        expectedRevision: payload.expectedRevision,
+        sourceId: payload.projection?.sourceId || null,
+      });
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({
+          schema: 'trama.semantic-memory-upsert-receipt/v1',
+          status: payload.expectedRevision === null ? 'inserted' : 'replaced',
+          source: {
+            sourceAppId: payload.projection.sourceAppId,
+            sourceType: payload.projection.sourceType,
+            sourceId: payload.projection.sourceId,
+          },
+          revision: payload.projection.revision,
+        }),
+      });
+      return;
+    }
+
+    await route.abort('failed');
+  });
+
+  await setupFreshVault(page);
+  expect(appRequests).toHaveLength(0);
+
+  await openLibrary(page);
+  await addNamedSyntheticSource(page, 'Fonte LSM-01D mobile', 'Materiale professionale sintetico per la qualifica della sincronizzazione locale.');
+  const card = await sourceCard(page, 'Fonte LSM-01D mobile');
+  await card.getByText('Gestisci', { exact: true }).click();
+  const classify = card.getByRole('button', { name: 'Classifica come materiale professionale', exact: true });
+  await expect(classify).toBeVisible();
+  page.once('dialog', dialog => {
+    expect(dialog.message()).toBe('Confermo che è materiale professionale del docente e non contiene dati personali degli studenti.');
+    void dialog.accept();
+  });
+  await classify.click();
+  await expect(card.getByText('Professionale', { exact: true })).toBeVisible();
+  expect(appRequests).toHaveLength(0);
+
+  await openSettings(page);
+  let settings = page.getByTestId('semantic-memory-settings');
+  await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
+  let syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
+  await expect(syncButton).toBeDisabled();
+  expect(appRequests).toHaveLength(0);
+
+  await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
+  await expect(settings.getByText('Memoria locale connessa e pronta.', { exact: true })).toBeVisible();
+  await expect(syncButton).toBeEnabled();
+  expect(issuedCapabilities).toHaveLength(1);
+  expect(appRequests).toHaveLength(1);
+  expect(appRequests[0]).toEqual({ method: 'POST', path: '/v1/session', authorization: null });
+
+  await page.waitForTimeout(150);
+  expect(appRequests).toHaveLength(1);
+  await syncButton.click();
+  await expect(settings.getByText(/Indice locale (aggiornato|già allineato)/)).toBeVisible();
+  await expect.poll(() => upsertRequests.length).toBeGreaterThan(0);
+  expect(appRequests.filter(request => request.path === '/v1/health')).toHaveLength(1);
+  expect(appRequests.find(request => request.path === '/v1/health')?.authorization).toBeNull();
+  expect(upsertRequests.every(request => request.authorization === `Bearer ${issuedCapabilities[0]}`)).toBe(true);
+  expect(upsertRequests.some(request => request.sourceId)).toBe(true);
+
+  const storageBeforeReload = await page.evaluate(() => ({
+    local: JSON.stringify({ ...window.localStorage }),
+    session: JSON.stringify({ ...window.sessionStorage }),
+  }));
+  expect(storageBeforeReload.local).not.toContain(issuedCapabilities[0]);
+  expect(storageBeforeReload.session).not.toContain(issuedCapabilities[0]);
+
+  const appRequestCountBeforeReload = appRequests.length;
+  await reloadAndUnlock(page);
+  expect(appRequests).toHaveLength(appRequestCountBeforeReload);
+  await openSettings(page);
+  settings = page.getByTestId('semantic-memory-settings');
+  await expect(settings.getByText('Non connessa. La Biblioteca continua a usare la ricerca locale già disponibile.', { exact: true })).toBeVisible();
+  await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
+  syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
+  await expect(syncButton).toBeDisabled();
+  expect(appRequests).toHaveLength(appRequestCountBeforeReload);
+
+  await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
+  await expect(settings.getByText('Memoria locale connessa e pronta.', { exact: true })).toBeVisible();
+  await expect(syncButton).toBeEnabled();
+  expect(issuedCapabilities).toHaveLength(2);
+  expect(issuedCapabilities[1]).not.toBe(issuedCapabilities[0]);
+  expect(appRequests).toHaveLength(appRequestCountBeforeReload + 1);
+  expect(appRequests.at(-1)).toEqual({ method: 'POST', path: '/v1/session', authorization: null });
+  await page.waitForTimeout(150);
+  expect(appRequests).toHaveLength(appRequestCountBeforeReload + 1);
+
+  const storageAfterReactivation = await page.evaluate(() => ({
+    local: JSON.stringify({ ...window.localStorage }),
+    session: JSON.stringify({ ...window.sessionStorage }),
+  }));
+  for (const capability of issuedCapabilities) {
+    expect(storageAfterReactivation.local).not.toContain(capability);
+    expect(storageAfterReactivation.session).not.toContain(capability);
+  }
+
+  await page.screenshot({
+    path: path.join(evidenceDir, 'lsm-01d-mobile-sync-reload-reactivation.png'),
+    fullPage: true,
+  });
+  fs.writeFileSync(
+    path.join(evidenceDir, 'lsm-01d-mobile-sync-reload-reactivation.json'),
+    JSON.stringify({
+      candidateSha: process.env.CANDIDATE_SHA || null,
+      viewport: { width: 390, height: 844 },
+      sessionBootstrapCount: issuedCapabilities.length,
+      applicationRequests: appRequests,
+      preflightCount: preflightRequests.length,
+      upsertRequests: upsertRequests.map(request => ({
+        ...request,
+        authorization: request.authorization ? 'Bearer <ephemeral-capability>' : null,
+      })),
+      noProbeOnReload: appRequests.length === appRequestCountBeforeReload + 1,
+      capabilityPersisted: issuedCapabilities.some(capability =>
+        storageAfterReactivation.local.includes(capability) || storageAfterReactivation.session.includes(capability)
+      ),
       pageErrors,
     }, null, 2),
   );

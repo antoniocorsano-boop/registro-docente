@@ -15,6 +15,7 @@ import { searchLibrarySources } from '../library/libraryState';
 import { createFileSource, createTextSource, createWebSource } from '../library/intake';
 import { retrieveLibrarySourcesByMeaning } from '../library/semanticRetrieval';
 import type { SemanticLibraryResolution } from '../library/semanticRetrieval';
+import { SemanticMemoryHttpError } from '../semanticMemory/httpClient';
 import { retrieveLibrarySourcesFromSemanticMemory } from '../semanticMemory/libraryRetrieval';
 import { uid } from '../utils';
 import { LibrarySourceCard } from './LibrarySourceCard';
@@ -27,6 +28,8 @@ interface LibraryViewProps {
   currentClassName?: string | null;
   embeddingConfig?: LocalEmbeddingConfig;
   semanticMemoryPort?: LocalSemanticMemoryPort | null;
+  semanticMemorySessionErrorCode?: string | null;
+  onSemanticMemorySessionExpired?: () => void;
   isPending: boolean;
   errorMessage: string | null;
   onAddSource: (source: LibrarySource) => Promise<void>;
@@ -66,6 +69,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   currentClassName = null,
   embeddingConfig,
   semanticMemoryPort = null,
+  semanticMemorySessionErrorCode = null,
+  onSemanticMemorySessionExpired,
   isPending,
   errorMessage,
   onAddSource,
@@ -126,9 +131,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   useEffect(() => {
     semanticRequestRef.current += 1;
     setSemanticResolution(null);
-    setSemanticError(null);
+    setSemanticError(
+      semanticMemorySessionErrorCode === 'SESSION_EXPIRED'
+        ? 'La memoria locale non è più attiva. Riattivala dalle Impostazioni.'
+        : null
+    );
     setIsSemanticPending(false);
-  }, [query, library, embeddingConfig, semanticMemoryPort]);
+  }, [query, library, embeddingConfig, semanticMemoryPort, semanticMemorySessionErrorCode]);
 
   useEffect(() => () => {
     semanticRequestRef.current += 1;
@@ -224,9 +233,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           });
       if (semanticRequestRef.current !== requestId) return;
       setSemanticResolution(result);
-    } catch {
+    } catch (error) {
       if (semanticRequestRef.current !== requestId) return;
-      setSemanticError('Il motore locale non risponde. Puoi riprovare; la ricerca normale resta disponibile.');
+      if (error instanceof SemanticMemoryHttpError && error.code === 'HTTP_401') {
+        onSemanticMemorySessionExpired?.();
+        setSemanticError('La memoria locale non è più attiva. Riattivala dalle Impostazioni.');
+      } else {
+        setSemanticError('Il motore locale non risponde. Puoi riprovare; la ricerca normale resta disponibile.');
+      }
     } finally {
       if (semanticRequestRef.current === requestId) setIsSemanticPending(false);
     }

@@ -329,6 +329,29 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
+    },
+    {
+      "id": "LSM-01D-I01",
+      "owner": "LSM-01D",
+      "statement": "Local semantic memory activation is explicitly teacher-triggered and zero-token: the browser bootstraps only against HTTP loopback, receives only an ephemeral session capability, persists no LSM secret, performs no automatic synchronization, and keeps semantic memory unavailable until the local session is explicitly activated.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/semanticMemory/",
+        "src/components/SemanticMemorySettings.tsx",
+        "src/components/LibraryView.tsx",
+        "src/App.tsx",
+        "src/security/lsm01dSessionBootstrapContract.test.ts",
+        "src/security/lsm01dSessionExpiryContract.test.ts",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ],
+      "tests": [
+        "src/security/lsm01dSessionBootstrapContract.test.ts",
+        "src/security/lsm01dSessionExpiryContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ]
     }
   ]
 }
