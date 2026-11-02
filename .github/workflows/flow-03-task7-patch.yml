@@ -1,4 +1,4 @@
-# Trigger the fail-closed Task 7 patch after PERSIST-01H contract alignment.
+# Publish the verified Task 7 product delta; workflow files are finalized separately by the authorized connector.
 name: FLOW-03 Task 7 Patch
 
 on:
@@ -61,11 +61,12 @@ jobs:
       - name: Diff check
         run: git diff --check
 
-      - name: Commit verified Task 7 delta and remove harness
+      - name: Commit verified non-workflow Task 7 delta
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm scripts/flow03-task7-patch.mjs .github/workflows/flow-03-task7-patch.yml
+          git checkout -- .github/workflows/browser-qualification.yml
           git add \
             src/App.tsx \
             src/components/BehaviorsView.tsx \
@@ -73,7 +74,7 @@ jobs:
             src/security/flow02BrowserQualificationContract.test.ts \
             tests/browser/flow-02-conduci.spec.cjs \
             tests/browser/flow-03-registra.spec.cjs \
-            .github/workflows/browser-qualification.yml \
             qualification/invariants.v1.json
+          git diff --cached --check
           git commit -m "feat: qualify FLOW-03 recording orchestration"
           git push origin HEAD:feat/flow-03-registra-orchestrator
