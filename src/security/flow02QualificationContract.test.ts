@@ -38,6 +38,7 @@ describe('FLOW-02 qualification invariant', () => {
       'src/components/DashboardView.tsx',
       'src/components/CopilotExperience.tsx',
       'src/components/CopilotDeck.tsx',
+      'src/components/LibraryCopilotComposer.tsx',
       'src/library/copilotLaunchContext.ts',
       'src/today/todayRouter.ts',
       'src/security/flow02ConductSessionContract.test.ts',
