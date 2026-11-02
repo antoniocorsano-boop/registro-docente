@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Registro Docente — UX-GOV-01 future user flows</title>
+  <desc id="desc">Canonical future user flow diagram for Registro Docente: secure access, Oggi router, Prepara, Conduci, Registra, Rivedi, unified professional context, transversal specialist tools and transition roadmap.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#020617"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06b6d4"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#059669"/><stop offset="1" stop-color="#34d399"/></linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d97706"/><stop offset="1" stop-color="#fbbf24"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#67e8f9"/></marker>
+    <style>
+      .title{font:700 36px system-ui,sans-serif;fill:#f8fafc}.sub{font:500 18px system-ui,sans-serif;fill:#cbd5e1}.h2{font:700 22px system-ui,sans-serif;fill:#f8fafc}.h3{font:700 18px system-ui,sans-serif;fill:#f8fafc}.body{font:500 15px system-ui,sans-serif;fill:#cbd5e1}.small{font:500 13px system-ui,sans-serif;fill:#94a3b8}.pill{font:700 13px system-ui,sans-serif;fill:#020617}.phase{font:700 14px system-ui,sans-serif;fill:#f8fafc}.card{fill:#0b1220;stroke:#334155;stroke-width:2}.thin{fill:none;stroke:#164e63;stroke-width:2}.flow{fill:none;stroke:#67e8f9;stroke-width:3;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1600" height="1120" fill="url(#bg)"/>
+  <rect x="40" y="32" width="1520" height="86" rx="24" fill="#07111f" stroke="#155e75" stroke-width="2"/>
+  <text x="76" y="72" class="title">Registro Docente — Visione futura dei flussi utente</text>
+  <text x="76" y="102" class="sub">UX-GOV-01 · Il docente sceglie il lavoro; l'app mantiene il contesto; gli strumenti compaiono quando servono.</text>
+
+  <!-- Secure start -->
+  <rect x="70" y="158" width="250" height="126" rx="20" class="card" stroke="#22d3ee"/>
+  <text x="94" y="192" class="h3">Accesso sicuro</text>
+  <text x="94" y="220" class="body">Avvio locale → Vault</text>
+  <text x="94" y="244" class="small">setup · migrazione · sblocco</text>
+  <text x="94" y="266" class="small">ingresso professionale neutro</text>
+
+  <path d="M320 221 H395" class="flow"/>
+
+  <!-- Oggi -->
+  <rect x="405" y="146" width="790" height="158" rx="26" fill="#071827" stroke="#22d3ee" stroke-width="3" filter="url(#glow)"/>
+  <text x="438" y="184" class="h2">Home — Oggi</text>
+  <text x="438" y="210" class="body">Router del lavoro quotidiano · nessuna duplicazione degli strumenti specialistici</text>
+
+  <rect x="438" y="230" width="165" height="54" rx="14" fill="url(#cyan)"/><text x="486" y="264" class="h3" fill="#020617">Prepara</text>
+  <rect x="625" y="230" width="165" height="54" rx="14" fill="url(#green)"/><text x="674" y="264" class="h3" fill="#020617">Conduci</text>
+  <rect x="812" y="230" width="165" height="54" rx="14" fill="url(#violet)"/><text x="855" y="264" class="h3">Registra</text>
+  <rect x="999" y="230" width="165" height="54" rx="14" fill="url(#amber)"/><text x="1048" y="264" class="h3" fill="#020617">Rivedi</text>
+
+  <!-- Context -->
+  <path d="M800 304 V354" class="flow"/>
+  <rect x="350" y="364" width="900" height="118" rx="22" fill="#11122a" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="382" y="398" class="h2">Contesto professionale unificato</text>
+  <text x="382" y="426" class="body">Condiviso tra Home, Classe, UDA, Biblioteca, Verifiche e Copilota; esplicito, reversibile, fail-closed sull'ambiguità.</text>
+  <g>
+    <rect x="382" y="445" width="112" height="28" rx="14" fill="#67e8f9"/><text x="417" y="464" class="pill">Classe</text>
+    <rect x="506" y="445" width="100" height="28" rx="14" fill="#6ee7b7"/><text x="537" y="464" class="pill">UDA</text>
+    <rect x="618" y="445" width="112" height="28" rx="14" fill="#c4b5fd"/><text x="650" y="464" class="pill">Lezione</text>
+    <rect x="742" y="445" width="105" height="28" rx="14" fill="#fde68a"/><text x="776" y="464" class="pill">Fonte</text>
+    <rect x="859" y="445" width="120" height="28" rx="14" fill="#67e8f9"/><text x="887" y="464" class="pill">Obiettivo</text>
+    <rect x="991" y="445" width="105" height="28" rx="14" fill="#6ee7b7"/><text x="1023" y="464" class="pill">Tempo</text>
+    <rect x="1108" y="445" width="112" height="28" rx="14" fill="#c4b5fd"/><text x="1136" y="464" class="pill">Privacy</text>
+  </g>
+
+  <!-- Four flow cards -->
+  <path d="M520 482 V528" class="flow"/><path d="M710 482 V528" class="flow"/><path d="M900 482 V528" class="flow"/><path d="M1090 482 V528" class="flow"/>
+
+  <rect x="90" y="540" width="330" height="270" rx="22" class="card" stroke="#22d3ee"/>
+  <text x="120" y="578" class="h2">1 · Prepara</text>
+  <text x="120" y="610" class="body">Organizza e progetta</text>
+  <text x="120" y="646" class="body">• Programmazione / quadro</text><text x="120" y="674" class="body">• UDA / attività</text><text x="120" y="702" class="body">• Biblioteca / materiali</text><text x="120" y="730" class="body">• Verifiche da creare/adattare</text><text x="120" y="758" class="body">• Copilota opzionale</text>
+  <text x="120" y="790" class="small">Output: risultato pronto per Conduci</text>
+
+  <rect x="455" y="540" width="330" height="270" rx="22" class="card" stroke="#34d399"/>
+  <text x="485" y="578" class="h2">2 · Conduci</text>
+  <text x="485" y="610" class="body">Lavora durante la lezione</text>
+  <text x="485" y="646" class="body">• Classe/attività corrente</text><text x="485" y="674" class="body">• Obiettivo e materiali</text><text x="485" y="702" class="body">• Verifica / compito</text><text x="485" y="730" class="body">• Annotazioni rapide</text><text x="485" y="758" class="body">• Privacy Shield immediato</text>
+  <text x="485" y="790" class="small">Output: evidenze da rendere durevoli</text>
+
+  <rect x="820" y="540" width="330" height="270" rx="22" class="card" stroke="#a78bfa"/>
+  <text x="850" y="578" class="h2">3 · Registra</text>
+  <text x="850" y="610" class="body">Rendi durevole il lavoro</text>
+  <text x="850" y="646" class="body">• Valutazioni</text><text x="850" y="674" class="body">• Comportamento</text><text x="850" y="702" class="body">• Esiti verifiche</text><text x="850" y="730" class="body">• Note / osservazioni</text><text x="850" y="758" class="body">• Avanzamento UDA</text>
+  <text x="850" y="790" class="small">Usa le superfici autorevoli esistenti</text>
+
+  <rect x="1185" y="540" width="330" height="270" rx="22" class="card" stroke="#fbbf24"/>
+  <text x="1215" y="578" class="h2">4 · Rivedi</text>
+  <text x="1215" y="610" class="body">Analizza e decidi il seguito</text>
+  <text x="1215" y="646" class="body">• Tabellone / medie</text><text x="1215" y="674" class="body">• Analisi / trend</text><text x="1215" y="702" class="body">• Storico</text><text x="1215" y="730" class="body">• Scheda alunno</text><text x="1215" y="758" class="body">• Gap / sintesi / report</text>
+  <text x="1215" y="790" class="small">Output: decisione → nuovo Prepara</text>
+
+  <!-- cycle -->
+  <path d="M1515 812 C1515 856 1470 875 1400 875 H200 C130 875 90 850 90 812" class="thin" stroke="#67e8f9" marker-end="url(#arrow)"/>
+  <text x="676" y="865" class="body">Ciclo professionale continuo</text>
+
+  <!-- transversal tools -->
+  <rect x="90" y="900" width="1425" height="90" rx="22" fill="#06131f" stroke="#155e75" stroke-width="2"/>
+  <text x="120" y="934" class="h3">Strumenti trasversali — disponibili senza diventare silos di navigazione</text>
+  <text x="120" y="968" class="body">Copilota contestuale · Biblioteca/memoria professionale · Verifiche · Analisi · Memoria semantica locale · Privacy/Backup · Impostazioni</text>
+
+  <!-- roadmap -->
+  <text x="90" y="1038" class="h2">Roadmap canonica</text>
+  <g>
+    <rect x="290" y="1010" width="145" height="62" rx="14" fill="#164e63"/><text x="312" y="1036" class="phase">CTX-01</text><text x="306" y="1058" class="small">Contesto unico</text>
+    <rect x="452" y="1010" width="145" height="62" rx="14" fill="#155e75"/><text x="470" y="1036" class="phase">TODAY-01</text><text x="474" y="1058" class="small">Home Oggi</text>
+    <rect x="614" y="1010" width="145" height="62" rx="14" fill="#047857"/><text x="638" y="1036" class="phase">FLOW-01..04</text><text x="633" y="1058" class="small">4 flussi</text>
+    <rect x="776" y="1010" width="145" height="62" rx="14" fill="#6d28d9"/><text x="803" y="1036" class="phase">INT-01..02</text><text x="799" y="1058" class="small">Integrazione</text>
+    <rect x="938" y="1010" width="145" height="62" rx="14" fill="#0f766e"/><text x="972" y="1036" class="phase">LSM-02</text><text x="953" y="1058" class="small">Memoria trasparente</text>
+    <rect x="1100" y="1010" width="145" height="62" rx="14" fill="#1d4ed8"/><text x="1126" y="1036" class="phase">MOBILE-01</text><text x="1122" y="1058" class="small">App installabile</text>
+    <rect x="1262" y="1010" width="145" height="62" rx="14" fill="#92400e"/><text x="1290" y="1036" class="phase">UX-QA-03</text><text x="1285" y="1058" class="small">Qualifica finale</text>
+  </g>
+</svg>
