@@ -103,9 +103,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           context={conductContext}
           privacyShieldActive={privacyShieldActive}
           onTogglePrivacyShield={() => onTogglePrivacyShield?.()}
-          onNavigateUda={() => onNavigateTab('uda-gantt')}
-          onNavigateLibrary={() => onNavigateTab('biblioteca')}
-          onNavigateAssessment={() => onNavigateTab('verifiche-online')}
+          onNavigateUda={() => onContinueToday?.('uda-gantt')}
+          onNavigateLibrary={() => onContinueToday?.('biblioteca')}
+          onNavigateAssessment={() => onContinueToday?.('verifiche-online')}
           onOpenCopilot={() => onOpenConductCopilot?.()}
           onGoToRecord={() => onGoToRecord?.()}
           onDismiss={() => onDismissToday?.()}
