@@ -116,7 +116,7 @@ async function openPreparationCopilot(page) {
 }
 
 test.describe('FLOW-01 desktop qualification', () => {
-  test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
+  test.use({ viewport: { width: 1280, height: 900 } });
 
   test('Prepara keeps explicit class context across specialist surfaces and Copilota', async ({ page }) => {
     await configureVault(page, 'flow-01-desktop');
@@ -140,7 +140,7 @@ test.describe('FLOW-01 desktop qualification', () => {
 });
 
 test.describe('FLOW-01 mobile qualification', () => {
-  test.use({ viewport: { width: 390, height: 844 }, trace: 'retain-on-failure' });
+  test.use({ viewport: { width: 390, height: 844 } });
 
   test('Prepara is touch-safe, non-overflowing and hands the known class to Copilota at 390x844', async ({ page }) => {
     await configureVault(page, 'flow-01-mobile');
