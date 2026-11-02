@@ -29,7 +29,7 @@ async function openDrawerItem(page, label) {
 }
 
 async function returnHome(page) {
-  await openDrawerItem(page, 'Classi');
+  await openDrawerItem(page, 'Oggi');
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
