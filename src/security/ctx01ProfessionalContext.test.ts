@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveProfessionalContext } from '../context/professionalContext';
+import {
+  resolveProfessionalContext,
+  resolveProfessionalContextFromLaunch,
+  toCopilotContextProjection,
+  toLibraryTeachingContext
+} from '../context/professionalContext';
 
 describe('CTX-01 professional context resolver', () => {
   test('resolves the current class without inventing a teaching target', () => {
@@ -169,5 +174,103 @@ describe('CTX-01 professional context resolver', () => {
     expect(Object.keys(result.context)).not.toContain('students');
     expect(Object.keys(result.context)).not.toContain('grades');
     expect(Object.keys(result.context)).not.toContain('behaviors');
+  });
+});
+
+describe('CTX-01 professional context adapters', () => {
+  const ambient = {
+    schema: 'registro.professional-context/v1' as const,
+    surface: 'library' as const,
+    classId: '2c',
+    className: '2C',
+    udaId: 'uda-1',
+    lessonId: 'lesson-1',
+    sourceId: 'source-1',
+    planningProfileId: 'profile-2',
+    assessmentId: 'assessment-1',
+    goal: 'Preparare attività',
+    time: { kind: 'today' as const, date: '2026-11-02' },
+    privacyScope: 'TEACHER_PROFESSIONAL' as const
+  };
+
+  test('projects only supported routing fields to the existing Copilot context', () => {
+    expect(toCopilotContextProjection(ambient)).toEqual({
+      schema: 'registro.copilot-context/v1',
+      surface: 'library',
+      className: '2C',
+      udaId: 'uda-1',
+      lessonId: 'lesson-1',
+      sourceId: 'source-1',
+      planningProfileId: 'profile-2',
+      assessmentId: 'assessment-1'
+    });
+  });
+
+  test('projects the same UDA and lesson to the Biblioteca teaching contract', () => {
+    expect(toLibraryTeachingContext(ambient)).toEqual({
+      udaId: 'uda-1',
+      lessonId: 'lesson-1'
+    });
+
+    expect(toLibraryTeachingContext({
+      ...ambient,
+      udaId: undefined,
+      lessonId: undefined
+    })).toBeNull();
+  });
+
+  test('enriches ambient context from a compatible explicit launch', () => {
+    const result = resolveProfessionalContextFromLaunch(
+      {
+        ...ambient,
+        udaId: undefined,
+        lessonId: undefined,
+        sourceId: undefined
+      },
+      {
+        surface: 'lesson',
+        className: '2C',
+        udaId: 'uda-2',
+        lessonId: 'lesson-2',
+        sourceId: 'source-2',
+        intent: 'prepare'
+      },
+      {
+        udaId: 'uda-2',
+        className: '2C',
+        period: 'Q1',
+        lessonId: 'lesson-2'
+      }
+    );
+
+    expect(result.status).toBe('resolved');
+    if (result.status !== 'resolved') return;
+    expect(result.context.surface).toBe('lesson');
+    expect(result.context.classId).toBe('2c');
+    expect(result.context.className).toBe('2C');
+    expect(result.context.udaId).toBe('uda-2');
+    expect(result.context.lessonId).toBe('lesson-2');
+    expect(result.context.sourceId).toBe('source-2');
+  });
+
+  test('fails closed when explicit launch targets another class', () => {
+    const result = resolveProfessionalContextFromLaunch(
+      ambient,
+      {
+        surface: 'uda',
+        className: '3C',
+        udaId: 'uda-3c'
+      },
+      {
+        udaId: 'uda-3c',
+        className: '3C',
+        period: 'Q1'
+      }
+    );
+
+    expect(result).toEqual({
+      status: 'conflict',
+      conflicts: ['CLASS_MISMATCH']
+    });
   });
 });
