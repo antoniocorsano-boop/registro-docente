@@ -18,7 +18,7 @@ describe('TODAY-01 Dashboard continuation contract', () => {
 
     expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
     expect(dashboard).toContain("import { ConductLessonPanel } from './ConductLessonPanel';");
-    expect(dashboard).toContain("import { getTodayContinuationOptions, type TodayAction } from '../today/todayRouter';");
+    expect(dashboard).toContain("import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';");
     expect(dashboard).toContain('todayAction?: TodayAction | null;');
     expect(dashboard).toContain('onContinueToday?: (tab: ActiveTab) => void;');
     expect(dashboard).toContain('onDismissToday?: () => void;');
