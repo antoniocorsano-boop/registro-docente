@@ -60,6 +60,21 @@ describe('FLOW-03 UDA diary handoff contract', () => {
     expect(prefillEffect).not.toContain('commitUdaViewMutation(');
   });
 
+  test('opens the existing planning workspace for FLOW-03 and forwards the governed handoff', async () => {
+    const workspace = await source('src/components/UdaWorkspaceView.tsx');
+
+    expect(workspace).toContain("import type { RecordLessonPrefill } from './UdaGanttView.tsx';");
+    expect(workspace).toContain('recordLessonPrefill?: RecordLessonPrefill;');
+    expect(workspace).toContain('onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;');
+    expect(workspace).toContain("if (!recordLessonPrefill) return;");
+    expect(workspace).toContain("setActiveView('planning');");
+    expect(workspace).toContain('setClassFilter(recordLessonPrefill.className);');
+
+    const planning = sectionBetween(workspace, "{activeView === 'planning' && (", "{activeView === 'analysis' && (");
+    expect(planning).toContain('recordLessonPrefill={recordLessonPrefill}');
+    expect(planning).toContain('onRecordLessonCommitted={onRecordLessonCommitted}');
+  });
+
   test('signals FLOW-03 completion only from the existing successful lesson commit callback', async () => {
     const gantt = await source('src/components/UdaGanttView.tsx');
     const addLesson = sectionBetween(gantt, '// Add lesson to current UDA', '// Remove lesson from UDA');
