@@ -94,12 +94,10 @@ export const updateRecordStagedNote = (
   session: RecordSessionDraft,
   stagedNote: string
 ): RecordSessionDraft => {
-  const normalizedNote = normalizeOptionalText(stagedNote);
-
-  if (normalizedNote) {
+  if (stagedNote.length > 0) {
     return {
       ...session,
-      stagedNote: normalizedNote
+      stagedNote
     };
   }
 

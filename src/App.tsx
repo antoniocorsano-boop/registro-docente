@@ -1398,21 +1398,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const completeRecordFlow = useCallback((
     kind: RecordEvidenceKind,
-    navigationVersionAtSave: number
+    navigationVersionAtSave: number,
+    originatingSession: RecordSessionDraft | null,
+    originatingClassId: string
   ): boolean => {
     const session = recordSessionRef.current;
-    if (!session
+    if (!originatingSession
+      || !session
+      || session !== originatingSession
       || session.status !== 'editing'
       || session.evidenceKind !== kind
-      || session.context.classId !== currentClassIdRef.current) {
+      || session.context.classId !== originatingClassId
+      || currentClassIdRef.current !== originatingClassId
+      || navigationVersionRef.current !== navigationVersionAtSave) {
       return false;
     }
 
     publishRecordSession(markRecordSessionSaved(session));
-    if (navigationVersionRef.current === navigationVersionAtSave) {
-      setActiveTab('dashboard');
-      setTodayAction('record');
-    }
+    setActiveTab('dashboard');
+    setTodayAction('record');
     return true;
   }, [publishRecordSession, setActiveTab]);
 
@@ -1448,7 +1452,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       return;
     }
 
-    const completed = completeRecordFlow('lesson-log', navigationVersionAtSave);
+    const completed = completeRecordFlow('lesson-log', navigationVersionAtSave, session, session.context.classId);
     if (completed) {
       recordSpecialistNavigationVersionRef.current = null;
     }
@@ -1599,6 +1603,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
+    const recordSessionAtSave = recordSessionRef.current;
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
       id: uid(),
@@ -1627,7 +1632,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
-        const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave);
+        const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
         if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
           setActiveTab('storico');
@@ -1641,12 +1646,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
-    const dateStr = newRecords[0]?.date || today();
+    const recordSessionAtSave = recordSessionRef.current;
+    const submittedBehaviorKeys = new Set(
+      newRecords.map(record => `${record.date}::${record.studentId}`)
+    );
 
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
-      const remaining = (targetClass.behaviors || []).filter(b => b.date !== dateStr);
+      const remaining = (targetClass.behaviors || []).filter(
+        record => !submittedBehaviorKeys.has(`${record.date}::${record.studentId}`)
+      );
       const updatedClass: ClassData = {
         ...targetClass,
         behaviors: [...remaining, ...newRecords]
@@ -1657,7 +1667,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
-        const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave);
+        const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId);
         if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
           setActiveTab('dashboard');
         }
@@ -1837,11 +1847,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
 
     let importedCount = 0;
+    let importedCountByClassId: Record<string, number> = {};
     const navigationVersionAtSave = navigationVersionRef.current;
+    const recordSessionAtSave = recordSessionRef.current;
+    const recordingClassId = recordSessionAtSave?.context.classId;
 
     return commitAppDataMutation(current => {
       const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId);
       importedCount = result.importedCount;
+      importedCountByClassId = result.importedCountByClassId;
       return {
         ...current,
         classes: result.classes
@@ -1849,7 +1863,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }, {
       afterCommit: () => {
         alert(`Importazione completata con successo! ${importedCount} valutazioni sono state registrate negli elenchi di classe.`);
-        completeRecordFlow('online-outcomes', navigationVersionAtSave);
+        if (recordingClassId && (importedCountByClassId[recordingClassId] || 0) > 0) {
+          completeRecordFlow('online-outcomes', navigationVersionAtSave, recordSessionAtSave, recordingClassId);
+        }
       }
     }).then(() => undefined);
   };

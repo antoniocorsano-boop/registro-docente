@@ -59,11 +59,14 @@ describe('FLOW-03 App orchestration contract', () => {
     const app = await source('src/App.tsx');
     const completion = sectionBetween(app, 'const completeRecordFlow', 'const handleChooseRecordEvidence');
 
+    expect(completion).toContain('originatingSession: RecordSessionDraft | null');
+    expect(completion).toContain('session !== originatingSession');
     expect(completion).toContain("session.status !== 'editing'");
     expect(completion).toContain('session.evidenceKind !== kind');
-    expect(completion).toContain('session.context.classId !== currentClassIdRef.current');
+    expect(completion).toContain('session.context.classId !== originatingClassId');
+    expect(completion).toContain('currentClassIdRef.current !== originatingClassId');
+    expect(completion).toContain('navigationVersionRef.current !== navigationVersionAtSave');
     expect(completion).toContain('markRecordSessionSaved(session)');
-    expect(completion).toContain('navigationVersionRef.current === navigationVersionAtSave');
     expect(completion).toContain("setActiveTab('dashboard')");
     expect(completion).toContain("setTodayAction('record')");
   });
@@ -72,18 +75,18 @@ describe('FLOW-03 App orchestration contract', () => {
     const app = await source('src/App.tsx');
 
     const evaluations = sectionBetween(app, 'const handleSaveEvaluations', '// Save behavior notes');
-    expect(evaluations).toContain("completeRecordFlow('evaluation', navigationVersionAtSave)");
-    expect(evaluations.indexOf("completeRecordFlow('evaluation', navigationVersionAtSave)")).toBeGreaterThan(evaluations.indexOf('afterCommit: () =>'));
+    expect(evaluations).toContain("completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId)");
+    expect(evaluations.indexOf("completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId)")).toBeGreaterThan(evaluations.indexOf('afterCommit: () =>'));
     expect(evaluations).toContain("if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave)");
 
     const behaviours = sectionBetween(app, 'const handleSaveBehaviors', '// Edit batch');
-    expect(behaviours).toContain("completeRecordFlow('behaviour', navigationVersionAtSave)");
-    expect(behaviours.indexOf("completeRecordFlow('behaviour', navigationVersionAtSave)")).toBeGreaterThan(behaviours.indexOf('afterCommit: () =>'));
+    expect(behaviours).toContain("completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId)");
+    expect(behaviours.indexOf("completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId)")).toBeGreaterThan(behaviours.indexOf('afterCommit: () =>'));
 
     const imports = sectionBetween(app, 'const handleImportSubmissionsToRegister', '// Save UDAs');
     expect(imports).toContain('const navigationVersionAtSave = navigationVersionRef.current;');
-    expect(imports).toContain("completeRecordFlow('online-outcomes', navigationVersionAtSave)");
-    expect(imports.indexOf("completeRecordFlow('online-outcomes', navigationVersionAtSave)")).toBeGreaterThan(imports.indexOf('afterCommit: () =>'));
+    expect(imports).toContain("completeRecordFlow('online-outcomes', navigationVersionAtSave, recordSessionAtSave, recordingClassId)");
+    expect(imports.indexOf("completeRecordFlow('online-outcomes', navigationVersionAtSave, recordSessionAtSave, recordingClassId)")).toBeGreaterThan(imports.indexOf('afterCommit: () =>'));
   });
 
   test('clears stale orchestration on explicit flow exit, class replacement, restore and reset', async () => {

@@ -38,8 +38,9 @@ export function reconcileSubmissionGrades(
   classes: ClassData[],
   submissions: OnlineSubmission[],
   targetUdaId?: string
-): { classes: ClassData[]; importedCount: number } {
+): { classes: ClassData[]; importedCount: number; importedCountByClassId: Record<string, number> } {
   let importedCount = 0;
+  const importedCountByClassId: Record<string, number> = {};
 
   const nextClasses = classes.map(classData => {
     let grades = [...(classData.grades || [])];
@@ -54,6 +55,7 @@ export function reconcileSubmissionGrades(
       grades = grades.filter(grade => grade.batchId !== nextGrade.batchId);
       grades.push(nextGrade);
       importedCount += 1;
+      importedCountByClassId[classData.id] = (importedCountByClassId[classData.id] || 0) + 1;
     }
 
     return {
@@ -64,6 +66,7 @@ export function reconcileSubmissionGrades(
 
   return {
     classes: nextClasses,
-    importedCount
+    importedCount,
+    importedCountByClassId
   };
 }
