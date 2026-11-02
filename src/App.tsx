@@ -48,6 +48,7 @@ import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
+import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
@@ -1332,6 +1333,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  const handleOpenPreparationCopilot = useCallback(() => {
+    const launchContext = buildPreparationCopilotLaunchContext(currentClass);
+    if (!launchContext) return;
+    openLibraryCopilot(launchContext);
+  }, [currentClass, openLibraryCopilot]);
+
   const handleStartTodayAction = useCallback((action: TodayAction) => {
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
     setTodayAction(action);
@@ -1868,6 +1875,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             todayAction={todayAction}
             onContinueToday={handleContinueToday}
             onDismissToday={handleCancelTodayAction}
+            onOpenPreparationCopilot={handleOpenPreparationCopilot}
           />
         )}
 
