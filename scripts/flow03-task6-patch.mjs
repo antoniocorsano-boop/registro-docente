@@ -34,6 +34,13 @@ gantt = replaceOnce(
 
 gantt = replaceOnce(
   gantt,
+  `                    </div>\n                  </div>\n                </form>\n\n                {/* Lessons list */}`,
+  `                    </div>\n                  </div>\n\n                  <textarea\n                    rows={2}\n                    value={newLessonNotes}\n                    onChange={e => setNewLessonNotes(e.target.value)}\n                    placeholder="Note professionali opzionali sulla lezione..."\n                    className="w-full p-2 rounded bg-slate-950 border border-slate-800 text-white resize-y"\n                  />\n                </form>\n\n                {/* Lessons list */}`,
+  'gantt editable lesson notes'
+);
+
+gantt = replaceOnce(
+  gantt,
   `      setNewLessonTopic('');\n      setNewLessonNotes('');\n      showStatus('Attività registrata nel diario');\n    });`,
   `      setNewLessonTopic('');\n      setNewLessonNotes('');\n      showStatus('Attività registrata nel diario');\n      if (\n        recordLessonPrefill &&\n        recordLessonPrefill.className === updatedUda.className &&\n        (!recordLessonPrefill.udaId || recordLessonPrefill.udaId === updatedUda.id)\n      ) {\n        onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);\n      }\n    });`,
   'gantt completion callback'
