@@ -2041,6 +2041,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             editingBatchId={editingBatchId}
             udas={udas}
+            initialUdaId={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation'
+              ? recordSession.context.udaId
+              : undefined}
+            initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
             onCancelEdit={() => setEditingBatchId(null)}
             isPrivacyShieldActive={isPrivacyShieldActive}
