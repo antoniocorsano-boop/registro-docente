@@ -46,6 +46,7 @@ import {
 } from './memory/professionalMemory';
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
+import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
@@ -1276,19 +1277,42 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
-  const ambientCopilotContext: CopilotLaunchContext = {
-    surface:
-      activeTab === 'home' ? 'home'
-        : activeTab === 'dashboard' ? 'class-dashboard'
-          : activeTab === 'biblioteca' ? 'library'
-            : activeTab === 'uda-gantt' ? 'other-teacher-surface'
-              : activeTab === 'programmazione' ? 'planning'
-                : activeTab === 'verifiche-online' ? 'online-tests'
-                  : activeTab === 'voti' ? 'evaluations'
-                    : activeTab === 'tabellone' ? 'evaluations'
-                      : 'other-teacher-surface',
-    className: currentClass?.name
-  };
+  const ambientCopilotSurface =
+    activeTab === 'home' ? 'home'
+      : activeTab === 'dashboard' ? 'class-dashboard'
+        : activeTab === 'biblioteca' ? 'library'
+          : activeTab === 'uda-gantt' ? 'other-teacher-surface'
+            : activeTab === 'programmazione' ? 'planning'
+              : activeTab === 'verifiche-online' ? 'online-tests'
+                : activeTab === 'voti' ? 'evaluations'
+                  : activeTab === 'tabellone' ? 'evaluations'
+                    : 'other-teacher-surface';
+
+  const ambientProfessionalContext = resolveProfessionalContext({
+    surface: ambientCopilotSurface,
+    currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    privacyScope:
+      activeTab === 'voti'
+      || activeTab === 'tabellone'
+      || activeTab === 'analytics'
+      || activeTab === 'storico'
+      || activeTab === 'report'
+      || activeTab === 'comportamenti'
+      || activeTab === 'dati'
+        ? 'STUDENT_PERSONAL_PRESENT'
+        : 'TEACHER_PROFESSIONAL'
+  });
+
+  const ambientCopilotProjection = ambientProfessionalContext.status === 'resolved'
+    ? toCopilotContextProjection(ambientProfessionalContext.context)
+    : toCopilotContextProjection({
+        schema: 'registro.professional-context/v1',
+        surface: ambientCopilotSurface,
+        time: { kind: 'unspecified' },
+        privacyScope: 'TEACHER_PROFESSIONAL'
+      });
+
+  const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
 
   // Synchronize URL query params
   useEffect(() => {

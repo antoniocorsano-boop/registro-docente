@@ -82,7 +82,9 @@ describe('AIC-01 remote context privacy contract', () => {
     expect(appSource).toContain("activeTab === 'voti' ? 'evaluations'");
     expect(appSource).toContain("activeTab === 'tabellone' ? 'evaluations'");
     expect(appSource).toContain(": 'other-teacher-surface'");
-    expect(appSource).toContain('className: currentClass?.name');
+    expect(appSource).toContain('resolveProfessionalContext({');
+    expect(appSource).toContain('currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null');
+    expect(appSource).toContain('toCopilotContextProjection(ambientProfessionalContext.context)');
     expect(appSource).not.toContain('ambientCopilotContext = { student');
     expect(appSource).not.toContain('ambientCopilotContext = { grades');
     expect(appSource).not.toContain('ambientCopilotContext = { behaviors');

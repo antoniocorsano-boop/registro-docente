@@ -24,7 +24,9 @@ describe('single contextual Copilot surface contract', () => {
 
   test('global launch context is ambient metadata only and excludes student data', () => {
     expect(appSource).toContain('ambientCopilotContext');
-    expect(appSource).toContain('className: currentClass?.name');
+    expect(appSource).toContain('resolveProfessionalContext({');
+    expect(appSource).toContain('currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null');
+    expect(appSource).toContain('toCopilotContextProjection(ambientProfessionalContext.context)');
     expect(appSource).not.toContain('ambientCopilotContext = { student');
     expect(appSource).not.toContain('ambientCopilotContext = { grades');
     expect(appSource).not.toContain('ambientCopilotContext = { behaviors');
