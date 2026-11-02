@@ -3,7 +3,9 @@ import { ActiveTab, ClassData } from '../types';
 import { calcAvg, formatGrade, TYPES_LABEL } from '../utils';
 import { Sparkline } from './Sparkline';
 import { PreparationRouterPanel } from './PreparationRouterPanel';
-import { getTodayContinuationOptions, type TodayAction } from '../today/todayRouter';
+import { ConductLessonPanel } from './ConductLessonPanel';
+import type { ConductContextResolution } from '../conduct/conductSession';
+import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
 import {
   ClipboardList,
   Sparkles,
@@ -12,8 +14,7 @@ import {
   Calendar
 } from 'lucide-react';
 
-const TODAY_ACTION_LABELS: Record<Exclude<TodayAction, 'prepare'>, string> = {
-  conduct: 'Conduci',
+const TODAY_ACTION_LABELS: Record<TodayContinuationAction, string> = {
   record: 'Registra',
   review: 'Rivedi'
 };
@@ -26,6 +27,11 @@ interface DashboardViewProps {
   onContinueToday?: (tab: ActiveTab) => void;
   onDismissToday?: () => void;
   onOpenPreparationCopilot?: () => void;
+  conductContext?: ConductContextResolution | null;
+  privacyShieldActive?: boolean;
+  onTogglePrivacyShield?: () => void;
+  onOpenConductCopilot?: () => void;
+  onGoToRecord?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -35,7 +41,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   todayAction = null,
   onContinueToday,
   onDismissToday,
-  onOpenPreparationCopilot
+  onOpenPreparationCopilot,
+  conductContext = null,
+  privacyShieldActive = false,
+  onTogglePrivacyShield,
+  onOpenConductCopilot,
+  onGoToRecord
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
@@ -87,7 +98,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
       )}
 
-      {todayAction && todayAction !== 'prepare' && (
+      {todayAction === 'conduct' && conductContext && (
+        <ConductLessonPanel
+          context={conductContext}
+          privacyShieldActive={privacyShieldActive}
+          onTogglePrivacyShield={() => onTogglePrivacyShield?.()}
+          onNavigateUda={() => onNavigateTab('uda-gantt')}
+          onNavigateLibrary={() => onNavigateTab('biblioteca')}
+          onNavigateAssessment={() => onNavigateTab('verifiche-online')}
+          onOpenCopilot={() => onOpenConductCopilot?.()}
+          onGoToRecord={() => onGoToRecord?.()}
+          onDismiss={() => onDismissToday?.()}
+        />
+      )}
+
+      {todayAction && todayAction !== 'prepare' && todayAction !== 'conduct' && (
         <section className="neon-card p-4" aria-label={`Continua: ${TODAY_ACTION_LABELS[todayAction]}`}>
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
