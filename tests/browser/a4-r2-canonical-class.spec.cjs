@@ -24,7 +24,7 @@ async function createClassAndReturnHome(page, className) {
   await closePersistenceConfirmation(page);
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   const drawer = page.getByRole('complementary');
-  await drawer.getByRole('button', { name: 'Classi', exact: true }).click();
+  await drawer.getByRole('button', { name: 'Oggi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 

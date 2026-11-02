@@ -408,7 +408,10 @@
         "tests/browser/aic-04-cross-surface-entry.spec.cjs",
         "tests/browser/ux-qa-01-navigation.spec.cjs",
         "tests/browser/ux-qa-01-review-regressions.spec.cjs",
-        "tests/browser/ux-qa-02-progressive-disclosure.spec.cjs"
+        "tests/browser/ux-qa-02-progressive-disclosure.spec.cjs",
+        "tests/browser/a4-r1-teacher-first.spec.cjs",
+        "tests/browser/a4-r2-canonical-class.spec.cjs",
+        "tests/browser/ux-trust-01-qualification.spec.cjs"
       ],
       "tests": [
         "src/security/today01RouterContract.test.ts",

@@ -26,7 +26,7 @@ async function createClassAndReturnHome(page, className) {
 
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   const drawer = page.getByRole('complementary');
-  const classesButton = drawer.getByRole('button', { name: 'Classi', exact: true });
+  const classesButton = drawer.getByRole('button', { name: 'Oggi', exact: true });
   await expect(classesButton).toBeVisible();
   await classesButton.click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
