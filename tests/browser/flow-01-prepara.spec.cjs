@@ -101,6 +101,9 @@ async function assertStickyHeaderClearsFirstPreparationAction(page, router) {
   await expect(header).toBeVisible();
   await expect(firstAction).toBeVisible();
 
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
   const [headerBox, actionBox] = await Promise.all([
     header.boundingBox(),
     firstAction.boundingBox()
