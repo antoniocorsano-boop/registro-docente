@@ -42,7 +42,7 @@ describe('FLOW-01 preparation UI contract', () => {
   test('generic TODAY router no longer owns preparation options', async () => {
     const router = await source('src/today/todayRouter.ts');
 
-    expect(router).toContain("export type TodayContinuationAction = Exclude<TodayAction, 'prepare'>;");
+    expect(router).toContain("export type TodayContinuationAction = Exclude<TodayAction, 'prepare' | 'conduct'>;");
     expect(router).toContain('Record<TodayContinuationAction, readonly TodayContinuationOption[]>');
     expect(router).not.toContain('prepare: [');
     expect(router).toContain("action: TodayContinuationAction");
