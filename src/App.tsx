@@ -51,6 +51,15 @@ import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import { resolveConductContext } from './conduct/conductSession';
 import {
+  buildRecordSession,
+  markRecordSessionSaved,
+  routeForRecordEvidence,
+  setRecordEvidenceKind,
+  updateRecordStagedNote,
+  type RecordEvidenceKind,
+  type RecordSessionDraft
+} from './recording/recordSession';
+import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
   buildMissionContextFingerprint,
@@ -274,6 +283,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
+  const [recordSession, setRecordSession] = useState<RecordSessionDraft | null>(null);
+  const recordSessionRef = useRef<RecordSessionDraft | null>(null);
+  const publishRecordSession = useCallback((next: RecordSessionDraft | null) => {
+    recordSessionRef.current = next;
+    setRecordSession(next);
+  }, []);
   const navigationVersionRef = useRef(0);
   const setActiveTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
@@ -1335,6 +1350,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
       setTodayAction(null);
+      publishRecordSession(null);
       setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
     };
     window.addEventListener('popstate', handlePopState);
@@ -1363,33 +1379,128 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     openLibraryCopilot(launchContext);
   }, [conductContext, openLibraryCopilot]);
 
-  const handleContinueFromConductToRecord = useCallback(() => {
+  const handleContinueFromConductToRecord = useCallback((stagedNote?: string) => {
+    const selectedClass = appDataRef.current.classes.find(
+      candidate => candidate.id === currentClassIdRef.current
+    );
+    if (!selectedClass) return;
+
+    const session = buildRecordSession({
+      classId: selectedClass.id,
+      className: selectedClass.name,
+      conductContext,
+      stagedNote
+    });
+    publishRecordSession(session);
     setTodayAction('record');
-  }, []);
+  }, [conductContext, publishRecordSession]);
+
+  const completeRecordFlow = useCallback((
+    kind: RecordEvidenceKind,
+    navigationVersionAtSave: number
+  ): boolean => {
+    const session = recordSessionRef.current;
+    if (!session
+      || session.status !== 'editing'
+      || session.evidenceKind !== kind
+      || session.context.classId !== currentClassIdRef.current) {
+      return false;
+    }
+
+    publishRecordSession(markRecordSessionSaved(session));
+    if (navigationVersionRef.current === navigationVersionAtSave) {
+      setActiveTab('dashboard');
+      setTodayAction('record');
+    }
+    return true;
+  }, [publishRecordSession, setActiveTab]);
+
+  const handleChooseRecordEvidence = useCallback((kind: RecordEvidenceKind) => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+
+    const editingSession = setRecordEvidenceKind(session, kind);
+    publishRecordSession(editingSession);
+    const route = routeForRecordEvidence(kind);
+    setTodayAction('record');
+    setActiveTab(route.tab);
+
+    try {
+      const classId = currentClassIdRef.current;
+      const params = new URLSearchParams();
+      if (classId) params.set('class', classId);
+      params.set('tab', route.tab);
+      history.pushState({ classId, tab: route.tab }, '', `?${params.toString()}`);
+    } catch (e) {}
+  }, [publishRecordSession, setActiveTab]);
+
+  const handleUpdateRecordStagedNote = useCallback((note: string) => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+    publishRecordSession(updateRecordStagedNote(session, note));
+  }, [publishRecordSession]);
+
+  const handleRecordAnother = useCallback(() => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+    publishRecordSession({ context: session.context, status: 'choose' });
+    setTodayAction('record');
+    setActiveTab('dashboard');
+  }, [publishRecordSession, setActiveTab]);
+
+  const handleContinueRecordToReview = useCallback(() => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+    publishRecordSession(null);
+    setTodayAction('review');
+    setActiveTab('dashboard');
+  }, [publishRecordSession, setActiveTab]);
 
   const handleStartTodayAction = useCallback((action: TodayAction) => {
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
+    if (action !== 'record') publishRecordSession(null);
     setTodayAction(action);
     if (decision.status === 'needs-class') {
+      publishRecordSession(null);
       setActiveTab('home');
       return;
     }
+
+    if (action === 'record') {
+      const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === decision.classId);
+      if (!selectedClass) {
+        publishRecordSession(null);
+        return;
+      }
+      publishRecordSession(buildRecordSession({
+        classId: selectedClass.id,
+        className: selectedClass.name
+      }));
+    }
     handleNavigateTab(decision.target);
-  }, [handleNavigateTab, setActiveTab]);
+  }, [handleNavigateTab, publishRecordSession, setActiveTab]);
 
   const handleContinueToday = useCallback((tab: ActiveTab) => {
     setTodayAction(null);
+    publishRecordSession(null);
     handleNavigateTab(tab);
-  }, [handleNavigateTab]);
+  }, [handleNavigateTab, publishRecordSession]);
 
   const handleCancelTodayAction = useCallback(() => {
     setTodayAction(null);
-  }, []);
+    publishRecordSession(null);
+  }, [publishRecordSession]);
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
+    const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
+    publishRecordSession(
+      todayAction === 'record' && selectedClass
+        ? buildRecordSession({ classId: selectedClass.id, className: selectedClass.name })
+        : null
+    );
     setActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -1401,6 +1512,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateHome = () => {
     setTodayAction(null);
+    publishRecordSession(null);
     currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
     setActiveTab('home');
@@ -1495,8 +1607,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
+        const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave);
         setEditingBatchId(null);
-        if (navigationVersionRef.current === navigationVersionAtSave) {
+        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
           setActiveTab('storico');
         }
       }
@@ -1524,7 +1637,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
-        if (navigationVersionRef.current === navigationVersionAtSave) {
+        const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave);
+        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
           setActiveTab('dashboard');
         }
       }
@@ -1703,6 +1817,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
 
     let importedCount = 0;
+    const navigationVersionAtSave = navigationVersionRef.current;
 
     return commitAppDataMutation(current => {
       const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId);
@@ -1714,6 +1829,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }, {
       afterCommit: () => {
         alert(`Importazione completata con successo! ${importedCount} valutazioni sono state registrate negli elenchi di classe.`);
+        completeRecordFlow('online-outcomes', navigationVersionAtSave);
       }
     }).then(() => undefined);
   };
@@ -1784,6 +1900,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       appDataRef.current = restoredVisibleAppData;
       currentClassIdRef.current = null;
       setTodayAction(null);
+      publishRecordSession(null);
       settingsRef.current = restored.settings;
       udasRef.current = restored.udas;
       testsRef.current = restored.customTests;
@@ -1821,6 +1938,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       setTodayAction(null);
+      publishRecordSession(null);
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
       professionalMemoryRef.current = resetProfessionalMemory;
@@ -1909,6 +2027,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onOpenConductCopilot={handleOpenConductCopilot}
             onGoToRecord={handleContinueFromConductToRecord}
+            recordSession={recordSession}
+            onChangeRecordStagedNote={handleUpdateRecordStagedNote}
+            onChooseRecordEvidence={handleChooseRecordEvidence}
+            onReviewRecord={handleContinueRecordToReview}
+            onRecordAnother={handleRecordAnother}
           />
         )}
 
