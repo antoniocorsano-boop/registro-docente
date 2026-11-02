@@ -365,6 +365,24 @@
       "tests": [
         "src/security/localRuntimeHostContract.test.ts"
       ]
+    },
+    {
+      "id": "CTX-01-I01",
+      "owner": "CTX-01",
+      "statement": "Professional context is session-only, deterministic and minimised; contradictions fail closed; existing neutral-entry and student-data privacy invariants remain authoritative.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/context/professionalContext.ts",
+        "src/security/ctx01ProfessionalContext.test.ts",
+        "src/security/ctx01AppIntegrationContract.test.ts",
+        "src/security/ctx01QualificationContract.test.ts"
+      ],
+      "tests": [
+        "src/security/ctx01ProfessionalContext.test.ts",
+        "src/security/ctx01AppIntegrationContract.test.ts",
+        "src/security/ctx01QualificationContract.test.ts"
+      ]
     }
   ]
 }
