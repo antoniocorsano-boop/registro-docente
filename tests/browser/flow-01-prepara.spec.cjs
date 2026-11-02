@@ -95,6 +95,22 @@ async function assertNoHorizontalOverflow(page) {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
 
+async function assertStickyHeaderClearsFirstPreparationAction(page, router) {
+  const header = page.locator('header').first();
+  const firstAction = router.getByRole('button', { name: /^Definisci la cornice/ });
+  await expect(header).toBeVisible();
+  await expect(firstAction).toBeVisible();
+
+  const [headerBox, actionBox] = await Promise.all([
+    header.boundingBox(),
+    firstAction.boundingBox()
+  ]);
+
+  expect(headerBox).not.toBeNull();
+  expect(actionBox).not.toBeNull();
+  expect(actionBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1);
+}
+
 async function verifyTabDestinations(page) {
   let router = await openPreparationRouter(page);
 
@@ -167,6 +183,8 @@ test.describe('FLOW-01 mobile qualification', () => {
       if (box) expect(box.height).toBeGreaterThanOrEqual(44);
     }
     await assertNoHorizontalOverflow(page);
+    await assertStickyHeaderClearsFirstPreparationAction(page, router);
+    await page.screenshot({ path: evidencePath('flow-01-mobile-router-viewport.png') });
     await page.screenshot({ path: evidencePath('flow-01-mobile-router.png'), fullPage: true });
 
     const composer = await openPreparationCopilot(page);
