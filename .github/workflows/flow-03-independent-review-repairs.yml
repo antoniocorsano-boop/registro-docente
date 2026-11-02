@@ -8,6 +8,7 @@ on:
       - scripts/flow03-independent-review-repairs.mjs
       - .github/workflows/flow-03-independent-review-repairs.yml
       - src/security/flow03RecordSessionContract.test.ts
+      - src/security/flow03UdaDiaryHandoffContract.test.ts
 
 permissions:
   contents: write
