@@ -26,7 +26,7 @@ describe('FLOW-02 Dashboard integration contract', () => {
     expect(router).not.toContain('  conduct: [');
   });
 
-  test('wires the dedicated conduct panel only to explicit session and specialist actions', async () => {
+  test('routes conduct specialist exits through the canonical session-clearing continuation', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain('conductContext?: ConductContextResolution | null;');
@@ -34,9 +34,9 @@ describe('FLOW-02 Dashboard integration contract', () => {
     expect(dashboard).toContain('onTogglePrivacyShield?: () => void;');
     expect(dashboard).toContain('onOpenConductCopilot?: () => void;');
     expect(dashboard).toContain('onGoToRecord?: () => void;');
-    expect(dashboard).toContain("onNavigateLibrary={() => onNavigateTab('biblioteca')}");
-    expect(dashboard).toContain("onNavigateAssessment={() => onNavigateTab('verifiche-online')}");
-    expect(dashboard).toContain("onNavigateUda={() => onNavigateTab('uda-gantt')}");
+    expect(dashboard).toContain("onNavigateLibrary={() => onContinueToday?.('biblioteca')}");
+    expect(dashboard).toContain("onNavigateAssessment={() => onContinueToday?.('verifiche-online')}");
+    expect(dashboard).toContain("onNavigateUda={() => onContinueToday?.('uda-gantt')}");
     expect(dashboard).toContain('onOpenCopilot={() => onOpenConductCopilot?.()}');
     expect(dashboard).toContain('onGoToRecord={() => onGoToRecord?.()}');
     expect(dashboard).toContain('onTogglePrivacyShield={() => onTogglePrivacyShield?.()}');
