@@ -45,7 +45,7 @@ jobs:
             echo 'No FLOW-02 contracts found.'
             exit 1
           fi
-          bun test "${tests[@]}"
+          bun test "${tests[@]}" src/security/today01ContinuationContract.test.ts src/security/today01RouterContract.test.ts
 
       - name: Typecheck
         run: bun run lint
