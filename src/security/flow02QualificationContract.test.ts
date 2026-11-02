@@ -43,6 +43,7 @@ describe('FLOW-02 qualification invariant', () => {
       'src/today/todayRouter.ts',
       'src/security/flow02ConductSessionContract.test.ts',
       'src/security/flow02ConductUiContract.test.ts',
+      'src/security/flow02ConductCopilotUxContract.test.ts',
       'src/security/flow02AppIntegrationContract.test.ts',
       'src/security/flow02DashboardIntegrationContract.test.ts',
       'src/security/flow02BrowserQualificationContract.test.ts',
@@ -66,6 +67,7 @@ describe('FLOW-02 qualification invariant', () => {
     for (const path of [
       'src/security/flow02ConductSessionContract.test.ts',
       'src/security/flow02ConductUiContract.test.ts',
+      'src/security/flow02ConductCopilotUxContract.test.ts',
       'src/security/flow02AppIntegrationContract.test.ts',
       'src/security/flow02DashboardIntegrationContract.test.ts',
       'src/security/flow02BrowserQualificationContract.test.ts',

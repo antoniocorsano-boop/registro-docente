@@ -178,7 +178,14 @@ async function openConductCopilot(page, panel) {
   const composer = page.getByTestId('library-copilot-composer');
   await expect(composer).toBeVisible();
   await expect(composer).toContainText(CLASS_NAME);
+  await expect(composer).toContainText('Supporto durante la lezione');
+  await expect(composer.getByLabel('Che cosa ti serve adesso?', { exact: true })).toBeVisible();
+  await expect(composer).not.toContainText('contesto UDA non univoco');
   await expect(composer).not.toContainText(RAPID_NOTE);
+  await expect(composer.getByRole('button', { name: 'Preparare un’attività', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Lavorare su un materiale', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Collegare a una UDA', exact: true })).toHaveCount(0);
+  await expect(composer.getByRole('button', { name: 'Rivedere qualcosa', exact: true })).toHaveCount(0);
   await expect(composer.getByTestId('teacher-first-class-choice')).toHaveCount(0);
   return composer;
 }
