@@ -352,6 +352,19 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
+    },
+    {
+      "id": "LOCAL-REG-01-I01",
+      "owner": "LOCAL-REG-01",
+      "statement": "Registro server bind is controlled only by server-side TRAMA_BIND_HOST; hosted default remains 0.0.0.0 and local Android supervision may bind loopback 127.0.0.1 without browser authority.",
+      "impactPaths": [
+        "server.ts",
+        "src/server/runtimeHost.ts",
+        "src/security/localRuntimeHostContract.test.ts"
+      ],
+      "tests": [
+        "src/security/localRuntimeHostContract.test.ts"
+      ]
     }
   ]
 }

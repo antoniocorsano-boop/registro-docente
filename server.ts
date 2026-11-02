@@ -13,6 +13,7 @@ import {
 } from './src/server/teachingProposalRuntime.ts';
 import { handleAgentIntentRequest } from './src/server/agentIntentRoute.ts';
 import { createGeminiAgentIntentProvider } from './src/server/geminiAgentIntentProvider.ts';
+import { resolveServerBindHost } from './src/server/runtimeHost.ts';
 import {
   createAgentIntentRuntime,
   resolveAgentIntentRuntimeConfig
@@ -25,6 +26,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const BIND_HOST = resolveServerBindHost(process.env);
 
 const libraryProposalProvider = createGeminiTeachingProposalProvider({
   apiKey: process.env.GEMINI_API_KEY
@@ -484,8 +486,8 @@ async function start() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server avviato su http://0.0.0.0:${PORT}`);
+  app.listen(PORT, BIND_HOST, () => {
+    console.log(`Server avviato su http://${BIND_HOST}:${PORT}`);
   });
 }
 
