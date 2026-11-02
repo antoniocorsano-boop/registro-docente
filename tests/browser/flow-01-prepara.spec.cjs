@@ -125,7 +125,7 @@ test.describe('FLOW-01 desktop qualification', () => {
     const router = await openPreparationRouter(page);
     await assertNoHorizontalOverflow(page);
     await page.screenshot({ path: evidencePath('flow-01-desktop-router.png'), fullPage: true });
-    await router.getByRole('button', { name: 'Chiudi', exact: true }).click();
+    await router.getByRole('button', { name: 'Chiudi Prepara', exact: true }).click();
     await expect(router).toBeHidden();
 
     await openOggiFromDrawer(page);
