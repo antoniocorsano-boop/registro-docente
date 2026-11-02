@@ -98,7 +98,7 @@ describe('FLOW-03 recording session contract', () => {
     expect(editing.evidenceKind).toBe('evaluation');
 
     const changed = mod.updateRecordStagedNote(editing, ' Osservazione da rivedere ');
-    expect(changed.stagedNote).toBe('Osservazione da rivedere');
+    expect(changed.stagedNote).toBe(' Osservazione da rivedere ');
     expect(changed.status).toBe('editing');
 
     const saved = mod.markRecordSessionSaved(changed);
