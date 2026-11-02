@@ -1342,6 +1342,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     handleNavigateTab(decision.target);
   }, [handleNavigateTab, setActiveTab]);
 
+  const handleContinueToday = useCallback((tab: ActiveTab) => {
+    setTodayAction(null);
+    handleNavigateTab(tab);
+  }, [handleNavigateTab]);
+
   const handleCancelTodayAction = useCallback(() => {
     setTodayAction(null);
   }, []);
@@ -1860,6 +1865,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
+            todayAction={todayAction}
+            onContinueToday={handleContinueToday}
+            onDismissToday={handleCancelTodayAction}
           />
         )}
 
