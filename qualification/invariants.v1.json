@@ -404,7 +404,11 @@
         "src/security/today01SessionContextContract.test.ts",
         "src/security/today01ContinuationContract.test.ts",
         "src/security/today01QualificationContract.test.ts",
-        "tests/browser/today-01-home-oggi-router.spec.cjs"
+        "tests/browser/today-01-home-oggi-router.spec.cjs",
+        "tests/browser/aic-04-cross-surface-entry.spec.cjs",
+        "tests/browser/ux-qa-01-navigation.spec.cjs",
+        "tests/browser/ux-qa-01-review-regressions.spec.cjs",
+        "tests/browser/ux-qa-02-progressive-disclosure.spec.cjs"
       ],
       "tests": [
         "src/security/today01RouterContract.test.ts",
