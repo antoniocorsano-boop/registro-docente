@@ -16,6 +16,7 @@ const registry = await Bun.file(
 };
 
 const navbar = await Bun.file('src/components/Navbar.tsx').text();
+const browserWorkflow = await Bun.file('.github/workflows/browser-qualification.yml').text();
 
 describe('TODAY-01 qualification invariant', () => {
   test('publishes the canonical Oggi session-only router invariant', () => {
@@ -63,6 +64,13 @@ describe('TODAY-01 qualification invariant', () => {
     }
 
     expect(browserSmoke.has('tests/browser/qualification-invariant-smoke.spec.cjs')).toBe(true);
+    expect(browserSmoke.has('tests/browser/today-01-home-oggi-router.spec.cjs')).toBe(true);
+  });
+
+  test('runs dedicated TODAY-01 Chromium evidence in the canonical browser workflow', () => {
+    expect(browserWorkflow).toContain('cp tests/browser/today-01-home-oggi-router.spec.cjs .browser-tools/today-01-home-oggi-router.spec.cjs');
+    expect(browserWorkflow).toContain('Run TODAY-01 Chromium qualification');
+    expect(browserWorkflow).toContain('today-01-home-oggi-router.spec.cjs');
   });
 
   test('renames global Home navigation to Oggi while retaining Classi as an expert Home concept', () => {
