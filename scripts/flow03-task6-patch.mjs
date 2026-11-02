@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-// Fail-closed Task 6 product patch; rerun after correcting the contract boundary.
+// Fail-closed Task 6 product patch.
 function replaceOnce(text, before, after, label) {
   const count = text.split(before).length - 1;
   if (count !== 1) {
@@ -48,6 +48,53 @@ gantt = replaceOnce(
 );
 
 fs.writeFileSync(ganttPath, gantt);
+
+const workspacePath = 'src/components/UdaWorkspaceView.tsx';
+let workspace = fs.readFileSync(workspacePath, 'utf8');
+
+workspace = replaceOnce(
+  workspace,
+  `import React, { useMemo, useState } from 'react';`,
+  `import React, { useEffect, useMemo, useState } from 'react';`,
+  'workspace useEffect import'
+);
+
+workspace = replaceOnce(
+  workspace,
+  `import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';`,
+  `import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';\nimport type { RecordLessonPrefill } from './UdaGanttView.tsx';`,
+  'workspace prefill type import'
+);
+
+workspace = replaceOnce(
+  workspace,
+  `  onSaveUdas: (udas: UdaRecord[]) => Promise<void>;\n  onNavigateTab?: (tab: any) => void;\n  onOpenCopilot?: (context: CopilotLaunchContext) => void;`,
+  `  onSaveUdas: (udas: UdaRecord[]) => Promise<void>;\n  onNavigateTab?: (tab: any) => void;\n  recordLessonPrefill?: RecordLessonPrefill;\n  onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;\n  onOpenCopilot?: (context: CopilotLaunchContext) => void;`,
+  'workspace props'
+);
+
+workspace = replaceOnce(
+  workspace,
+  `  onSaveUdas,\n  onNavigateTab,\n  onOpenCopilot\n}) => {`,
+  `  onSaveUdas,\n  onNavigateTab,\n  recordLessonPrefill,\n  onRecordLessonCommitted,\n  onOpenCopilot\n}) => {`,
+  'workspace destructure'
+);
+
+workspace = replaceOnce(
+  workspace,
+  `  const [statusMessage, setStatusMessage] = useState<string | null>(null);\n  const [saveError, setSaveError] = useState<string | null>(null);\n\n  const filteredUdas = useMemo(`,
+  `  const [statusMessage, setStatusMessage] = useState<string | null>(null);\n  const [saveError, setSaveError] = useState<string | null>(null);\n\n  useEffect(() => {\n    if (!recordLessonPrefill) return;\n    setActiveView('planning');\n    setClassFilter(recordLessonPrefill.className);\n  }, [recordLessonPrefill]);\n\n  const filteredUdas = useMemo(`,
+  'workspace FLOW-03 planning handoff'
+);
+
+workspace = replaceOnce(
+  workspace,
+  `          <LegacyUdaGanttView classes={classes} udas={udas} settings={settings} tests={tests} onSaveUdas={onSaveUdas} onNavigateTab={onNavigateTab} />`,
+  `          <LegacyUdaGanttView\n            classes={classes}\n            udas={udas}\n            settings={settings}\n            tests={tests}\n            onSaveUdas={onSaveUdas}\n            onNavigateTab={onNavigateTab}\n            recordLessonPrefill={recordLessonPrefill}\n            onRecordLessonCommitted={onRecordLessonCommitted}\n          />`,
+  'workspace planning Gantt handoff'
+);
+
+fs.writeFileSync(workspacePath, workspace);
 
 const appPath = 'src/App.tsx';
 let app = fs.readFileSync(appPath, 'utf8');
