@@ -36,12 +36,14 @@ describe('PERSIST-01 navigation remains independent from in-flight app-data pers
 
     const evaluations = sectionBetween(source, '// Save evaluations batch', '// Save behavior notes');
     expect(evaluations).toContain('const navigationVersionAtSave = navigationVersionRef.current;');
-    expect(evaluations).toContain('if (navigationVersionRef.current === navigationVersionAtSave)');
+    expect(evaluations).toContain('const recordCompleted = completeRecordFlow(\'evaluation\', navigationVersionAtSave);');
+    expect(evaluations).toContain('if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave)');
     expect(evaluations).toContain("setActiveTab('storico')");
 
     const behaviors = sectionBetween(source, '// Save behavior notes', '// Edit batch');
     expect(behaviors).toContain('const navigationVersionAtSave = navigationVersionRef.current;');
-    expect(behaviors).toContain('if (navigationVersionRef.current === navigationVersionAtSave)');
+    expect(behaviors).toContain('const recordCompleted = completeRecordFlow(\'behaviour\', navigationVersionAtSave);');
+    expect(behaviors).toContain('if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave)');
     expect(behaviors).toContain("setActiveTab('dashboard')");
   });
 });
