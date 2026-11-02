@@ -76,12 +76,17 @@ export function resolveProfessionalContext(
   const conflicts: ProfessionalContextConflictCode[] = [];
   const currentClassName = optionalTrimmed(input.currentClass?.name);
   const teachingClassName = optionalTrimmed(input.teachingContext?.className);
+  const planningClassName = input.planningContext?.status === 'resolved'
+    ? optionalTrimmed(input.planningContext.teachingContext.className)
+    : undefined;
 
-  if (
-    currentClassName
-    && teachingClassName
-    && currentClassName !== teachingClassName
-  ) {
+  const declaredClassNames = [
+    currentClassName,
+    teachingClassName,
+    planningClassName
+  ].filter((value): value is string => Boolean(value));
+
+  if (new Set(declaredClassNames).size > 1) {
     conflicts.push('CLASS_MISMATCH');
   }
 
