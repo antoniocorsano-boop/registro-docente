@@ -237,9 +237,12 @@ async function openBehaviourFromRecord(page, record) {
 async function openOnlineOutcomesFromRecord(page, record) {
   await record.getByRole('button', { name: 'Esiti verifica online', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Importa Voti nel Registro', exact: true })).toBeVisible();
+  await assertSelectedClassStillVisible(page);
+  await assertNoAutomaticMutation(page);
+
+  await page.getByRole('button', { name: /Condivisione Padlet/ }).click();
   const classSelect = page.getByLabel('Classe Destinataria', { exact: true });
   await expect(classSelect).toHaveValue(CLASS_NAME);
-  await assertSelectedClassStillVisible(page);
   await assertNoAutomaticMutation(page);
 }
 
