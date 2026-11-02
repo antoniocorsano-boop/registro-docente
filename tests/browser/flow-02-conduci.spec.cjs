@@ -151,6 +151,28 @@ async function assertTextareaNotCoveredByFixedBottomControl(page, panel) {
   expect(overlaps).toEqual([]);
 }
 
+async function assertVaultControlsClearOperationalActions(page, panel) {
+  const privacy = panel.getByRole('button', { name: /Privacy Shield/ });
+  await privacy.scrollIntoViewIfNeeded();
+  const privacyBox = await privacy.boundingBox();
+  expect(privacyBox).not.toBeNull();
+
+  for (const label of ['Imposta blocco automatico', 'Blocca Registro']) {
+    const control = page.getByRole('button', { name: label, exact: true });
+    await expect(control).toBeVisible();
+    const controlBox = await control.boundingBox();
+    expect(controlBox).not.toBeNull();
+
+    const intersects = !(
+      privacyBox.x + privacyBox.width <= controlBox.x ||
+      privacyBox.x >= controlBox.x + controlBox.width ||
+      privacyBox.y + privacyBox.height <= controlBox.y ||
+      privacyBox.y >= controlBox.y + controlBox.height
+    );
+    expect(intersects).toBe(false);
+  }
+}
+
 async function openConductCopilot(page, panel) {
   await panel.getByRole('button', { name: 'Chiedi supporto', exact: true }).click();
   const composer = page.getByTestId('library-copilot-composer');
@@ -196,6 +218,7 @@ test.describe('FLOW-02 mobile qualification', () => {
     await assertNoHorizontalOverflow(page);
     await assertStickyHeaderClearsConductPanel(page, panel);
     await assertCriticalControlsTouchSafe(panel);
+    await assertVaultControlsClearOperationalActions(page, panel);
     await page.screenshot({ path: evidencePath('flow-02-mobile-conduct-viewport.png') });
     await page.screenshot({ path: evidencePath('flow-02-mobile-conduct.png'), fullPage: true });
 
