@@ -93,7 +93,7 @@ let flow02 = fs.readFileSync(flow02Path, 'utf8');
 flow02 = replaceOnce(
   flow02,
   `  const record = page.getByRole('region', { name: 'Continua: Registra' });`,
-  `  const record = page.getByRole('region', { name: \`Registra per \${CLASS_NAME}\` });`,
+  '  const record = page.getByRole(\'region\', { name: `Registra per ${CLASS_NAME}` });',
   'FLOW-02 record region'
 );
 flow02 = replaceOnce(
@@ -106,10 +106,20 @@ fs.writeFileSync(flow02Path, flow02);
 
 const flow02ContractPath = 'src/security/flow02BrowserQualificationContract.test.ts';
 let flow02Contract = fs.readFileSync(flow02ContractPath, 'utf8');
+const flow02ContractBefore = [
+  '    expect(spec).toContain("getByRole(\'region\', { name: \'Continua: Registra\' })");',
+  "    expect(spec).toContain('assertSelectedClassStillVisible');"
+].join('\n');
+const flow02ContractAfter = [
+  '    expect(spec).toContain("getByRole(\'region\', { name: `Registra per ${CLASS_NAME}` })");',
+  '    expect(spec).toContain("getByLabel(\'Nota di sessione\', { exact: true })");',
+  "    expect(spec).toContain('toHaveValue(RAPID_NOTE)');",
+  "    expect(spec).toContain('assertSelectedClassStillVisible');"
+].join('\n');
 flow02Contract = replaceOnce(
   flow02Contract,
-  `    expect(spec).toContain("getByRole('region', { name: 'Continua: Registra' })");\n    expect(spec).toContain('assertSelectedClassStillVisible');`,
-  `    expect(spec).toContain("getByRole('region', { name: \\`Registra per \\${CLASS_NAME}\\` })");\n    expect(spec).toContain("getByLabel('Nota di sessione', { exact: true })");\n    expect(spec).toContain('toHaveValue(RAPID_NOTE)');\n    expect(spec).toContain('assertSelectedClassStillVisible');`,
+  flow02ContractBefore,
+  flow02ContractAfter,
   'FLOW-02 browser contract'
 );
 fs.writeFileSync(flow02ContractPath, flow02Contract);
