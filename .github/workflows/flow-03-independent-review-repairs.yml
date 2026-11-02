@@ -9,6 +9,7 @@ on:
       - .github/workflows/flow-03-independent-review-repairs.yml
       - src/security/flow03RecordSessionContract.test.ts
       - src/security/flow03UdaDiaryHandoffContract.test.ts
+      - src/security/homeNavigationDuringSaveIntegrity.test.ts
 
 permissions:
   contents: write
