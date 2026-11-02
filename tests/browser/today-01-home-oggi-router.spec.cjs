@@ -87,7 +87,7 @@ test.describe('TODAY-01 desktop qualification', () => {
 
     await continuation.getByRole('button', { name: 'Chiudi continuazione di oggi' }).click();
     await expect(continuation).toBeHidden();
-    await expect(page.getByText(CLASS_NAME, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}`, exact: true })).toBeVisible();
   });
 });
 
