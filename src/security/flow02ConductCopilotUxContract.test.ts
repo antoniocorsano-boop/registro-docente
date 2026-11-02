@@ -27,6 +27,16 @@ describe('FLOW-02 conduct Copilot UX rework', () => {
     expect(directGate).not.toContain("directLaunchIntent === 'conduct'");
   });
 
+  test('does not infer a UDA automatically when conduct intentionally launches without an explicit teaching target', () => {
+    const teachingSuggestion = sectionBetween(
+      composer,
+      'const teachingSuggestion = useMemo(() => {',
+      'const resolvedTeachingContext ='
+    );
+
+    expect(teachingSuggestion).toContain("if (contextOverride !== 'auto' || hasLaunchTeachingTarget || isConductLaunch) return null;");
+  });
+
   test('uses in-lesson language and never exposes the technical ambiguous-UDA phrase in conduct mode', () => {
     expect(composer).toContain('Supporto durante la lezione');
     expect(composer).toContain('La classe è già impostata. Descrivi ciò che ti serve adesso; il Copilota userà solo il contesto professionale già disponibile.');
