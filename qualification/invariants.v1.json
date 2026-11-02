@@ -403,7 +403,8 @@
         "src/security/today01HomeUiContract.test.ts",
         "src/security/today01SessionContextContract.test.ts",
         "src/security/today01ContinuationContract.test.ts",
-        "src/security/today01QualificationContract.test.ts"
+        "src/security/today01QualificationContract.test.ts",
+        "tests/browser/today-01-home-oggi-router.spec.cjs"
       ],
       "tests": [
         "src/security/today01RouterContract.test.ts",
@@ -413,7 +414,8 @@
         "src/security/today01QualificationContract.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/qualification-invariant-smoke.spec.cjs"
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/today-01-home-oggi-router.spec.cjs"
       ]
     }
   ]
