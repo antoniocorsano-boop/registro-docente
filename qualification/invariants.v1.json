@@ -424,6 +424,37 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/today-01-home-oggi-router.spec.cjs"
       ]
+    },
+    {
+      "id": "FLOW-01-I01",
+      "owner": "FLOW-01",
+      "statement": "Prepara is a session-only professional-intent router: it preserves the explicitly selected class, delegates to existing authoritative preparation surfaces, opens Copilota with class-only prepare intent, and never persists or invents preparation targets.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/preparation/",
+        "src/today/todayRouter.ts",
+        "src/components/PreparationRouterPanel.tsx",
+        "src/components/DashboardView.tsx",
+        "src/security/flow01PreparationRouterContract.test.ts",
+        "src/security/flow01PreparationUiContract.test.ts",
+        "src/security/flow01AppIntegrationContract.test.ts",
+        "src/security/flow01BrowserQualificationContract.test.ts",
+        "src/security/flow01QualificationContract.test.ts",
+        "tests/browser/flow-01-prepara.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/flow01PreparationRouterContract.test.ts",
+        "src/security/flow01PreparationUiContract.test.ts",
+        "src/security/flow01AppIntegrationContract.test.ts",
+        "src/security/flow01BrowserQualificationContract.test.ts",
+        "src/security/flow01QualificationContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/flow-01-prepara.spec.cjs"
+      ]
     }
   ]
 }
