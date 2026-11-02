@@ -1,0 +1,103 @@
+import { describe, expect, test } from 'bun:test';
+
+async function source(path: string) {
+  return Bun.file(path).text();
+}
+
+function sectionBetween(text: string, start: string, end: string) {
+  const startIndex = text.indexOf(start);
+  const endIndex = text.indexOf(end, startIndex + start.length);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return text.slice(startIndex, endIndex);
+}
+
+describe('FLOW-03 independent review repairs', () => {
+  test('staged note editing preserves raw spaces and newlines until an explicit handoff boundary', async () => {
+    const {
+      buildRecordSession,
+      updateRecordStagedNote
+    } = await import('../recording/recordSession');
+
+    const session = buildRecordSession({ classId: 'class-a', className: '2A' });
+    const editing = {
+      ...session,
+      evidenceKind: 'lesson-log' as const,
+      status: 'editing' as const
+    };
+
+    expect(updateRecordStagedNote(editing, 'due parole ' ).stagedNote).toBe('due parole ');
+    expect(updateRecordStagedNote(editing, 'prima riga\n').stagedNote).toBe('prima riga\n');
+  });
+
+  test('record completion is bound to the exact recording session that initiated the mutation', async () => {
+    const app = await source('src/App.tsx');
+    const completion = sectionBetween(app, 'const completeRecordFlow', 'const handleChooseRecordEvidence');
+
+    expect(completion).toContain('originatingSession: RecordSessionDraft | null');
+    expect(completion).toContain('session !== originatingSession');
+    expect(completion).toContain('originatingClassId: string');
+    expect(completion).toContain('session.context.classId !== originatingClassId');
+
+    const evaluations = sectionBetween(app, 'const handleSaveEvaluations', '// Save behavior notes');
+    expect(evaluations).toContain('const recordSessionAtSave = recordSessionRef.current;');
+    expect(evaluations).toContain("completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId)");
+
+    const behaviours = sectionBetween(app, 'const handleSaveBehaviors', '// Edit batch');
+    expect(behaviours).toContain('const recordSessionAtSave = recordSessionRef.current;');
+    expect(behaviours).toContain("completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId)");
+  });
+
+  test('partial behavior save replaces only submitted student/date pairs', async () => {
+    const app = await source('src/App.tsx');
+    const behaviours = sectionBetween(app, 'const handleSaveBehaviors', '// Edit batch');
+
+    expect(behaviours).toContain('const submittedBehaviorKeys = new Set(');
+    expect(behaviours).toContain('`${record.date}::${record.studentId}`');
+    expect(behaviours).toContain('!submittedBehaviorKeys.has(`${record.date}::${record.studentId}`)');
+    expect(behaviours).not.toContain('filter(b => b.date !== dateStr)');
+  });
+
+  test('submission reconciliation reports imports by canonical class id', async () => {
+    const { reconcileSubmissionGrades } = await import('../persistence/submissionGradeImport');
+
+    const classes = [
+      {
+        id: 'class-a',
+        name: '2A',
+        students: [{ id: 'student-a', name: 'Anna Rossi' }],
+        grades: []
+      },
+      {
+        id: 'class-b',
+        name: '2B',
+        students: [{ id: 'student-b', name: 'Bruno Bianchi' }],
+        grades: []
+      }
+    ] as any;
+    const submissions = [{
+      id: 'sub-b',
+      class: '2B',
+      name: 'Bruno Bianchi',
+      score: 8,
+      total: 10,
+      date: '2026-11-02T10:00:00.000Z',
+      testTitle: 'Energia',
+      testId: 'test-1'
+    }] as any;
+
+    const result = reconcileSubmissionGrades(classes, submissions);
+    expect((result as any).importedCountByClassId).toEqual({ 'class-b': 1 });
+  });
+
+  test('online recording completes only when the originating class actually imported a grade', async () => {
+    const app = await source('src/App.tsx');
+    const imports = sectionBetween(app, 'const handleImportSubmissionsToRegister', '// Save UDAs');
+
+    expect(imports).toContain('const recordSessionAtSave = recordSessionRef.current;');
+    expect(imports).toContain('const recordingClassId = recordSessionAtSave?.context.classId;');
+    expect(imports).toContain('importedCountByClassId = result.importedCountByClassId;');
+    expect(imports).toContain('if (recordingClassId && (importedCountByClassId[recordingClassId] || 0) > 0)');
+    expect(imports).toContain("completeRecordFlow('online-outcomes', navigationVersionAtSave, recordSessionAtSave, recordingClassId)");
+  });
+});
