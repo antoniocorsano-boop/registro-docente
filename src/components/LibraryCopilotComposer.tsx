@@ -354,13 +354,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   );
 
   const teachingSuggestion = useMemo(() => {
-    if (contextOverride !== 'auto' || hasLaunchTeachingTarget) return null;
+    if (contextOverride !== 'auto' || hasLaunchTeachingTarget || isConductLaunch) return null;
     return suggestLibraryTeachingContext({
       udas: selectableLocalUdas,
       currentClassName: effectiveClassName ?? null,
       today: localDateKey()
     });
-  }, [selectableLocalUdas, effectiveClassName, hasLaunchTeachingTarget, contextOverride]);
+  }, [selectableLocalUdas, effectiveClassName, hasLaunchTeachingTarget, contextOverride, isConductLaunch]);
 
   const resolvedTeachingContext = contextOverride === 'auto'
     ? (hasLaunchTeachingTarget

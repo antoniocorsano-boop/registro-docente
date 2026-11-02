@@ -100,6 +100,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {todayAction === 'conduct' && conductContext && (
         <ConductLessonPanel
+          key={currentClass.id}
           context={conductContext}
           privacyShieldActive={privacyShieldActive}
           onTogglePrivacyShield={() => onTogglePrivacyShield?.()}
