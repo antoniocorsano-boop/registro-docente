@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+// Re-run on the current exact branch head after aligning inherited FLOW-01/FLOW-02/PERSIST contracts.
 async function patchFile(path, transforms) {
   let source = await readFile(path, 'utf8');
   for (const [label, before, after] of transforms) {
