@@ -78,7 +78,10 @@ async function createSyntheticUda(page) {
   const dialog = page.getByRole('dialog', { name: 'Nuova Unità Didattica (UDA)' });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Titolo', { exact: true }).fill(UDA_TITLE);
-  await dialog.getByLabel('Classe', { exact: true }).selectOption({ label: CLASS_NAME });
+  const classSelect = dialog.locator('select').first();
+  await expect(classSelect).toBeVisible();
+  await classSelect.selectOption({ label: CLASS_NAME });
+  await expect(classSelect).toHaveValue(CLASS_NAME);
   await dialog.getByLabel('Mese Inizio', { exact: true }).selectOption({ label: 'Novembre' });
   await dialog.getByLabel('Durata Mesi', { exact: true }).fill('2');
   await dialog.getByRole('button', { name: 'Crea UDA', exact: true }).click();
