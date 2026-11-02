@@ -1,7 +1,9 @@
-import type {
-  CopilotLocalSurface,
-  CopilotContextProjectionV1
+import {
+  buildCopilotContextProjection,
+  type CopilotContextProjectionV1,
+  type CopilotLocalSurface
 } from '../copilot/contextProjection';
+import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import type { LibraryPlanningContextResolution } from '../library/planningContextBridge';
 import type {
   LibraryTeachingContext,
@@ -128,6 +130,58 @@ export function resolveProfessionalContext(
   return { status: 'resolved', context };
 }
 
-// Reserved imports/interfaces for CTX-01 adapters implemented in the next task.
-export type ProfessionalContextCopilotProjection = CopilotContextProjectionV1;
-export type ProfessionalContextLibraryTeachingContext = LibraryTeachingContext;
+export function toCopilotContextProjection(
+  context: ProfessionalContextV1
+): CopilotContextProjectionV1 {
+  return buildCopilotContextProjection({
+    surface: context.surface,
+    className: context.className,
+    udaId: context.udaId,
+    lessonId: context.lessonId,
+    sourceId: context.sourceId,
+    planningProfileId: context.planningProfileId,
+    assessmentId: context.assessmentId
+  });
+}
+
+export function toLibraryTeachingContext(
+  context: ProfessionalContextV1
+): LibraryTeachingContext | null {
+  if (!context.udaId) return null;
+  return {
+    udaId: context.udaId,
+    ...(context.lessonId ? { lessonId: context.lessonId } : {})
+  };
+}
+
+export function resolveProfessionalContextFromLaunch(
+  ambient: ProfessionalContextV1,
+  launch: CopilotLaunchContext | null,
+  resolvedTeachingContext: ResolvedLibraryTeachingContext | null = null,
+  planningContext: LibraryPlanningContextResolution | null = null
+): ProfessionalContextResolutionV1 {
+  if (!launch) return { status: 'resolved', context: ambient };
+
+  const launchClassName = optionalTrimmed(launch.className);
+  if (
+    ambient.className
+    && launchClassName
+    && ambient.className !== launchClassName
+  ) {
+    return { status: 'conflict', conflicts: ['CLASS_MISMATCH'] };
+  }
+
+  return resolveProfessionalContext({
+    surface: launch.surface,
+    currentClass: ambient.className
+      ? { id: ambient.classId ?? '', name: ambient.className }
+      : null,
+    teachingContext: resolvedTeachingContext,
+    planningContext,
+    sourceId: launch.sourceId ?? ambient.sourceId,
+    assessmentId: ambient.assessmentId,
+    goal: ambient.goal,
+    time: ambient.time,
+    privacyScope: ambient.privacyScope
+  });
+}
