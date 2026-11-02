@@ -55,7 +55,7 @@ describe('FLOW-03 UDA diary handoff contract', () => {
     expect(gantt).toContain('value={newLessonNotes}');
     expect(gantt).toContain('onChange={e => setNewLessonNotes(e.target.value)}');
 
-    const prefillEffect = sectionBetween(gantt, 'const recordLessonPrefillSignatureRef', '// Add lesson to current UDA');
+    const prefillEffect = sectionBetween(gantt, 'const recordLessonPrefillSignatureRef', '}, [recordLessonPrefill, udas]);');
     expect(prefillEffect).not.toContain('onSaveUdas(');
     expect(prefillEffect).not.toContain('commitUdaViewMutation(');
   });
