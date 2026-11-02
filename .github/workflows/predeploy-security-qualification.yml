@@ -94,10 +94,10 @@ jobs:
         continue-on-error: true
         run: bun run test:security
 
-      - name: FLOW-03 focused contract
+      - name: FLOW-03 focused contracts
         id: flow03
         continue-on-error: true
-        run: bun test src/security/flow03RecordSessionContract.test.ts
+        run: bun test src/security/flow03*.test.ts
 
       - name: Library tests
         id: library
