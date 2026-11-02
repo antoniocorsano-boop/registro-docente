@@ -32,6 +32,7 @@ interface CopilotDeckProps {
   onOpenConversation: () => void;
   surfaceMode: CopilotSurfaceMode;
   onSurfaceModeChange: (mode: CopilotSurfaceMode) => void;
+  showClosedTrigger?: boolean;
 }
 
 const GROUPS: Array<{
@@ -142,7 +143,8 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
   onResume,
   onOpenConversation,
   surfaceMode,
-  onSurfaceModeChange
+  onSurfaceModeChange,
+  showClosedTrigger = true
 }) => {
   const isOpen = surfaceMode === 'home';
   const [previewBinding, setPreviewBinding] = useState<{ id: string; materialFingerprint: string } | null>(null);
@@ -175,7 +177,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
 
   return (
     <>
-      {surfaceMode === 'closed' && (
+      {showClosedTrigger && surfaceMode === 'closed' && (
         <button
           type="button"
           data-testid="library-copilot-trigger"
