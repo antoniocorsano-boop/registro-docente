@@ -40,11 +40,17 @@ export const ConductLessonPanel: React.FC<ConductLessonPanelProps> = ({
           detail: 'Ci sono più percorsi possibili per questa classe.',
           objective: undefined
         }
-      : {
-          title: 'Nessuna attività univoca già disponibile',
-          detail: 'Apri la UDA per scegliere il riferimento della lezione.',
-          objective: undefined
-        };
+      : context.status === 'class-only'
+        ? {
+            title: 'Nessuna attività univoca già disponibile',
+            detail: 'Apri la UDA per scegliere il riferimento della lezione.',
+            objective: undefined
+          }
+        : {
+            title: 'Nessuna attività univoca già disponibile',
+            detail: 'Apri la UDA per scegliere il riferimento della lezione.',
+            objective: undefined
+          };
 
   return (
     <section
