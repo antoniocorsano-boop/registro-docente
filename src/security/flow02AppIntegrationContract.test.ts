@@ -60,6 +60,20 @@ describe('FLOW-02 App integration contract', () => {
     }
   });
 
+  test('keeps conduct metadata outside direct Library action dispatch', async () => {
+    const composer = await source('src/components/LibraryCopilotComposer.tsx');
+    const directGate = sectionBetween(
+      composer,
+      'const hasCompleteDirectLaunch = Boolean(',
+      'const teachingSuggestion'
+    );
+
+    expect(directGate).toContain("directLaunchIntent === 'prepare'");
+    expect(directGate).toContain("directLaunchIntent === 'review'");
+    expect(directGate).toContain("directLaunchIntent === 'link'");
+    expect(directGate).not.toContain("directLaunchIntent === 'conduct'");
+  });
+
   test('suppresses the ambient Copilot trigger while Conduci owns the contextual entry point', async () => {
     const app = await source('src/App.tsx');
     const experience = await source('src/components/CopilotExperience.tsx');
