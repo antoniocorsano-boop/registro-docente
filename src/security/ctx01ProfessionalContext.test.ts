@@ -145,6 +145,56 @@ describe('CTX-01 professional context resolver', () => {
     });
   });
 
+  test('fails closed when current class and resolved planning class disagree', () => {
+    const result = resolveProfessionalContext({
+      surface: 'planning',
+      currentClass: { id: '2c', name: '2C' },
+      planningContext: {
+        status: 'resolved',
+        reason: 'RESOLVED',
+        teachingContext: {
+          udaId: 'uda-3c',
+          className: '3C',
+          period: 'Q1'
+        },
+        profile: { id: 'profile-3' },
+        arenaContext: null
+      } as any
+    });
+
+    expect(result).toEqual({
+      status: 'conflict',
+      conflicts: ['CLASS_MISMATCH']
+    });
+  });
+
+  test('fails closed when explicit teaching and resolved planning classes disagree', () => {
+    const result = resolveProfessionalContext({
+      surface: 'planning',
+      teachingContext: {
+        udaId: 'uda-2c',
+        className: '2C',
+        period: 'Q1'
+      },
+      planningContext: {
+        status: 'resolved',
+        reason: 'RESOLVED',
+        teachingContext: {
+          udaId: 'uda-3c',
+          className: '3C',
+          period: 'Q1'
+        },
+        profile: { id: 'profile-3' },
+        arenaContext: null
+      } as any
+    });
+
+    expect(result).toEqual({
+      status: 'conflict',
+      conflicts: ['CLASS_MISMATCH']
+    });
+  });
+
   test('fails closed on an ambiguous planning context', () => {
     const result = resolveProfessionalContext({
       surface: 'planning',
