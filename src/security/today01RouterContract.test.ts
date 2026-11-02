@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const ROUTER_MODULE_URL = new URL('../today/todayRouter.ts', import.meta.url);
 const ROUTER_MODULE_PATH = fileURLToPath(ROUTER_MODULE_URL);
 const ACTIONS = ['prepare', 'conduct', 'record', 'review'] as const;
-const CONTINUATION_ACTIONS = ['conduct', 'record', 'review'] as const;
+const CONTINUATION_ACTIONS = ['record', 'review'] as const;
 
 const routerExists = () => existsSync(ROUTER_MODULE_PATH);
 
@@ -51,14 +51,10 @@ describe('TODAY-01 routing contract', () => {
     });
   });
 
-  test('keeps non-Prepara continuation surfaces authoritative and stable', async () => {
+  test('keeps non-orchestrated continuation surfaces authoritative and stable', async () => {
     const router = await loadRouter();
     if (!router) return;
 
-    expect(router.getTodayContinuationOptions('conduct').map(option => option.tab)).toEqual([
-      'uda-gantt',
-      'verifiche-online'
-    ]);
     expect(router.getTodayContinuationOptions('record').map(option => option.tab)).toEqual([
       'voti',
       'comportamenti'
@@ -71,7 +67,7 @@ describe('TODAY-01 routing contract', () => {
     ]);
   });
 
-  test('non-Prepara continuation metadata remains navigation-only', async () => {
+  test('remaining continuation metadata stays navigation-only', async () => {
     const router = await loadRouter();
     if (!router) return;
 
