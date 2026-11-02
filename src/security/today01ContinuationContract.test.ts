@@ -13,25 +13,30 @@ function sectionBetween(text: string, start: string, end: string) {
 }
 
 describe('TODAY-01 Dashboard continuation contract', () => {
-  test('extends Dashboard with one FLOW-01 prepare panel and navigation-only Oggi continuation props', async () => {
+  test('extends Dashboard with dedicated prepare/conduct panels and navigation-only Oggi continuation props', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
+    expect(dashboard).toContain("import { ConductLessonPanel } from './ConductLessonPanel';");
     expect(dashboard).toContain("import { getTodayContinuationOptions, type TodayAction } from '../today/todayRouter';");
     expect(dashboard).toContain('todayAction?: TodayAction | null;');
     expect(dashboard).toContain('onContinueToday?: (tab: ActiveTab) => void;');
     expect(dashboard).toContain('onDismissToday?: () => void;');
     expect(dashboard).toContain('onOpenPreparationCopilot?: () => void;');
+    expect(dashboard).toContain('onOpenConductCopilot?: () => void;');
+    expect(dashboard).toContain('onGoToRecord?: () => void;');
     expect(dashboard).not.toContain('onSaveToday');
     expect(dashboard).not.toContain('onCreateToday');
   });
 
-  test('delegates prepare while keeping compact generic continuations for the other TODAY actions', async () => {
+  test('delegates prepare and conduct while keeping compact generic continuations for record/review', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("todayAction === 'prepare'");
     expect(dashboard).toContain('<PreparationRouterPanel');
-    expect(dashboard).toContain("todayAction && todayAction !== 'prepare'");
+    expect(dashboard).toContain("todayAction === 'conduct'");
+    expect(dashboard).toContain('<ConductLessonPanel');
+    expect(dashboard).toContain("todayAction && todayAction !== 'prepare' && todayAction !== 'conduct'");
     expect(dashboard).toContain('getTodayContinuationOptions(todayAction)');
     expect(dashboard).toContain('Continua:');
     expect(dashboard).toContain('min-h-[44px]');
@@ -57,6 +62,9 @@ describe('TODAY-01 Dashboard continuation contract', () => {
     expect(dashboardRender).toContain('todayAction={todayAction}');
     expect(dashboardRender).toContain('onContinueToday={handleContinueToday}');
     expect(dashboardRender).toContain('onDismissToday={handleCancelTodayAction}');
+    expect(dashboardRender).toContain('conductContext={conductContext}');
+    expect(dashboardRender).toContain('onOpenConductCopilot={handleOpenConductCopilot}');
+    expect(dashboardRender).toContain('onGoToRecord={handleContinueFromConductToRecord}');
     expect(dashboardRender).toContain('currentClass={currentClass}');
   });
 });
