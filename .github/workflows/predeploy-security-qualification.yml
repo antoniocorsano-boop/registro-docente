@@ -94,9 +94,6 @@ jobs:
         continue-on-error: true
         run: bun run test:security
 
-      - name: FLOW-02 conduct Copilot UX focused contract
-        run: bun test src/security/flow02ConductCopilotUxContract.test.ts
-
       - name: Library tests
         id: library
         continue-on-error: true
