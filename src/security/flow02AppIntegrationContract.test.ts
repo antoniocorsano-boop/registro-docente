@@ -60,6 +60,20 @@ describe('FLOW-02 App integration contract', () => {
     }
   });
 
+  test('suppresses the ambient Copilot trigger while Conduci owns the contextual entry point', async () => {
+    const app = await source('src/App.tsx');
+    const experience = await source('src/components/CopilotExperience.tsx');
+    const deck = await source('src/components/CopilotDeck.tsx');
+
+    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct'}");
+    expect(experience).toContain('showClosedTrigger?: boolean;');
+    expect(experience).toContain('showClosedTrigger = true');
+    expect(experience).toContain('showClosedTrigger={showClosedTrigger}');
+    expect(deck).toContain('showClosedTrigger?: boolean;');
+    expect(deck).toContain('showClosedTrigger = true');
+    expect(deck).toContain("showClosedTrigger && surfaceMode === 'closed' && (");
+  });
+
   test('hands off to Registra by changing only session intent', async () => {
     const app = await source('src/App.tsx');
     const handler = sectionBetween(
