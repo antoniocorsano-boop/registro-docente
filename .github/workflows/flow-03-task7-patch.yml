@@ -1,4 +1,4 @@
-# Trigger the fail-closed Task 7 patch on the staged candidate.
+# Trigger the fail-closed Task 7 patch after PERSIST-01H contract alignment.
 name: FLOW-03 Task 7 Patch
 
 on:
