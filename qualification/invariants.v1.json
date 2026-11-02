@@ -376,12 +376,16 @@
         "src/context/professionalContext.ts",
         "src/security/ctx01ProfessionalContext.test.ts",
         "src/security/ctx01AppIntegrationContract.test.ts",
-        "src/security/ctx01QualificationContract.test.ts"
+        "src/security/ctx01QualificationContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/aic01ContextPrivacyContract.test.ts"
       ],
       "tests": [
         "src/security/ctx01ProfessionalContext.test.ts",
         "src/security/ctx01AppIntegrationContract.test.ts",
-        "src/security/ctx01QualificationContract.test.ts"
+        "src/security/ctx01QualificationContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/aic01ContextPrivacyContract.test.ts"
       ]
     }
   ]
