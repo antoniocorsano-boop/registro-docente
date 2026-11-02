@@ -89,6 +89,9 @@ async function assertStickyHeaderClearsConductPanel(page, panel) {
   await expect(header).toBeVisible();
   await expect(firstCritical).toBeVisible();
 
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
   const [headerBox, contentBox] = await Promise.all([
     header.boundingBox(),
     firstCritical.boundingBox()
