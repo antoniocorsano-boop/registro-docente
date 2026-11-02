@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// Fail-closed Task 6 product patch; rerun after correcting the contract boundary.
 function replaceOnce(text, before, after, label) {
   const count = text.split(before).length - 1;
   if (count !== 1) {
