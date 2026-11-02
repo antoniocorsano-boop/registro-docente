@@ -31,7 +31,7 @@ interface DashboardViewProps {
   privacyShieldActive?: boolean;
   onTogglePrivacyShield?: () => void;
   onOpenConductCopilot?: () => void;
-  onGoToRecord?: () => void;
+  onGoToRecord?: (stagedNote?: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -108,7 +108,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onNavigateLibrary={() => onContinueToday?.('biblioteca')}
           onNavigateAssessment={() => onContinueToday?.('verifiche-online')}
           onOpenCopilot={() => onOpenConductCopilot?.()}
-          onGoToRecord={() => onGoToRecord?.()}
+          onGoToRecord={(stagedNote) => onGoToRecord?.(stagedNote)}
           onDismiss={() => onDismissToday?.()}
         />
       )}
