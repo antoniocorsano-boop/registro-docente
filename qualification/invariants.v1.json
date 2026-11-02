@@ -387,6 +387,34 @@
         "src/security/librarySingleCopilotSurfaceContract.test.ts",
         "src/security/aic01ContextPrivacyContract.test.ts"
       ]
+    },
+    {
+      "id": "TODAY-01-I01",
+      "owner": "TODAY-01",
+      "statement": "Home/Oggi is a session-only task router: it never infers class context, never persists task intent, preserves expert Home views, and routes only to existing authoritative specialist surfaces after explicit teacher choices.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/today/",
+        "src/components/HomeView.tsx",
+        "src/components/DashboardView.tsx",
+        "src/components/Navbar.tsx",
+        "src/security/today01RouterContract.test.ts",
+        "src/security/today01HomeUiContract.test.ts",
+        "src/security/today01SessionContextContract.test.ts",
+        "src/security/today01ContinuationContract.test.ts",
+        "src/security/today01QualificationContract.test.ts"
+      ],
+      "tests": [
+        "src/security/today01RouterContract.test.ts",
+        "src/security/today01HomeUiContract.test.ts",
+        "src/security/today01SessionContextContract.test.ts",
+        "src/security/today01ContinuationContract.test.ts",
+        "src/security/today01QualificationContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
     }
   ]
 }

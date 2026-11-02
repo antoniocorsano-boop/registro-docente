@@ -213,7 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3 h-3" />
-            <span>Classi</span>
+            <span>Oggi</span>
           </button>
         </div>
       )}
@@ -233,7 +233,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onNavigateHome}
             className="shrink-0 min-h-[44px] flex items-center gap-1 px-3 py-1 rounded bg-slate-800 text-slate-200 text-xs cursor-pointer"
           >
-            <ArrowLeft className="w-3 h-3" /> Classi
+            <ArrowLeft className="w-3 h-3" /> Oggi
           </button>
         </div>
       )}
@@ -282,7 +282,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <LayoutDashboard className="w-4 h-4 shrink-0 text-[var(--primary)]" />
-            <span>Classi</span>
+            <span>Oggi</span>
           </button>
 
           {currentClass && (
