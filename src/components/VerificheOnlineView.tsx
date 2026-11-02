@@ -62,7 +62,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   useEffect(() => {
     if (!initialClassName) return;
     const safeClass = classes.find(item => item.name === initialClassName);
-    if (safeClass) setSelectedClass(safeClass.name);
+    if (safeClass) {
+      setSelectedClass(safeClass.name);
+      setActiveSubTab('analisi');
+    }
   }, [classes, initialClassName]);
 
   const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
