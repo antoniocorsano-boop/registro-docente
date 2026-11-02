@@ -56,6 +56,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm scripts/flow03-task6-patch.mjs .github/workflows/flow-03-task6-patch.yml
-          git add src/App.tsx src/components/UdaGanttView.tsx
+          git add src/App.tsx src/components/UdaGanttView.tsx src/components/UdaWorkspaceView.tsx
           git commit -m "feat: hand FLOW-03 notes to authoritative UDA diary"
           git push origin HEAD:feat/flow-03-registra-orchestrator
