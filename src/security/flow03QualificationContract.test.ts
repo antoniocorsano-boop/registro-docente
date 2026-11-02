@@ -49,6 +49,7 @@ describe('FLOW-03 qualification invariant', () => {
       'src/security/flow03AppIntegrationContract.test.ts',
       'src/security/flow03EvaluationPrefillContract.test.ts',
       'src/security/flow03BehaviourExplicitContract.test.ts',
+      'src/security/flow03OnlineOutcomesContextContract.test.ts',
       'src/security/flow03UdaDiaryHandoffContract.test.ts',
       'src/security/flow03BrowserQualificationContract.test.ts',
       'src/security/flow03QualificationContract.test.ts',
@@ -72,6 +73,7 @@ describe('FLOW-03 qualification invariant', () => {
       'src/security/flow03AppIntegrationContract.test.ts',
       'src/security/flow03EvaluationPrefillContract.test.ts',
       'src/security/flow03BehaviourExplicitContract.test.ts',
+      'src/security/flow03OnlineOutcomesContextContract.test.ts',
       'src/security/flow03UdaDiaryHandoffContract.test.ts',
       'src/security/flow03BrowserQualificationContract.test.ts',
       'src/security/flow03QualificationContract.test.ts'
