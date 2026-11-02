@@ -1904,6 +1904,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onContinueToday={handleContinueToday}
             onDismissToday={handleCancelTodayAction}
             onOpenPreparationCopilot={handleOpenPreparationCopilot}
+            conductContext={conductContext}
+            privacyShieldActive={isPrivacyShieldActive}
+            onTogglePrivacyShield={handleTogglePrivacyShield}
+            onOpenConductCopilot={handleOpenConductCopilot}
+            onGoToRecord={handleContinueFromConductToRecord}
           />
         )}
 
