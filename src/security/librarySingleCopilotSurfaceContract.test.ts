@@ -42,7 +42,7 @@ describe('single contextual Copilot surface contract', () => {
     expect(sourceCardSource).toContain('Prepara un’attività');
     expect(sourceCardSource).toContain('Rivedi nel contesto');
     expect(sourceCardSource).toContain('Collega alla UDA');
-    expect(launchContextSource).toContain("export type LibraryLaunchIntent = 'prepare' | 'review' | 'link';");
+    expect(launchContextSource).toContain("export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link';");
     expect(launchContextSource).toContain('intent?: LibraryLaunchIntent;');
   });
 
