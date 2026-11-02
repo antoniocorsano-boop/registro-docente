@@ -69,6 +69,14 @@ async function reenterPreparationRouter(page) {
 }
 
 async function assertSelectedClassStillVisible(page) {
+  const quickSwitcher = page.locator('select[title="Cambia rapidamente classe attiva"]');
+  if (await quickSwitcher.isVisible().catch(() => false)) {
+    await expect.poll(() => quickSwitcher.evaluate(select =>
+      select.selectedOptions[0]?.textContent?.trim() ?? ''
+    )).toBe(CLASS_NAME);
+    return;
+  }
+
   await expect.poll(async () => {
     const labels = page.getByText(CLASS_NAME, { exact: true });
     const count = await labels.count();
