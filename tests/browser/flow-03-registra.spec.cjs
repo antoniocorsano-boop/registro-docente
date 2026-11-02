@@ -49,12 +49,13 @@ async function createSyntheticClassWithStudent(page) {
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
-  await closePersistenceConfirmation(page);
+  await closePersistenceConfirmationIfPresent(page);
 
   const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
   await studentInput.fill(STUDENT_NAME);
   await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
-  await closePersistenceConfirmation(page);
+  await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  await closePersistenceConfirmationIfPresent(page);
   await expect(studentInput).toHaveValue('');
   await openOggiFromDrawer(page);
 }
@@ -81,7 +82,7 @@ async function createSyntheticUda(page) {
   await dialog.getByLabel('Mese Inizio', { exact: true }).selectOption({ label: 'Novembre' });
   await dialog.getByLabel('Durata Mesi', { exact: true }).fill('2');
   await dialog.getByRole('button', { name: 'Crea UDA', exact: true }).click();
-  await closePersistenceConfirmation(page);
+  await closePersistenceConfirmationIfPresent(page);
   await expect(page.getByRole('status')).toContainText(`Nuova UDA "${UDA_TITLE}" creata con successo`);
   await openOggiFromDrawer(page);
 }
