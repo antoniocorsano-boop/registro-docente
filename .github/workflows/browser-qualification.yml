@@ -66,6 +66,7 @@ jobs:
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/today-01-home-oggi-router.spec.cjs .browser-tools/today-01-home-oggi-router.spec.cjs
+          cp tests/browser/flow-01-prepara.spec.cjs .browser-tools/flow-01-prepara.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
           cp tests/browser/library-use-surface-helpers.cjs .browser-tools/library-use-surface-helpers.cjs
@@ -156,6 +157,20 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/today-01-test-results
+
+      - name: Run FLOW-01 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            flow-01-prepara.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/flow-01-test-results
 
       - name: Run LSM-01C consumer Chromium qualification
         shell: bash
