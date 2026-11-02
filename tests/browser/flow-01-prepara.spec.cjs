@@ -69,7 +69,14 @@ async function reenterPreparationRouter(page) {
 }
 
 async function assertSelectedClassStillVisible(page) {
-  await expect(page.getByText(CLASS_NAME, { exact: true }).last()).toBeVisible();
+  await expect.poll(async () => {
+    const labels = page.getByText(CLASS_NAME, { exact: true });
+    const count = await labels.count();
+    for (let index = 0; index < count; index += 1) {
+      if (await labels.nth(index).isVisible()) return true;
+    }
+    return false;
+  }).toBe(true);
 }
 
 async function assertNoHorizontalOverflow(page) {
