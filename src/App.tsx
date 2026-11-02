@@ -2077,6 +2077,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onSaveBehaviors={handleSaveBehaviors}
             isPrivacyShieldActive={isPrivacyShieldActive}
+            requireExplicitSelection={recordSession?.status === 'editing'
+              && recordSession.evidenceKind === 'behaviour'
+              && recordSession.context.classId === currentClass.id}
           />
         )}
 
@@ -2151,6 +2154,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             submissions={submissions}
             udas={udas}
             settings={settings}
+            initialClassName={recordSession?.status === 'editing'
+              && recordSession.evidenceKind === 'online-outcomes'
+              && recordSession.context.classId === currentClass?.id
+              ? recordSession.context.className
+              : undefined}
             isPrivacyShieldActive={isPrivacyShieldActive}
             onSaveNewTest={handleSaveNewTest}
             onDeleteSubmission={handleDeleteSubmission}

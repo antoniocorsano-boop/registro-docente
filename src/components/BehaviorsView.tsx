@@ -8,12 +8,14 @@ interface BehaviorsViewProps {
   currentClass: ClassData;
   onSaveBehaviors: (records: BehaviorRecord[]) => Promise<void>;
   isPrivacyShieldActive?: boolean;
+  requireExplicitSelection?: boolean;
 }
 
 export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
   currentClass,
   onSaveBehaviors,
-  isPrivacyShieldActive = true
+  isPrivacyShieldActive = true,
+  requireExplicitSelection = false
 }) => {
 
   const [selectedDate, setSelectedDate] = useState<string>(today());
@@ -26,7 +28,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
       const match = [...existingRecords]
         .reverse()
         .find(b => b.studentId === s.id && b.date === selectedDate);
-      init[s.id] = match ? match.status : 'Ottimale 🌟';
+      init[s.id] = match ? match.status : requireExplicitSelection ? undefined : 'Ottimale 🌟';
     });
     return init;
   });
@@ -48,7 +50,14 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
 
   const handleSave = async () => {
     if (isSaving) return;
-    const newRecords: BehaviorRecord[] = currentClass.students.map(s => ({
+    const selectedStudents = requireExplicitSelection
+      ? currentClass.students.filter(s => Boolean(statusMap[s.id]))
+      : currentClass.students;
+    if (requireExplicitSelection && selectedStudents.length === 0) {
+      alert('Seleziona almeno uno stato di comportamento prima di salvare.');
+      return;
+    }
+    const newRecords: BehaviorRecord[] = selectedStudents.map(s => ({
       id: uid(),
       studentId: s.id,
       date: selectedDate,
@@ -126,7 +135,7 @@ export const BehaviorsView: React.FC<BehaviorsViewProps> = ({
           </p>
         ) : (
           currentClass.students.map((student, idx) => {
-            const currentStatus = statusMap[student.id] || 'Ottimale 🌟';
+            const currentStatus = statusMap[student.id];
 
             return (
               <div

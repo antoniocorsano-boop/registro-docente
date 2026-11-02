@@ -58,7 +58,9 @@ describe('FLOW-02 browser qualification contract', () => {
     const spec = await source('tests/browser/flow-02-conduci.spec.cjs');
 
     expect(spec).toContain("getByRole('button', { name: 'Vai a Registra', exact: true })");
-    expect(spec).toContain("getByRole('region', { name: 'Continua: Registra' })");
+    expect(spec).toContain("getByRole('region', { name: `Registra per ${CLASS_NAME}` })");
+    expect(spec).toContain("getByLabel('Nota di sessione', { exact: true })");
+    expect(spec).toContain('toHaveValue(RAPID_NOTE)');
     expect(spec).toContain('assertSelectedClassStillVisible');
   });
 });

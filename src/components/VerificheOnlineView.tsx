@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
@@ -34,6 +34,7 @@ interface VerificheOnlineViewProps {
   udas?: UdaRecord[];
   settings?: AppSettings;
   isPrivacyShieldActive?: boolean;
+  initialClassName?: string;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => Promise<void>;
@@ -48,6 +49,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   udas = [],
   settings,
   isPrivacyShieldActive = true,
+  initialClassName,
   onSaveNewTest,
   onDeleteTest,
   onDeleteSubmission,
@@ -56,6 +58,13 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'bacheca' | 'editor' | 'stampa' | 'analisi'>('bacheca');
   const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.name || '3ª A');
+
+  useEffect(() => {
+    if (!initialClassName) return;
+    const safeClass = classes.find(item => item.name === initialClassName);
+    if (safeClass) setSelectedClass(safeClass.name);
+  }, [classes, initialClassName]);
+
   const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
   const [isParsingFile, setIsParsingFile] = useState(false);
   const [isSavingTest, setIsSavingTest] = useState(false);

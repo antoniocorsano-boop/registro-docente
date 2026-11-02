@@ -192,7 +192,7 @@ async function openConductCopilot(page, panel) {
 
 async function handoffToRecord(page, panel) {
   await panel.getByRole('button', { name: 'Vai a Registra', exact: true }).click();
-  const record = page.getByRole('region', { name: 'Continua: Registra' });
+  const record = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
   await expect(record).toBeVisible();
   await expect(record).toContainText(CLASS_NAME);
   await assertSelectedClassStillVisible(page);
@@ -254,7 +254,7 @@ test.describe('FLOW-02 mobile qualification', () => {
     await expect(composer).toBeHidden();
 
     const record = await handoffToRecord(page, panel);
-    await expect(record).not.toContainText(RAPID_NOTE);
+    await expect(record.getByLabel('Nota di sessione', { exact: true })).toHaveValue(RAPID_NOTE);
     await page.screenshot({ path: evidencePath('flow-02-mobile-record-handoff.png') });
   });
 });
