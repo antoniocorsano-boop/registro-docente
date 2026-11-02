@@ -26,6 +26,17 @@ describe('FLOW-02 Dashboard integration contract', () => {
     expect(router).not.toContain('  conduct: [');
   });
 
+  test('remounts the conduct panel when the selected class changes so rapid notes cannot cross classes', async () => {
+    const dashboard = await source('src/components/DashboardView.tsx');
+    const conductPanel = sectionBetween(
+      dashboard,
+      "{todayAction === 'conduct' && conductContext && (",
+      "{todayAction && todayAction !== 'prepare' && todayAction !== 'conduct' && ("
+    );
+
+    expect(conductPanel).toContain('key={currentClass.id}');
+  });
+
   test('routes conduct specialist exits through the canonical session-clearing continuation', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
