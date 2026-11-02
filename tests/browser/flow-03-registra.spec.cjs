@@ -154,7 +154,7 @@ async function assertNoHorizontalOverflow(page) {
 }
 
 async function assertCriticalControlsTouchSafe(record) {
-  for (const label of ['Chiudi', 'Valutazione', 'Comportamento', 'Esiti verifica online', 'Attività / nota UDA']) {
+  for (const label of ['Chiudi Registra', 'Valutazione', 'Comportamento', 'Esiti verifica online', 'Attività / nota UDA']) {
     const button = record.getByRole('button', { name: label, exact: true });
     await expect(button).toBeVisible();
     const box = await button.boundingBox();

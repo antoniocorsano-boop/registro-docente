@@ -567,6 +567,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   Classe Destinataria
                 </label>
                 <select
+                  aria-label="Classe Destinataria"
                   value={selectedClass}
                   onChange={e => setSelectedClass(e.target.value)}
                   className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"

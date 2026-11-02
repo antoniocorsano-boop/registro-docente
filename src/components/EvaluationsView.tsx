@@ -211,6 +211,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               Collega a UDA Curricolare
             </label>
             <select
+              aria-label="Collega a UDA Curricolare"
               value={udaId}
               onChange={e => setUdaId(e.target.value)}
               className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
