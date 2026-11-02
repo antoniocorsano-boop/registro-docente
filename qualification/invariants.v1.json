@@ -534,7 +534,10 @@
         "src/security/flow03QualificationContract.test.ts",
         "tests/browser/flow-02-conduci.spec.cjs",
         "tests/browser/flow-03-registra.spec.cjs",
-        ".github/workflows/browser-qualification.yml"
+        ".github/workflows/browser-qualification.yml",
+        ".github/workflows/flow-03-contract-qualification.yml",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",
@@ -546,7 +549,9 @@
         "src/security/flow03OnlineOutcomesContextContract.test.ts",
         "src/security/flow03UdaDiaryHandoffContract.test.ts",
         "src/security/flow03BrowserQualificationContract.test.ts",
-        "src/security/flow03QualificationContract.test.ts"
+        "src/security/flow03QualificationContract.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs",
