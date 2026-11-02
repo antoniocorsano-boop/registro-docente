@@ -1,0 +1,52 @@
+name: FLOW-03 Invariant Coverage Patch
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+    paths:
+      - scripts/flow03-invariant-coverage-patch.mjs
+      - .github/workflows/flow-03-invariant-coverage-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-registry:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact staged candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact staged candidate
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Apply registry patch
+        run: node scripts/flow03-invariant-coverage-patch.mjs
+
+      - name: Validate registry
+        run: bun scripts/qualification/check-invariants.mjs
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Commit registry-only fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qualification/invariants.v1.json
+          git diff --cached --check
+          git commit -m "test: cover FLOW-03 inherited invariant paths"
+          git push origin HEAD:feat/flow-03-registra-orchestrator
