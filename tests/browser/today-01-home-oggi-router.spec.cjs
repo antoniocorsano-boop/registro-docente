@@ -4,6 +4,8 @@ const path = require('node:path');
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const CLASS_NAME = '2C Sintetica TODAY-01';
 
+test.use({ trace: 'retain-on-failure' });
+
 function evidencePath(name) {
   const dir = process.env.EVIDENCE_DIR;
   return dir ? path.resolve(dir, name) : name;
@@ -42,7 +44,7 @@ async function assertNoHorizontalOverflow(page) {
 }
 
 test.describe('TODAY-01 desktop qualification', () => {
-  test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
+  test.use({ viewport: { width: 1280, height: 900 } });
 
   test('Oggi stays neutral, requires explicit class choice and continues through existing surfaces', async ({ page }) => {
     await configureVault(page, 'today-01-desktop');
@@ -88,7 +90,7 @@ test.describe('TODAY-01 desktop qualification', () => {
 });
 
 test.describe('TODAY-01 mobile qualification', () => {
-  test.use({ viewport: { width: 390, height: 844 }, trace: 'retain-on-failure' });
+  test.use({ viewport: { width: 390, height: 844 } });
 
   test('Oggi remains touch-safe and non-overflowing at 390x844', async ({ page }) => {
     await configureVault(page, 'today-01-mobile');
