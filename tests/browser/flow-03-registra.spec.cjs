@@ -21,19 +21,18 @@ async function configureVault(page, password) {
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 }
 
-async function closePersistenceConfirmation(page) {
-  const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
-  await expect(heading).toBeVisible();
-  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
-  await expect(heading).toBeHidden();
-}
-
 async function closePersistenceConfirmationIfPresent(page) {
   const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
   if (await heading.isVisible().catch(() => false)) {
     await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
     await expect(heading).toBeHidden();
   }
+}
+
+async function disablePrivacyShield(page) {
+  const shield = page.locator('button[title^="Privacy Shield"]').first();
+  await expect(shield).toBeVisible();
+  await shield.click();
 }
 
 async function openOggiFromDrawer(page) {
@@ -50,6 +49,7 @@ async function createSyntheticClassWithStudent(page) {
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await closePersistenceConfirmationIfPresent(page);
+  await disablePrivacyShield(page);
 
   const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
   await studentInput.fill(STUDENT_NAME);
@@ -234,13 +234,14 @@ async function openOnlineOutcomesFromRecord(page, record) {
   await assertNoAutomaticMutation(page);
 }
 
-// Registra → Valutazione
+// Conduci → Registra → Valutazione, so the UDA context is explicit and safe.
 test.describe('FLOW-03 desktop qualification', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test('Registra → Valutazione keeps explicit class/UDA context without writing', async ({ page }) => {
     await prepareScenario(page, 'flow-03-desktop');
-    const record = await openRecordFromOggi(page);
+    const conduct = await openConductFromOggi(page);
+    const record = await handoffConductToRecord(page, conduct);
     await assertSelectedClassStillVisible(page);
     await assertNoHorizontalOverflow(page);
     await page.screenshot({ path: evidencePath('flow-03-desktop-record.png'), fullPage: true });
