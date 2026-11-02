@@ -13,6 +13,10 @@ function sectionBetween(text: string, start: string, end: string) {
 }
 
 describe('TODAY-01 Dashboard continuation contract', () => {
+  test('requires the dedicated FLOW-03 recording-session module before record delegation changes', async () => {
+    expect(await Bun.file('src/recording/recordSession.ts').exists()).toBe(true);
+  });
+
   test('extends Dashboard with dedicated prepare/conduct panels and navigation-only Oggi continuation props', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
