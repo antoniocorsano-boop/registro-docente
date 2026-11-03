@@ -47,6 +47,10 @@ import {
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
+import { resolvePlanningFrame } from './planning/planningFrameResolver';
+import { keepTeachingFocusForClass, resolveTeachingFocusForClass, transitionTeachingFocusForTab } from './context/teachingFocus';
+import type { LibraryTeachingContext } from './library/teachingContext';
+import { buildTeachingUdaCatalog, buildTeachingUdaClassReconciliationIndex } from './teaching/teachingUdaCatalog';
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import { resolveConductContext } from './conduct/conductSession';
@@ -292,8 +296,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   });
   const [isSemanticMemorySyncing, setIsSemanticMemorySyncing] = useState(false);
 
+  // INT-01: catalog is a derived read model; UDA authority remains with its source.
+  const teachingUdaCatalog = React.useMemo(() => buildTeachingUdaCatalog({
+    localUdas: udas,
+    acceptedProjections: planning.docenteOsProjections,
+    classReconciliation: buildTeachingUdaClassReconciliationIndex(planning.docenteOsProjections),
+    classes: appData.classes
+  }), [udas, planning.docenteOsProjections, appData.classes]);
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
+  const [teachingFocus, setTeachingFocus] = useState<LibraryTeachingContext | null>(null);
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);
   const reviewSessionRef = useRef<ReviewSessionContext | null>(null);
@@ -367,6 +380,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const setActiveTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
+    setTeachingFocus(previous =>
+      transitionTeachingFocusForTab(previous, currentClassIdRef.current, tab, teachingUdaCatalog)
+    );
 
     const storedReviewSession = reviewSessionRef.current;
     if (!storedReviewSession) return;
@@ -380,7 +396,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [publishReviewSession]);
+  }, [publishReviewSession, teachingUdaCatalog]);
+
+  // A removed or no-longer-reconciled UDA can never remain a latent focus.
+  useEffect(() => {
+    setTeachingFocus(previous =>
+      previous
+        ? keepTeachingFocusForClass(previous, appData.currentClassId, teachingUdaCatalog)
+        : null
+    );
+  }, [appData.currentClassId, teachingUdaCatalog]);
 
   const handleConnectSemanticMemory = useCallback(async ({
     endpoint
@@ -1345,6 +1370,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  const planningFrame = React.useMemo(() => resolvePlanningFrame({
+    className: currentClass?.name ?? null,
+    planning,
+    schoolYear: settings.year,
+    subjectCode: settings.subject
+  }), [currentClass?.name, planning, settings.year, settings.subject]);
+  const resolvedTeachingFocus = resolveTeachingFocusForClass({
+    focus: teachingFocus,
+    currentClassId: currentClass?.id ?? null,
+    catalog: teachingUdaCatalog
+  });
   const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass?.id;
   const conductContext = currentClass
     ? resolveConductContext({
@@ -1364,7 +1400,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     activeTab === 'home' ? 'home'
       : activeTab === 'dashboard' ? 'class-dashboard'
         : activeTab === 'biblioteca' ? 'library'
-          : activeTab === 'uda-gantt' ? 'other-teacher-surface'
+          : activeTab === 'uda-gantt'
+            ? resolvedTeachingFocus.status === 'resolved'
+              ? resolvedTeachingFocus.context.lessonId ? 'lesson' : 'uda'
+              : 'other-teacher-surface'
             : activeTab === 'programmazione' ? 'planning'
               : activeTab === 'verifiche-online' ? 'online-tests'
                 : activeTab === 'voti' ? 'evaluations'
@@ -1374,6 +1413,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const ambientProfessionalContext = resolveProfessionalContext({
     surface: ambientCopilotSurface,
     currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    planningFrame: activeTab === 'programmazione' || activeTab === 'uda-gantt' ? planningFrame : null,
+    teachingContext: (activeTab === 'programmazione' || activeTab === 'uda-gantt')
+      && resolvedTeachingFocus.status === 'resolved'
+      ? resolvedTeachingFocus.context
+      : null,
     privacyScope:
       activeTab === 'voti'
       || activeTab === 'tabellone'
@@ -1642,6 +1686,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       && currentClassIdRef.current === null
       && reviewSessionRef.current === null;
     publishReviewSession(null);
+    setTeachingFocus(null);
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
