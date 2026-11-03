@@ -304,13 +304,14 @@ test.describe('FLOW-03 mobile qualification', () => {
     // The same handoff must not force Pianificazione again on unrelated rerenders.
     await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
     await expect(topic).toBeHidden();
-    await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+    const workspaceViews = page.getByRole('group', { name: 'Viste UDA' });
+    await workspaceViews.getByRole('button', { name: 'Analisi', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Analisi UDA' })).toBeVisible();
     const privacyShield = page.locator('button[title^="Privacy Shield"]').first();
     await expect(privacyShield).toBeVisible();
     await privacyShield.click();
     await expect(page.getByRole('region', { name: 'Analisi UDA' })).toBeVisible();
-    await page.getByRole('button', { name: 'Pianificazione', exact: true }).click();
+    await workspaceViews.getByRole('button', { name: 'Pianificazione', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
     await expect(topic).toBeVisible();
     await expect(topic).toHaveValue(UDA_TITLE);
