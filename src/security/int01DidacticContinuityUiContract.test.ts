@@ -22,13 +22,20 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(view).toContain('onOpenUda');
   });
 
-  test('UDA espone focus, classe e selezione esplicita senza generare una nuova UDA', async () => {
-    const view = await Bun.file('src/components/UdaGanttView.tsx').text();
-    expect(view).toContain('DidacticContinuityBar');
-    expect(view).toContain('onTeachingFocusChange');
-    expect(view).toContain('currentClassName');
-    expect(view).toContain('teachingFocus');
-    expect(view).toContain('onOpenPlanning');
+  test('the actual UDA workspace, not only the legacy Gantt, exposes class-first focus', async () => {
+    const alias = await Bun.file('src/components/UdaGanttView.ts').text();
+    expect(alias).toContain("UdaWorkspaceView as UdaGanttView");
+    const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
+    expect(workspace).toContain('DidacticContinuityBar');
+    expect(workspace).toContain('onTeachingFocusChange');
+    expect(workspace).toContain('currentClassName');
+    expect(workspace).toContain('teachingFocus');
+    expect(workspace).toContain('onOpenPlanning');
+    expect(workspace).toContain("setActiveView('planning')");
+    expect(workspace).toContain('onTeachingFocusChange?.({ udaId: uda.id })');
+    const legacy = await Bun.file('src/components/UdaGanttView.tsx').text();
+    expect(legacy).toContain('teachingFocus');
+    expect(legacy).toContain('onTeachingFocusChange');
   });
 
   test('App routes Programmazione and UDA through one current class and focus', async () => {
