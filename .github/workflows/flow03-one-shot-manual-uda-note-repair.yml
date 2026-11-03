@@ -28,8 +28,14 @@ jobs:
           path = Path('src/components/UdaGanttView.tsx')
           text = path.read_text()
 
-          old_pending = "      pendingRecordLessonFocusRef.current = false;"
-          new_pending = "      pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;"
+          old_missing = (
+              "    if (!safeTarget) {\n"
+              "      pendingRecordLessonFocusRef.current = false;"
+          )
+          new_missing = (
+              "    if (!safeTarget) {\n"
+              "      pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;"
+          )
           old_guard = "      selectedUdaForDetail.id !== recordLessonPrefill.udaId"
           new_guard = "      recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId"
           form_anchor = "    const form = recordLessonFormRef.current;"
@@ -43,7 +49,7 @@ jobs:
           )
 
           checks = {
-              'pending flag': text.count(old_pending),
+              'missing-target branch': text.count(old_missing),
               'selection guard': text.count(old_guard),
               'form anchor': text.count(form_anchor),
           }
@@ -51,7 +57,7 @@ jobs:
               if count != 1:
                   raise SystemExit(f'expected one {label}, found {count}')
 
-          text = text.replace(old_pending, new_pending, 1)
+          text = text.replace(old_missing, new_missing, 1)
           text = text.replace(old_guard, new_guard, 1)
           text = text.replace(form_anchor, manual_draft, 1)
           path.write_text(text)
