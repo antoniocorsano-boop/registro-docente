@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): stage mission continuity app patch' }}"
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): retry mission continuity app patch' }}"
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout branch
@@ -18,6 +18,9 @@ jobs:
         with:
           ref: feat/flow-03-registra-orchestrator
           fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Apply bounded App patch
         shell: bash
