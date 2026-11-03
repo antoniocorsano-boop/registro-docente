@@ -799,6 +799,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   const [newLessonNotes, setNewLessonNotes] = useState('');
   const [newLessonType, setNewLessonType] = useState<UdaActivityType>('teoria');
   const recordLessonPrefillSignatureRef = useRef<string | null>(null);
+  const recordLessonFormRef = useRef<HTMLFormElement | null>(null);
+  const pendingRecordLessonFocusRef = useRef(false);
 
   useEffect(() => {
     if (!recordLessonPrefill) return;
@@ -824,15 +826,32 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       : undefined;
 
     if (!safeTarget) {
+      pendingRecordLessonFocusRef.current = false;
       setSelectedUdaForDetail(null);
       return;
     }
 
+    pendingRecordLessonFocusRef.current = true;
     setSelectedUdaForDetail(safeTarget);
     setNewLessonDate(recordLessonPrefill.date);
     setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
     setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
   }, [recordLessonPrefill, udas]);
+
+  useEffect(() => {
+    if (!recordLessonPrefill || !selectedUdaForDetail || !pendingRecordLessonFocusRef.current) return;
+    if (
+      selectedUdaForDetail.className !== recordLessonPrefill.className ||
+      selectedUdaForDetail.id !== recordLessonPrefill.udaId
+    ) return;
+
+    const form = recordLessonFormRef.current;
+    if (!form) return;
+
+    pendingRecordLessonFocusRef.current = false;
+    form.scrollIntoView({ block: 'center' });
+    form.querySelector<HTMLInputElement>('input[type="text"]')?.focus({ preventScroll: true });
+  }, [recordLessonPrefill, selectedUdaForDetail]);
 
   // Months full Italian naming
   const MONTHS_FULL_NAMES = [
@@ -883,7 +902,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         parentUda: parent,
         oldStartMonth: oldStart,
         newStartMonth: clampedStart,
-        oldDuration: oldDuration,
+        oldDuration,
         newDuration: clampedDuration,
         shifts: suggestedShifts
       });
@@ -3033,7 +3052,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 </div>
 
                 {/* Add lesson form */}
-                <form onSubmit={handleAddLesson} className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2.5 text-xs">
+                <form ref={recordLessonFormRef} onSubmit={handleAddLesson} className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2.5 text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                     <input
                       type="date"
