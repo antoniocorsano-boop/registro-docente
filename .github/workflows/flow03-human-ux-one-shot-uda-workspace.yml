@@ -1,0 +1,163 @@
+name: FLOW-03 Human UX One-shot UDA Workspace Patch
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): stage focused UDA workspace patch' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03-registra-orchestrator
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Apply bounded focused-workspace patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workspace_path = Path('src/components/UdaWorkspaceView.tsx')
+          workspace = workspace_path.read_text()
+
+          replacements = [
+              (
+                  "  const recordLessonPrefillSignatureRef = useRef<string | null>(null);\n",
+                  "  const recordLessonPrefillSignatureRef = useRef<string | null>(null);\n"
+                  "  const isFocusedRecordMode = Boolean(recordLessonPrefill);\n"
+                  "  const [focusedRecordUdaId, setFocusedRecordUdaId] = useState<string | null>(\n"
+                  "    () => recordLessonPrefill?.udaId ?? null\n"
+                  "  );\n",
+              ),
+              (
+                  "    setActiveView('planning');\n"
+                  "    setClassFilter(recordLessonPrefill.className);\n",
+                  "    setFocusedRecordUdaId(recordLessonPrefill.udaId ?? null);\n"
+                  "    setActiveView(recordLessonPrefill.udaId ? 'planning' : 'uda');\n"
+                  "    setClassFilter(recordLessonPrefill.className);\n",
+              ),
+              (
+                  "  const filteredUdas = useMemo(\n"
+                  "    () => classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),\n"
+                  "    [classFilter, udas]\n"
+                  "  );\n",
+                  "  const filteredUdas = useMemo(\n"
+                  "    () => classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),\n"
+                  "    [classFilter, udas]\n"
+                  "  );\n\n"
+                  "  const focusedClassUdas = useMemo(\n"
+                  "    () => recordLessonPrefill\n"
+                  "      ? udas.filter(uda => uda.className === recordLessonPrefill.className)\n"
+                  "      : [],\n"
+                  "    [recordLessonPrefill, udas]\n"
+                  "  );\n\n"
+                  "  const effectiveRecordLessonPrefill =\n"
+                  "    recordLessonPrefill && focusedRecordUdaId\n"
+                  "      ? { ...recordLessonPrefill, udaId: focusedRecordUdaId }\n"
+                  "      : recordLessonPrefill;\n",
+              ),
+              (
+                  "  return (\n"
+                  "    <div className=\"space-y-5\">\n",
+                  "  if (isFocusedRecordMode && activeView === 'uda') {\n"
+                  "    return (\n"
+                  "      <section aria-label=\"Seleziona UDA per Registra\" className=\"space-y-4 rounded-2xl border border-cyan-900/70 bg-slate-950/50 p-4 md:p-5\">\n"
+                  "        <div>\n"
+                  "          <p className=\"text-xs font-semibold uppercase tracking-wider text-cyan-400\">Registra · Attività / nota UDA</p>\n"
+                  "          <h2 className=\"mt-1 text-xl font-bold text-white\">Scegli l'UDA da aggiornare</h2>\n"
+                  "          <p className=\"mt-1 text-sm text-slate-400\">Classe {recordLessonPrefill?.className}. La scelta apre il diario senza registrare ancora nulla.</p>\n"
+                  "        </div>\n"
+                  "        {focusedClassUdas.length === 0 ? (\n"
+                  "          <div className=\"rounded-xl border border-dashed border-slate-700 p-5 text-sm text-slate-400\">Nessuna UDA disponibile per questa classe. Torna a Registra e scegli un'altra evidenza.</div>\n"
+                  "        ) : (\n"
+                  "          <div className=\"grid gap-3 md:grid-cols-2\">\n"
+                  "            {focusedClassUdas.map(uda => (\n"
+                  "              <article key={uda.id} className=\"rounded-xl border border-slate-800 bg-slate-900/70 p-4\">\n"
+                  "                <h3 className=\"font-semibold text-white\">{uda.title}</h3>\n"
+                  "                <p className=\"mt-1 text-sm text-slate-400\">{uda.className} · {uda.period} · {uda.hours} h</p>\n"
+                  "                <button\n"
+                  "                  type=\"button\"\n"
+                  "                  onClick={() => {\n"
+                  "                    setFocusedRecordUdaId(uda.id);\n"
+                  "                    setActiveView('planning');\n"
+                  "                  }}\n"
+                  "                  className=\"mt-4 min-h-[44px] w-full rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950\"\n"
+                  "                >\n"
+                  "                  Scegli questa UDA\n"
+                  "                </button>\n"
+                  "              </article>\n"
+                  "            ))}\n"
+                  "          </div>\n"
+                  "        )}\n"
+                  "      </section>\n"
+                  "    );\n"
+                  "  }\n\n"
+                  "  if (isFocusedRecordMode && activeView === 'planning') {\n"
+                  "    return (\n"
+                  "      <section aria-label=\"Pianificazione UDA\" className=\"space-y-3\">\n"
+                  "        <LegacyUdaGanttView\n"
+                  "          classes={classes}\n"
+                  "          udas={udas}\n"
+                  "          settings={settings}\n"
+                  "          tests={tests}\n"
+                  "          onSaveUdas={onSaveUdas}\n"
+                  "          onNavigateTab={onNavigateTab}\n"
+                  "          recordLessonPrefill={effectiveRecordLessonPrefill}\n"
+                  "          getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}\n"
+                  "          onRecordLessonCommitted={onRecordLessonCommitted}\n"
+                  "          onOpenCopilot={onOpenCopilot}\n"
+                  "          focusedRecordMode={true}\n"
+                  "        />\n"
+                  "      </section>\n"
+                  "    );\n"
+                  "  }\n\n"
+                  "  return (\n"
+                  "    <div className=\"space-y-5\">\n",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = workspace.count(old)
+              if count != 1:
+                  raise SystemExit(f'workspace anchor count {count}: {old[:100]!r}')
+              workspace = workspace.replace(old, new, 1)
+
+          workspace_path.write_text(workspace)
+
+          gantt_path = Path('src/components/UdaGanttView.tsx')
+          gantt = gantt_path.read_text()
+          old_prop = "  onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;\n"
+          new_prop = old_prop + "  focusedRecordMode?: boolean;\n"
+          if gantt.count(old_prop) != 1:
+              raise SystemExit(f'gantt prop anchor count {gantt.count(old_prop)}')
+          gantt = gantt.replace(old_prop, new_prop, 1)
+          gantt_path.write_text(gantt)
+          PY
+
+      - name: Verify exact diff and TypeScript
+        shell: bash
+        run: |
+          git diff --check
+          git diff -- src/components/UdaWorkspaceView.tsx src/components/UdaGanttView.tsx
+          bun install --frozen-lockfile
+          bun run lint
+
+      - name: Commit focused workspace
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/UdaWorkspaceView.tsx src/components/UdaGanttView.tsx
+          git commit -m "feat(flow-03): focus UDA choice for recording handoff"
+          git push origin HEAD:feat/flow-03-registra-orchestrator
