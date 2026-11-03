@@ -2414,6 +2414,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClassName={currentClass?.name ?? null}
             planningFrame={planningFrame}
             focusedProfileId={planningFrame.status === 'resolved' ? planningFrame.profile.id : null}
+            defaultSubjectCode={settings.subject}
             teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
             udaTitle={activeTeachingCandidate?.title ?? null}
             lessonTitle={activeTeachingLesson?.topic ?? null}
