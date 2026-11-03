@@ -119,4 +119,21 @@ describe('FLOW-03 independent review repairs', () => {
     expect(uda).toContain('preventScroll: true');
     expect(uda).toContain('ref={recordLessonFormRef}');
   });
+
+  test('captures the UDA diary navigation version at lesson submission, not at the original handoff', async () => {
+    const app = await source('src/App.tsx');
+    const uda = await source('src/components/UdaGanttView.tsx');
+    const addLesson = sectionBetween(uda, '// Add lesson to current UDA', '// Remove lesson from UDA');
+
+    expect(uda).toContain('getRecordLessonNavigationVersion?: () => number;');
+    expect(addLesson).toContain('const navigationVersionAtSave = getRecordLessonNavigationVersion?.();');
+    expect(addLesson.indexOf('const navigationVersionAtSave = getRecordLessonNavigationVersion?.();')).toBeLessThan(
+      addLesson.indexOf('void commitUdaViewMutation(nextUdas, () => {')
+    );
+    expect(addLesson).toContain('onRecordLessonCommitted?.(updatedUda.id, navigationVersionAtSave);');
+    expect(addLesson).not.toContain('onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);');
+
+    const render = sectionBetween(app, "{activeTab === 'uda-gantt' && (", '{/* TAB 12: Impostazioni & Tema */}');
+    expect(render).toContain('getRecordLessonNavigationVersion={() => navigationVersionRef.current}');
+  });
 });
