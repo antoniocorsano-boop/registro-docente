@@ -1,4 +1,5 @@
 name: FLOW-04 Task 4 guarded manifest
+# Trigger-only workflow: self-removes after a qualified manifest commit.
 
 on:
   push:
