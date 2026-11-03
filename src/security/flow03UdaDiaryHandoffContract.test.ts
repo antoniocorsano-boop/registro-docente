@@ -24,6 +24,7 @@ describe('FLOW-03 UDA diary handoff contract', () => {
     expect(gantt).toContain('notes?: string;');
     expect(gantt).toContain('navigationVersion: number;');
     expect(gantt).toContain('recordLessonPrefill?: RecordLessonPrefill;');
+    expect(gantt).toContain('getRecordNavigationVersion?: () => number;');
     expect(gantt).toContain('onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;');
   });
 
@@ -72,21 +73,26 @@ describe('FLOW-03 UDA diary handoff contract', () => {
 
     const planning = sectionBetween(workspace, "{activeView === 'planning' && (", "{activeView === 'analysis' && (");
     expect(planning).toContain('recordLessonPrefill={recordLessonPrefill}');
+    expect(planning).toContain('getRecordNavigationVersion={getRecordNavigationVersion}');
     expect(planning).toContain('onRecordLessonCommitted={onRecordLessonCommitted}');
   });
 
-  test('signals FLOW-03 completion only from the existing successful lesson commit callback', async () => {
+  test('captures diary navigation version at lesson submit and reuses it only after the durable commit succeeds', async () => {
     const gantt = await source('src/components/UdaGanttView.tsx');
     const addLesson = sectionBetween(gantt, '// Add lesson to current UDA', '// Remove lesson from UDA');
 
+    expect(addLesson).toContain('const navigationVersionAtSave = getRecordNavigationVersion?.();');
+    expect(addLesson.indexOf('const navigationVersionAtSave = getRecordNavigationVersion?.();')).toBeLessThan(addLesson.indexOf('void commitUdaViewMutation(nextUdas, () => {'));
     expect(addLesson).toContain('void commitUdaViewMutation(nextUdas, () => {');
-    expect(addLesson).toContain('onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);');
-    expect(addLesson.indexOf('onRecordLessonCommitted?.(')).toBeGreaterThan(addLesson.indexOf('showStatus(\'Attività registrata nel diario\')'));
-    expect(addLesson).toContain('setNewLessonTopic(\'\');');
-    expect(addLesson).toContain('setNewLessonNotes(\'\');');
+    expect(addLesson).toContain('navigationVersionAtSave !== undefined');
+    expect(addLesson).toContain('onRecordLessonCommitted?.(updatedUda.id, navigationVersionAtSave);');
+    expect(addLesson).not.toContain('onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);');
+    expect(addLesson.indexOf('onRecordLessonCommitted?.(')).toBeGreaterThan(addLesson.indexOf("showStatus('Attività registrata nel diario')"));
+    expect(addLesson).toContain("setNewLessonTopic('');");
+    expect(addLesson).toContain("setNewLessonNotes('');");
   });
 
-  test('App supplies UDA prefill only for a matching lesson-log session and validates the committed target', async () => {
+  test('App supplies UDA prefill only for a matching lesson-log session and exposes current navigation at submit time', async () => {
     const app = await source('src/App.tsx');
 
     expect(app).toContain('const recordSpecialistNavigationVersionRef = useRef<number | null>(null);');
@@ -105,6 +111,7 @@ describe('FLOW-03 UDA diary handoff contract', () => {
     expect(render).toContain('topic: recordSession.context.activityLabel');
     expect(render).toContain('notes: recordSession.stagedNote');
     expect(render).toContain('navigationVersion: recordSpecialistNavigationVersionRef.current');
+    expect(render).toContain('getRecordNavigationVersion={() => navigationVersionRef.current}');
     expect(render).toContain('onRecordLessonCommitted={handleRecordLessonCommitted}');
   });
 });
