@@ -38,7 +38,7 @@ export type PlanningFrameResolution =
 
 export function resolveClassGradeLevel(className: string): number | null {
   const normalized = className.trim();
-  const match = /^([1-5])(?:\s*(?:[ªº^])?\s*[A-Za-zÀ-ÖØ-öø-ÿ])?$/.exec(normalized);
+  const match = /^([1-5])(?:\s*(?:[ªº^])?\s*[A-Za-zÀ-ÖØ-öø-ÿ](?:\s*[-–]\s*Secondaria\s+I\s+Grado)?)?$/i.exec(normalized);
   return match ? Number(match[1]) : null;
 }
 
