@@ -208,3 +208,7 @@ Richiesto: **PASS** sui due finding Important originari.
 - [ ] **Step 7: Stato PR**
 
 Solo dopo PASS umano: marcare #110 Ready. Non effettuare merge senza autorizzazione separata.
+
+## Qualification checkpoint — 2026-11-03
+
+Il rework dei due finding **Important** è implementato e i contratti/browser journey sono aggiornati. Il precedente commit tecnico `0fe10493c3dcd32512369be1c9e7af853b0b9732` è stato prodotto da GitHub Actions e i workflow PR sono rimasti in `action_required`; questo checkpoint è intenzionalmente **solo documentale** e serve a produrre un candidato human-authored con identico albero prodotto/test per la fresh exact-SHA qualification. Nessun merge o deploy è autorizzato.
