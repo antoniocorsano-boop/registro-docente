@@ -20,15 +20,16 @@ describe('FLOW-03B contextual Rivedi contract', () => {
     expect(labels(null)).toEqual(['Tabellone', 'Analisi', 'Storico', 'Scheda alunno']);
   });
 
-  test('captures evidence kind only for the session-only Rivedi handoff and never auto-opens a destination', async () => {
+  test('carries evidence kind into the session-only ReviewSession handoff and never auto-opens a destination', async () => {
     const app = await source('src/App.tsx');
     const dashboard = await source('src/components/DashboardView.tsx');
 
-    expect(app).toContain('const [reviewEvidenceKind, setReviewEvidenceKind] = useState<RecordEvidenceKind | null>(null);');
-    expect(app).toContain('setReviewEvidenceKind(session.evidenceKind ?? null);');
+    expect(app).toContain('const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);');
+    expect(app).toContain("origin: 'post-record'");
+    expect(app).toContain('evidenceKind: session.evidenceKind ?? null');
     expect(app).toContain('publishRecordSession(null);');
     expect(app).toContain("setTodayAction('review');");
-    expect(app).toContain('reviewEvidenceKind={reviewEvidenceKind}');
+    expect(app).toContain('reviewEvidenceKind={reviewSession?.evidenceKind ?? null}');
 
     expect(dashboard).toContain('reviewEvidenceKind?: RecordEvidenceKind | null;');
     expect(dashboard).toContain('getRecordReviewOptions(reviewEvidenceKind)');
@@ -36,7 +37,7 @@ describe('FLOW-03B contextual Rivedi contract', () => {
     expect(dashboard).toContain('onClick={() => onContinueToday?.(option.tab)}');
   });
 
-  test('clears contextual review evidence when the teacher switches class', async () => {
+  test('invalidates contextual review state when the teacher switches class', async () => {
     const app = await source('src/App.tsx');
     const selectClassStart = app.indexOf('const handleSelectClass = (classId: string) => {');
     expect(selectClassStart).toBeGreaterThanOrEqual(0);
@@ -44,6 +45,7 @@ describe('FLOW-03B contextual Rivedi contract', () => {
     expect(selectClassEnd).toBeGreaterThan(selectClassStart);
     const selectClassBlock = app.slice(selectClassStart, selectClassEnd);
 
-    expect(selectClassBlock).toContain('setReviewEvidenceKind(null);');
+    expect(selectClassBlock).toContain('publishReviewSession(null);');
+    expect(selectClassBlock).toContain('reviewSessionRef.current === null');
   });
 });
