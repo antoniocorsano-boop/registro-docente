@@ -1,0 +1,45 @@
+name: FLOW-04 browser selector fix
+
+on:
+  push:
+    branches:
+      - feat/flow-04-review-session
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: "${{ github.event.head_commit.message == 'chore: apply FLOW-04 browser selector fix' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-04-review-session
+          fetch-depth: 1
+
+      - name: Narrow student selector to the desktop matrix cell
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('tests/browser/flow-04-review-session.spec.cjs')
+          text = path.read_text()
+          old = "    await page.getByText(STUDENT_NAME, { exact: true }).click();"
+          new = "    await page.getByRole('cell', { name: STUDENT_NAME, exact: true }).click();"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one ambiguous selector, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          node --check tests/browser/flow-04-review-session.spec.cjs
+
+      - name: Commit selector repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/browser/flow-04-review-session.spec.cjs
+          git diff --cached --check
+          git commit -m 'test: target FLOW-04 matrix student cell precisely'
+          git push origin HEAD:feat/flow-04-review-session
