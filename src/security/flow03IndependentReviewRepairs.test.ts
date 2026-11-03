@@ -100,4 +100,23 @@ describe('FLOW-03 independent review repairs', () => {
     expect(imports).toContain('if (recordingClassId && (importedCountByClassId[recordingClassId] || 0) > 0)');
     expect(imports).toContain("completeRecordFlow('online-outcomes', navigationVersionAtSave, recordSessionAtSave, recordingClassId)");
   });
+
+  test('does not repeat the same UDA context twice in Registra', async () => {
+    const panel = await source('src/components/RecordLessonPanel.tsx');
+
+    expect(panel).toContain('const udaTitle = session.context.udaTitle?.trim();');
+    expect(panel).toContain('const activityLabel = session.context.activityLabel?.trim();');
+    expect(panel).toContain('activityLabel !== udaTitle');
+    expect(panel).toContain('secondaryActivityLabel');
+  });
+
+  test('brings the authoritative UDA lesson form into the viewport after a safe FLOW-03 handoff', async () => {
+    const uda = await source('src/components/UdaGanttView.tsx');
+
+    expect(uda).toContain('recordLessonFormRef');
+    expect(uda).toContain('scrollIntoView');
+    expect(uda).toContain("block: 'center'");
+    expect(uda).toContain('preventScroll: true');
+    expect(uda).toContain('ref={recordLessonFormRef}');
+  });
 });
