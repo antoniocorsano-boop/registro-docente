@@ -12,20 +12,27 @@ import { validateTeachingProfile } from '../../planning/validation';
 interface PlanningProfileEditorProps {
   profile?: TeachingProfile;
   onSave: (profile: TeachingProfile) => Promise<void>;
+  defaultSubjectCode?: string;
+  defaultGradeLevel?: number;
 }
 
 type PlanningSection = 'profile' | 'calendar' | 'organization';
 
-const createDraftProfile = (): TeachingProfile => {
+const createDraftProfile = (
+  defaultSubjectCode = 'tecnologia',
+  defaultGradeLevel = 1
+): TeachingProfile => {
   const schoolYear = '2026/27';
   const schoolOrder: SchoolOrder = 'lower_secondary';
-  const subjectCode = 'tecnologia';
+  const subjectCode = defaultSubjectCode.trim() || 'tecnologia';
+  const gradeLevel = Number.isInteger(defaultGradeLevel)
+    && defaultGradeLevel >= 1 && defaultGradeLevel <= 5 ? defaultGradeLevel : 1;
   return {
     id: `planning-profile-${Date.now()}`,
     schoolYear,
     schoolOrder,
-    gradeLevel: 1,
-    cohortRef: '2026-grade-1',
+    gradeLevel,
+    cohortRef: `2026-grade-${gradeLevel}`,
     subjectCode,
     normativeRegime: '',
     normativeReference: getFirstCycleNormativeReference({ schoolOrder, subjectCode, schoolYear }),
@@ -52,8 +59,12 @@ const sectionButtonClass = (active: boolean) =>
       : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-700 hover:text-white'
   }`;
 
-export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({ profile, onSave }) => {
-  const [draft, setDraft] = useState<TeachingProfile>(() => profile ?? createDraftProfile());
+export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
+  profile, onSave, defaultSubjectCode = 'tecnologia', defaultGradeLevel = 1
+}) => {
+  const [draft, setDraft] = useState<TeachingProfile>(() =>
+    profile ?? createDraftProfile(defaultSubjectCode, defaultGradeLevel)
+  );
   const [activeSection, setActiveSection] = useState<PlanningSection>('profile');
   const [editingSection, setEditingSection] = useState<PlanningSection | null>(() => profile ? null : 'profile');
   const [attempted, setAttempted] = useState(false);
