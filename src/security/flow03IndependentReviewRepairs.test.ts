@@ -162,4 +162,37 @@ describe('FLOW-03 independent review repairs', () => {
     );
     expect(planning).toContain('getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}');
   });
+
+  test('applies the UDA workspace handoff only once for the same stable prefill signature', async () => {
+    const workspace = await source('src/components/UdaWorkspaceView.tsx');
+
+    expect(workspace).toContain("import React, { useEffect, useMemo, useRef, useState } from 'react';");
+    expect(workspace).toContain('const recordLessonPrefillSignatureRef = useRef<string | null>(null);');
+    expect(workspace).toContain('const signature = JSON.stringify([');
+    expect(workspace).toContain('recordLessonPrefill.navigationVersion');
+    expect(workspace).toContain('if (recordLessonPrefillSignatureRef.current === signature) return;');
+    expect(workspace).toContain('recordLessonPrefillSignatureRef.current = signature;');
+  });
+
+  test('FLOW-03 browser journeys fail closed on page errors after their final evidence screenshot', async () => {
+    const browser = await source('tests/browser/flow-03-registra.spec.cjs');
+    expect(browser).toContain('function installPageErrorCollector(page)');
+    expect(browser).toContain("page.on('pageerror'");
+
+    const desktop = sectionBetween(
+      browser,
+      "test('Registra → Valutazione keeps explicit class/UDA context without writing'",
+      "// Conduci → Registra → diario UDA"
+    );
+    expect(desktop).toContain('const pageErrors = installPageErrorCollector(page);');
+    expect(desktop).toContain("page.screenshot({ path: evidencePath('flow-03-desktop-evaluation.png'), fullPage: true });");
+    expect(desktop).toContain('expect(pageErrors).toEqual([]);');
+    expect(desktop.indexOf("flow-03-desktop-evaluation.png")).toBeLessThan(desktop.lastIndexOf('expect(pageErrors).toEqual([]);'));
+
+    const mobile = browser.slice(browser.indexOf("test('records one explicit UDA lesson"));
+    expect(mobile).toContain('const pageErrors = installPageErrorCollector(page);');
+    expect(mobile).toContain("page.screenshot({ path: evidencePath('flow-03-mobile-final.png'), fullPage: true });");
+    expect(mobile).toContain('expect(pageErrors).toEqual([]);');
+    expect(mobile.indexOf("flow-03-mobile-final.png")).toBeLessThan(mobile.lastIndexOf('expect(pageErrors).toEqual([]);'));
+  });
 });
