@@ -32,6 +32,7 @@ interface DashboardViewProps {
   privacyShieldActive?: boolean;
   onTogglePrivacyShield?: () => void;
   onOpenConductCopilot?: () => void;
+  onOpenRecordCopilot?: () => void;
   onGoToRecord?: (stagedNote?: string) => void;
   recordSession?: RecordSessionDraft | null;
   onChangeRecordStagedNote?: (note: string) => void;
@@ -52,6 +53,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   privacyShieldActive = false,
   onTogglePrivacyShield,
   onOpenConductCopilot,
+  onOpenRecordCopilot,
   onGoToRecord,
   recordSession = null,
   onChangeRecordStagedNote,
@@ -61,6 +63,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
+  const isActiveRecordFocus = todayAction === 'record' && recordSession?.status === 'editing';
 
   const studentAvgs = students
     .map(s => calcAvg(grades.filter(g => g.studentId === s.id)))
@@ -130,6 +133,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           session={recordSession}
           onChangeStagedNote={(note) => onChangeRecordStagedNote?.(note)}
           onChooseEvidence={(kind) => onChooseRecordEvidence?.(kind)}
+          onOpenCopilot={() => onOpenRecordCopilot?.()}
           onReview={() => onReviewRecord?.()}
           onRecordAnother={() => onRecordAnother?.()}
           onDismiss={() => onDismissToday?.()}
@@ -173,7 +177,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* Overview & KPIs */}
-      <div className="neon-card neon-card-highlight p-5">
+      <details
+        key={isActiveRecordFocus ? 'focused' : 'full'}
+        data-testid="flow03b-class-overview"
+        open={!isActiveRecordFocus}
+        className={isActiveRecordFocus ? 'neon-card overflow-hidden' : ''}
+      >
+        <summary
+          className={isActiveRecordFocus
+            ? 'min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
+            : 'sr-only'}
+        >
+          Panoramica Sezione: {currentClass.name}
+        </summary>
+        <div className="neon-card neon-card-highlight p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
             <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
@@ -269,7 +286,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span>Analisi</span>
           </button>
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Recent Evaluations Activity */}
       <div className="neon-card p-4">

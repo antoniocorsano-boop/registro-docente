@@ -2090,6 +2090,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             privacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onOpenConductCopilot={handleOpenConductCopilot}
+            onOpenRecordCopilot={reopenLibraryCopilot}
             onGoToRecord={handleContinueFromConductToRecord}
             recordSession={recordSession}
             onChangeRecordStagedNote={handleUpdateRecordStagedNote}
@@ -2105,6 +2106,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             evidenceKind={activeRecordMission.evidenceKind}
             udaTitle={activeRecordMission.context.udaTitle}
             activityLabel={activeRecordMission.context.activityLabel}
+            onOpenCopilot={reopenLibraryCopilot}
             onReturn={handleReturnToRecord}
           />
         )}
@@ -2348,7 +2350,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct'}
+            showClosedTrigger={todayAction !== 'conduct' && todayAction !== 'record'}
           />
           <LibraryCopilotComposer
               library={library}

@@ -6,6 +6,7 @@ interface RecordMissionBannerProps {
   evidenceKind: RecordEvidenceKind;
   udaTitle?: string;
   activityLabel?: string;
+  onOpenCopilot: () => void;
   onReturn: () => void;
 }
 
@@ -21,6 +22,7 @@ export const RecordMissionBanner: React.FC<RecordMissionBannerProps> = ({
   evidenceKind,
   udaTitle,
   activityLabel,
+  onOpenCopilot,
   onReturn
 }) => {
   const contextLabel = activityLabel?.trim() || udaTitle?.trim();
@@ -37,13 +39,22 @@ export const RecordMissionBanner: React.FC<RecordMissionBannerProps> = ({
           <p className="mt-1 truncate text-xs text-slate-400">{contextLabel}</p>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onReturn}
-        className="min-h-[44px] shrink-0 rounded-xl border border-cyan-700 bg-slate-950 px-4 py-2 text-sm font-bold text-cyan-200 transition-colors hover:border-cyan-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-      >
-        Torna a Registra
-      </button>
+      <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+        <button
+          type="button"
+          onClick={onOpenCopilot}
+          className="min-h-[44px] rounded-xl border border-cyan-700 bg-slate-950 px-4 py-2 text-sm font-bold text-cyan-200 transition-colors hover:border-cyan-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          Copilota
+        </button>
+        <button
+          type="button"
+          onClick={onReturn}
+          className="min-h-[44px] rounded-xl border border-cyan-700 bg-slate-950 px-4 py-2 text-sm font-bold text-cyan-200 transition-colors hover:border-cyan-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          Torna a Registra
+        </button>
+      </div>
     </section>
   );
 };

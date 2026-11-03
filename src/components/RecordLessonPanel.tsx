@@ -5,6 +5,7 @@ interface RecordLessonPanelProps {
   session: RecordSessionDraft;
   onChangeStagedNote: (note: string) => void;
   onChooseEvidence: (kind: RecordEvidenceKind) => void;
+  onOpenCopilot: () => void;
   onReview: () => void;
   onRecordAnother: () => void;
   onDismiss: () => void;
@@ -16,6 +17,7 @@ export const RecordLessonPanel: React.FC<RecordLessonPanelProps> = ({
   session,
   onChangeStagedNote,
   onChooseEvidence,
+  onOpenCopilot,
   onReview,
   onRecordAnother,
   onDismiss
@@ -40,14 +42,23 @@ export const RecordLessonPanel: React.FC<RecordLessonPanelProps> = ({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Chiudi Registra"
-          className="min-h-[44px] shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-        >
-          Chiudi
-        </button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onOpenCopilot}
+            className="min-h-[44px] rounded-xl border border-cyan-300 bg-white px-3 text-sm font-semibold text-cyan-800 dark:border-cyan-800 dark:bg-slate-900 dark:text-cyan-200"
+          >
+            Copilota
+          </button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Chiudi Registra"
+            className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            Chiudi
+          </button>
+        </div>
       </div>
 
       {session.status === 'saved' ? (
