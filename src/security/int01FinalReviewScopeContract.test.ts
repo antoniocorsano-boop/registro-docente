@@ -73,6 +73,7 @@ describe('INT-01 Final Independent Review repair — class isolation and shared 
     const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
     const legacy = await Bun.file('src/components/UdaGanttView.tsx').text();
     expect(workspace).toContain("udaBelongsToActiveClass(uda.className, currentClassName, classes)");
+    expect(workspace).toContain('classScopedUdaMutationAllowed(udas, nextUdas, currentClassName, classes)');
     expect(legacy).toContain("udaBelongsToActiveClass(uda.className, currentClassName, classes)");
     expect(legacy).toContain('const scopedUdas = currentClassName');
     expect(legacy).toContain('classScopedUdaMutationAllowed(');
