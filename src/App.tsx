@@ -65,6 +65,7 @@ import {
   isReviewSurface,
   keepReviewSessionForClass,
   returnToReviewRouter,
+  transitionReviewSessionForTab,
   type ReviewSessionContext
 } from './review/reviewSession';
 import {
@@ -308,10 +309,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   }, []);
   const navigationVersionRef = useRef(0);
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
-  const setActiveTab = useCallback((tab: ActiveTab) => {
-    navigationVersionRef.current += 1;
-    setActiveTabState(tab);
-  }, []);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -366,6 +363,24 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const testsRef = useRef(tests);
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
+
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+
+    const storedReviewSession = reviewSessionRef.current;
+    if (!storedReviewSession) return;
+
+    const nextReviewSession = transitionReviewSessionForTab(
+      storedReviewSession,
+      currentClassIdRef.current,
+      tab
+    );
+    publishReviewSession(nextReviewSession);
+    if (storedReviewSession && !nextReviewSession) {
+      setTodayAction(null);
+    }
+  }, [publishReviewSession]);
 
   const handleConnectSemanticMemory = useCallback(async ({
     endpoint
@@ -477,30 +492,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveRecordSession?: boolean } = {}
   ) => {
-    navigationVersionRef.current += 1;
-    setActiveTabState(tab);
+    const hadReviewSession = reviewSessionRef.current !== null;
+    setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
       recordSpecialistNavigationVersionRef.current = null;
     }
 
-    const storedReviewSession = reviewSessionRef.current;
-    const activeReviewSession = keepReviewSessionForClass(
-      storedReviewSession,
-      currentClassIdRef.current
-    );
-    if (activeReviewSession && isReviewSurface(tab)) {
-      publishReviewSession(enterReviewSurface(activeReviewSession, tab));
-    } else if (activeReviewSession && tab === 'dashboard') {
-      publishReviewSession(returnToReviewRouter(activeReviewSession));
-    } else {
-      if (storedReviewSession) {
-        publishReviewSession(null);
-        setTodayAction(null);
-      } else if (tab !== 'dashboard') {
-        setTodayAction(null);
-      }
+    if (!hadReviewSession && tab !== 'dashboard') {
+      setTodayAction(null);
     }
 
     const classId = currentClassIdRef.current;
@@ -512,7 +513,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
-  }, [publishRecordSession, publishReviewSession]);
+  }, [publishRecordSession, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
