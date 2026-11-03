@@ -1,0 +1,158 @@
+name: FLOW-03 Human UX One-shot Focused Diary Patch
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): stage focused authoritative UDA diary patch' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03-registra-orchestrator
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Apply bounded focused-diary patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/UdaGanttView.tsx')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "  onRecordLessonCommitted\n}) => {\n",
+                  "  onRecordLessonCommitted,\n  focusedRecordMode = false\n}) => {\n",
+              ),
+              (
+                  "  const [selectedUdaForDetail, setSelectedUdaForDetail] = useState<UdaRecord | null>(null);\n",
+                  "  const [selectedUdaForDetail, setSelectedUdaForDetail] = useState<UdaRecord | null>(null);\n  const [showFocusedRecordDetails, setShowFocusedRecordDetails] = useState(false);\n",
+              ),
+              (
+                  "    recordLessonPrefillSignatureRef.current = signature;\n\n    setSelectedMasterClass(recordLessonPrefill.className);\n",
+                  "    recordLessonPrefillSignatureRef.current = signature;\n    if (focusedRecordMode) setShowFocusedRecordDetails(false);\n\n    setSelectedMasterClass(recordLessonPrefill.className);\n",
+              ),
+              (
+                  "  }, [recordLessonPrefill, udas]);\n\n  useEffect(() => {\n    if (!recordLessonPrefill || !selectedUdaForDetail || !pendingRecordLessonFocusRef.current) return;\n",
+                  "  }, [focusedRecordMode, recordLessonPrefill, udas]);\n\n  useEffect(() => {\n    if (!recordLessonPrefill || !selectedUdaForDetail || !pendingRecordLessonFocusRef.current) return;\n",
+              ),
+              (
+                  "      {/* ============================================================== */}\n      {/* TOP UNIFIED WORKFLOW BAR: MASTER CLASS SELECTOR & ACTIONS */}\n",
+                  "      {!focusedRecordMode && (\n        <>\n      {/* ============================================================== */}\n      {/* TOP UNIFIED WORKFLOW BAR: MASTER CLASS SELECTOR & ACTIONS */}\n",
+              ),
+              (
+                  "      {/* ============================================================== */}\n      {/* GANTT BAR CLICK MODAL: ATTIVITÀ, OBIETTIVI, COMPETENZE & CRONO */}\n",
+                  "        </>\n      )}\n\n      {/* ============================================================== */}\n      {/* GANTT BAR CLICK MODAL: ATTIVITÀ, OBIETTIVI, COMPETENZE & CRONO */}\n",
+              ),
+              (
+                  "            <div className=\"w-full max-w-4xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-6\">\n              {/* Header */}\n",
+                  "            <div className=\"w-full max-w-4xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-6\">\n              {focusedRecordMode && (\n                <div className=\"rounded-xl border border-cyan-800/70 bg-cyan-950/30 p-3\">\n                  <p className=\"text-xs font-black uppercase tracking-wide text-cyan-300\">Registrazione rapida</p>\n                  <p className=\"mt-1 text-sm text-slate-300\">Completa il diario dell'UDA; i dettagli progettuali restano disponibili solo se servono.</p>\n                </div>\n              )}\n              {/* Header */}\n",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one anchor, found {count}: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          details_marker = "              {/* Section: Propedeuticità & Dipendenze tra UDA */}\n"
+          diary_marker = "              {/* Section 3: Diario di Bordo delle Lezioni */}\n"
+          if text.count(details_marker) != 1 or text.count(diary_marker) != 1:
+              raise SystemExit('focused dossier section markers are not unique')
+
+          details_open = (
+              "              {focusedRecordMode && !showFocusedRecordDetails && (\n"
+              "                <button\n"
+              "                  type=\"button\"\n"
+              "                  onClick={() => setShowFocusedRecordDetails(true)}\n"
+              "                  className=\"min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-cyan-200 hover:border-cyan-600\"\n"
+              "                >\n"
+              "                  Mostra dettagli UDA\n"
+              "                </button>\n"
+              "              )}\n"
+              "              {focusedRecordMode && showFocusedRecordDetails && (\n"
+              "                <button\n"
+              "                  type=\"button\"\n"
+              "                  onClick={() => setShowFocusedRecordDetails(false)}\n"
+              "                  className=\"min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-cyan-600\"\n"
+              "                >\n"
+              "                  Nascondi dettagli UDA\n"
+              "                </button>\n"
+              "              )}\n\n"
+              "              {(!focusedRecordMode || showFocusedRecordDetails) && (\n"
+              "                <>\n"
+              + details_marker
+          )
+          text = text.replace(details_marker, details_open, 1)
+          text = text.replace(
+              diary_marker,
+              "                </>\n              )}\n\n" + diary_marker,
+              1
+          )
+
+          lessons_marker = "                {/* Lessons list */}\n"
+          footer_marker = "              {/* Footer */}\n"
+          lessons_start = text.index(lessons_marker)
+          footer_start = text.index(footer_marker, lessons_start)
+          segment = text[lessons_start:footer_start]
+          if segment.count(lessons_marker) != 1:
+              raise SystemExit('lessons marker is not unique in dossier segment')
+          segment = segment.replace(
+              lessons_marker,
+              "                {(!focusedRecordMode || showFocusedRecordDetails) && (\n" + lessons_marker,
+              1
+          )
+          last_diary_close = segment.rfind("              </div>\n\n")
+          if last_diary_close < 0:
+              raise SystemExit('could not locate diary section close')
+          segment = (
+              segment[:last_diary_close]
+              + "                )}\n"
+              + segment[last_diary_close:]
+          )
+          text = text[:lessons_start] + segment + text[footer_start:]
+
+          old_diary_title = "                      3. Diario delle Lezioni & Tipologie di Attività\n"
+          new_diary_title = "                      {focusedRecordMode ? 'Diario della registrazione' : '3. Diario delle Lezioni & Tipologie di Attività'}\n"
+          if text.count(old_diary_title) != 1:
+              raise SystemExit(f'diary title anchor count {text.count(old_diary_title)}')
+          text = text.replace(old_diary_title, new_diary_title, 1)
+
+          old_submit = "                        + Add\n"
+          new_submit = "                        {focusedRecordMode ? 'Registra attività' : '+ Add'}\n"
+          dossier_start = text.index('{selectedUdaForDetail && (() => {')
+          submit_index = text.index(old_submit, dossier_start)
+          text = text[:submit_index] + text[submit_index:].replace(old_submit, new_submit, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Verify exact diff and TypeScript
+        shell: bash
+        run: |
+          git diff --check
+          git diff -- src/components/UdaGanttView.tsx
+          bun install --frozen-lockfile
+          bun run lint
+
+      - name: Commit focused diary
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/UdaGanttView.tsx
+          git commit -m "feat(flow-03): add focused authoritative UDA diary mode"
+          git push origin HEAD:feat/flow-03-registra-orchestrator
