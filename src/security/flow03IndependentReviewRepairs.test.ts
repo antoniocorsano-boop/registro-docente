@@ -148,4 +148,18 @@ describe('FLOW-03 independent review repairs', () => {
     expect(render).toContain('getRecordLessonNavigationVersion={() => navigationVersionRef.current}');
     expect(render).toContain('onRecordLessonCommitted={handleRecordLessonCommitted}');
   });
+
+  test('forwards the lesson navigation getter through the UDA workspace barrel', async () => {
+    const workspace = await source('src/components/UdaWorkspaceView.tsx');
+
+    expect(workspace).toContain('getRecordLessonNavigationVersion?: () => number;');
+    expect(workspace).toContain('getRecordLessonNavigationVersion,');
+
+    const planning = sectionBetween(
+      workspace,
+      "{activeView === 'planning' && (",
+      "{activeView === 'analysis' && ("
+    );
+    expect(planning).toContain('getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}');
+  });
 });
