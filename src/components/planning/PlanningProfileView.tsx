@@ -4,7 +4,7 @@ import type {
   ArenaPlanningContextPreview,
   TeachingProfile
 } from '../../planning/types';
-import type { PlanningFrameResolution } from '../../planning/planningFrameResolver';
+import { resolveClassGradeLevel, type PlanningFrameResolution } from '../../planning/planningFrameResolver';
 import type { ResolvedLibraryTeachingContext } from '../../library/teachingContext';
 import { DidacticContinuityBar } from '../DidacticContinuityBar';
 import { ArenaPlanningContextPanel } from './ArenaPlanningContextPanel';
@@ -22,6 +22,7 @@ interface PlanningProfileViewProps {
   udaTitle?: string | null;
   lessonTitle?: string | null;
   onOpenUda?: () => void;
+  defaultSubjectCode?: string;
 }
 
 export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
@@ -35,7 +36,8 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   teachingContext = null,
   udaTitle = null,
   lessonTitle = null,
-  onOpenUda
+  onOpenUda,
+  defaultSubjectCode = 'tecnologia'
 }) => {
   const hasClassContext = Boolean(currentClassName?.trim());
   // Manual choice is scoped to the current class/frame; it never updates the class itself.
@@ -90,7 +92,13 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
         </div>
       )}
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-6">
-        <PlanningProfileEditor profile={selected} onSave={onSaveProfile} />
+        <PlanningProfileEditor
+          key={selected?.id ?? `${scope}:${defaultSubjectCode}`}
+          profile={selected}
+          onSave={onSaveProfile}
+          defaultSubjectCode={defaultSubjectCode}
+          defaultGradeLevel={resolveClassGradeLevel(currentClassName ?? '') ?? 1}
+        />
       </div>
       {selected && (
         <ArenaPlanningContextPanel
