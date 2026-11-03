@@ -23,4 +23,4 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: INT-01 contracts
-        run: bun test src/security/int01PlanningFrameContract.test.ts src/library/planningContextBridge.test.ts src/security/int01TeachingFocusContract.test.ts src/security/int01ProfessionalContextContract.test.ts src/security/int01AppContextContract.test.ts src/security/int01DidacticContinuityUiContract.test.ts
+        run: bun test src/security/int01PlanningFrameContract.test.ts src/library/planningContextBridge.test.ts src/security/int01TeachingFocusContract.test.ts src/security/int01ProfessionalContextContract.test.ts src/security/int01AppContextContract.test.ts src/security/int01DidacticContinuityUiContract.test.ts src/security/int01QualificationContract.test.ts
