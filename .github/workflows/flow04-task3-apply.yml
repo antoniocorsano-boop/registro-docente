@@ -182,19 +182,15 @@ jobs:
 
           app = replace_once(
               app,
-              'dashboard review wiring',
-              """            todayAction={todayAction}
-                        reviewEvidenceKind={reviewSession?.evidenceKind ?? null}
-                        onContinueToday={handleContinueToday}
-                        onDismissToday={handleCancelTodayAction}
-          """,
-              """            todayAction={todayAction}
-                        reviewSession={reviewSession}
-                        onContinueToday={handleContinueToday}
-                        onOpenReviewSurface={handleOpenReviewSurface}
-                        onCloseReview={handleCloseReview}
-                        onDismissToday={handleCancelTodayAction}
-          """
+              'review session dashboard prop',
+              'reviewEvidenceKind={reviewSession?.evidenceKind ?? null}',
+              'reviewSession={reviewSession}'
+          )
+          app = replace_once(
+              app,
+              'dedicated review dashboard handlers',
+              'onContinueToday={handleContinueToday}\n',
+              'onContinueToday={handleContinueToday}\n            onOpenReviewSurface={handleOpenReviewSurface}\n            onCloseReview={handleCloseReview}\n'
           )
 
           banner_anchor = """        {activeRecordMission && (
