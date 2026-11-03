@@ -145,7 +145,7 @@ describe('FLOW-04 App lifecycle contract', () => {
 
   test('applies review lifecycle at the shared tab setter so specialist callbacks cannot bypass it', async () => {
     const app = await source('src/App.tsx');
-    const tabSetter = sectionBetween(app, 'const setActiveTab = useCallback', 'const [editingBatchId');
+    const tabSetter = sectionBetween(app, 'const setActiveTab = useCallback', 'const handleConnectSemanticMemory');
     const navigation = sectionBetween(app, 'const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
 
     expect(tabSetter).toContain('const storedReviewSession = reviewSessionRef.current;');
