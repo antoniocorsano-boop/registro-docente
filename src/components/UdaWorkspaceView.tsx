@@ -415,9 +415,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
               <label className="block text-sm text-slate-300">Classe
                 <select
                   value={newClass}
-                  onChange={event => setNewClass(event.target.value)}
-                  disabled={Boolean(currentClassName)}
-                  className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3 disabled:opacity-80"
+                  onChange={event => setNewClass(currentClassName || event.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3"
                 >
                   {classes.filter(item => !currentClassName || item.name === currentClassName)
                     .map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
