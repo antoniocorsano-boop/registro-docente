@@ -127,7 +127,6 @@ jobs:
           overview_marker = dashboard.find('      {/* Overview & KPIs */}', review_start)
           if review_start < 0 or overview_marker < 0:
               raise SystemExit('inline review router markers not found')
-          old_review_block = dashboard[review_start:overview_marker]
           new_review_block = """      {todayAction === 'review' && reviewSession && reviewSession.classId === currentClass.id && (
             <ReviewRouterPanel
               session={reviewSession}
@@ -141,31 +140,27 @@ jobs:
 
           dashboard = replace_once(
               dashboard,
-              'overview mission hierarchy',
-              """      <details
-                key={isActiveRecordFocus ? 'focused' : 'full'}
-                data-testid="flow03b-class-overview"
-                open={!isActiveRecordFocus}
-                className={isActiveRecordFocus ? 'neon-card overflow-hidden' : ''}
-              >
-                <summary
-                  className={isActiveRecordFocus
-                    ? 'min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
-                    : 'sr-only'}
-                >
-          """,
-              """      <details
-                key={isActiveMissionFocus ? 'focused' : 'full'}
-                data-testid="flow03b-class-overview"
-                open={!isActiveMissionFocus}
-                className={isActiveMissionFocus ? 'neon-card overflow-hidden' : ''}
-              >
-                <summary
-                  className={isActiveMissionFocus
-                    ? 'min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
-                    : 'sr-only'}
-                >
-          """
+              'overview focus key',
+              "key={isActiveRecordFocus ? 'focused' : 'full'}",
+              "key={isActiveMissionFocus ? 'focused' : 'full'}"
+          )
+          dashboard = replace_once(
+              dashboard,
+              'overview open state',
+              'open={!isActiveRecordFocus}',
+              'open={!isActiveMissionFocus}'
+          )
+          dashboard = replace_once(
+              dashboard,
+              'overview focused card state',
+              "className={isActiveRecordFocus ? 'neon-card overflow-hidden' : ''}",
+              "className={isActiveMissionFocus ? 'neon-card overflow-hidden' : ''}"
+          )
+          dashboard = replace_once(
+              dashboard,
+              'overview summary visibility',
+              'className={isActiveRecordFocus\n',
+              'className={isActiveMissionFocus\n'
           )
 
           dashboard_path.write_text(dashboard)
