@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { classScopedUdaMutationAllowed, udaBelongsToActiveClass, buildUdaDeletionSnapshot } from '../context/udaClassScope';
+import { classScopedUdaMutationAllowed, udaBelongsToActiveClass, buildUdaDeletionSnapshot, hasForeignUdaDependencyOn } from '../context/udaClassScope';
 import type { UdaRecord } from '../types';
 
 const uda = (id: string, className: string): UdaRecord => ({
@@ -133,6 +133,30 @@ describe('INT-01 Final Independent Review repair — class isolation and shared 
       buildUdaDeletionSnapshot([local, foreignDependent], 'own'),
       '2Z'
     )).toBe(false);
+  });
+
+  test('class-first cascade refuses foreign dependencies without presenting their UDA data', () => {
+    const local = { ...uda('A', '2Z'), dependencies: [] };
+    const localChild = { ...uda('A-child', '2Z'), dependencies: ['A'] };
+    const foreignChild = { ...uda('B-child', '3Z'), dependencies: ['A-child'] };
+    expect(hasForeignUdaDependencyOn([local, localChild, foreignChild], ['A', 'A-child'], '2Z')).toBe(true);
+    expect(hasForeignUdaDependencyOn([local, localChild, foreignChild], ['A'], '2Z')).toBe(false);
+    expect(hasForeignUdaDependencyOn([local, localChild, foreignChild], ['A', 'A-child'], null)).toBe(false);
+    expect(hasForeignUdaDependencyOn([local, localChild], ['A', 'A-child'], '2Z')).toBe(false);
+  });
+
+  test('cascade proposal is built only from active-class records and stops at foreign-linked edges', async () => {
+    const gantt = await Bun.file('src/components/UdaGanttView.tsx').text();
+    const start = gantt.indexOf('const handleRequestDateChange = (');
+    const end = gantt.indexOf('// Apply cascade shift proposal', start);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const handler = gantt.slice(start, end);
+    expect(handler).toContain('const parent = scopedUdas.find(');
+    expect(handler).toContain('computeCascadeShifts(udaId, clampedStart, clampedDuration, scopedUdas)');
+    expect(handler).toContain('hasForeignUdaDependencyOn(');
+    expect(handler).toContain('showStatus(');
+    expect(handler).not.toContain('computeCascadeShifts(udaId, clampedStart, clampedDuration, udas)');
   });
 
 });
