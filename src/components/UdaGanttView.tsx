@@ -57,7 +57,7 @@ import type { PlanningFrameResolution } from '../planning/planningFrameResolver'
 import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
 import { DidacticContinuityBar } from './DidacticContinuityBar';
 import { getSchoolMonthIndex, getUdaGapSeverity, getUdaRemediationCopy } from '../analytics/udaSemantics';
-import { classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
+import { buildUdaDeletionSnapshot, classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
 
 export interface RecordLessonPrefill {
   className: string;
@@ -491,7 +491,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   // Modal for new/quick UDA
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newClass, setNewClass] = useState(classes[0]?.name || '3ª A');
+  const [newClass, setNewClass] = useState(currentClassName || classes[0]?.name || '3ª A');
   const [newHours, setNewHours] = useState(14);
   const [newPeriod, setNewPeriod] = useState<'Q1' | 'Q2'>('Q1');
   const [newStartMonth, setNewStartMonth] = useState(0); // 0=Set
@@ -839,6 +839,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     setClassFilter(currentClassName);
     setGapClassFilter(currentClassName);
     setSummaryClassFilter(currentClassName);
+    setNewClass(currentClassName);
+    setNewPredecessorId('');
     setSelectedUdaForDetail(null);
     setGanttSelectedUda(null);
     locallyPublishedFocusIdRef.current = null;
@@ -1217,6 +1219,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   };
 
   const handleDelete = (id: string) => {
+    if (currentClassName && !scopedUdas.some(uda => uda.id === id)) return;
     const hasChildren = getUdaSuccessors(id, udas);
     let promptMsg = 'Eliminare questa Unità Didattica (UDA)?';
     if (hasChildren.length > 0) {
@@ -1224,14 +1227,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     }
 
     if (confirm(promptMsg)) {
-      // Remove this ID from dependencies of any other UDA
-      const nextUdas = udas
-        .filter(u => u.id !== id)
-        .map(u => ({
-          ...u,
-          dependencies: (u.dependencies || []).filter(depId => depId !== id)
-        }));
-
+      // Only actual dependency links may change; other classes keep their original records.
+      const nextUdas = buildUdaDeletionSnapshot(udas, id);
       void commitUdaViewMutation(nextUdas, () => {
         if (selectedUdaForDetail?.id === id) {
           setSelectedUdaForDetail(null);
@@ -1240,6 +1237,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           setGanttSelectedUda(null);
         }
         showStatus('UDA eliminata');
+      }).then(committed => {
+        if (!committed) {
+          showStatus('Eliminazione non completata: verifica eventuali dipendenze tra classi.');
+        }
       });
     }
   };
@@ -1758,7 +1759,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { setNewClass(currentClassName || classes[0]?.name || '3ª A'); setIsModalOpen(true); }}
             className="px-3.5 py-1.5 rounded-lg neon-btn-primary text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4" />
