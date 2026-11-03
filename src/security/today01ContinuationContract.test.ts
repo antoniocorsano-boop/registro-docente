@@ -57,7 +57,9 @@ describe('TODAY-01 Dashboard continuation contract', () => {
     const app = await source('src/App.tsx');
     const continuation = sectionBetween(app, 'const handleContinueToday', 'const handleCancelTodayAction');
 
-    expect(continuation).toContain('keepReviewSessionForClass(reviewSessionRef.current, currentClassIdRef.current)');
+    expect(continuation).toContain('const activeReviewSession = keepReviewSessionForClass(');
+    expect(continuation).toContain('reviewSessionRef.current,');
+    expect(continuation).toContain('currentClassIdRef.current');
     expect(continuation).toContain('isReviewSurface(tab)');
     expect(continuation).toContain('handleOpenReviewSurface(tab);');
     expect(continuation).toContain('setTodayAction(null)');
