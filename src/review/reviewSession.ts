@@ -85,3 +85,22 @@ export function keepReviewSessionForClass(
 
   return session;
 }
+
+export function transitionReviewSessionForTab(
+  session: ReviewSessionContext | null,
+  classId: string | null | undefined,
+  tab: ActiveTab
+): ReviewSessionContext | null {
+  const activeSession = keepReviewSessionForClass(session, classId);
+  if (!activeSession) return null;
+
+  if (isReviewSurface(tab)) {
+    return enterReviewSurface(activeSession, tab);
+  }
+
+  if (tab === 'dashboard') {
+    return returnToReviewRouter(activeSession);
+  }
+
+  return null;
+}
