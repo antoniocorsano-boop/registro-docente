@@ -23,6 +23,7 @@ interface PlanningProfileViewProps {
   lessonTitle?: string | null;
   onOpenUda?: () => void;
   defaultSubjectCode?: string;
+  subjectDisplayLabel?: string;
 }
 
 export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
@@ -37,7 +38,8 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   udaTitle = null,
   lessonTitle = null,
   onOpenUda,
-  defaultSubjectCode = 'tecnologia'
+  defaultSubjectCode = 'tecnologia',
+  subjectDisplayLabel = ''
 }) => {
   const hasClassContext = Boolean(currentClassName?.trim());
   // Manual choice is scoped to the current class/frame; it never updates the class itself.
@@ -97,6 +99,7 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           profile={selected}
           onSave={onSaveProfile}
           defaultSubjectCode={defaultSubjectCode}
+          subjectDisplayLabel={subjectDisplayLabel}
           defaultGradeLevel={resolveClassGradeLevel(currentClassName ?? '') ?? 1}
         />
       </div>
