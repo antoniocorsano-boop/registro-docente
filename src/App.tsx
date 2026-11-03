@@ -146,6 +146,7 @@ import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
+import { RecordMissionBanner } from './components/RecordMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
 import { BehaviorsView } from './components/BehaviorsView';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -1320,6 +1321,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         todayIsoDate: today()
       })
     : null;
+  const activeRecordMission =
+    recordSession?.status === 'editing'
+    && recordSession.context.classId === currentClass?.id
+    && recordSession.evidenceKind
+    && routeForRecordEvidence(recordSession.evidenceKind).tab === activeTab
+      ? { ...recordSession, evidenceKind: recordSession.evidenceKind }
+      : null;
   const ambientCopilotSurface =
     activeTab === 'home' ? 'home'
       : activeTab === 'dashboard' ? 'class-dashboard'
@@ -1470,6 +1478,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       recordSpecialistNavigationVersionRef.current = null;
     }
   }, [completeRecordFlow]);
+
+  const handleReturnToRecord = useCallback(() => {
+    const session = recordSessionRef.current;
+    if (!session || session.status !== 'editing' || session.context.classId !== currentClassIdRef.current) return;
+    recordSpecialistNavigationVersionRef.current = null;
+    setTodayAction('record');
+    setActiveTab('dashboard');
+  }, [setActiveTab]);
 
   const handleUpdateRecordStagedNote = useCallback((note: string) => {
     const session = recordSessionRef.current;
@@ -2081,6 +2097,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onChooseRecordEvidence={handleChooseRecordEvidence}
             onReviewRecord={handleContinueRecordToReview}
             onRecordAnother={handleRecordAnother}
+          />
+        )}
+
+        {activeRecordMission && (
+          <RecordMissionBanner
+            className={activeRecordMission.context.className}
+            evidenceKind={activeRecordMission.evidenceKind}
+            udaTitle={activeRecordMission.context.udaTitle}
+            activityLabel={activeRecordMission.context.activityLabel}
+            onReturn={handleReturnToRecord}
           />
         )}
 
