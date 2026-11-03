@@ -165,7 +165,7 @@ async function runJourney(page, { mobile }) {
 
   // Independent-review regression: an explicit selection from Analysis must
   // replace the shared UDA focus and open exactly one Gantt sheet.
-  await page.getByRole('button', { name: 'UDA', exact: true }).click();
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true }).click();
   await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
   const otherDialog = page.getByRole('dialog', { name: 'Nuova Unità Didattica (UDA)' });
   await otherDialog.getByLabel('Titolo', { exact: true }).fill(OTHER_UDA_TITLE);
