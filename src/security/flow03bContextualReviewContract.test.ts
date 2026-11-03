@@ -35,4 +35,15 @@ describe('FLOW-03B contextual Rivedi contract', () => {
     expect(dashboard).toContain('Prima destinazione consigliata');
     expect(dashboard).toContain('onClick={() => onContinueToday?.(option.tab)}');
   });
+
+  test('clears contextual review evidence when the teacher switches class', async () => {
+    const app = await source('src/App.tsx');
+    const selectClassStart = app.indexOf('const handleSelectClass = (classId: string) => {');
+    expect(selectClassStart).toBeGreaterThanOrEqual(0);
+    const selectClassEnd = app.indexOf('\n  };', selectClassStart);
+    expect(selectClassEnd).toBeGreaterThan(selectClassStart);
+    const selectClassBlock = app.slice(selectClassStart, selectClassEnd);
+
+    expect(selectClassBlock).toContain('setReviewEvidenceKind(null);');
+  });
 });
