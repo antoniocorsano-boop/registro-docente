@@ -1,0 +1,190 @@
+name: FLOW-04 Task 5 guarded browser registration
+
+on:
+  push:
+    branches:
+      - feat/flow-04-review-session
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: "${{ github.event.head_commit.message == 'chore: apply FLOW-04 task5 browser registration' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout FLOW-04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-04-review-session
+          fetch-depth: 1
+
+      - name: Apply guarded browser and invariant registration
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          def replace_once(path_string, old, new):
+              path = Path(path_string)
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path_string}: expected one guarded block, found {count}')
+              path.write_text(text.replace(old, new, 1))
+
+          # TODAY-01 keeps its original behavioral assertion but follows the FLOW-04 router surface.
+          replace_once(
+              'tests/browser/today-01-home-oggi-router.spec.cjs',
+              """    const continuation = page.getByRole('region', { name: 'Continua: Rivedi' });
+    await expect(continuation).toBeVisible();
+    for (const label of ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno']) {
+      await expect(continuation.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+    await page.screenshot({ path: evidencePath('today-01-desktop-continuation.png'), fullPage: true });
+
+    await continuation.getByRole('button', { name: 'Chiudi continuazione di oggi' }).click();
+    await expect(continuation).toBeHidden();
+""",
+              """    const continuation = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });
+    await expect(continuation).toBeVisible();
+    for (const label of ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno']) {
+      await expect(continuation.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
+    }
+    await page.screenshot({ path: evidencePath('today-01-desktop-continuation.png'), fullPage: true });
+
+    await continuation.getByRole('button', { name: 'Chiudi la sessione Rivedi' }).click();
+    await expect(continuation).toBeHidden();
+"""
+          )
+
+          # FLOW-03B still verifies evaluation-driven ordering, now through ReviewRouterPanel.
+          replace_once(
+              'tests/browser/flow-03-registra.spec.cjs',
+              """    await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
+    const review = page.getByRole('region', { name: 'Continua: Rivedi' });
+    await expect(review).toContainText('Prima destinazione consigliata: Tabellone.');
+    const labels = (await review.locator('button').allTextContents())
+      .map(label => label.trim())
+      .filter(label => ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'].includes(label));
+    expect(labels).toEqual(['Tabellone', 'Analisi', 'Storico', 'Scheda alunno']);
+""",
+              """    await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
+    const review = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });
+    await expect(review).toContainText("L'ordine delle superfici riflette il tipo di evidenza appena registrata");
+    const expectedReviewOrder = ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'];
+    const positionedReviewOptions = [];
+    for (const label of expectedReviewOrder) {
+      const option = review.getByRole('button', { name: new RegExp(`^${label}`) });
+      await expect(option).toBeVisible();
+      const box = await option.boundingBox();
+      expect(box).not.toBeNull();
+      positionedReviewOptions.push({ label, y: box.y });
+    }
+    expect(positionedReviewOptions.sort((a, b) => a.y - b.y).map(item => item.label)).toEqual(expectedReviewOrder);
+"""
+          )
+
+          workflow_path = Path('.github/workflows/browser-qualification.yml')
+          workflow = workflow_path.read_text()
+          copy_anchor = "          cp tests/browser/flow-03-registra.spec.cjs .browser-tools/flow-03-registra.spec.cjs\n"
+          copy_insert = copy_anchor + "          cp tests/browser/flow-04-review-session.spec.cjs .browser-tools/flow-04-review-session.spec.cjs\n"
+          if workflow.count(copy_anchor) != 1:
+              raise SystemExit('browser workflow: FLOW-03 copy anchor missing or duplicated')
+          if 'cp tests/browser/flow-04-review-session.spec.cjs' in workflow:
+              raise SystemExit('browser workflow: FLOW-04 copy already registered')
+          workflow = workflow.replace(copy_anchor, copy_insert, 1)
+
+          flow03_step = """      - name: Run FLOW-03 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL=\"http://127.0.0.1:${PORT}\" \\
+          EVIDENCE_DIR=\"../browser-evidence\" \\
+          CANDIDATE_SHA=\"${CANDIDATE_SHA}\" \\
+          ./node_modules/.bin/playwright test \\
+            flow-03-registra.spec.cjs \\
+            --workers=1 \\
+            --reporter=line \\
+            --output=../browser-evidence/flow-03-test-results
+
+"""
+          flow04_step = flow03_step + """      - name: Run FLOW-04 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL=\"http://127.0.0.1:${PORT}\" \\
+          EVIDENCE_DIR=\"../browser-evidence\" \\
+          CANDIDATE_SHA=\"${CANDIDATE_SHA}\" \\
+          ./node_modules/.bin/playwright test \\
+            flow-04-review-session.spec.cjs \\
+            --workers=1 \\
+            --reporter=line \\
+            --output=../browser-evidence/flow-04-test-results
+
+"""
+          if workflow.count(flow03_step) != 1:
+              raise SystemExit('browser workflow: FLOW-03 run step missing or duplicated')
+          if 'name: Run FLOW-04 Chromium qualification' in workflow:
+              raise SystemExit('browser workflow: FLOW-04 run already registered')
+          workflow_path.write_text(workflow.replace(flow03_step, flow04_step, 1))
+
+          registry_path = Path('qualification/invariants.v1.json')
+          registry = json.loads(registry_path.read_text())
+          matches = [item for item in registry.get('invariants', []) if item.get('id') == 'FLOW-04-I01']
+          if len(matches) != 1:
+              raise SystemExit(f'FLOW-04-I01 expected exactly once, found {len(matches)}')
+          invariant = matches[0]
+
+          for impact in [
+              '.github/workflows/browser-qualification.yml',
+              'tests/browser/flow-04-review-session.spec.cjs',
+              'src/security/flow04BrowserQualificationContract.test.ts'
+          ]:
+              if impact not in invariant['impactPaths']:
+                  invariant['impactPaths'].append(impact)
+
+          browser_contract = 'src/security/flow04BrowserQualificationContract.test.ts'
+          if browser_contract not in invariant['tests']:
+              invariant['tests'].append(browser_contract)
+
+          browser_smoke = invariant.setdefault('browserSmoke', [])
+          browser_spec = 'tests/browser/flow-04-review-session.spec.cjs'
+          if browser_spec not in browser_smoke:
+              browser_smoke.append(browser_spec)
+
+          registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify FLOW-04 Task 5 registration
+        run: |
+          bun test src/security/flow04BrowserQualificationContract.test.ts
+          bun scripts/qualification/check-invariants.mjs
+          bun run test:security
+          bun run lint
+          bun run build
+
+      - name: Commit qualified Task 5 registration and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/flow04-task5-apply.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/browser-qualification.yml \
+            qualification/invariants.v1.json \
+            tests/browser/today-01-home-oggi-router.spec.cjs \
+            tests/browser/flow-03-registra.spec.cjs \
+            .github/workflows/flow04-task5-apply.yml
+          git diff --cached --check
+          git commit -m 'test: register FLOW-04 browser qualification'
+          git push origin HEAD:feat/flow-04-review-session
