@@ -1,0 +1,66 @@
+name: FLOW-03B Class Review Context Repair
+
+on:
+  push:
+    branches:
+      - feat/flow-03b-post-record-ux
+    paths:
+      - .github/workflows/flow03b-class-review-context-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03b-post-record-ux
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Apply class review context repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/App.tsx')
+          text = path.read_text()
+          old = """  const handleSelectClass = (classId: string) => {
+    currentClassIdRef.current = classId;
+    setAppData(prev => ({ ...prev, currentClassId: classId }));
+"""
+          new = """  const handleSelectClass = (classId: string) => {
+    setReviewEvidenceKind(null);
+    currentClassIdRef.current = classId;
+    setAppData(prev => ({ ...prev, currentClassId: classId }));
+"""
+          if text.count(old) != 1:
+            raise SystemExit(f'Expected exactly one handleSelectClass anchor, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+
+      - name: Verify focused repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun test src/security/flow03bContextualReviewContract.test.ts
+          for test_file in src/security/flow03*.test.ts; do bun test "$test_file"; done
+          bunx tsc --noEmit
+          git diff --check
+
+      - name: Commit repair and remove harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/flow03b-class-review-context-repair.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx .github/workflows/flow03b-class-review-context-repair.yml
+          git commit -m 'fix(flow-03b): clear review evidence on class switch'
+          git push origin HEAD:feat/flow-03b-post-record-ux
