@@ -105,7 +105,9 @@ async function createUda(page) {
   await expect(page.getByRole('status')).toContainText('creata con successo');
   await expect(continuity(page)).not.toContainText('UDA:');
 
-  await page.getByRole('button', { name: 'Dossier & Rubrica', exact: true }).click();
+  // UdaWorkspaceView is the authoritative first-level UDA surface.
+  // Explicitly select the card before entering the legacy planning dossier.
+  await page.getByRole('button', { name: 'Gestisci in Pianificazione', exact: true }).click();
   await expect(page.getByRole('heading', { name: UDA_TITLE })).toBeVisible();
   await page.getByRole('button', { name: 'Chiudi Fascicolo' }).click();
   await expect(continuity(page)).toContainText('UDA: ' + UDA_TITLE);
