@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { classScopedUdaMutationAllowed } from '../context/udaClassScope';
+import { classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
 import type { UdaRecord } from '../types';
 
 const uda = (id: string, className: string): UdaRecord => ({
@@ -52,4 +52,49 @@ describe('INT-01 Final Independent Review repair — class isolation and shared 
     expect(analysis).toContain('teachingContext={teachingContext}');
     expect(analysis).toContain('onTeachingFocusChange={onTeachingFocusChange}');
   });
+  test('resolves stored short labels against the active shipped canonical class, without guessing ambiguous aliases', () => {
+    const classes = [
+      { id: 'class-3a', name: '3ª A - Secondaria I Grado' },
+      { id: 'class-3b', name: '3ª B - Secondaria I Grado' }
+    ];
+    expect(udaBelongsToActiveClass('3ª A', '3ª A - Secondaria I Grado', classes)).toBe(true);
+    expect(udaBelongsToActiveClass('3A', '3ª A - Secondaria I Grado', classes)).toBe(true);
+    expect(udaBelongsToActiveClass('3ª B', '3ª A - Secondaria I Grado', classes)).toBe(false);
+    const original = [uda('A', '3ª A'), uda('B', '3ª B')];
+    expect(classScopedUdaMutationAllowed(original,
+      [{ ...original[0]!, title: 'changed' }, original[1]!], '3ª A - Secondaria I Grado', classes)).toBe(true);
+    expect(classScopedUdaMutationAllowed(original,
+      [original[0]!, { ...original[1]!, title: 'changed' }], '3ª A - Secondaria I Grado', classes)).toBe(false);
+    const ambiguous = [...classes, { id: 'duplicate', name: '3A' }];
+    expect(udaBelongsToActiveClass('3ª A', '3ª A - Secondaria I Grado', ambiguous)).toBe(false);
+  });
+
+  test('workspace and legacy visual scopes include canonical aliases and never fall back to all classes', async () => {
+    const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
+    const legacy = await Bun.file('src/components/UdaGanttView.tsx').text();
+    expect(workspace).toContain("udaBelongsToActiveClass(uda.className, currentClassName, classes)");
+    expect(legacy).toContain("udaBelongsToActiveClass(uda.className, currentClassName, classes)");
+    expect(legacy).toContain('const scopedUdas = currentClassName');
+    expect(legacy).toContain('classScopedUdaMutationAllowed(');
+    expect(legacy).toContain('const effectiveClassFilter = currentClassName || classFilter');
+    expect(legacy).toContain('value={effectiveClassFilter}');
+    expect(legacy).toContain('disabled={Boolean(currentClassName)}');
+  });
+
+  test('analysis gets the focus callback but must not reopen a prior dossier automatically', async () => {
+    const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
+    const start = workspace.indexOf("{activeView === 'analysis' && (");
+    const end = workspace.indexOf("{isCreateOpen && (", start);
+    const analysis = workspace.slice(start, end);
+    expect(analysis).toContain('onTeachingFocusChange={onTeachingFocusChange}');
+    expect(analysis).toContain('autoOpenTeachingFocus={false}');
+  });
+
+  test('publishing a Gantt selection does not open a second modal over the chosen sheet', async () => {
+    const legacy = await Bun.file('src/components/UdaGanttView.tsx').text();
+    expect(legacy).toContain('locallyPublishedFocusIdRef.current = uda.id');
+    expect(legacy).toContain('locallyPublishedFocusIdRef.current === teachingFocus.udaId');
+    expect(legacy).toContain('autoOpenTeachingFocus');
+  });
+
 });
