@@ -368,6 +368,42 @@ test.describe('FLOW-03 direct Registra manual UDA qualification', () => {
 });
 });
 
+test.describe('FLOW-03 ordinary UDA navigation invalidation qualification', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('ordinary navigation after closing focused UDA does not resurrect the recording mission', async ({ page }) => {
+  const pageErrors = installPageErrorCollector(page);
+  await prepareScenario(page, 'flow-03-uda-ordinary-navigation');
+
+  const record = await openRecordFromOggi(page);
+  await record.getByLabel('Nota di sessione', { exact: true }).fill(RAPID_NOTE);
+  await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
+  const mission = await assertRecordMission(page, 'Attività / nota UDA');
+  const chooser = page.getByRole('region', { name: 'Seleziona UDA per Registra' });
+  await expect(chooser).toBeVisible();
+  await chooser.getByRole('button', { name: 'Scegli questa UDA', exact: true }).click();
+  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
+  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeHidden();
+
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const drawer = page.getByRole('complementary');
+  await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
+  await expect(mission).toBeHidden();
+  await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await drawer.getByRole('button', { name: 'UDA', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: `Missione Registra per ${CLASS_NAME}` })).toBeHidden();
+  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeHidden();
+  await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeVisible();
+  await page.screenshot({ path: evidencePath('flow-03-desktop-uda-ordinary-return.png'), fullPage: true });
+  expect(pageErrors).toEqual([]);
+});
+});
+
 // Conduci → Registra → diario UDA
 // Registra → Comportamento
 // Registra → Esiti verifica online
