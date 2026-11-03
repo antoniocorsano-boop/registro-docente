@@ -1,0 +1,27 @@
+name: FLOW-04 P1 Focused RED
+
+on:
+  push:
+    branches:
+      - feat/flow-04-review-session
+
+permissions:
+  contents: read
+
+jobs:
+  focused-red:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Reproduce specialist navigation lifecycle gap
+        run: bun test src/security/flow04ReviewSessionContract.test.ts
