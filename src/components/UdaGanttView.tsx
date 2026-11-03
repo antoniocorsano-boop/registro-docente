@@ -53,6 +53,9 @@ import {
   MINISTERIAL_COMPETENCY_DESCRIPTORS
 } from '../services/embeddingService';
 import { createUdaSnapshotMutation } from '../persistence/udaSnapshotMutation';
+import type { PlanningFrameResolution } from '../planning/planningFrameResolver';
+import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
+import { DidacticContinuityBar } from './DidacticContinuityBar';
 import { getSchoolMonthIndex, getUdaGapSeverity, getUdaRemediationCopy } from '../analytics/udaSemantics';
 
 export interface RecordLessonPrefill {
@@ -75,6 +78,14 @@ interface UdaGanttViewProps {
   getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   focusedRecordMode?: boolean;
+  currentClassName?: string | null;
+  planningFrame?: PlanningFrameResolution | null;
+  teachingFocus?: LibraryTeachingContext | null;
+  teachingContext?: ResolvedLibraryTeachingContext | null;
+  udaTitle?: string | null;
+  lessonTitle?: string | null;
+  onTeachingFocusChange?: (focus: LibraryTeachingContext | null) => void;
+  onOpenPlanning?: () => void;
 }
 
 // Internal planning coefficients for the UDA activity index; not a normative scale
@@ -461,7 +472,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   recordLessonPrefill,
   getRecordLessonNavigationVersion,
   onRecordLessonCommitted,
-  focusedRecordMode = false
+  focusedRecordMode = false,
+  currentClassName = null,
+  planningFrame = null,
+  teachingFocus = null,
+  teachingContext = null,
+  udaTitle = null,
+  lessonTitle = null,
+  onTeachingFocusChange,
+  onOpenPlanning
 }) => {
   // Master class filter at the top bar that keeps all views aligned
   const [selectedMasterClass, setSelectedMasterClass] = useState<string>('all');
@@ -795,6 +814,28 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     setClassFilter(className);
     setGapClassFilter(className);
     setSummaryClassFilter(className);
+  };
+
+  // A class-first entry scopes existing specialist filters without choosing an UDA.
+  useEffect(() => {
+    if (!currentClassName || recordLessonPrefill) return;
+    setSelectedMasterClass(currentClassName);
+    setClassFilter(currentClassName);
+    setGapClassFilter(currentClassName);
+    setSummaryClassFilter(currentClassName);
+  }, [currentClassName, recordLessonPrefill]);
+
+  // A validated explicit UDA focus may open the existing dossier; projected UDAs have no local dossier.
+  useEffect(() => {
+    if (!currentClassName || recordLessonPrefill || !teachingFocus?.udaId || teachingContext?.writableByRegistro === false) return;
+    const target = udas.find(uda => uda.id === teachingFocus.udaId && uda.className === currentClassName);
+    if (target) setSelectedUdaForDetail(target);
+  }, [currentClassName, recordLessonPrefill, teachingFocus?.udaId, teachingContext?.writableByRegistro]);
+
+  const publishExplicitUdaFocus = (uda: UdaRecord) => {
+    onTeachingFocusChange?.(currentClassName && currentClassName === uda.className
+      ? { udaId: uda.id }
+      : null);
   };
 
   // New lesson form inside detail modal
@@ -1590,6 +1631,18 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         </div>
       )}
 
+      {!focusedRecordMode && !recordLessonPrefill && currentClassName && onOpenPlanning && (
+        <DidacticContinuityBar
+          className={currentClassName}
+          planningFrame={planningFrame}
+          teachingContext={teachingContext}
+          udaTitle={udaTitle}
+          lessonTitle={lessonTitle}
+          destination="programmazione"
+          onNavigate={onOpenPlanning}
+        />
+      )}
+
       {!focusedRecordMode && (
         <>
       {/* ============================================================== */}
@@ -1606,6 +1659,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             <button
               type="button"
               onClick={() => handleMasterClassChange('all')}
+              disabled={Boolean(currentClassName)}
+              title={currentClassName ? 'Per cambiare classe torna alla selezione delle classi' : 'Tutte le classi'}
               className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                 selectedMasterClass === 'all'
                   ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
@@ -1619,6 +1674,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 key={c.id}
                 type="button"
                 onClick={() => handleMasterClassChange(c.name)}
+                disabled={Boolean(currentClassName && currentClassName !== c.name)}
                 className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                   selectedMasterClass === c.name
                     ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
@@ -2004,7 +2060,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                           <td className="p-2.5 text-left sticky left-0 z-10 bg-[var(--surface)] border-r border-[var(--border)] max-w-[280px]">
                             <div className="space-y-1">
                               <div
-                                onClick={() => setGanttSelectedUda(u)}
+                                onClick={() => { setGanttSelectedUda(u); publishExplicitUdaFocus(u); }}
                                 className="font-semibold text-slate-200 hover:text-[var(--primary)] cursor-pointer flex items-center justify-between gap-1 transition-colors"
                                 title={`Clicca per aprire la scheda di "${u.title}"`}
                               >
@@ -2364,7 +2420,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSelectedUdaForDetail(u)}
+                          onClick={() => { setSelectedUdaForDetail(u); publishExplicitUdaFocus(u); }}
                           className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
