@@ -46,7 +46,9 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(editor).toContain('defaultGradeLevel');
     expect(view).toContain('resolveClassGradeLevel');
     expect(view).toContain('defaultSubjectCode');
-    expect(app).toContain('defaultSubjectCode={settings.subject}');
+    expect(app).toContain('defaultSubjectCode={curricularSubjectCode}');
+    expect(app).toContain('resolveCurricularSubjectCode(settings.subject)');
+    expect(app).not.toContain('defaultSubjectCode={settings.subject}');
     // Do not force the legacy hard-coded subject when a real subject is known.
     expect(editor).not.toContain("const subjectCode = 'tecnologia';");
   });
