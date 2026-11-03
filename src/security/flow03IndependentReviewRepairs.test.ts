@@ -122,28 +122,30 @@ describe('FLOW-03 independent review repairs', () => {
 
   test('captures the UDA diary navigation version at lesson submission, not at the original handoff', async () => {
     const app = await source('src/App.tsx');
-    const capture = sectionBetween(
-      app,
-      'const handleRecordLessonSubmitCapture = useCallback(() => {',
-      'const handleRecordLessonCommitted = useCallback'
+    const uda = await source('src/components/UdaGanttView.tsx');
+    const addLesson = sectionBetween(uda, '// Add lesson to current UDA', '// Remove lesson from UDA');
+
+    expect(uda).toContain('getRecordLessonNavigationVersion?: () => number;');
+    expect(addLesson).toContain('const navigationVersionAtSave = getRecordLessonNavigationVersion?.();');
+    expect(addLesson.indexOf('const navigationVersionAtSave = getRecordLessonNavigationVersion?.();')).toBeLessThan(
+      addLesson.indexOf('void commitUdaViewMutation(nextUdas, () => {')
     );
+    expect(addLesson).toContain('navigationVersionAtSave !== undefined');
+    expect(addLesson).toContain('onRecordLessonCommitted?.(updatedUda.id, navigationVersionAtSave);');
+    expect(addLesson).not.toContain('onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);');
+
     const committed = sectionBetween(
       app,
       'const handleRecordLessonCommitted = useCallback',
       'const handleUpdateRecordStagedNote = useCallback'
     );
-
-    expect(capture).toContain("session.evidenceKind !== 'lesson-log'");
-    expect(capture).toContain('session.context.classId !== currentClassIdRef.current');
-    expect(capture).toContain('recordSpecialistNavigationVersionRef.current = navigationVersionRef.current;');
-    expect(committed).toContain('const navigationVersionAtSave = recordSpecialistNavigationVersionRef.current;');
-    expect(committed).toContain('navigationVersionAtSave === null');
+    expect(committed).toContain('navigationVersionAtSave: number');
     expect(committed).toContain(
       "completeRecordFlow('lesson-log', navigationVersionAtSave, session, session.context.classId);"
     );
 
     const render = sectionBetween(app, "{activeTab === 'uda-gantt' && (", '{/* TAB 12: Impostazioni & Tema */}');
-    expect(render).toContain('<div onSubmitCapture={handleRecordLessonSubmitCapture}>');
+    expect(render).toContain('getRecordLessonNavigationVersion={() => navigationVersionRef.current}');
     expect(render).toContain('onRecordLessonCommitted={handleRecordLessonCommitted}');
   });
 });
