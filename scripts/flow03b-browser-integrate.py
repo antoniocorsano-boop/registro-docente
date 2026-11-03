@@ -59,6 +59,11 @@ if text.count(anchor) != 1:
     raise SystemExit(f'desktop insertion anchor count={text.count(anchor)}')
 text = text.replace(anchor, block, 1)
 
+mobile_marker = "test.describe('FLOW-03 mobile qualification', () => {"
+if text.count(mobile_marker) != 1:
+    raise SystemExit(f'mobile describe marker count={text.count(mobile_marker)}')
+prefix, mobile = text.split(mobile_marker, 1)
+
 # Strengthen the existing primary mobile journey at the moment Registra becomes active.
 anchor = """  const record = await handoffConductToRecord(page, conduct);
   await assertSelectedClassStillVisible(page);
@@ -77,9 +82,9 @@ replacement = """  const record = await handoffConductToRecord(page, conduct);
   await assertSelectedClassStillVisible(page);
   await assertNoHorizontalOverflow(page);
 """
-if text.count(anchor) != 1:
-    raise SystemExit(f'mobile active anchor count={text.count(anchor)}')
-text = text.replace(anchor, replacement, 1)
+if mobile.count(anchor) != 1:
+    raise SystemExit(f'mobile active anchor count={mobile.count(anchor)}')
+mobile = mobile.replace(anchor, replacement, 1)
 
 # Verify specialist mission keeps Copilota inline and floating trigger absent.
 anchor = """  const mission = await assertRecordMission(page, 'Attività / nota UDA');
@@ -90,9 +95,9 @@ replacement = """  const mission = await assertRecordMission(page, 'Attività / 
   await expect(flow03bFloatingCopilot).toBeHidden();
   await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
 """
-if text.count(anchor) != 1:
-    raise SystemExit(f'mobile mission anchor count={text.count(anchor)}')
-text = text.replace(anchor, replacement, 1)
+if mobile.count(anchor) != 1:
+    raise SystemExit(f'mobile mission anchor count={mobile.count(anchor)}')
+mobile = mobile.replace(anchor, replacement, 1)
 
 # Once saved, the active-task focus must end and the ambient UI must return.
 anchor = """  await expect(savedRecord).toContainText('Registrazione completata');
@@ -106,9 +111,9 @@ replacement = """  await expect(savedRecord).toContainText('Registrazione comple
   await expect(flow03bFloatingCopilot).toBeVisible();
   await assertNoHorizontalOverflow(page);
 """
-if text.count(anchor) != 1:
-    raise SystemExit(f'mobile saved anchor count={text.count(anchor)}')
-text = text.replace(anchor, replacement, 1)
+if mobile.count(anchor) != 1:
+    raise SystemExit(f'mobile saved anchor count={mobile.count(anchor)}')
+mobile = mobile.replace(anchor, replacement, 1)
 
 # Lesson-log review should prioritize UDA context, without automatic navigation.
 anchor = """  const review = page.getByRole('region', { name: 'Continua: Rivedi' });
@@ -124,10 +129,11 @@ replacement = """  const review = page.getByRole('region', { name: 'Continua: Ri
   expect(flow03bReviewLabels).toEqual(['UDA e diario', 'Tabellone', 'Analisi', 'Storico']);
   await page.screenshot({ path: evidencePath('flow-03-mobile-review.png'), fullPage: true });
 """
-if text.count(anchor) != 1:
-    raise SystemExit(f'mobile review anchor count={text.count(anchor)}')
-text = text.replace(anchor, replacement, 1)
+if mobile.count(anchor) != 1:
+    raise SystemExit(f'mobile review anchor count={mobile.count(anchor)}')
+mobile = mobile.replace(anchor, replacement, 1)
 
+text = prefix + mobile_marker + mobile
 path.write_text(text, encoding='utf-8')
 
 # The dedicated temporary browser surfaces are no longer needed: coverage lives in the canonical FLOW-03 spec.
