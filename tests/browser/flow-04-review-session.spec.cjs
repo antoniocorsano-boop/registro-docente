@@ -185,7 +185,7 @@ test.describe('FLOW-04 Oggi → Rivedi desktop qualification', () => {
     await page.screenshot({ path: evidencePath('flow-04-desktop-tabellone.png'), fullPage: true });
 
     // specialist-to-specialist keeps review mission even when the specialist view calls setActiveTab directly.
-    await page.getByText(STUDENT_NAME, { exact: true }).click();
+    await page.getByRole('cell', { name: STUDENT_NAME, exact: true }).click();
     banner = await reviewMission(page);
     await expect(banner).toContainText('Superficie corrente: Scheda alunno');
     await page.screenshot({ path: evidencePath('flow-04-desktop-report-from-tabellone.png'), fullPage: true });
