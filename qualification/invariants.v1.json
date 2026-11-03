@@ -563,7 +563,8 @@
         "tests/browser/lib04c-copilot-link.spec.cjs",
         "tests/browser/lib04d-copilot-prepare.spec.cjs",
         "tests/browser/release-01-qualification.spec.cjs",
-        "tests/browser/ux-trust-01-full-regression.spec.cjs"
+        "tests/browser/ux-trust-01-full-regression.spec.cjs",
+        "tests/browser/aic-06-budget-governor.spec.cjs"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",
