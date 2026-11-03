@@ -548,7 +548,9 @@
         "src/security/persist01hTeacherUiContract.test.ts",
         "src/persistence/backupReminderPolicy.ts",
         "src/security/flow03bBackupReminderContract.test.ts",
-        "src/security/flow03bActiveRecordFocusContract.test.ts"
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "src/recording/reviewRouting.ts",
+        "src/security/flow03bContextualReviewContract.test.ts"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",
@@ -571,7 +573,8 @@
         "src/security/homeNavigationDuringSaveIntegrity.test.ts",
         "src/security/persist01hTeacherUiContract.test.ts",
         "src/security/flow03bBackupReminderContract.test.ts",
-        "src/security/flow03bActiveRecordFocusContract.test.ts"
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "src/security/flow03bContextualReviewContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs",

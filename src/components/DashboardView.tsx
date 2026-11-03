@@ -7,7 +7,8 @@ import { ConductLessonPanel } from './ConductLessonPanel';
 import { RecordLessonPanel } from './RecordLessonPanel';
 import type { ConductContextResolution } from '../conduct/conductSession';
 import type { RecordEvidenceKind, RecordSessionDraft } from '../recording/recordSession';
-import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
+import { getRecordReviewOptions } from '../recording/reviewRouting';
+import { type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
 import {
   ClipboardList,
   Sparkles,
@@ -25,6 +26,7 @@ interface DashboardViewProps {
   onNavigateTab: (tab: ActiveTab) => void;
   onEditBatch: (batchId: string) => void;
   todayAction?: TodayAction | null;
+  reviewEvidenceKind?: RecordEvidenceKind | null;
   onContinueToday?: (tab: ActiveTab) => void;
   onDismissToday?: () => void;
   onOpenPreparationCopilot?: () => void;
@@ -46,6 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   onEditBatch,
   todayAction = null,
+  reviewEvidenceKind = null,
   onContinueToday,
   onDismissToday,
   onOpenPreparationCopilot,
@@ -100,6 +103,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const recentActivities = Object.values(groupsMap)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
+  const recordReviewOptions = getRecordReviewOptions(reviewEvidenceKind);
 
   return (
     <div className="space-y-4">
@@ -150,6 +154,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <p className="text-xs text-slate-400 mt-1">
                   Scegli una superficie già esistente per la classe {currentClass.name}.
                 </p>
+                {reviewEvidenceKind && recordReviewOptions[0] && (
+                  <p className="mt-1 text-xs font-semibold text-cyan-300">
+                    Prima destinazione consigliata: {recordReviewOptions[0].label}.
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -161,7 +170,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {getTodayContinuationOptions(todayAction).map(option => (
+              {getRecordReviewOptions(reviewEvidenceKind).map(option => (
                 <button
                   key={option.tab}
                   type="button"

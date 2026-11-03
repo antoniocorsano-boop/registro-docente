@@ -285,6 +285,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
+  const [reviewEvidenceKind, setReviewEvidenceKind] = useState<RecordEvidenceKind | null>(null);
   const [recordSession, setRecordSession] = useState<RecordSessionDraft | null>(null);
   const recordSessionRef = useRef<RecordSessionDraft | null>(null);
   const publishRecordSession = useCallback((next: RecordSessionDraft | null) => {
@@ -1503,12 +1504,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleContinueRecordToReview = useCallback(() => {
     const session = recordSessionRef.current;
     if (!session || session.context.classId !== currentClassIdRef.current) return;
+    setReviewEvidenceKind(session.evidenceKind ?? null);
     publishRecordSession(null);
     setTodayAction('review');
     setActiveTab('dashboard');
   }, [publishRecordSession, setActiveTab]);
 
   const handleStartTodayAction = useCallback((action: TodayAction) => {
+    setReviewEvidenceKind(null);
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
     if (action !== 'record') publishRecordSession(null);
     setTodayAction(action);
@@ -1534,12 +1537,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleContinueToday = useCallback((tab: ActiveTab) => {
     setTodayAction(null);
+    setReviewEvidenceKind(null);
     publishRecordSession(null);
     handleNavigateTab(tab);
   }, [handleNavigateTab, publishRecordSession]);
 
   const handleCancelTodayAction = useCallback(() => {
     setTodayAction(null);
+    setReviewEvidenceKind(null);
     publishRecordSession(null);
   }, [publishRecordSession]);
 
@@ -2083,6 +2088,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
             todayAction={todayAction}
+            reviewEvidenceKind={reviewEvidenceKind}
             onContinueToday={handleContinueToday}
             onDismissToday={handleCancelTodayAction}
             onOpenPreparationCopilot={handleOpenPreparationCopilot}
