@@ -594,6 +594,34 @@
         "tests/browser/qualification-invariant-smoke.spec.cjs",
         "tests/browser/flow-03-registra.spec.cjs"
       ]
+    },
+    {
+      "id": "FLOW-04-I01",
+      "owner": "FLOW-04",
+      "statement": "Rivedi is a session-only professional review orchestrator that preserves explicit class and review mission across existing authoritative surfaces, remains non-persistent and descriptive, never decides or auto-writes professional outcomes, and fails closed across class or review-boundary changes.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/review/",
+        "src/components/DashboardView.tsx",
+        "src/components/ReviewRouterPanel.tsx",
+        "src/components/ReviewMissionBanner.tsx",
+        "src/recording/reviewRouting.ts",
+        "src/security/flow04ReviewSessionContract.test.ts",
+        "src/security/flow04ReviewUiContract.test.ts",
+        "src/security/flow04PersistenceBoundary.test.ts",
+        "src/security/flow03bContextualReviewContract.test.ts",
+        "src/security/today01ContinuationContract.test.ts",
+        "src/security/today01SessionContextContract.test.ts"
+      ],
+      "tests": [
+        "src/security/flow04ReviewSessionContract.test.ts",
+        "src/security/flow04ReviewUiContract.test.ts",
+        "src/security/flow04PersistenceBoundary.test.ts",
+        "src/security/flow03bContextualReviewContract.test.ts",
+        "src/security/today01ContinuationContract.test.ts",
+        "src/security/today01SessionContextContract.test.ts"
+      ]
     }
   ]
 }
