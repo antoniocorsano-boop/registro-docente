@@ -74,6 +74,7 @@ interface UdaGanttViewProps {
   recordLessonPrefill?: RecordLessonPrefill;
   getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
+  focusedRecordMode?: boolean;
 }
 
 // Internal planning coefficients for the UDA activity index; not a normative scale
