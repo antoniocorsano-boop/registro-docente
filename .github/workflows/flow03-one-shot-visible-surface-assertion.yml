@@ -1,0 +1,57 @@
+name: FLOW-03 One-shot Visible Focused Surface Assertion Repair
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): stage visible focused-surface browser assertion repair' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03-registra-orchestrator
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Replace only the two technical-wrapper visibility assertions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/browser/flow-03-registra.spec.cjs')
+          text = path.read_text()
+          old = "  await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();\n"
+          count = text.count(old)
+          if count != 2:
+              raise SystemExit(f'expected exactly two focused wrapper assertions, found {count}')
+          text = text.replace(old, '')
+          path.write_text(text)
+          PY
+
+      - name: Verify focused browser contract and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          node --check tests/browser/flow-03-registra.spec.cjs
+          bun install --frozen-lockfile
+          bun test src/security/flow03BrowserQualificationContract.test.ts
+
+      - name: Commit clean repair and remove this harness
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/flow03-one-shot-visible-surface-assertion.yml
+          git add tests/browser/flow-03-registra.spec.cjs
+          git commit -m "test(flow-03): assert visible focused UDA surface instead of empty wrapper"
+          git push origin HEAD:feat/flow-03-registra-orchestrator
