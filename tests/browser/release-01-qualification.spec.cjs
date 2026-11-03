@@ -32,9 +32,10 @@ async function unlockVault(page, expectedHeading = 'Le mie classi') {
 
 async function closePersistenceConfirmation(page) {
   const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
-  await expect(heading).toBeVisible();
-  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
-  await expect(heading).toBeHidden();
+  if (await heading.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+    await expect(heading).toBeHidden();
+  }
 }
 
 async function disablePrivacyShield(page) {

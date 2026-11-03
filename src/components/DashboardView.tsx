@@ -7,7 +7,8 @@ import { ConductLessonPanel } from './ConductLessonPanel';
 import { RecordLessonPanel } from './RecordLessonPanel';
 import type { ConductContextResolution } from '../conduct/conductSession';
 import type { RecordEvidenceKind, RecordSessionDraft } from '../recording/recordSession';
-import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
+import { getRecordReviewOptions } from '../recording/reviewRouting';
+import { type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
 import {
   ClipboardList,
   Sparkles,
@@ -25,6 +26,7 @@ interface DashboardViewProps {
   onNavigateTab: (tab: ActiveTab) => void;
   onEditBatch: (batchId: string) => void;
   todayAction?: TodayAction | null;
+  reviewEvidenceKind?: RecordEvidenceKind | null;
   onContinueToday?: (tab: ActiveTab) => void;
   onDismissToday?: () => void;
   onOpenPreparationCopilot?: () => void;
@@ -32,6 +34,7 @@ interface DashboardViewProps {
   privacyShieldActive?: boolean;
   onTogglePrivacyShield?: () => void;
   onOpenConductCopilot?: () => void;
+  onOpenRecordCopilot?: () => void;
   onGoToRecord?: (stagedNote?: string) => void;
   recordSession?: RecordSessionDraft | null;
   onChangeRecordStagedNote?: (note: string) => void;
@@ -45,6 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   onEditBatch,
   todayAction = null,
+  reviewEvidenceKind = null,
   onContinueToday,
   onDismissToday,
   onOpenPreparationCopilot,
@@ -52,6 +56,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   privacyShieldActive = false,
   onTogglePrivacyShield,
   onOpenConductCopilot,
+  onOpenRecordCopilot,
   onGoToRecord,
   recordSession = null,
   onChangeRecordStagedNote,
@@ -61,6 +66,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
+  const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass.id;
 
   const studentAvgs = students
     .map(s => calcAvg(grades.filter(g => g.studentId === s.id)))
@@ -97,6 +103,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const recentActivities = Object.values(groupsMap)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
+  const recordReviewOptions = getRecordReviewOptions(reviewEvidenceKind);
 
   return (
     <div className="space-y-4">
@@ -130,6 +137,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           session={recordSession}
           onChangeStagedNote={(note) => onChangeRecordStagedNote?.(note)}
           onChooseEvidence={(kind) => onChooseRecordEvidence?.(kind)}
+          onOpenCopilot={() => onOpenRecordCopilot?.()}
           onReview={() => onReviewRecord?.()}
           onRecordAnother={() => onRecordAnother?.()}
           onDismiss={() => onDismissToday?.()}
@@ -146,6 +154,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <p className="text-xs text-slate-400 mt-1">
                   Scegli una superficie già esistente per la classe {currentClass.name}.
                 </p>
+                {reviewEvidenceKind && recordReviewOptions[0] && (
+                  <p className="mt-1 text-xs font-semibold text-cyan-300">
+                    Prima destinazione consigliata: {recordReviewOptions[0].label}.
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -157,7 +170,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {getTodayContinuationOptions(todayAction).map(option => (
+              {getRecordReviewOptions(reviewEvidenceKind).map(option => (
                 <button
                   key={option.tab}
                   type="button"
@@ -173,7 +186,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* Overview & KPIs */}
-      <div className="neon-card neon-card-highlight p-5">
+      <details
+        key={isActiveRecordFocus ? 'focused' : 'full'}
+        data-testid="flow03b-class-overview"
+        open={!isActiveRecordFocus}
+        className={isActiveRecordFocus ? 'neon-card overflow-hidden' : ''}
+      >
+        <summary
+          className={isActiveRecordFocus
+            ? 'min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
+            : 'sr-only'}
+        >
+          Panoramica Sezione: {currentClass.name}
+        </summary>
+        <div className="neon-card neon-card-highlight p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
             <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
@@ -269,7 +295,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span>Analisi</span>
           </button>
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Recent Evaluations Activity */}
       <div className="neon-card p-4">

@@ -129,6 +129,7 @@ import {
   prepareBackupCheckpoint,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
+import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
@@ -284,6 +285,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
+  const [reviewEvidenceKind, setReviewEvidenceKind] = useState<RecordEvidenceKind | null>(null);
   const [recordSession, setRecordSession] = useState<RecordSessionDraft | null>(null);
   const recordSessionRef = useRef<RecordSessionDraft | null>(null);
   const publishRecordSession = useCallback((next: RecordSessionDraft | null) => {
@@ -507,7 +509,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ): Promise<AppData> => {
     const {
-      showBackupModal = true,
+      showBackupModal,
       successMessage = 'Salvato nel vault locale',
       afterCommit
     } = options;
@@ -538,9 +540,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
       },
-      afterCommit: () => {
+      afterCommit: (candidate, previous) => {
         if (successMessage) toast(successMessage);
-        if (showBackupModal) setIsBackupModalOpen(true);
+        const shouldOpenBackupModal = showBackupModal === true
+          || (showBackupModal === undefined
+            && shouldSuggestBackupReminder(previous.meta, candidate.meta));
+        if (shouldOpenBackupModal) setIsBackupModalOpen(true);
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
@@ -1309,6 +1314,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass?.id;
   const conductContext = currentClass
     ? resolveConductContext({
         className: currentClass.name,
@@ -1499,12 +1505,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleContinueRecordToReview = useCallback(() => {
     const session = recordSessionRef.current;
     if (!session || session.context.classId !== currentClassIdRef.current) return;
+    setReviewEvidenceKind(session.evidenceKind ?? null);
     publishRecordSession(null);
     setTodayAction('review');
     setActiveTab('dashboard');
   }, [publishRecordSession, setActiveTab]);
 
   const handleStartTodayAction = useCallback((action: TodayAction) => {
+    setReviewEvidenceKind(null);
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
     if (action !== 'record') publishRecordSession(null);
     setTodayAction(action);
@@ -1530,17 +1538,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleContinueToday = useCallback((tab: ActiveTab) => {
     setTodayAction(null);
+    setReviewEvidenceKind(null);
     publishRecordSession(null);
     handleNavigateTab(tab);
   }, [handleNavigateTab, publishRecordSession]);
 
   const handleCancelTodayAction = useCallback(() => {
     setTodayAction(null);
+    setReviewEvidenceKind(null);
     publishRecordSession(null);
   }, [publishRecordSession]);
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    setReviewEvidenceKind(null);
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
@@ -2079,6 +2090,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
             todayAction={todayAction}
+            reviewEvidenceKind={reviewEvidenceKind}
             onContinueToday={handleContinueToday}
             onDismissToday={handleCancelTodayAction}
             onOpenPreparationCopilot={handleOpenPreparationCopilot}
@@ -2086,6 +2098,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             privacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onOpenConductCopilot={handleOpenConductCopilot}
+            onOpenRecordCopilot={reopenLibraryCopilot}
             onGoToRecord={handleContinueFromConductToRecord}
             recordSession={recordSession}
             onChangeRecordStagedNote={handleUpdateRecordStagedNote}
@@ -2101,6 +2114,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             evidenceKind={activeRecordMission.evidenceKind}
             udaTitle={activeRecordMission.context.udaTitle}
             activityLabel={activeRecordMission.context.activityLabel}
+            onOpenCopilot={reopenLibraryCopilot}
             onReturn={handleReturnToRecord}
           />
         )}
@@ -2344,7 +2358,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct'}
+            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
           />
           <LibraryCopilotComposer
               library={library}

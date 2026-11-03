@@ -545,7 +545,26 @@
         ".github/workflows/browser-qualification.yml",
         ".github/workflows/flow-03-contract-qualification.yml",
         "src/security/homeNavigationDuringSaveIntegrity.test.ts",
-        "src/security/persist01hTeacherUiContract.test.ts"
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/persistence/backupReminderPolicy.ts",
+        "src/security/flow03bBackupReminderContract.test.ts",
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "src/recording/reviewRouting.ts",
+        "src/security/flow03bContextualReviewContract.test.ts",
+        "docs/superpowers/specs/2026-11-03-flow-03b-post-record-ux-design.md",
+        "docs/superpowers/plans/2026-11-03-flow-03b-post-record-ux.md",
+        "docs/superpowers/receipts/2026-11-03-flow-03b-browser-integration-checkpoint.md",
+        "tests/browser/aic-01-context-projection.spec.cjs",
+        "tests/browser/aic-05-professional-memory.spec.cjs",
+        "tests/browser/aic-07-supervised-copilot.spec.cjs",
+        "tests/browser/browser-qualification.spec.cjs",
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/lib01e-provider-disclosure-review.spec.cjs",
+        "tests/browser/lib04c-copilot-link.spec.cjs",
+        "tests/browser/lib04d-copilot-prepare.spec.cjs",
+        "tests/browser/release-01-qualification.spec.cjs",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs",
+        "tests/browser/aic-06-budget-governor.spec.cjs"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",
@@ -566,7 +585,10 @@
         "src/security/flow03FocusedUdaWorkspaceContract.test.ts",
         "src/security/flow03FocusedUdaDiaryContract.test.ts",
         "src/security/homeNavigationDuringSaveIntegrity.test.ts",
-        "src/security/persist01hTeacherUiContract.test.ts"
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/flow03bBackupReminderContract.test.ts",
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "src/security/flow03bContextualReviewContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs",

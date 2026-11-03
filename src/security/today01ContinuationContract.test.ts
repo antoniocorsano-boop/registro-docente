@@ -23,7 +23,8 @@ describe('TODAY-01 Dashboard continuation contract', () => {
     expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
     expect(dashboard).toContain("import { ConductLessonPanel } from './ConductLessonPanel';");
     expect(dashboard).toContain("import { RecordLessonPanel } from './RecordLessonPanel';");
-    expect(dashboard).toContain("import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';");
+    expect(dashboard).toContain("import { getRecordReviewOptions } from '../recording/reviewRouting';");
+    expect(dashboard).toContain("import { type TodayAction, type TodayContinuationAction } from '../today/todayRouter';");
     expect(dashboard).toContain('todayAction?: TodayAction | null;');
     expect(dashboard).toContain('onContinueToday?: (tab: ActiveTab) => void;');
     expect(dashboard).toContain('onDismissToday?: () => void;');
@@ -44,7 +45,7 @@ describe('TODAY-01 Dashboard continuation contract', () => {
     expect(dashboard).toContain("todayAction === 'record' && recordSession");
     expect(dashboard).toContain('<RecordLessonPanel');
     expect(dashboard).toContain("todayAction === 'review'");
-    expect(dashboard).toContain('getTodayContinuationOptions(todayAction)');
+    expect(dashboard).toContain('getRecordReviewOptions(reviewEvidenceKind)');
     expect(dashboard).toContain('Continua:');
     expect(dashboard).toContain('min-h-[44px]');
     expect(dashboard).toContain('flex-wrap');
