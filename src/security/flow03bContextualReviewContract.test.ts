@@ -23,18 +23,22 @@ describe('FLOW-03B contextual Rivedi contract', () => {
   test('carries evidence kind into the session-only ReviewSession handoff and never auto-opens a destination', async () => {
     const app = await source('src/App.tsx');
     const dashboard = await source('src/components/DashboardView.tsx');
+    const panel = await source('src/components/ReviewRouterPanel.tsx');
 
     expect(app).toContain('const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);');
     expect(app).toContain("origin: 'post-record'");
     expect(app).toContain('evidenceKind: session.evidenceKind ?? null');
     expect(app).toContain('publishRecordSession(null);');
     expect(app).toContain("setTodayAction('review');");
-    expect(app).toContain('reviewEvidenceKind={reviewSession?.evidenceKind ?? null}');
+    expect(app).toContain('reviewSession={reviewSession}');
+    expect(app).not.toContain('reviewEvidenceKind={reviewSession?.evidenceKind ?? null}');
 
-    expect(dashboard).toContain('reviewEvidenceKind?: RecordEvidenceKind | null;');
-    expect(dashboard).toContain('getRecordReviewOptions(reviewEvidenceKind)');
-    expect(dashboard).toContain('Prima destinazione consigliata');
-    expect(dashboard).toContain('onClick={() => onContinueToday?.(option.tab)}');
+    expect(dashboard).toContain('reviewSession?: ReviewSessionContext | null;');
+    expect(dashboard).toContain('<ReviewRouterPanel');
+    expect(panel).toContain('getRecordReviewOptions(session.evidenceKind)');
+    expect(panel).toContain("session.origin === 'post-record' && session.evidenceKind");
+    expect(panel).toContain('onNavigateSurface(option.tab)');
+    expect(panel).not.toContain('onNavigateSurface(options[0].tab)');
   });
 
   test('invalidates contextual review state when the teacher switches class', async () => {
