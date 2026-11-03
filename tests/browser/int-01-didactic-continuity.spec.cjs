@@ -144,6 +144,27 @@ async function runJourney(page, { mobile }) {
   await openUda.click();
   await createUda(page);
 
+  if (!mobile) {
+    // The legacy specialist must create an UDA for the active (not first)
+    // class, despite its locked class dropdown.
+    const planning = page.getByRole('region', { name: 'Pianificazione UDA' });
+    await planning.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+    const legacyModal = planning.locator('div.fixed.inset-0.z-50').filter({
+      has: planning.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })
+    });
+    await expect(legacyModal).toBeVisible();
+    await expect(legacyModal.locator('select').first()).toBeDisabled();
+    await expect(legacyModal.locator('select').first()).toHaveValue(CLASS_NAME);
+    await legacyModal.getByPlaceholder('es. UDA 4: Energie Rinnovabili e Sostenibilità')
+      .fill('INT-01 Creazione UDA per classe attiva');
+    await legacyModal.getByRole('button', { name: 'Crea UDA', exact: true }).click();
+    await closeSaveConfirmation(page);
+    await expect(legacyModal).toHaveCount(0);
+    await expect(planning.getByRole('row').filter({
+      hasText: 'INT-01 Creazione UDA per classe attiva'
+    })).toBeVisible();
+  }
+
   const openPlanning = continuity(page).getByRole('button', { name: 'Apri Programmazione' });
   if (mobile) await assertSafeMobile(page, openPlanning);
   await page.screenshot({
