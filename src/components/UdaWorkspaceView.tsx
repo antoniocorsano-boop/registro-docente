@@ -385,7 +385,15 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
             <h3 className="font-semibold text-violet-200">Analisi</h3>
             <p className="mt-1 text-sm text-slate-400">Gap, indicatori e strumenti diagnostici avanzati, visibili solo quando servono.</p>
           </div>
-          <LegacyUdaGanttView classes={classes} udas={udas} settings={settings} tests={tests} onSaveUdas={onSaveUdas} onNavigateTab={onNavigateTab} />
+          <LegacyUdaGanttView
+            classes={classes}
+            udas={udas}
+            settings={settings}
+            tests={tests}
+            onSaveUdas={onSaveUdas}
+            onNavigateTab={onNavigateTab}
+            currentClassName={currentClassName}
+          />
         </section>
       )}
 
