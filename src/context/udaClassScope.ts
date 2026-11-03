@@ -90,3 +90,25 @@ export function buildUdaDeletionSnapshot(
       };
     });
 }
+
+/**
+ * Detect dependencies crossing the active-class boundary without returning
+ * any out-of-class titles, dates, or UDA details to the presentation layer.
+ * This is a preflight gate for a proposed cascade; mutation validation stays
+ * independent and fail-closed at the persistence boundary.
+ */
+export function hasForeignUdaDependencyOn(
+  udas: readonly UdaRecord[],
+  affectedUdaIds: readonly string[],
+  currentClassName: string | null | undefined,
+  classes: readonly ScopeClass[] = []
+): boolean {
+  if (!currentClassName?.trim()) return false;
+  const affected = new Set(affectedUdaIds);
+  if (affected.size === 0) return false;
+
+  return udas.some(uda =>
+    !udaBelongsToActiveClass(uda.className, currentClassName, classes)
+    && Boolean(uda.dependencies?.some(dependencyId => affected.has(dependencyId)))
+  );
+}
