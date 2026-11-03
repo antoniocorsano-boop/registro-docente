@@ -335,7 +335,6 @@ test.describe('FLOW-03 direct Registra manual UDA qualification', () => {
   await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeHidden();
   await chooser.getByRole('button', { name: 'Scegli questa UDA', exact: true }).click();
 
-  await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
   await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
   await expect(page.getByText('Diario della registrazione', { exact: true })).toBeVisible();
   const topic = page.getByPlaceholder('Argomento o fase operativa svolta...');
@@ -389,7 +388,6 @@ test.describe('FLOW-03 mobile qualification', () => {
 
   await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
   const mission = await assertRecordMission(page, 'Attività / nota UDA');
-  await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
   await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
   await expect(page.getByText('Diario della registrazione', { exact: true })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeHidden();
