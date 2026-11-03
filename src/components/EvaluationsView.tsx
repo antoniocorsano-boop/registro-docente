@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ClassData, EvaluationType, Grade, UdaRecord } from '../types';
 import { normalizeGrade, today, TYPES_LABEL, uid, formatStudentNameWithPrivacy } from '../utils';
 import { Save, X, Calendar, BookOpen, Layers, Check, Clock } from 'lucide-react';
@@ -47,8 +47,19 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const [udaId, setUdaId] = useState<string>('');
   const [gradesMap, setGradesMap] = useState<Record<string, { value: string; delayed: boolean }>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const evaluationInitializationSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const safeInitialUdaId = udas.some(u => u.id === initialUdaId && u.className === currentClass.name) ? initialUdaId || '' : '';
+    const signature = JSON.stringify([
+      currentClass.id,
+      editingBatchId,
+      editingBatchId ? null : safeInitialUdaId,
+      editingBatchId ? null : (isIsoDate(initialDate) ? initialDate : null)
+    ]);
+    if (evaluationInitializationSignatureRef.current === signature) return;
+    evaluationInitializationSignatureRef.current = signature;
+
     if (editingBatchId) {
       const existingGrades = (currentClass.grades || []).filter(g => g.batchId === editingBatchId);
       if (existingGrades.length > 0) {
@@ -68,7 +79,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
         setGradesMap(newMap);
       }
     } else {
-      const safeInitialUdaId = udas.some(u => u.id === initialUdaId && u.className === currentClass.name) ? initialUdaId || '' : '';
       setTitle('');
       setDate(isIsoDate(initialDate) ? initialDate! : today());
       setUdaId(safeInitialUdaId);
