@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   repair:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -30,17 +29,10 @@ jobs:
           from pathlib import Path
           path = Path('src/App.tsx')
           text = path.read_text()
-          old = """  const handleSelectClass = (classId: string) => {
-    currentClassIdRef.current = classId;
-    setAppData(prev => ({ ...prev, currentClassId: classId }));
-"""
-          new = """  const handleSelectClass = (classId: string) => {
-    setReviewEvidenceKind(null);
-    currentClassIdRef.current = classId;
-    setAppData(prev => ({ ...prev, currentClassId: classId }));
-"""
+          old = "  const handleSelectClass = (classId: string) => {\n    currentClassIdRef.current = classId;\n"
+          new = "  const handleSelectClass = (classId: string) => {\n    setReviewEvidenceKind(null);\n    currentClassIdRef.current = classId;\n"
           if text.count(old) != 1:
-            raise SystemExit(f'Expected exactly one handleSelectClass anchor, found {text.count(old)}')
+              raise SystemExit(f'Expected exactly one handleSelectClass anchor, found {text.count(old)}')
           path.write_text(text.replace(old, new))
           PY
 
