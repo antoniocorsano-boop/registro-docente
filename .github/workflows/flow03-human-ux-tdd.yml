@@ -24,7 +24,10 @@ jobs:
       - name: Run Human UX rework contracts
         run: |
           set -euo pipefail
-          files=(src/security/flow03MissionContinuityContract.test.ts)
+          files=(
+            src/security/flow03MissionContinuityContract.test.ts
+            src/security/flow03BrowserQualificationContract.test.ts
+          )
           if [[ -f src/security/flow03FocusedUdaWorkspaceContract.test.ts ]]; then files+=(src/security/flow03FocusedUdaWorkspaceContract.test.ts); fi
           if [[ -f src/security/flow03FocusedUdaDiaryContract.test.ts ]]; then files+=(src/security/flow03FocusedUdaDiaryContract.test.ts); fi
           bun test "${files[@]}"
