@@ -51,17 +51,18 @@ export const ReviewRouterPanel: React.FC<ReviewRouterPanelProps> = ({
 
         <div className="grid gap-2 sm:grid-cols-2" aria-label="Superfici di revisione disponibili">
           {reviewOptions.map(option => {
-            if (!isReviewSurface(option.tab)) return null;
+            const surface = option.tab;
+            if (!isReviewSurface(surface)) return null;
             return (
               <button
-                key={option.tab}
+                key={surface}
                 type="button"
-                onClick={() => onNavigateSurface(option.tab)}
+                onClick={() => onNavigateSurface(surface)}
                 className="min-h-[44px] rounded-lg border border-[var(--primary)]/40 bg-[var(--surface-variant)] px-3 py-3 text-left transition-colors hover:border-[var(--primary)] hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
               >
                 <span className="block text-sm font-semibold text-[var(--primary)]">{option.label}</span>
                 <span className="mt-1 block text-xs leading-relaxed text-slate-400">
-                  {REVIEW_SURFACE_DESCRIPTIONS[option.tab]}
+                  {REVIEW_SURFACE_DESCRIPTIONS[surface]}
                 </span>
               </button>
             );
