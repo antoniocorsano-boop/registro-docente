@@ -96,6 +96,27 @@ describe('FLOW-04 ReviewSession domain', () => {
     expect(reviewModule.keepReviewSessionForClass(session, '3C')).toBeNull();
     expect(reviewModule.keepReviewSessionForClass(session, null)).toBeNull();
   });
+
+  test('applies one review lifecycle to specialist-driven tab transitions', async () => {
+    const reviewModule = await loadReviewModule();
+    expect(reviewModule).not.toBeNull();
+    if (!reviewModule) return;
+
+    const base = reviewModule.buildReviewSession({
+      classId: '2C',
+      className: '2C',
+      origin: 'today-review'
+    });
+    const tabellone = reviewModule.transitionReviewSessionForTab(base, '2C', 'tabellone');
+    expect(tabellone?.currentSurface).toBe('tabellone');
+
+    const report = reviewModule.transitionReviewSessionForTab(tabellone, '2C', 'report');
+    expect(report?.currentSurface).toBe('report');
+
+    expect(reviewModule.transitionReviewSessionForTab(report, '2C', 'dashboard')).toEqual(base);
+    expect(reviewModule.transitionReviewSessionForTab(report, '2C', 'voti')).toBeNull();
+    expect(reviewModule.transitionReviewSessionForTab(report, '3C', 'report')).toBeNull();
+  });
 });
 
 describe('FLOW-04 App lifecycle contract', () => {
@@ -122,18 +143,23 @@ describe('FLOW-04 App lifecycle contract', () => {
     expect(postRecord).toContain('publishReviewSession(buildReviewSession({');
   });
 
-  test('keeps the review mission across review surfaces and closes it outside the review perimeter', async () => {
+  test('applies review lifecycle at the shared tab setter so specialist callbacks cannot bypass it', async () => {
     const app = await source('src/App.tsx');
+    const tabSetter = sectionBetween(app, 'const setActiveTab = useCallback', 'const [editingBatchId');
     const navigation = sectionBetween(app, 'const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
 
-    expect(navigation).toContain('const activeReviewSession = keepReviewSessionForClass(');
-    expect(navigation).toContain('storedReviewSession,');
-    expect(navigation).toContain('currentClassIdRef.current');
-    expect(navigation).toContain('isReviewSurface(tab)');
-    expect(navigation).toContain('enterReviewSurface(activeReviewSession, tab)');
-    expect(navigation).toContain("tab === 'dashboard'");
-    expect(navigation).toContain('returnToReviewRouter(activeReviewSession)');
-    expect(navigation).toContain('publishReviewSession(null)');
+    expect(tabSetter).toContain('const storedReviewSession = reviewSessionRef.current;');
+    expect(tabSetter).toContain('transitionReviewSessionForTab(');
+    expect(tabSetter).toContain('currentClassIdRef.current');
+    expect(tabSetter).toContain('publishReviewSession(nextReviewSession);');
+    expect(tabSetter).toContain('if (storedReviewSession && !nextReviewSession)');
+    expect(tabSetter).toContain('setTodayAction(null);');
+
+    expect(navigation).toContain('const hadReviewSession = reviewSessionRef.current !== null;');
+    expect(navigation).toContain('setActiveTab(tab);');
+    expect(navigation).toContain("if (!hadReviewSession && tab !== 'dashboard')");
+    expect(navigation).not.toContain('enterReviewSurface(activeReviewSession, tab)');
+    expect(navigation).not.toContain('returnToReviewRouter(activeReviewSession)');
 
     expect(app).toContain('const handleOpenReviewSurface = useCallback');
     expect(app).toContain('const handleReturnToReview = useCallback');
