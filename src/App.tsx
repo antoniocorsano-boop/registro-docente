@@ -456,9 +456,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
   }, [invalidateSemanticMemorySession, isSemanticMemorySyncing, semanticMemorySession.endpoint, semanticMemorySession.status]);
 
-  const handleNavigateTab = useCallback((tab: ActiveTab) => {
+  const handleNavigateTab = useCallback((
+    tab: ActiveTab,
+    options: { preserveRecordSession?: boolean } = {}
+  ) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
+    if (!options.preserveRecordSession) {
+      publishRecordSession(null);
+      recordSpecialistNavigationVersionRef.current = null;
+    }
     if (tab !== 'dashboard') {
       setTodayAction(null);
     }
@@ -471,7 +478,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
-  }, []);
+  }, [publishRecordSession]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1501,7 +1508,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         className: selectedClass.name
       }));
     }
-    handleNavigateTab(decision.target);
+    handleNavigateTab(decision.target, { preserveRecordSession: action === 'record' });
   }, [handleNavigateTab, publishRecordSession, setActiveTab]);
 
   const handleContinueToday = useCallback((tab: ActiveTab) => {

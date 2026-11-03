@@ -7,6 +7,7 @@ const STUDENT_NAME = 'Rossi Mario';
 const UDA_TITLE = 'UDA FLOW-03 Energia e sistemi';
 const RAPID_NOTE = 'Osservazione temporanea FLOW-03: riprendere il passaggio sul rendimento energetico.';
 const LESSON_TOPIC = 'Bilancio energetico del sistema tecnico';
+const STANDALONE_EVALUATION_TITLE = 'Valutazione autonoma FLOW-03';
 
 function evidencePath(name) {
   const dir = process.env.EVIDENCE_DIR;
@@ -267,6 +268,22 @@ test.describe('FLOW-03 desktop qualification', () => {
 
     await openEvaluationFromRecord(page, record);
     await page.screenshot({ path: evidencePath('flow-03-desktop-evaluation.png'), fullPage: true });
+
+    // Ordinary navigation must invalidate Registra before a later standalone evaluation.
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    const drawer = page.getByRole('complementary');
+    await drawer.getByRole('button', { name: 'Storico', exact: true }).click();
+    await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).click();
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill(STANDALONE_EVALUATION_TITLE);
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closePersistenceConfirmationIfPresent(page);
+    await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
+    await expect(page.getByText(STANDALONE_EVALUATION_TITLE, { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: `Registra per ${CLASS_NAME}` })).toBeHidden();
+    await page.screenshot({ path: evidencePath('flow-03-desktop-standalone-evaluation.png'), fullPage: true });
     expect(pageErrors).toEqual([]);
   });
 });
