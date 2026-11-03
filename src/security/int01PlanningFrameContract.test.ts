@@ -50,7 +50,7 @@ describe('INT-01 class-first planning frame', () => {
   });
   test('resolves a unique profile by year, subject and grade without an UDA', () => {
     const p = profile();
-    expect(resolvePlanningFrame(input(planning([p]))).toEqual({
+    expect(resolvePlanningFrame(input(planning([p])))).toEqual({
       status: 'resolved', reason: 'RESOLVED', className: '2C', profile: p, arenaContext: null
     });
   });
