@@ -1,0 +1,80 @@
+name: FLOW-03 One-shot Manual UDA Note Repair
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): stage one-shot manual UDA note repair'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03-registra-orchestrator
+          fetch-depth: 0
+
+      - name: Apply exact FLOW-03 repair
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/components/UdaGanttView.tsx')
+          text = path.read_text()
+
+          old_missing_target = """    if (!safeTarget) {
+            pendingRecordLessonFocusRef.current = false;
+            setSelectedUdaForDetail(null);
+            return;
+          }
+          """
+          new_missing_target = """    if (!safeTarget) {
+            pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;
+            setSelectedUdaForDetail(null);
+            return;
+          }
+          """
+
+          old_selection_guard = """    if (
+            selectedUdaForDetail.className !== recordLessonPrefill.className ||
+            selectedUdaForDetail.id !== recordLessonPrefill.udaId
+          ) return;
+
+          const form = recordLessonFormRef.current;
+          """
+          new_selection_guard = """    if (
+            selectedUdaForDetail.className !== recordLessonPrefill.className ||
+            (recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId)
+          ) return;
+
+          if (!recordLessonPrefill.udaId) {
+            setNewLessonDate(recordLessonPrefill.date);
+            setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
+            setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
+          }
+
+          const form = recordLessonFormRef.current;
+          """
+
+          if text.count(old_missing_target) != 1:
+            raise SystemExit(f'expected one missing-target block, found {text.count(old_missing_target)}')
+          if text.count(old_selection_guard) != 1:
+            raise SystemExit(f'expected one selection-guard block, found {text.count(old_selection_guard)}')
+
+          text = text.replace(old_missing_target, new_missing_target, 1)
+          text = text.replace(old_selection_guard, new_selection_guard, 1)
+          path.write_text(text)
+
+      - name: Commit exact repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/UdaGanttView.tsx
+          git diff --cached --check
+          git commit -m "fix(flow-03): preserve staged note after manual UDA selection"
+          git push origin HEAD:feat/flow-03-registra-orchestrator
