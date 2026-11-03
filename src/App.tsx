@@ -60,6 +60,14 @@ import {
   type RecordSessionDraft
 } from './recording/recordSession';
 import {
+  buildReviewSession,
+  enterReviewSurface,
+  isReviewSurface,
+  keepReviewSessionForClass,
+  returnToReviewRouter,
+  type ReviewSessionContext
+} from './review/reviewSession';
+import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
   buildMissionContextFingerprint,
@@ -285,7 +293,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
-  const [reviewEvidenceKind, setReviewEvidenceKind] = useState<RecordEvidenceKind | null>(null);
+  const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);
+  const reviewSessionRef = useRef<ReviewSessionContext | null>(null);
+  const publishReviewSession = useCallback((next: ReviewSessionContext | null) => {
+    reviewSessionRef.current = next;
+    setReviewSession(next);
+  }, []);
   const [recordSession, setRecordSession] = useState<RecordSessionDraft | null>(null);
   const recordSessionRef = useRef<RecordSessionDraft | null>(null);
   const publishRecordSession = useCallback((next: RecordSessionDraft | null) => {
@@ -470,9 +483,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       publishRecordSession(null);
       recordSpecialistNavigationVersionRef.current = null;
     }
-    if (tab !== 'dashboard') {
-      setTodayAction(null);
+
+    const storedReviewSession = reviewSessionRef.current;
+    const activeReviewSession = keepReviewSessionForClass(
+      storedReviewSession,
+      currentClassIdRef.current
+    );
+    if (activeReviewSession && isReviewSurface(tab)) {
+      publishReviewSession(enterReviewSurface(activeReviewSession, tab));
+    } else if (activeReviewSession && tab === 'dashboard') {
+      publishReviewSession(returnToReviewRouter(activeReviewSession));
+    } else {
+      if (storedReviewSession) {
+        publishReviewSession(null);
+        setTodayAction(null);
+      } else if (tab !== 'dashboard') {
+        setTodayAction(null);
+      }
     }
+
     const classId = currentClassIdRef.current;
     try {
       const state = { classId, tab };
@@ -482,7 +511,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
-  }, [publishRecordSession]);
+  }, [publishRecordSession, publishReviewSession]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1373,6 +1402,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
       setTodayAction(null);
+      publishReviewSession(null);
       publishRecordSession(null);
       setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
     };
@@ -1505,14 +1535,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleContinueRecordToReview = useCallback(() => {
     const session = recordSessionRef.current;
     if (!session || session.context.classId !== currentClassIdRef.current) return;
-    setReviewEvidenceKind(session.evidenceKind ?? null);
+    publishReviewSession(buildReviewSession({
+      classId: session.context.classId,
+      className: session.context.className,
+      origin: 'post-record',
+      evidenceKind: session.evidenceKind ?? null
+    }));
     publishRecordSession(null);
     setTodayAction('review');
     setActiveTab('dashboard');
-  }, [publishRecordSession, setActiveTab]);
+  }, [publishRecordSession, publishReviewSession, setActiveTab]);
 
   const handleStartTodayAction = useCallback((action: TodayAction) => {
-    setReviewEvidenceKind(null);
+    publishReviewSession(null);
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
     if (action !== 'record') publishRecordSession(null);
     setTodayAction(action);
@@ -1522,36 +1557,89 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       return;
     }
 
+    const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === decision.classId);
+    if (!selectedClass) {
+      publishRecordSession(null);
+      publishReviewSession(null);
+      setTodayAction(null);
+      return;
+    }
+
     if (action === 'record') {
-      const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === decision.classId);
-      if (!selectedClass) {
-        publishRecordSession(null);
-        return;
-      }
       publishRecordSession(buildRecordSession({
         classId: selectedClass.id,
         className: selectedClass.name
       }));
     }
+    if (action === 'review') {
+      publishReviewSession(buildReviewSession({
+        classId: selectedClass.id,
+        className: selectedClass.name,
+        origin: 'today-review'
+      }));
+    }
     handleNavigateTab(decision.target, { preserveRecordSession: action === 'record' });
-  }, [handleNavigateTab, publishRecordSession, setActiveTab]);
+  }, [handleNavigateTab, publishRecordSession, publishReviewSession, setActiveTab]);
+
+  const handleOpenReviewSurface = useCallback((tab: ActiveTab) => {
+    const session = keepReviewSessionForClass(
+      reviewSessionRef.current,
+      currentClassIdRef.current
+    );
+    if (!session || !isReviewSurface(tab)) return;
+    publishReviewSession(enterReviewSurface(session, tab));
+    setTodayAction('review');
+    handleNavigateTab(tab);
+  }, [handleNavigateTab, publishReviewSession]);
+
+  const handleReturnToReview = useCallback(() => {
+    const session = keepReviewSessionForClass(
+      reviewSessionRef.current,
+      currentClassIdRef.current
+    );
+    if (!session) {
+      publishReviewSession(null);
+      setTodayAction(null);
+      return;
+    }
+    publishReviewSession(returnToReviewRouter(session));
+    setTodayAction('review');
+    handleNavigateTab('dashboard');
+  }, [handleNavigateTab, publishReviewSession]);
+
+  const handleCloseReview = useCallback(() => {
+    publishReviewSession(null);
+    setTodayAction(null);
+  }, [publishReviewSession]);
 
   const handleContinueToday = useCallback((tab: ActiveTab) => {
+    const activeReviewSession = keepReviewSessionForClass(
+      reviewSessionRef.current,
+      currentClassIdRef.current
+    );
+    if (activeReviewSession && isReviewSurface(tab)) {
+      handleOpenReviewSurface(tab);
+      return;
+    }
     setTodayAction(null);
-    setReviewEvidenceKind(null);
+    publishReviewSession(null);
     publishRecordSession(null);
     handleNavigateTab(tab);
-  }, [handleNavigateTab, publishRecordSession]);
+  }, [handleNavigateTab, handleOpenReviewSurface, publishRecordSession, publishReviewSession]);
 
   const handleCancelTodayAction = useCallback(() => {
     setTodayAction(null);
-    setReviewEvidenceKind(null);
+    publishReviewSession(null);
     publishRecordSession(null);
-  }, [publishRecordSession]);
+  }, [publishRecordSession, publishReviewSession]);
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
-    setReviewEvidenceKind(null);
+    const shouldStartPendingReview =
+      todayAction === 'review'
+      && currentClassIdRef.current === null
+      && reviewSessionRef.current === null;
+    publishReviewSession(null);
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
@@ -1560,6 +1648,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         ? buildRecordSession({ classId: selectedClass.id, className: selectedClass.name })
         : null
     );
+    if (shouldStartPendingReview && selectedClass) {
+      publishReviewSession(buildReviewSession({
+        classId: selectedClass.id,
+        className: selectedClass.name,
+        origin: 'today-review'
+      }));
+    } else if (todayAction === 'review') {
+      setTodayAction(null);
+    }
     setActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -1571,6 +1668,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateHome = () => {
     setTodayAction(null);
+    publishReviewSession(null);
     publishRecordSession(null);
     currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
@@ -1971,6 +2069,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       appDataRef.current = restoredVisibleAppData;
       currentClassIdRef.current = null;
       setTodayAction(null);
+      publishReviewSession(null);
       publishRecordSession(null);
       settingsRef.current = restored.settings;
       udasRef.current = restored.udas;
@@ -2009,6 +2108,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       setTodayAction(null);
+      publishReviewSession(null);
       publishRecordSession(null);
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
@@ -2090,7 +2190,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
             todayAction={todayAction}
-            reviewEvidenceKind={reviewEvidenceKind}
+            reviewEvidenceKind={reviewSession?.evidenceKind ?? null}
             onContinueToday={handleContinueToday}
             onDismissToday={handleCancelTodayAction}
             onOpenPreparationCopilot={handleOpenPreparationCopilot}
