@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): stage focused UDA workspace patch' }}"
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): retry focused UDA workspace patch' }}"
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout branch
@@ -116,7 +116,6 @@ jobs:
                   "          recordLessonPrefill={effectiveRecordLessonPrefill}\n"
                   "          getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}\n"
                   "          onRecordLessonCommitted={onRecordLessonCommitted}\n"
-                  "          onOpenCopilot={onOpenCopilot}\n"
                   "          focusedRecordMode={true}\n"
                   "        />\n"
                   "      </section>\n"
