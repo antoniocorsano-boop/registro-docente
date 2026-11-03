@@ -8,10 +8,8 @@ const UDA_TITLE = 'UDA compatibilità QUAL-SMOKE';
 test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' });
 test.setTimeout(60000);
 
-async function closePersistenceConfirmation(page) {
+async function assertNoRoutineBackupInterruption(page) {
   const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
-  await expect(heading).toBeVisible();
-  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
   await expect(heading).toBeHidden();
 }
 
@@ -32,7 +30,7 @@ test('QUAL-INVARIANT smoke preserves an exact descriptive local class binding th
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
-  await closePersistenceConfirmation(page);
+  await assertNoRoutineBackupInterruption(page);
 
   await openDrawerItem(page, 'UDA');
   const udaToggle = page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'UDA', exact: true });
