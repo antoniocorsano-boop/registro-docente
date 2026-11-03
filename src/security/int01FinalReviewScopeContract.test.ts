@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
+import { classScopedUdaMutationAllowed, udaBelongsToActiveClass, buildUdaDeletionSnapshot } from '../context/udaClassScope';
 import type { UdaRecord } from '../types';
 
 const uda = (id: string, className: string): UdaRecord => ({
@@ -96,6 +96,43 @@ describe('INT-01 Final Independent Review repair — class isolation and shared 
     expect(legacy).toContain('locallyPublishedFocusIdRef.current = uda.id');
     expect(legacy).toContain('locallyPublishedFocusIdRef.current === teachingFocus.udaId');
     expect(legacy).toContain('autoOpenTeachingFocus');
+  });
+
+  test('the legacy creation flow binds its initial and changed class to currentClassName', async () => {
+    const legacy = await Bun.file('src/components/UdaGanttView.tsx').text();
+    expect(legacy).toContain("useState(currentClassName || classes[0]?.name || '3ª A')");
+    expect(legacy).toContain('setNewClass(currentClassName);');
+    expect(legacy).toContain("currentClassName && newClass !== currentClassName");
+    expect(legacy).toContain('disabled={Boolean(currentClassName)}');
+  });
+
+  test('deleting an active-class UDA preserves unrelated historical records without dependencies', () => {
+    const local = uda('own', '2Z');
+    const foreign = { ...uda('other', '3Z'), dependencies: undefined };
+    const original = [local, foreign];
+    const next = buildUdaDeletionSnapshot(original, 'own');
+    expect(next).toEqual([foreign]);
+    expect(next[0]).toBe(foreign);
+    expect(next[0]!.dependencies).toBeUndefined();
+    expect(classScopedUdaMutationAllowed(original, next, '2Z')).toBe(true);
+  });
+
+  test('deletion removes a real dependency only from its owner and refuses foreign mutation', () => {
+    const local = uda('own', '2Z');
+    const localDependent = { ...uda('local-dependent', '2Z'), dependencies: ['own'] };
+    const foreign = { ...uda('foreign', '3Z'), dependencies: undefined };
+    const original = [local, localDependent, foreign];
+    const next = buildUdaDeletionSnapshot(original, 'own');
+    expect(next[0]!.dependencies).toEqual([]);
+    expect(next[1]).toBe(foreign);
+    expect(classScopedUdaMutationAllowed(original, next, '2Z')).toBe(true);
+
+    const foreignDependent = { ...uda('foreign-dependent', '3Z'), dependencies: ['own'] };
+    expect(classScopedUdaMutationAllowed(
+      [local, foreignDependent],
+      buildUdaDeletionSnapshot([local, foreignDependent], 'own'),
+      '2Z'
+    )).toBe(false);
   });
 
 });
