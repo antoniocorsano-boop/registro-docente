@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): retry mission continuity app patch' }}"
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): rerun mission continuity app patch with lint' }}"
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout branch
@@ -96,13 +96,13 @@ jobs:
           path.write_text(text)
           PY
 
-      - name: Verify exact diff and typecheck
+      - name: Verify exact diff and TypeScript
         shell: bash
         run: |
           git diff --check
           git diff -- src/App.tsx
           bun install --frozen-lockfile
-          bun run typecheck
+          bun run lint
 
       - name: Commit App patch
         shell: bash
