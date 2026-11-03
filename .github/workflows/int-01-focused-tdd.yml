@@ -1,0 +1,22 @@
+name: INT-01 Focused TDD
+on:
+  pull_request:
+    paths:
+      - 'src/planning/**'
+      - 'src/context/**'
+      - 'src/library/planningContextBridge*'
+      - 'src/security/int01*.test.ts'
+      - '.github/workflows/int-01-focused-tdd.yml'
+  workflow_dispatch:
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact candidate
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: INT-01 contracts
+        run: bun test src/security/int01PlanningFrameContract.test.ts
