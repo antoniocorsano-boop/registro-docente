@@ -4,6 +4,8 @@ on:
     paths:
       - 'src/planning/**'
       - 'src/context/**'
+      - 'src/App.tsx'
+      - 'src/components/**'
       - 'src/library/planningContextBridge*'
       - 'src/security/int01*.test.ts'
       - '.github/workflows/int-01-focused-tdd.yml'
@@ -21,4 +23,4 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: INT-01 contracts
-        run: bun test src/security/int01PlanningFrameContract.test.ts src/library/planningContextBridge.test.ts src/security/int01TeachingFocusContract.test.ts src/security/int01ProfessionalContextContract.test.ts src/security/int01AppContextContract.test.ts
+        run: bun test src/security/int01PlanningFrameContract.test.ts src/library/planningContextBridge.test.ts src/security/int01TeachingFocusContract.test.ts src/security/int01ProfessionalContextContract.test.ts src/security/int01AppContextContract.test.ts src/security/int01DidacticContinuityUiContract.test.ts
