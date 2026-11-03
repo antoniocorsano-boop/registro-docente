@@ -612,7 +612,10 @@
         "src/security/flow04PersistenceBoundary.test.ts",
         "src/security/flow03bContextualReviewContract.test.ts",
         "src/security/today01ContinuationContract.test.ts",
-        "src/security/today01SessionContextContract.test.ts"
+        "src/security/today01SessionContextContract.test.ts",
+        ".github/workflows/browser-qualification.yml",
+        "tests/browser/flow-04-review-session.spec.cjs",
+        "src/security/flow04BrowserQualificationContract.test.ts"
       ],
       "tests": [
         "src/security/flow04ReviewSessionContract.test.ts",
@@ -620,7 +623,11 @@
         "src/security/flow04PersistenceBoundary.test.ts",
         "src/security/flow03bContextualReviewContract.test.ts",
         "src/security/today01ContinuationContract.test.ts",
-        "src/security/today01SessionContextContract.test.ts"
+        "src/security/today01SessionContextContract.test.ts",
+        "src/security/flow04BrowserQualificationContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/flow-04-review-session.spec.cjs"
       ]
     }
   ]

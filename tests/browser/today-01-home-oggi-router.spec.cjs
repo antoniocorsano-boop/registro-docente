@@ -79,14 +79,14 @@ test.describe('TODAY-01 desktop qualification', () => {
     await expect(page.getByRole('status')).toContainText('Per continuare con Rivedi, scegli una classe.');
     await page.getByRole('button', { name: `Apri classe ${CLASS_NAME}`, exact: true }).click();
 
-    const continuation = page.getByRole('region', { name: 'Continua: Rivedi' });
+    const continuation = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });
     await expect(continuation).toBeVisible();
     for (const label of ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno']) {
-      await expect(continuation.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(continuation.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
     }
     await page.screenshot({ path: evidencePath('today-01-desktop-continuation.png'), fullPage: true });
 
-    await continuation.getByRole('button', { name: 'Chiudi continuazione di oggi' }).click();
+    await continuation.getByRole('button', { name: 'Chiudi la sessione Rivedi' }).click();
     await expect(continuation).toBeHidden();
     await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}`, exact: true })).toBeVisible();
   });
