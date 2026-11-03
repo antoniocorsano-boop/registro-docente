@@ -5,6 +5,7 @@ import { uid } from '../utils';
 import type { PlanningFrameResolution } from '../planning/planningFrameResolver';
 import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
 import { DidacticContinuityBar } from './DidacticContinuityBar';
+import { udaBelongsToActiveClass } from '../context/udaClassScope';
 import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';
 import type { RecordLessonPrefill } from './UdaGanttView.tsx';
 
@@ -112,8 +113,10 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   }, [recordLessonPrefill, currentClassName, teachingFocus?.udaId, teachingContext?.udaId, teachingContext?.className]);
 
   const filteredUdas = useMemo(
-    () => classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),
-    [classFilter, udas]
+    () => currentClassName
+      ? udas.filter(uda => udaBelongsToActiveClass(uda.className, currentClassName, classes))
+      : classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),
+    [classFilter, classes, currentClassName, udas]
   );
 
   const focusedClassUdas = useMemo(
@@ -313,7 +316,7 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (currentClassName && uda.className === currentClassName) {
+                        if (currentClassName && udaBelongsToActiveClass(uda.className, currentClassName, classes)) {
                           onTeachingFocusChange?.({ udaId: uda.id });
                         }
                         setActiveView('planning');
@@ -323,7 +326,7 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                     {onOpenCopilot && (
                       <button
                         type="button"
-                        onClick={() => onOpenCopilot({ surface: 'uda', className: uda.className, udaId: uda.id })}
+                        onClick={() => onOpenCopilot({ surface: 'uda', className: currentClassName || uda.className, udaId: uda.id })}
                         className="min-h-[44px] w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-700 hover:text-cyan-200"
                       >
                         Usa con Copilota
@@ -393,6 +396,10 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
             onSaveUdas={onSaveUdas}
             onNavigateTab={onNavigateTab}
             currentClassName={currentClassName}
+            teachingFocus={teachingFocus}
+            teachingContext={teachingContext}
+            onTeachingFocusChange={onTeachingFocusChange}
+            autoOpenTeachingFocus={false}
           />
         </section>
       )}
