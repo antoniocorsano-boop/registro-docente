@@ -48,6 +48,7 @@ import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import { resolvePlanningFrame } from './planning/planningFrameResolver';
+import { resolveCurricularSubjectCode } from './planning/curricularSubjectCode';
 import { keepTeachingFocusForClass, resolveTeachingFocusForClass, transitionTeachingFocusForTab } from './context/teachingFocus';
 import type { LibraryTeachingContext } from './library/teachingContext';
 import { buildTeachingUdaCatalog, buildTeachingUdaClassReconciliationIndex } from './teaching/teachingUdaCatalog';
@@ -1370,12 +1371,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  // Separate the settings' display label from the authoritative curriculum code.
+  const curricularSubjectCode = React.useMemo(
+    () => resolveCurricularSubjectCode(settings.subject),
+    [settings.subject]
+  );
   const planningFrame = React.useMemo(() => resolvePlanningFrame({
     className: currentClass?.name ?? null,
     planning,
     schoolYear: settings.year,
-    subjectCode: settings.subject
-  }), [currentClass?.name, planning, settings.year, settings.subject]);
+    subjectCode: curricularSubjectCode
+  }), [currentClass?.name, planning, settings.year, curricularSubjectCode]);
   const resolvedTeachingFocus = resolveTeachingFocusForClass({
     focus: teachingFocus,
     currentClassId: currentClass?.id ?? null,
@@ -2414,7 +2420,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClassName={currentClass?.name ?? null}
             planningFrame={planningFrame}
             focusedProfileId={planningFrame.status === 'resolved' ? planningFrame.profile.id : null}
-            defaultSubjectCode={settings.subject}
+            defaultSubjectCode={curricularSubjectCode}
             teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
             udaTitle={activeTeachingCandidate?.title ?? null}
             lessonTitle={activeTeachingLesson?.topic ?? null}
