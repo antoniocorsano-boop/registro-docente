@@ -20,6 +20,10 @@ export const RecordLessonPanel: React.FC<RecordLessonPanelProps> = ({
   onRecordAnother,
   onDismiss
 }) => {
+  const udaTitle = session.context.udaTitle?.trim();
+  const activityLabel = session.context.activityLabel?.trim();
+  const secondaryActivityLabel = activityLabel && activityLabel !== udaTitle ? activityLabel : undefined;
+
   return (
     <section
       aria-label={`Registra per ${session.context.className}`}
@@ -29,10 +33,10 @@ export const RecordLessonPanel: React.FC<RecordLessonPanelProps> = ({
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">Oggi · Registra</p>
           <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Registra per {session.context.className}</h2>
-          {(session.context.udaTitle || session.context.activityLabel) && (
+          {(udaTitle || secondaryActivityLabel) && (
             <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              {session.context.udaTitle && <p className="font-semibold">{session.context.udaTitle}</p>}
-              {session.context.activityLabel && <p className="mt-0.5">{session.context.activityLabel}</p>}
+              {udaTitle && <p className="font-semibold">{udaTitle}</p>}
+              {secondaryActivityLabel && <p className="mt-0.5">{secondaryActivityLabel}</p>}
             </div>
           )}
         </div>
