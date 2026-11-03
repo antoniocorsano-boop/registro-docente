@@ -5,7 +5,7 @@ import { uid } from '../utils';
 import type { PlanningFrameResolution } from '../planning/planningFrameResolver';
 import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
 import { DidacticContinuityBar } from './DidacticContinuityBar';
-import { udaBelongsToActiveClass } from '../context/udaClassScope';
+import { classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
 import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';
 import type { RecordLessonPrefill } from './UdaGanttView.tsx';
 
@@ -154,11 +154,15 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   const createUda = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newTitle.trim() || !newClass || isSaving) return;
+    if (currentClassName && newClass !== currentClassName) {
+      setSaveError('La classe selezionata non corrisponde alla classe di lavoro.');
+      return;
+    }
 
     const record: UdaRecord = {
       id: uid(),
       title: newTitle.trim(),
-      className: newClass,
+      className: currentClassName || newClass,
       hours: Number(newHours) || 10,
       period: newPeriod,
       startMonth: Math.max(0, Math.min(9, Number(newStartMonth))),
@@ -176,10 +180,16 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
       dependencies: []
     };
 
+    const nextUdas = [...udas, record];
+    if (!classScopedUdaMutationAllowed(udas, nextUdas, currentClassName, classes)) {
+      setSaveError('La nuova UDA non rispetta il contesto della classe selezionata.');
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
     try {
-      await onSaveUdas([...udas, record]);
+      await onSaveUdas(nextUdas);
       setNewTitle('');
       setIsCreateOpen(false);
       setStatusMessage(`Nuova UDA "${record.title}" creata con successo`);
