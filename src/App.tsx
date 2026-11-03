@@ -2356,7 +2356,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && todayAction !== 'record'}
+            showClosedTrigger={todayAction !== 'conduct' && !(todayAction === 'record' && recordSession?.status === 'editing')}
           />
           <LibraryCopilotComposer
               library={library}

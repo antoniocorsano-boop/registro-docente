@@ -43,13 +43,15 @@ export const RecordLessonPanel: React.FC<RecordLessonPanelProps> = ({
           )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={onOpenCopilot}
-            className="min-h-[44px] rounded-xl border border-cyan-300 bg-white px-3 text-sm font-semibold text-cyan-800 dark:border-cyan-800 dark:bg-slate-900 dark:text-cyan-200"
-          >
-            Copilota
-          </button>
+          {session.status === 'editing' && (
+            <button
+              type="button"
+              onClick={onOpenCopilot}
+              className="min-h-[44px] rounded-xl border border-cyan-300 bg-white px-3 text-sm font-semibold text-cyan-800 dark:border-cyan-800 dark:bg-slate-900 dark:text-cyan-200"
+            >
+              Copilota
+            </button>
+          )}
           <button
             type="button"
             onClick={onDismiss}
