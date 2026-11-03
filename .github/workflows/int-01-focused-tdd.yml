@@ -21,4 +21,4 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: INT-01 contracts
-        run: bun test src/security/int01PlanningFrameContract.test.ts
+        run: bun test src/security/int01PlanningFrameContract.test.ts src/library/planningContextBridge.test.ts
