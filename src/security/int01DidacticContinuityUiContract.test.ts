@@ -38,6 +38,19 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(legacy).toContain('onTeachingFocusChange');
   });
 
+  test('a new planning profile starts with the active class grade and configured discipline', async () => {
+    const editor = await Bun.file('src/components/planning/PlanningProfileEditor.tsx').text();
+    const view = await Bun.file('src/components/planning/PlanningProfileView.tsx').text();
+    const app = await Bun.file('src/App.tsx').text();
+    expect(editor).toContain('defaultSubjectCode');
+    expect(editor).toContain('defaultGradeLevel');
+    expect(view).toContain('resolveClassGradeLevel');
+    expect(view).toContain('defaultSubjectCode');
+    expect(app).toContain('defaultSubjectCode={settings.subject}');
+    // Do not force the legacy hard-coded subject when a real subject is known.
+    expect(editor).not.toContain("const subjectCode = 'tecnologia';");
+  });
+
   test('the specialist Analysis view also respects the active class boundary', async () => {
     const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
     const start = workspace.indexOf("{activeView === 'analysis' && (");
