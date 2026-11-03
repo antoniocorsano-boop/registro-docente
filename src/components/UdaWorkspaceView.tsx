@@ -62,6 +62,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   onOpenPlanning
 }) => {
   const [activeView, setActiveView] = useState<WorkspaceView>('uda');
+  const activeViewRef = useRef<WorkspaceView>(activeView);
+  activeViewRef.current = activeView;
   const [classFilter, setClassFilter] = useState(currentClassName || 'all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -108,6 +110,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   // Only a validated explicit focus can open the existing specialist planning dossier.
   useEffect(() => {
     if (recordLessonPrefill || !currentClassName || !teachingFocus?.udaId) return;
+    // A local Analysis selection updates shared focus without stealing the current specialist view.
+    if (activeViewRef.current === 'analysis' || activeViewRef.current === 'progress') return;
     if (teachingContext?.udaId !== teachingFocus.udaId || teachingContext.className !== currentClassName) return;
     setActiveView('planning');
   }, [recordLessonPrefill, currentClassName, teachingFocus?.udaId, teachingContext?.udaId, teachingContext?.className]);
