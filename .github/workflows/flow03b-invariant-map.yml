@@ -1,0 +1,72 @@
+name: FLOW-03B Invariant Map Alignment
+
+on:
+  push:
+    branches:
+      - feat/flow-03b-post-record-ux
+    paths:
+      - .github/workflows/flow03b-invariant-map.yml
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03b-post-record-ux
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Map FLOW-03B historical browser compatibility paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('qualification/invariants.v1.json')
+          data = json.loads(path.read_text())
+          invariant = next(item for item in data['invariants'] if item['id'] == 'FLOW-03-I01')
+          additions = [
+            'tests/browser/aic-01-context-projection.spec.cjs',
+            'tests/browser/aic-05-professional-memory.spec.cjs',
+            'tests/browser/aic-07-supervised-copilot.spec.cjs',
+            'tests/browser/browser-qualification.spec.cjs',
+            'tests/browser/lib01-private-library-qualification.spec.cjs',
+            'tests/browser/lib01e-provider-disclosure-review.spec.cjs',
+            'tests/browser/lib04c-copilot-link.spec.cjs',
+            'tests/browser/lib04d-copilot-prepare.spec.cjs',
+            'tests/browser/release-01-qualification.spec.cjs',
+            'tests/browser/ux-trust-01-full-regression.spec.cjs',
+          ]
+          existing = invariant['impactPaths']
+          for item in additions:
+            if item not in existing:
+              existing.append(item)
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+      - name: Verify invariant registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun scripts/qualification/check-invariants.mjs
+          bun test src/security/qualificationInvariantFramework.test.ts
+          git diff --check
+
+      - name: Commit registry alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add qualification/invariants.v1.json
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
+          git commit -m 'chore(flow-03b): map historical browser compatibility paths'
+          git push origin HEAD:feat/flow-03b-post-record-ux
