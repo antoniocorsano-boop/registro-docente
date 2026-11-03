@@ -14,13 +14,13 @@ describe('FLOW-03B active recording focus contract', () => {
     expect(dashboard).toContain('Panoramica Sezione: {currentClass.name}');
   });
 
-  test('keeps Copilota available inline while removing the competing floating trigger', async () => {
+  test('uses inline Copilota only while Registra is editing and restores the ambient trigger after save', async () => {
     const app = await source('src/App.tsx');
     const panel = await source('src/components/RecordLessonPanel.tsx');
     const banner = await source('src/components/RecordMissionBanner.tsx');
     const dashboard = await source('src/components/DashboardView.tsx');
 
-    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct' && todayAction !== 'record'}");
+    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct' && !(todayAction === 'record' && recordSession?.status === 'editing')}");
     expect(app).toContain('onOpenRecordCopilot={reopenLibraryCopilot}');
     expect(app).toContain('onOpenCopilot={reopenLibraryCopilot}');
 
@@ -28,6 +28,7 @@ describe('FLOW-03B active recording focus contract', () => {
     expect(dashboard).toContain('onOpenCopilot={() => onOpenRecordCopilot?.()}');
 
     expect(panel).toContain('onOpenCopilot: () => void;');
+    expect(panel).toContain("session.status === 'editing' && (");
     expect(panel).toContain('onClick={onOpenCopilot}');
     expect(panel).toContain('Copilota');
     expect(panel).toContain('min-h-[44px]');
