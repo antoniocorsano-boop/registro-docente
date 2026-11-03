@@ -67,3 +67,26 @@ export function classScopedUdaMutationAllowed(
   }
   return true;
 }
+
+/**
+ * Delete one UDA while leaving unrelated records structurally untouched.
+ * Historical UDA records may omit `dependencies`; materializing `[]` on
+ * every record would be an unintended cross-class change.
+ *
+ * A real dependency on the deleted ID is removed; the class-scoped mutation
+ * guard must still reject this snapshot if that change belongs to another class.
+ */
+export function buildUdaDeletionSnapshot(
+  udas: readonly UdaRecord[],
+  udaId: string
+): UdaRecord[] {
+  return udas
+    .filter(uda => uda.id !== udaId)
+    .map(uda => {
+      if (!uda.dependencies?.includes(udaId)) return uda;
+      return {
+        ...uda,
+        dependencies: uda.dependencies.filter(dependencyId => dependencyId !== udaId)
+      };
+    });
+}
