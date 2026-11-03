@@ -126,7 +126,9 @@ describe('FLOW-04 App lifecycle contract', () => {
     const app = await source('src/App.tsx');
     const navigation = sectionBetween(app, 'const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
 
-    expect(navigation).toContain('keepReviewSessionForClass(reviewSessionRef.current, currentClassIdRef.current)');
+    expect(navigation).toContain('const activeReviewSession = keepReviewSessionForClass(');
+    expect(navigation).toContain('storedReviewSession,');
+    expect(navigation).toContain('currentClassIdRef.current');
     expect(navigation).toContain('isReviewSurface(tab)');
     expect(navigation).toContain('enterReviewSurface(activeReviewSession, tab)');
     expect(navigation).toContain("tab === 'dashboard'");
