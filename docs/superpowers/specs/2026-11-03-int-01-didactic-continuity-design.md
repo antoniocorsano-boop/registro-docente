@@ -365,3 +365,13 @@ INT-01 può diventare Ready solo dopo:
 - Human Product/UX Review PASS.
 
 Nessun merge o deploy senza autorizzazione esplicita separata.
+
+## Amendment 01 — Il vero punto di ingresso UDA
+
+**Finding emerso nel browser:** `src/components/UdaGanttView.ts` esporta `UdaWorkspaceView as UdaGanttView`. Per la risoluzione dei moduli, l'import di `App` senza estensione utilizza questo livello: la prima superficie autorevole è quindi `src/components/UdaWorkspaceView.tsx`, mentre `src/components/UdaGanttView.tsx` è il modulo specialistico effettivo di Pianificazione/Analisi.
+
+**Decisione vincolante:** `DidacticContinuityBar` compare al livello principale di `UdaWorkspaceView`, non soltanto nel componente specialistico. Il contesto e la classe vengono trasferiti al Gantt nelle viste compatibili; la modalità `recordLessonPrefill` di FLOW-03 mantiene il proprio percorso specialistico e non riceve nuovi automatismi. La scheda UDA presenta `Gestisci in Pianificazione`: solo il clic esplicito pubblica `{ udaId }`, poi apre la superficie esistente. La selezione della classe nello spazio UDA non può cambiare classe mentre esiste una classe corrente; nel modulo di creazione il selettore mantiene l'unica opzione valida anche per accessibilità e compatibilità. `analysis` resta limitata alla classe attiva.
+
+**Compatibilità classi:** il resolver interpreta, oltre alle forme concise già approvate, il formato canonico preesistente `3ª A - Secondaria I Grado`, mantenendo il rifiuto di stringhe generiche o ambigue. Non inferisce disciplina da alias; la corrispondenza resta esatta dopo trim e normalizzazione maiuscole.
+
+**Qualifica:** copertura del componente `src/components/UdaWorkspaceView.tsx` nel test UI e nell'invariante `INT-01-I01`; percorso Playwright attraverso `UDA curricolari → Gestisci in Pianificazione` anziché accesso diretto al Gantt legacy; permanenza dello smoke QUAL-INVARIANT, test AIC-01 e contratti FLOW-03. Nessun cambiamento di persistenza o autorità.
