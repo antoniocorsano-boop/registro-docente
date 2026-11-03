@@ -37,7 +37,8 @@ describe('FLOW-03B contextual Rivedi contract', () => {
     expect(dashboard).toContain('<ReviewRouterPanel');
     expect(panel).toContain('getRecordReviewOptions(session.evidenceKind)');
     expect(panel).toContain("session.origin === 'post-record' && session.evidenceKind");
-    expect(panel).toContain('onNavigateSurface(option.tab)');
+    expect(panel).toContain('const surface = option.tab;');
+    expect(panel).toContain('onNavigateSurface(surface)');
     expect(panel).not.toContain('onNavigateSurface(options[0].tab)');
   });
 
