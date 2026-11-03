@@ -13,6 +13,7 @@ interface PlanningProfileEditorProps {
   profile?: TeachingProfile;
   onSave: (profile: TeachingProfile) => Promise<void>;
   defaultSubjectCode?: string;
+  subjectDisplayLabel?: string;
   defaultGradeLevel?: number;
 }
 
@@ -60,7 +61,7 @@ const sectionButtonClass = (active: boolean) =>
   }`;
 
 export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
-  profile, onSave, defaultSubjectCode = 'tecnologia', defaultGradeLevel = 1
+  profile, onSave, defaultSubjectCode = 'tecnologia', subjectDisplayLabel = '', defaultGradeLevel = 1
 }) => {
   const [draft, setDraft] = useState<TeachingProfile>(() =>
     profile ?? createDraftProfile(defaultSubjectCode, defaultGradeLevel)
@@ -217,6 +218,11 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
               </label>
               <label className="text-sm text-slate-300">Disciplina
                 <input value={draft.subjectCode} onChange={e => updateIdentity({ subjectCode: e.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
+                {subjectDisplayLabel.trim() && subjectDisplayLabel.trim().toLocaleLowerCase('it') !== draft.subjectCode.trim().toLocaleLowerCase('it') && (
+                  <span className="mt-2 block text-xs text-slate-400">
+                    Denominazione nelle impostazioni: {subjectDisplayLabel}. Codice curricolare: {draft.subjectCode}.
+                  </span>
+                )}
               </label>
               <label className="text-sm text-slate-300 md:col-span-2">Coorte
                 <input value={draft.cohortRef} onChange={e => setDraft(current => ({ ...current, cohortRef: e.target.value }))} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
