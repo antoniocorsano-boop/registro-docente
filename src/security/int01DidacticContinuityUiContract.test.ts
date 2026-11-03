@@ -38,6 +38,16 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(legacy).toContain('onTeachingFocusChange');
   });
 
+  test('the specialist Analysis view also respects the active class boundary', async () => {
+    const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
+    const start = workspace.indexOf("{activeView === 'analysis' && (");
+    const end = workspace.indexOf("{isCreateOpen && (", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const analysis = workspace.slice(start, end);
+    expect(analysis).toContain('currentClassName={currentClassName}');
+  });
+
   test('App routes Programmazione and UDA through one current class and focus', async () => {
     const app = await Bun.file('src/App.tsx').text();
     expect(app).toContain('focusedProfileId={planningFrame.status');
