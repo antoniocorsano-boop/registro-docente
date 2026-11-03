@@ -270,7 +270,6 @@ test.describe('FLOW-03 mobile qualification', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('records one explicit UDA lesson, then offers review and keeps other specialist routes non-mutating', async ({ page }) => {
-    test.setTimeout(60_000);
     await prepareScenario(page, 'flow-03-mobile');
 
     const conduct = await openConductFromOggi(page);
