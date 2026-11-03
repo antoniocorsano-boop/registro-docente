@@ -180,8 +180,8 @@ describe('FLOW-03 independent review repairs', () => {
 
     expect(navigation).toContain('preserveRecordSession?: boolean');
     expect(navigation).toContain('const shouldPreserveRecordSession =');
-    expect(navigation).toContain("recordSessionRef.current?.status === 'editing'");
-    expect(navigation).toContain("recordSessionRef.current.evidenceKind === 'lesson-log'");
+    expect(navigation).toContain('Boolean(options.preserveRecordSession)');
+    expect(navigation).not.toContain("recordSessionRef.current.evidenceKind === 'lesson-log'");
     expect(navigation).toContain('if (!shouldPreserveRecordSession) {');
     expect(navigation).toContain('publishRecordSession(null);');
     expect(navigation).toContain('recordSpecialistNavigationVersionRef.current = null;');
