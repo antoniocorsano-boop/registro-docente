@@ -1,0 +1,198 @@
+name: FLOW-04 P1 guarded repair
+
+on:
+  push:
+    branches:
+      - feat/flow-04-review-session
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: "${{ github.event.head_commit.message == 'chore: apply FLOW-04 specialist navigation repair' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-04-review-session
+          fetch-depth: 1
+
+      - name: Apply guarded App lifecycle repair
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('src/App.tsx')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              """import {
+  buildReviewSession,
+  enterReviewSurface,
+  isReviewSurface,
+  keepReviewSessionForClass,
+  returnToReviewRouter,
+  type ReviewSessionContext
+} from './review/reviewSession';""",
+              """import {
+  buildReviewSession,
+  enterReviewSurface,
+  isReviewSurface,
+  keepReviewSessionForClass,
+  returnToReviewRouter,
+  transitionReviewSessionForTab,
+  type ReviewSessionContext
+} from './review/reviewSession';""",
+              'review import'
+          )
+
+          replace_once(
+              """  const navigationVersionRef = useRef(0);
+  const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+  }, []);
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);""",
+              """  const navigationVersionRef = useRef(0);
+  const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);""",
+              'old low-level tab setter'
+          )
+
+          replace_once(
+              """  const testsRef = useRef(tests);
+  const submissionsRef = useRef(submissions);
+  const libraryMutationPendingCountRef = useRef(0);
+
+  const handleConnectSemanticMemory = useCallback(async ({""",
+              """  const testsRef = useRef(tests);
+  const submissionsRef = useRef(submissions);
+  const libraryMutationPendingCountRef = useRef(0);
+
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+
+    const storedReviewSession = reviewSessionRef.current;
+    if (!storedReviewSession) return;
+
+    const nextReviewSession = transitionReviewSessionForTab(
+      storedReviewSession,
+      currentClassIdRef.current,
+      tab
+    );
+    publishReviewSession(nextReviewSession);
+    if (storedReviewSession && !nextReviewSession) {
+      setTodayAction(null);
+    }
+  }, [publishReviewSession]);
+
+  const handleConnectSemanticMemory = useCallback(async ({""",
+              'new shared tab setter insertion'
+          )
+
+          replace_once(
+              """  const handleNavigateTab = useCallback((
+    tab: ActiveTab,
+    options: { preserveRecordSession?: boolean } = {}
+  ) => {
+    navigationVersionRef.current += 1;
+    setActiveTabState(tab);
+    const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
+    if (!shouldPreserveRecordSession) {
+      publishRecordSession(null);
+      recordSpecialistNavigationVersionRef.current = null;
+    }
+
+    const storedReviewSession = reviewSessionRef.current;
+    const activeReviewSession = keepReviewSessionForClass(
+      storedReviewSession,
+      currentClassIdRef.current
+    );
+    if (activeReviewSession && isReviewSurface(tab)) {
+      publishReviewSession(enterReviewSurface(activeReviewSession, tab));
+    } else if (activeReviewSession && tab === 'dashboard') {
+      publishReviewSession(returnToReviewRouter(activeReviewSession));
+    } else {
+      if (storedReviewSession) {
+        publishReviewSession(null);
+        setTodayAction(null);
+      } else if (tab !== 'dashboard') {
+        setTodayAction(null);
+      }
+    }
+
+    const classId = currentClassIdRef.current;
+    try {
+      const state = { classId, tab };
+      const params = new URLSearchParams();
+      if (classId) params.set('class', classId);
+      if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
+      const query = params.toString();
+      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+    } catch (e) {}
+  }, [publishRecordSession, publishReviewSession]);""",
+              """  const handleNavigateTab = useCallback((
+    tab: ActiveTab,
+    options: { preserveRecordSession?: boolean } = {}
+  ) => {
+    const hadReviewSession = reviewSessionRef.current !== null;
+    setActiveTab(tab);
+    const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
+    if (!shouldPreserveRecordSession) {
+      publishRecordSession(null);
+      recordSpecialistNavigationVersionRef.current = null;
+    }
+
+    if (!hadReviewSession && tab !== 'dashboard') {
+      setTodayAction(null);
+    }
+
+    const classId = currentClassIdRef.current;
+    try {
+      const state = { classId, tab };
+      const params = new URLSearchParams();
+      if (classId) params.set('class', classId);
+      if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
+      const query = params.toString();
+      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+    } catch (e) {}
+  }, [publishRecordSession, setActiveTab]);""",
+              'canonical handleNavigateTab'
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify focused repair
+        run: |
+          bun test src/security/flow04ReviewSessionContract.test.ts
+          bun run lint
+          bun run build
+
+      - name: Commit product repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx
+          git diff --cached --check
+          git commit -m 'fix: preserve FLOW-04 lifecycle across specialist navigation'
+          git push origin HEAD:feat/flow-04-review-session
