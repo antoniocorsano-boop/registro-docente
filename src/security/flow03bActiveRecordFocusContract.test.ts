@@ -5,12 +5,13 @@ async function source(path: string) {
 }
 
 describe('FLOW-03B active recording focus contract', () => {
-  test('collapses class overview for an unsaved same-class Registra session only', async () => {
+  test('keeps unsaved same-class Registra inside the shared mission-focus hierarchy', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass.id;");
+    expect(dashboard).toContain('const isActiveMissionFocus = isActiveRecordFocus || isActiveReviewFocus;');
     expect(dashboard).toContain('data-testid="flow03b-class-overview"');
-    expect(dashboard).toContain('open={!isActiveRecordFocus}');
+    expect(dashboard).toContain('open={!isActiveMissionFocus}');
     expect(dashboard).toContain('Panoramica Sezione: {currentClass.name}');
   });
 

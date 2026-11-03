@@ -20,11 +20,12 @@ describe('PERSIST-01 navigation remains independent from in-flight app-data pers
   test('navigation changes synchronously advance a navigation version', async () => {
     const source = await Bun.file('src/App.tsx').text();
     const navigationState = sectionBetween(source, '// 6. Navigation and UI state', '// Metadata for backup tracking');
+    const sharedTabSetter = sectionBetween(source, 'const setActiveTab = useCallback', 'const handleConnectSemanticMemory');
 
     expect(navigationState).toContain('navigationVersionRef');
     expect(navigationState).toContain('setActiveTabState');
-    expect(navigationState).toContain('navigationVersionRef.current += 1');
-    expect(navigationState).toContain('setActiveTabState(tab)');
+    expect(sharedTabSetter).toContain('navigationVersionRef.current += 1');
+    expect(sharedTabSetter).toContain('setActiveTabState(tab)');
   });
 
   test('post-commit redirects run only when no newer navigation occurred', async () => {

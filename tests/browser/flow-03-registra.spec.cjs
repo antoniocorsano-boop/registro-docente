@@ -345,12 +345,18 @@ test.describe('FLOW-03B desktop post-record UX qualification', () => {
     await expect(floatingCopilot).toBeVisible();
 
     await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
-    const review = page.getByRole('region', { name: 'Continua: Rivedi' });
-    await expect(review).toContainText('Prima destinazione consigliata: Tabellone.');
-    const labels = (await review.locator('button').allTextContents())
-      .map(label => label.trim())
-      .filter(label => ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'].includes(label));
-    expect(labels).toEqual(['Tabellone', 'Analisi', 'Storico', 'Scheda alunno']);
+    const review = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });
+    await expect(review).toContainText("L'ordine delle superfici riflette il tipo di evidenza appena registrata");
+    const expectedReviewOrder = ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'];
+    const positionedReviewOptions = [];
+    for (const label of expectedReviewOrder) {
+      const option = review.getByRole('button', { name: new RegExp(`^${label}`) });
+      await expect(option).toBeVisible();
+      const box = await option.boundingBox();
+      expect(box).not.toBeNull();
+      positionedReviewOptions.push({ label, y: box.y });
+    }
+    expect(positionedReviewOptions.sort((a, b) => a.y - b.y).map(item => item.label)).toEqual(expectedReviewOrder);
     await page.screenshot({ path: evidencePath('flow-03b-desktop-review.png'), fullPage: true });
     expect(pageErrors).toEqual([]);
   });
@@ -528,13 +534,19 @@ test.describe('FLOW-03 mobile qualification', () => {
   await page.screenshot({ path: evidencePath('flow-03-mobile-uda-saved.png'), fullPage: true });
 
   await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
-  const review = page.getByRole('region', { name: 'Continua: Rivedi' });
+  const review = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });
   await expect(review).toBeVisible();
-  await expect(review).toContainText('Prima destinazione consigliata: UDA e diario.');
-  const flow03bReviewLabels = (await review.locator('button').allTextContents())
-    .map(label => label.trim())
-    .filter(label => ['UDA e diario', 'Tabellone', 'Analisi', 'Storico'].includes(label));
-  expect(flow03bReviewLabels).toEqual(['UDA e diario', 'Tabellone', 'Analisi', 'Storico']);
+  await expect(review).toContainText("L'ordine delle superfici riflette il tipo di evidenza appena registrata");
+  const expectedLessonReviewOrder = ['UDA e diario', 'Tabellone', 'Analisi', 'Storico'];
+  const positionedLessonReviewOptions = [];
+  for (const label of expectedLessonReviewOrder) {
+    const option = review.getByRole('button', { name: new RegExp(`^${label}`) });
+    await expect(option).toBeVisible();
+    const box = await option.boundingBox();
+    expect(box).not.toBeNull();
+    positionedLessonReviewOptions.push({ label, y: box.y });
+  }
+  expect(positionedLessonReviewOptions.sort((a, b) => a.y - b.y).map(item => item.label)).toEqual(expectedLessonReviewOrder);
   await page.screenshot({ path: evidencePath('flow-03-mobile-review.png'), fullPage: true });
 
   await openOggiFromDrawer(page);

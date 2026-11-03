@@ -10,7 +10,7 @@ describe('FLOW-01 preparation UI contract', () => {
     expect(existsSync('src/components/PreparationRouterPanel.tsx')).toBe(true);
   });
 
-  test('Dashboard delegates prepare to its dedicated panel while only review remains generic', async () => {
+  test('Dashboard delegates prepare to its dedicated panel while FLOW-04 owns review orchestration', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
@@ -19,8 +19,10 @@ describe('FLOW-01 preparation UI contract', () => {
     expect(dashboard).toContain('className={currentClass.name}');
     expect(dashboard).toContain('onNavigateTab={(tab) => onContinueToday?.(tab)}');
     expect(dashboard).toContain('onDismiss={() => onDismissToday?.()}');
+    expect(dashboard).toContain("import { ReviewRouterPanel } from './ReviewRouterPanel';");
     expect(dashboard).toContain("todayAction === 'review'");
-    expect(dashboard).toContain('getRecordReviewOptions(reviewEvidenceKind)');
+    expect(dashboard).toContain('<ReviewRouterPanel');
+    expect(dashboard).not.toContain('getRecordReviewOptions(reviewEvidenceKind)');
   });
 
   test('panel renders professional intentions from the single routing table', async () => {
