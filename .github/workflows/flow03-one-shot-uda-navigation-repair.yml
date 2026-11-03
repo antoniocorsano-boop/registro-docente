@@ -31,88 +31,25 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
+          import base64
+          def d(value): return base64.b64decode(value).decode()
           app_path = Path('src/App.tsx')
           app = app_path.read_text()
-          old = """    const shouldPreserveRecordSession =
-      options.preserveRecordSession
-      || (
-        recordSessionRef.current?.status === 'editing'
-        && recordSessionRef.current.evidenceKind === 'lesson-log'
-      );"""
-          new = """    const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);"""
-          if app.count(old) != 1:
-              raise SystemExit(f'App navigation anchor cardinality != 1: {app.count(old)}')
+          old = d('ICAgIGNvbnN0IHNob3VsZFByZXNlcnZlUmVjb3JkU2Vzc2lvbiA9CiAgICAgIG9wdGlvbnMucHJlc2VydmVSZWNvcmRTZXNzaW9uCiAgICAgIHx8ICgKICAgICAgICByZWNvcmRTZXNzaW9uUmVmLmN1cnJlbnQ/LnN0YXR1cyA9PT0gJ2VkaXRpbmcnCiAgICAgICAgJiYgcmVjb3JkU2Vzc2lvblJlZi5jdXJyZW50LmV2aWRlbmNlS2luZCA9PT0gJ2xlc3Nvbi1sb2cnCiAgICAgICk7')
+          new = d('ICAgIGNvbnN0IHNob3VsZFByZXNlcnZlUmVjb3JkU2Vzc2lvbiA9IEJvb2xlYW4ob3B0aW9ucy5wcmVzZXJ2ZVJlY29yZFNlc3Npb24pOw==')
+          if app.count(old) != 1: raise SystemExit(f'App navigation anchor cardinality != 1: {app.count(old)}')
           app_path.write_text(app.replace(old, new, 1))
-
           spec_path = Path('tests/browser/flow-03-registra.spec.cjs')
           spec = spec_path.read_text()
-          anchor = """// Conduci → Registra → diario UDA
-// Registra → Comportamento
-// Registra → Esiti verifica online
-test.describe('FLOW-03 mobile qualification', () => {"""
-          regression = """test.describe('FLOW-03 ordinary UDA navigation invalidation qualification', () => {
-  test.use({ viewport: { width: 1280, height: 900 } });
-
-  test('ordinary navigation after closing focused UDA does not resurrect the recording mission', async ({ page }) => {
-  const pageErrors = installPageErrorCollector(page);
-  await prepareScenario(page, 'flow-03-uda-ordinary-navigation');
-
-  const record = await openRecordFromOggi(page);
-  await record.getByLabel('Nota di sessione', { exact: true }).fill(RAPID_NOTE);
-  await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
-  const mission = await assertRecordMission(page, 'Attività / nota UDA');
-  const chooser = page.getByRole('region', { name: 'Seleziona UDA per Registra' });
-  await expect(chooser).toBeVisible();
-  await chooser.getByRole('button', { name: 'Scegli questa UDA', exact: true }).click();
-  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
-  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeHidden();
-
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  const drawer = page.getByRole('complementary');
-  await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
-  await expect(mission).toBeHidden();
-  await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await drawer.getByRole('button', { name: 'UDA', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: `Missione Registra per ${CLASS_NAME}` })).toBeHidden();
-  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeHidden();
-  await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeVisible();
-  await page.screenshot({ path: evidencePath('flow-03-desktop-uda-ordinary-return.png'), fullPage: true });
-  expect(pageErrors).toEqual([]);
-});
-});
-
-// Conduci → Registra → diario UDA
-// Registra → Comportamento
-// Registra → Esiti verifica online
-test.describe('FLOW-03 mobile qualification', () => {"""
-          if spec.count(anchor) != 1:
-              raise SystemExit(f'Browser insertion anchor cardinality != 1: {spec.count(anchor)}')
+          anchor = d('Ly8gQ29uZHVjaSDihpIgUmVnaXN0cmEg4oaSIGRpYXJpbyBVREEKLy8gUmVnaXN0cmEg4oaSIENvbXBvcnRhbWVudG8KLy8gUmVnaXN0cmEg4oaSIEVzaXRpIHZlcmlmaWNhIG9ubGluZQp0ZXN0LmRlc2NyaWJlKCdGTE9XLTAzIG1vYmlsZSBxdWFsaWZpY2F0aW9uJywgKCkgPT4gew==')
+          regression = d('dGVzdC5kZXNjcmliZSgnRkxPVy0wMyBvcmRpbmFyeSBVREEgbmF2aWdhdGlvbiBpbnZhbGlkYXRpb24gcXVhbGlmaWNhdGlvbicsICgpID0+IHsKICB0ZXN0LnVzZSh7IHZpZXdwb3J0OiB7IHdpZHRoOiAxMjgwLCBoZWlnaHQ6IDkwMCB9IH0pOwoKICB0ZXN0KCdvcmRpbmFyeSBuYXZpZ2F0aW9uIGFmdGVyIGNsb3NpbmcgZm9jdXNlZCBVREEgZG9lcyBub3QgcmVzdXJyZWN0IHRoZSByZWNvcmRpbmcgbWlzc2lvbicsIGFzeW5jICh7IHBhZ2UgfSkgPT4gewogIGNvbnN0IHBhZ2VFcnJvcnMgPSBpbnN0YWxsUGFnZUVycm9yQ29sbGVjdG9yKHBhZ2UpOwogIGF3YWl0IHByZXBhcmVTY2VuYXJpbyhwYWdlLCAnZmxvdy0wMy11ZGEtb3JkaW5hcnktbmF2aWdhdGlvbicpOwoKICBjb25zdCByZWNvcmQgPSBhd2FpdCBvcGVuUmVjb3JkRnJvbU9nZ2kocGFnZSk7CiAgYXdhaXQgcmVjb3JkLmdldEJ5TGFiZWwoJ05vdGEgZGkgc2Vzc2lvbmUnLCB7IGV4YWN0OiB0cnVlIH0pLmZpbGwoUkFQSURfTk9URSk7CiAgYXdhaXQgcmVjb3JkLmdldEJ5Um9sZSgnYnV0dG9uJywgeyBuYW1lOiAnQXR0aXZpdMOgIC8gbm90YSBVREEnLCBleGFjdDogdHJ1ZSB9KS5jbGljaygpOwogIGNvbnN0IG1pc3Npb24gPSBhd2FpdCBhc3NlcnRSZWNvcmRNaXNzaW9uKHBhZ2UsICdBdHRpdml0w6AgLyBub3RhIFVEQScpOwogIGNvbnN0IGNob29zZXIgPSBwYWdlLmdldEJ5Um9sZSgncmVnaW9uJywgeyBuYW1lOiAnU2VsZXppb25hIFVEQSBwZXIgUmVnaXN0cmEnIH0pOwogIGF3YWl0IGV4cGVjdChjaG9vc2VyKS50b0JlVmlzaWJsZSgpOwogIGF3YWl0IGNob29zZXIuZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdTY2VnbGkgcXVlc3RhIFVEQScsIGV4YWN0OiB0cnVlIH0pLmNsaWNrKCk7CiAgYXdhaXQgZXhwZWN0KHBhZ2UuZ2V0QnlUZXh0KCdSZWdpc3RyYXppb25lIHJhcGlkYScsIHsgZXhhY3Q6IHRydWUgfSkpLnRvQmVWaXNpYmxlKCk7CgogIGF3YWl0IHBhZ2UuZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdDaGl1ZGkgRmFzY2ljb2xvJywgZXhhY3Q6IHRydWUgfSkuY2xpY2soKTsKICBhd2FpdCBleHBlY3QocGFnZS5nZXRCeVRleHQoJ1JlZ2lzdHJhemlvbmUgcmFwaWRhJywgeyBleGFjdDogdHJ1ZSB9KSkudG9CZUhpZGRlbigpOwoKICBhd2FpdCBwYWdlLmdldEJ5Um9sZSgnYnV0dG9uJywgeyBuYW1lOiAnTWVudScsIGV4YWN0OiB0cnVlIH0pLmNsaWNrKCk7CiAgY29uc3QgZHJhd2VyID0gcGFnZS5nZXRCeVJvbGUoJ2NvbXBsZW1lbnRhcnknKTsKICBhd2FpdCBkcmF3ZXIuZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdTdG9yaWNvIHByb3ZlJywgZXhhY3Q6IHRydWUgfSkuY2xpY2soKTsKICBhd2FpdCBleHBlY3QobWlzc2lvbikudG9CZUhpZGRlbigpOwogIGF3YWl0IGV4cGVjdChwYWdlLmdldEJ5Um9sZSgnaGVhZGluZycsIHsgbmFtZTogYFN0b3JpY28gUHJvdmUgUmVnaXN0cmF0ZTogJHtDTEFTU19OQU1FfWAgfSkpLnRvQmVWaXNpYmxlKCk7CgogIGF3YWl0IHBhZ2UuZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdNZW51JywgZXhhY3Q6IHRydWUgfSkuY2xpY2soKTsKICBhd2FpdCBkcmF3ZXIuZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdVREEnLCBleGFjdDogdHJ1ZSB9KS5jbGljaygpOwogIGF3YWl0IGV4cGVjdChwYWdlLmdldEJ5Um9sZSgnaGVhZGluZycsIHsgbmFtZTogJ1VuaXTDoCBkaWRhdHRpY2hlJywgZXhhY3Q6IHRydWUgfSkpLnRvQmVWaXNpYmxlKCk7CiAgYXdhaXQgZXhwZWN0KHBhZ2UuZ2V0QnlSb2xlKCdyZWdpb24nLCB7IG5hbWU6IGBNaXNzaW9uZSBSZWdpc3RyYSBwZXIgJHtDTEFTU19OQU1FfWAgfSkpLnRvQmVIaWRkZW4oKTsKICBhd2FpdCBleHBlY3QocGFnZS5nZXRCeVRleHQoJ1JlZ2lzdHJhemlvbmUgcmFwaWRhJywgeyBleGFjdDogdHJ1ZSB9KSkudG9CZUhpZGRlbigpOwogIGF3YWl0IGV4cGVjdChwYWdlLmdldEJ5Um9sZSgnZ3JvdXAnLCB7IG5hbWU6ICdWaXN0ZSBVREEnIH0pKS50b0JlVmlzaWJsZSgpOwogIGF3YWl0IHBhZ2Uuc2NyZWVuc2hvdCh7IHBhdGg6IGV2aWRlbmNlUGF0aCgnZmxvdy0wMy1kZXNrdG9wLXVkYS1vcmRpbmFyeS1yZXR1cm4ucG5nJyksIGZ1bGxQYWdlOiB0cnVlIH0pOwogIGV4cGVjdChwYWdlRXJyb3JzKS50b0VxdWFsKFtdKTsKfSk7Cn0pOwoKLy8gQ29uZHVjaSDihpIgUmVnaXN0cmEg4oaSIGRpYXJpbyBVREEKLy8gUmVnaXN0cmEg4oaSIENvbXBvcnRhbWVudG8KLy8gUmVnaXN0cmEg4oaSIEVzaXRpIHZlcmlmaWNhIG9ubGluZQp0ZXN0LmRlc2NyaWJlKCdGTE9XLTAzIG1vYmlsZSBxdWFsaWZpY2F0aW9uJywgKCkgPT4gew==')
+          if spec.count(anchor) != 1: raise SystemExit(f'Browser insertion anchor cardinality != 1: {spec.count(anchor)}')
           spec_path.write_text(spec.replace(anchor, regression, 1))
-
           contract_path = Path('src/security/flow03OrdinaryUdaNavigationInvalidationContract.test.ts')
           contract = contract_path.read_text()
-          old_contract = """    expect(handler).toContain('publishRecordSession(null)');
-  });
-});
-"""
-          new_contract = """    expect(handler).toContain('publishRecordSession(null)');
-
-    const browser = await source('tests/browser/flow-03-registra.spec.cjs');
-    expect(browser).toContain('ordinary navigation after closing focused UDA does not resurrect the recording mission');
-    expect(browser).toContain("flow-03-desktop-uda-ordinary-return.png");
-    expect(browser).toContain("getByRole('button', { name: 'Storico prove', exact: true })");
-    expect(browser).toContain("getByRole('button', { name: 'UDA', exact: true })");
-  });
-});
-"""
-          if contract.count(old_contract) != 1:
-              raise SystemExit(f'Contract anchor cardinality != 1: {contract.count(old_contract)}')
+          old_contract = d('ICAgIGV4cGVjdChoYW5kbGVyKS50b0NvbnRhaW4oJ3B1Ymxpc2hSZWNvcmRTZXNzaW9uKG51bGwpJyk7CiAgfSk7Cn0pOwo=')
+          new_contract = d('ICAgIGV4cGVjdChoYW5kbGVyKS50b0NvbnRhaW4oJ3B1Ymxpc2hSZWNvcmRTZXNzaW9uKG51bGwpJyk7CgogICAgY29uc3QgYnJvd3NlciA9IGF3YWl0IHNvdXJjZSgndGVzdHMvYnJvd3Nlci9mbG93LTAzLXJlZ2lzdHJhLnNwZWMuY2pzJyk7CiAgICBleHBlY3QoYnJvd3NlcikudG9Db250YWluKCdvcmRpbmFyeSBuYXZpZ2F0aW9uIGFmdGVyIGNsb3NpbmcgZm9jdXNlZCBVREEgZG9lcyBub3QgcmVzdXJyZWN0IHRoZSByZWNvcmRpbmcgbWlzc2lvbicpOwogICAgZXhwZWN0KGJyb3dzZXIpLnRvQ29udGFpbigiZmxvdy0wMy1kZXNrdG9wLXVkYS1vcmRpbmFyeS1yZXR1cm4ucG5nIik7CiAgICBleHBlY3QoYnJvd3NlcikudG9Db250YWluKCJnZXRCeVJvbGUoJ2J1dHRvbicsIHsgbmFtZTogJ1N0b3JpY28gcHJvdmUnLCBleGFjdDogdHJ1ZSB9KSIpOwogICAgZXhwZWN0KGJyb3dzZXIpLnRvQ29udGFpbigiZ2V0QnlSb2xlKCdidXR0b24nLCB7IG5hbWU6ICdVREEnLCBleGFjdDogdHJ1ZSB9KSIpOwogIH0pOwp9KTsK')
+          if contract.count(old_contract) != 1: raise SystemExit(f'Contract anchor cardinality != 1: {contract.count(old_contract)}')
           contract_path.write_text(contract.replace(old_contract, new_contract, 1))
           PY
 
@@ -120,11 +57,7 @@ test.describe('FLOW-03 mobile qualification', () => {"""
         shell: bash
         run: |
           set -euo pipefail
-          bun test \
-            src/security/flow03OrdinaryUdaNavigationInvalidationContract.test.ts \
-            src/security/flow03MissionContinuityContract.test.ts \
-            src/security/flow03IndependentReviewRepairs.test.ts \
-            src/security/flow03BrowserQualificationContract.test.ts
+          bun test src/security/flow03OrdinaryUdaNavigationInvalidationContract.test.ts src/security/flow03MissionContinuityContract.test.ts src/security/flow03IndependentReviewRepairs.test.ts src/security/flow03BrowserQualificationContract.test.ts
           bunx tsc --noEmit
           git diff --check
 
