@@ -168,7 +168,7 @@ test.describe('FLOW-04 Oggi → Rivedi desktop qualification', () => {
   test('keeps one review mission across existing surfaces and fails closed on boundary changes', async ({ page }) => {
     const pageErrors = installPageErrorCollector(page);
     await configureVault(page, 'flow-04-desktop');
-    await createSyntheticClass(page, CLASS_NAME);
+    await createSyntheticClass(page, CLASS_NAME, { withStudent: true });
     await createSyntheticClass(page, SECOND_CLASS_NAME);
 
     let review = await openReviewFromOggi(page, CLASS_NAME);
@@ -183,6 +183,12 @@ test.describe('FLOW-04 Oggi → Rivedi desktop qualification', () => {
     await assertTouchSafe(banner.getByRole('button', { name: 'Torna a Rivedi', exact: true }));
     await assertTouchSafe(banner.getByRole('button', { name: 'Chiudi', exact: true }));
     await page.screenshot({ path: evidencePath('flow-04-desktop-tabellone.png'), fullPage: true });
+
+    // specialist-to-specialist keeps review mission even when the specialist view calls setActiveTab directly.
+    await page.getByText(STUDENT_NAME, { exact: true }).click();
+    banner = await reviewMission(page);
+    await expect(banner).toContainText('Superficie corrente: Scheda alunno');
+    await page.screenshot({ path: evidencePath('flow-04-desktop-report-from-tabellone.png'), fullPage: true });
 
     await banner.getByRole('button', { name: 'Torna a Rivedi', exact: true }).click();
     review = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });
@@ -199,6 +205,16 @@ test.describe('FLOW-04 Oggi → Rivedi desktop qualification', () => {
     await review.getByRole('button', { name: 'Chiudi la sessione Rivedi' }).click();
     await expect(review).toBeHidden();
     await expect(page.locator('[data-testid="flow03b-class-overview"]')).toHaveJSProperty('open', true);
+
+    // specialist exit closes review mission when Storico opens the non-review evaluation editor directly.
+    await openOggiFromDrawer(page);
+    review = await openReviewFromOggi(page, CLASS_NAME);
+    await reviewOption(review, 'Storico').click();
+    banner = await reviewMission(page);
+    await expect(banner).toContainText('Superficie corrente: Storico');
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).click();
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect(banner).toBeHidden();
 
     // non-review navigation closes the mission instead of carrying it into an unrelated task.
     await openOggiFromDrawer(page);
