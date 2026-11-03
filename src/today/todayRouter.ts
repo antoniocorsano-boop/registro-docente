@@ -1,7 +1,7 @@
 import type { ActiveTab } from '../types';
 
 export type TodayAction = 'prepare' | 'conduct' | 'record' | 'review';
-export type TodayContinuationAction = Exclude<TodayAction, 'prepare' | 'conduct'>;
+export type TodayContinuationAction = Extract<TodayAction, 'review'>;
 
 export type TodayRouteDecision =
   | { status: 'needs-class'; action: TodayAction }
@@ -13,10 +13,6 @@ export interface TodayContinuationOption {
 }
 
 const CONTINUATION_OPTIONS: Record<TodayContinuationAction, readonly TodayContinuationOption[]> = {
-  record: [
-    { tab: 'voti', label: 'Valutazioni' },
-    { tab: 'comportamenti', label: 'Comportamento' }
-  ],
   review: [
     { tab: 'tabellone', label: 'Tabellone' },
     { tab: 'analytics', label: 'Analisi' },

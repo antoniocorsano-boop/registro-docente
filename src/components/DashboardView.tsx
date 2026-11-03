@@ -4,7 +4,9 @@ import { calcAvg, formatGrade, TYPES_LABEL } from '../utils';
 import { Sparkline } from './Sparkline';
 import { PreparationRouterPanel } from './PreparationRouterPanel';
 import { ConductLessonPanel } from './ConductLessonPanel';
+import { RecordLessonPanel } from './RecordLessonPanel';
 import type { ConductContextResolution } from '../conduct/conductSession';
+import type { RecordEvidenceKind, RecordSessionDraft } from '../recording/recordSession';
 import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
 import {
   ClipboardList,
@@ -15,7 +17,6 @@ import {
 } from 'lucide-react';
 
 const TODAY_ACTION_LABELS: Record<TodayContinuationAction, string> = {
-  record: 'Registra',
   review: 'Rivedi'
 };
 
@@ -31,7 +32,12 @@ interface DashboardViewProps {
   privacyShieldActive?: boolean;
   onTogglePrivacyShield?: () => void;
   onOpenConductCopilot?: () => void;
-  onGoToRecord?: () => void;
+  onGoToRecord?: (stagedNote?: string) => void;
+  recordSession?: RecordSessionDraft | null;
+  onChangeRecordStagedNote?: (note: string) => void;
+  onChooseRecordEvidence?: (kind: RecordEvidenceKind) => void;
+  onReviewRecord?: () => void;
+  onRecordAnother?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -46,7 +52,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   privacyShieldActive = false,
   onTogglePrivacyShield,
   onOpenConductCopilot,
-  onGoToRecord
+  onGoToRecord,
+  recordSession = null,
+  onChangeRecordStagedNote,
+  onChooseRecordEvidence,
+  onReviewRecord,
+  onRecordAnother
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
@@ -108,12 +119,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onNavigateLibrary={() => onContinueToday?.('biblioteca')}
           onNavigateAssessment={() => onContinueToday?.('verifiche-online')}
           onOpenCopilot={() => onOpenConductCopilot?.()}
-          onGoToRecord={() => onGoToRecord?.()}
+          onGoToRecord={(stagedNote) => onGoToRecord?.(stagedNote)}
           onDismiss={() => onDismissToday?.()}
         />
       )}
 
-      {todayAction && todayAction !== 'prepare' && todayAction !== 'conduct' && (
+      {todayAction === 'record' && recordSession && (
+        <RecordLessonPanel
+          key={recordSession.context.classId}
+          session={recordSession}
+          onChangeStagedNote={(note) => onChangeRecordStagedNote?.(note)}
+          onChooseEvidence={(kind) => onChooseRecordEvidence?.(kind)}
+          onReview={() => onReviewRecord?.()}
+          onRecordAnother={() => onRecordAnother?.()}
+          onDismiss={() => onDismissToday?.()}
+        />
+      )}
+
+      {todayAction === 'review' && (
         <section className="neon-card p-4" aria-label={`Continua: ${TODAY_ACTION_LABELS[todayAction]}`}>
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">

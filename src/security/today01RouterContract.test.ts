@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const ROUTER_MODULE_URL = new URL('../today/todayRouter.ts', import.meta.url);
 const ROUTER_MODULE_PATH = fileURLToPath(ROUTER_MODULE_URL);
 const ACTIONS = ['prepare', 'conduct', 'record', 'review'] as const;
-const CONTINUATION_ACTIONS = ['record', 'review'] as const;
+const CONTINUATION_ACTIONS = ['review'] as const;
 
 const routerExists = () => existsSync(ROUTER_MODULE_PATH);
 
@@ -51,14 +51,10 @@ describe('TODAY-01 routing contract', () => {
     });
   });
 
-  test('keeps non-orchestrated continuation surfaces authoritative and stable', async () => {
+  test('keeps only the non-orchestrated review continuation surface authoritative and stable', async () => {
     const router = await loadRouter();
     if (!router) return;
 
-    expect(router.getTodayContinuationOptions('record').map(option => option.tab)).toEqual([
-      'voti',
-      'comportamenti'
-    ]);
     expect(router.getTodayContinuationOptions('review').map(option => option.tab)).toEqual([
       'tabellone',
       'analytics',

@@ -33,6 +33,7 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
     expect(text).toContain('onBulkAddStudents: (students: Student[]) => Promise<number>;');
     expect(text).toContain('const [isStudentMutationPending, setIsStudentMutationPending] = useState(false);');
     expect(text).toContain('const handleAdd = async (e: React.FormEvent) =>');
+    expect(text).toContain('await onAddStudent(sanitizeName(newStudentName));');
     expect(text.indexOf('await onAddStudent(sanitizeName(newStudentName));')).toBeLessThan(text.indexOf("setNewStudentName('');"));
     expect(text).toContain('await onBulkAddStudents(imported);');
     expect(text.indexOf('await onBulkAddStudents(imported);')).toBeLessThan(text.indexOf('Importazione completata con successo!'));
@@ -83,7 +84,7 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
 
   test('all test creation paths share one synchronous durable-save guard before generating IDs', async () => {
     const text = await source('src/components/VerificheOnlineView.tsx');
-    expect(text).toContain("import React, { useRef, useState } from 'react';");
+    expect(text).toContain("import React, { useEffect, useRef, useState } from 'react';");
     expect(text).toContain('const [isSavingTest, setIsSavingTest] = useState(false);');
     expect(text).toContain('const testSavePendingRef = useRef(false);');
     expect(text).toContain('const commitTestSaveIntent = async (buildTest: () => OnlineTest): Promise<OnlineTest | null> =>');

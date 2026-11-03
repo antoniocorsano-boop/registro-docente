@@ -9,7 +9,7 @@ interface ConductLessonPanelProps {
   onNavigateLibrary: () => void;
   onNavigateAssessment: () => void;
   onOpenCopilot: () => void;
-  onGoToRecord: () => void;
+  onGoToRecord: (stagedNote?: string) => void;
   onDismiss: () => void;
 }
 
@@ -120,7 +120,7 @@ export const ConductLessonPanel: React.FC<ConductLessonPanelProps> = ({
 
         <button
           type="button"
-          onClick={onGoToRecord}
+          onClick={() => onGoToRecord(rapidNote.trim() || undefined)}
           className="mt-4 min-h-[44px] w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
         >
           Vai a Registra

@@ -13,30 +13,37 @@ function sectionBetween(text: string, start: string, end: string) {
 }
 
 describe('TODAY-01 Dashboard continuation contract', () => {
-  test('extends Dashboard with dedicated prepare/conduct panels and navigation-only Oggi continuation props', async () => {
+  test('requires the dedicated FLOW-03 recording-session module before record delegation changes', async () => {
+    expect(await Bun.file('src/recording/recordSession.ts').exists()).toBe(true);
+  });
+
+  test('extends Dashboard with dedicated prepare/conduct/record panels and navigation-only review continuation props', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
     expect(dashboard).toContain("import { ConductLessonPanel } from './ConductLessonPanel';");
+    expect(dashboard).toContain("import { RecordLessonPanel } from './RecordLessonPanel';");
     expect(dashboard).toContain("import { getTodayContinuationOptions, type TodayAction, type TodayContinuationAction } from '../today/todayRouter';");
     expect(dashboard).toContain('todayAction?: TodayAction | null;');
     expect(dashboard).toContain('onContinueToday?: (tab: ActiveTab) => void;');
     expect(dashboard).toContain('onDismissToday?: () => void;');
     expect(dashboard).toContain('onOpenPreparationCopilot?: () => void;');
     expect(dashboard).toContain('onOpenConductCopilot?: () => void;');
-    expect(dashboard).toContain('onGoToRecord?: () => void;');
+    expect(dashboard).toContain('onGoToRecord?: (stagedNote?: string) => void;');
     expect(dashboard).not.toContain('onSaveToday');
     expect(dashboard).not.toContain('onCreateToday');
   });
 
-  test('delegates prepare and conduct while keeping compact generic continuations for record/review', async () => {
+  test('delegates prepare, conduct and record while keeping only review as generic continuation', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("todayAction === 'prepare'");
     expect(dashboard).toContain('<PreparationRouterPanel');
     expect(dashboard).toContain("todayAction === 'conduct'");
     expect(dashboard).toContain('<ConductLessonPanel');
-    expect(dashboard).toContain("todayAction && todayAction !== 'prepare' && todayAction !== 'conduct'");
+    expect(dashboard).toContain("todayAction === 'record' && recordSession");
+    expect(dashboard).toContain('<RecordLessonPanel');
+    expect(dashboard).toContain("todayAction === 'review'");
     expect(dashboard).toContain('getTodayContinuationOptions(todayAction)');
     expect(dashboard).toContain('Continua:');
     expect(dashboard).toContain('min-h-[44px]');

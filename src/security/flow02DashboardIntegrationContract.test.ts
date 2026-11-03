@@ -13,7 +13,7 @@ function sectionBetween(text: string, start: string, end: string) {
 }
 
 describe('FLOW-02 Dashboard integration contract', () => {
-  test('delegates conduct to a dedicated panel and leaves only record/review generic', async () => {
+  test('delegates conduct and record to dedicated panels and leaves only review generic', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
     const router = await source('src/today/todayRouter.ts');
 
@@ -21,9 +21,12 @@ describe('FLOW-02 Dashboard integration contract', () => {
     expect(dashboard).toContain("import type { ConductContextResolution } from '../conduct/conductSession';");
     expect(dashboard).toContain("todayAction === 'conduct'");
     expect(dashboard).toContain('<ConductLessonPanel');
-    expect(dashboard).toContain("todayAction && todayAction !== 'prepare' && todayAction !== 'conduct'");
-    expect(router).toContain("export type TodayContinuationAction = Exclude<TodayAction, 'prepare' | 'conduct'>;");
+    expect(dashboard).toContain("todayAction === 'record' && recordSession");
+    expect(dashboard).toContain('<RecordLessonPanel');
+    expect(dashboard).toContain("todayAction === 'review'");
+    expect(router).toContain("export type TodayContinuationAction = Extract<TodayAction, 'review'>;");
     expect(router).not.toContain('  conduct: [');
+    expect(router).not.toContain('  record: [');
   });
 
   test('remounts the conduct panel when the selected class changes so rapid notes cannot cross classes', async () => {
@@ -31,7 +34,7 @@ describe('FLOW-02 Dashboard integration contract', () => {
     const conductPanel = sectionBetween(
       dashboard,
       "{todayAction === 'conduct' && conductContext && (",
-      "{todayAction && todayAction !== 'prepare' && todayAction !== 'conduct' && ("
+      "{todayAction === 'record' && recordSession && ("
     );
 
     expect(conductPanel).toContain('key={currentClass.id}');
@@ -44,12 +47,12 @@ describe('FLOW-02 Dashboard integration contract', () => {
     expect(dashboard).toContain('privacyShieldActive?: boolean;');
     expect(dashboard).toContain('onTogglePrivacyShield?: () => void;');
     expect(dashboard).toContain('onOpenConductCopilot?: () => void;');
-    expect(dashboard).toContain('onGoToRecord?: () => void;');
+    expect(dashboard).toContain('onGoToRecord?: (stagedNote?: string) => void;');
     expect(dashboard).toContain("onNavigateLibrary={() => onContinueToday?.('biblioteca')}");
     expect(dashboard).toContain("onNavigateAssessment={() => onContinueToday?.('verifiche-online')}");
     expect(dashboard).toContain("onNavigateUda={() => onContinueToday?.('uda-gantt')}");
     expect(dashboard).toContain('onOpenCopilot={() => onOpenConductCopilot?.()}');
-    expect(dashboard).toContain('onGoToRecord={() => onGoToRecord?.()}');
+    expect(dashboard).toContain('onGoToRecord={(stagedNote) => onGoToRecord?.(stagedNote)}');
     expect(dashboard).toContain('onTogglePrivacyShield={() => onTogglePrivacyShield?.()}');
   });
 

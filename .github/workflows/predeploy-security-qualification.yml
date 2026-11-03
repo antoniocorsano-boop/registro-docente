@@ -94,6 +94,17 @@ jobs:
         continue-on-error: true
         run: bun run test:security
 
+      - name: FLOW-03 focused contracts
+        id: flow03
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test_file in src/security/flow03*.test.ts; do
+            echo "Running ${test_file}"
+            bun test "${test_file}"
+          done
+
       - name: Library tests
         id: library
         continue-on-error: true
@@ -138,7 +149,7 @@ jobs:
           retention-days: 14
 
       - name: Preserve qualification gates
-        if: steps.invariants.outcome == 'failure' || steps.impact.outcome == 'failure' || steps.inherited.outcome == 'failure' || steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure' || steps.library.outcome == 'failure'
+        if: steps.invariants.outcome == 'failure' || steps.impact.outcome == 'failure' || steps.inherited.outcome == 'failure' || steps.typecheck.outcome == 'failure' || steps.security.outcome == 'failure' || steps.flow03.outcome == 'failure' || steps.library.outcome == 'failure'
         run: |
           echo "At least one PREDEPLOY qualification gate failed."
           exit 1

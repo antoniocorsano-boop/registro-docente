@@ -51,6 +51,15 @@ import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import { resolveConductContext } from './conduct/conductSession';
 import {
+  buildRecordSession,
+  markRecordSessionSaved,
+  routeForRecordEvidence,
+  setRecordEvidenceKind,
+  updateRecordStagedNote,
+  type RecordEvidenceKind,
+  type RecordSessionDraft
+} from './recording/recordSession';
+import {
   authorizeCopilotMission,
   authorizeCopilotMissionResume,
   buildMissionContextFingerprint,
@@ -137,6 +146,7 @@ import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
+import { RecordMissionBanner } from './components/RecordMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
 import { BehaviorsView } from './components/BehaviorsView';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -274,7 +284,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
+  const [recordSession, setRecordSession] = useState<RecordSessionDraft | null>(null);
+  const recordSessionRef = useRef<RecordSessionDraft | null>(null);
+  const publishRecordSession = useCallback((next: RecordSessionDraft | null) => {
+    recordSessionRef.current = next;
+    setRecordSession(next);
+  }, []);
   const navigationVersionRef = useRef(0);
+  const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const setActiveTab = useCallback((tab: ActiveTab) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
@@ -440,9 +457,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
   }, [invalidateSemanticMemorySession, isSemanticMemorySyncing, semanticMemorySession.endpoint, semanticMemorySession.status]);
 
-  const handleNavigateTab = useCallback((tab: ActiveTab) => {
+  const handleNavigateTab = useCallback((
+    tab: ActiveTab,
+    options: { preserveRecordSession?: boolean } = {}
+  ) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
+    const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
+    if (!shouldPreserveRecordSession) {
+      publishRecordSession(null);
+      recordSpecialistNavigationVersionRef.current = null;
+    }
     if (tab !== 'dashboard') {
       setTodayAction(null);
     }
@@ -455,7 +480,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
-  }, []);
+  }, [publishRecordSession]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1291,6 +1316,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         todayIsoDate: today()
       })
     : null;
+  const activeRecordMission =
+    recordSession?.status === 'editing'
+    && recordSession.context.classId === currentClass?.id
+    && recordSession.evidenceKind
+    && routeForRecordEvidence(recordSession.evidenceKind).tab === activeTab
+      ? { ...recordSession, evidenceKind: recordSession.evidenceKind }
+      : null;
   const ambientCopilotSurface =
     activeTab === 'home' ? 'home'
       : activeTab === 'dashboard' ? 'class-dashboard'
@@ -1335,6 +1367,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
       setTodayAction(null);
+      publishRecordSession(null);
       setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
     };
     window.addEventListener('popstate', handlePopState);
@@ -1363,33 +1396,159 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     openLibraryCopilot(launchContext);
   }, [conductContext, openLibraryCopilot]);
 
-  const handleContinueFromConductToRecord = useCallback(() => {
+  const handleContinueFromConductToRecord = useCallback((stagedNote?: string) => {
+    const selectedClass = appDataRef.current.classes.find(
+      candidate => candidate.id === currentClassIdRef.current
+    );
+    if (!selectedClass) return;
+
+    const session = buildRecordSession({
+      classId: selectedClass.id,
+      className: selectedClass.name,
+      conductContext,
+      stagedNote
+    });
+    publishRecordSession(session);
     setTodayAction('record');
-  }, []);
+  }, [conductContext, publishRecordSession]);
+
+  const completeRecordFlow = useCallback((
+    kind: RecordEvidenceKind,
+    navigationVersionAtSave: number,
+    originatingSession: RecordSessionDraft | null,
+    originatingClassId: string
+  ): boolean => {
+    const session = recordSessionRef.current;
+    if (!originatingSession
+      || !session
+      || session !== originatingSession
+      || session.status !== 'editing'
+      || session.evidenceKind !== kind
+      || session.context.classId !== originatingClassId
+      || currentClassIdRef.current !== originatingClassId
+      || navigationVersionRef.current !== navigationVersionAtSave) {
+      return false;
+    }
+
+    publishRecordSession(markRecordSessionSaved(session));
+    setActiveTab('dashboard');
+    setTodayAction('record');
+    return true;
+  }, [publishRecordSession, setActiveTab]);
+
+  const handleChooseRecordEvidence = useCallback((kind: RecordEvidenceKind) => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+
+    const editingSession = setRecordEvidenceKind(session, kind);
+    publishRecordSession(editingSession);
+    const route = routeForRecordEvidence(kind);
+    setTodayAction('record');
+    setActiveTab(route.tab);
+    recordSpecialistNavigationVersionRef.current = navigationVersionRef.current;
+
+    try {
+      const classId = currentClassIdRef.current;
+      const params = new URLSearchParams();
+      if (classId) params.set('class', classId);
+      params.set('tab', route.tab);
+      history.pushState({ classId, tab: route.tab }, '', `?${params.toString()}`);
+    } catch (e) {}
+  }, [publishRecordSession, setActiveTab]);
+
+  const handleRecordLessonCommitted = useCallback((udaId: string, navigationVersionAtSave: number) => {
+    const session = recordSessionRef.current;
+    if (
+      !session ||
+      session.status !== 'editing' ||
+      session.evidenceKind !== 'lesson-log' ||
+      session.context.classId !== currentClassIdRef.current ||
+      (session.context.udaId && session.context.udaId !== udaId)
+    ) {
+      return;
+    }
+
+    const completed = completeRecordFlow('lesson-log', navigationVersionAtSave, session, session.context.classId);
+    if (completed) {
+      recordSpecialistNavigationVersionRef.current = null;
+    }
+  }, [completeRecordFlow]);
+
+  const handleReturnToRecord = useCallback(() => {
+    const session = recordSessionRef.current;
+    if (!session || session.status !== 'editing' || session.context.classId !== currentClassIdRef.current) return;
+    recordSpecialistNavigationVersionRef.current = null;
+    setTodayAction('record');
+    setActiveTab('dashboard');
+  }, [setActiveTab]);
+
+  const handleUpdateRecordStagedNote = useCallback((note: string) => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+    publishRecordSession(updateRecordStagedNote(session, note));
+  }, [publishRecordSession]);
+
+  const handleRecordAnother = useCallback(() => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+    publishRecordSession({ context: session.context, status: 'choose' });
+    setTodayAction('record');
+    setActiveTab('dashboard');
+  }, [publishRecordSession, setActiveTab]);
+
+  const handleContinueRecordToReview = useCallback(() => {
+    const session = recordSessionRef.current;
+    if (!session || session.context.classId !== currentClassIdRef.current) return;
+    publishRecordSession(null);
+    setTodayAction('review');
+    setActiveTab('dashboard');
+  }, [publishRecordSession, setActiveTab]);
 
   const handleStartTodayAction = useCallback((action: TodayAction) => {
     const decision = resolveTodayRoute(action, currentClassIdRef.current);
+    if (action !== 'record') publishRecordSession(null);
     setTodayAction(action);
     if (decision.status === 'needs-class') {
+      publishRecordSession(null);
       setActiveTab('home');
       return;
     }
-    handleNavigateTab(decision.target);
-  }, [handleNavigateTab, setActiveTab]);
+
+    if (action === 'record') {
+      const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === decision.classId);
+      if (!selectedClass) {
+        publishRecordSession(null);
+        return;
+      }
+      publishRecordSession(buildRecordSession({
+        classId: selectedClass.id,
+        className: selectedClass.name
+      }));
+    }
+    handleNavigateTab(decision.target, { preserveRecordSession: action === 'record' });
+  }, [handleNavigateTab, publishRecordSession, setActiveTab]);
 
   const handleContinueToday = useCallback((tab: ActiveTab) => {
     setTodayAction(null);
+    publishRecordSession(null);
     handleNavigateTab(tab);
-  }, [handleNavigateTab]);
+  }, [handleNavigateTab, publishRecordSession]);
 
   const handleCancelTodayAction = useCallback(() => {
     setTodayAction(null);
-  }, []);
+    publishRecordSession(null);
+  }, [publishRecordSession]);
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
+    const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
+    publishRecordSession(
+      todayAction === 'record' && selectedClass
+        ? buildRecordSession({ classId: selectedClass.id, className: selectedClass.name })
+        : null
+    );
     setActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
@@ -1401,6 +1560,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateHome = () => {
     setTodayAction(null);
+    publishRecordSession(null);
     currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
     setActiveTab('home');
@@ -1467,6 +1627,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
+    const recordSessionAtSave = recordSessionRef.current;
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
       id: uid(),
@@ -1495,8 +1656,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
+        const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
-        if (navigationVersionRef.current === navigationVersionAtSave) {
+        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
           setActiveTab('storico');
         }
       }
@@ -1508,12 +1670,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const classId = currentClass?.id;
     if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
-    const dateStr = newRecords[0]?.date || today();
+    const recordSessionAtSave = recordSessionRef.current;
+    const submittedBehaviorKeys = new Set(
+      newRecords.map(record => `${record.date}::${record.studentId}`)
+    );
 
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
-      const remaining = (targetClass.behaviors || []).filter(b => b.date !== dateStr);
+      const remaining = (targetClass.behaviors || []).filter(
+        record => !submittedBehaviorKeys.has(`${record.date}::${record.studentId}`)
+      );
       const updatedClass: ClassData = {
         ...targetClass,
         behaviors: [...remaining, ...newRecords]
@@ -1524,7 +1691,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
-        if (navigationVersionRef.current === navigationVersionAtSave) {
+        const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId);
+        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
           setActiveTab('dashboard');
         }
       }
@@ -1703,10 +1871,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
 
     let importedCount = 0;
+    let importedCountByClassId: Record<string, number> = {};
+    const navigationVersionAtSave = navigationVersionRef.current;
+    const recordSessionAtSave = recordSessionRef.current;
+    const recordingClassId = recordSessionAtSave?.context.classId;
 
     return commitAppDataMutation(current => {
       const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId);
       importedCount = result.importedCount;
+      importedCountByClassId = result.importedCountByClassId;
       return {
         ...current,
         classes: result.classes
@@ -1714,6 +1887,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }, {
       afterCommit: () => {
         alert(`Importazione completata con successo! ${importedCount} valutazioni sono state registrate negli elenchi di classe.`);
+        if (recordingClassId && (importedCountByClassId[recordingClassId] || 0) > 0) {
+          completeRecordFlow('online-outcomes', navigationVersionAtSave, recordSessionAtSave, recordingClassId);
+        }
       }
     }).then(() => undefined);
   };
@@ -1784,6 +1960,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       appDataRef.current = restoredVisibleAppData;
       currentClassIdRef.current = null;
       setTodayAction(null);
+      publishRecordSession(null);
       settingsRef.current = restored.settings;
       udasRef.current = restored.udas;
       testsRef.current = restored.customTests;
@@ -1821,6 +1998,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       appDataRef.current = resetAppData;
       currentClassIdRef.current = null;
       setTodayAction(null);
+      publishRecordSession(null);
       planningRef.current = resetPlanning;
       libraryRef.current = resetLibrary;
       professionalMemoryRef.current = resetProfessionalMemory;
@@ -1909,6 +2087,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onOpenConductCopilot={handleOpenConductCopilot}
             onGoToRecord={handleContinueFromConductToRecord}
+            recordSession={recordSession}
+            onChangeRecordStagedNote={handleUpdateRecordStagedNote}
+            onChooseRecordEvidence={handleChooseRecordEvidence}
+            onReviewRecord={handleContinueRecordToReview}
+            onRecordAnother={handleRecordAnother}
+          />
+        )}
+
+        {activeRecordMission && (
+          <RecordMissionBanner
+            className={activeRecordMission.context.className}
+            evidenceKind={activeRecordMission.evidenceKind}
+            udaTitle={activeRecordMission.context.udaTitle}
+            activityLabel={activeRecordMission.context.activityLabel}
+            onReturn={handleReturnToRecord}
           />
         )}
 
@@ -1918,6 +2111,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             editingBatchId={editingBatchId}
             udas={udas}
+            initialUdaId={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation'
+              ? recordSession.context.udaId
+              : undefined}
+            initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
             onCancelEdit={() => setEditingBatchId(null)}
             isPrivacyShieldActive={isPrivacyShieldActive}
@@ -1930,6 +2127,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onSaveBehaviors={handleSaveBehaviors}
             isPrivacyShieldActive={isPrivacyShieldActive}
+            requireExplicitSelection={recordSession?.status === 'editing'
+              && recordSession.evidenceKind === 'behaviour'
+              && recordSession.context.classId === currentClass.id}
           />
         )}
 
@@ -2004,6 +2204,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             submissions={submissions}
             udas={udas}
             settings={settings}
+            initialClassName={recordSession?.status === 'editing'
+              && recordSession.evidenceKind === 'online-outcomes'
+              && recordSession.context.classId === currentClass?.id
+              ? recordSession.context.className
+              : undefined}
             isPrivacyShieldActive={isPrivacyShieldActive}
             onSaveNewTest={handleSaveNewTest}
             onDeleteSubmission={handleDeleteSubmission}
@@ -2065,6 +2270,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             tests={tests}
             onSaveUdas={handleSaveUdas}
             onNavigateTab={handleNavigateTab}
+            recordLessonPrefill={recordSession?.status === 'editing' && recordSession.evidenceKind === 'lesson-log'
+              && recordSession.context.classId === currentClass?.id
+              && recordSpecialistNavigationVersionRef.current !== null
+              ? {
+                  className: recordSession.context.className,
+                  udaId: recordSession.context.udaId,
+                  date: today(),
+                  topic: recordSession.context.activityLabel,
+                  notes: recordSession.stagedNote,
+                  navigationVersion: recordSpecialistNavigationVersionRef.current
+                }
+              : undefined}
+            getRecordLessonNavigationVersion={() => navigationVersionRef.current}
+            onRecordLessonCommitted={handleRecordLessonCommitted}
             onOpenCopilot={openLibraryCopilot}
           />
         )}

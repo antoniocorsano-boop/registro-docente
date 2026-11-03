@@ -10,7 +10,7 @@ describe('FLOW-01 preparation UI contract', () => {
     expect(existsSync('src/components/PreparationRouterPanel.tsx')).toBe(true);
   });
 
-  test('Dashboard delegates prepare to the dedicated panel and preserves generic TODAY continuations', async () => {
+  test('Dashboard delegates prepare to its dedicated panel while only review remains generic', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("import { PreparationRouterPanel } from './PreparationRouterPanel';");
@@ -19,7 +19,7 @@ describe('FLOW-01 preparation UI contract', () => {
     expect(dashboard).toContain('className={currentClass.name}');
     expect(dashboard).toContain('onNavigateTab={(tab) => onContinueToday?.(tab)}');
     expect(dashboard).toContain('onDismiss={() => onDismissToday?.()}');
-    expect(dashboard).toContain("todayAction && todayAction !== 'prepare'");
+    expect(dashboard).toContain("todayAction === 'review'");
     expect(dashboard).toContain('getTodayContinuationOptions(todayAction)');
   });
 
@@ -39,12 +39,14 @@ describe('FLOW-01 preparation UI contract', () => {
     expect(panel).not.toContain('commitAppDataMutation');
   });
 
-  test('generic TODAY router no longer owns preparation options', async () => {
+  test('generic TODAY router owns neither prepare nor conduct nor record options', async () => {
     const router = await source('src/today/todayRouter.ts');
 
-    expect(router).toContain("export type TodayContinuationAction = Exclude<TodayAction, 'prepare' | 'conduct'>;");
+    expect(router).toContain("export type TodayContinuationAction = Extract<TodayAction, 'review'>;");
     expect(router).toContain('Record<TodayContinuationAction, readonly TodayContinuationOption[]>');
     expect(router).not.toContain('prepare: [');
-    expect(router).toContain("action: TodayContinuationAction");
+    expect(router).not.toContain('conduct: [');
+    expect(router).not.toContain('record: [');
+    expect(router).toContain('action: TodayContinuationAction');
   });
 });

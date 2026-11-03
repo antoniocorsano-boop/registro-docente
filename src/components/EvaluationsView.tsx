@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ClassData, EvaluationType, Grade, UdaRecord } from '../types';
 import { normalizeGrade, today, TYPES_LABEL, uid, formatStudentNameWithPrivacy } from '../utils';
 import { Save, X, Calendar, BookOpen, Layers, Check, Clock } from 'lucide-react';
@@ -8,6 +8,8 @@ interface EvaluationsViewProps {
   currentClass: ClassData;
   editingBatchId: string | null;
   udas?: UdaRecord[];
+  initialUdaId?: string;
+  initialDate?: string;
   onSaveEvaluations: (batchData: {
     batchId: string;
     period: 'Q1' | 'Q2';
@@ -21,10 +23,18 @@ interface EvaluationsViewProps {
   isPrivacyShieldActive?: boolean;
 }
 
+const isIsoDate = (value?: string): value is string => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+
 export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   currentClass,
   editingBatchId,
   udas = [],
+  initialUdaId,
+  initialDate,
   onSaveEvaluations,
   onCancelEdit,
   isPrivacyShieldActive = true
@@ -37,8 +47,19 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const [udaId, setUdaId] = useState<string>('');
   const [gradesMap, setGradesMap] = useState<Record<string, { value: string; delayed: boolean }>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const evaluationInitializationSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const safeInitialUdaId = udas.some(u => u.id === initialUdaId && u.className === currentClass.name) ? initialUdaId || '' : '';
+    const signature = JSON.stringify([
+      currentClass.id,
+      editingBatchId,
+      editingBatchId ? null : safeInitialUdaId,
+      editingBatchId ? null : (isIsoDate(initialDate) ? initialDate : null)
+    ]);
+    if (evaluationInitializationSignatureRef.current === signature) return;
+    evaluationInitializationSignatureRef.current = signature;
+
     if (editingBatchId) {
       const existingGrades = (currentClass.grades || []).filter(g => g.batchId === editingBatchId);
       if (existingGrades.length > 0) {
@@ -59,11 +80,11 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
       }
     } else {
       setTitle('');
-      setDate(today());
-      setUdaId('');
+      setDate(isIsoDate(initialDate) ? initialDate! : today());
+      setUdaId(safeInitialUdaId);
       setGradesMap({});
     }
-  }, [editingBatchId, currentClass]);
+  }, [editingBatchId, currentClass, udas, initialUdaId, initialDate]);
 
   const handleInputChange = (studentId: string, rawVal: string) => {
     const isDelayed = rawVal.toUpperCase().includes('R') || rawVal.toUpperCase().includes('RIT');
@@ -200,12 +221,13 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               Collega a UDA Curricolare
             </label>
             <select
+              aria-label="Collega a UDA Curricolare"
               value={udaId}
               onChange={e => setUdaId(e.target.value)}
               className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
             >
               <option value="">-- Nessuna UDA associata --</option>
-              {udas.map(u => (
+              {udas.filter(u => u.className === currentClass.name).map(u => (
                 <option key={u.id} value={u.id}>
                   {u.className} · {u.title}
                 </option>
