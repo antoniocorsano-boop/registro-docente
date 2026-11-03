@@ -175,7 +175,7 @@ async function runJourney(page, { mobile }) {
   await otherDialog.getByRole('spinbutton', { name: 'Durata Mesi', exact: true }).fill('2');
   await otherDialog.getByRole('button', { name: 'Crea UDA', exact: true }).click();
   await closeSaveConfirmation(page);
-  await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+  await page.getByRole('group', { name: 'Viste UDA' }).getByRole('button', { name: 'Analisi', exact: true }).click();
 
   const analysis = page.getByRole('region', { name: 'Analisi UDA' });
   await expect(analysis).toBeVisible();
