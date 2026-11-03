@@ -655,7 +655,9 @@
         "tests/browser/int-01-didactic-continuity.spec.cjs",
         ".github/workflows/browser-qualification.yml",
         "src/planning/curricularSubjectCode.ts",
-        "src/security/int01CurricularSubjectCodeContract.test.ts"
+        "src/security/int01CurricularSubjectCodeContract.test.ts",
+        "src/context/udaClassScope.ts",
+        "src/security/int01FinalReviewScopeContract.test.ts"
       ],
       "tests": [
         "src/security/int01PlanningFrameContract.test.ts",
@@ -664,7 +666,8 @@
         "src/security/int01AppContextContract.test.ts",
         "src/security/int01DidacticContinuityUiContract.test.ts",
         "src/security/int01QualificationContract.test.ts",
-        "src/security/int01CurricularSubjectCodeContract.test.ts"
+        "src/security/int01CurricularSubjectCodeContract.test.ts",
+        "src/security/int01FinalReviewScopeContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-01-didactic-continuity.spec.cjs"
