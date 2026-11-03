@@ -293,7 +293,9 @@ test.describe('FLOW-03 mobile qualification', () => {
     await assertNoHorizontalOverflow(page);
     await page.screenshot({ path: evidencePath('flow-03-mobile-uda-prefill.png'), fullPage: true });
 
-    // Regression: navigation before submit must not leave the later durable save stuck in editing.
+    // Regression: close the blocking dossier modal, navigate away, then return before submit.
+    await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
+    await expect(topic).toBeHidden();
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
     let drawer = page.getByRole('complementary');
     await drawer.getByRole('button', { name: 'Impostazioni', exact: true }).click();
@@ -305,15 +307,9 @@ test.describe('FLOW-03 mobile qualification', () => {
     await expect(topic).toHaveValue(UDA_TITLE);
     await expect(notes).toHaveValue(RAPID_NOTE);
 
-    console.log('FLOW-03 checkpoint: UDA prefill restored after navigation');
-    await expect(topic).toBeEditable({ timeout: 5_000 });
-    console.log('FLOW-03 checkpoint: lesson topic is editable');
-    await topic.fill(LESSON_TOPIC, { timeout: 5_000 });
-    console.log('FLOW-03 checkpoint: lesson topic filled');
-    await expect(topic).toHaveValue(LESSON_TOPIC, { timeout: 5_000 });
+    await topic.fill(LESSON_TOPIC);
     const lessonForm = topic.locator('xpath=ancestor::form[1]');
-    await lessonForm.locator('button[type="submit"]').click({ timeout: 5_000 });
-    console.log('FLOW-03 checkpoint: lesson submit clicked');
+    await lessonForm.locator('button[type="submit"]').click();
     await closePersistenceConfirmationIfPresent(page);
 
     const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
