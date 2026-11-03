@@ -59,15 +59,17 @@ function continuity(page) {
 async function createPlanningProfile(page) {
   const profile = page.getByRole('region', { name: 'Profilo programmazione' });
   await expect(profile).toBeVisible();
-  await expect(profile.getByRole('textbox', { name: 'Disciplina' })).toHaveValue('Tecnologia & Disegno Tecnico');
+  await expect(profile.getByRole('textbox', { name: 'Disciplina' })).toHaveValue('tecnologia');
+  await expect(profile.getByText(/Denominazione nelle impostazioni: Tecnologia & Disegno Tecnico/)).toBeVisible();
   await profile.getByRole('spinbutton', { name: 'Classe/livello' }).fill('2');
 
   await page.getByRole('button', { name: 'Calendario e normativa' }).click();
   const calendar = page.getByRole('region', { name: 'Calendario e normativa' });
   await calendar.getByLabel('Inizio lezioni').fill('2026-09-14');
   await calendar.getByLabel('Fine lezioni').fill('2027-06-08');
-  const localHours = calendar.getByRole('spinbutton', { name: /Monte ore locale annuale/ });
-  await localHours.fill('66');
+  await expect(calendar.getByText('2 h/settimana · 66 h/anno')).toBeVisible();
+  // National entitlement is already defined: local allocation is optional, not a hidden save prerequisite.
+  await expect(calendar.getByRole('spinbutton', { name: /Monte ore locale annuale/ })).toHaveValue('');
 
   await page.getByRole('button', { name: 'Organizzazione' }).click();
   const organization = page.getByRole('region', { name: 'Organizzazione programmazione' });
