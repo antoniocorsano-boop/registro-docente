@@ -8,6 +8,7 @@ const mandatoryImpactPaths = [
   'src/components/DidacticContinuityBar.tsx',
   'src/components/planning/PlanningProfileView.tsx',
   'src/components/UdaGanttView.tsx',
+  'src/components/UdaWorkspaceView.tsx',
   'src/App.tsx',
   'src/security/int01PlanningFrameContract.test.ts',
   'src/security/int01TeachingFocusContract.test.ts',
