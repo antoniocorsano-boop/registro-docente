@@ -288,6 +288,45 @@ test.describe('FLOW-03 desktop qualification', () => {
   });
 });
 
+test.describe('FLOW-03 direct Registra manual UDA qualification', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('carries the staged note only after the teacher explicitly selects a same-class UDA', async ({ page }) => {
+    const pageErrors = installPageErrorCollector(page);
+    await prepareScenario(page, 'flow-03-manual-uda');
+
+    const record = await openRecordFromOggi(page);
+    const stagedNote = record.getByLabel('Nota di sessione', { exact: true });
+    await stagedNote.fill(RAPID_NOTE);
+    await expect(stagedNote).toHaveValue(RAPID_NOTE);
+    await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
+
+    await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
+    const topic = page.getByPlaceholder('Argomento o fase operativa svolta...');
+    const notes = page.getByPlaceholder('Note professionali opzionali sulla lezione...');
+    await expect(topic).toBeHidden();
+    await expect(notes).toBeHidden();
+
+    await page.getByText(UDA_TITLE, { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Apri Fascicolo Completo & Diario', exact: true }).click();
+    await expect(topic).toBeVisible();
+    await expect(topic).toHaveValue('');
+    await expect(notes).toHaveValue(RAPID_NOTE);
+
+    await topic.fill(LESSON_TOPIC);
+    const lessonForm = topic.locator('xpath=ancestor::form[1]');
+    await lessonForm.locator('button[type="submit"]').click();
+    await closePersistenceConfirmationIfPresent(page);
+
+    const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
+    await expect(savedRecord).toBeVisible();
+    await expect(savedRecord).toContainText('Registrazione completata');
+    await expect(savedRecord.getByRole('button', { name: 'Rivedi', exact: true })).toBeVisible();
+    await page.screenshot({ path: evidencePath('flow-03-direct-manual-uda-saved.png'), fullPage: true });
+    expect(pageErrors).toEqual([]);
+  });
+});
+
 // Conduci → Registra → diario UDA
 // Registra → Comportamento
 // Registra → Esiti verifica online

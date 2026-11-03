@@ -192,18 +192,18 @@ describe('FLOW-03 independent review repairs', () => {
 
   test('carries a staged Registra note only after an explicit same-class UDA selection when no UDA was prebound', async () => {
     const uda = await source('src/components/UdaGanttView.tsx');
+    const handoff = sectionBetween(
+      uda,
+      'useEffect(() => {\n    if (!recordLessonPrefill) return;',
+      '// Months full Italian naming'
+    );
 
-    expect(uda).toContain('const pendingRecordLessonPrefillRef = useRef<RecordLessonPrefill | null>(null);');
-    expect(uda).toContain('pendingRecordLessonPrefillRef.current = recordLessonPrefill.udaId ? null : recordLessonPrefill;');
-    expect(uda).toContain('const handleOpenUdaForDetail = (uda: UdaRecord) => {');
-    expect(uda).toContain('const pendingPrefill = pendingRecordLessonPrefillRef.current;');
-    expect(uda).toContain('!pendingPrefill.udaId');
-    expect(uda).toContain('uda.className === pendingPrefill.className');
-    expect(uda).toContain("setNewLessonNotes(pendingPrefill.notes?.trim() || '');");
-    expect(uda).toContain('pendingRecordLessonPrefillRef.current = null;');
-    expect(uda).toContain('setSelectedUdaForDetail(uda);');
-    expect(uda).toContain('onClick={() => handleOpenUdaForDetail(u)}');
-    expect(uda).toContain('handleOpenUdaForDetail(u);');
+    expect(handoff).toContain('pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;');
+    expect(handoff).toContain('setSelectedUdaForDetail(null);');
+    expect(handoff).toContain('selectedUdaForDetail.className !== recordLessonPrefill.className');
+    expect(handoff).toContain('(recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId)');
+    expect(handoff).toContain('if (!recordLessonPrefill.udaId) {');
+    expect(handoff).toContain("setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');");
   });
 
   test('FLOW-03 browser journeys fail closed on page errors after their final evidence screenshot', async () => {

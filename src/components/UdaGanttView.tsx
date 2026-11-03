@@ -827,8 +827,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       ? udas.find(uda => uda.id === recordLessonPrefill.udaId && uda.className === recordLessonPrefill.className)
       : undefined;
 
+    pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;
     if (!safeTarget) {
-      pendingRecordLessonFocusRef.current = false;
       setSelectedUdaForDetail(null);
       return;
     }
@@ -844,8 +844,14 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     if (!recordLessonPrefill || !selectedUdaForDetail || !pendingRecordLessonFocusRef.current) return;
     if (
       selectedUdaForDetail.className !== recordLessonPrefill.className ||
-      selectedUdaForDetail.id !== recordLessonPrefill.udaId
+      (recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId)
     ) return;
+
+    if (!recordLessonPrefill.udaId) {
+      setNewLessonDate(recordLessonPrefill.date);
+      setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
+      setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
+    }
 
     const form = recordLessonFormRef.current;
     if (!form) return;
