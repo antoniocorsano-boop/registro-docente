@@ -1,0 +1,49 @@
+name: FLOW-03 P2 Submit Repair Harness
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+    paths:
+      - .github/workflows/flow-03-p2-submit-repair.yml
+      - scripts/flow03_p2_submit_repair.py
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact triggering head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03-registra-orchestrator
+          fetch-depth: 0
+
+      - name: Verify lease
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Apply exact repair
+        run: python scripts/flow03_p2_submit_repair.py
+
+      - name: Verify repair delta
+        run: |
+          git diff --check
+          grep -F "getRecordLessonNavigationVersion?: () => number;" src/components/UdaGanttView.tsx
+          grep -F "const navigationVersionAtSave = getRecordLessonNavigationVersion?.();" src/components/UdaGanttView.tsx
+          grep -F "getRecordLessonNavigationVersion={() => navigationVersionRef.current}" src/App.tsx
+          grep -F "Regression: navigation before submit" tests/browser/flow-03-registra.spec.cjs
+
+      - name: Commit and push with lease
+        env:
+          BRANCH: feat/flow-03-registra-orchestrator
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/UdaGanttView.tsx tests/browser/flow-03-registra.spec.cjs
+          git diff --cached --quiet && { echo "No repair delta produced"; exit 1; }
+          git commit -m "fix(flow-03): snapshot UDA navigation at lesson submit"
+          git fetch origin "$BRANCH"
+          test "$(git rev-parse origin/$BRANCH)" = "$GITHUB_SHA"
+          git push origin HEAD:"$BRANCH"
