@@ -172,6 +172,13 @@ async function runJourney(page, { mobile }) {
     const quickSwitch = page.locator('select[title="Cambia rapidamente classe attiva"]');
     await expect(quickSwitch).toBeVisible();
     await quickSwitch.selectOption({ label: NEXT_CLASS_NAME });
+    // Selecting a different class intentionally closes the specialist mission
+    // and lands on its Dashboard. The old UDA focus must not be restored.
+    await expect(continuity(page)).toHaveCount(0);
+    await expect.poll(() => quickSwitch.evaluate(select =>
+      select.selectedOptions[0]?.textContent?.trim() ?? ''
+    )).toBe(NEXT_CLASS_NAME);
+    await fromDrawer(page, 'Programmazione didattica');
     await expect(continuity(page)).toContainText('Classe ' + NEXT_CLASS_NAME);
     await expect(continuity(page)).not.toContainText('UDA: ' + UDA_TITLE);
   }
