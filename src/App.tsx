@@ -1551,6 +1551,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    setReviewEvidenceKind(null);
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
