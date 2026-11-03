@@ -305,9 +305,15 @@ test.describe('FLOW-03 mobile qualification', () => {
     await expect(topic).toHaveValue(UDA_TITLE);
     await expect(notes).toHaveValue(RAPID_NOTE);
 
-    await topic.fill(LESSON_TOPIC);
+    console.log('FLOW-03 checkpoint: UDA prefill restored after navigation');
+    await expect(topic).toBeEditable({ timeout: 5_000 });
+    console.log('FLOW-03 checkpoint: lesson topic is editable');
+    await topic.fill(LESSON_TOPIC, { timeout: 5_000 });
+    console.log('FLOW-03 checkpoint: lesson topic filled');
+    await expect(topic).toHaveValue(LESSON_TOPIC, { timeout: 5_000 });
     const lessonForm = topic.locator('xpath=ancestor::form[1]');
-    await lessonForm.locator('button[type="submit"]').click();
+    await lessonForm.locator('button[type="submit"]').click({ timeout: 5_000 });
+    console.log('FLOW-03 checkpoint: lesson submit clicked');
     await closePersistenceConfirmationIfPresent(page);
 
     const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
