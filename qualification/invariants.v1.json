@@ -545,7 +545,9 @@
         ".github/workflows/browser-qualification.yml",
         ".github/workflows/flow-03-contract-qualification.yml",
         "src/security/homeNavigationDuringSaveIntegrity.test.ts",
-        "src/security/persist01hTeacherUiContract.test.ts"
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/persistence/backupReminderPolicy.ts",
+        "src/security/flow03bBackupReminderContract.test.ts"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",
@@ -566,7 +568,8 @@
         "src/security/flow03FocusedUdaWorkspaceContract.test.ts",
         "src/security/flow03FocusedUdaDiaryContract.test.ts",
         "src/security/homeNavigationDuringSaveIntegrity.test.ts",
-        "src/security/persist01hTeacherUiContract.test.ts"
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/flow03bBackupReminderContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs",

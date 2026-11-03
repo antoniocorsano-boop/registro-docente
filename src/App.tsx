@@ -129,6 +129,7 @@ import {
   prepareBackupCheckpoint,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
+import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
@@ -507,7 +508,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ): Promise<AppData> => {
     const {
-      showBackupModal = true,
+      showBackupModal,
       successMessage = 'Salvato nel vault locale',
       afterCommit
     } = options;
@@ -538,9 +539,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
       },
-      afterCommit: () => {
+      afterCommit: (candidate, previous) => {
         if (successMessage) toast(successMessage);
-        if (showBackupModal) setIsBackupModalOpen(true);
+        const shouldOpenBackupModal = showBackupModal === true
+          || (showBackupModal === undefined
+            && shouldSuggestBackupReminder(previous.meta, candidate.meta));
+        if (shouldOpenBackupModal) setIsBackupModalOpen(true);
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
