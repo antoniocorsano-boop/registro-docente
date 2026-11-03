@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   apply:
-    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): apply prepared Human UX browser patch' }}"
+    if: "${{ github.actor != 'github-actions[bot]' && github.event.head_commit.message == 'chore(flow-03): retry prepared Human UX browser patch' }}"
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout branch
@@ -27,14 +27,17 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import textwrap
 
           prepared = Path('.github/workflows/flow03-human-ux-one-shot-browser.yml').read_text()
           start_marker = "          python3 - <<'PY'\n"
           end_marker = "          inv_path = Path('qualification/invariants.v1.json')\n"
           start = prepared.index(start_marker) + len(start_marker)
           end = prepared.index(end_marker, start)
-          script = textwrap.dedent(prepared[start:end])
+          extracted = prepared[start:end]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in extracted.splitlines()
+          ) + '\n'
           exec(compile(script, '<prepared-flow03-browser-patch>', 'exec'))
 
           inv_path = Path('qualification/invariants.v1.json')
