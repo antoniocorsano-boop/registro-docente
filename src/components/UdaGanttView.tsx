@@ -72,6 +72,7 @@ interface UdaGanttViewProps {
   onSaveUdas: (udas: UdaRecord[]) => Promise<void>;
   onNavigateTab?: (tab: any) => void;
   recordLessonPrefill?: RecordLessonPrefill;
+  getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
 }
 
@@ -457,6 +458,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   onSaveUdas,
   onNavigateTab,
   recordLessonPrefill,
+  getRecordLessonNavigationVersion,
   onRecordLessonCommitted
 }) => {
   // Master class filter at the top bar that keeps all views aligned
@@ -1156,6 +1158,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     e.preventDefault();
     if (!selectedUdaForDetail || !newLessonTopic.trim()) return;
 
+    const navigationVersionAtSave = getRecordLessonNavigationVersion?.();
     const newLesson: UdaLesson = {
       id: uid(),
       date: newLessonDate,
@@ -1182,10 +1185,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       showStatus('Attività registrata nel diario');
       if (
         recordLessonPrefill &&
+        navigationVersionAtSave !== undefined &&
         recordLessonPrefill.className === updatedUda.className &&
         (!recordLessonPrefill.udaId || recordLessonPrefill.udaId === updatedUda.id)
       ) {
-        onRecordLessonCommitted?.(updatedUda.id, recordLessonPrefill.navigationVersion);
+        onRecordLessonCommitted?.(updatedUda.id, navigationVersionAtSave);
       }
     });
   };

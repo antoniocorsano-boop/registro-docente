@@ -292,6 +292,18 @@ test.describe('FLOW-03 mobile qualification', () => {
     await assertNoHorizontalOverflow(page);
     await page.screenshot({ path: evidencePath('flow-03-mobile-uda-prefill.png'), fullPage: true });
 
+    // Regression: navigation before submit must not leave the later durable save stuck in editing.
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    let drawer = page.getByRole('complementary');
+    await drawer.getByRole('button', { name: 'Impostazioni', exact: true }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    drawer = page.getByRole('complementary');
+    await drawer.getByRole('button', { name: 'UDA', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
+    await expect(topic).toBeVisible();
+    await expect(topic).toHaveValue(UDA_TITLE);
+    await expect(notes).toHaveValue(RAPID_NOTE);
+
     await topic.fill(LESSON_TOPIC);
     const lessonForm = topic.locator('xpath=ancestor::form[1]');
     await lessonForm.locator('button[type="submit"]').click();

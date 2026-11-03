@@ -1440,26 +1440,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } catch (e) {}
   }, [publishRecordSession, setActiveTab]);
 
-  const handleRecordLessonSubmitCapture = useCallback(() => {
+  const handleRecordLessonCommitted = useCallback((udaId: string, navigationVersionAtSave: number) => {
     const session = recordSessionRef.current;
     if (
       !session ||
-      session.status !== 'editing' ||
-      session.evidenceKind !== 'lesson-log' ||
-      session.context.classId !== currentClassIdRef.current
-    ) {
-      return;
-    }
-
-    recordSpecialistNavigationVersionRef.current = navigationVersionRef.current;
-  }, []);
-
-  const handleRecordLessonCommitted = useCallback((udaId: string, _navigationVersionFromPrefill: number) => {
-    const session = recordSessionRef.current;
-    const navigationVersionAtSave = recordSpecialistNavigationVersionRef.current;
-    if (
-      !session ||
-      navigationVersionAtSave === null ||
       session.status !== 'editing' ||
       session.evidenceKind !== 'lesson-log' ||
       session.context.classId !== currentClassIdRef.current ||
@@ -2245,8 +2229,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
         {/* TAB 12: Programmazione UDA & Gantt legacy */}
         {activeTab === 'uda-gantt' && (
-          <div onSubmitCapture={handleRecordLessonSubmitCapture}>
-            <UdaGanttView
+          <UdaGanttView
             classes={appData.classes}
             udas={udas}
             settings={settings}
@@ -2265,10 +2248,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                   navigationVersion: recordSpecialistNavigationVersionRef.current
                 }
               : undefined}
-              onRecordLessonCommitted={handleRecordLessonCommitted}
-              onOpenCopilot={openLibraryCopilot}
-            />
-          </div>
+            getRecordLessonNavigationVersion={() => navigationVersionRef.current}
+            onRecordLessonCommitted={handleRecordLessonCommitted}
+            onOpenCopilot={openLibraryCopilot}
+          />
         )}
 
         {/* TAB 12: Impostazioni & Tema */}
