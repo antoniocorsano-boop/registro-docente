@@ -19,8 +19,9 @@ describe('FLOW-04 review mission UI contract', () => {
     expect(panel).toContain('Progressione didattica e diario della classe.');
     expect(panel).toContain('Evidenze comportamentali registrate.');
     expect(panel).toContain("session.origin === 'post-record' && session.evidenceKind");
-    expect(panel).toContain('isReviewSurface(option.tab)');
-    expect(panel).toContain('onNavigateSurface(option.tab)');
+    expect(panel).toContain('const surface = option.tab;');
+    expect(panel).toContain('isReviewSurface(surface)');
+    expect(panel).toContain('onNavigateSurface(surface)');
     expect(panel).toContain('min-h-[44px]');
     expect(panel).not.toMatch(/assegna voto|promuovi|boccia|devi correggere|correggi automaticamente/i);
   });
@@ -49,7 +50,7 @@ describe('FLOW-04 review mission UI contract', () => {
     expect(dashboard).toContain('const isActiveReviewFocus =');
     expect(dashboard).toContain('const isActiveMissionFocus = isActiveRecordFocus || isActiveReviewFocus;');
     expect(dashboard).toContain("todayAction === 'review' && reviewSession?.classId === currentClass.id");
-    expect(dashboard).toContain("open={!isActiveMissionFocus}");
+    expect(dashboard).toContain('open={!isActiveMissionFocus}');
     expect(dashboard).not.toContain('Scegli una superficie già esistente');
     expect(dashboard).not.toContain('Prima destinazione consigliata');
   });
