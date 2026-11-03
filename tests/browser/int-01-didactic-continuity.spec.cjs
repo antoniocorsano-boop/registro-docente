@@ -35,14 +35,6 @@ async function fromDrawer(page, label) {
   await drawer.getByRole('button', { name: label, exact: true }).click();
 }
 
-async function configureDiscipline(page) {
-  await fromDrawer(page, 'Impostazioni');
-  await page.getByPlaceholder('es. Tecnologia & Disegno').fill('tecnologia');
-  await page.getByRole('button', { name: 'Salva profilo e preferenze' }).click();
-  await closeSaveConfirmation(page);
-  await fromDrawer(page, 'Oggi');
-}
-
 async function createSyntheticClass(page, name) {
   page.once('dialog', dialog => dialog.accept(name));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
@@ -67,6 +59,7 @@ function continuity(page) {
 async function createPlanningProfile(page) {
   const profile = page.getByRole('region', { name: 'Profilo programmazione' });
   await expect(profile).toBeVisible();
+  await expect(profile.getByRole('textbox', { name: 'Disciplina' })).toHaveValue('Tecnologia & Disegno Tecnico');
   await profile.getByRole('spinbutton', { name: 'Classe/livello' }).fill('2');
 
   await page.getByRole('button', { name: 'Calendario e normativa' }).click();
@@ -129,7 +122,6 @@ async function runJourney(page, { mobile }) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await configureVault(page, mobile ? 'int-01-mobile' : 'int-01-desktop');
-  await configureDiscipline(page);
   await createSyntheticClass(page, CLASS_NAME);
   if (!mobile) await createSyntheticClass(page, NEXT_CLASS_NAME);
 
