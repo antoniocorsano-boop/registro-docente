@@ -1,4 +1,4 @@
-name: FLOW-04 Task 5 guarded browser registration
+name: FLOW-04 Task 5 guarded non-workflow registration
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   apply:
-    if: "${{ github.event.head_commit.message == 'chore: apply FLOW-04 task5 browser registration' }}"
+    if: "${{ github.event.head_commit.message == 'chore: apply FLOW-04 task5 non-workflow registration' }}"
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout FLOW-04 branch
@@ -19,7 +19,7 @@ jobs:
           ref: feat/flow-04-review-session
           fetch-depth: 1
 
-      - name: Apply guarded browser and invariant registration
+      - name: Apply guarded historical-browser and invariant registration
         shell: bash
         run: |
           python3 <<'PY'
@@ -34,6 +34,16 @@ jobs:
               if count != 1:
                   raise SystemExit(f'{path_string}: expected one marker, found {count}: {old}')
               path.write_text(text.replace(old, new, 1))
+
+          workflow = Path('.github/workflows/browser-qualification.yml').read_text()
+          for marker in [
+              'cp tests/browser/flow-04-review-session.spec.cjs .browser-tools/flow-04-review-session.spec.cjs',
+              'name: Run FLOW-04 Chromium qualification',
+              'flow-04-review-session.spec.cjs',
+              '--output=../browser-evidence/flow-04-test-results'
+          ]:
+              if marker not in workflow:
+                  raise SystemExit(f'browser workflow is missing persisted FLOW-04 marker: {marker}')
 
           today = 'tests/browser/today-01-home-oggi-router.spec.cjs'
           replace_once(today, "page.getByRole('region', { name: 'Continua: Rivedi' })", "page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` })")
@@ -91,39 +101,6 @@ jobs:
               raise SystemExit(f'FLOW-03 browser: lesson ordering block expected once, found {lesson_substitutions}')
           flow03_path.write_text(flow03)
 
-          workflow_path = Path('.github/workflows/browser-qualification.yml')
-          workflow = workflow_path.read_text()
-          copy_anchor = "          cp tests/browser/flow-03-registra.spec.cjs .browser-tools/flow-03-registra.spec.cjs\n"
-          if workflow.count(copy_anchor) != 1:
-              raise SystemExit(f'browser workflow: FLOW-03 copy anchor expected once, found {workflow.count(copy_anchor)}')
-          if 'cp tests/browser/flow-04-review-session.spec.cjs' in workflow:
-              raise SystemExit('browser workflow: FLOW-04 copy already registered')
-          workflow = workflow.replace(copy_anchor, copy_anchor + "          cp tests/browser/flow-04-review-session.spec.cjs .browser-tools/flow-04-review-session.spec.cjs\n", 1)
-
-          next_step = "      - name: Run LSM-01C consumer Chromium qualification\n"
-          if workflow.count(next_step) != 1:
-              raise SystemExit(f'browser workflow: LSM next-step anchor expected once, found {workflow.count(next_step)}')
-          if 'name: Run FLOW-04 Chromium qualification' in workflow:
-              raise SystemExit('browser workflow: FLOW-04 run already registered')
-          flow04_lines = [
-              "      - name: Run FLOW-04 Chromium qualification",
-              "        shell: bash",
-              "        run: |",
-              "          set -euo pipefail",
-              "          cd .browser-tools",
-              "          BASE_URL=\"http://127.0.0.1:${PORT}\" \\",
-              "          EVIDENCE_DIR=\"../browser-evidence\" \\",
-              "          CANDIDATE_SHA=\"${CANDIDATE_SHA}\" \\",
-              "          ./node_modules/.bin/playwright test \\",
-              "            flow-04-review-session.spec.cjs \\",
-              "            --workers=1 \\",
-              "            --reporter=line \\",
-              "            --output=../browser-evidence/flow-04-test-results",
-              "",
-          ]
-          workflow = workflow.replace(next_step, "\n".join(flow04_lines) + next_step, 1)
-          workflow_path.write_text(workflow)
-
           registry_path = Path('qualification/invariants.v1.json')
           registry = json.loads(registry_path.read_text())
           matches = [item for item in registry.get('invariants', []) if item.get('id') == 'FLOW-04-I01']
@@ -161,18 +138,15 @@ jobs:
           bun run lint
           bun run build
 
-      - name: Commit qualified Task 5 registration and remove temporary workflow
+      - name: Commit qualified non-workflow registration
         shell: bash
         run: |
-          rm .github/workflows/flow04-task5-apply.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            .github/workflows/browser-qualification.yml \
             qualification/invariants.v1.json \
             tests/browser/today-01-home-oggi-router.spec.cjs \
-            tests/browser/flow-03-registra.spec.cjs \
-            .github/workflows/flow04-task5-apply.yml
+            tests/browser/flow-03-registra.spec.cjs
           git diff --cached --check
-          git commit -m 'test: register FLOW-04 browser qualification'
+          git commit -m 'test: register FLOW-04 browser qualification metadata'
           git push origin HEAD:feat/flow-04-review-session
