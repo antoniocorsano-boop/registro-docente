@@ -47,7 +47,7 @@ describe('FLOW-03 focused UDA workspace contract', () => {
     const focusedPlanning = sectionBetween(
       workspace,
       "if (isFocusedRecordMode && activeView === 'planning')",
-      'return ('
+      '  return (\n    <div className="space-y-5">'
     );
 
     expect(focusedPlanning).toContain('<LegacyUdaGanttView');
