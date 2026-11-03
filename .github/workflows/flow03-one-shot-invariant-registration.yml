@@ -1,0 +1,65 @@
+name: FLOW-03 One-shot Invariant Registration
+
+on:
+  push:
+    branches:
+      - feat/flow-03-registra-orchestrator
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03-registra-orchestrator
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Register new FLOW-03 invariant contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('qualification/invariants.v1.json')
+          data = json.loads(path.read_text())
+          target = next(item for item in data['invariants'] if item['id'] == 'FLOW-03-I01')
+          contract = 'src/security/flow03OrdinaryUdaNavigationInvalidationContract.test.ts'
+          for key in ('impactPaths', 'tests'):
+              if contract not in target[key]:
+                  anchor = 'src/security/flow03IndependentReviewRepairs.test.ts'
+                  index = target[key].index(anchor) + 1
+                  target[key].insert(index, contract)
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n')
+          PY
+
+      - name: Verify registry and FLOW-03 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun scripts/qualification/check-invariants.mjs
+          bun test src/security/flow03OrdinaryUdaNavigationInvalidationContract.test.ts src/security/flow03IndependentReviewRepairs.test.ts
+          git diff --check
+
+      - name: Commit registration and remove one-shot harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/flow03-one-shot-invariant-registration.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'chore(flow-03): register UDA navigation invariant contract'
+          git push origin HEAD:feat/flow-03-registra-orchestrator
