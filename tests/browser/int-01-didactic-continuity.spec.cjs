@@ -184,10 +184,12 @@ async function runJourney(page, { mobile }) {
   await expect(secondaryClassFilter).toHaveValue(CLASS_NAME);
   const otherRow = analysis.getByRole('row').filter({ hasText: OTHER_UDA_TITLE });
   await otherRow.getByText(OTHER_UDA_TITLE).click();
-  await expect(analysis.locator('div.fixed.inset-0.z-50')).toHaveCount(1);
+  await expect(analysis.getByRole('dialog', { name: 'Scheda UDA nel cronoprogramma' })).toBeVisible();
+  await expect(analysis.getByRole('dialog')).toHaveCount(1);
+  await analysis.getByRole('dialog', { name: 'Scheda UDA nel cronoprogramma' })
+    .getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(analysis.getByRole('dialog')).toHaveCount(0);
   await expect(continuity(page)).toContainText('UDA: ' + OTHER_UDA_TITLE);
-  await analysis.getByRole('button', { name: 'Chiudi', exact: true }).click();
-  await expect(analysis.locator('div.fixed.inset-0.z-50')).toHaveCount(0);
   await continuity(page).getByRole('button', { name: 'Apri Programmazione' }).click();
   await expect(continuity(page)).toContainText('UDA: ' + OTHER_UDA_TITLE);
 
