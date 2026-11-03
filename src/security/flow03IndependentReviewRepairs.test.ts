@@ -174,6 +174,19 @@ describe('FLOW-03 independent review repairs', () => {
     expect(workspace).toContain('recordLessonPrefillSignatureRef.current = signature;');
   });
 
+  test('ordinary navigation invalidates a recording session while the explicit Registra entry preserves it', async () => {
+    const app = await source('src/App.tsx');
+    const navigation = sectionBetween(app, 'const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
+
+    expect(navigation).toContain('preserveRecordSession?: boolean');
+    expect(navigation).toContain('if (!options.preserveRecordSession) {');
+    expect(navigation).toContain('publishRecordSession(null);');
+    expect(navigation).toContain('recordSpecialistNavigationVersionRef.current = null;');
+
+    const start = sectionBetween(app, 'const handleStartTodayAction = useCallback', 'const handleContinueToday');
+    expect(start).toContain("handleNavigateTab(decision.target, { preserveRecordSession: action === 'record' });");
+  });
+
   test('FLOW-03 browser journeys fail closed on page errors after their final evidence screenshot', async () => {
     const browser = await source('tests/browser/flow-03-registra.spec.cjs');
     expect(browser).toContain('function installPageErrorCollector(page)');
