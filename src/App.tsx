@@ -1381,6 +1381,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     currentClassId: currentClass?.id ?? null,
     catalog: teachingUdaCatalog
   });
+  const activeTeachingCandidate = resolvedTeachingFocus.status === 'resolved'
+    ? teachingUdaCatalog.find(candidate => candidate.id === resolvedTeachingFocus.context.udaId)
+    : null;
+  const activeTeachingLesson = resolvedTeachingFocus.status === 'resolved'
+    ? activeTeachingCandidate?.lessons.find(lesson => lesson.id === resolvedTeachingFocus.context.lessonId)
+    : null;
   const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass?.id;
   const conductContext = currentClass
     ? resolveConductContext({
@@ -2405,6 +2411,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             arenaContexts={planning.arenaContexts}
             onSaveProfile={handleSaveTeachingProfile}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
+            currentClassName={currentClass?.name ?? null}
+            planningFrame={planningFrame}
+            focusedProfileId={planningFrame.status === 'resolved' ? planningFrame.profile.id : null}
+            teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
+            udaTitle={activeTeachingCandidate?.title ?? null}
+            lessonTitle={activeTeachingLesson?.topic ?? null}
+            onOpenUda={() => setActiveTab('uda-gantt')}
           />
         )}
 
@@ -2444,6 +2457,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             tests={tests}
             onSaveUdas={handleSaveUdas}
+            currentClassName={currentClass?.name ?? null}
+            planningFrame={planningFrame}
+            teachingFocus={resolvedTeachingFocus.status === 'resolved' ? teachingFocus : null}
+            teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
+            udaTitle={activeTeachingCandidate?.title ?? null}
+            lessonTitle={activeTeachingLesson?.topic ?? null}
+            onTeachingFocusChange={focus => setTeachingFocus(
+              keepTeachingFocusForClass(focus, currentClass?.id ?? null, teachingUdaCatalog)
+            )}
+            onOpenPlanning={() => setActiveTab('programmazione')}
             onNavigateTab={handleNavigateTab}
             recordLessonPrefill={recordSession?.status === 'editing' && recordSession.evidenceKind === 'lesson-log'
               && recordSession.context.classId === currentClass?.id
