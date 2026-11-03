@@ -156,6 +156,7 @@ import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
 import { RecordMissionBanner } from './components/RecordMissionBanner';
+import { ReviewMissionBanner } from './components/ReviewMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
 import { BehaviorsView } from './components/BehaviorsView';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -2190,8 +2191,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onNavigateTab={handleNavigateTab}
             onEditBatch={handleEditBatch}
             todayAction={todayAction}
-            reviewEvidenceKind={reviewSession?.evidenceKind ?? null}
+            reviewSession={reviewSession}
             onContinueToday={handleContinueToday}
+            onOpenReviewSurface={handleOpenReviewSurface}
+            onCloseReview={handleCloseReview}
             onDismissToday={handleCancelTodayAction}
             onOpenPreparationCopilot={handleOpenPreparationCopilot}
             conductContext={conductContext}
@@ -2207,6 +2210,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onRecordAnother={handleRecordAnother}
           />
         )}
+
+        {reviewSession
+          && currentClass
+          && reviewSession.classId === currentClass.id
+          && isReviewSurface(activeTab)
+          && reviewSession.currentSurface === activeTab && (
+            <ReviewMissionBanner
+              session={reviewSession}
+              onReturn={handleReturnToReview}
+              onDismiss={handleCloseReview}
+            />
+          )}
 
         {activeRecordMission && (
           <RecordMissionBanner
