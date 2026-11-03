@@ -43,6 +43,9 @@ describe('FLOW-04 browser qualification contract', () => {
       'Superficie corrente: Analisi',
       'class switch closes the prior review mission',
       'non-review navigation closes the mission',
+      'specialist-to-specialist keeps review mission',
+      'Superficie corrente: Scheda alunno',
+      'specialist exit closes review mission',
       'assertNoHorizontalOverflow',
       'assertTouchSafe',
       'expect(pageErrors).toEqual([])'
