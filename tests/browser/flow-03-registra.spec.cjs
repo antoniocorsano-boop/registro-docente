@@ -272,7 +272,7 @@ test.describe('FLOW-03 desktop qualification', () => {
     // Ordinary navigation must invalidate Registra before a later standalone evaluation.
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
     const drawer = page.getByRole('complementary');
-    await drawer.getByRole('button', { name: 'Storico', exact: true }).click();
+    await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
     await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
     await page.getByRole('button', { name: /Nuova Valutazione/ }).click();
     await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();

@@ -462,7 +462,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ) => {
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
-    if (!options.preserveRecordSession) {
+    const shouldPreserveRecordSession =
+      options.preserveRecordSession
+      || (
+        recordSessionRef.current?.status === 'editing'
+        && recordSessionRef.current.evidenceKind === 'lesson-log'
+      );
+    if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
       recordSpecialistNavigationVersionRef.current = null;
     }
