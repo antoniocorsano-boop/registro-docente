@@ -553,7 +553,17 @@
         "src/security/flow03bContextualReviewContract.test.ts",
         "docs/superpowers/specs/2026-11-03-flow-03b-post-record-ux-design.md",
         "docs/superpowers/plans/2026-11-03-flow-03b-post-record-ux.md",
-        "docs/superpowers/receipts/2026-11-03-flow-03b-browser-integration-checkpoint.md"
+        "docs/superpowers/receipts/2026-11-03-flow-03b-browser-integration-checkpoint.md",
+        "tests/browser/aic-01-context-projection.spec.cjs",
+        "tests/browser/aic-05-professional-memory.spec.cjs",
+        "tests/browser/aic-07-supervised-copilot.spec.cjs",
+        "tests/browser/browser-qualification.spec.cjs",
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/lib01e-provider-disclosure-review.spec.cjs",
+        "tests/browser/lib04c-copilot-link.spec.cjs",
+        "tests/browser/lib04d-copilot-prepare.spec.cjs",
+        "tests/browser/release-01-qualification.spec.cjs",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",
