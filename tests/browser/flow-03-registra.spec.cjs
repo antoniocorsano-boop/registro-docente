@@ -207,6 +207,19 @@ async function assertNoAutomaticMutation(page) {
   await expect(page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' })).toBeHidden();
 }
 
+async function assertRecordMission(page, evidenceLabel) {
+  const mission = page.getByRole('region', { name: `Missione Registra per ${CLASS_NAME}` });
+  await expect(mission).toBeVisible();
+  await expect(mission).toContainText(`Stai registrando · ${CLASS_NAME}`);
+  await expect(mission).toContainText(evidenceLabel);
+  const returnButton = mission.getByRole('button', { name: 'Torna a Registra', exact: true });
+  await expect(returnButton).toBeVisible();
+  const box = await returnButton.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  return mission;
+}
+
 async function handoffConductToRecord(page, panel) {
   const note = panel.getByLabel('Nota rapida', { exact: true });
   await note.fill(RAPID_NOTE);
@@ -229,6 +242,7 @@ async function openEvaluationFromRecord(page, record) {
   await expect.poll(() => udaSelect.locator('option:checked').textContent()).toContain(UDA_TITLE);
   await assertSelectedClassStillVisible(page);
   await assertNoAutomaticMutation(page);
+  return assertRecordMission(page, 'Valutazione');
 }
 
 async function openBehaviourFromRecord(page, record) {
@@ -239,6 +253,7 @@ async function openBehaviourFromRecord(page, record) {
   await expect(defaultStatus).not.toHaveClass(/ring-2/);
   await assertSelectedClassStillVisible(page);
   await assertNoAutomaticMutation(page);
+  return assertRecordMission(page, 'Comportamento');
 }
 
 async function openOnlineOutcomesFromRecord(page, record) {
@@ -251,6 +266,7 @@ async function openOnlineOutcomesFromRecord(page, record) {
   const classSelect = page.getByLabel('Classe Destinataria', { exact: true });
   await expect(classSelect).toHaveValue(CLASS_NAME);
   await assertNoAutomaticMutation(page);
+  return assertRecordMission(page, 'Esiti verifica online');
 }
 
 // Conduci → Registra → Valutazione, so the UDA context is explicit and safe.
@@ -258,73 +274,99 @@ test.describe('FLOW-03 desktop qualification', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test('Registra → Valutazione keeps explicit class/UDA context without writing', async ({ page }) => {
-    const pageErrors = installPageErrorCollector(page);
-    await prepareScenario(page, 'flow-03-desktop');
-    const conduct = await openConductFromOggi(page);
-    const record = await handoffConductToRecord(page, conduct);
-    await assertSelectedClassStillVisible(page);
-    await assertNoHorizontalOverflow(page);
-    await page.screenshot({ path: evidencePath('flow-03-desktop-record.png'), fullPage: true });
+  const pageErrors = installPageErrorCollector(page);
+  await prepareScenario(page, 'flow-03-desktop');
+  const conduct = await openConductFromOggi(page);
+  const record = await handoffConductToRecord(page, conduct);
+  await assertSelectedClassStillVisible(page);
+  await assertNoHorizontalOverflow(page);
+  await page.screenshot({ path: evidencePath('flow-03-desktop-record.png'), fullPage: true });
 
-    await openEvaluationFromRecord(page, record);
-    await page.screenshot({ path: evidencePath('flow-03-desktop-evaluation.png'), fullPage: true });
+  let mission = await openEvaluationFromRecord(page, record);
+  await page.screenshot({ path: evidencePath('flow-03-desktop-evaluation-mission.png'), fullPage: true });
 
-    // Ordinary navigation must invalidate Registra before a later standalone evaluation.
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    const drawer = page.getByRole('complementary');
-    await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
-    await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
-    await page.getByRole('button', { name: /Nuova Valutazione/ }).click();
-    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
-    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill(STANDALONE_EVALUATION_TITLE);
-    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
-    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
-    await closePersistenceConfirmationIfPresent(page);
-    await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
-    await expect(page.getByText(STANDALONE_EVALUATION_TITLE, { exact: true })).toBeVisible();
-    await expect(page.getByRole('region', { name: `Registra per ${CLASS_NAME}` })).toBeHidden();
-    await page.screenshot({ path: evidencePath('flow-03-desktop-standalone-evaluation.png'), fullPage: true });
-    expect(pageErrors).toEqual([]);
-  });
+  await mission.getByRole('button', { name: 'Torna a Registra', exact: true }).click();
+  const returnedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
+  await expect(returnedRecord).toBeVisible();
+  await expect(returnedRecord.getByLabel('Nota di sessione', { exact: true })).toHaveValue(RAPID_NOTE);
+  await page.screenshot({ path: evidencePath('flow-03-desktop-return-to-record.png'), fullPage: true });
+
+  mission = await openEvaluationFromRecord(page, returnedRecord);
+  await expect(mission).toBeVisible();
+
+  // Ordinary navigation must invalidate Registra before a later standalone evaluation.
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const drawer = page.getByRole('complementary');
+  await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
+  await expect(mission).toBeHidden();
+  await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
+  await page.getByRole('button', { name: /Nuova Valutazione/ }).click();
+  await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+  await expect(mission).toBeHidden();
+  await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill(STANDALONE_EVALUATION_TITLE);
+  await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+  await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+  await closePersistenceConfirmationIfPresent(page);
+  await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
+  await expect(page.getByText(STANDALONE_EVALUATION_TITLE, { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: `Registra per ${CLASS_NAME}` })).toBeHidden();
+  await page.screenshot({ path: evidencePath('flow-03-desktop-standalone-evaluation.png'), fullPage: true });
+  expect(pageErrors).toEqual([]);
+});
 });
 
 test.describe('FLOW-03 direct Registra manual UDA qualification', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test('carries the staged note only after the teacher explicitly selects a same-class UDA', async ({ page }) => {
-    const pageErrors = installPageErrorCollector(page);
-    await prepareScenario(page, 'flow-03-manual-uda');
+  const pageErrors = installPageErrorCollector(page);
+  await prepareScenario(page, 'flow-03-manual-uda');
 
-    const record = await openRecordFromOggi(page);
-    const stagedNote = record.getByLabel('Nota di sessione', { exact: true });
-    await stagedNote.fill(RAPID_NOTE);
-    await expect(stagedNote).toHaveValue(RAPID_NOTE);
-    await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
+  const record = await openRecordFromOggi(page);
+  const stagedNote = record.getByLabel('Nota di sessione', { exact: true });
+  await stagedNote.fill(RAPID_NOTE);
+  await expect(stagedNote).toHaveValue(RAPID_NOTE);
+  await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
 
-    await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
-    const topic = page.getByPlaceholder('Argomento o fase operativa svolta...');
-    const notes = page.getByPlaceholder('Note professionali opzionali sulla lezione...');
-    await expect(topic).toBeHidden();
-    await expect(notes).toBeHidden();
+  await assertRecordMission(page, 'Attività / nota UDA');
+  const chooser = page.getByRole('region', { name: 'Seleziona UDA per Registra' });
+  await expect(chooser).toBeVisible();
+  await expect(chooser.getByText(UDA_TITLE, { exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeHidden();
+  await chooser.getByRole('button', { name: 'Scegli questa UDA', exact: true }).click();
 
-    await page.getByText(UDA_TITLE, { exact: true }).first().click();
-    await page.getByRole('button', { name: 'Apri Fascicolo Completo & Diario', exact: true }).click();
-    await expect(topic).toBeVisible();
-    await expect(topic).toHaveValue('');
-    await expect(notes).toHaveValue(RAPID_NOTE);
+  await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
+  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
+  await expect(page.getByText('Diario della registrazione', { exact: true })).toBeVisible();
+  const topic = page.getByPlaceholder('Argomento o fase operativa svolta...');
+  const notes = page.getByPlaceholder('Note professionali opzionali sulla lezione...');
+  await expect(topic).toBeVisible();
+  await expect(topic).toHaveValue('');
+  await expect(notes).toHaveValue(RAPID_NOTE);
+  const showDetails = page.getByRole('button', { name: 'Mostra dettagli UDA', exact: true });
+  await expect(showDetails).toBeVisible();
+  await page.screenshot({ path: evidencePath('flow-03-direct-focused-uda.png'), fullPage: true });
 
-    await topic.fill(LESSON_TOPIC);
-    const lessonForm = topic.locator('xpath=ancestor::form[1]');
-    await lessonForm.locator('button[type="submit"]').click();
-    await closePersistenceConfirmationIfPresent(page);
+  await showDetails.click();
+  const hideDetails = page.getByRole('button', { name: 'Nascondi dettagli UDA', exact: true });
+  await expect(hideDetails).toBeVisible();
+  await expect(topic).toHaveValue('');
+  await expect(notes).toHaveValue(RAPID_NOTE);
+  await hideDetails.click();
+  await expect(showDetails).toBeVisible();
 
-    const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
-    await expect(savedRecord).toBeVisible();
-    await expect(savedRecord).toContainText('Registrazione completata');
-    await expect(savedRecord.getByRole('button', { name: 'Rivedi', exact: true })).toBeVisible();
-    await page.screenshot({ path: evidencePath('flow-03-direct-manual-uda-saved.png'), fullPage: true });
-    expect(pageErrors).toEqual([]);
-  });
+  await topic.fill(LESSON_TOPIC);
+  const lessonForm = topic.locator('xpath=ancestor::form[1]');
+  await lessonForm.getByRole('button', { name: 'Registra attività', exact: true }).click();
+  await closePersistenceConfirmationIfPresent(page);
+
+  const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
+  await expect(savedRecord).toBeVisible();
+  await expect(savedRecord).toContainText('Registrazione completata');
+  await expect(savedRecord.getByRole('button', { name: 'Rivedi', exact: true })).toBeVisible();
+  await page.screenshot({ path: evidencePath('flow-03-direct-manual-uda-saved.png'), fullPage: true });
+  expect(pageErrors).toEqual([]);
+});
 });
 
 // Conduci → Registra → diario UDA
@@ -334,84 +376,83 @@ test.describe('FLOW-03 mobile qualification', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('records one explicit UDA lesson, then offers review and keeps other specialist routes non-mutating', async ({ page }) => {
-    const pageErrors = installPageErrorCollector(page);
-    await prepareScenario(page, 'flow-03-mobile');
+  const pageErrors = installPageErrorCollector(page);
+  await prepareScenario(page, 'flow-03-mobile');
 
-    const conduct = await openConductFromOggi(page);
-    const record = await handoffConductToRecord(page, conduct);
-    await assertSelectedClassStillVisible(page);
-    await assertNoHorizontalOverflow(page);
-    await assertCriticalControlsTouchSafe(record);
-    await assertStagedNoteTextareaUnobscured(page, record);
-    await page.screenshot({ path: evidencePath('flow-03-mobile-record.png'), fullPage: true });
+  const conduct = await openConductFromOggi(page);
+  const record = await handoffConductToRecord(page, conduct);
+  await assertSelectedClassStillVisible(page);
+  await assertNoHorizontalOverflow(page);
+  await assertCriticalControlsTouchSafe(record);
+  await assertStagedNoteTextareaUnobscured(page, record);
+  await page.screenshot({ path: evidencePath('flow-03-mobile-record.png'), fullPage: true });
 
-    await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
-    const topic = page.getByPlaceholder('Argomento o fase operativa svolta...');
-    const notes = page.getByPlaceholder('Note professionali opzionali sulla lezione...');
-    await expect(topic).toBeVisible();
-    await expect(topic).toHaveValue(UDA_TITLE);
-    await expect(notes).toHaveValue(RAPID_NOTE);
-    await assertSelectedClassStillVisible(page);
-    await assertNoAutomaticMutation(page);
-    await assertNoHorizontalOverflow(page);
-    await page.screenshot({ path: evidencePath('flow-03-mobile-uda-prefill.png'), fullPage: true });
+  await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
+  const mission = await assertRecordMission(page, 'Attività / nota UDA');
+  await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
+  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
+  await expect(page.getByText('Diario della registrazione', { exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeHidden();
+  const topic = page.getByPlaceholder('Argomento o fase operativa svolta...');
+  const notes = page.getByPlaceholder('Note professionali opzionali sulla lezione...');
+  await expect(topic).toBeVisible();
+  await expect(topic).toHaveValue(UDA_TITLE);
+  await expect(notes).toHaveValue(RAPID_NOTE);
+  await assertSelectedClassStillVisible(page);
+  await assertNoAutomaticMutation(page);
+  await assertNoHorizontalOverflow(page);
+  const showDetails = page.getByRole('button', { name: 'Mostra dettagli UDA', exact: true });
+  await expect(showDetails).toBeVisible();
+  await page.screenshot({ path: evidencePath('flow-03-mobile-focused-uda.png'), fullPage: true });
 
-    // The same handoff must not force Pianificazione again on unrelated rerenders.
-    await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
-    await expect(topic).toBeHidden();
-    const workspaceViews = page.getByRole('group', { name: 'Viste UDA' });
-    await workspaceViews.getByRole('button', { name: 'Analisi', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Analisi UDA' })).toBeVisible();
-    const privacyShield = page.locator('button[title^="Privacy Shield"]').first();
-    await expect(privacyShield).toBeVisible();
-    await privacyShield.click();
-    await expect(page.getByRole('region', { name: 'Analisi UDA' })).toBeVisible();
-    await workspaceViews.getByRole('button', { name: 'Pianificazione', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
-    await expect(topic).toBeVisible();
-    await expect(topic).toHaveValue(UDA_TITLE);
-    await expect(notes).toHaveValue(RAPID_NOTE);
+  await showDetails.click();
+  const hideDetails = page.getByRole('button', { name: 'Nascondi dettagli UDA', exact: true });
+  await expect(hideDetails).toBeVisible();
+  await expect(topic).toHaveValue(UDA_TITLE);
+  await expect(notes).toHaveValue(RAPID_NOTE);
+  await hideDetails.click();
+  await expect(showDetails).toBeVisible();
 
-    // Regression: close the blocking dossier modal, navigate away, then return before submit.
-    await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
-    await expect(topic).toBeHidden();
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    let drawer = page.getByRole('complementary');
-    await drawer.getByRole('button', { name: 'Impostazioni', exact: true }).click();
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    drawer = page.getByRole('complementary');
-    await drawer.getByRole('button', { name: 'UDA', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Pianificazione UDA' })).toBeVisible();
-    await expect(topic).toBeVisible();
-    await expect(topic).toHaveValue(UDA_TITLE);
-    await expect(notes).toHaveValue(RAPID_NOTE);
+  // Explicit return preserves the session-only draft, unlike ordinary navigation.
+  await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
+  await expect(topic).toBeHidden();
+  await mission.getByRole('button', { name: 'Torna a Registra', exact: true }).click();
+  const returnedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
+  await expect(returnedRecord).toBeVisible();
+  await expect(returnedRecord.getByLabel('Nota di sessione', { exact: true })).toHaveValue(RAPID_NOTE);
+  await returnedRecord.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
+  await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
+  await expect(topic).toBeVisible();
+  await expect(topic).toHaveValue(UDA_TITLE);
+  await expect(notes).toHaveValue(RAPID_NOTE);
 
-    await topic.fill(LESSON_TOPIC);
-    const lessonForm = topic.locator('xpath=ancestor::form[1]');
-    await lessonForm.locator('button[type="submit"]').click();
-    await closePersistenceConfirmationIfPresent(page);
+  await topic.fill(LESSON_TOPIC);
+  const lessonForm = topic.locator('xpath=ancestor::form[1]');
+  await lessonForm.getByRole('button', { name: 'Registra attività', exact: true }).click();
+  await closePersistenceConfirmationIfPresent(page);
 
-    const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
-    await expect(savedRecord).toBeVisible();
-    await expect(savedRecord).toContainText('Registrazione completata');
-    await expect(savedRecord.getByRole('button', { name: 'Rivedi', exact: true })).toBeVisible();
-    await assertNoHorizontalOverflow(page);
-    await page.screenshot({ path: evidencePath('flow-03-mobile-uda-saved.png'), fullPage: true });
+  const savedRecord = page.getByRole('region', { name: `Registra per ${CLASS_NAME}` });
+  await expect(savedRecord).toBeVisible();
+  await expect(savedRecord).toContainText('Registrazione completata');
+  await expect(savedRecord.getByRole('button', { name: 'Rivedi', exact: true })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+  await page.screenshot({ path: evidencePath('flow-03-mobile-uda-saved.png'), fullPage: true });
 
-    await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
-    const review = page.getByRole('region', { name: 'Continua: Rivedi' });
-    await expect(review).toBeVisible();
-    await page.screenshot({ path: evidencePath('flow-03-mobile-review.png'), fullPage: true });
+  await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
+  const review = page.getByRole('region', { name: 'Continua: Rivedi' });
+  await expect(review).toBeVisible();
+  await page.screenshot({ path: evidencePath('flow-03-mobile-review.png'), fullPage: true });
 
-    await openOggiFromDrawer(page);
-    const behaviourRecord = await openRecordFromOggi(page);
-    await openBehaviourFromRecord(page, behaviourRecord);
+  await openOggiFromDrawer(page);
+  const behaviourRecord = await openRecordFromOggi(page);
+  const behaviourMission = await openBehaviourFromRecord(page, behaviourRecord);
+  await expect(behaviourMission).toBeVisible();
 
-    await openOggiFromDrawer(page);
-    const onlineRecord = await openRecordFromOggi(page);
-    await openOnlineOutcomesFromRecord(page, onlineRecord);
-    await page.screenshot({ path: evidencePath('flow-03-mobile-final.png'), fullPage: true });
-    expect(pageErrors).toEqual([]);
-  });
+  await openOggiFromDrawer(page);
+  const onlineRecord = await openRecordFromOggi(page);
+  const onlineMission = await openOnlineOutcomesFromRecord(page, onlineRecord);
+  await expect(onlineMission).toBeVisible();
+  await page.screenshot({ path: evidencePath('flow-03-mobile-final.png'), fullPage: true });
+  expect(pageErrors).toEqual([]);
+});
 });
