@@ -31,7 +31,8 @@ describe('FLOW-03 safe evaluation prefill contract', () => {
     expect(effect).toContain("? initialUdaId || ''");
     expect(effect).toContain("setUdaId(safeInitialUdaId);");
     expect(effect).toContain("setDate(isIsoDate(initialDate) ? initialDate! : today());");
-    expect(effect.indexOf('setUdaId(existingGrades[0].udaId || \'\');')).toBeLessThan(effect.indexOf('const safeInitialUdaId'));
+    expect(effect.indexOf('const safeInitialUdaId')).toBeLessThan(effect.indexOf('if (editingBatchId)'));
+    expect(effect.indexOf('setUdaId(existingGrades[0].udaId || \'\');')).toBeLessThan(effect.indexOf('setUdaId(safeInitialUdaId);'));
   });
 
   test('keeps UDA/date fully reviewable and never auto-submits the prefill', async () => {
