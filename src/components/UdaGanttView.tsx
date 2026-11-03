@@ -460,7 +460,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   onNavigateTab,
   recordLessonPrefill,
   getRecordLessonNavigationVersion,
-  onRecordLessonCommitted
+  onRecordLessonCommitted,
+  focusedRecordMode = false
 }) => {
   // Master class filter at the top bar that keeps all views aligned
   const [selectedMasterClass, setSelectedMasterClass] = useState<string>('all');
@@ -491,6 +492,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   // Detailed UDA Project Dossier Modal
   const [selectedUdaForDetail, setSelectedUdaForDetail] = useState<UdaRecord | null>(null);
+  const [showFocusedRecordDetails, setShowFocusedRecordDetails] = useState(false);
 
   // Dedicated Gantt Bar Click Modal (Activity Detail, Objectives & Key Competencies)
   const [ganttSelectedUda, setGanttSelectedUda] = useState<UdaRecord | null>(null);
@@ -818,6 +820,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     ]);
     if (recordLessonPrefillSignatureRef.current === signature) return;
     recordLessonPrefillSignatureRef.current = signature;
+    if (focusedRecordMode) setShowFocusedRecordDetails(false);
 
     setSelectedMasterClass(recordLessonPrefill.className);
     setClassFilter(recordLessonPrefill.className);
@@ -839,7 +842,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     setNewLessonDate(recordLessonPrefill.date);
     setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
     setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
-  }, [recordLessonPrefill, udas]);
+  }, [focusedRecordMode, recordLessonPrefill, udas]);
 
   useEffect(() => {
     if (!recordLessonPrefill || !selectedUdaForDetail || !pendingRecordLessonFocusRef.current) return;
@@ -1587,6 +1590,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         </div>
       )}
 
+      {!focusedRecordMode && (
+        <>
       {/* ============================================================== */}
       {/* TOP UNIFIED WORKFLOW BAR: MASTER CLASS SELECTOR & ACTIONS */}
       {/* ============================================================== */}
@@ -2557,6 +2562,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         </div>
       )}
 
+        </>
+      )}
+
       {/* ============================================================== */}
       {/* GANTT BAR CLICK MODAL: ATTIVITÀ, OBIETTIVI, COMPETENZE & CRONO */}
       {/* ============================================================== */}
@@ -2778,6 +2786,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         return (
           <div className="fixed inset-0 z-50 bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto">
             <div className="w-full max-w-4xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-6">
+              {focusedRecordMode && (
+                <div className="rounded-xl border border-cyan-800/70 bg-cyan-950/30 p-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-cyan-300">Registrazione rapida</p>
+                  <p className="mt-1 text-sm text-slate-300">Completa il diario dell'UDA; i dettagli progettuali restano disponibili solo se servono.</p>
+                </div>
+              )}
               {/* Header */}
               <div className="flex items-start justify-between pb-4 border-b border-[var(--border)]">
                 <div>
@@ -2816,6 +2830,27 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 </div>
               </div>
 
+              {focusedRecordMode && !showFocusedRecordDetails && (
+                <button
+                  type="button"
+                  onClick={() => setShowFocusedRecordDetails(true)}
+                  className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-cyan-200 hover:border-cyan-600"
+                >
+                  Mostra dettagli UDA
+                </button>
+              )}
+              {focusedRecordMode && showFocusedRecordDetails && (
+                <button
+                  type="button"
+                  onClick={() => setShowFocusedRecordDetails(false)}
+                  className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-cyan-600"
+                >
+                  Nascondi dettagli UDA
+                </button>
+              )}
+
+              {(!focusedRecordMode || showFocusedRecordDetails) && (
+                <>
               {/* Section: Propedeuticità & Dipendenze tra UDA */}
               <div className="p-4 rounded-xl bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
@@ -3048,13 +3083,16 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 </div>
               </div>
 
+                </>
+              )}
+
               {/* Section 3: Diario di Bordo delle Lezioni */}
               <div className="p-4 rounded-xl bg-[var(--surface-variant)] border border-[var(--border)] space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                   <div className="flex items-center gap-2">
                     <CalendarDays className="w-4 h-4 text-cyan-400" />
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                      3. Diario delle Lezioni & Tipologie di Attività
+                      {focusedRecordMode ? 'Diario della registrazione' : '3. Diario delle Lezioni & Tipologie di Attività'}
                     </h3>
                   </div>
                   <span className="text-xs text-slate-400 font-mono">
@@ -3107,7 +3145,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                         type="submit"
                         className="flex-1 py-2 rounded-lg neon-btn-primary font-bold text-xs cursor-pointer"
                       >
-                        + Add
+                        {focusedRecordMode ? 'Registra attività' : '+ Add'}
                       </button>
                     </div>
                   </div>
@@ -3121,6 +3159,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   />
                 </form>
 
+                {(!focusedRecordMode || showFocusedRecordDetails) && (
+                  <>
                 {/* Lessons list */}
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {(selectedUdaForDetail.lessons || []).length === 0 ? (
@@ -3153,6 +3193,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     })
                   )}
                 </div>
+                  </>
+                )}
               </div>
 
               {/* Footer */}
