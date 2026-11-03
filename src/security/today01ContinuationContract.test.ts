@@ -35,7 +35,7 @@ describe('TODAY-01 Dashboard continuation contract', () => {
     expect(dashboard).not.toContain('onCreateToday');
   });
 
-  test('delegates prepare, conduct and record while keeping only review as generic continuation', async () => {
+  test('delegates prepare, conduct and record while keeping only review as generic continuation until FLOW-04 UI replaces it', async () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(dashboard).toContain("todayAction === 'prepare'");
@@ -53,11 +53,15 @@ describe('TODAY-01 Dashboard continuation contract', () => {
     expect(dashboard).toContain('onDismissToday?.()');
   });
 
-  test('App clears the session task when one authoritative continuation is chosen', async () => {
+  test('App routes an active FLOW-04 review through its dedicated handler while generic continuations still close intent', async () => {
     const app = await source('src/App.tsx');
     const continuation = sectionBetween(app, 'const handleContinueToday', 'const handleCancelTodayAction');
 
+    expect(continuation).toContain('keepReviewSessionForClass(reviewSessionRef.current, currentClassIdRef.current)');
+    expect(continuation).toContain('isReviewSurface(tab)');
+    expect(continuation).toContain('handleOpenReviewSurface(tab);');
     expect(continuation).toContain('setTodayAction(null)');
+    expect(continuation).toContain('publishReviewSession(null)');
     expect(continuation).toContain('handleNavigateTab(tab)');
     expect(continuation).not.toContain('setAppData(');
     expect(continuation).not.toContain('currentClassIdRef.current =');
