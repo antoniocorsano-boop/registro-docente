@@ -43,7 +43,7 @@ export const RecordLessonPanel: React.FC<RecordLessonPanelProps> = ({
           )}
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {session.status === 'editing' && (
+          {session.status !== 'saved' && (
             <button
               type="button"
               onClick={onOpenCopilot}

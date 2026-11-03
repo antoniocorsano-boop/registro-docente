@@ -66,7 +66,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const students = currentClass.students || [];
   const grades = currentClass.grades || [];
-  const isActiveRecordFocus = todayAction === 'record' && recordSession?.status === 'editing';
+  const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass.id;
 
   const studentAvgs = students
     .map(s => calcAvg(grades.filter(g => g.studentId === s.id)))

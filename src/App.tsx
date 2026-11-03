@@ -1314,6 +1314,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass?.id;
   const conductContext = currentClass
     ? resolveConductContext({
         className: currentClass.name,
@@ -2356,7 +2357,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !(todayAction === 'record' && recordSession?.status === 'editing')}
+            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
           />
           <LibraryCopilotComposer
               library={library}
