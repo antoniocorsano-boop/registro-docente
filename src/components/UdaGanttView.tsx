@@ -57,7 +57,7 @@ import type { PlanningFrameResolution } from '../planning/planningFrameResolver'
 import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
 import { DidacticContinuityBar } from './DidacticContinuityBar';
 import { getSchoolMonthIndex, getUdaGapSeverity, getUdaRemediationCopy } from '../analytics/udaSemantics';
-import { buildUdaDeletionSnapshot, classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
+import { buildUdaDeletionSnapshot, classScopedUdaMutationAllowed, hasForeignUdaDependencyOn, udaBelongsToActiveClass } from '../context/udaClassScope';
 
 export interface RecordLessonPrefill {
   className: string;
@@ -841,6 +841,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     setSummaryClassFilter(currentClassName);
     setNewClass(currentClassName);
     setNewPredecessorId('');
+    setCascadeProposal(null);
     setSelectedUdaForDetail(null);
     setGanttSelectedUda(null);
     locallyPublishedFocusIdRef.current = null;
@@ -973,7 +974,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     targetStartMonth: number,
     targetDurationMonths: number
   ) => {
-    const parent = udas.find(u => u.id === udaId);
+    const parent = scopedUdas.find(u => u.id === udaId);
     if (!parent) return;
 
     // Bounds checking
@@ -987,8 +988,13 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     // If no real change, return
     if (clampedStart === oldStart && clampedDuration === oldDuration) return;
 
-    // Compute potential cascade shifts
-    const suggestedShifts = computeCascadeShifts(udaId, clampedStart, clampedDuration, udas);
+    // The proposal and its visible children must be strictly class-local.
+    const suggestedShifts = computeCascadeShifts(udaId, clampedStart, clampedDuration, scopedUdas);
+    const affectedUdaIds = [udaId, ...suggestedShifts.map(shift => shift.childUda.id)];
+    if (hasForeignUdaDependencyOn(udas, affectedUdaIds, currentClassName, classes)) {
+      showStatus('Modifica non eseguita: sono presenti dipendenze tra classi.');
+      return;
+    }
 
     if (suggestedShifts.length > 0) {
       // Open cascade proposal modal so teacher can inspect and confirm
