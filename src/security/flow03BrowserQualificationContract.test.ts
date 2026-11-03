@@ -39,6 +39,40 @@ describe('FLOW-03 browser qualification contract', () => {
     }
   });
 
+  test('journey proves the Human Product UX mission continuity rework', async () => {
+    if (!existsSync('tests/browser/flow-03-registra.spec.cjs')) return;
+    const spec = await source('tests/browser/flow-03-registra.spec.cjs');
+
+    for (const marker of [
+      'Missione Registra per ${CLASS_NAME}',
+      'Stai registrando · ${CLASS_NAME}',
+      'Torna a Registra',
+      'flow-03-desktop-evaluation-mission.png',
+      'flow-03-desktop-return-to-record.png'
+    ]) {
+      expect(spec).toContain(marker);
+    }
+    expect(spec).toContain('await expect(mission).toBeHidden();');
+  });
+
+  test('journey proves explicit focused UDA selection and authoritative diary disclosure', async () => {
+    if (!existsSync('tests/browser/flow-03-registra.spec.cjs')) return;
+    const spec = await source('tests/browser/flow-03-registra.spec.cjs');
+
+    for (const marker of [
+      'Seleziona UDA per Registra',
+      'Scegli questa UDA',
+      'Registrazione rapida',
+      'Diario della registrazione',
+      'Mostra dettagli UDA',
+      'Nascondi dettagli UDA',
+      'flow-03-direct-focused-uda.png',
+      'flow-03-mobile-focused-uda.png'
+    ]) {
+      expect(spec).toContain(marker);
+    }
+  });
+
   test('journey captures desktop and primary mobile 390x844 evidence', async () => {
     if (!existsSync('tests/browser/flow-03-registra.spec.cjs')) return;
     const spec = await source('tests/browser/flow-03-registra.spec.cjs');
@@ -46,9 +80,11 @@ describe('FLOW-03 browser qualification contract', () => {
     expect(spec).toContain("viewport: { width: 390, height: 844 }");
     for (const evidence of [
       'flow-03-desktop-record.png',
-      'flow-03-desktop-evaluation.png',
+      'flow-03-desktop-evaluation-mission.png',
+      'flow-03-desktop-return-to-record.png',
+      'flow-03-direct-focused-uda.png',
       'flow-03-mobile-record.png',
-      'flow-03-mobile-uda-prefill.png',
+      'flow-03-mobile-focused-uda.png',
       'flow-03-mobile-uda-saved.png',
       'flow-03-mobile-review.png'
     ]) {
@@ -66,5 +102,6 @@ describe('FLOW-03 browser qualification contract', () => {
     expect(spec).toContain('assertStagedNoteTextareaUnobscured');
     expect(spec).toContain('assertNoAutomaticMutation');
     expect(spec).toContain('assertSelectedClassStillVisible');
+    expect(spec).toContain('expect(pageErrors).toEqual([])');
   });
 });
