@@ -190,6 +190,22 @@ describe('FLOW-03 independent review repairs', () => {
     expect(start).toContain("handleNavigateTab(decision.target, { preserveRecordSession: action === 'record' });");
   });
 
+  test('carries a staged Registra note only after an explicit same-class UDA selection when no UDA was prebound', async () => {
+    const uda = await source('src/components/UdaGanttView.tsx');
+
+    expect(uda).toContain('const pendingRecordLessonPrefillRef = useRef<RecordLessonPrefill | null>(null);');
+    expect(uda).toContain('pendingRecordLessonPrefillRef.current = recordLessonPrefill.udaId ? null : recordLessonPrefill;');
+    expect(uda).toContain('const handleOpenUdaForDetail = (uda: UdaRecord) => {');
+    expect(uda).toContain('const pendingPrefill = pendingRecordLessonPrefillRef.current;');
+    expect(uda).toContain('!pendingPrefill.udaId');
+    expect(uda).toContain('uda.className === pendingPrefill.className');
+    expect(uda).toContain("setNewLessonNotes(pendingPrefill.notes?.trim() || '');");
+    expect(uda).toContain('pendingRecordLessonPrefillRef.current = null;');
+    expect(uda).toContain('setSelectedUdaForDetail(uda);');
+    expect(uda).toContain('onClick={() => handleOpenUdaForDetail(u)}');
+    expect(uda).toContain('handleOpenUdaForDetail(u);');
+  });
+
   test('FLOW-03 browser journeys fail closed on page errors after their final evidence screenshot', async () => {
     const browser = await source('tests/browser/flow-03-registra.spec.cjs');
     expect(browser).toContain('function installPageErrorCollector(page)');
