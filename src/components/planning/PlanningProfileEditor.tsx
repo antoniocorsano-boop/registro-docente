@@ -216,14 +216,16 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
               <label className="text-sm text-slate-300">Classe/livello
                 <input type="number" min="1" max="5" value={draft.gradeLevel} onChange={e => setDraft(current => ({ ...current, gradeLevel: Number(e.target.value) }))} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
               </label>
-              <label className="text-sm text-slate-300">Disciplina
-                <input value={draft.subjectCode} onChange={e => updateIdentity({ subjectCode: e.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
+              <div>
+                <label className="block text-sm text-slate-300">Disciplina
+                  <input value={draft.subjectCode} onChange={e => updateIdentity({ subjectCode: e.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
+                </label>
                 {subjectDisplayLabel.trim() && subjectDisplayLabel.trim().toLocaleLowerCase('it') !== draft.subjectCode.trim().toLocaleLowerCase('it') && (
-                  <span className="mt-2 block text-xs text-slate-400">
+                  <p className="mt-2 text-xs text-slate-400">
                     Denominazione nelle impostazioni: {subjectDisplayLabel}. Codice curricolare: {draft.subjectCode}.
-                  </span>
+                  </p>
                 )}
-              </label>
+              </div>
               <label className="text-sm text-slate-300 md:col-span-2">Coorte
                 <input value={draft.cohortRef} onChange={e => setDraft(current => ({ ...current, cohortRef: e.target.value }))} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
               </label>
