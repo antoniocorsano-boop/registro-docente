@@ -5,6 +5,7 @@ const mandatoryImpactPaths = [
   'src/planning/curricularSubjectCode.ts',
   'src/library/planningContextBridge.ts',
   'src/context/teachingFocus.ts',
+  'src/context/udaClassScope.ts',
   'src/context/professionalContext.ts',
   'src/components/DidacticContinuityBar.tsx',
   'src/components/planning/PlanningProfileView.tsx',
@@ -14,6 +15,7 @@ const mandatoryImpactPaths = [
   'src/App.tsx',
   'src/security/int01PlanningFrameContract.test.ts',
   'src/security/int01CurricularSubjectCodeContract.test.ts',
+  'src/security/int01FinalReviewScopeContract.test.ts',
   'src/security/int01TeachingFocusContract.test.ts',
   'src/security/int01ProfessionalContextContract.test.ts',
   'src/security/int01AppContextContract.test.ts',
@@ -25,6 +27,7 @@ const mandatoryImpactPaths = [
 const mandatoryContracts = [
   'src/security/int01PlanningFrameContract.test.ts',
   'src/security/int01CurricularSubjectCodeContract.test.ts',
+  'src/security/int01FinalReviewScopeContract.test.ts',
   'src/security/int01TeachingFocusContract.test.ts',
   'src/security/int01ProfessionalContextContract.test.ts',
   'src/security/int01AppContextContract.test.ts',
