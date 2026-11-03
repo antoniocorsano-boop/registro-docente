@@ -28,38 +28,31 @@ jobs:
           path = Path('src/components/UdaGanttView.tsx')
           text = path.read_text()
 
-          old_missing = (
-              "    if (!safeTarget) {\n"
-              "      pendingRecordLessonFocusRef.current = false;"
-          )
-          new_missing = (
-              "    if (!safeTarget) {\n"
-              "      pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;"
-          )
-          old_guard = "      selectedUdaForDetail.id !== recordLessonPrefill.udaId"
-          new_guard = "      recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId"
-          form_anchor = "    const form = recordLessonFormRef.current;"
-          manual_draft = (
-              "    if (!recordLessonPrefill.udaId) {\n"
-              "      setNewLessonDate(recordLessonPrefill.date);\n"
-              "      setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');\n"
-              "      setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');\n"
-              "    }\n\n"
-              "    const form = recordLessonFormRef.current;"
-          )
+          replacements = [
+              (
+                  "      pendingRecordLessonFocusRef.current = false;",
+                  "      pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;",
+              ),
+              (
+                  "      selectedUdaForDetail.id !== recordLessonPrefill.udaId",
+                  "      recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId",
+              ),
+              (
+                  "    const form = recordLessonFormRef.current;",
+                  "    if (!recordLessonPrefill.udaId) {\n"
+                  "      setNewLessonDate(recordLessonPrefill.date);\n"
+                  "      setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');\n"
+                  "      setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');\n"
+                  "    }\n\n"
+                  "    const form = recordLessonFormRef.current;",
+              ),
+          ]
 
-          checks = {
-              'missing-target branch': text.count(old_missing),
-              'selection guard': text.count(old_guard),
-              'form anchor': text.count(form_anchor),
-          }
-          for label, count in checks.items():
-              if count != 1:
-                  raise SystemExit(f'expected one {label}, found {count}')
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'missing expected anchor: {old}')
+              text = text.replace(old, new, 1)
 
-          text = text.replace(old_missing, new_missing, 1)
-          text = text.replace(old_guard, new_guard, 1)
-          text = text.replace(form_anchor, manual_draft, 1)
           path.write_text(text)
           PY
 
