@@ -15,6 +15,7 @@ interface UdaWorkspaceViewProps {
   onSaveUdas: (udas: UdaRecord[]) => Promise<void>;
   onNavigateTab?: (tab: any) => void;
   recordLessonPrefill?: RecordLessonPrefill;
+  getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   onOpenCopilot?: (context: CopilotLaunchContext) => void;
 }
@@ -36,6 +37,7 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   onSaveUdas,
   onNavigateTab,
   recordLessonPrefill,
+  getRecordLessonNavigationVersion,
   onRecordLessonCommitted,
   onOpenCopilot
 }) => {
@@ -222,6 +224,7 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
             onSaveUdas={onSaveUdas}
             onNavigateTab={onNavigateTab}
             recordLessonPrefill={recordLessonPrefill}
+            getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}
             onRecordLessonCommitted={onRecordLessonCommitted}
           />
         </section>
