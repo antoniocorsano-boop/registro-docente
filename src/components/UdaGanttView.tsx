@@ -2681,7 +2681,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         const endMonthName = MONTHS_LABELS[Math.min(9, u.startMonth + u.durationMonths - 1)] || 'Novembre';
 
         return (
-          <div className="fixed inset-0 z-50 bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto">
+          <div className="fixed inset-0 z-[70] bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Scheda UDA nel cronoprogramma">
             <div className="w-full max-w-3xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-5 animate-in fade-in duration-200">
               {/* Header */}
               <div className="flex items-start justify-between pb-4 border-b border-[var(--border)]">
@@ -2882,7 +2882,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         const otherUdas = scopedUdas.filter(u => u.id !== selectedUdaForDetail.id);
 
         return (
-          <div className="fixed inset-0 z-50 bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto">
+          <div className="fixed inset-0 z-[70] bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Fascicolo UDA">
             <div className="w-full max-w-4xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-6">
               {focusedRecordMode && (
                 <div className="rounded-xl border border-cyan-800/70 bg-cyan-950/30 p-3">
