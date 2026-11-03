@@ -44,6 +44,16 @@ describe('INT-01 class-first planning frame', () => {
     expect(resolvePlanningFrame(input(planning([profile()]), null)))
       .toEqual({ status: 'unavailable', reason: 'CLASS_CONTEXT_MISSING' });
   });
+  test('resolves the existing canonical Registro class label without parsing arbitrary words', () => {
+    const p = profile({ gradeLevel: 3 });
+    expect(resolvePlanningFrame(input(planning([p]), '3ª A - Secondaria I Grado'))).toEqual({
+      status: 'resolved', reason: 'RESOLVED', className: '3ª A - Secondaria I Grado',
+      profile: p, arenaContext: null
+    });
+    expect(resolvePlanningFrame(input(planning([p]), 'classe terza C'))).toEqual({
+      status: 'unavailable', reason: 'GRADE_LEVEL_UNRESOLVED'
+    });
+  });
   test('rejects ambiguous and malformed class identities', () => {
     expect(resolvePlanningFrame(input(planning([profile()]), 'classe seconda C')))
       .toEqual({ status: 'unavailable', reason: 'GRADE_LEVEL_UNRESOLVED' });
