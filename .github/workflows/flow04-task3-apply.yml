@@ -1,0 +1,254 @@
+name: FLOW-04 Task 3 guarded patch
+
+on:
+  push:
+    branches:
+      - feat/flow-04-review-session
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: "${{ github.event.head_commit.message == 'chore: apply FLOW-04 task3 patch' }}"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout FLOW-04 branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/flow-04-review-session
+          fetch-depth: 1
+
+      - name: Apply exact FLOW-04 mission UI patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, label: str, old: str, new: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              return text.replace(old, new, 1)
+
+          dashboard_path = Path('src/components/DashboardView.tsx')
+          dashboard = dashboard_path.read_text()
+
+          dashboard = replace_once(
+              dashboard,
+              'dashboard imports',
+              """import { RecordLessonPanel } from './RecordLessonPanel';
+          import type { ConductContextResolution } from '../conduct/conductSession';
+          import type { RecordEvidenceKind, RecordSessionDraft } from '../recording/recordSession';
+          import { getRecordReviewOptions } from '../recording/reviewRouting';
+          import { type TodayAction, type TodayContinuationAction } from '../today/todayRouter';
+          """,
+              """import { RecordLessonPanel } from './RecordLessonPanel';
+          import { ReviewRouterPanel } from './ReviewRouterPanel';
+          import type { ConductContextResolution } from '../conduct/conductSession';
+          import type { RecordEvidenceKind, RecordSessionDraft } from '../recording/recordSession';
+          import type { ReviewSessionContext, ReviewSurface } from '../review/reviewSession';
+          import { type TodayAction } from '../today/todayRouter';
+          """
+          )
+
+          dashboard = replace_once(
+              dashboard,
+              'remove review continuation label map',
+              """const TODAY_ACTION_LABELS: Record<TodayContinuationAction, string> = {
+            review: 'Rivedi'
+          };
+
+          """,
+              ''
+          )
+
+          dashboard = replace_once(
+              dashboard,
+              'dashboard review props',
+              """  todayAction?: TodayAction | null;
+            reviewEvidenceKind?: RecordEvidenceKind | null;
+            onContinueToday?: (tab: ActiveTab) => void;
+            onDismissToday?: () => void;
+          """,
+              """  todayAction?: TodayAction | null;
+            reviewSession?: ReviewSessionContext | null;
+            onContinueToday?: (tab: ActiveTab) => void;
+            onOpenReviewSurface?: (surface: ReviewSurface) => void;
+            onCloseReview?: () => void;
+            onDismissToday?: () => void;
+          """
+          )
+
+          dashboard = replace_once(
+              dashboard,
+              'dashboard review destructuring',
+              """  todayAction = null,
+            reviewEvidenceKind = null,
+            onContinueToday,
+            onDismissToday,
+          """,
+              """  todayAction = null,
+            reviewSession = null,
+            onContinueToday,
+            onOpenReviewSurface,
+            onCloseReview,
+            onDismissToday,
+          """
+          )
+
+          dashboard = replace_once(
+              dashboard,
+              'dashboard mission focus',
+              """  const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass.id;
+          """,
+              """  const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass.id;
+            const isActiveReviewFocus =
+              todayAction === 'review' && reviewSession?.classId === currentClass.id;
+            const isActiveMissionFocus = isActiveRecordFocus || isActiveReviewFocus;
+          """
+          )
+
+          dashboard = replace_once(
+              dashboard,
+              'remove dashboard-local review resolver',
+              """  const recentActivities = Object.values(groupsMap)
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .slice(0, 5);
+            const recordReviewOptions = getRecordReviewOptions(reviewEvidenceKind);
+          """,
+              """  const recentActivities = Object.values(groupsMap)
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .slice(0, 5);
+          """
+          )
+
+          review_start = dashboard.find("      {todayAction === 'review' && (")
+          overview_marker = dashboard.find('      {/* Overview & KPIs */}', review_start)
+          if review_start < 0 or overview_marker < 0:
+              raise SystemExit('inline review router markers not found')
+          old_review_block = dashboard[review_start:overview_marker]
+          new_review_block = """      {todayAction === 'review' && reviewSession && reviewSession.classId === currentClass.id && (
+            <ReviewRouterPanel
+              session={reviewSession}
+              onNavigateSurface={(surface) => onOpenReviewSurface?.(surface)}
+              onDismiss={() => onCloseReview?.()}
+            />
+          )}
+
+          """
+          dashboard = dashboard[:review_start] + new_review_block + dashboard[overview_marker:]
+
+          dashboard = replace_once(
+              dashboard,
+              'overview mission hierarchy',
+              """      <details
+                key={isActiveRecordFocus ? 'focused' : 'full'}
+                data-testid="flow03b-class-overview"
+                open={!isActiveRecordFocus}
+                className={isActiveRecordFocus ? 'neon-card overflow-hidden' : ''}
+              >
+                <summary
+                  className={isActiveRecordFocus
+                    ? 'min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
+                    : 'sr-only'}
+                >
+          """,
+              """      <details
+                key={isActiveMissionFocus ? 'focused' : 'full'}
+                data-testid="flow03b-class-overview"
+                open={!isActiveMissionFocus}
+                className={isActiveMissionFocus ? 'neon-card overflow-hidden' : ''}
+              >
+                <summary
+                  className={isActiveMissionFocus
+                    ? 'min-h-[44px] cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400'
+                    : 'sr-only'}
+                >
+          """
+          )
+
+          dashboard_path.write_text(dashboard)
+
+          app_path = Path('src/App.tsx')
+          app = app_path.read_text()
+
+          app = replace_once(
+              app,
+              'review mission banner import',
+              """import { DashboardView } from './components/DashboardView';
+          import { RecordMissionBanner } from './components/RecordMissionBanner';
+          """,
+              """import { DashboardView } from './components/DashboardView';
+          import { RecordMissionBanner } from './components/RecordMissionBanner';
+          import { ReviewMissionBanner } from './components/ReviewMissionBanner';
+          """
+          )
+
+          app = replace_once(
+              app,
+              'dashboard review wiring',
+              """            todayAction={todayAction}
+                        reviewEvidenceKind={reviewSession?.evidenceKind ?? null}
+                        onContinueToday={handleContinueToday}
+                        onDismissToday={handleCancelTodayAction}
+          """,
+              """            todayAction={todayAction}
+                        reviewSession={reviewSession}
+                        onContinueToday={handleContinueToday}
+                        onOpenReviewSurface={handleOpenReviewSurface}
+                        onCloseReview={handleCloseReview}
+                        onDismissToday={handleCancelTodayAction}
+          """
+          )
+
+          banner_anchor = """        {activeRecordMission && (
+                    <RecordMissionBanner
+          """
+          if app.count(banner_anchor) != 1:
+              raise SystemExit(f'record mission banner anchor: expected exactly 1 match, found {app.count(banner_anchor)}')
+          review_banner = """        {reviewSession
+                    && currentClass
+                    && reviewSession.classId === currentClass.id
+                    && isReviewSurface(activeTab)
+                    && reviewSession.currentSurface === activeTab && (
+                      <ReviewMissionBanner
+                        session={reviewSession}
+                        onReturn={handleReturnToReview}
+                        onDismiss={handleCloseReview}
+                      />
+                    )}
+
+          """
+          app = app.replace(banner_anchor, review_banner + banner_anchor, 1)
+
+          app_path.write_text(app)
+          PY
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify FLOW-04 mission UI and historical contracts
+        run: |
+          bun test \
+            src/security/flow04ReviewUiContract.test.ts \
+            src/security/flow04ReviewSessionContract.test.ts \
+            src/security/flow03bContextualReviewContract.test.ts \
+            src/security/today01ContinuationContract.test.ts \
+            src/security/today01SessionContextContract.test.ts
+          bun run lint
+          bun run build
+
+      - name: Commit guarded Task 3 implementation and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/flow04-task3-apply.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/DashboardView.tsx src/App.tsx .github/workflows/flow04-task3-apply.yml
+          git diff --cached --check
+          git commit -m 'feat: add FLOW-04 review mission UI'
+          git push origin HEAD:feat/flow-04-review-session
