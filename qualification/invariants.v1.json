@@ -550,7 +550,10 @@
         "src/security/flow03bBackupReminderContract.test.ts",
         "src/security/flow03bActiveRecordFocusContract.test.ts",
         "src/recording/reviewRouting.ts",
-        "src/security/flow03bContextualReviewContract.test.ts"
+        "src/security/flow03bContextualReviewContract.test.ts",
+        "docs/superpowers/specs/2026-11-03-flow-03b-post-record-ux-design.md",
+        "docs/superpowers/plans/2026-11-03-flow-03b-post-record-ux.md",
+        "docs/superpowers/receipts/2026-11-03-flow-03b-browser-integration-checkpoint.md"
       ],
       "tests": [
         "src/security/flow03RecordSessionContract.test.ts",

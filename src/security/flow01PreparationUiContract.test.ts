@@ -20,7 +20,7 @@ describe('FLOW-01 preparation UI contract', () => {
     expect(dashboard).toContain('onNavigateTab={(tab) => onContinueToday?.(tab)}');
     expect(dashboard).toContain('onDismiss={() => onDismissToday?.()}');
     expect(dashboard).toContain("todayAction === 'review'");
-    expect(dashboard).toContain('getTodayContinuationOptions(todayAction)');
+    expect(dashboard).toContain('getRecordReviewOptions(reviewEvidenceKind)');
   });
 
   test('panel renders professional intentions from the single routing table', async () => {
