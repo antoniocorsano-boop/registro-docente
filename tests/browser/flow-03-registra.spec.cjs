@@ -13,6 +13,12 @@ function evidencePath(name) {
   return dir ? path.resolve(dir, name) : name;
 }
 
+function installPageErrorCollector(page) {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error instanceof Error ? error.message : String(error)));
+  return pageErrors;
+}
+
 async function configureVault(page, password) {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
@@ -251,6 +257,7 @@ test.describe('FLOW-03 desktop qualification', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test('Registra → Valutazione keeps explicit class/UDA context without writing', async ({ page }) => {
+    const pageErrors = installPageErrorCollector(page);
     await prepareScenario(page, 'flow-03-desktop');
     const conduct = await openConductFromOggi(page);
     const record = await handoffConductToRecord(page, conduct);
@@ -260,6 +267,7 @@ test.describe('FLOW-03 desktop qualification', () => {
 
     await openEvaluationFromRecord(page, record);
     await page.screenshot({ path: evidencePath('flow-03-desktop-evaluation.png'), fullPage: true });
+    expect(pageErrors).toEqual([]);
   });
 });
 
@@ -270,6 +278,7 @@ test.describe('FLOW-03 mobile qualification', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('records one explicit UDA lesson, then offers review and keeps other specialist routes non-mutating', async ({ page }) => {
+    const pageErrors = installPageErrorCollector(page);
     await prepareScenario(page, 'flow-03-mobile');
 
     const conduct = await openConductFromOggi(page);
@@ -330,5 +339,7 @@ test.describe('FLOW-03 mobile qualification', () => {
     await openOggiFromDrawer(page);
     const onlineRecord = await openRecordFromOggi(page);
     await openOnlineOutcomesFromRecord(page, onlineRecord);
+    await page.screenshot({ path: evidencePath('flow-03-mobile-final.png'), fullPage: true });
+    expect(pageErrors).toEqual([]);
   });
 });
