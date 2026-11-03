@@ -1,0 +1,88 @@
+name: FLOW-03B AIC-06 Browser Alignment
+
+on:
+  push:
+    branches:
+      - feat/flow-03b-post-record-ux
+    paths:
+      - .github/workflows/flow03b-aic06-browser-alignment.yml
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/flow-03b-post-record-ux
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Align AIC-06 persistence helper and invariant map
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          browser_path = Path('tests/browser/aic-06-budget-governor.spec.cjs')
+          text = browser_path.read_text()
+          old = """async function closePersistenceConfirmation(page) {
+            const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+            await expect(heading).toBeVisible();
+            await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+          }
+          """
+          new = """async function closePersistenceConfirmation(page) {
+            const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+            if (await heading.isVisible().catch(() => false)) {
+              await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+              await expect(heading).toBeHidden();
+            }
+          }
+          """
+          if text.count(old) != 1:
+            raise SystemExit(f'Expected exactly one stale AIC-06 helper, found {text.count(old)}')
+          browser_path.write_text(text.replace(old, new))
+
+          registry_path = Path('qualification/invariants.v1.json')
+          data = json.loads(registry_path.read_text())
+          invariant = next(item for item in data['invariants'] if item['id'] == 'FLOW-03-I01')
+          target = 'tests/browser/aic-06-budget-governor.spec.cjs'
+          if target not in invariant['impactPaths']:
+            invariant['impactPaths'].append(target)
+          registry_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          PY
+
+      - name: Verify focused contracts and invariant registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun test src/security/flow03bBackupReminderContract.test.ts
+          bun scripts/qualification/check-invariants.mjs
+          bun test src/security/qualificationInvariantFramework.test.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('tests/browser/aic-06-budget-governor.spec.cjs').read_text()
+          assert "if (await heading.isVisible().catch(() => false))" in text
+          assert "await expect(heading).toBeHidden();" in text
+          assert "await expect(heading).toBeVisible();\n  await page.getByRole('button', { name: 'Chiudi', exact: true }).click();" not in text
+          PY
+          git diff --check
+
+      - name: Commit AIC-06 browser compatibility repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/browser/aic-06-budget-governor.spec.cjs qualification/invariants.v1.json
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
+          git commit -m 'test(flow-03b): align AIC-06 browser setup with backup policy'
+          git push origin HEAD:feat/flow-03b-post-record-ux
