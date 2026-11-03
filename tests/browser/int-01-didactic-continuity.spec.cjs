@@ -150,7 +150,7 @@ async function runJourney(page, { mobile }) {
     const planning = page.getByRole('region', { name: 'Pianificazione UDA' });
     await planning.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
     const legacyModal = planning.locator('div.fixed.inset-0.z-50').filter({
-      has: planning.getByRole('heading', { name: 'Nuova Unità Didattica (UDA)' })
+      hasText: 'Nuova Unità Didattica (UDA)'
     });
     await expect(legacyModal).toBeVisible();
     await expect(legacyModal.locator('select').first()).toBeDisabled();
