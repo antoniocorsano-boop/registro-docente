@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 const mandatoryImpactPaths = [
   'src/planning/planningFrameResolver.ts',
+  'src/planning/curricularSubjectCode.ts',
   'src/library/planningContextBridge.ts',
   'src/context/teachingFocus.ts',
   'src/context/professionalContext.ts',
@@ -12,6 +13,7 @@ const mandatoryImpactPaths = [
   'src/components/UdaWorkspaceView.tsx',
   'src/App.tsx',
   'src/security/int01PlanningFrameContract.test.ts',
+  'src/security/int01CurricularSubjectCodeContract.test.ts',
   'src/security/int01TeachingFocusContract.test.ts',
   'src/security/int01ProfessionalContextContract.test.ts',
   'src/security/int01AppContextContract.test.ts',
@@ -22,6 +24,7 @@ const mandatoryImpactPaths = [
 ];
 const mandatoryContracts = [
   'src/security/int01PlanningFrameContract.test.ts',
+  'src/security/int01CurricularSubjectCodeContract.test.ts',
   'src/security/int01TeachingFocusContract.test.ts',
   'src/security/int01ProfessionalContextContract.test.ts',
   'src/security/int01AppContextContract.test.ts',
