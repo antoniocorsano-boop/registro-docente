@@ -5,6 +5,7 @@ const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const CLASS_NAME = '2Z';
 const NEXT_CLASS_NAME = '3Z';
 const UDA_TITLE = 'INT-01 Agricoltura sostenibile';
+const OTHER_UDA_TITLE = 'INT-01 Energia e sostenibilità';
 
 test.use({ trace: 'retain-on-failure' });
 
@@ -161,6 +162,34 @@ async function runJourney(page, { mobile }) {
   await expect(page.getByRole('heading', { name: UDA_TITLE })).toBeVisible();
   await page.getByRole('button', { name: 'Chiudi Fascicolo' }).click();
   await expect(continuity(page)).toContainText('UDA: ' + UDA_TITLE);
+
+  // Independent-review regression: an explicit selection from Analysis must
+  // replace the shared UDA focus and open exactly one Gantt sheet.
+  await page.getByRole('button', { name: 'UDA', exact: true }).click();
+  await page.getByRole('button', { name: 'Nuova UDA', exact: true }).click();
+  const otherDialog = page.getByRole('dialog', { name: 'Nuova Unità Didattica (UDA)' });
+  await otherDialog.getByLabel('Titolo', { exact: true }).fill(OTHER_UDA_TITLE);
+  const otherSelects = otherDialog.locator('select');
+  await otherSelects.nth(0).selectOption({ label: CLASS_NAME });
+  await otherSelects.nth(2).selectOption('2');
+  await otherDialog.getByRole('spinbutton', { name: 'Durata Mesi', exact: true }).fill('2');
+  await otherDialog.getByRole('button', { name: 'Crea UDA', exact: true }).click();
+  await closeSaveConfirmation(page);
+  await page.getByRole('button', { name: 'Analisi', exact: true }).click();
+
+  const analysis = page.getByRole('region', { name: 'Analisi UDA' });
+  await expect(analysis).toBeVisible();
+  const secondaryClassFilter = analysis.getByRole('combobox', { name: 'Filtra classe UDA' });
+  await expect(secondaryClassFilter).toBeDisabled();
+  await expect(secondaryClassFilter).toHaveValue(CLASS_NAME);
+  const otherRow = analysis.getByRole('row').filter({ hasText: OTHER_UDA_TITLE });
+  await otherRow.getByText(OTHER_UDA_TITLE).click();
+  await expect(analysis.locator('div.fixed.inset-0.z-50')).toHaveCount(1);
+  await expect(continuity(page)).toContainText('UDA: ' + OTHER_UDA_TITLE);
+  await analysis.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(analysis.locator('div.fixed.inset-0.z-50')).toHaveCount(0);
+  await continuity(page).getByRole('button', { name: 'Apri Programmazione' }).click();
+  await expect(continuity(page)).toContainText('UDA: ' + OTHER_UDA_TITLE);
 
   if (!mobile) {
     const quickSwitch = page.locator('select[title="Cambia rapidamente classe attiva"]');
