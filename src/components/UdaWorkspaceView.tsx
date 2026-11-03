@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData, OnlineTest, UdaRecord } from '../types';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import { uid } from '../utils';
@@ -53,9 +53,22 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const recordLessonPrefillSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!recordLessonPrefill) return;
+
+    const signature = JSON.stringify([
+      recordLessonPrefill.className,
+      recordLessonPrefill.udaId ?? null,
+      recordLessonPrefill.date,
+      recordLessonPrefill.topic ?? null,
+      recordLessonPrefill.notes ?? null,
+      recordLessonPrefill.navigationVersion
+    ]);
+    if (recordLessonPrefillSignatureRef.current === signature) return;
+    recordLessonPrefillSignatureRef.current = signature;
+
     setActiveView('planning');
     setClassFilter(recordLessonPrefill.className);
   }, [recordLessonPrefill]);
