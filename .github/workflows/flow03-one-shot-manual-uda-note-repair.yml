@@ -20,57 +20,60 @@ jobs:
           fetch-depth: 0
 
       - name: Apply exact FLOW-03 repair
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           from pathlib import Path
 
           path = Path('src/components/UdaGanttView.tsx')
           text = path.read_text()
 
           old_missing_target = """    if (!safeTarget) {
-            pendingRecordLessonFocusRef.current = false;
-            setSelectedUdaForDetail(null);
-            return;
-          }
+              pendingRecordLessonFocusRef.current = false;
+              setSelectedUdaForDetail(null);
+              return;
+            }
           """
           new_missing_target = """    if (!safeTarget) {
-            pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;
-            setSelectedUdaForDetail(null);
-            return;
-          }
+              pendingRecordLessonFocusRef.current = !recordLessonPrefill.udaId;
+              setSelectedUdaForDetail(null);
+              return;
+            }
           """
 
           old_selection_guard = """    if (
-            selectedUdaForDetail.className !== recordLessonPrefill.className ||
-            selectedUdaForDetail.id !== recordLessonPrefill.udaId
-          ) return;
+              selectedUdaForDetail.className !== recordLessonPrefill.className ||
+              selectedUdaForDetail.id !== recordLessonPrefill.udaId
+            ) return;
 
-          const form = recordLessonFormRef.current;
+            const form = recordLessonFormRef.current;
           """
           new_selection_guard = """    if (
-            selectedUdaForDetail.className !== recordLessonPrefill.className ||
-            (recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId)
-          ) return;
+              selectedUdaForDetail.className !== recordLessonPrefill.className ||
+              (recordLessonPrefill.udaId && selectedUdaForDetail.id !== recordLessonPrefill.udaId)
+            ) return;
 
-          if (!recordLessonPrefill.udaId) {
-            setNewLessonDate(recordLessonPrefill.date);
-            setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
-            setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
-          }
+            if (!recordLessonPrefill.udaId) {
+              setNewLessonDate(recordLessonPrefill.date);
+              setNewLessonTopic(recordLessonPrefill.topic?.trim() || '');
+              setNewLessonNotes(recordLessonPrefill.notes?.trim() || '');
+            }
 
-          const form = recordLessonFormRef.current;
+            const form = recordLessonFormRef.current;
           """
 
           if text.count(old_missing_target) != 1:
-            raise SystemExit(f'expected one missing-target block, found {text.count(old_missing_target)}')
+              raise SystemExit(f'expected one missing-target block, found {text.count(old_missing_target)}')
           if text.count(old_selection_guard) != 1:
-            raise SystemExit(f'expected one selection-guard block, found {text.count(old_selection_guard)}')
+              raise SystemExit(f'expected one selection-guard block, found {text.count(old_selection_guard)}')
 
           text = text.replace(old_missing_target, new_missing_target, 1)
           text = text.replace(old_selection_guard, new_selection_guard, 1)
           path.write_text(text)
+          PY
 
       - name: Commit exact repair
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
