@@ -44,16 +44,20 @@ jobs:
           flow03 = flow03_path.read_text()
           old_region = "const review = page.getByRole('region', { name: 'Continua: Rivedi' });"
           new_region = "const review = page.getByRole('region', { name: `Rivedi la classe ${CLASS_NAME}` });"
-          if flow03.count(old_region) != 1:
-              raise SystemExit(f'FLOW-03 browser: old review region expected once, found {flow03.count(old_region)}')
-          flow03 = flow03.replace(old_region, new_region, 1)
-          old_copy = "await expect(review).toContainText('Prima destinazione consigliata: Tabellone.');"
-          new_copy = "await expect(review).toContainText(\"L'ordine delle superfici riflette il tipo di evidenza appena registrata\");"
-          if flow03.count(old_copy) != 1:
-              raise SystemExit(f'FLOW-03 browser: old review copy expected once, found {flow03.count(old_copy)}')
-          flow03 = flow03.replace(old_copy, new_copy, 1)
-          pattern = re.compile(r"    const labels = \(await review\.locator\('button'\)\.allTextContents\(\)\)\n      \.map\(label => label\.trim\(\)\)\n      \.filter\(label => \['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'\]\.includes\(label\)\);\n    expect\(labels\)\.toEqual\(\['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'\]\);", re.M)
-          replacement = "\n".join([
+          if flow03.count(old_region) != 2:
+              raise SystemExit(f'FLOW-03 browser: old review region expected twice, found {flow03.count(old_region)}')
+          flow03 = flow03.replace(old_region, new_region)
+
+          old_eval_copy = "await expect(review).toContainText('Prima destinazione consigliata: Tabellone.');"
+          old_lesson_copy = "await expect(review).toContainText('Prima destinazione consigliata: UDA e diario.');"
+          contextual_copy = "await expect(review).toContainText(\"L'ordine delle superfici riflette il tipo di evidenza appena registrata\");"
+          if flow03.count(old_eval_copy) != 1 or flow03.count(old_lesson_copy) != 1:
+              raise SystemExit('FLOW-03 browser: contextual review copy markers do not match expected evaluation/lesson blocks')
+          flow03 = flow03.replace(old_eval_copy, contextual_copy, 1)
+          flow03 = flow03.replace(old_lesson_copy, contextual_copy, 1)
+
+          eval_pattern = re.compile(r"    const labels = \(await review\.locator\('button'\)\.allTextContents\(\)\)\n      \.map\(label => label\.trim\(\)\)\n      \.filter\(label => \['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'\]\.includes\(label\)\);\n    expect\(labels\)\.toEqual\(\['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'\]\);", re.M)
+          eval_replacement = "\n".join([
               "    const expectedReviewOrder = ['Tabellone', 'Analisi', 'Storico', 'Scheda alunno'];",
               "    const positionedReviewOptions = [];",
               "    for (const label of expectedReviewOrder) {",
@@ -65,9 +69,26 @@ jobs:
               "    }",
               "    expect(positionedReviewOptions.sort((a, b) => a.y - b.y).map(item => item.label)).toEqual(expectedReviewOrder);"
           ])
-          flow03, substitutions = pattern.subn(replacement, flow03, count=1)
-          if substitutions != 1:
-              raise SystemExit(f'FLOW-03 browser: ordering block expected once, found {substitutions}')
+          flow03, eval_substitutions = eval_pattern.subn(eval_replacement, flow03, count=1)
+          if eval_substitutions != 1:
+              raise SystemExit(f'FLOW-03 browser: evaluation ordering block expected once, found {eval_substitutions}')
+
+          lesson_pattern = re.compile(r"  const flow03bReviewLabels = \(await review\.locator\('button'\)\.allTextContents\(\)\)\n    \.map\(label => label\.trim\(\)\)\n    \.filter\(label => \['UDA e diario', 'Tabellone', 'Analisi', 'Storico'\]\.includes\(label\)\);\n  expect\(flow03bReviewLabels\)\.toEqual\(\['UDA e diario', 'Tabellone', 'Analisi', 'Storico'\]\);", re.M)
+          lesson_replacement = "\n".join([
+              "  const expectedLessonReviewOrder = ['UDA e diario', 'Tabellone', 'Analisi', 'Storico'];",
+              "  const positionedLessonReviewOptions = [];",
+              "  for (const label of expectedLessonReviewOrder) {",
+              "    const option = review.getByRole('button', { name: new RegExp(`^${label}`) });",
+              "    await expect(option).toBeVisible();",
+              "    const box = await option.boundingBox();",
+              "    expect(box).not.toBeNull();",
+              "    positionedLessonReviewOptions.push({ label, y: box.y });",
+              "  }",
+              "  expect(positionedLessonReviewOptions.sort((a, b) => a.y - b.y).map(item => item.label)).toEqual(expectedLessonReviewOrder);"
+          ])
+          flow03, lesson_substitutions = lesson_pattern.subn(lesson_replacement, flow03, count=1)
+          if lesson_substitutions != 1:
+              raise SystemExit(f'FLOW-03 browser: lesson ordering block expected once, found {lesson_substitutions}')
           flow03_path.write_text(flow03)
 
           workflow_path = Path('.github/workflows/browser-qualification.yml')
