@@ -576,3 +576,16 @@ Only after Human PASS and exact-SHA gates remain fresh:
 - update #115 and #104 to `QUALIFIED / READY` but not integrated.
 
 **Do not merge or deploy without a new explicit authorization.**
+
+
+## Amendment 01 — correzione per l'entrypoint UDA effettivo
+
+**Ruling:** `src/components/UdaGanttView.ts` è una facciata che esporta `UdaWorkspaceView` come `UdaGanttView` e delega a `UdaGanttView.tsx` solo gli strumenti legacy. Il Task 4 include quindi anche la modifica e i test di `src/components/UdaWorkspaceView.tsx`:
+
+- **RED:** il test `int01DidacticContinuityUiContract.test.ts` deve verificare la barra sulla vera superficie, la selezione UDA esplicita e la presenza dei props nel passaggio al Gantt.
+- **GREEN:** rendere `UdaWorkspaceView` class-first, visualizzare la barra nella vista principale, pubblicare il focus soltanto con `Gestisci in Pianificazione`, trasferire contesto alla Pianificazione e vincolare la vista Analisi alla classe corrente.
+- **Regressioni:** non alterare la modalità `recordLessonPrefill` focalizzata di FLOW-03; non nascondere il selettore Classe dal dialogo Nuova UDA, ma limitarlo all'unica opzione coerente con la classe attiva.
+- **Browser:** coprire la navigazione principale `UDA curricolari → Gestisci in Pianificazione`; non fare affidamento sulla presenza del Gantt nella prima vista.
+- **Class labels:** test RED→GREEN per `3ª A - Secondaria I Grado` nel resolver, conservando il rifiuto delle descrizioni non canoniche.
+
+`INT-01-I01` deve includere `src/components/UdaWorkspaceView.tsx` nei percorsi di impatto. Il task finale conserva la condizione: nessuna promozione senza tutti i gate exact-SHA e Human Product/UX Review.
