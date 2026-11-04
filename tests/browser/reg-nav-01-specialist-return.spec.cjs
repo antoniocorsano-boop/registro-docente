@@ -172,6 +172,13 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     await expectNavigation(page, 'voti');
     await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
     await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+
+    // "Nuova valutazione" is an explicit fresh editor, never an inherited edit A.
+    await fromDrawer(page, 'Storico prove');
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => history.state?.__registroSpecialistTargetEntry)).toBeUndefined();
     expect(errors).toEqual([]);
   });
 
