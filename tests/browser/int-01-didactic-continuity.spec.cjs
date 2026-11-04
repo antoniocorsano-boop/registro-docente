@@ -172,6 +172,11 @@ async function runJourney(page, { mobile }) {
   const openUda = continuity(page).getByRole('button', { name: 'Apri UDA', exact: true });
   if (mobile) await assertSafeMobile(page, openUda);
   await openUda.click();
+  await expect(page).toHaveURL(/tab=uda-gantt/);
+  await page.goBack();
+  await expect(continuity(page)).toContainText('Apri UDA');
+  await page.goForward();
+  await expect(page).toHaveURL(/tab=uda-gantt/);
   await createUda(page);
 
   if (!mobile) {
@@ -294,6 +299,9 @@ test.describe('INT-01: non-saved Programmazione draft on mobile', () => {
     await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
     await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Rimani nella Programmazione' }).focus();
+    await page.keyboard.press('Tab');
+    await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))).toBe(true);
     await dialog.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
     await details.click();
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-2-saved-via-guard');
@@ -321,5 +329,33 @@ test.describe('INT-01: non-saved Programmazione draft on mobile', () => {
     await page.getByRole('button', { name: 'Profilo', exact: true }).click();
     await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-2-saved-via-guard');
+  });
+});
+
+test.describe('INT-01 mobile: guarded history Back', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test('cancel preserves the original history stack, and confirmation performs one Back', async ({ page }) => {
+    await configureVault(page, 'int-01-browser-back-draft');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-draft-history');
+    await details.click();
+    const planningUrl = page.url();
+    await page.goBack();
+    const prompt = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(prompt).toBeVisible();
+    await expect(page).toHaveURL(planningUrl);
+    await prompt.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await expect(page).toHaveURL(planningUrl);
+    await page.goBack();
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Continua senza salvare' }).click();
+    await expect(page).not.toHaveURL(planningUrl);
   });
 });

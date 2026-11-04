@@ -311,7 +311,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const activeTabRef = useRef<ActiveTab>('home');
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
+  const historyRestorePendingRef = useRef(false);
+  const historyApprovedTraversalRef = useRef(false);
   const pendingExitRef = useRef<(() => void) | null>(null);
+  const planningExitDialogRef = useRef<HTMLDivElement | null>(null);
+  const planningExitOriginFocusRef = useRef<HTMLElement | null>(null);
+  const planningExitRestoreFocusRef = useRef(false);
   const [planningExitOpen, setPlanningExitOpen] = useState(false);
   const [planningExitSaving, setPlanningExitSaving] = useState(false);
   const [planningExitError, setPlanningExitError] = useState('');
@@ -321,6 +326,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const requestPlanningDeparture = useCallback((commit: () => void): boolean => {
     if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
       && planningGuardRef.current?.hasUnsavedChanges()) {
+      if (pendingExitRef.current) return false; // Never replace an unconfirmed navigation.
+      planningExitOriginFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement : null;
       pendingExitRef.current = commit;
       setPlanningExitError('');
       setPlanningExitOpen(true);
@@ -331,11 +339,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   }, []);
   const cancelPlanningExit = () => {
     if (planningExitSaving) return;
+    planningExitRestoreFocusRef.current = true;
     pendingExitRef.current = null;
     setPlanningExitOpen(false);
     setPlanningExitError('');
   };
   const performPlanningExit = () => {
+    planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
     pendingExitRef.current = null;
     setPlanningExitOpen(false);
@@ -364,6 +374,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setPlanningExitSaving(false);
     }
   };
+  // Keep background surfaces inert while the unsaved-changes decision is modal.
+  useEffect(() => {
+    if (!planningExitOpen) return;
+    const dialog = planningExitDialogRef.current;
+    const parent = dialog?.parentElement;
+    const siblings = parent
+      ? Array.from(parent.children).filter(node => node !== dialog && node instanceof HTMLElement)
+      : [];
+    const prior = siblings.map(node => (node as HTMLElement).inert);
+    siblings.forEach(node => { (node as HTMLElement).inert = true; });
+    dialog?.querySelector<HTMLButtonElement>('[data-int01-stay]')?.focus();
+    return () => {
+      siblings.forEach((node, index) => { (node as HTMLElement).inert = prior[index] ?? false; });
+      if (planningExitRestoreFocusRef.current) {
+        planningExitRestoreFocusRef.current = false;
+        planningExitOriginFocusRef.current?.focus();
+      }
+    };
+  }, [planningExitOpen]);
+
   const [teachingFocus, setTeachingFocus] = useState<LibraryTeachingContext | null>(null);
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);
@@ -1519,10 +1549,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
 
   // Synchronize URL query params
-  // Browser Back is treated as an exit, including a change of active class.
+  // Browser Back: restore the original history position *without pushState*.
+  // A confirmed departure replays the traversal, preserving Back/Forward entries.
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      const destinationUrl = window.location.pathname + window.location.search + window.location.hash;
       const nextClassId = event.state?.classId || null;
       const nextTab: ActiveTab = event.state?.tab || (nextClassId ? 'dashboard' : 'home');
       const navigate = () => {
@@ -1533,16 +1563,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         publishRecordSession(null);
         setActiveTab(nextTab);
       };
-      if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
-        const classId = currentClassIdRef.current;
-        const params = new URLSearchParams();
-        if (classId) params.set('class', classId);
-        params.set('tab', 'programmazione');
-        history.pushState({ classId, tab: 'programmazione' }, '', `?${params.toString()}`);
+      if (historyRestorePendingRef.current) {
+        historyRestorePendingRef.current = false;
         requestPlanningDeparture(() => {
-          history.replaceState(event.state, '', destinationUrl);
-          navigate();
+          historyApprovedTraversalRef.current = true;
+          history.back();
         });
+        return;
+      }
+      if (historyApprovedTraversalRef.current) {
+        historyApprovedTraversalRef.current = false;
+        planningExitBypassRef.current = true;
+        try { navigate(); } finally { planningExitBypassRef.current = false; }
+        return;
+      }
+      if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+        historyRestorePendingRef.current = true;
+        history.forward();
         return;
       }
       navigate();
@@ -2513,7 +2550,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
             udaTitle={activeTeachingCandidate?.title ?? null}
             lessonTitle={activeTeachingLesson?.topic ?? null}
-            onOpenUda={() => setActiveTab('uda-gantt')}
+            onOpenUda={() => handleNavigateTab('uda-gantt')}
           />
         )}
 
@@ -2562,7 +2599,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onTeachingFocusChange={focus => setTeachingFocus(
               keepTeachingFocusForClass(focus, currentClass?.id ?? null, teachingUdaCatalog)
             )}
-            onOpenPlanning={() => setActiveTab('programmazione')}
+            onOpenPlanning={() => handleNavigateTab('programmazione')}
             onNavigateTab={handleNavigateTab}
             recordLessonPrefill={recordSession?.status === 'editing' && recordSession.evidenceKind === 'lesson-log'
               && recordSession.context.classId === currentClass?.id
@@ -2674,8 +2711,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       )}
 
       {planningExitOpen && (
-        <div role="dialog" aria-modal="true" aria-labelledby="planning-exit-title"
-          onKeyDown={event => { if (event.key === 'Escape') cancelPlanningExit(); }}
+        <div ref={planningExitDialogRef}
+          role="dialog" aria-modal="true" aria-labelledby="planning-exit-title"
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelPlanningExit();
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = Array.from(planningExitDialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []);
+            if (focusable.length === 0) { event.preventDefault(); return; }
+            const index = focusable.indexOf(document.activeElement as HTMLButtonElement);
+            if (event.shiftKey && index <= 0) {
+              event.preventDefault();
+              focusable[focusable.length - 1]?.focus();
+            } else if (!event.shiftKey && (index === focusable.length - 1 || index < 0)) {
+              event.preventDefault();
+              focusable[0]?.focus();
+            }
+          }}
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4">
           <div className="w-full max-w-md space-y-4 rounded-2xl border border-amber-800 bg-slate-950 p-5 shadow-2xl">
             <h2 id="planning-exit-title" className="text-xl font-bold text-white">Modifiche non salvate</h2>
@@ -2692,7 +2746,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
                 Continua senza salvare
               </button>
-              <button type="button" onClick={cancelPlanningExit} autoFocus disabled={planningExitSaving}
+              <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
                 Rimani nella Programmazione
               </button>

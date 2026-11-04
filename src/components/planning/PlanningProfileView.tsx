@@ -55,8 +55,18 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
     && manualChoice?.scope === scope && profiles.some(p => p.id === manualChoice.id)
       ? manualChoice.id : null;
   const resolvedSelectedId = manualId ?? (hasClassContext ? validFocusedId : profiles[0]?.id ?? null);
-  const selected = profiles.find(profile => profile.id === resolvedSelectedId);
   const editorGuardRef = useRef<PlanningDraftGuard | null>(null);
+  // Arena can become ambiguous while an editor is dirty. Keep its same-class
+  // source profile mounted until an explicit save or discard, never reassign it.
+  const retainedProfileRef = useRef<{ className: string | null; id: string } | null>(null);
+  const isDirty = editorGuardRef.current?.hasUnsavedChanges() ?? false;
+  const retainedId = isDirty && retainedProfileRef.current?.className === currentClassName
+    ? retainedProfileRef.current.id : null;
+  const selectedId = resolvedSelectedId ?? retainedId;
+  const selected = profiles.find(profile => profile.id === selectedId);
+  if (selected && !isDirty) {
+    retainedProfileRef.current = { className: currentClassName, id: selected.id };
+  }
   const [selectionWarning, setSelectionWarning] = useState('');
   const registerEditorGuard = useCallback((guard: PlanningDraftGuard | null) => {
     editorGuardRef.current = guard;
@@ -164,11 +174,16 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           <span aria-hidden="true" className="text-cyan-300">{mobileDetailsVisible ? '−' : '+'}</span>
         </button>
       )}
+      {isDirty && planningFrame?.status === 'ambiguous' && selected && (
+        <p role="status" className="rounded-lg border border-amber-700 p-3 text-sm text-amber-200">
+          Cornice da verificare. La bozza rimane disponibile, ma non viene collegata automaticamente.
+        </p>
+      )}
       <div id="int01-planning-details" className={mobileDetailsVisible ? 'space-y-5' : 'hidden space-y-5 sm:block'}>
       {profiles.length > 0 && (
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
           {hasClassContext && planningFrame?.status === 'resolved' ? (
-            <div aria-label="Profilo della classe attiva" className="text-sm text-slate-200">
+            <div aria-label="Profilo salvato" className="text-sm text-slate-200">
               <p className="font-semibold">Profilo della classe corrente</p>
               <p className="mt-1 text-slate-400">{selected?.schoolYear} · {selected?.subjectCode} · classe {selected?.gradeLevel}</p>
             </div>

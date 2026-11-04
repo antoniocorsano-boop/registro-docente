@@ -66,8 +66,8 @@ describe('INT-01 bidirectional didactic continuity', () => {
   test('App routes Programmazione and UDA through one current class and focus', async () => {
     const app = await Bun.file('src/App.tsx').text();
     expect(app).toContain('focusedProfileId={planningFrame.status');
-    expect(app).toContain('onOpenUda={() => setActiveTab(');
-    expect(app).toContain('onOpenPlanning={() => setActiveTab(');
+    expect(app).toContain("onOpenUda={() => handleNavigateTab('uda-gantt')}");
+    expect(app).toContain("onOpenPlanning={() => handleNavigateTab('programmazione')}");
     expect(app).toContain('onTeachingFocusChange={');
   });
 
@@ -127,8 +127,14 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('Salva e continua');
     expect(app).toContain('Continua senza salvare');
     expect(app).toContain('Rimani nella Programmazione');
+    expect(app).toContain('history.forward()');
+    expect(app).toContain('history.back()');
+    expect(app).toContain('(node as HTMLElement).inert = true');
+    expect(app).toContain('planningExitDialogRef.current?.querySelectorAll');
     expect(app).toContain('onRegisterDraftGuard={registerPlanningDraftGuard}');
     expect(view).toContain('Profilo della classe corrente');
+    expect(view).toContain('retainedProfileRef');
+    expect(view).toContain('Cornice da verificare. La bozza rimane disponibile');
     expect(view).toContain('onRegisterDraftGuard={registerEditorGuard}');
     expect(editor).toContain('saveDraftChanges');
     expect(editor).toContain("window.addEventListener('beforeunload'");
