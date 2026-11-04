@@ -13,8 +13,8 @@ function evidencePath(name) {
   return path.resolve(process.env.EVIDENCE_DIR || '.', name);
 }
 
-async function configureVault(page, password) {
-  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+async function configureVault(page, password, url = baseURL) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
   await page.locator('#vault-password').fill(password);
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
@@ -872,5 +872,60 @@ test.describe('INT-01 HPR: competing browser navigation while the UDA confirmati
     expect(await page.evaluate(() => history.state?.tab)).toBe('dashboard');
     await fromDrawer(page, 'Programmazione didattica');
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-3');
+  });
+});
+
+test.describe('INT-01 HPR: diagnostica di navigazione isolata', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('retains opt-in through class, Programmazione, UDA, Back and identifies a real reload', async ({ page }) => {
+    const password = 'int-01-hpr-trace-fixture';
+    await configureVault(page, password, `${baseURL}/?int01Trace=1`);
+    const diagnostic = page.locator('details[aria-label="Diagnostica navigazione INT-01"]');
+    await expect(diagnostic).toBeVisible();
+    await expect(diagnostic.locator('summary')).toContainText('nuovo caricamento');
+
+    await createSyntheticClass(page, NEXT_CLASS_NAME);
+    await expect(page).toHaveURL(/int01Trace=1/);
+    await page.getByRole('button', { name: 'Apri classe ' + NEXT_CLASS_NAME, exact: true }).click();
+    await fromDrawer(page, 'Programmazione didattica');
+    await expect(page).toHaveURL(/tab=programmazione/);
+    await expect(page).toHaveURL(/int01Trace=1/);
+
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-diagnostic-test');
+    await page.getByRole('region', { name: 'Programmazione corrente' })
+      .getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(dialog.getByRole('status', { name: 'Destinazione richiesta' }))
+      .toContainText('Unità didattiche (UDA)');
+    await dialog.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/int01Trace=1/);
+    await diagnostic.locator('summary').click();
+    await expect(diagnostic.locator('ol')).toContainText('conferma-scarto');
+    await expect(diagnostic.locator('ol')).toContainText('azione-eseguita');
+
+    await page.goBack();
+    await expect(page.getByRole('region', { name: 'Programmazione corrente' })).toBeVisible();
+    await expect(page).toHaveURL(/int01Trace=1/);
+
+    await page.reload();
+    await expect(page).toHaveURL(/int01Trace=1/);
+    await expect(page.getByRole('heading', { name: 'Sblocca Registro' })).toBeVisible();
+    await page.locator('#vault-password').fill(password);
+    await page.getByRole('button', { name: 'Sblocca Registro', exact: true }).click();
+    await expect(diagnostic.locator('summary')).toContainText('ricaricamento pagina');
+    await diagnostic.locator('summary').click();
+    await expect(diagnostic.locator('ol')).toContainText('avvio-app:reload');
+    await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
+  });
+
+  test('never exposes diagnostic events without the explicit URL opt-in', async ({ page }) => {
+    await configureVault(page, 'int-01-hpr-no-trace');
+    await expect(page.locator('details[aria-label="Diagnostica navigazione INT-01"]'))
+      .toHaveCount(0);
+    await createSyntheticClass(page, NEXT_CLASS_NAME);
+    await expect(page).not.toHaveURL(/int01Trace=1/);
   });
 });
