@@ -393,6 +393,64 @@ test.describe('INT-01 mobile: guarded Forward traversal', () => {
   });
 });
 
+test.describe('INT-01 mobile: pending decision during verified browser Back', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  for (const withoutNavigationIndex of [false, true]) {
+    test(`supersedes a pending UDA push with verified Back ${withoutNavigationIndex ? 'without' : 'with'} Navigation API`, async ({ page }) => {
+      if (withoutNavigationIndex) {
+        await page.addInitScript(() => {
+          Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+        });
+      }
+      await configureVault(page, `int-01-verified-pending-back-${withoutNavigationIndex ? 'marked' : 'native'}`);
+      await createSyntheticClass(page, CLASS_NAME);
+      const router = await openPreparaForClass(page);
+      await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+      await createPlanningProfile(page);
+
+      // Record the actual previous entry and preserve the forward branch.
+      const planningUrl = page.url();
+      await page.goBack();
+      const previousUrl = page.url();
+      expect(previousUrl).not.toBe(planningUrl);
+      await page.goForward();
+      await expect(page).toHaveURL(planningUrl);
+
+      const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+      await details.click();
+      const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+      await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+      await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-unsaved-pending-verified');
+      await details.click();
+
+      await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+      const confirmation = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+      await expect(confirmation).toBeVisible();
+      await expect(page).toHaveURL(planningUrl);
+
+      // Browser Back occurs during an existing decision. The app restores
+      // Programmazione before asking, then must replace the stale UDA callback.
+      await page.goBack();
+      await expect(page).toHaveURL(planningUrl);
+      await expect(confirmation).toBeVisible();
+      const lengthBeforeConfirmation = await page.evaluate(() => history.length);
+
+      await confirmation.getByRole('button', { name: 'Continua senza salvare' }).click();
+      await expect(confirmation).toBeHidden();
+      await expect(page).toHaveURL(previousUrl);
+      await expect(continuity(page)).toHaveCount(0);
+      expect(await page.evaluate(() => history.length)).toBe(lengthBeforeConfirmation);
+
+      // A real Back preserves the Programmazione forward entry; a stale UDA
+      // push would truncate it and change the confirmed destination.
+      await page.goForward();
+      await expect(page).toHaveURL(planningUrl);
+      await expect(continuity(page)).toContainText('Apri UDA');
+    });
+  }
+});
+
 test.describe('INT-01: multi-entry unmarked history', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   test('checks the exact origin before permitting a dirty draft to be discarded', async ({ page }) => {
