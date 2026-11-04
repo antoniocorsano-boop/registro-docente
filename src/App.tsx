@@ -441,10 +441,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setPlanningExitOpen(false);
     setPlanningExitError('');
   };
-  const performPlanningExit = () => {
+  const performPlanningExit = (discardUnsavedDraft = false) => {
     // A confirmation must never execute a stale UDA callback while history.go
     // is still traversing to the verified Programmazione origin.
     if (historyRestorePendingRef.current !== null) return;
+    // A Back to an older history entry may show the *same* Programmazione
+    // component, so unmounting is not sufficient to discard its dirty draft.
+    if (discardUnsavedDraft) planningGuardRef.current?.discardChanges();
     planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
     pendingExitRef.current = null;
@@ -2976,7 +2979,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
                 {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
               </button>
-              <button type="button" onClick={performPlanningExit} disabled={planningExitSaving || historyRestoringOrigin}
+              <button type="button" onClick={() => performPlanningExit(true)} disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
                 Continua senza salvare
               </button>
