@@ -129,6 +129,7 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     const selectedId = await selector.locator('option:checked').getAttribute('value');
     const stateText = await page.evaluate(() => JSON.stringify(history.state));
     expect(stateText).not.toContain(OTHER_STUDENT_NAME);
+    expect(selectedId).toBeTruthy();
     expect(stateText).not.toContain(selectedId);
 
     await page.goBack({ waitUntil: 'domcontentloaded' });
