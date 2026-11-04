@@ -120,7 +120,14 @@ export const SecureRegistroRoot: React.FC = () => {
       const query = params.toString();
       const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
       try {
-        window.history.replaceState(null, '', nextUrl);
+        // Keep the app-owned history position: replacing the neutral bootstrap
+        // entry must not restart numbering while older entries remain reachable.
+        // Remove only stale class/tab authority, never the position marker.
+        const existingPosition = window.history.state?.__tramaHistoryPosition;
+        const neutralHistoryState = Number.isSafeInteger(existingPosition)
+          ? { __tramaHistoryPosition: existingPosition }
+          : null;
+        window.history.replaceState(neutralHistoryState, '', nextUrl);
       } catch (error) {
         console.warn('Unable to normalize neutral navigation history', error);
       }

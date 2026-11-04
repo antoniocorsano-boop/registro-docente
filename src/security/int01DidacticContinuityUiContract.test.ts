@@ -141,4 +141,16 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(editor).toContain('saveDraftChanges');
     expect(editor).toContain("window.addEventListener('beforeunload'");
   });
+
+  test('HPR history marker survives neutral bootstrap without restoring stale class', async () => {
+    const secureRoot = await Bun.file('src/components/SecureRegistroRoot.tsx').text();
+    const app = await Bun.file('src/App.tsx').text();
+    expect(secureRoot).toContain('const existingPosition = window.history.state?.__tramaHistoryPosition');
+    expect(secureRoot).toContain("window.history.replaceState(neutralHistoryState, '', nextUrl)");
+    expect(secureRoot).toContain("params.delete('class')");
+    expect(secureRoot).toContain("params.delete('tab')");
+    expect(app).toContain('__tramaHistoryPosition');
+    expect(app).toContain('history.go(-delta)');
+    expect(app).toContain('history.go(restoring.delta)');
+  });
 });
