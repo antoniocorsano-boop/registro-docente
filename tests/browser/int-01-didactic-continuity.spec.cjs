@@ -274,3 +274,49 @@ test.describe('INT-01 mobile: Programmazione ↔ UDA', () => {
     await runJourney(page, { mobile: true });
   });
 });
+
+test.describe('INT-01: non-saved Programmazione draft on mobile', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('offers stay/save/discard and keeps the active class', async ({ page }) => {
+    await configureVault(page, 'int-01-mobile-guard');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    await page.getByRole('button', { name: 'Profilo', exact: true }).click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-grade-2-saved-via-guard');
+    await details.click();
+    await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await details.click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-2-saved-via-guard');
+    await details.click();
+    await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Salva e continua' }).click();
+    await closeSaveConfirmation(page);
+    await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
+    await continuity(page).getByRole('button', { name: 'Apri Programmazione' }).click();
+    await details.click();
+    await page.getByRole('button', { name: 'Profilo', exact: true }).click();
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-2-saved-via-guard');
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-grade-2-discarded');
+    await details.click();
+    await fromDrawer(page, 'Oggi');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Continua senza salvare' }).click();
+    await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
+    await fromDrawer(page, 'Programmazione didattica');
+    await details.click();
+    await page.getByRole('button', { name: 'Profilo', exact: true }).click();
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-2-saved-via-guard');
+  });
+});

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PlanningDraftGuard } from '../../planning/planningDraftGuard';
 import { calculateEffectiveCapacity } from '../../planning/capacity';
 import { getFirstCycleNormativeReference } from '../../planning/normative/italianFirstCycle';
 import type {
@@ -15,6 +16,7 @@ interface PlanningProfileEditorProps {
   defaultSubjectCode?: string;
   subjectDisplayLabel?: string;
   defaultGradeLevel?: number;
+  onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
 }
 
 type PlanningSection = 'profile' | 'calendar' | 'organization';
@@ -61,7 +63,8 @@ const sectionButtonClass = (active: boolean) =>
   }`;
 
 export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
-  profile, onSave, defaultSubjectCode = 'tecnologia', subjectDisplayLabel = '', defaultGradeLevel = 1
+  profile, onSave, defaultSubjectCode = 'tecnologia', subjectDisplayLabel = '', defaultGradeLevel = 1,
+  onRegisterDraftGuard
 }) => {
   const [draft, setDraft] = useState<TeachingProfile>(() =>
     profile ?? createDraftProfile(defaultSubjectCode, defaultGradeLevel)
@@ -71,13 +74,68 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // Durable profile is the baseline; opening/closing a panel never persists drafts.
+  const persistedRef = useRef(JSON.stringify(draft));
+  const draftRef = useRef(draft);
+  const dirtyRef = useRef(false);
+  const savePendingRef = useRef(false);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  draftRef.current = draft;
+  dirtyRef.current = JSON.stringify(draft) !== persistedRef.current;
 
   useEffect(() => {
     if (profile) {
+      persistedRef.current = JSON.stringify(profile);
+      draftRef.current = profile;
+      dirtyRef.current = false;
       setDraft(profile);
       setEditingSection(null);
     }
   }, [profile]);
+
+  const saveDraftChanges = useCallback(async (): Promise<boolean> => {
+    if (savePendingRef.current) return false;
+    const candidate = draftRef.current;
+    setAttempted(true);
+    setSaveError('');
+    if (validateTeachingProfile(candidate).length > 0) return false;
+    savePendingRef.current = true;
+    setSaving(true);
+    try {
+      await onSaveRef.current(candidate);
+      persistedRef.current = JSON.stringify(candidate);
+      dirtyRef.current = false;
+      setEditingSection(null);
+      return true;
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Salvataggio non riuscito.');
+      return false;
+    } finally {
+      savePendingRef.current = false;
+      setSaving(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!onRegisterDraftGuard) return;
+    const guard: PlanningDraftGuard = {
+      hasUnsavedChanges: () => dirtyRef.current,
+      saveChanges: saveDraftChanges
+    };
+    onRegisterDraftGuard(guard);
+    return () => onRegisterDraftGuard(null);
+  }, [onRegisterDraftGuard, saveDraftChanges]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, []);
 
   const errors = useMemo(() => validateTeachingProfile(draft), [draft]);
   const capacity = useMemo(() => errors.length === 0 ? calculateEffectiveCapacity(draft) : null, [draft, errors]);
@@ -145,20 +203,9 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
     setEditingSection(profile ? null : section);
   };
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    setAttempted(true);
-    setSaveError('');
-    if (errors.length > 0 || saving) return;
-    setSaving(true);
-    try {
-      await onSave(draft);
-      setEditingSection(null);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Salvataggio non riuscito.');
-    } finally {
-      setSaving(false);
-    }
+    void saveDraftChanges();
   };
 
   const saveFooter = editingSection ? (

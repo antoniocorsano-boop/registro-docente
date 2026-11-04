@@ -117,4 +117,20 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(view).toContain('<PlanningProfileEditor');
     expect(view).toContain('<ArenaPlanningContextPanel');
   });
+
+  test('HPR guarded navigation and resolved class-only profile presentation', async () => {
+    const app = await Bun.file('src/App.tsx').text();
+    const view = await Bun.file('src/components/planning/PlanningProfileView.tsx').text();
+    const editor = await Bun.file('src/components/planning/PlanningProfileEditor.tsx').text();
+    expect(app).toContain('requestPlanningDeparture');
+    expect(app).toContain('Modifiche non salvate');
+    expect(app).toContain('Salva e continua');
+    expect(app).toContain('Continua senza salvare');
+    expect(app).toContain('Rimani nella Programmazione');
+    expect(app).toContain('onRegisterDraftGuard={registerPlanningDraftGuard}');
+    expect(view).toContain('Profilo della classe corrente');
+    expect(view).toContain('onRegisterDraftGuard={registerEditorGuard}');
+    expect(editor).toContain('saveDraftChanges');
+    expect(editor).toContain("window.addEventListener('beforeunload'");
+  });
 });

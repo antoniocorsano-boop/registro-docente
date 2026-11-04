@@ -12,6 +12,7 @@ import {
   UdaRecord
 } from './types';
 import type { ArenaPlanningContextPreview, PlanningState, TeachingProfile } from './planning/types';
+import type { PlanningDraftGuard } from './planning/planningDraftGuard';
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
@@ -307,6 +308,55 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
+  const activeTabRef = useRef<ActiveTab>('home');
+  const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const pendingExitRef = useRef<(() => void) | null>(null);
+  const [planningExitOpen, setPlanningExitOpen] = useState(false);
+  const [planningExitSaving, setPlanningExitSaving] = useState(false);
+  const [planningExitError, setPlanningExitError] = useState('');
+  const registerPlanningDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
+    planningGuardRef.current = guard;
+  }, []);
+  const requestPlanningDeparture = useCallback((commit: () => void): boolean => {
+    if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+      pendingExitRef.current = commit;
+      setPlanningExitError('');
+      setPlanningExitOpen(true);
+      return false;
+    }
+    commit();
+    return true;
+  }, []);
+  const cancelPlanningExit = () => {
+    if (planningExitSaving) return;
+    pendingExitRef.current = null;
+    setPlanningExitOpen(false);
+    setPlanningExitError('');
+  };
+  const performPlanningExit = () => {
+    const commit = pendingExitRef.current;
+    pendingExitRef.current = null;
+    setPlanningExitOpen(false);
+    setPlanningExitError('');
+    commit?.();
+  };
+  const saveAndLeavePlanning = async () => {
+    const guard = planningGuardRef.current;
+    if (!guard || planningExitSaving) return;
+    setPlanningExitSaving(true);
+    setPlanningExitError('');
+    try {
+      if (await guard.saveChanges()) {
+        performPlanningExit();
+      } else {
+        setPlanningExitError('Il profilo non è stato salvato. Correggi i dati o riprova.');
+      }
+    } catch {
+      setPlanningExitError('Salvataggio non riuscito. La Programmazione rimane aperta.');
+    } finally {
+      setPlanningExitSaving(false);
+    }
+  };
   const [teachingFocus, setTeachingFocus] = useState<LibraryTeachingContext | null>(null);
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);
@@ -378,7 +428,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
 
-  const setActiveTab = useCallback((tab: ActiveTab) => {
+  const applyActiveTab = useCallback((tab: ActiveTab) => {
+    activeTabRef.current = tab;
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
     setTeachingFocus(previous =>
@@ -398,6 +449,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setTodayAction(null);
     }
   }, [publishReviewSession, teachingUdaCatalog]);
+
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    if (tab === activeTabRef.current) return;
+    requestPlanningDeparture(() => applyActiveTab(tab));
+  }, [applyActiveTab, requestPlanningDeparture]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -518,8 +574,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveRecordSession?: boolean } = {}
   ) => {
+    requestPlanningDeparture(() => {
     const hadReviewSession = reviewSessionRef.current !== null;
-    setActiveTab(tab);
+    applyActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
@@ -539,7 +596,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
-  }, [publishRecordSession, setActiveTab]);
+    });
+  }, [applyActiveTab, publishRecordSession, requestPlanningDeparture]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1453,20 +1511,37 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
 
-  // Synchronize URL query params
+  // Browser Back is treated as an exit, including a change of active class.
   useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      const nextCurrentClassId = e.state?.classId || null;
-      currentClassIdRef.current = nextCurrentClassId;
-      setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
-      setTodayAction(null);
-      publishReviewSession(null);
-      publishRecordSession(null);
-      setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
+    const handlePopState = (event: PopStateEvent) => {
+      const destinationUrl = window.location.pathname + window.location.search + window.location.hash;
+      const nextClassId = event.state?.classId || null;
+      const nextTab: ActiveTab = event.state?.tab || (nextClassId ? 'dashboard' : 'home');
+      const navigate = () => {
+        currentClassIdRef.current = nextClassId;
+        setAppData(prev => ({ ...prev, currentClassId: nextClassId }));
+        setTodayAction(null);
+        publishReviewSession(null);
+        publishRecordSession(null);
+        applyActiveTab(nextTab);
+      };
+      if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+        const classId = currentClassIdRef.current;
+        const params = new URLSearchParams();
+        if (classId) params.set('class', classId);
+        params.set('tab', 'programmazione');
+        history.pushState({ classId, tab: 'programmazione' }, '', `?${params.toString()}`);
+        requestPlanningDeparture(() => {
+          history.replaceState(event.state, '', destinationUrl);
+          navigate();
+        });
+        return;
+      }
+      navigate();
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [applyActiveTab, publishRecordSession, publishReviewSession, requestPlanningDeparture]);
 
   const handleOpenPreparationCopilot = useCallback(() => {
     const launchContext = buildPreparationCopilotLaunchContext(currentClass);
@@ -1693,6 +1768,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    requestPlanningDeparture(() => {
     const shouldStartPendingReview =
       todayAction === 'review'
       && currentClassIdRef.current === null
@@ -1716,28 +1792,31 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } else if (todayAction === 'review') {
       setTodayAction(null);
     }
-    setActiveTab('dashboard');
+    applyActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
       history.pushState({ classId, tab: 'dashboard' }, '', `?class=${classId}`);
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   };
 
   const handleNavigateHome = () => {
+    requestPlanningDeparture(() => {
     setTodayAction(null);
     publishReviewSession(null);
     publishRecordSession(null);
     currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
-    setActiveTab('home');
+    applyActiveTab('home');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
       history.pushState(null, '', window.location.pathname);
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   };
 
   // Add new class
@@ -2416,6 +2495,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             profiles={planning.profiles}
             arenaContexts={planning.arenaContexts}
             onSaveProfile={handleSaveTeachingProfile}
+            onRegisterDraftGuard={registerPlanningDraftGuard}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
             currentClassName={currentClass?.name ?? null}
             planningFrame={planningFrame}
@@ -2583,6 +2663,34 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               isPending={isLibraryMutationPending}
             />
         </>
+      )}
+
+      {planningExitOpen && (
+        <div role="dialog" aria-modal="true" aria-labelledby="planning-exit-title"
+          onKeyDown={event => { if (event.key === 'Escape') cancelPlanningExit(); }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-amber-800 bg-slate-950 p-5 shadow-2xl">
+            <h2 id="planning-exit-title" className="text-xl font-bold text-white">Modifiche non salvate</h2>
+            <p className="text-sm text-slate-300">
+              Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
+            </p>
+            {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving}
+                className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
+                {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
+              </button>
+              <button type="button" onClick={performPlanningExit} disabled={planningExitSaving}
+                className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
+                Continua senza salvare
+              </button>
+              <button type="button" onClick={cancelPlanningExit} autoFocus disabled={planningExitSaving}
+                className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                Rimani nella Programmazione
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Persistence confirmation modal */}

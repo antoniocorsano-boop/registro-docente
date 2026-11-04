@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import type { PlanningDraftGuard } from '../../planning/planningDraftGuard';
 import type {
   ArenaPlanningContext,
   ArenaPlanningContextPreview,
@@ -24,6 +25,7 @@ interface PlanningProfileViewProps {
   onOpenUda?: () => void;
   defaultSubjectCode?: string;
   subjectDisplayLabel?: string;
+  onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
 }
 
 export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
@@ -39,7 +41,8 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   lessonTitle = null,
   onOpenUda,
   defaultSubjectCode = 'tecnologia',
-  subjectDisplayLabel = ''
+  subjectDisplayLabel = '',
+  onRegisterDraftGuard
 }) => {
   const hasClassContext = Boolean(currentClassName?.trim());
   // Manual choice is scoped to the current class/frame; it never updates the class itself.
@@ -48,11 +51,25 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   const validFocusedId = focusedProfileId && profiles.some(p => p.id === focusedProfileId)
     ? focusedProfileId
     : null;
-  const manualId = manualChoice?.scope === scope && profiles.some(p => p.id === manualChoice.id)
-    ? manualChoice.id
-    : null;
+  const manualId = planningFrame?.status !== 'resolved'
+    && manualChoice?.scope === scope && profiles.some(p => p.id === manualChoice.id)
+      ? manualChoice.id : null;
   const resolvedSelectedId = manualId ?? (hasClassContext ? validFocusedId : profiles[0]?.id ?? null);
   const selected = profiles.find(profile => profile.id === resolvedSelectedId);
+  const editorGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const [selectionWarning, setSelectionWarning] = useState('');
+  const registerEditorGuard = useCallback((guard: PlanningDraftGuard | null) => {
+    editorGuardRef.current = guard;
+    onRegisterDraftGuard?.(guard);
+  }, [onRegisterDraftGuard]);
+  const chooseProfile = (id: string) => {
+    if (editorGuardRef.current?.hasUnsavedChanges()) {
+      setSelectionWarning('Salva le modifiche prima di passare a un altro profilo.');
+      return;
+    }
+    setSelectionWarning('');
+    setManualChoice({ scope, id });
+  };
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileArenaOpen, setMobileArenaOpen] = useState(false);
   const resolvedFrame = planningFrame?.status === 'resolved' ? planningFrame : null;
@@ -150,10 +167,16 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
       <div id="int01-planning-details" className={mobileDetailsVisible ? 'space-y-5' : 'hidden space-y-5 sm:block'}>
       {profiles.length > 0 && (
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          {hasClassContext && planningFrame?.status === 'resolved' ? (
+            <div aria-label="Profilo della classe attiva" className="text-sm text-slate-200">
+              <p className="font-semibold">Profilo della classe corrente</p>
+              <p className="mt-1 text-slate-400">{selected?.schoolYear} · {selected?.subjectCode} · classe {selected?.gradeLevel}</p>
+            </div>
+          ) : (
           <label className="text-sm text-slate-300">Profilo salvato
             <select
               value={resolvedSelectedId ?? ''}
-              onChange={event => setManualChoice({ scope, id: event.target.value })}
+              onChange={event => chooseProfile(event.target.value)}
               className="mt-1 min-h-[44px] w-full rounded border border-slate-700 bg-slate-950 p-2"
             >
               {hasClassContext && !resolvedSelectedId && (
@@ -166,6 +189,8 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
               ))}
             </select>
           </label>
+          )}
+          {selectionWarning && <p role="alert" className="mt-2 text-sm text-amber-200">{selectionWarning}</p>}
           {hasClassContext && selected && selected.id !== validFocusedId && (
             <p className="mt-2 text-xs text-amber-200">
               Stai consultando manualmente un profilo diverso dalla cornice della classe selezionata.
@@ -179,6 +204,7 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           key={selected?.id ?? `${scope}:${defaultSubjectCode}`}
           profile={selected}
           onSave={onSaveProfile}
+          onRegisterDraftGuard={registerEditorGuard}
           defaultSubjectCode={defaultSubjectCode}
           subjectDisplayLabel={subjectDisplayLabel}
           defaultGradeLevel={resolveClassGradeLevel(currentClassName ?? '') ?? 1}
