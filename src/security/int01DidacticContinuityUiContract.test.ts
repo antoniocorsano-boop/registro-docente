@@ -176,4 +176,15 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('history.go(-delta)');
     expect(app).toContain('history.go(restoring.delta)');
   });
+
+  test('clean legacy entries acquire a unique identity before a dirty Back', async () => {
+    const app = await Bun.file('src/App.tsx').text();
+    expect(app).toContain('const historyEntryIdRef');
+    expect(app).toContain('__tramaHistoryEntryId');
+    expect(app).toContain('const currentEntryId = targetEntryId ?? crypto.randomUUID()');
+    expect(app).toContain('historyPositionRef.current = targetPosition');
+    expect(app).toContain('restoring.originBrowserIndex');
+    expect(app).toContain('targetEntryId === restoring.originEntryId');
+    expect(app).toContain('originVerified && window.location.href === restoring.originUrl');
+  });
 });

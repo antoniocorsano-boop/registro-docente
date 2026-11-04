@@ -312,11 +312,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
+  const historyEntryIdRef = useRef<string | null>(null);
   const browserHistoryIndexRef = useRef<number | null>(null);
   const historyUrlRef = useRef('');
   const historyRestorePendingRef = useRef<{
     delta: number;
-    originPosition: number;
+    originPosition: number | null;
+    originEntryId: string;
+    originBrowserIndex: number | null;
     originUrl: string;
     scanDirection?: 1 | -1;
     scannedSteps?: number;
@@ -332,7 +335,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const state = history.state && typeof history.state === 'object' ? history.state : {};
     const nextPosition = (historyPositionRef.current ?? 0) + 1;
     historyPositionRef.current = nextPosition;
-    history.replaceState({ ...state, __tramaHistoryPosition: nextPosition }, '', window.location.href);
+    const entryId = crypto.randomUUID();
+    history.replaceState({
+      ...state,
+      __tramaHistoryPosition: nextPosition,
+      __tramaHistoryEntryId: entryId
+    }, '', window.location.href);
+    historyEntryIdRef.current = entryId;
     historyUrlRef.current = window.location.href;
     browserHistoryIndexRef.current = readBrowserHistoryIndex();
   }, []);
@@ -341,11 +350,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const state = history.state && typeof history.state === 'object' ? history.state : {};
     const recordedPosition = Number.isSafeInteger(state.__tramaHistoryPosition)
       ? state.__tramaHistoryPosition as number : 0;
+    const entryId = typeof state.__tramaHistoryEntryId === 'string'
+      && state.__tramaHistoryEntryId.length > 0
+      ? state.__tramaHistoryEntryId : crypto.randomUUID();
     historyPositionRef.current = recordedPosition;
+    historyEntryIdRef.current = entryId;
     historyUrlRef.current = window.location.href;
     browserHistoryIndexRef.current = readBrowserHistoryIndex();
-    if (!Number.isSafeInteger(state.__tramaHistoryPosition)) {
-      history.replaceState({ ...state, __tramaHistoryPosition: recordedPosition }, '', window.location.href);
+    if (!Number.isSafeInteger(state.__tramaHistoryPosition)
+      || state.__tramaHistoryEntryId !== entryId) {
+      history.replaceState({
+        ...state,
+        __tramaHistoryPosition: recordedPosition,
+        __tramaHistoryEntryId: entryId
+      }, '', window.location.href);
     }
   }, []);
   const pendingExitRef = useRef<(() => void) | null>(null);
@@ -1594,8 +1612,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const targetPosition = Number.isSafeInteger(event.state?.__tramaHistoryPosition)
         ? event.state.__tramaHistoryPosition as number : null;
       const browserIndex = readBrowserHistoryIndex();
+      const targetEntryId = typeof event.state?.__tramaHistoryEntryId === 'string'
+        && event.state.__tramaHistoryEntryId.length > 0
+        ? event.state.__tramaHistoryEntryId as string : null;
       const navigate = () => {
-        if (targetPosition !== null) historyPositionRef.current = targetPosition;
+        // On clean arrival stamp legacy, unmarked entries with a unique identity.
+        // Never infer that their old numeric position equals the prior entry's.
+        const currentEntryId = targetEntryId ?? crypto.randomUUID();
+        if (!targetEntryId) {
+          history.replaceState({
+            ...(event.state && typeof event.state === 'object' ? event.state : {}),
+            __tramaHistoryEntryId: currentEntryId
+          }, '', window.location.href);
+        }
+        historyPositionRef.current = targetPosition;
+        historyEntryIdRef.current = currentEntryId;
         browserHistoryIndexRef.current = browserIndex;
         historyUrlRef.current = window.location.href;
         currentClassIdRef.current = nextClassId;
@@ -1608,9 +1639,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
       const restoring = historyRestorePendingRef.current;
       if (restoring) {
-        // Check both marker and address; a stale or duplicated index is not enough.
-        if (targetPosition === restoring.originPosition &&
-          window.location.href === restoring.originUrl) {
+        // A legacy origin may have no numeric marker. Prove its exact identity
+        // using the browser's absolute index or its unique per-entry token.
+        const originVerified =
+          (browserIndex !== null && restoring.originBrowserIndex !== null
+            && browserIndex === restoring.originBrowserIndex)
+          || (targetEntryId !== null && targetEntryId === restoring.originEntryId);
+        if (originVerified && window.location.href === restoring.originUrl) {
           historyRestorePendingRef.current = null;
           browserHistoryIndexRef.current = browserIndex;
           requestPlanningDeparture(() => {
@@ -1652,14 +1687,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           ? browserIndex - browserHistoryIndexRef.current : null;
         const markedDelta = targetPosition !== null && currentPosition !== null
           ? targetPosition - currentPosition : null;
-        const delta = absoluteDelta ?? markedDelta;
+        const delta = absoluteDelta
+          ?? (targetEntryId === historyEntryIdRef.current ? 0 : markedDelta);
 
         if (delta === null) {
           // Fallback for older browsers: old unmarked entries precede the
           // current app-owned entry. Scan forward until that entry is verified.
           historyRestorePendingRef.current = {
             delta: -1,
-            originPosition: currentPosition ?? 0,
+            originPosition: currentPosition,
+            originEntryId: historyEntryIdRef.current ?? '',
+            originBrowserIndex: browserHistoryIndexRef.current,
             originUrl: historyUrlRef.current,
             scanDirection: 1,
             scannedSteps: 1
@@ -1670,18 +1708,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         if (delta !== 0) {
           historyRestorePendingRef.current = {
             delta,
-            originPosition: currentPosition ?? 0,
+            originPosition: currentPosition,
+            originEntryId: historyEntryIdRef.current ?? '',
+            originBrowserIndex: browserHistoryIndexRef.current,
             originUrl: historyUrlRef.current
           };
           history.go(-delta);
           return;
         }
         if (window.location.href !== historyUrlRef.current) {
-          // This is a replaced entry, not a safe committed change of class.
-          // Restore its URL without navigating away or discarding the editor.
+          // Never overwrite a foreign browser entry just because numeric
+          // positions happen to collide. Leave the dirty editor untouched.
+          if (targetEntryId !== historyEntryIdRef.current) {
+            console.warn('INT-01: unverified browser-history entry; refusing implicit class change');
+            return;
+          }
           history.replaceState(
             { ...(history.state && typeof history.state === 'object' ? history.state : {}),
-              __tramaHistoryPosition: currentPosition },
+              __tramaHistoryPosition: currentPosition,
+              __tramaHistoryEntryId: historyEntryIdRef.current },
             '',
             historyUrlRef.current
           );

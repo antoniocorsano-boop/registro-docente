@@ -422,3 +422,43 @@ test.describe('INT-01: multi-entry unmarked history', () => {
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-draft-legacy');
   });
 });
+
+test.describe('INT-01 mobile: dirty draft starting from a legacy unmarked history entry', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test('stamps the clean legacy origin and restores it before asking to leave', async ({ page }) => {
+    await configureVault(page, 'int-01-legacy-unmarked-origin');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const classId = await page.evaluate(() => history.state?.classId);
+    const planningUrl = page.url();
+    await page.evaluate(({ classId, planningUrl }) => {
+      history.pushState({ classId, tab: 'programmazione', legacy: 'unmarked-origin' },
+        '', planningUrl + (planningUrl.includes('?') ? '&' : '?') + 'legacy=origin');
+      history.pushState({ classId, tab: 'uda-gantt', legacy: 'later-entry' },
+        '', planningUrl + (planningUrl.includes('?') ? '&' : '?') + 'legacy=later');
+    }, { classId, planningUrl });
+    await page.goBack();
+    const unmarkedOriginUrl = page.url();
+    await expect(page.getByRole('status', { name: 'Stato della programmazione' })).toContainText('Programmazione disponibile');
+    await expect.poll(() => page.evaluate(() => history.state?.__tramaHistoryEntryId?.length > 0)).toBe(true);
+    await expect.poll(() => page.evaluate(() => history.state?.__tramaHistoryPosition ?? null)).toBeNull();
+
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-unmarked-origin-draft');
+    await details.click();
+
+    await page.goBack();
+    const dialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(unmarkedOriginUrl);
+    await dialog.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await expect(page).toHaveURL(unmarkedOriginUrl);
+    await details.click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-unmarked-origin-draft');
+  });
+});
