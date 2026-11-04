@@ -629,6 +629,53 @@
       "browserSmoke": [
         "tests/browser/flow-04-review-session.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-01-I01",
+      "owner": "INT-01",
+      "statement": "Programmazione is resolved class-first with fail-closed identity and authority checks; one validated session-only teaching focus carries explicit UDA/lesson context between authoritative specialist surfaces without auto-selection, autosave or schema migration; Docente OS projections remain read-only.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/planning/planningFrameResolver.ts",
+        "src/library/planningContextBridge.ts",
+        "src/context/teachingFocus.ts",
+        "src/context/professionalContext.ts",
+        "src/components/DidacticContinuityBar.tsx",
+        "src/components/SecureRegistroRoot.tsx",
+        "src/components/planning/PlanningProfileView.tsx",
+        "src/components/planning/PlanningProfileEditor.tsx",
+        "src/components/UdaGanttView.tsx",
+        "src/components/UdaWorkspaceView.tsx",
+        "src/App.tsx",
+        "src/security/int01PlanningFrameContract.test.ts",
+        "src/security/int01TeachingFocusContract.test.ts",
+        "src/security/int01ProfessionalContextContract.test.ts",
+        "src/security/int01AppContextContract.test.ts",
+        "src/security/int01DidacticContinuityUiContract.test.ts",
+        "src/security/int01QualificationContract.test.ts",
+        "tests/browser/int-01-didactic-continuity.spec.cjs",
+        ".github/workflows/browser-qualification.yml",
+        "src/planning/curricularSubjectCode.ts",
+        "src/security/int01CurricularSubjectCodeContract.test.ts",
+        "src/context/udaClassScope.ts",
+        "src/security/int01FinalReviewScopeContract.test.ts",
+        "src/security/appVaultWiring.test.ts",
+        "tests/browser/ux-qa-01-review-regressions.spec.cjs"
+      ],
+      "tests": [
+        "src/security/int01PlanningFrameContract.test.ts",
+        "src/security/int01TeachingFocusContract.test.ts",
+        "src/security/int01ProfessionalContextContract.test.ts",
+        "src/security/int01AppContextContract.test.ts",
+        "src/security/int01DidacticContinuityUiContract.test.ts",
+        "src/security/int01QualificationContract.test.ts",
+        "src/security/int01CurricularSubjectCodeContract.test.ts",
+        "src/security/int01FinalReviewScopeContract.test.ts",
+        "src/security/appVaultWiring.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-01-didactic-continuity.spec.cjs"
+      ]
     }
   ]
 }

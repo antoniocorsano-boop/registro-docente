@@ -67,9 +67,17 @@ test('neutral bootstrap replaces stale class history so Back returns to Home aft
   await createSyntheticClass(page, CLASS_B);
 
   await openClass(page, CLASS_A);
+  const beforeReloadPosition = await page.evaluate(() => history.state?.__tramaHistoryPosition);
+  expect(Number.isSafeInteger(beforeReloadPosition)).toBe(true);
   await reloadAndUnlock(page);
 
+  // A neutral Home must retain the position of the replaced entry.
+  const afterReloadPosition = await page.evaluate(() => history.state?.__tramaHistoryPosition);
+  expect(afterReloadPosition).toBe(beforeReloadPosition);
+
   await openClass(page, CLASS_B);
+  const secondClassPosition = await page.evaluate(() => history.state?.__tramaHistoryPosition);
+  expect(secondClassPosition).toBe(beforeReloadPosition + 1);
   await page.goBack({ waitUntil: 'domcontentloaded' });
 
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
