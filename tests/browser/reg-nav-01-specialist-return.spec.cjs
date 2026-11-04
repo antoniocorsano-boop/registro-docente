@@ -106,6 +106,34 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
       expect(errors).toEqual([]);
     });
   }
+
+  test('Scheda alunno dal menu → seconda selezione → Analisi → Indietro conserva lo studente', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Scheda alunno');
+    await expect(page.getByRole('heading', { name: /Scheda Alunno & Profilo delle Competenze/ })).toBeVisible();
+    await expectNavigation(page, 'report');
+
+    const selector = page.locator('main select').first();
+    await selector.selectOption({ label: OTHER_STUDENT_NAME });
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    const selectedId = await selector.locator('option:checked').getAttribute('value');
+    expect(selectedId).toBeTruthy();
+
+    // Browser history carries an opaque token, never the student identifier.
+    const entry = await page.evaluate(() => history.state);
+    expect(entry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
+    expect(JSON.stringify(entry)).not.toContain(selectedId);
+
+    await fromDrawer(page, 'Analisi');
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    expect(errors).toEqual([]);
+  });
+
   test('Indietro e Avanti ripristinano lo studente corretto fra più schede aperte', async ({ page }) => {
     await prepareSyntheticClass(page);
     await page.locator('main').getByRole('button', { name: 'Analisi', exact: true }).click();
