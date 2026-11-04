@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 export interface PlanningDraftGuard {
   hasUnsavedChanges: () => boolean;
   saveChanges: () => Promise<boolean>;
+  discardChanges: () => void;
 }
 import { calculateEffectiveCapacity } from '../../planning/capacity';
 import { getFirstCycleNormativeReference } from '../../planning/normative/italianFirstCycle';
@@ -121,15 +122,29 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
     }
   }, []);
 
+  const discardDraftChanges = useCallback(() => {
+    // Rehydrate the last persisted snapshot even when routing to another
+    // history entry of the *same* class/profile keeps this editor mounted.
+    if (savePendingRef.current) return;
+    const restored = JSON.parse(persistedRef.current) as TeachingProfile;
+    draftRef.current = restored;
+    dirtyRef.current = false;
+    setDraft(restored);
+    setEditingSection(null);
+    setAttempted(false);
+    setSaveError('');
+  }, []);
+
   useEffect(() => {
     if (!onRegisterDraftGuard) return;
     const guard: PlanningDraftGuard = {
       hasUnsavedChanges: () => dirtyRef.current,
-      saveChanges: saveDraftChanges
+      saveChanges: saveDraftChanges,
+      discardChanges: discardDraftChanges
     };
     onRegisterDraftGuard(guard);
     return () => onRegisterDraftGuard(null);
-  }, [onRegisterDraftGuard, saveDraftChanges]);
+  }, [onRegisterDraftGuard, saveDraftChanges, discardDraftChanges]);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
