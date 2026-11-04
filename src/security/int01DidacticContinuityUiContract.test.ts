@@ -165,4 +165,15 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('history.go(-delta)');
     expect(app).toContain('history.go(restoring.delta)');
   });
+
+  test('legacy history cannot silently reclassify a dirty Programmazione', async () => {
+    const app = await Bun.file('src/App.tsx').text();
+    expect(app).toContain('browserHistoryIndexRef');
+    expect(app).toContain('readBrowserHistoryIndex');
+    expect(app).toContain('historyUrlRef');
+    expect(app).toContain('window.location.href === restoring.originUrl');
+    expect(app).toContain('history.go(direction)');
+    expect(app).toContain('history.go(-delta)');
+    expect(app).toContain('history.go(restoring.delta)');
+  });
 });

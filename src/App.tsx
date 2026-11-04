@@ -312,13 +312,29 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
-  const historyRestorePendingRef = useRef<{ delta: number; originPosition: number } | null>(null);
+  const browserHistoryIndexRef = useRef<number | null>(null);
+  const historyUrlRef = useRef('');
+  const historyRestorePendingRef = useRef<{
+    delta: number;
+    originPosition: number;
+    originUrl: string;
+    scanDirection?: 1 | -1;
+    scannedSteps?: number;
+  } | null>(null);
+  const readBrowserHistoryIndex = (): number | null => {
+    const index = (window as Window & {
+      navigation?: { currentEntry?: { index?: number } };
+    }).navigation?.currentEntry?.index;
+    return typeof index === 'number' && Number.isSafeInteger(index) ? index : null;
+  };
   const historyApprovedTraversalRef = useRef<number | null>(null);
   const markHistoryPush = useCallback(() => {
     const state = history.state && typeof history.state === 'object' ? history.state : {};
     const nextPosition = (historyPositionRef.current ?? 0) + 1;
     historyPositionRef.current = nextPosition;
     history.replaceState({ ...state, __tramaHistoryPosition: nextPosition }, '', window.location.href);
+    historyUrlRef.current = window.location.href;
+    browserHistoryIndexRef.current = readBrowserHistoryIndex();
   }, []);
 
   useEffect(() => {
@@ -326,6 +342,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const recordedPosition = Number.isSafeInteger(state.__tramaHistoryPosition)
       ? state.__tramaHistoryPosition as number : 0;
     historyPositionRef.current = recordedPosition;
+    historyUrlRef.current = window.location.href;
+    browserHistoryIndexRef.current = readBrowserHistoryIndex();
     if (!Number.isSafeInteger(state.__tramaHistoryPosition)) {
       history.replaceState({ ...state, __tramaHistoryPosition: recordedPosition }, '', window.location.href);
     }
@@ -1567,16 +1585,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
 
   // Synchronize URL query params
-  // Restore actual browser history position when an unsaved editor blocks traversal.
-  // The index is stamped on app-owned entries; no compensating pushState is needed.
+  // Restore the real originating entry before offering any departure choice.
+  // Legacy unmarked history is not assumed to be just one step away.
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const nextClassId = event.state?.classId || null;
       const nextTab: ActiveTab = event.state?.tab || (nextClassId ? 'dashboard' : 'home');
       const targetPosition = Number.isSafeInteger(event.state?.__tramaHistoryPosition)
         ? event.state.__tramaHistoryPosition as number : null;
+      const browserIndex = readBrowserHistoryIndex();
       const navigate = () => {
         if (targetPosition !== null) historyPositionRef.current = targetPosition;
+        browserHistoryIndexRef.current = browserIndex;
+        historyUrlRef.current = window.location.href;
         currentClassIdRef.current = nextClassId;
         setAppData(prev => ({ ...prev, currentClassId: nextClassId }));
         setTodayAction(null);
@@ -1584,31 +1605,86 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         publishRecordSession(null);
         setActiveTab(nextTab);
       };
+
       const restoring = historyRestorePendingRef.current;
       if (restoring) {
-        historyRestorePendingRef.current = null;
-        // We are back at the original entry; commit the requested delta only after confirmation.
-        requestPlanningDeparture(() => {
-          historyApprovedTraversalRef.current = restoring.delta;
-          history.go(restoring.delta);
-        });
+        // Check both marker and address; a stale or duplicated index is not enough.
+        if (targetPosition === restoring.originPosition &&
+          window.location.href === restoring.originUrl) {
+          historyRestorePendingRef.current = null;
+          browserHistoryIndexRef.current = browserIndex;
+          requestPlanningDeparture(() => {
+            historyApprovedTraversalRef.current = restoring.delta;
+            history.go(restoring.delta);
+          });
+          return;
+        }
+        // An old unmarked entry may be multiple positions away.
+        // Walk toward the actual origin without inserting history entries.
+        const direction = restoring.scanDirection ?? (restoring.delta < 0 ? 1 : -1);
+        const steps = restoring.scannedSteps ?? 0;
+        if (steps < history.length) {
+          historyRestorePendingRef.current = {
+            ...restoring,
+            delta: restoring.delta + (direction === 1 ? -1 : 1),
+            scanDirection: direction,
+            scannedSteps: steps + 1
+          };
+          history.go(direction);
+          return;
+        }
+        // Never activate an unrelated class while unsaved professional edits exist.
+        console.warn('INT-01 could not restore original history entry');
         return;
       }
+
       if (historyApprovedTraversalRef.current !== null) {
         historyApprovedTraversalRef.current = null;
         planningExitBypassRef.current = true;
         try { navigate(); } finally { planningExitBypassRef.current = false; }
         return;
       }
+
       const currentPosition = historyPositionRef.current;
-      if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
-        // Entries from the current session have a reliable index; older unmarked
-        // entries use the single-step Back fallback without truncating history.
-        const delta = targetPosition !== null && currentPosition !== null
-          ? targetPosition - currentPosition : -1;
+      if (activeTabRef.current === 'programmazione' &&
+        planningGuardRef.current?.hasUnsavedChanges()) {
+        const absoluteDelta = browserIndex !== null && browserHistoryIndexRef.current !== null
+          ? browserIndex - browserHistoryIndexRef.current : null;
+        const markedDelta = targetPosition !== null && currentPosition !== null
+          ? targetPosition - currentPosition : null;
+        const delta = absoluteDelta ?? markedDelta;
+
+        if (delta === null) {
+          // Fallback for older browsers: old unmarked entries precede the
+          // current app-owned entry. Scan forward until that entry is verified.
+          historyRestorePendingRef.current = {
+            delta: -1,
+            originPosition: currentPosition ?? 0,
+            originUrl: historyUrlRef.current,
+            scanDirection: 1,
+            scannedSteps: 1
+          };
+          history.forward();
+          return;
+        }
         if (delta !== 0) {
-          historyRestorePendingRef.current = { delta, originPosition: currentPosition ?? 0 };
+          historyRestorePendingRef.current = {
+            delta,
+            originPosition: currentPosition ?? 0,
+            originUrl: historyUrlRef.current
+          };
           history.go(-delta);
+          return;
+        }
+        if (window.location.href !== historyUrlRef.current) {
+          // This is a replaced entry, not a safe committed change of class.
+          // Restore its URL without navigating away or discarding the editor.
+          history.replaceState(
+            { ...(history.state && typeof history.state === 'object' ? history.state : {}),
+              __tramaHistoryPosition: currentPosition },
+            '',
+            historyUrlRef.current
+          );
           return;
         }
       }

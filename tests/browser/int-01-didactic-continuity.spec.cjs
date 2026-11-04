@@ -392,3 +392,33 @@ test.describe('INT-01 mobile: guarded Forward traversal', () => {
     await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
   });
 });
+
+test.describe('INT-01: multi-entry unmarked history', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test('checks the exact origin before permitting a dirty draft to be discarded', async ({ page }) => {
+    await configureVault(page, 'int-01-legacy-multi-step');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    // Model two old unmarked history entries before the new Programmazione entry.
+    await page.evaluate(() => {
+      history.pushState({ legacy: 'first' }, '', '?legacy=first');
+      history.pushState({ legacy: 'second' }, '', '?legacy=second');
+    });
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const originalUrl = page.url();
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-draft-legacy');
+    await details.click();
+    await page.evaluate(() => history.go(-2));
+    const dialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(originalUrl);
+    await dialog.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await details.click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-draft-legacy');
+  });
+});
