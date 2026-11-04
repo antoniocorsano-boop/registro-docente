@@ -157,7 +157,7 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     expect(entry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
     expect(JSON.stringify(entry)).not.toContain(selectedId);
 
-    await fromDrawer(page, 'Analisi');
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
     await expectNavigation(page, 'analytics');
     await page.goBack({ waitUntil: 'domcontentloaded' });
     await expectNavigation(page, 'report');
