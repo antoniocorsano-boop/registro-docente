@@ -311,8 +311,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const activeTabRef = useRef<ActiveTab>('home');
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
-  const historyRestorePendingRef = useRef(false);
-  const historyApprovedTraversalRef = useRef(false);
+  const historyPositionRef = useRef<number | null>(null);
+  const historyRestorePendingRef = useRef<{ delta: number; originPosition: number } | null>(null);
+  const historyApprovedTraversalRef = useRef<number | null>(null);
+  const markHistoryPush = useCallback(() => {
+    const state = history.state && typeof history.state === 'object' ? history.state : {};
+    const nextPosition = (historyPositionRef.current ?? 0) + 1;
+    historyPositionRef.current = nextPosition;
+    history.replaceState({ ...state, __tramaHistoryPosition: nextPosition }, '', window.location.href);
+  }, []);
+
+  useEffect(() => {
+    const state = history.state && typeof history.state === 'object' ? history.state : {};
+    const recordedPosition = Number.isSafeInteger(state.__tramaHistoryPosition)
+      ? state.__tramaHistoryPosition as number : 0;
+    historyPositionRef.current = recordedPosition;
+    if (!Number.isSafeInteger(state.__tramaHistoryPosition)) {
+      history.replaceState({ ...state, __tramaHistoryPosition: recordedPosition }, '', window.location.href);
+    }
+  }, []);
   const pendingExitRef = useRef<(() => void) | null>(null);
   const planningExitDialogRef = useRef<HTMLDivElement | null>(null);
   const planningExitOriginFocusRef = useRef<HTMLElement | null>(null);
@@ -632,9 +649,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+      markHistoryPush();
     } catch (e) {}
     });
-  }, [publishRecordSession, requestPlanningDeparture, setActiveTab]);
+  }, [markHistoryPush, publishRecordSession, requestPlanningDeparture, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1549,13 +1567,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
 
   // Synchronize URL query params
-  // Browser Back: restore the original history position *without pushState*.
-  // A confirmed departure replays the traversal, preserving Back/Forward entries.
+  // Restore actual browser history position when an unsaved editor blocks traversal.
+  // The index is stamped on app-owned entries; no compensating pushState is needed.
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const nextClassId = event.state?.classId || null;
       const nextTab: ActiveTab = event.state?.tab || (nextClassId ? 'dashboard' : 'home');
+      const targetPosition = Number.isSafeInteger(event.state?.__tramaHistoryPosition)
+        ? event.state.__tramaHistoryPosition as number : null;
       const navigate = () => {
+        if (targetPosition !== null) historyPositionRef.current = targetPosition;
         currentClassIdRef.current = nextClassId;
         setAppData(prev => ({ ...prev, currentClassId: nextClassId }));
         setTodayAction(null);
@@ -1563,24 +1584,33 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         publishRecordSession(null);
         setActiveTab(nextTab);
       };
-      if (historyRestorePendingRef.current) {
-        historyRestorePendingRef.current = false;
+      const restoring = historyRestorePendingRef.current;
+      if (restoring) {
+        historyRestorePendingRef.current = null;
+        // We are back at the original entry; commit the requested delta only after confirmation.
         requestPlanningDeparture(() => {
-          historyApprovedTraversalRef.current = true;
-          history.back();
+          historyApprovedTraversalRef.current = restoring.delta;
+          history.go(restoring.delta);
         });
         return;
       }
-      if (historyApprovedTraversalRef.current) {
-        historyApprovedTraversalRef.current = false;
+      if (historyApprovedTraversalRef.current !== null) {
+        historyApprovedTraversalRef.current = null;
         planningExitBypassRef.current = true;
         try { navigate(); } finally { planningExitBypassRef.current = false; }
         return;
       }
+      const currentPosition = historyPositionRef.current;
       if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
-        historyRestorePendingRef.current = true;
-        history.forward();
-        return;
+        // Entries from the current session have a reliable index; older unmarked
+        // entries use the single-step Back fallback without truncating history.
+        const delta = targetPosition !== null && currentPosition !== null
+          ? targetPosition - currentPosition : -1;
+        if (delta !== 0) {
+          historyRestorePendingRef.current = { delta, originPosition: currentPosition ?? 0 };
+          history.go(-delta);
+          return;
+        }
       }
       navigate();
     };
@@ -1667,6 +1697,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (classId) params.set('class', classId);
       params.set('tab', route.tab);
       history.pushState({ classId, tab: route.tab }, '', `?${params.toString()}`);
+      markHistoryPush();
     } catch (e) {}
   }, [publishRecordSession, setActiveTab]);
 
@@ -1842,6 +1873,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setSelectedStudentForReport(null);
     try {
       history.pushState({ classId, tab: 'dashboard' }, '', `?class=${classId}`);
+      markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
     });
@@ -1859,6 +1891,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setSelectedStudentForReport(null);
     try {
       history.pushState(null, '', window.location.pathname);
+      markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
     });
@@ -2326,6 +2359,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             setStudentMode(prev => ({ ...prev, isOpen: false }));
             try {
               history.pushState(null, '', window.location.pathname);
+      markHistoryPush();
             } catch (e) {}
           }}
         />

@@ -359,3 +359,36 @@ test.describe('INT-01 mobile: guarded history Back', () => {
     await expect(page).not.toHaveURL(planningUrl);
   });
 });
+
+test.describe('INT-01 mobile: guarded Forward traversal', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test('restores the origin when dirty and replays exactly one Forward after confirmation', async ({ page }) => {
+    await configureVault(page, 'int-01-forward-guard');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const planningUrl = page.url();
+    await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    const udaUrl = page.url();
+    await page.goBack();
+    await expect(page).toHaveURL(planningUrl);
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-unsaved-forward');
+    await details.click();
+    await page.goForward();
+    const confirmExit = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(confirmExit).toBeVisible();
+    await expect(page).toHaveURL(planningUrl);
+    await confirmExit.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await expect(page).toHaveURL(planningUrl);
+    await page.goForward();
+    await expect(confirmExit).toBeVisible();
+    await confirmExit.getByRole('button', { name: 'Continua senza salvare' }).click();
+    await expect(page).toHaveURL(udaUrl);
+    await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
+  });
+});

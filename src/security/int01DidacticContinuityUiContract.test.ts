@@ -127,8 +127,10 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('Salva e continua');
     expect(app).toContain('Continua senza salvare');
     expect(app).toContain('Rimani nella Programmazione');
-    expect(app).toContain('history.forward()');
-    expect(app).toContain('history.back()');
+    expect(app).toContain('history.go(-delta)');
+    expect(app).toContain('history.go(restoring.delta)');
+    expect(app).toContain('__tramaHistoryPosition');
+    expect(app).toContain('markHistoryPush()');
     expect(app).toContain('(node as HTMLElement).inert = true');
     expect(app).toContain('planningExitDialogRef.current?.querySelectorAll');
     expect(app).toContain('onRegisterDraftGuard={registerPlanningDraftGuard}');
