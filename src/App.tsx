@@ -327,6 +327,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     originEntryId: string;
     originBrowserIndex: number | null;
     originUrl: string;
+    destinationTab: ActiveTab;
   } | null>(null);
   const readBrowserHistoryIndex = (): number | null => {
     const index = (window as Window & {
@@ -390,19 +391,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [planningExitOpen, setPlanningExitOpen] = useState(false);
   const [planningExitSaving, setPlanningExitSaving] = useState(false);
   const [planningExitError, setPlanningExitError] = useState('');
+  const [planningExitDestination, setPlanningExitDestination] = useState<ActiveTab | null>(null);
   const [historyFallbackWarning, setHistoryFallbackWarning] = useState(false);
   // UI feedback only; the ref is the synchronous safety gate during async history restoration.
   const [historyRestoringOrigin, setHistoryRestoringOrigin] = useState(false);
   const registerPlanningDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
     planningGuardRef.current = guard;
   }, []);
-  const requestPlanningDeparture = useCallback((commit: () => void): boolean => {
+  const requestPlanningDeparture = useCallback((
+    commit: () => void, destination: ActiveTab | null = null
+  ): boolean => {
     if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
       && planningGuardRef.current?.hasUnsavedChanges()) {
       if (pendingExitRef.current) return false; // Never replace an unconfirmed navigation.
       planningExitOriginFocusRef.current = document.activeElement instanceof HTMLElement
         ? document.activeElement : null;
       pendingExitRef.current = commit;
+      setPlanningExitDestination(destination);
       setPlanningExitError('');
       setPlanningExitOpen(true);
       return false;
@@ -438,6 +443,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setHistoryFallbackWarning(false);
     planningExitRestoreFocusRef.current = true;
     pendingExitRef.current = null;
+    setPlanningExitDestination(null);
     setPlanningExitOpen(false);
     setPlanningExitError('');
   };
@@ -451,6 +457,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
     pendingExitRef.current = null;
+    setPlanningExitDestination(null);
     historyFallbackRef.current = null;
     setHistoryFallbackWarning(false);
     setPlanningExitOpen(false);
@@ -573,7 +580,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const setActiveTab = useCallback((tab: ActiveTab) => {
     if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
       && tab !== 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
-      requestPlanningDeparture(() => setActiveTab(tab));
+      requestPlanningDeparture(() => setActiveTab(tab), tab);
       return;
     }
     activeTabRef.current = tab;
@@ -739,7 +746,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
       markHistoryPush();
     } catch (e) {}
-    });
+    }, tab);
   }, [markHistoryPush, publishRecordSession, requestPlanningDeparture, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
@@ -1709,18 +1716,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           // with the browser's *actual* destination, not refuse the update.
           if (pendingExitRef.current) {
             pendingExitRef.current = navigate;
+            setPlanningExitDestination(nextTab);
           } else {
-            requestPlanningDeparture(navigate);
+            requestPlanningDeparture(navigate, nextTab);
           }
         } else {
           // Browser controls may still navigate while a modal is open: the
           // confirmation must always apply to the *actual* current entry.
           pendingExitRef.current = navigate;
+          setPlanningExitDestination(nextTab);
         }
       };
 
       if (historyFallbackRef.current) {
         pendingExitRef.current = navigate;
+        setPlanningExitDestination(nextTab);
         return;
       }
       const restoring = historyRestorePendingRef.current;
@@ -1742,8 +1752,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           };
           if (pendingExitRef.current) {
             pendingExitRef.current = replayVerifiedTraversal;
+            setPlanningExitDestination(restoring.destinationTab);
           } else {
-            requestPlanningDeparture(replayVerifiedTraversal);
+            requestPlanningDeparture(replayVerifiedTraversal, restoring.destinationTab);
           }
           return;
         }
@@ -1780,7 +1791,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             originPosition: currentPosition,
             originEntryId: historyEntryIdRef.current ?? '',
             originBrowserIndex: browserHistoryIndexRef.current,
-            originUrl: historyUrlRef.current
+            originUrl: historyUrlRef.current,
+            destinationTab: nextTab
           };
           setHistoryRestoringOrigin(true);
           history.go(-delta);
@@ -2068,7 +2080,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+    }, 'dashboard');
   };
 
   const handleNavigateHome = () => {
@@ -2086,7 +2098,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+    }, 'home');
   };
 
   // Add new class
@@ -2962,6 +2974,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             <p className="text-sm text-slate-300">
               Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
             </p>
+            {planningExitDestination && (
+              <p role="status" aria-label="Destinazione richiesta" className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm font-semibold text-white">
+                Destinazione: {planningExitDestination === 'uda-gantt' ? 'Unità didattiche (UDA)'
+                  : planningExitDestination === 'dashboard' ? 'Panoramica della classe'
+                  : planningExitDestination === 'home' ? 'Oggi'
+                  : 'schermata selezionata'}.
+              </p>
+            )}
             {historyRestoringOrigin && (
               <p role="status" className="text-sm text-amber-200">
                 Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.
