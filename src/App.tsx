@@ -1464,8 +1464,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         nextCurrentClassId,
         nextTab
       );
-      setEditingBatchId(specialist?.kind === 'evaluation' ? specialist.batchId : null);
-      setSelectedStudentForReport(specialist?.kind === 'student' ? specialist.studentId : null);
+      // An entry can outlive a deleted batch or student. Never resurrect an
+      // editor from an opaque token whose authorized target no longer exists.
+      const currentClass = appDataRef.current.classes.find(c => c.id === nextCurrentClassId);
+      const available = specialist?.kind === 'evaluation'
+        ? Boolean(currentClass?.grades.some(g => g.batchId === specialist.batchId))
+        : specialist?.kind === 'student'
+          ? Boolean(currentClass?.students.some(s => s.id === specialist.studentId))
+          : true;
+      if (specialist && !available) {
+        forgetSpecialistTarget(
+          specialistTargetMemoryRef.current,
+          e.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+          nextCurrentClassId,
+          nextTab
+        );
+      }
+      const restoredSpecialist = available ? specialist : null;
+      setEditingBatchId(restoredSpecialist?.kind === 'evaluation' ? restoredSpecialist.batchId : null);
+      setSelectedStudentForReport(restoredSpecialist?.kind === 'student' ? restoredSpecialist.studentId : null);
       setTodayAction(null);
       publishReviewSession(null);
       publishRecordSession(null);
