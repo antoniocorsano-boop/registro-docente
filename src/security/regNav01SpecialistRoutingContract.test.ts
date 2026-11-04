@@ -33,6 +33,15 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     }
   });
 
+  test('menu report records the already visible same-class student in that history entry', () => {
+    const navigation = between('const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
+    expect(navigation).toContain('currentClassStudents');
+    expect(navigation).toContain('selectedStudentForReport');
+    expect(navigation).toContain("tab === 'report'");
+    expect(navigation).toContain('specialistTargetMemoryRef.current, candidate, classId, tab, specialistTarget');
+    expect(browser).toContain('Scheda da menu conserva lo studente già mostrato senza altra selezione');
+  });
+
   test('Annulla Modifica invalidates the current history target without a professional write', () => {
     const handler = between('onCancelEdit={() => {', 'isPrivacyShieldActive={isPrivacyShieldActive}');
     expect(handler).toContain('forgetSpecialistTarget(');
