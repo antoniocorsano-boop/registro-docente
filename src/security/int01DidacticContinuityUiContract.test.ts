@@ -153,4 +153,16 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('history.go(-delta)');
     expect(app).toContain('history.go(restoring.delta)');
   });
+
+  test('vault neutral bootstrap preserves history position but clears stale class and tab', async () => {
+    const root = await Bun.file('src/components/SecureRegistroRoot.tsx').text();
+    const app = await Bun.file('src/App.tsx').text();
+    expect(root).toContain('history.state?.__tramaHistoryPosition');
+    expect(root).toContain('window.history.replaceState(neutralHistoryState');
+    expect(root).toContain("params.delete('class')");
+    expect(root).toContain("params.delete('tab')");
+    expect(app).toContain('markHistoryPush()');
+    expect(app).toContain('history.go(-delta)');
+    expect(app).toContain('history.go(restoring.delta)');
+  });
 });

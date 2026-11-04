@@ -641,6 +641,7 @@
         "src/context/teachingFocus.ts",
         "src/context/professionalContext.ts",
         "src/components/DidacticContinuityBar.tsx",
+        "src/components/SecureRegistroRoot.tsx",
         "src/components/planning/PlanningProfileView.tsx",
         "src/components/planning/PlanningProfileEditor.tsx",
         "src/components/UdaGanttView.tsx",
@@ -657,7 +658,9 @@
         "src/planning/curricularSubjectCode.ts",
         "src/security/int01CurricularSubjectCodeContract.test.ts",
         "src/context/udaClassScope.ts",
-        "src/security/int01FinalReviewScopeContract.test.ts"
+        "src/security/int01FinalReviewScopeContract.test.ts",
+        "src/security/appVaultWiring.test.ts",
+        "tests/browser/ux-qa-01-review-regressions.spec.cjs"
       ],
       "tests": [
         "src/security/int01PlanningFrameContract.test.ts",
@@ -667,7 +670,8 @@
         "src/security/int01DidacticContinuityUiContract.test.ts",
         "src/security/int01QualificationContract.test.ts",
         "src/security/int01CurricularSubjectCodeContract.test.ts",
-        "src/security/int01FinalReviewScopeContract.test.ts"
+        "src/security/int01FinalReviewScopeContract.test.ts",
+        "src/security/appVaultWiring.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-01-didactic-continuity.spec.cjs"
