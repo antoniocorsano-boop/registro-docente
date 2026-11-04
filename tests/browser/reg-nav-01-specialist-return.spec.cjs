@@ -138,6 +138,39 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     expect(errors).toEqual([]);
   });
 
+  test('Modifica A → elimina A → Indietro non riapre la valutazione eliminata', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Valutazione sintetica da eliminare');
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closeSaveNotice(page);
+    await expect(page.getByText('Valutazione sintetica da eliminare', { exact: true })).toBeVisible();
+
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expectNavigation(page, 'voti');
+
+    await fromDrawer(page, 'Storico prove');
+    await expectNavigation(page, 'storico');
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('button[title="Elimina prova"]').first().click();
+    await expect(page.getByText('Valutazione sintetica da eliminare', { exact: true })).toHaveCount(0);
+
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toHaveCount(0);
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'storico');
+    await expect(page.getByText('Valutazione sintetica da eliminare', { exact: true })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('Valutazioni da menu mantiene la modifica già visualizzata dopo Back', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
