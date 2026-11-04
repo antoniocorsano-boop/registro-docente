@@ -1518,6 +1518,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
 
+  // Synchronize URL query params
   // Browser Back is treated as an exit, including a change of active class.
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
