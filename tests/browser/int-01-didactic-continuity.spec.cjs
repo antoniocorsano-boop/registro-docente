@@ -313,7 +313,10 @@ test.describe('INT-01: non-saved Programmazione draft on mobile', () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Continua senza salvare' }).click();
     await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
-    await fromDrawer(page, 'Programmazione didattica');
+    // Oggi intentionally clears class authority: reselect it through Prepara before verifying
+    // that a discarded draft never overwrote the committed profile.
+    const returnRouter = await openPreparaForClass(page);
+    await returnRouter.getByRole('button', { name: /^Definisci la cornice/ }).click();
     await details.click();
     await page.getByRole('button', { name: 'Profilo', exact: true }).click();
     await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
