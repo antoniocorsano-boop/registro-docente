@@ -125,6 +125,11 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     await expect(reportHeading).toBeVisible();
     await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
     await expectNavigation(page, 'report');
+    // Only an opaque entry token belongs to history; selection IDs remain in vault-session memory.
+    const selectedId = await selector.locator('option:checked').getAttribute('value');
+    const stateText = await page.evaluate(() => JSON.stringify(history.state));
+    expect(stateText).not.toContain(OTHER_STUDENT_NAME);
+    expect(stateText).not.toContain(selectedId);
 
     await page.goBack({ waitUntil: 'domcontentloaded' });
     await expectNavigation(page, 'analytics');
