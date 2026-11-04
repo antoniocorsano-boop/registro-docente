@@ -129,7 +129,7 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     await page.getByRole('button', { name: 'Annulla Modifica' }).click();
     await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
 
-    await fromDrawer(page, 'Analisi');
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
     await expectNavigation(page, 'analytics');
     await page.goBack({ waitUntil: 'domcontentloaded' });
     await expectNavigation(page, 'voti');
