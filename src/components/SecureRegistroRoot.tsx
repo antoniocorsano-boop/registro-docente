@@ -124,9 +124,16 @@ export const SecureRegistroRoot: React.FC = () => {
         // entry must not restart numbering while older entries remain reachable.
         // Remove only stale class/tab authority, never the position marker.
         const existingPosition = window.history.state?.__tramaHistoryPosition;
-        const neutralHistoryState = Number.isSafeInteger(existingPosition)
-          ? { __tramaHistoryPosition: existingPosition }
-          : null;
+        const existingEpoch = window.history.state?.__tramaHistoryEpoch;
+        const existingEntryId = window.history.state?.__tramaHistoryEntryId;
+        const markers = {
+          ...(Number.isSafeInteger(existingPosition) ? { __tramaHistoryPosition: existingPosition } : {}),
+          ...(typeof existingEpoch === 'string' && existingEpoch.length > 0
+            ? { __tramaHistoryEpoch: existingEpoch } : {}),
+          ...(typeof existingEntryId === 'string' && existingEntryId.length > 0
+            ? { __tramaHistoryEntryId: existingEntryId } : {})
+        };
+        const neutralHistoryState = Object.keys(markers).length > 0 ? markers : null;
         window.history.replaceState(neutralHistoryState, '', nextUrl);
       } catch (error) {
         console.warn('Unable to normalize neutral navigation history', error);

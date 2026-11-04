@@ -462,3 +462,88 @@ test.describe('INT-01 mobile: dirty draft starting from a legacy unmarked histor
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-unmarked-origin-draft');
   });
 });
+
+test.describe('INT-01 mobile: legacy browser without Navigation API index', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('Forward from unmarked dirty origin offers an explicit decision instead of hanging', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+    });
+    await configureVault(page, 'int-01-no-native-forward');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    expect(await page.evaluate(() => window.navigation?.currentEntry?.index ?? null)).toBeNull();
+    const classId = await page.evaluate(() => history.state?.classId);
+    const planningUrl = page.url();
+    await page.evaluate(({ classId, planningUrl }) => {
+      history.pushState({ classId, tab: 'programmazione', legacy: 'origin' },
+        '', planningUrl + '&legacy=no-index-origin');
+      history.pushState({ classId, tab: 'uda-gantt', legacy: 'later' },
+        '', planningUrl + '&legacy=no-index-later');
+    }, { classId, planningUrl });
+    await page.goBack();
+    const originUrl = page.url();
+    await expect.poll(() => page.evaluate(() => history.state?.__tramaHistoryEntryId?.length > 0)).toBe(true);
+
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-no-index-forward');
+    await details.click();
+
+    await page.goForward();
+    const prompt = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(prompt).toBeVisible();
+    await expect(prompt.getByText(/cronologia in avanti potrebbe essere sostituita/)).toBeVisible();
+    await prompt.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await expect(page).toHaveURL(originUrl);
+    await details.click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-no-index-forward');
+  });
+
+  test('unknown coordinates survive app pushes; a mixed multi-entry Back never guesses delta', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+    });
+    await configureVault(page, 'int-01-no-index-epochs');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const classId = await page.evaluate(() => history.state?.classId);
+    const planningUrl = page.url();
+    await page.evaluate(({ classId, planningUrl }) => {
+      history.pushState({ classId, tab: 'dashboard', __tramaHistoryPosition: 4, legacy: 'old-epoch' },
+        '', planningUrl + '&legacy=old-marked');
+      history.pushState({ classId, tab: 'programmazione', legacy: 'unknown' },
+        '', planningUrl + '&legacy=unknown');
+    }, { classId, planningUrl });
+    await page.goBack(); // Clean arrival at older marked entry.
+    await page.goForward(); // Clean arrival at unmarked Programmazione.
+    const unmarkedUrl = page.url();
+    await expect.poll(() => page.evaluate(() => history.state?.__tramaHistoryPosition ?? null)).toBeNull();
+    await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => history.state?.__tramaHistoryPosition ?? null)).toBeNull();
+    await page.goBack();
+    await expect(page).toHaveURL(unmarkedUrl);
+
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-unknown-coordinate');
+    await details.click();
+    await page.evaluate(() => history.go(-1)); // Marked entry from a different coordinate epoch.
+    const prompt = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(prompt).toBeVisible();
+    await expect(prompt.getByText(/cronologia in avanti potrebbe essere sostituita/)).toBeVisible();
+    await prompt.getByRole('button', { name: 'Rimani nella Programmazione' }).click();
+    await expect(page).toHaveURL(unmarkedUrl);
+    await details.click();
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-unknown-coordinate');
+  });
+});

@@ -312,7 +312,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
+  // Positions have meaning only inside the same, continuous app-owned epoch.
+  const historyEpochRef = useRef<string | null>(null);
   const historyEntryIdRef = useRef<string | null>(null);
+  const historyFallbackRef = useRef<{
+    originUrl: string;
+    classId: string | null;
+  } | null>(null);
   const browserHistoryIndexRef = useRef<number | null>(null);
   const historyUrlRef = useRef('');
   const historyRestorePendingRef = useRef<{
@@ -321,8 +327,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     originEntryId: string;
     originBrowserIndex: number | null;
     originUrl: string;
-    scanDirection?: 1 | -1;
-    scannedSteps?: number;
   } | null>(null);
   const readBrowserHistoryIndex = (): number | null => {
     const index = (window as Window & {
@@ -333,14 +337,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const historyApprovedTraversalRef = useRef<number | null>(null);
   const markHistoryPush = useCallback(() => {
     const state = history.state && typeof history.state === 'object' ? history.state : {};
-    const nextPosition = (historyPositionRef.current ?? 0) + 1;
-    historyPositionRef.current = nextPosition;
+    // Never manufacture position 1 after entering an unmarked legacy entry.
+    const nextPosition = historyPositionRef.current !== null && historyEpochRef.current !== null
+      ? historyPositionRef.current + 1 : null;
     const entryId = crypto.randomUUID();
-    history.replaceState({
-      ...state,
-      __tramaHistoryPosition: nextPosition,
-      __tramaHistoryEntryId: entryId
-    }, '', window.location.href);
+    const nextState: Record<string, unknown> = { ...state, __tramaHistoryEntryId: entryId };
+    if (nextPosition !== null) {
+      nextState.__tramaHistoryPosition = nextPosition;
+      nextState.__tramaHistoryEpoch = historyEpochRef.current;
+    } else {
+      delete nextState.__tramaHistoryPosition;
+      delete nextState.__tramaHistoryEpoch;
+    }
+    history.replaceState(nextState, '', window.location.href);
+    historyPositionRef.current = nextPosition;
     historyEntryIdRef.current = entryId;
     historyUrlRef.current = window.location.href;
     browserHistoryIndexRef.current = readBrowserHistoryIndex();
@@ -350,18 +360,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const state = history.state && typeof history.state === 'object' ? history.state : {};
     const recordedPosition = Number.isSafeInteger(state.__tramaHistoryPosition)
       ? state.__tramaHistoryPosition as number : 0;
+    // Bootstrap can adopt an old number, but not pretend its old neighbours
+    // share the same coordinate system after reload or vault unlock.
+    const epoch = typeof state.__tramaHistoryEpoch === 'string'
+      && state.__tramaHistoryEpoch.length > 0
+      ? state.__tramaHistoryEpoch : crypto.randomUUID();
     const entryId = typeof state.__tramaHistoryEntryId === 'string'
       && state.__tramaHistoryEntryId.length > 0
       ? state.__tramaHistoryEntryId : crypto.randomUUID();
     historyPositionRef.current = recordedPosition;
+    historyEpochRef.current = epoch;
     historyEntryIdRef.current = entryId;
     historyUrlRef.current = window.location.href;
     browserHistoryIndexRef.current = readBrowserHistoryIndex();
     if (!Number.isSafeInteger(state.__tramaHistoryPosition)
-      || state.__tramaHistoryEntryId !== entryId) {
+      || state.__tramaHistoryEpoch !== epoch || state.__tramaHistoryEntryId !== entryId) {
       history.replaceState({
         ...state,
         __tramaHistoryPosition: recordedPosition,
+        __tramaHistoryEpoch: epoch,
         __tramaHistoryEntryId: entryId
       }, '', window.location.href);
     }
@@ -373,6 +390,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [planningExitOpen, setPlanningExitOpen] = useState(false);
   const [planningExitSaving, setPlanningExitSaving] = useState(false);
   const [planningExitError, setPlanningExitError] = useState('');
+  const [historyFallbackWarning, setHistoryFallbackWarning] = useState(false);
   const registerPlanningDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
     planningGuardRef.current = guard;
   }, []);
@@ -392,6 +410,30 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   }, []);
   const cancelPlanningExit = () => {
     if (planningExitSaving) return;
+    const fallback = historyFallbackRef.current;
+    if (fallback) {
+      // A browser without a verifiable entry index cannot traverse back to an
+      // unknown origin safely. Explicitly re-enter the original URL instead;
+      // this replaces the forward branch, disclosed in the recovery dialog.
+      try {
+        const entryId = crypto.randomUUID();
+        history.pushState({
+          classId: fallback.classId,
+          tab: 'programmazione',
+          __tramaHistoryEntryId: entryId
+        }, '', fallback.originUrl);
+        historyPositionRef.current = null;
+        historyEpochRef.current = null;
+        historyEntryIdRef.current = entryId;
+        browserHistoryIndexRef.current = readBrowserHistoryIndex();
+        historyUrlRef.current = window.location.href;
+      } catch {
+        setPlanningExitError('Non è stato possibile ritornare alla Programmazione. Salva o continua senza salvare.');
+        return;
+      }
+    }
+    historyFallbackRef.current = null;
+    setHistoryFallbackWarning(false);
     planningExitRestoreFocusRef.current = true;
     pendingExitRef.current = null;
     setPlanningExitOpen(false);
@@ -401,6 +443,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
     pendingExitRef.current = null;
+    historyFallbackRef.current = null;
+    setHistoryFallbackWarning(false);
     setPlanningExitOpen(false);
     setPlanningExitError('');
     planningExitBypassRef.current = true;
@@ -1611,6 +1655,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const nextTab: ActiveTab = event.state?.tab || (nextClassId ? 'dashboard' : 'home');
       const targetPosition = Number.isSafeInteger(event.state?.__tramaHistoryPosition)
         ? event.state.__tramaHistoryPosition as number : null;
+      const targetEpoch = typeof event.state?.__tramaHistoryEpoch === 'string'
+        && event.state.__tramaHistoryEpoch.length > 0
+        ? event.state.__tramaHistoryEpoch as string : null;
       const browserIndex = readBrowserHistoryIndex();
       const targetEntryId = typeof event.state?.__tramaHistoryEntryId === 'string'
         && event.state.__tramaHistoryEntryId.length > 0
@@ -1626,6 +1673,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           }, '', window.location.href);
         }
         historyPositionRef.current = targetPosition;
+        historyEpochRef.current = targetPosition !== null ? targetEpoch : null;
         historyEntryIdRef.current = currentEntryId;
         browserHistoryIndexRef.current = browserIndex;
         historyUrlRef.current = window.location.href;
@@ -1637,10 +1685,30 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setActiveTab(nextTab);
       };
 
+      const openUnverifiableDeparture = () => {
+        // No history index and no common marker epoch: guessing Back/Forward
+        // could leave the editor under another class's URL or hang forever.
+        historyRestorePendingRef.current = null;
+        if (!historyFallbackRef.current) {
+          historyFallbackRef.current = {
+            originUrl: historyUrlRef.current,
+            classId: currentClassIdRef.current
+          };
+          setHistoryFallbackWarning(true);
+          requestPlanningDeparture(navigate);
+        } else {
+          // Browser controls may still navigate while a modal is open: the
+          // confirmation must always apply to the *actual* current entry.
+          pendingExitRef.current = navigate;
+        }
+      };
+
+      if (historyFallbackRef.current) {
+        pendingExitRef.current = navigate;
+        return;
+      }
       const restoring = historyRestorePendingRef.current;
       if (restoring) {
-        // A legacy origin may have no numeric marker. Prove its exact identity
-        // using the browser's absolute index or its unique per-entry token.
         const originVerified =
           (browserIndex !== null && restoring.originBrowserIndex !== null
             && browserIndex === restoring.originBrowserIndex)
@@ -1654,22 +1722,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           });
           return;
         }
-        // An old unmarked entry may be multiple positions away.
-        // Walk toward the actual origin without inserting history entries.
-        const direction = restoring.scanDirection ?? (restoring.delta < 0 ? 1 : -1);
-        const steps = restoring.scannedSteps ?? 0;
-        if (steps < history.length) {
-          historyRestorePendingRef.current = {
-            ...restoring,
-            delta: restoring.delta + (direction === 1 ? -1 : 1),
-            scanDirection: direction,
-            scannedSteps: steps + 1
-          };
-          history.go(direction);
-          return;
-        }
-        // Never activate an unrelated class while unsaved professional edits exist.
-        console.warn('INT-01 could not restore original history entry');
+        // Do not scan blindly toward an unverified origin.
+        openUnverifiableDeparture();
         return;
       }
 
@@ -1686,23 +1740,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         const absoluteDelta = browserIndex !== null && browserHistoryIndexRef.current !== null
           ? browserIndex - browserHistoryIndexRef.current : null;
         const markedDelta = targetPosition !== null && currentPosition !== null
+          && targetEpoch !== null && targetEpoch === historyEpochRef.current
           ? targetPosition - currentPosition : null;
         const delta = absoluteDelta
           ?? (targetEntryId === historyEntryIdRef.current ? 0 : markedDelta);
 
         if (delta === null) {
-          // Fallback for older browsers: old unmarked entries precede the
-          // current app-owned entry. Scan forward until that entry is verified.
-          historyRestorePendingRef.current = {
-            delta: -1,
-            originPosition: currentPosition,
-            originEntryId: historyEntryIdRef.current ?? '',
-            originBrowserIndex: browserHistoryIndexRef.current,
-            originUrl: historyUrlRef.current,
-            scanDirection: 1,
-            scannedSteps: 1
-          };
-          history.forward();
+          openUnverifiableDeparture();
           return;
         }
         if (delta !== 0) {
@@ -1720,12 +1764,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           // Never overwrite a foreign browser entry just because numeric
           // positions happen to collide. Leave the dirty editor untouched.
           if (targetEntryId !== historyEntryIdRef.current) {
-            console.warn('INT-01: unverified browser-history entry; refusing implicit class change');
+            openUnverifiableDeparture();
             return;
           }
           history.replaceState(
             { ...(history.state && typeof history.state === 'object' ? history.state : {}),
-              __tramaHistoryPosition: currentPosition,
+              ...(currentPosition !== null ? { __tramaHistoryPosition: currentPosition } : {}),
+              ...(historyEpochRef.current !== null ? { __tramaHistoryEpoch: historyEpochRef.current } : {}),
               __tramaHistoryEntryId: historyEntryIdRef.current },
             '',
             historyUrlRef.current
@@ -2891,6 +2936,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             <p className="text-sm text-slate-300">
               Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
             </p>
+            {historyFallbackWarning && (
+              <p role="status" className="text-sm text-amber-200">
+                Il navigatore non permette di verificare il percorso precedente. La bozza è ancora disponibile.
+                Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.
+              </p>
+            )}
             {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
             <div className="flex flex-col gap-2">
               <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving}

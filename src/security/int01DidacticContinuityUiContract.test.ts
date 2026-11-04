@@ -146,6 +146,8 @@ describe('INT-01 bidirectional didactic continuity', () => {
     const secureRoot = await Bun.file('src/components/SecureRegistroRoot.tsx').text();
     const app = await Bun.file('src/App.tsx').text();
     expect(secureRoot).toContain('const existingPosition = window.history.state?.__tramaHistoryPosition');
+    expect(secureRoot).toContain('const existingEpoch = window.history.state?.__tramaHistoryEpoch');
+    expect(secureRoot).toContain('const existingEntryId = window.history.state?.__tramaHistoryEntryId');
     expect(secureRoot).toContain("window.history.replaceState(neutralHistoryState, '', nextUrl)");
     expect(secureRoot).toContain("params.delete('class')");
     expect(secureRoot).toContain("params.delete('tab')");
@@ -172,7 +174,13 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('readBrowserHistoryIndex');
     expect(app).toContain('historyUrlRef');
     expect(app).toContain('window.location.href === restoring.originUrl');
-    expect(app).toContain('history.go(direction)');
+    expect(app).not.toContain('history.go(direction)');
+    expect(app).toContain('openUnverifiableDeparture');
+    expect(app).toContain('historyFallbackRef');
+    expect(app).toContain('historyEpochRef');
+    expect(app).toContain('targetEpoch === historyEpochRef.current');
+    expect(app).toContain('historyPositionRef.current !== null && historyEpochRef.current !== null');
+    expect(app).not.toContain('(historyPositionRef.current ?? 0) + 1');
     expect(app).toContain('history.go(-delta)');
     expect(app).toContain('history.go(restoring.delta)');
   });
@@ -185,6 +193,8 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(app).toContain('historyPositionRef.current = targetPosition');
     expect(app).toContain('restoring.originBrowserIndex');
     expect(app).toContain('targetEntryId === restoring.originEntryId');
+    expect(app).toContain('historyFallbackWarning');
+    expect(app).toContain('la cronologia in avanti potrebbe essere sostituita');
     expect(app).toContain('originVerified && window.location.href === restoring.originUrl');
   });
 });
