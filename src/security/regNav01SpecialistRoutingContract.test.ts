@@ -33,6 +33,15 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     }
   });
 
+  test('Annulla Modifica invalidates the current history target without a professional write', () => {
+    const handler = between('onCancelEdit={() => {', 'isPrivacyShieldActive={isPrivacyShieldActive}');
+    expect(handler).toContain('forgetSpecialistTarget(');
+    expect(handler).toContain("currentClassIdRef.current,");
+    expect(handler).toContain("'voti'");
+    expect(handler).toContain('setEditingBatchId(null)');
+    expect(browser).toContain('Storico → Modifica A → Annulla modifica → Analisi → Indietro');
+  });
+
   test('Chromium tests browser Back and URL/history agreement on synthetic classes', () => {
     expect(browser).toContain("expectNavigation(page, 'voti')");
     expect(browser).toContain("expectNavigation(page, 'report')");
