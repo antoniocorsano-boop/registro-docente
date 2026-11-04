@@ -1723,10 +1723,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         if (originVerified && window.location.href === restoring.originUrl) {
           historyRestorePendingRef.current = null;
           browserHistoryIndexRef.current = browserIndex;
-          requestPlanningDeparture(() => {
+          // A browser traversal supersedes an earlier «Apri UDA» click
+          // whose confirmation is still open. Replace the stale callback
+          // only after verifying the exact history origin and URL.
+          const replayVerifiedTraversal = () => {
             historyApprovedTraversalRef.current = restoring.delta;
             history.go(restoring.delta);
-          });
+          };
+          if (pendingExitRef.current) {
+            pendingExitRef.current = replayVerifiedTraversal;
+          } else {
+            requestPlanningDeparture(replayVerifiedTraversal);
+          }
           return;
         }
         // Do not scan blindly toward an unverified origin.
