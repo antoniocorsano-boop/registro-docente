@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   recallSpecialistTarget,
+  forgetSpecialistTarget,
   rememberSpecialistTarget,
   updateStudentSpecialistTarget,
   type SpecialistTargetMemory
@@ -49,4 +50,21 @@ describe('REG-NAV-01 — session-only specialist history targets', () => {
       { kind: 'student', studentId: 'student-A' })).toBe(false);
     expect(memory.size).toBe(0);
   });
+
+  test('annullamento modifica invalida solo il batch associato alla entry corrente', () => {
+    const memory: SpecialistTargetMemory = new Map();
+    rememberSpecialistTarget(memory, 'edit-A', 'class-1', 'voti',
+      { kind: 'evaluation', batchId: 'batch-A' });
+    rememberSpecialistTarget(memory, 'edit-B', 'class-1', 'voti',
+      { kind: 'evaluation', batchId: 'batch-B' });
+
+    expect(forgetSpecialistTarget(memory, 'edit-A', 'class-2', 'voti')).toBe(false);
+    expect(recallSpecialistTarget(memory, 'edit-A', 'class-1', 'voti'))
+      .toEqual({ kind: 'evaluation', batchId: 'batch-A' });
+    expect(forgetSpecialistTarget(memory, 'edit-A', 'class-1', 'voti')).toBe(true);
+    expect(recallSpecialistTarget(memory, 'edit-A', 'class-1', 'voti')).toBeNull();
+    expect(recallSpecialistTarget(memory, 'edit-B', 'class-1', 'voti'))
+      .toEqual({ kind: 'evaluation', batchId: 'batch-B' });
+  });
+
 });
