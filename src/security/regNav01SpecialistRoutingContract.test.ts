@@ -18,7 +18,7 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(between('const handleEditBatch', '// Delete batch'))
       .toContain("handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId } })");
     expect(between('onNewEvaluation={() => {', '{/* TAB 8:'))
-      .toContain("handleNavigateTab('voti')");
+      .toContain("handleNavigateTab('voti', { specialistTarget: null })");
   });
 
   test('both Analisi and Tabellone open a student report through the same navigation path', () => {
@@ -46,6 +46,8 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     const navigation = between('const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
     expect(navigation).toContain('currentClassGrades');
     expect(navigation).toContain('editingBatchId');
+    expect(navigation).toContain('options.specialistTarget === null');
+    expect(navigation).toContain('currentClassGrades.some(');
     expect(navigation).toContain("tab === 'voti'");
     expect(navigation).toContain("kind: 'evaluation', batchId: visibleBatchId");
     expect(navigation).toContain('specialistTargetMemoryRef.current, candidate, classId, tab, specialistTarget');
