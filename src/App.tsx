@@ -501,11 +501,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean; specialistTarget?: SpecialistTarget } = {}
+    options: { preserveRecordSession?: boolean; specialistTarget?: SpecialistTarget | null } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
     const classId = currentClassIdRef.current;
-    const currentClassStudents = appDataRef.current.classes.find(c => c.id === classId)?.students ?? [];
+    const classSnapshot = appDataRef.current.classes.find(c => c.id === classId);
+    const currentClassStudents = classSnapshot?.students ?? [];
+    const currentClassGrades = classSnapshot?.grades ?? [];
     // The menu can open the report with a student already selected. Capture the
     // class-authorized target on entry, even when the selector is not changed.
     const requestedStudentId = options.specialistTarget?.kind === 'student'
@@ -516,12 +518,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           ? requestedStudentId
           : currentClassStudents[0]?.id ?? null)
       : null;
+    // A menu route snapshots the batch already being edited. An explicit request
+    // for a new evaluation (or a recording flow) must not inherit the old batch.
+    const requestedBatchId = options.specialistTarget === null || options.preserveRecordSession
+      ? null
+      : options.specialistTarget?.kind === 'evaluation'
+        ? options.specialistTarget.batchId
+        : editingBatchId;
+    const visibleBatchId = tab === 'voti' && requestedBatchId
+      && currentClassGrades.some(g => g.batchId === requestedBatchId)
+      ? requestedBatchId : null;
     const specialistTarget: SpecialistTarget | undefined = tab === 'report'
       ? (visibleStudentId ? { kind: 'student', studentId: visibleStudentId } : undefined)
-      : options.specialistTarget;
-    if (tab === 'voti' && specialistTarget?.kind === 'evaluation') {
-      setEditingBatchId(specialistTarget.batchId);
-    }
+      : tab === 'voti'
+        ? (visibleBatchId ? { kind: 'evaluation', batchId: visibleBatchId } : undefined)
+        : (options.specialistTarget ?? undefined);
+    if (tab === 'voti') setEditingBatchId(visibleBatchId);
     if (tab === 'report') setSelectedStudentForReport(visibleStudentId);
     setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
@@ -555,7 +567,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // A failed push never authorizes reuse of the transient specialist token.
       if (specialistToken) specialistTargetMemoryRef.current.delete(specialistToken);
     }
-  }, [publishRecordSession, selectedStudentForReport, setActiveTab]);
+  }, [editingBatchId, publishRecordSession, selectedStudentForReport, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -2358,7 +2370,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteBatch={handleDeleteBatch}
             onNewEvaluation={() => {
               setEditingBatchId(null);
-              handleNavigateTab('voti');
+              handleNavigateTab('voti', { specialistTarget: null });
             }}
           />
         )}
