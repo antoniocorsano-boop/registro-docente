@@ -310,6 +310,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const activeTabRef = useRef<ActiveTab>('home');
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const planningExitBypassRef = useRef(false);
   const pendingExitRef = useRef<(() => void) | null>(null);
   const [planningExitOpen, setPlanningExitOpen] = useState(false);
   const [planningExitSaving, setPlanningExitSaving] = useState(false);
@@ -318,7 +319,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     planningGuardRef.current = guard;
   }, []);
   const requestPlanningDeparture = useCallback((commit: () => void): boolean => {
-    if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && planningGuardRef.current?.hasUnsavedChanges()) {
       pendingExitRef.current = commit;
       setPlanningExitError('');
       setPlanningExitOpen(true);
@@ -338,7 +340,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     pendingExitRef.current = null;
     setPlanningExitOpen(false);
     setPlanningExitError('');
-    commit?.();
+    planningExitBypassRef.current = true;
+    try {
+      commit?.();
+    } finally {
+      planningExitBypassRef.current = false;
+    }
   };
   const saveAndLeavePlanning = async () => {
     const guard = planningGuardRef.current;
@@ -428,7 +435,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
 
-  const applyActiveTab = useCallback((tab: ActiveTab) => {
+  const setActiveTab = useCallback((tab: ActiveTab) => {
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && tab !== 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+      requestPlanningDeparture(() => setActiveTab(tab));
+      return;
+    }
     activeTabRef.current = tab;
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
@@ -448,12 +460,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [publishReviewSession, teachingUdaCatalog]);
-
-  const setActiveTab = useCallback((tab: ActiveTab) => {
-    if (tab === activeTabRef.current) return;
-    requestPlanningDeparture(() => applyActiveTab(tab));
-  }, [applyActiveTab, requestPlanningDeparture]);
+  }, [publishReviewSession, requestPlanningDeparture, teachingUdaCatalog]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -576,7 +583,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ) => {
     requestPlanningDeparture(() => {
     const hadReviewSession = reviewSessionRef.current !== null;
-    applyActiveTab(tab);
+    setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
@@ -597,7 +604,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
     });
-  }, [applyActiveTab, publishRecordSession, requestPlanningDeparture]);
+  }, [publishRecordSession, requestPlanningDeparture, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1523,7 +1530,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setTodayAction(null);
         publishReviewSession(null);
         publishRecordSession(null);
-        applyActiveTab(nextTab);
+        setActiveTab(nextTab);
       };
       if (activeTabRef.current === 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
         const classId = currentClassIdRef.current;
@@ -1541,7 +1548,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [applyActiveTab, publishRecordSession, publishReviewSession, requestPlanningDeparture]);
+  }, [publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab]);
 
   const handleOpenPreparationCopilot = useCallback(() => {
     const launchContext = buildPreparationCopilotLaunchContext(currentClass);
@@ -1792,7 +1799,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } else if (todayAction === 'review') {
       setTodayAction(null);
     }
-    applyActiveTab('dashboard');
+    setActiveTab('dashboard');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
@@ -1809,7 +1816,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     publishRecordSession(null);
     currentClassIdRef.current = null;
     setAppData(prev => ({ ...prev, currentClassId: null }));
-    applyActiveTab('home');
+    setActiveTab('home');
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
