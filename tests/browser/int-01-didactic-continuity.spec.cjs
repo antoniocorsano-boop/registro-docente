@@ -528,7 +528,10 @@ test.describe('INT-01 mobile: explicit discard on same-class Programmazione hist
       expect(await page.evaluate(() => history.state?.__tramaHistoryEntryId)).toBe(originalPlanningEntryId);
       expect(await page.evaluate(() => history.length)).toBe(lengthBefore);
       await details.click();
-      await expect(cohort).toHaveValue(persistedCohort);
+      // Discard returns the editor to read mode; re-open its controls before
+      // comparing the exact persisted value rather than a stale DOM input.
+      await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+      await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue(persistedCohort);
       await details.click();
 
       // The discarded editor must not prompt again on the next legitimate exit.
