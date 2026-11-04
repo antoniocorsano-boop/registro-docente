@@ -27,7 +27,7 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     ));
     expect(callbacks).toHaveLength(2);
     for (const callback of callbacks) {
-      expect(callback[1]).toContain("handleNavigateTab('report')");
+      expect(callback[1]).toContain("handleNavigateTab('report', { specialistTarget: { kind: 'student', studentId } })");
       expect(callback[1]).toContain('setSelectedStudentForReport(studentId)');
       expect(callback[1]).not.toContain("setActiveTab('report')");
     }
@@ -37,6 +37,9 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(browser).toContain("expectNavigation(page, 'voti')");
     expect(browser).toContain("expectNavigation(page, 'report')");
     expect(browser).toContain('page.goBack(');
+    expect(browser).toContain('page.goForward(');
+    expect(source).toContain('[SPECIALIST_TARGET_HISTORY_KEY]: specialistToken');
+    expect(source).toContain('recallSpecialistTarget(');
     expect(browser).toContain("isMobile: true");
     expect(workflow).toContain('Run REG-NAV-01 specialist return Chromium qualification');
   });
