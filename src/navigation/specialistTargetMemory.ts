@@ -60,3 +60,15 @@ export function updateStudentSpecialistTarget(
   });
   return true;
 }
+
+export function forgetSpecialistTarget(
+  memory: SpecialistTargetMemory,
+  token: unknown,
+  classId: string | null,
+  tab: ActiveTab
+): boolean {
+  if (typeof token !== 'string' || !classId) return false;
+  const saved = memory.get(token);
+  if (!saved || saved.classId !== classId || saved.tab !== tab) return false;
+  return memory.delete(token);
+}
