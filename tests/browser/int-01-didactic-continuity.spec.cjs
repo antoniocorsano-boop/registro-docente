@@ -777,6 +777,8 @@ test.describe('INT-01 mobile HPR: unconfigured annual profile and explicit UDA d
     await frame.getByRole('button', { name: 'Apri UDA', exact: true }).click();
     const confirm = page.getByRole('dialog', { name: 'Modifiche non salvate' });
     await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole('status', { name: 'Destinazione richiesta' }))
+      .toContainText('Destinazione: Unità didattiche (UDA)');
     await expect(page).toHaveURL(planningUrl);
     await confirm.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
 
@@ -790,6 +792,42 @@ test.describe('INT-01 mobile HPR: unconfigured annual profile and explicit UDA d
     await page.goBack();
     await expect(page).toHaveURL(planningUrl);
     await expect(frame).toContainText('Classe ' + NEXT_CLASS_NAME);
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-3');
+  });
+});
+
+// Browser Back is a different action from the primary «Apri UDA» button.
+// The confirmation must disclose the destination so a teacher cannot mistake
+// a return to the class overview for the result of the UDA action.
+test.describe('INT-01 mobile HPR: dirty unconfigured profile and browser Back', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('labels the class overview as destination after Back rather than claiming UDA', async ({ page }) => {
+    await configureVault(page, 'int-01-hpr-back-destination');
+    await createSyntheticClass(page, NEXT_CLASS_NAME);
+    await page.getByRole('button', { name: 'Apri classe ' + NEXT_CLASS_NAME, exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + NEXT_CLASS_NAME }))
+      .toBeVisible();
+
+    await fromDrawer(page, 'Programmazione didattica');
+    const planningUrl = page.url();
+    const frame = page.getByRole('region', { name: 'Programmazione corrente' });
+    await expect(frame).toContainText('Programmazione da configurare');
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-grade-3-prova');
+
+    await page.goBack();
+    const prompt = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(prompt).toBeVisible();
+    await expect(prompt.getByRole('status', { name: 'Destinazione richiesta' }))
+      .toContainText('Destinazione: Panoramica della classe');
+    await expect(page).toHaveURL(planningUrl);
+    await prompt.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + NEXT_CLASS_NAME }))
+      .toBeVisible();
+    expect(await page.evaluate(() => history.state?.tab)).toBe('dashboard');
+    await fromDrawer(page, 'Programmazione didattica');
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-3');
   });
 });
