@@ -429,11 +429,44 @@ test.describe('INT-01 mobile: pending decision during verified browser Back', ()
       await expect(confirmation).toBeVisible();
       await expect(page).toHaveURL(planningUrl);
 
-      // Browser Back occurs during an existing decision. The app restores
-      // Programmazione before asking, then must replace the stale UDA callback.
+      // Hold only the app's asynchronous return to the verified origin.
+      // This exposes the race between the browser Back and its restore popstate.
+      await page.evaluate(() => {
+        const nativeGo = window.history.go.bind(window.history);
+        window.__int01ReleaseRestore = null;
+        window.history.go = delta => {
+          if (delta > 0 && window.__int01ReleaseRestore === null) {
+            window.__int01ReleaseRestore = () => nativeGo(delta);
+            return;
+          }
+          nativeGo(delta);
+        };
+        window.__int01RestoreNativeGo = () => { window.history.go = nativeGo; };
+      });
       await page.goBack();
-      await expect(page).toHaveURL(planningUrl);
+      await expect(page).toHaveURL(previousUrl);
+      await expect.poll(() => page.evaluate(() => typeof window.__int01ReleaseRestore)).toBe('function');
       await expect(confirmation).toBeVisible();
+      await expect(confirmation.getByRole('status')).toContainText('Ripristino della Programmazione');
+      for (const label of ['Salva e continua', 'Continua senza salvare', 'Rimani nella Programmazione']) {
+        await expect(confirmation.getByRole('button', { name: label })).toBeDisabled();
+      }
+      const lengthWhileRestoring = await page.evaluate(() => history.length);
+      // Even a scripted click must not execute the obsolete UDA action.
+      await confirmation.getByRole('button', { name: 'Continua senza salvare' }).evaluate(button => button.click());
+      await expect(page).toHaveURL(previousUrl);
+      expect(await page.evaluate(() => history.length)).toBe(lengthWhileRestoring);
+      await page.evaluate(() => {
+        const release = window.__int01ReleaseRestore;
+        window.__int01RestoreNativeGo?.();
+        window.__int01ReleaseRestore = null;
+        release?.();
+      });
+      await expect(page).toHaveURL(planningUrl);
+      await expect(confirmation.getByRole('status')).toHaveCount(0);
+      for (const label of ['Salva e continua', 'Continua senza salvare', 'Rimani nella Programmazione']) {
+        await expect(confirmation.getByRole('button', { name: label })).toBeEnabled();
+      }
       const lengthBeforeConfirmation = await page.evaluate(() => history.length);
 
       await confirmation.getByRole('button', { name: 'Continua senza salvare' }).click();
