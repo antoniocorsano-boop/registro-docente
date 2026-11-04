@@ -102,4 +102,19 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(editor).not.toContain('Configura il profilo reale prima di collegare il curricolo Arena.');
     expect(editor).toContain('profile ?');
   });
+
+  test('HPR: compact mobile Programmazione prioritizes UDA and progressively discloses configuration', async () => {
+    const view = await Bun.file('src/components/planning/PlanningProfileView.tsx').text();
+    expect(view).toContain('aria-label="Programmazione corrente"');
+    expect(view).toContain('Apri UDA');
+    expect(view).toContain('aria-controls="int01-planning-details"');
+    expect(view).toContain('aria-controls="int01-arena-details"');
+    expect(view).toContain("setMobileDetailsOpen(open => !open)");
+    expect(view).toContain("setMobileArenaOpen(open => !open)");
+    expect(view).toContain("planningFrame?.status !== 'resolved'");
+    expect(view).toContain('id="int01-planning-details"');
+    expect(view).toContain('sm:block');
+    expect(view).toContain('<PlanningProfileEditor');
+    expect(view).toContain('<ArenaPlanningContextPanel');
+  });
 });

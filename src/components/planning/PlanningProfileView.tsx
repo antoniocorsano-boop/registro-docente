@@ -53,11 +53,51 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
     : null;
   const resolvedSelectedId = manualId ?? (hasClassContext ? validFocusedId : profiles[0]?.id ?? null);
   const selected = profiles.find(profile => profile.id === resolvedSelectedId);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+  const [mobileArenaOpen, setMobileArenaOpen] = useState(false);
+  const resolvedFrame = planningFrame?.status === 'resolved' ? planningFrame : null;
+  // Keep the mounted editor and its unsaved draft even when visually collapsed.
+  const mobileDetailsVisible = mobileDetailsOpen || !hasClassContext || !selected
+    || planningFrame?.status !== 'resolved';
 
   return (
     <section className="max-w-5xl mx-auto space-y-5">
+      {hasClassContext && (
+        <section aria-label="Programmazione corrente" className="space-y-3 rounded-xl border border-slate-700 bg-slate-900/70 p-4 sm:hidden">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Programmazione didattica</p>
+            <h2 className="mt-1 text-xl font-bold text-white">Classe {currentClassName}</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              {subjectDisplayLabel.trim() || resolvedFrame?.profile.subjectCode || defaultSubjectCode}
+              {resolvedFrame ? ` · ${resolvedFrame.profile.schoolYear}` : ''}
+            </p>
+          </div>
+          <div role="status" aria-label="Stato della programmazione" className="text-sm font-semibold">
+            <span className={resolvedFrame ? 'text-emerald-200' : 'text-amber-200'}>
+              {resolvedFrame ? 'Programmazione disponibile'
+                : planningFrame?.status === 'ambiguous' ? 'Cornice della classe da chiarire'
+                : planningFrame?.status === 'unavailable' && planningFrame.reason === 'PLANNING_PROFILE_NOT_FOUND'
+                  ? 'Programmazione da configurare' : 'Programmazione da verificare'}
+            </span>
+          </div>
+          {teachingContext && (
+            <p className="text-sm text-slate-300">
+              UDA: {udaTitle?.trim() || 'selezionata'}
+              {teachingContext.lessonId ? ` · Lezione: ${lessonTitle?.trim() || 'selezionata'}` : ''}
+              {teachingContext.writableByRegistro === false ? ' · Docente OS (sola lettura)' : ''}
+            </p>
+          )}
+          {onOpenUda && (
+            <button type="button" onClick={onOpenUda}
+              className="min-h-[44px] w-full rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-bold text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200">
+              Apri UDA
+            </button>
+          )}
+        </section>
+      )}
       {hasClassContext && onOpenUda && (
-        <DidacticContinuityBar
+        <div className="hidden sm:block">
+          <DidacticContinuityBar
           className={currentClassName!}
           planningFrame={planningFrame}
           teachingContext={teachingContext}
@@ -65,10 +105,11 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           lessonTitle={lessonTitle}
           destination="uda-gantt"
           onNavigate={onOpenUda}
-        />
+          />
+        </div>
       )}
       {hasClassContext && (
-        <div role="status" aria-label="Stato della programmazione" className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-200">
+        <div role="status" aria-label="Stato della programmazione" className="hidden rounded-lg sm:block border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-200">
           {planningFrame?.status === 'resolved' ? (
             <>
               <p className="font-semibold text-emerald-200">Programmazione disponibile</p>
@@ -97,6 +138,16 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           )}
         </div>
       )}
+      {hasClassContext && selected && planningFrame?.status === 'resolved' && (
+        <button type="button" aria-expanded={mobileDetailsVisible}
+          aria-controls="int01-planning-details"
+          onClick={() => setMobileDetailsOpen(open => !open)}
+          className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-sm font-semibold text-white sm:hidden">
+          <span>Dettagli e modifica</span>
+          <span aria-hidden="true" className="text-cyan-300">{mobileDetailsVisible ? '−' : '+'}</span>
+        </button>
+      )}
+      <div id="int01-planning-details" className={mobileDetailsVisible ? 'space-y-5' : 'hidden space-y-5 sm:block'}>
       {profiles.length > 0 && (
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
           <label className="text-sm text-slate-300">Profilo salvato
@@ -133,12 +184,28 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           defaultGradeLevel={resolveClassGradeLevel(currentClassName ?? '') ?? 1}
         />
       </div>
+      </div>
       {selected && (
-        <ArenaPlanningContextPanel
-          profile={selected}
-          acceptedContexts={arenaContexts}
-          onAccept={onAcceptArenaContext}
-        />
+        <section aria-label="Collegamento curricolo Arena" className="space-y-3">
+          {hasClassContext && (
+            <button type="button" aria-label="Apri strumenti Arena"
+              aria-expanded={mobileArenaOpen} aria-controls="int01-arena-details"
+              onClick={() => setMobileArenaOpen(open => !open)}
+              className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3 text-left sm:hidden">
+              <span>
+                <span className="block text-sm font-semibold text-white">Curricolo Arena</span>
+                <span className="block text-xs text-slate-400">
+                  {resolvedFrame?.arenaContext ? 'Collegato · sola lettura' : 'Da collegare · facoltativo'}
+                </span>
+              </span>
+              <span aria-hidden="true" className="text-cyan-300">{mobileArenaOpen ? '−' : '+'}</span>
+            </button>
+          )}
+          <div id="int01-arena-details" className={mobileArenaOpen || !hasClassContext ? 'block' : 'hidden sm:block'}>
+            <ArenaPlanningContextPanel profile={selected}
+              acceptedContexts={arenaContexts} onAccept={onAcceptArenaContext} />
+          </div>
+        </section>
       )}
     </section>
   );

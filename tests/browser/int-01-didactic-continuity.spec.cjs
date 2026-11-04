@@ -54,7 +54,7 @@ async function openPreparaForClass(page) {
 }
 
 function continuity(page) {
-  return page.getByRole('region', { name: 'Continuità didattica' });
+  return page.getByRole('region', { name: /^(Continuità didattica|Programmazione corrente)$/ });
 }
 
 async function createPlanningProfile(page) {
@@ -80,12 +80,31 @@ async function createPlanningProfile(page) {
 
   await page.getByRole('button', { name: 'Salva profilo', exact: true }).click();
   await closeSaveConfirmation(page);
-  await expect(continuity(page)).toContainText('Cornice:');
-  await expect(continuity(page)).toContainText('classe 2');
-  await expect(continuity(page)).not.toContainText('Cornice: profilo non disponibile');
+  const isMobile = (page.viewportSize()?.width ?? 1280) < 640;
+  if (!isMobile) {
+    await expect(continuity(page)).toContainText('Cornice:');
+    await expect(continuity(page)).toContainText('classe 2');
+    await expect(continuity(page)).not.toContainText('Cornice: profilo non disponibile');
+  }
   const planningStatus = page.getByRole('status', { name: 'Stato della programmazione' });
   await expect(planningStatus).toContainText('Programmazione disponibile');
-  await expect(planningStatus).toContainText('Curricolo Arena da collegare');
+  if (isMobile) {
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await expect(details).toHaveAttribute('aria-expanded', 'false');
+    await expect(continuity(page)).toContainText('Apri UDA');
+    const arena = page.getByRole('button', { name: 'Apri strumenti Arena' });
+    await expect(arena).toContainText('Da collegare');
+    await expect(arena).toHaveAttribute('aria-expanded', 'false');
+    await arena.click();
+    await expect(arena).toHaveAttribute('aria-expanded', 'true');
+    await arena.click();
+    await details.click();
+    await expect(details).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('group', { name: 'Sezioni programmazione' })).toBeVisible();
+    await details.click();
+  } else {
+    await expect(planningStatus).toContainText('Curricolo Arena da collegare');
+  }
   await expect(page.getByText('Configura il profilo reale prima di collegare il curricolo Arena.')).toHaveCount(0);
 }
 
@@ -139,9 +158,10 @@ async function runJourney(page, { mobile }) {
   const router = await openPreparaForClass(page);
   await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
   await expect(continuity(page)).toContainText('Classe ' + CLASS_NAME);
-  await expect(continuity(page)).toContainText('Cornice: profilo non disponibile');
+  if (!mobile) await expect(continuity(page)).toContainText('Cornice: profilo non disponibile');
   await expect(page.getByRole('status', { name: 'Stato della programmazione' }))
     .toContainText('Programmazione da configurare');
+  if (mobile) await expect(page.getByRole('group', { name: 'Sezioni programmazione' })).toBeVisible();
 
   await createPlanningProfile(page);
   await page.screenshot({
