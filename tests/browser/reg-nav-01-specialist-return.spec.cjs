@@ -165,6 +165,37 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     expect(errors).toEqual([]);
   });
 
+
+  test('Scheda da menu conserva lo studente già mostrato senza altra selezione', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await page.locator('main').getByRole('button', { name: 'Analisi', exact: true }).click();
+    const detail = page.getByTestId('mobile-analytics-student-detail');
+    await detail.locator('summary').click();
+    await detail.getByRole('button', { name: /Bianchi Anna/ }).click();
+    const selector = page.locator('main select').first();
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await fromDrawer(page, 'Scheda alunno');
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    // The newly opened menu route must capture the target even without another select change.
+    const selectedId = await selector.locator('option:checked').getAttribute('value');
+    expect(selectedId).toBeTruthy();
+    const historyEntry = await page.evaluate(() => history.state);
+    expect(historyEntry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
+    expect(JSON.stringify(historyEntry)).not.toContain(selectedId);
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    expect(errors).toEqual([]);
+  });
+
   test('Indietro e Avanti ripristinano lo studente corretto fra più schede aperte', async ({ page }) => {
     await prepareSyntheticClass(page);
     await page.locator('main').getByRole('button', { name: 'Analisi', exact: true }).click();
