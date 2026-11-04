@@ -153,6 +153,14 @@ import {
 import { buildRegistroSemanticMemorySnapshot } from './semanticMemory/projections';
 import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 
+import {
+  SPECIALIST_TARGET_HISTORY_KEY,
+  recallSpecialistTarget,
+  rememberSpecialistTarget,
+  updateStudentSpecialistTarget,
+  type SpecialistTarget,
+  type SpecialistTargetMemory
+} from './navigation/specialistTargetMemory';
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
@@ -311,6 +319,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
+  // Only an opaque history token leaves this unlocked-session memory; IDs never enter history.state.
+  const specialistTargetMemoryRef = useRef<SpecialistTargetMemory>(new Map());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
@@ -490,9 +500,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean } = {}
+    options: { preserveRecordSession?: boolean; specialistTarget?: SpecialistTarget } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
+    if (tab === 'voti' && options.specialistTarget?.kind === 'evaluation') {
+      setEditingBatchId(options.specialistTarget.batchId);
+    }
+    if (tab === 'report' && options.specialistTarget?.kind === 'student') {
+      setSelectedStudentForReport(options.specialistTarget.studentId);
+    }
     setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
@@ -506,13 +522,28 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
     const classId = currentClassIdRef.current;
     try {
-      const state = { classId, tab };
+      let specialistToken: string | null = null;
+      if (options.specialistTarget && classId) {
+        const candidate = crypto.randomUUID();
+        if (rememberSpecialistTarget(
+          specialistTargetMemoryRef.current, candidate, classId, tab, options.specialistTarget
+        )) specialistToken = candidate;
+      }
+      const state = specialistToken
+        ? { classId, tab, [SPECIALIST_TARGET_HISTORY_KEY]: specialistToken }
+        : { classId, tab };
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
-    } catch (e) {}
+    } catch (e) {
+      // The browser can refuse an entry; no professional data is written.
+      // A failed push never authorizes reuse of the transient specialist token.
+      if (typeof state !== 'undefined' && SPECIALIST_TARGET_HISTORY_KEY in state) {
+        specialistTargetMemoryRef.current.delete(state[SPECIALIST_TARGET_HISTORY_KEY]);
+      }
+    }
   }, [publishRecordSession, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
@@ -1403,10 +1434,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const nextCurrentClassId = e.state?.classId || null;
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
+      const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
+      const specialist = recallSpecialistTarget(
+        specialistTargetMemoryRef.current,
+        e.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+        nextCurrentClassId,
+        nextTab
+      );
+      setEditingBatchId(specialist?.kind === 'evaluation' ? specialist.batchId : null);
+      setSelectedStudentForReport(specialist?.kind === 'student' ? specialist.studentId : null);
       setTodayAction(null);
       publishReviewSession(null);
       publishRecordSession(null);
-      setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
+      setActiveTab(nextTab);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -1813,7 +1853,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Edit batch
   const handleEditBatch = (batchId: string) => {
     setEditingBatchId(batchId);
-    handleNavigateTab('voti');
+    handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId } });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -2270,7 +2310,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             onOpenStudentReport={(studentId) => {
               setSelectedStudentForReport(studentId);
-              handleNavigateTab('report');
+              handleNavigateTab('report', { specialistTarget: { kind: 'student', studentId } });
             }}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
@@ -2282,7 +2322,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onOpenStudentReport={(studentId) => {
               setSelectedStudentForReport(studentId);
-              handleNavigateTab('report');
+              handleNavigateTab('report', { specialistTarget: { kind: 'student', studentId } });
             }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
@@ -2307,7 +2347,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <StudentReportView
             currentClass={currentClass}
             selectedStudentId={selectedStudentForReport}
-            onSelectStudent={setSelectedStudentForReport}
+            onSelectStudent={(studentId) => {
+              setSelectedStudentForReport(studentId);
+              updateStudentSpecialistTarget(
+                specialistTargetMemoryRef.current,
+                history.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+                currentClassIdRef.current,
+                studentId
+              );
+            }}
             settings={settings}
             udas={udas}
             isPrivacyShieldActive={isPrivacyShieldActive}
