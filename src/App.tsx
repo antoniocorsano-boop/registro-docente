@@ -156,6 +156,7 @@ import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 import {
   SPECIALIST_TARGET_HISTORY_KEY,
   recallSpecialistTarget,
+  forgetSpecialistTarget,
   rememberSpecialistTarget,
   updateStudentSpecialistTarget,
   type SpecialistTarget,
@@ -2284,7 +2285,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
-            onCancelEdit={() => setEditingBatchId(null)}
+            onCancelEdit={() => {
+              // Cancellation changes the meaning of this existing history entry.
+              // Without invalidation, Back could silently re-open the old batch editor.
+              forgetSpecialistTarget(
+                specialistTargetMemoryRef.current,
+                window.history.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+                currentClassIdRef.current,
+                'voti'
+              );
+              setEditingBatchId(null);
+            }}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
