@@ -484,6 +484,61 @@ test.describe('INT-01 mobile: pending decision during verified browser Back', ()
   }
 });
 
+test.describe('INT-01 mobile: explicit discard on same-class Programmazione history', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  for (const withoutNavigationIndex of [false, true]) {
+    test(`discards the dirty editor across same-profile history ${withoutNavigationIndex ? 'without' : 'with'} Navigation API`, async ({ page }) => {
+      if (withoutNavigationIndex) {
+        await page.addInitScript(() => {
+          Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+        });
+      }
+      await configureVault(page, `int-01-same-profile-discard-${withoutNavigationIndex ? 'marked' : 'native'}`);
+      await createSyntheticClass(page, CLASS_NAME);
+      const router = await openPreparaForClass(page);
+      await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+      await createPlanningProfile(page);
+
+      const originalPlanningEntryId = await page.evaluate(() => history.state?.__tramaHistoryEntryId);
+      const originalUrl = page.url();
+      await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+      await continuity(page).getByRole('button', { name: 'Apri Programmazione' }).click();
+      await expect(page).toHaveURL(originalUrl);
+      expect(await page.evaluate(() => history.state?.__tramaHistoryEntryId)).not.toBe(originalPlanningEntryId);
+
+      const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+      await details.click();
+      await page.getByRole('button', { name: 'Profilo', exact: true }).click();
+      const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+      await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+      const cohort = profile.getByRole('textbox', { name: 'Coorte' });
+      const persistedCohort = await cohort.inputValue();
+      await cohort.fill('2026-unsaved-must-discard');
+      await details.click();
+
+      const lengthBefore = await page.evaluate(() => history.length);
+      await page.evaluate(() => history.go(-2));
+      const confirmation = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+      await expect(confirmation).toBeVisible();
+      await expect(page).toHaveURL(originalUrl);
+      await confirmation.getByRole('button', { name: 'Continua senza salvare' }).click();
+      await expect(confirmation).toBeHidden();
+      await expect(page).toHaveURL(originalUrl);
+      expect(await page.evaluate(() => history.state?.__tramaHistoryEntryId)).toBe(originalPlanningEntryId);
+      expect(await page.evaluate(() => history.length)).toBe(lengthBefore);
+      await details.click();
+      await expect(cohort).toHaveValue(persistedCohort);
+      await details.click();
+
+      // The discarded editor must not prompt again on the next legitimate exit.
+      await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+      await expect(confirmation).toHaveCount(0);
+      await expect(page).toHaveURL(/tab=uda-gantt/);
+    });
+  }
+});
+
 test.describe('INT-01: multi-entry unmarked history', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   test('checks the exact origin before permitting a dirty draft to be discarded', async ({ page }) => {
