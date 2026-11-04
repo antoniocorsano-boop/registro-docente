@@ -16,7 +16,7 @@ function between(first: string, after: string): string {
 describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
   test('Storico uses the history-aware transition for new or edited evaluations', () => {
     expect(between('const handleEditBatch', '// Delete batch'))
-      .toContain("handleNavigateTab('voti')");
+      .toContain("handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId } })");
     expect(between('onNewEvaluation={() => {', '{/* TAB 8:'))
       .toContain("handleNavigateTab('voti')");
   });
@@ -41,6 +41,9 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(source).toContain('[SPECIALIST_TARGET_HISTORY_KEY]: specialistToken');
     expect(source).toContain('recallSpecialistTarget(');
     expect(browser).toContain("isMobile: true");
+    expect(browser).toContain("Scheda alunno dal menu");
+    expect(source).toContain("window.history.replaceState(");
+    expect(source).toContain("rememberSpecialistTarget(");
     expect(workflow).toContain('Run REG-NAV-01 specialist return Chromium qualification');
   });
 });
