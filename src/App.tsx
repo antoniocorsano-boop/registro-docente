@@ -2347,12 +2347,29 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             selectedStudentId={selectedStudentForReport}
             onSelectStudent={(studentId) => {
               setSelectedStudentForReport(studentId);
-              updateStudentSpecialistTarget(
-                specialistTargetMemoryRef.current,
-                history.state?.[SPECIALIST_TARGET_HISTORY_KEY],
-                currentClassIdRef.current,
-                studentId
-              );
+              const classId = currentClassIdRef.current;
+              const entry = window.history.state;
+              // An item chosen from the navigation menu has no specialist token yet.
+              // Attach one to this exact entry; never place the student ID in history or URL.
+              if (
+                !classId || currentClass?.id !== classId || activeTab !== 'report'
+                || entry?.classId !== classId || entry?.tab !== 'report'
+              ) return;
+              const memory = specialistTargetMemoryRef.current;
+              if (updateStudentSpecialistTarget(
+                memory, entry[SPECIALIST_TARGET_HISTORY_KEY], classId, studentId
+              )) return;
+              const token = crypto.randomUUID();
+              if (!rememberSpecialistTarget(memory, token, classId, 'report', {
+                kind: 'student', studentId
+              })) return;
+              try {
+                window.history.replaceState({
+                  ...entry, [SPECIALIST_TARGET_HISTORY_KEY]: token
+                }, '', window.location.href);
+              } catch {
+                memory.delete(token);
+              }
             }}
             settings={settings}
             udas={udas}
