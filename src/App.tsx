@@ -391,6 +391,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [planningExitSaving, setPlanningExitSaving] = useState(false);
   const [planningExitError, setPlanningExitError] = useState('');
   const [historyFallbackWarning, setHistoryFallbackWarning] = useState(false);
+  // UI feedback only; the ref is the synchronous safety gate during async history restoration.
+  const [historyRestoringOrigin, setHistoryRestoringOrigin] = useState(false);
   const registerPlanningDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
     planningGuardRef.current = guard;
   }, []);
@@ -409,7 +411,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return true;
   }, []);
   const cancelPlanningExit = () => {
-    if (planningExitSaving) return;
+    if (planningExitSaving || historyRestorePendingRef.current !== null) return;
     const fallback = historyFallbackRef.current;
     if (fallback) {
       // A browser without a verifiable entry index cannot traverse back to an
@@ -440,6 +442,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setPlanningExitError('');
   };
   const performPlanningExit = () => {
+    // A confirmation must never execute a stale UDA callback while history.go
+    // is still traversing to the verified Programmazione origin.
+    if (historyRestorePendingRef.current !== null) return;
     planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
     pendingExitRef.current = null;
@@ -456,7 +461,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
   const saveAndLeavePlanning = async () => {
     const guard = planningGuardRef.current;
-    if (!guard || planningExitSaving) return;
+    if (!guard || planningExitSaving || historyRestorePendingRef.current !== null) return;
     setPlanningExitSaving(true);
     setPlanningExitError('');
     try {
@@ -1689,6 +1694,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         // No history index and no common marker epoch: guessing Back/Forward
         // could leave the editor under another class's URL or hang forever.
         historyRestorePendingRef.current = null;
+        setHistoryRestoringOrigin(false);
         if (!historyFallbackRef.current) {
           historyFallbackRef.current = {
             originUrl: historyUrlRef.current,
@@ -1722,6 +1728,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           || (targetEntryId !== null && targetEntryId === restoring.originEntryId);
         if (originVerified && window.location.href === restoring.originUrl) {
           historyRestorePendingRef.current = null;
+          setHistoryRestoringOrigin(false);
           browserHistoryIndexRef.current = browserIndex;
           // A browser traversal supersedes an earlier «Apri UDA» click
           // whose confirmation is still open. Replace the stale callback
@@ -1772,6 +1779,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             originBrowserIndex: browserHistoryIndexRef.current,
             originUrl: historyUrlRef.current
           };
+          setHistoryRestoringOrigin(true);
           history.go(-delta);
           return;
         }
@@ -2951,6 +2959,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             <p className="text-sm text-slate-300">
               Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
             </p>
+            {historyRestoringOrigin && (
+              <p role="status" className="text-sm text-amber-200">
+                Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.
+              </p>
+            )}
             {historyFallbackWarning && (
               <p role="status" className="text-sm text-amber-200">
                 Il navigatore non permette di verificare il percorso precedente. La bozza è ancora disponibile.
@@ -2959,15 +2972,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             )}
             {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
             <div className="flex flex-col gap-2">
-              <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving}
+              <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
                 {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
               </button>
-              <button type="button" onClick={performPlanningExit} disabled={planningExitSaving}
+              <button type="button" onClick={performPlanningExit} disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
                 Continua senza salvare
               </button>
-              <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving}
+              <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
                 Rimani nella Programmazione
               </button>
