@@ -54,6 +54,15 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(browser).toContain('Valutazioni da menu mantiene la modifica già visualizzata');
   });
 
+  test('Back refuses a deleted evaluation target even if its opaque history token survives', () => {
+    const handler = between('const handlePopState = (e: PopStateEvent) => {', "window.addEventListener('popstate', handlePopState)");
+    expect(handler).toContain('appDataRef.current.classes');
+    expect(handler).toContain('grades.some(');
+    expect(handler).toContain("specialist?.kind === 'evaluation'");
+    expect(handler).toContain('forgetSpecialistTarget(');
+    expect(browser).toContain('Modifica A → elimina A → Indietro non riapre la valutazione eliminata');
+  });
+
   test('Annulla Modifica invalidates the current history target without a professional write', () => {
     const handler = between('onCancelEdit={() => {', 'isPrivacyShieldActive={isPrivacyShieldActive}');
     expect(handler).toContain('forgetSpecialistTarget(');
