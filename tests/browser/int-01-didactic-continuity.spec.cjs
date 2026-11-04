@@ -466,6 +466,58 @@ test.describe('INT-01 mobile: dirty draft starting from a legacy unmarked histor
 test.describe('INT-01 mobile: legacy browser without Navigation API index', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
+  test('browser Back replaces a pending UDA action with the actual legacy destination', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+    });
+    await configureVault(page, 'int-01-no-index-pending-action');
+    await createSyntheticClass(page, CLASS_NAME);
+    const router = await openPreparaForClass(page);
+    await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
+    await createPlanningProfile(page);
+    const classId = await page.evaluate(() => history.state?.classId);
+    const planningUrl = page.url();
+    await page.evaluate(({ classId, planningUrl }) => {
+      history.pushState({ classId, tab: 'uda-gantt', legacy: 'actual-destination' },
+        '', planningUrl + '&legacy=recovery-destination');
+      history.pushState({ classId, tab: 'programmazione', legacy: 'dirty-origin' },
+        '', planningUrl + '&legacy=recovery-origin');
+    }, { classId, planningUrl });
+    await page.goBack();
+    const destinationUrl = page.url();
+    await page.goForward();
+    const originUrl = page.url();
+    await expect(page.getByRole('status', { name: 'Stato della programmazione' })).toContainText('Programmazione disponibile');
+    await expect.poll(() => page.evaluate(() => history.state?.__tramaHistoryPosition ?? null)).toBeNull();
+
+    const details = page.getByRole('button', { name: 'Dettagli e modifica' });
+    await details.click();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('button', { name: 'Modifica', exact: true }).click();
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-dirty-pending-recovery');
+    await details.click();
+
+    // A normal app click opens the first decision, but must not navigate yet.
+    await continuity(page).getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(confirmation).toBeVisible();
+    await expect(page).toHaveURL(originUrl);
+
+    // The browser now moves to a different entry while that decision is open.
+    // Old code kept the original UDA push callback instead of the real target.
+    await page.goBack();
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation.getByText(/cronologia in avanti potrebbe essere sostituita/)).toBeVisible();
+    await expect(page).toHaveURL(destinationUrl);
+    const lengthAtDestination = await page.evaluate(() => history.length);
+
+    await confirmation.getByRole('button', { name: 'Continua senza salvare' }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(page).toHaveURL(destinationUrl);
+    await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => history.length)).toBe(lengthAtDestination);
+  });
+
   test('Forward from unmarked dirty origin offers an explicit decision instead of hanging', async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });

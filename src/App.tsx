@@ -1695,7 +1695,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             classId: currentClassIdRef.current
           };
           setHistoryFallbackWarning(true);
-          requestPlanningDeparture(navigate);
+          // If a navigation button already opened the modal, it has already
+          // registered a pending action. Recovery must replace that action
+          // with the browser's *actual* destination, not refuse the update.
+          if (pendingExitRef.current) {
+            pendingExitRef.current = navigate;
+          } else {
+            requestPlanningDeparture(navigate);
+          }
         } else {
           // Browser controls may still navigate while a modal is open: the
           // confirmation must always apply to the *actual* current entry.
