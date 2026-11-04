@@ -504,12 +504,25 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     options: { preserveRecordSession?: boolean; specialistTarget?: SpecialistTarget } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
-    if (tab === 'voti' && options.specialistTarget?.kind === 'evaluation') {
-      setEditingBatchId(options.specialistTarget.batchId);
+    const classId = currentClassIdRef.current;
+    const currentClassStudents = appDataRef.current.classes.find(c => c.id === classId)?.students ?? [];
+    // The menu can open the report with a student already selected. Capture the
+    // class-authorized target on entry, even when the selector is not changed.
+    const requestedStudentId = options.specialistTarget?.kind === 'student'
+      ? options.specialistTarget.studentId
+      : selectedStudentForReport;
+    const visibleStudentId = tab === 'report'
+      ? (currentClassStudents.some(s => s.id === requestedStudentId)
+          ? requestedStudentId
+          : currentClassStudents[0]?.id ?? null)
+      : null;
+    const specialistTarget: SpecialistTarget | undefined = tab === 'report'
+      ? (visibleStudentId ? { kind: 'student', studentId: visibleStudentId } : undefined)
+      : options.specialistTarget;
+    if (tab === 'voti' && specialistTarget?.kind === 'evaluation') {
+      setEditingBatchId(specialistTarget.batchId);
     }
-    if (tab === 'report' && options.specialistTarget?.kind === 'student') {
-      setSelectedStudentForReport(options.specialistTarget.studentId);
-    }
+    if (tab === 'report') setSelectedStudentForReport(visibleStudentId);
     setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
@@ -521,13 +534,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setTodayAction(null);
     }
 
-    const classId = currentClassIdRef.current;
     let specialistToken: string | null = null;
     try {
-      if (options.specialistTarget && classId) {
+      if (specialistTarget && classId) {
         const candidate = crypto.randomUUID();
         if (rememberSpecialistTarget(
-          specialistTargetMemoryRef.current, candidate, classId, tab, options.specialistTarget
+          specialistTargetMemoryRef.current, candidate, classId, tab, specialistTarget
         )) specialistToken = candidate;
       }
       const state = specialistToken
@@ -543,7 +555,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // A failed push never authorizes reuse of the transient specialist token.
       if (specialistToken) specialistTargetMemoryRef.current.delete(specialistToken);
     }
-  }, [publishRecordSession, setActiveTab]);
+  }, [publishRecordSession, selectedStudentForReport, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
