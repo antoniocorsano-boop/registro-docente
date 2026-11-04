@@ -42,6 +42,16 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(browser).toContain('Scheda da menu conserva lo studente già mostrato senza altra selezione');
   });
 
+  test('Valutazioni from menu preserves a class-authorized already-open batch on a new history entry', () => {
+    const navigation = between('const handleNavigateTab = useCallback', 'const mutationCoordinatorRef');
+    expect(navigation).toContain('currentClassGrades');
+    expect(navigation).toContain('editingBatchId');
+    expect(navigation).toContain("tab === 'voti'");
+    expect(navigation).toContain("kind: 'evaluation', batchId: visibleBatchId");
+    expect(navigation).toContain('specialistTargetMemoryRef.current, candidate, classId, tab, specialistTarget');
+    expect(browser).toContain('Valutazioni da menu mantiene la modifica già visualizzata');
+  });
+
   test('Annulla Modifica invalidates the current history target without a professional write', () => {
     const handler = between('onCancelEdit={() => {', 'isPrivacyShieldActive={isPrivacyShieldActive}');
     expect(handler).toContain('forgetSpecialistTarget(');
