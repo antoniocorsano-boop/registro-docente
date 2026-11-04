@@ -646,6 +646,24 @@
       "browserSmoke": [
         "tests/browser/reg-nav-01-specialist-return.spec.cjs"
       ]
+    },
+    {
+      "id": "REG-NAV-01-I02",
+      "owner": "REG-NAV-01",
+      "statement": "Back and Forward recover the exact same-class evaluation or student-report target by an opaque per-entry token, with professional selection IDs retained only in the unlocked App session, not in URL or history state.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/navigation/",
+        "src/security/regNav01SpecialistRoutingContract.test.ts",
+        "tests/browser/reg-nav-01-specialist-return.spec.cjs"
+      ],
+      "tests": [
+        "src/navigation/specialistTargetMemory.test.ts",
+        "src/security/regNav01SpecialistRoutingContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/reg-nav-01-specialist-return.spec.cjs"
+      ]
     }
   ]
 }
