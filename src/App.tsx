@@ -1813,7 +1813,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Edit batch
   const handleEditBatch = (batchId: string) => {
     setEditingBatchId(batchId);
-    setActiveTab('voti');
+    handleNavigateTab('voti');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -2270,7 +2270,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             onOpenStudentReport={(studentId) => {
               setSelectedStudentForReport(studentId);
-              setActiveTab('report');
+              handleNavigateTab('report');
             }}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
@@ -2282,7 +2282,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onOpenStudentReport={(studentId) => {
               setSelectedStudentForReport(studentId);
-              setActiveTab('report');
+              handleNavigateTab('report');
             }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
@@ -2297,7 +2297,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteBatch={handleDeleteBatch}
             onNewEvaluation={() => {
               setEditingBatchId(null);
-              setActiveTab('voti');
+              handleNavigateTab('voti');
             }}
           />
         )}
