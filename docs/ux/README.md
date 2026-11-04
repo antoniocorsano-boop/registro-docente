@@ -9,6 +9,15 @@
 - **Transition roadmap:** [`../superpowers/plans/2026-11-02-ux-gov-01-transition-roadmap.md`](../superpowers/plans/2026-11-02-ux-gov-01-transition-roadmap.md)
 - **Baseline product SHA:** `f332d63a9e26df41072f9b726142e612d408e7d0`
 
+## REG-NAV-01 — navigazione professionale (candidata)
+
+- **Contratto v1:** [REG-NAV-01-navigation-contract-v1.md](./REG-NAV-01-navigation-contract-v1.md)
+- **Inventario verificato delle transizioni:** [REG-NAV-01-navigation-inventory-2026-11-04.md](./REG-NAV-01-navigation-inventory-2026-11-04.md)
+- **Prima qualifica tecnica:** NAV-S1, Storico / Analisi / Tabellone → ritorno cronologico; [tracker #104](https://github.com/antoniocorsano-boop/registro-docente/issues/104), [PR #117](https://github.com/antoniocorsano-boop/registro-docente/pull/117).
+- **Relazione con INT-01:** non sostituisce né dichiara risolta la HPR Android REWORK della [PR #116](https://github.com/antoniocorsano-boop/registro-docente/pull/116).
+
+La specifica REG-NAV-01 è candidata alla qualificazione: UX-GOV-01 v1 rimane la fonte autorevole finché la proposta non completa revisione e approvazione.
+
 ## Authority order
 
 When references disagree, use this order:
