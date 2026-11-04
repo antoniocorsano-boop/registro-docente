@@ -309,6 +309,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const activeTabRef = useRef<ActiveTab>('home');
+  // Opt-in, preview-only. No class IDs, URLs, form values, credentials or vault data.
+  const [hprTraceEnabled] = useState(() =>
+    import.meta.env.VITE_INT01_HPR_TRACE === '1' && typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).get('int01Trace') === '1'
+  );
+  const [hprTrace, setHprTrace] = useState<string[]>([]);
+  const traceHpr = useCallback((event: string, destination: ActiveTab | null = null) => {
+    if (!hprTraceEnabled) return;
+    setHprTrace(prev => [
+      ...prev.slice(-13),
+      `${event} | attuale: ${activeTabRef.current} | destinazione: ${destination ?? 'nessuna'}`
+    ]);
+  }, [hprTraceEnabled]);
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
@@ -392,6 +405,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [planningExitSaving, setPlanningExitSaving] = useState(false);
   const [planningExitError, setPlanningExitError] = useState('');
   const [planningExitDestination, setPlanningExitDestination] = useState<ActiveTab | null>(null);
+  const [planningExitFromBrowser, setPlanningExitFromBrowser] = useState(false);
   const [historyFallbackWarning, setHistoryFallbackWarning] = useState(false);
   // UI feedback only; the ref is the synchronous safety gate during async history restoration.
   const [historyRestoringOrigin, setHistoryRestoringOrigin] = useState(false);
@@ -401,6 +415,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const requestPlanningDeparture = useCallback((
     commit: () => void, destination: ActiveTab | null = null
   ): boolean => {
+    traceHpr('richiesta-navigazione', destination);
     if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
       && planningGuardRef.current?.hasUnsavedChanges()) {
       if (pendingExitRef.current) return false; // Never replace an unconfirmed navigation.
@@ -408,13 +423,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         ? document.activeElement : null;
       pendingExitRef.current = commit;
       setPlanningExitDestination(destination);
+      setPlanningExitFromBrowser(false);
+      traceHpr('conferma-aperta', destination);
       setPlanningExitError('');
       setPlanningExitOpen(true);
       return false;
     }
     commit();
     return true;
-  }, []);
+  }, [traceHpr]);
   const cancelPlanningExit = () => {
     if (planningExitSaving || historyRestorePendingRef.current !== null) return;
     const fallback = historyFallbackRef.current;
@@ -444,6 +461,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     planningExitRestoreFocusRef.current = true;
     pendingExitRef.current = null;
     setPlanningExitDestination(null);
+    setPlanningExitFromBrowser(false);
+    traceHpr('uscita-annullata');
     setPlanningExitOpen(false);
     setPlanningExitError('');
   };
@@ -454,10 +473,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     // A Back to an older history entry may show the *same* Programmazione
     // component, so unmounting is not sufficient to discard its dirty draft.
     if (discardUnsavedDraft) planningGuardRef.current?.discardChanges();
+    traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
     planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
     pendingExitRef.current = null;
     setPlanningExitDestination(null);
+    setPlanningExitFromBrowser(false);
     historyFallbackRef.current = null;
     setHistoryFallbackWarning(false);
     setPlanningExitOpen(false);
@@ -465,6 +486,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     planningExitBypassRef.current = true;
     try {
       commit?.();
+      traceHpr(commit ? 'azione-eseguita' : 'azione-assente', planningExitDestination);
     } finally {
       planningExitBypassRef.current = false;
     }
@@ -584,6 +606,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       return;
     }
     activeTabRef.current = tab;
+    traceHpr('scheda-attivata', tab);
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
     setTeachingFocus(previous =>
@@ -602,7 +625,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [publishReviewSession, requestPlanningDeparture, teachingUdaCatalog]);
+  }, [publishReviewSession, requestPlanningDeparture, teachingUdaCatalog, traceHpr]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -723,6 +746,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveRecordSession?: boolean } = {}
   ) => {
+    traceHpr('click-navigazione', tab);
     requestPlanningDeparture(() => {
     const hadReviewSession = reviewSessionRef.current !== null;
     setActiveTab(tab);
@@ -747,7 +771,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       markHistoryPush();
     } catch (e) {}
     }, tab);
-  }, [markHistoryPush, publishRecordSession, requestPlanningDeparture, setActiveTab]);
+  }, [markHistoryPush, publishRecordSession, requestPlanningDeparture, setActiveTab, traceHpr]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1668,6 +1692,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const handlePopState = (event: PopStateEvent) => {
       const nextClassId = event.state?.classId || null;
       const nextTab: ActiveTab = event.state?.tab || (nextClassId ? 'dashboard' : 'home');
+      traceHpr('evento-cronologia-browser', nextTab);
       const targetPosition = Number.isSafeInteger(event.state?.__tramaHistoryPosition)
         ? event.state.__tramaHistoryPosition as number : null;
       const targetEpoch = typeof event.state?.__tramaHistoryEpoch === 'string'
@@ -1717,6 +1742,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           if (pendingExitRef.current) {
             pendingExitRef.current = navigate;
             setPlanningExitDestination(nextTab);
+            setPlanningExitFromBrowser(true);
+            traceHpr('sostituzione-da-cronologia', nextTab);
           } else {
             requestPlanningDeparture(navigate, nextTab);
           }
@@ -1725,12 +1752,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           // confirmation must always apply to the *actual* current entry.
           pendingExitRef.current = navigate;
           setPlanningExitDestination(nextTab);
+          setPlanningExitFromBrowser(true);
+          traceHpr('sostituzione-da-cronologia', nextTab);
         }
       };
 
       if (historyFallbackRef.current) {
         pendingExitRef.current = navigate;
         setPlanningExitDestination(nextTab);
+        setPlanningExitFromBrowser(true);
+        traceHpr('sostituzione-da-cronologia', nextTab);
         return;
       }
       const restoring = historyRestorePendingRef.current;
@@ -1753,6 +1784,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           if (pendingExitRef.current) {
             pendingExitRef.current = replayVerifiedTraversal;
             setPlanningExitDestination(restoring.destinationTab);
+            setPlanningExitFromBrowser(true);
+            traceHpr('sostituzione-da-cronologia', restoring.destinationTab);
           } else {
             requestPlanningDeparture(replayVerifiedTraversal, restoring.destinationTab);
           }
@@ -1820,7 +1853,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab]);
+  }, [publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab, traceHpr]);
 
   const handleOpenPreparationCopilot = useCallback(() => {
     const launchContext = buildPreparationCopilotLaunchContext(currentClass);
@@ -2586,6 +2619,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         onTogglePrivacyShield={handleTogglePrivacyShield}
       />
 
+      {hprTraceEnabled && (
+        <details aria-label="Diagnostica navigazione INT-01"
+          className="mx-auto w-full max-w-5xl border-b border-cyan-800 bg-slate-950 px-4 py-2 text-xs text-slate-200">
+          <summary className="cursor-pointer font-semibold">Diagnostica INT-01 — sola anteprima</summary>
+          <p className="py-2 text-slate-400">Solo eventi e nomi di schermate; nessun dato della classe o della password.</p>
+          <ol aria-label="Eventi INT-01" className="max-h-40 list-decimal space-y-1 overflow-auto pl-5">
+            {hprTrace.map((event, index) => <li key={index}>{event}</li>)}
+          </ol>
+        </details>
+      )}
+
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5">
         {/* TAB 1: Cruscotto Istituto */}
@@ -2974,6 +3018,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             <p className="text-sm text-slate-300">
               Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
             </p>
+            {planningExitFromBrowser && (
+              <p role="note" className="text-sm font-semibold text-amber-200">
+                Una navigazione del browser ha sostituito il percorso iniziale.
+                Controlla la destinazione prima di confermare.
+              </p>
+            )}
             {planningExitDestination && (
               <p role="status" aria-label="Destinazione richiesta" className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm font-semibold text-white">
                 Destinazione: {planningExitDestination === 'uda-gantt' ? 'Unità didattiche (UDA)'
