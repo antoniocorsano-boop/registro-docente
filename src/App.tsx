@@ -521,8 +521,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
 
     const classId = currentClassIdRef.current;
+    let specialistToken: string | null = null;
     try {
-      let specialistToken: string | null = null;
       if (options.specialistTarget && classId) {
         const candidate = crypto.randomUUID();
         if (rememberSpecialistTarget(
@@ -540,9 +540,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } catch (e) {
       // The browser can refuse an entry; no professional data is written.
       // A failed push never authorizes reuse of the transient specialist token.
-      if (typeof state !== 'undefined' && SPECIALIST_TARGET_HISTORY_KEY in state) {
-        specialistTargetMemoryRef.current.delete(state[SPECIALIST_TARGET_HISTORY_KEY]);
-      }
+      if (specialistToken) specialistTargetMemoryRef.current.delete(specialistToken);
     }
   }, [publishRecordSession, setActiveTab]);
 
