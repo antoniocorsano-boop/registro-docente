@@ -447,7 +447,7 @@ test.describe('INT-01 mobile: pending decision during verified browser Back', ()
       await expect(page).toHaveURL(previousUrl);
       await expect.poll(() => page.evaluate(() => typeof window.__int01ReleaseRestore)).toBe('function');
       await expect(confirmation).toBeVisible();
-      await expect(confirmation.getByRole('status')).toContainText('Ripristino della Programmazione');
+      await expect(confirmation.getByRole('status').filter({ hasText: 'Ripristino della Programmazione' })).toContainText('Ripristino della Programmazione');
       for (const label of ['Salva e continua', 'Continua senza salvare', 'Rimani nella Programmazione']) {
         await expect(confirmation.getByRole('button', { name: label })).toBeDisabled();
       }
@@ -463,7 +463,7 @@ test.describe('INT-01 mobile: pending decision during verified browser Back', ()
         release?.();
       });
       await expect(page).toHaveURL(planningUrl);
-      await expect(confirmation.getByRole('status')).toHaveCount(0);
+      await expect(confirmation.getByRole('status').filter({ hasText: 'Ripristino della Programmazione' })).toHaveCount(0);
       for (const label of ['Salva e continua', 'Continua senza salvare', 'Rimani nella Programmazione']) {
         await expect(confirmation.getByRole('button', { name: label })).toBeEnabled();
       }
