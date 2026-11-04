@@ -138,6 +138,43 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     expect(errors).toEqual([]);
   });
 
+  test('Valutazioni da menu mantiene la modifica già visualizzata dopo Back', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Prova sintetica NAV-S1-A');
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closeSaveNotice(page);
+    await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
+
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+    await expectNavigation(page, 'voti');
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await page.locator('nav').getByRole('button', { name: 'Valutazioni', exact: true }).click();
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+
+    const entry = await page.evaluate(() => history.state);
+    expect(entry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
+    const firstTitle = await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').inputValue();
+    expect(JSON.stringify(entry)).not.toContain(firstTitle);
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+    expect(errors).toEqual([]);
+  });
+
   test('Scheda alunno dal menu → seconda selezione → Analisi → Indietro conserva lo studente', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
