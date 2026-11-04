@@ -322,6 +322,29 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       `${event} | attuale: ${activeTabRef.current} | destinazione: ${destination ?? 'nessuna'}`
     ]);
   }, [hprTraceEnabled]);
+  // A reload or browser restoration must be distinguishable from an SPA tab switch.
+  // The event list remains memory-only; no data or identifiers are persisted.
+  const [hprLoadKind] = useState(() => {
+    if (!hprTraceEnabled) return 'disabled';
+    const navigation = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    return navigation?.type ?? 'unknown';
+  });
+  const withHprTraceQuery = useCallback((target: string): string => {
+    if (!hprTraceEnabled) return target;
+    const resolved = new URL(target, window.location.href);
+    if (resolved.origin !== window.location.origin) return target;
+    resolved.searchParams.set('int01Trace', '1');
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  }, [hprTraceEnabled]);
+  useEffect(() => {
+    if (!hprTraceEnabled) return;
+    traceHpr(`avvio-app:${hprLoadKind}`);
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) traceHpr('ripristino-cache-browser');
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [hprTraceEnabled, hprLoadKind, traceHpr]);
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
@@ -445,7 +468,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           classId: fallback.classId,
           tab: 'programmazione',
           __tramaHistoryEntryId: entryId
-        }, '', fallback.originUrl);
+        }, '', withHprTraceQuery(fallback.originUrl));
         historyPositionRef.current = null;
         historyEpochRef.current = null;
         historyEntryIdRef.current = entryId;
@@ -767,11 +790,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
-      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+      history.pushState(state, '', withHprTraceQuery(query ? `?${query}` : window.location.pathname));
       markHistoryPush();
     } catch (e) {}
     }, tab);
-  }, [markHistoryPush, publishRecordSession, requestPlanningDeparture, setActiveTab, traceHpr]);
+  }, [markHistoryPush, publishRecordSession, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1933,7 +1956,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       params.set('tab', route.tab);
-      history.pushState({ classId, tab: route.tab }, '', `?${params.toString()}`);
+      history.pushState({ classId, tab: route.tab }, '', withHprTraceQuery(`?${params.toString()}`));
       markHistoryPush();
     } catch (e) {}
   }, [publishRecordSession, setActiveTab]);
@@ -2109,7 +2132,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
-      history.pushState({ classId, tab: 'dashboard' }, '', `?class=${classId}`);
+      history.pushState({ classId, tab: 'dashboard' }, '', withHprTraceQuery(`?class=${classId}`));
       markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2127,7 +2150,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
-      history.pushState(null, '', window.location.pathname);
+      history.pushState(null, '', withHprTraceQuery(window.location.pathname));
       markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2595,7 +2618,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           onExit={() => {
             setStudentMode(prev => ({ ...prev, isOpen: false }));
             try {
-              history.pushState(null, '', window.location.pathname);
+              history.pushState(null, '', withHprTraceQuery(window.location.pathname));
       markHistoryPush();
             } catch (e) {}
           }}
@@ -2622,7 +2645,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       {hprTraceEnabled && (
         <details aria-label="Diagnostica navigazione INT-01"
           className="mx-auto w-full max-w-5xl border-b border-cyan-800 bg-slate-950 px-4 py-2 text-xs text-slate-200">
-          <summary className="cursor-pointer font-semibold">Diagnostica INT-01 — sola anteprima</summary>
+          <summary className="cursor-pointer font-semibold">Diagnostica INT-01 — {hprLoadKind === 'reload' ? 'ricaricamento pagina' : hprLoadKind === 'back_forward' ? 'ritorno dalla cronologia' : hprLoadKind === 'navigate' ? 'nuovo caricamento' : 'tipo di avvio non disponibile'}</summary>
           <p className="py-2 text-slate-400">Solo eventi e nomi di schermate; nessun dato della classe o della password.</p>
           <ol aria-label="Eventi INT-01" className="max-h-40 list-decimal space-y-1 overflow-auto pl-5">
             {hprTrace.map((event, index) => <li key={index}>{event}</li>)}
