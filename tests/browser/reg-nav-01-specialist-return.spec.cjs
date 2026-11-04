@@ -3,6 +3,7 @@ const { test, expect } = require('@playwright/test');
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const CLASS_NAME = 'Classe Sintetica REG-NAV-01';
 const STUDENT_NAME = 'Rossi Mario';
+const OTHER_STUDENT_NAME = 'Bianchi Anna';
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, trace: 'retain-on-failure' });
 test.setTimeout(120000);
@@ -39,6 +40,10 @@ async function prepareSyntheticClass(page) {
   await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(STUDENT_NAME);
   await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
   await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  await closeSaveNotice(page);
+  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(OTHER_STUDENT_NAME);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(OTHER_STUDENT_NAME, { exact: true })).toBeVisible();
   await closeSaveNotice(page);
 
   await fromDrawer(page, 'Oggi');
@@ -101,4 +106,37 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
       expect(errors).toEqual([]);
     });
   }
+  test('Indietro e Avanti ripristinano lo studente corretto fra più schede aperte', async ({ page }) => {
+    await prepareSyntheticClass(page);
+    await page.locator('main').getByRole('button', { name: 'Analisi', exact: true }).click();
+    const detail = page.getByTestId('mobile-analytics-student-detail');
+    await detail.locator('summary').click();
+    await detail.getByRole('button', { name: /Rossi Mario/ }).click();
+    const reportHeading = page.getByRole('heading', { name: /Scheda Alunno & Profilo delle Competenze/ });
+    await expect(reportHeading).toBeVisible();
+    const selector = page.locator('main select').first();
+    await expect(selector.locator('option:checked')).toHaveText(STUDENT_NAME);
+    await expectNavigation(page, 'report');
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await detail.locator('summary').click();
+    await detail.getByRole('button', { name: /Bianchi Anna/ }).click();
+    await expect(reportHeading).toBeVisible();
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    await expectNavigation(page, 'report');
+
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(STUDENT_NAME); // RED: stato globale ancora su B
+
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'analytics');
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+  });
+
 });
