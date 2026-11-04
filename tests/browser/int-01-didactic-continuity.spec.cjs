@@ -779,6 +779,8 @@ test.describe('INT-01 mobile HPR: unconfigured annual profile and explicit UDA d
     await expect(confirm).toBeVisible();
     await expect(confirm.getByRole('status', { name: 'Destinazione richiesta' }))
       .toContainText('Destinazione: Unità didattiche (UDA)');
+    await expect(confirm.getByRole('note')).toHaveCount(0);
+    await expect(page.getByLabel('Diagnostica navigazione INT-01')).toHaveCount(0);
     await expect(page).toHaveURL(planningUrl);
     await confirm.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
 
@@ -824,6 +826,47 @@ test.describe('INT-01 mobile HPR: dirty unconfigured profile and browser Back', 
     await expect(page).toHaveURL(planningUrl);
     await prompt.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
 
+    await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + NEXT_CLASS_NAME }))
+      .toBeVisible();
+    expect(await page.evaluate(() => history.state?.tab)).toBe('dashboard');
+    await fromDrawer(page, 'Programmazione didattica');
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-3');
+  });
+});
+
+test.describe('INT-01 HPR: competing browser navigation while the UDA confirmation is open', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('discloses an actual browser Back that supersedes an unconfirmed Apri UDA', async ({ page }) => {
+    await configureVault(page, 'int-01-hpr-interleaved-back');
+    await createSyntheticClass(page, NEXT_CLASS_NAME);
+    await page.getByRole('button', { name: 'Apri classe ' + NEXT_CLASS_NAME, exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + NEXT_CLASS_NAME }))
+      .toBeVisible();
+
+    await fromDrawer(page, 'Programmazione didattica');
+    const planningUrl = page.url();
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    await profile.getByRole('textbox', { name: 'Coorte' }).fill('2026-grade-3-prova');
+    await page.getByRole('region', { name: 'Programmazione corrente' })
+      .getByRole('button', { name: 'Apri UDA', exact: true }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('status', { name: 'Destinazione richiesta' }))
+      .toContainText('Unità didattiche (UDA)');
+    await expect(dialog.getByRole('note')).toHaveCount(0);
+
+    // The browser can issue Back while a confirmation is open on Android.
+    // Unlike a single Apri UDA click, that navigation now legitimately supersedes
+    // the pending UDA destination, and must be disclosed before discarding.
+    await page.goBack();
+    await expect(page).toHaveURL(planningUrl);
+    await expect(dialog.getByRole('status', { name: 'Destinazione richiesta' }))
+      .toContainText('Panoramica della classe');
+    await expect(dialog.getByRole('note'))
+      .toContainText('Una navigazione del browser ha sostituito il percorso iniziale.');
+    await dialog.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + NEXT_CLASS_NAME }))
       .toBeVisible();
     expect(await page.evaluate(() => history.state?.tab)).toBe('dashboard');
