@@ -757,7 +757,7 @@ test.describe('INT-01 mobile HPR: unconfigured annual profile and explicit UDA d
     await configureVault(page, 'int-01-hpr-unconfigured-discard');
     await createSyntheticClass(page, NEXT_CLASS_NAME);
     await page.getByRole('button', { name: 'Apri classe ' + NEXT_CLASS_NAME, exact: true }).click();
-    await expect(page.getByText('Panoramica Sezione:', { exact: false })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + NEXT_CLASS_NAME })).toBeVisible();
     const selectedClassId = await page.evaluate(() => history.state?.classId);
     expect(selectedClassId).toBeTruthy();
 
