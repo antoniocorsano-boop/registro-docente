@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PlanningDraftGuard } from '../../planning/planningDraftGuard';
+/** Session-only guard; drafts persist only after an explicit successful save. */
+export interface PlanningDraftGuard {
+  hasUnsavedChanges: () => boolean;
+  saveChanges: () => Promise<boolean>;
+}
 import { calculateEffectiveCapacity } from '../../planning/capacity';
 import { getFirstCycleNormativeReference } from '../../planning/normative/italianFirstCycle';
 import type {

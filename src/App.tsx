@@ -12,7 +12,7 @@ import {
   UdaRecord
 } from './types';
 import type { ArenaPlanningContextPreview, PlanningState, TeachingProfile } from './planning/types';
-import type { PlanningDraftGuard } from './planning/planningDraftGuard';
+import type { PlanningDraftGuard } from './components/planning/PlanningProfileEditor';
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import type { PlanningDraftGuard } from '../../planning/planningDraftGuard';
+import type { PlanningDraftGuard } from './PlanningProfileEditor';
 import type {
   ArenaPlanningContext,
   ArenaPlanningContextPreview,
