@@ -107,6 +107,37 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     });
   }
 
+
+  test('Storico → Modifica A → Annulla modifica → Analisi → Indietro non riapre editor A', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Prova sintetica A');
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closeSaveNotice(page);
+    await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
+    await expect(page.getByText('Prova sintetica A', { exact: true })).toBeVisible();
+
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expectNavigation(page, 'voti');
+    await page.getByRole('button', { name: 'Annulla Modifica' }).click();
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+
+    await fromDrawer(page, 'Analisi');
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('Scheda alunno dal menu → seconda selezione → Analisi → Indietro conserva lo studente', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
