@@ -77,4 +77,29 @@ describe('INT-01 bidirectional didactic continuity', () => {
     expect(view).toContain('onSaveUdas');
     expect(view).toContain('onTeachingFocusChange');
   });
+
+  test('HPR-UX-F02 shows only the active class in context; standalone filters remain available', async () => {
+    const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
+    const gantt = await Bun.file('src/components/UdaGanttView.tsx').text();
+    expect(workspace).toContain('aria-label="Classe corrente nella vista UDA"');
+    expect(workspace).toContain('{currentClassName ? (');
+    expect(gantt).toContain('aria-label="Classe corrente UDA"');
+    expect(gantt).toContain('aria-label="Classe corrente nel cronoprogramma"');
+    expect(gantt).toContain('onClick={() => handleMasterClassChange(\'all\')}');
+    expect(gantt).toContain('aria-label="Filtra classe UDA"');
+    expect(gantt).toContain('scopedUdas');
+    expect(gantt).toContain('classScopedUdaMutationAllowed');
+  });
+
+  test('HPR-UX-F01 distinguishes saved planning from optional Arena adoption', async () => {
+    const view = await Bun.file('src/components/planning/PlanningProfileView.tsx').text();
+    const editor = await Bun.file('src/components/planning/PlanningProfileEditor.tsx').text();
+    expect(view).toContain('aria-label="Stato della programmazione"');
+    expect(view).toContain('Programmazione disponibile');
+    expect(view).toContain('Programmazione da configurare');
+    expect(view).toContain('Curricolo Arena da collegare (facoltativo)');
+    expect(view).toContain("planningFrame?.status === 'ambiguous'");
+    expect(editor).not.toContain('Configura il profilo reale prima di collegare il curricolo Arena.');
+    expect(editor).toContain('profile ?');
+  });
 });

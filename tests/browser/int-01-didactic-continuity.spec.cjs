@@ -83,6 +83,10 @@ async function createPlanningProfile(page) {
   await expect(continuity(page)).toContainText('Cornice:');
   await expect(continuity(page)).toContainText('classe 2');
   await expect(continuity(page)).not.toContainText('Cornice: profilo non disponibile');
+  const planningStatus = page.getByRole('status', { name: 'Stato della programmazione' });
+  await expect(planningStatus).toContainText('Programmazione disponibile');
+  await expect(planningStatus).toContainText('Curricolo Arena da collegare');
+  await expect(page.getByText('Configura il profilo reale prima di collegare il curricolo Arena.')).toHaveCount(0);
 }
 
 async function createUda(page) {
@@ -104,6 +108,10 @@ async function createUda(page) {
   // UdaWorkspaceView is the authoritative first-level UDA surface.
   // Explicitly select the card before entering the legacy planning dossier.
   await page.getByRole('button', { name: 'Gestisci in Pianificazione', exact: true }).click();
+  const planning = page.getByRole('region', { name: 'Pianificazione UDA' });
+  await expect(planning.getByRole('button', { name: 'Tutte le Classi', exact: true })).toHaveCount(0);
+  await expect(planning.getByLabel('Classe corrente UDA')).toContainText(CLASS_NAME);
+  await expect(planning.getByLabel('Classe corrente nel cronoprogramma')).toContainText(CLASS_NAME);
   await expect(page.getByRole('heading', { name: UDA_TITLE })).toBeVisible();
   await page.getByRole('button', { name: 'Chiudi Fascicolo' }).click();
   await expect(continuity(page)).toContainText('UDA: ' + UDA_TITLE);
@@ -132,6 +140,8 @@ async function runJourney(page, { mobile }) {
   await router.getByRole('button', { name: /^Definisci la cornice/ }).click();
   await expect(continuity(page)).toContainText('Classe ' + CLASS_NAME);
   await expect(continuity(page)).toContainText('Cornice: profilo non disponibile');
+  await expect(page.getByRole('status', { name: 'Stato della programmazione' }))
+    .toContainText('Programmazione da configurare');
 
   await createPlanningProfile(page);
   await page.screenshot({
@@ -200,9 +210,9 @@ async function runJourney(page, { mobile }) {
 
   const analysis = page.getByRole('region', { name: 'Analisi UDA' });
   await expect(analysis).toBeVisible();
-  const secondaryClassFilter = analysis.getByRole('combobox', { name: 'Filtra classe UDA' });
-  await expect(secondaryClassFilter).toBeDisabled();
-  await expect(secondaryClassFilter).toHaveValue(CLASS_NAME);
+  await expect(analysis.getByRole('combobox', { name: 'Filtra classe UDA' })).toHaveCount(0);
+  await expect(analysis.getByLabel('Classe corrente nel cronoprogramma')).toContainText(CLASS_NAME);
+  await expect(analysis.getByRole('button', { name: NEXT_CLASS_NAME, exact: true })).toHaveCount(0);
   const otherRow = analysis.getByRole('row').filter({ hasText: OTHER_UDA_TITLE });
   await otherRow.getByText(OTHER_UDA_TITLE).click();
   await expect(analysis.getByRole('dialog', { name: 'Scheda UDA nel cronoprogramma' })).toBeVisible();

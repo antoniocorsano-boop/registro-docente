@@ -174,7 +174,7 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
     <form onSubmit={submit} className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-white">Programmazione didattica</h2>
-        <p className="text-sm text-slate-400 mt-1">Configura il profilo reale prima di collegare il curricolo Arena.</p>
+        <p className="text-sm text-slate-400 mt-1">{profile ? "Consulta o aggiorna il profilo già disponibile." : "Completa il profilo per definire la Programmazione della classe."}</p>
       </div>
 
       <div role="group" aria-label="Sezioni programmazione" className="grid grid-cols-1 sm:grid-cols-3 gap-2">

@@ -67,6 +67,36 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           onNavigate={onOpenUda}
         />
       )}
+      {hasClassContext && (
+        <div role="status" aria-label="Stato della programmazione" className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-200">
+          {planningFrame?.status === 'resolved' ? (
+            <>
+              <p className="font-semibold text-emerald-200">Programmazione disponibile</p>
+              <p className="mt-1">Il profilo della classe è utilizzabile e può essere aggiornato quando necessario.</p>
+              {planningFrame.arenaContext ? (
+                <p className="mt-2 text-emerald-200">Curricolo Arena collegato · approvato e vigente · sola lettura</p>
+              ) : (
+                <p className="mt-2 text-slate-300">Curricolo Arena da collegare (facoltativo). La Programmazione rimane utilizzabile.</p>
+              )}
+            </>
+          ) : planningFrame?.status === 'ambiguous' ? (
+            <>
+              <p className="font-semibold text-amber-200">Cornice della classe da chiarire</p>
+              <p className="mt-1">Sono presenti riferimenti non univoci. Scegli consapevolmente il profilo corretto, senza collegamenti automatici.</p>
+            </>
+          ) : planningFrame?.status === 'unavailable' && planningFrame.reason === 'PLANNING_PROFILE_NOT_FOUND' ? (
+            <>
+              <p className="font-semibold text-amber-200">Programmazione da configurare</p>
+              <p className="mt-1">Non è ancora disponibile un profilo coerente per questa classe.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold text-amber-200">Programmazione da verificare</p>
+              <p className="mt-1">Verifica i dati della classe prima di definire la cornice annuale.</p>
+            </>
+          )}
+        </div>
+      )}
       {profiles.length > 0 && (
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
           <label className="text-sm text-slate-300">Profilo salvato

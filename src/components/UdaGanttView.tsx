@@ -1702,6 +1702,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             <span>Classe di Lavoro:</span>
           </div>
 
+          {currentClassName ? (
+            <span aria-label="Classe corrente UDA" className="inline-flex min-h-[44px] items-center rounded-lg border border-cyan-700 bg-cyan-950/40 px-3 text-sm font-semibold text-cyan-100">
+              {currentClassName}
+            </span>
+          ) : (
           <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button
               type="button"
@@ -1732,6 +1737,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
               </button>
             ))}
           </div>
+          )}
 
           {/* Conflict status indicator */}
           {allConflicts.length > 0 ? (
@@ -2025,6 +2031,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   </button>
                 </div>
 
+                {currentClassName ? (
+                  <div aria-label="Classe corrente nel cronoprogramma" className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-100">
+                    <Filter className="h-3 w-3 text-cyan-400" />
+                    <span>Classe {currentClassName}</span>
+                  </div>
+                ) : (
                 <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800">
                   <Filter className="w-3 h-3 text-slate-400" />
                   <select
@@ -2042,6 +2054,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                     ))}
                   </select>
                 </div>
+                )}
 
                 <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800">
                   <select

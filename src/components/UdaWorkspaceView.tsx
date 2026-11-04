@@ -291,6 +291,12 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
       {activeView === 'uda' && (
         <section className="rounded-2xl border border-slate-800 bg-slate-950/35 p-4 md:p-5 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            {currentClassName ? (
+              <div aria-label="Classe corrente nella vista UDA" className="flex flex-col gap-1 text-sm text-slate-300 sm:min-w-64">
+                <span>Classe di lavoro</span>
+                <span className="flex min-h-[44px] items-center rounded-lg border border-cyan-800 bg-cyan-950/30 px-3 font-semibold text-cyan-100">{currentClassName}</span>
+              </div>
+            ) : (
             <label className="text-sm text-slate-300 sm:min-w-64">
               Classe di lavoro
               <select
@@ -303,7 +309,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                 {classes.filter(item => !currentClassName || item.name === currentClassName)
                   .map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
               </select>
-            </label>
+            </label>            )}
+
             <button type="button" aria-label="Nuova UDA" onClick={openCreate} className="min-h-[44px] rounded-xl bg-cyan-400 px-5 py-2 font-semibold text-slate-950">+ Nuova UDA</button>
           </div>
 
