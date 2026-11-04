@@ -748,3 +748,48 @@ test.describe('INT-01 mobile: legacy browser without Navigation API index', () =
     await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-unknown-coordinate');
   });
 });
+
+test.describe('INT-01 mobile HPR: unconfigured annual profile and explicit UDA departure', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('discard from class planning opens UDA, then one Back returns to class planning', async ({ page }) => {
+    // Replicate the Android Human Review path without a saved annual profile.
+    await configureVault(page, 'int-01-hpr-unconfigured-discard');
+    await createSyntheticClass(page, NEXT_CLASS_NAME);
+    await page.getByRole('button', { name: 'Apri classe ' + NEXT_CLASS_NAME, exact: true }).click();
+    await expect(page.getByText('Panoramica Sezione:', { exact: false })).toBeVisible();
+    const selectedClassId = await page.evaluate(() => history.state?.classId);
+    expect(selectedClassId).toBeTruthy();
+
+    await fromDrawer(page, 'Programmazione didattica');
+    const planningUrl = page.url();
+    await expect(page).toHaveURL(/tab=programmazione/);
+    const frame = page.getByRole('region', { name: 'Programmazione corrente' });
+    await expect(frame).toContainText('Classe ' + NEXT_CLASS_NAME);
+    await expect(frame).toContainText('Programmazione da configurare');
+    await expect(page.getByRole('group', { name: 'Sezioni programmazione' })).toBeVisible();
+
+    const profile = page.getByRole('region', { name: 'Profilo programmazione' });
+    const cohort = profile.getByRole('textbox', { name: 'Coorte' });
+    await expect(cohort).toHaveValue('2026-grade-3');
+    await cohort.fill('2026-grade-3-prova');
+
+    await frame.getByRole('button', { name: 'Apri UDA', exact: true }).click();
+    const confirm = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+    await expect(confirm).toBeVisible();
+    await expect(page).toHaveURL(planningUrl);
+    await confirm.getByRole('button', { name: 'Continua senza salvare', exact: true }).click();
+
+    // The previously requested UDA destination must not silently become the class Dashboard.
+    await expect(confirm).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/tab=uda-gantt/);
+    expect(await page.evaluate(() => history.state?.classId)).toBe(selectedClassId);
+    expect(await page.evaluate(() => history.state?.tab)).toBe('uda-gantt');
+
+    await page.goBack();
+    await expect(page).toHaveURL(planningUrl);
+    await expect(frame).toContainText('Classe ' + NEXT_CLASS_NAME);
+    await expect(profile.getByRole('textbox', { name: 'Coorte' })).toHaveValue('2026-grade-3');
+  });
+});
