@@ -640,10 +640,13 @@
         "src/components/useAdaptiveMobileActionVisibility.ts",
         "src/security/mobileActions01Contract.test.ts",
         "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
-        ".github/workflows/browser-qualification.yml"
+        ".github/workflows/browser-qualification.yml",
+        "src/components/mobileActionScrollPolicy.ts",
+        "src/security/mobileActions01ScrollPolicy.test.ts"
       ],
       "tests": [
-        "src/security/mobileActions01Contract.test.ts"
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/mobileActions01ScrollPolicy.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs"
