@@ -15,8 +15,11 @@ function between(first: string, after: string): string {
 
 describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
   test('Storico uses the history-aware transition for new or edited evaluations', () => {
-    expect(between('const handleEditBatch', '// Delete batch'))
-      .toContain("handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId }, returnTab: 'storico' })");
+    const editorRoute = between('const handleEditBatch', '// Delete batch');
+    expect(editorRoute).toContain("handleNavigateTab('voti', {");
+    expect(editorRoute).toContain("specialistTarget: { kind: 'evaluation', batchId }");
+    expect(editorRoute).toContain("returnTab: 'storico'");
+    expect(editorRoute).toContain("window.history.state?.tab === 'storico'");
     expect(between('onNewEvaluation={() => {', '{/* TAB 8:'))
       .toContain("handleNavigateTab('voti', { specialistTarget: null })");
   });
@@ -61,6 +64,15 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(handler).toContain("specialist?.kind === 'evaluation'");
     expect(handler).toContain('forgetSpecialistTarget(');
     expect(browser).toContain('Modifica A → elimina A → Indietro non riapre la valutazione eliminata');
+  });
+
+  test('save-to-Storico keeps URL/history synchronized before a later edit', () => {
+    const save = between('const handleSaveEvaluations =', '// Save behavior notes');
+    expect(save).toContain("handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null })");
+    expect(save).toContain('navigationVersionRef.current === navigationVersionAtSave');
+    expect(save).toContain('currentClassIdRef.current === classId');
+    expect(browser).toContain("A successful save must update both React and the browser entry.");
+    expect(browser).toContain("await expectNavigation(page, 'storico')");
   });
 
   test('Annulla Modifica discards only volatile changes and returns to Storico, never a blank new form', () => {
