@@ -122,6 +122,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </button>
 
+          {/* Real layout slot for the secure Vault actions. No floating overlay
+              over teacher forms or save buttons on mobile. SecureRegistroRoot
+              remains the owner of lock, timeout and local password state. */}
+          <div
+            id="registro-vault-header-actions"
+            role="group"
+            aria-label="Comandi di sicurezza del Registro"
+            className="md:hidden relative flex shrink-0 items-center gap-1"
+          />
+
           {/* Quick Class Switcher Dropdown */}
           {currentClass && classes.length > 1 && onSelectClass ? (
             <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-xs">
