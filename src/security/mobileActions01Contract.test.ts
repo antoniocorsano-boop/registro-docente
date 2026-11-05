@@ -10,7 +10,7 @@ const workflow = readFileSync('.github/workflows/browser-qualification.yml', 'ut
 
 describe('MOBILE-ACTIONS-01 / A — Copilota mobile contestuale', () => {
   test('a single compact and accessible mobile trigger preserves the existing Copilota entry', () => {
-    expect(deck).toContain('useAdaptiveMobileActionVisibility()');
+    expect(deck).toContain('useAdaptiveMobileActionVisibility(surfaceMode)');
     expect(deck).toContain('data-testid="library-copilot-trigger"');
     expect(deck).toContain('aria-label="Apri Copilota"');
     expect(deck).toContain("onSurfaceModeChange('home')");
@@ -29,6 +29,10 @@ describe('MOBILE-ACTIONS-01 / A — Copilota mobile contestuale', () => {
     expect(hook).toContain('setScrollingDown(true)');
     expect(hook).toContain('setScrollingDown(false)');
     expect(hook).toContain('setEditingField');
+    expect(hook).toContain('advanceMobileScroll');
+    expect(hook).toContain('isCopilotSurface(event.target)');
+    expect(hook).toContain("if (surfaceMode === 'closed')");
+    expect(browser).toContain("data-test-only");
     expect(hook).not.toContain('setTimeout(');
     expect(hook).not.toContain('localStorage');
   });
