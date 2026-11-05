@@ -72,6 +72,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [confirmHomeOpen, setConfirmHomeOpen] = useState(false);
   const hasMobileSecurity = Boolean(headerSecurity);
   const drawerPreviouslyOpen = useRef(false);
+  const confirmationPreviouslyOpen = useRef(false);
   const confirmationCancelRef = useRef<HTMLButtonElement>(null);
 
   // Focus is moved into the drawer and returned to the brand when closing.
@@ -87,8 +88,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [hasMobileSecurity, isDrawerOpen, confirmHomeOpen]);
 
   useEffect(() => {
-    if (confirmHomeOpen) confirmationCancelRef.current?.focus();
-  }, [confirmHomeOpen]);
+    if (confirmHomeOpen) {
+      confirmationCancelRef.current?.focus();
+    } else if (confirmationPreviouslyOpen.current && hasMobileSecurity) {
+      document.querySelector<HTMLButtonElement>('[data-testid="header01-brand-navigation"]')?.focus();
+    }
+    confirmationPreviouslyOpen.current = confirmHomeOpen;
+  }, [confirmHomeOpen, hasMobileSecurity]);
 
   // The logo NEVER resets professional state; the explicit Oggi command
   // requests confirmation before invoking the existing App owner.
