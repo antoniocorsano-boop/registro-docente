@@ -108,33 +108,51 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
   }
 
 
-  test('Storico → Modifica A → Annulla modifica → Analisi → Indietro non riapre editor A', async ({ page }) => {
+  test('Storico → Modifica A → Annulla modifica → Storico senza salvare né riaprire editor A', async ({ page }) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await prepareSyntheticClass(page);
     await fromDrawer(page, 'Storico prove');
 
     await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
-    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
     await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Prova sintetica A');
     await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
     await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
     await closeSaveNotice(page);
-    await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
+    const storico = page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME });
+    await expect(storico).toBeVisible();
     await expect(page.getByText('Prova sintetica A', { exact: true })).toBeVisible();
 
     await page.locator('button[title="Modifica valutazione"]').first().click();
     await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
     await expectNavigation(page, 'voti');
-    await page.getByRole('button', { name: 'Annulla Modifica' }).click();
-    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. 7.5').first()).toHaveValue('8');
 
+    // These are volatile changes, intentionally never submitted.
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Modifica temporanea non salvata');
+    await page.getByPlaceholder('es. 7.5').first().fill('6');
+    await page.getByRole('button', { name: 'Annulla Modifica' }).click();
+
+    await expect(storico).toBeVisible();
+    await expectNavigation(page, 'storico');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toHaveCount(0);
+    await expect(page.getByText('Prova sintetica A', { exact: true })).toBeVisible();
+    await expect(page.getByText('Modifica temporanea non salvata', { exact: true })).toHaveCount(0);
+
+    // The professional record must remain unchanged after cancellation.
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica A');
+    await expect(page.getByPlaceholder('es. 7.5').first()).toHaveValue('8');
+    await page.getByRole('button', { name: 'Annulla Modifica' }).click();
+    await expect(storico).toBeVisible();
+    await expectNavigation(page, 'storico');
+
+    // Back after a later visit must not resurrect the cancelled editor or blank new form.
     await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
     await expectNavigation(page, 'analytics');
     await page.goBack({ waitUntil: 'domcontentloaded' });
-    await expectNavigation(page, 'voti');
-    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toHaveCount(0);
+    await expectNavigation(page, 'storico');
+    await expect(storico).toBeVisible();
     expect(errors).toEqual([]);
   });
 
