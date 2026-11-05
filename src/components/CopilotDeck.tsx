@@ -148,7 +148,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
   showClosedTrigger = true
 }) => {
   const isOpen = surfaceMode === 'home';
-  const { hiddenOnMobile } = useAdaptiveMobileActionVisibility();
+  const { hiddenOnMobile } = useAdaptiveMobileActionVisibility(surfaceMode);
   const [previewBinding, setPreviewBinding] = useState<{ id: string; materialFingerprint: string } | null>(null);
   const [showOverflow, setShowOverflow] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
