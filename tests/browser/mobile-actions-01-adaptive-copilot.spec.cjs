@@ -95,6 +95,63 @@ for (const width of [390, 320]) {
   });
 }
 
+async function expectNoOverlap(a, b) {
+  const first = await a.boundingBox();
+  const second = await b.boundingBox();
+  expect(first).not.toBeNull();
+  expect(second).not.toBeNull();
+  const overlapWidth = Math.max(0, Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x));
+  const overlapHeight = Math.max(0, Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y));
+  expect(overlapWidth * overlapHeight).toBe(0);
+}
+
+for (const width of [390, 320]) {
+  test(`MOBILE-ACTIONS-01/B professional save stays unobstructed and Vault remains directly accessible at ${width}px`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 700 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepare(page);
+
+    const navigation = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Tabellone', exact: true }) });
+    await navigation.getByRole('button', { name: 'Valutazioni', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+
+    const save = page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true });
+    const lock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
+    const settings = page.getByRole('button', { name: 'Imposta blocco automatico', exact: true });
+    const trigger = page.getByTestId('library-copilot-trigger');
+    await expect(trigger).toBeHidden();
+    await expect(lock).toBeVisible();
+    await expect(settings).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect(save).toBeVisible();
+    await expectNoOverlap(save, lock);
+    await expectNoOverlap(save, settings);
+    await expectNoOverlap(save, navigation);
+
+    const fit = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth
+    }));
+    expect(fit.scrollWidth).toBeLessThanOrEqual(fit.innerWidth + 1);
+
+    await settings.click();
+    await expect(page.getByRole('combobox', { name: 'Blocco automatico Registro' })).toBeVisible();
+    await expect(lock).toBeVisible();
+    await settings.click();
+
+    // Focus in the editing field does not resurrect a floating trigger over Save.
+    const title = page.getByPlaceholder('es. Verifica su Fonti Rinnovabili');
+    await title.focus();
+    await expect(trigger).toBeHidden();
+    await title.blur();
+    await expect(trigger).toBeHidden();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
 test('MOBILE-ACTIONS-01 desktop retains labelled Copilota trigger and direct security action', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
