@@ -40,7 +40,10 @@ describe('PERSIST-01 navigation remains independent from in-flight app-data pers
     expect(evaluations).toContain('const recordSessionAtSave = recordSessionRef.current;');
     expect(evaluations).toContain("const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);");
     expect(evaluations).toContain('if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave)');
-    expect(evaluations).toContain("setActiveTab('storico')");
+    // Return to Storico using the same history-aware navigator as user actions.
+    // Never let a delayed post-save redirect override a newer class selection.
+    expect(evaluations).toContain("handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null })");
+    expect(evaluations).toContain("currentClassIdRef.current === classId");
 
     const behaviors = sectionBetween(source, '// Save behavior notes', '// Edit batch');
     expect(behaviors).toContain('const navigationVersionAtSave = navigationVersionRef.current;');

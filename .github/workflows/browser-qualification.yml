@@ -70,6 +70,7 @@ jobs:
           cp tests/browser/flow-02-conduci.spec.cjs .browser-tools/flow-02-conduci.spec.cjs
           cp tests/browser/flow-03-registra.spec.cjs .browser-tools/flow-03-registra.spec.cjs
           cp tests/browser/flow-04-review-session.spec.cjs .browser-tools/flow-04-review-session.spec.cjs
+          cp tests/browser/reg-nav-01-specialist-return.spec.cjs .browser-tools/reg-nav-01-specialist-return.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
           cp tests/browser/library-use-surface-helpers.cjs .browser-tools/library-use-surface-helpers.cjs
@@ -216,6 +217,20 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/flow-04-test-results
+
+      - name: Run REG-NAV-01 specialist return Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            reg-nav-01-specialist-return.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/reg-nav-01-results
 
       - name: Run LSM-01C consumer Chromium qualification
         shell: bash

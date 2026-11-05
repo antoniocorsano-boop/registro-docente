@@ -102,12 +102,14 @@
       "impactPaths": [
         "src/persistence/",
         "src/security/secureAppStorage.ts",
-        "src/App.tsx"
+        "src/App.tsx",
+        "src/security/durableAppMutationIntegrity.test.ts"
       ],
       "tests": [
         "src/security/persist01hCoordinatorContract.test.ts",
         "src/security/persist01hStorageContract.test.ts",
-        "src/security/durableMutationCoordinator.test.ts"
+        "src/security/durableMutationCoordinator.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
@@ -628,6 +630,41 @@
       ],
       "browserSmoke": [
         "tests/browser/flow-04-review-session.spec.cjs"
+      ]
+    },
+    {
+      "id": "REG-NAV-01-I01",
+      "owner": "REG-NAV-01",
+      "statement": "Specialist evaluation and student-report entry creates one coherent browser-history step; Back restores the explicit source and current authorized class without changing professional data.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/security/regNav01SpecialistRoutingContract.test.ts",
+        "tests/browser/reg-nav-01-specialist-return.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/regNav01SpecialistRoutingContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/reg-nav-01-specialist-return.spec.cjs"
+      ]
+    },
+    {
+      "id": "REG-NAV-01-I02",
+      "owner": "REG-NAV-01",
+      "statement": "Back and Forward recover the exact same-class evaluation or student-report target by an opaque per-entry token, with professional selection IDs retained only in the unlocked App session, not in URL or history state.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/navigation/",
+        "src/security/regNav01SpecialistRoutingContract.test.ts",
+        "tests/browser/reg-nav-01-specialist-return.spec.cjs"
+      ],
+      "tests": [
+        "src/navigation/specialistTargetMemory.test.ts",
+        "src/security/regNav01SpecialistRoutingContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/reg-nav-01-specialist-return.spec.cjs"
       ]
     }
   ]

@@ -1,0 +1,336 @@
+const { test, expect } = require('@playwright/test');
+
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
+const CLASS_NAME = 'Classe Sintetica REG-NAV-01';
+const STUDENT_NAME = 'Rossi Mario';
+const OTHER_STUDENT_NAME = 'Bianchi Anna';
+
+test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, trace: 'retain-on-failure' });
+test.setTimeout(120000);
+
+async function closeSaveNotice(page) {
+  const heading = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  if (await heading.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  }
+}
+
+async function fromDrawer(page, label) {
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const menu = page.getByRole('complementary');
+  await menu.getByRole('button', { name: label, exact: true }).click();
+}
+
+async function prepareSyntheticClass(page) {
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('#vault-password').fill('reg-nav-01-test-only');
+  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
+
+  page.once('dialog', dialog => dialog.accept(CLASS_NAME));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: ' + CLASS_NAME })).toBeVisible();
+  await closeSaveNotice(page);
+
+  const shield = page.locator('button[title^="Privacy Shield"]');
+  await expect(shield).toBeVisible();
+  await shield.click();
+
+  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(STUDENT_NAME);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  await closeSaveNotice(page);
+  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(OTHER_STUDENT_NAME);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  await expect(page.getByText(OTHER_STUDENT_NAME, { exact: true })).toBeVisible();
+  await closeSaveNotice(page);
+
+  await fromDrawer(page, 'Oggi');
+  await page.getByRole('button', { name: 'Apri classe ' + CLASS_NAME, exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Panoramica Sezione: ' + CLASS_NAME })).toBeVisible();
+}
+
+async function expectNavigation(page, tab) {
+  await expect(page).toHaveURL(new RegExp('[?&]tab=' + tab + '(&|$)'));
+  await expect.poll(() => page.evaluate(() => history.state?.tab)).toBe(tab);
+  const activeClass = await page.evaluate(() => history.state?.classId);
+  expect(activeClass).toBeTruthy();
+}
+
+test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () => {
+  test('Storico → Nuova valutazione → Indietro ripristina Storico', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+    await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
+    await expectNavigation(page, 'storico');
+
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expectNavigation(page, 'voti'); // RED: cambia solo lo stato React
+
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
+    await expectNavigation(page, 'storico');
+    expect(errors).toEqual([]);
+  });
+
+  for (const source of ['Analisi', 'Tabellone']) {
+    test(source + ' → Scheda alunno → Indietro preserva la classe e la superficie originale', async ({ page }) => {
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await prepareSyntheticClass(page);
+      await page.locator('main').getByRole('button', { name: source, exact: true }).click();
+      const sourceTab = source === 'Analisi' ? 'analytics' : 'tabellone';
+      await expectNavigation(page, sourceTab);
+
+      if (source === 'Analisi') {
+        await page.getByTestId('mobile-analytics-student-detail').locator('summary').click();
+        await page.getByTestId('mobile-analytics-student-detail')
+          .getByRole('button', { name: /Rossi Mario/ }).click();
+      } else {
+        await page.locator('main').getByRole('button', { name: /Rossi Mario/ }).first().click();
+      }
+      await expect(page.getByRole('heading', { name: /Scheda Alunno & Profilo delle Competenze/ })).toBeVisible();
+      await expectNavigation(page, 'report'); // RED: URL/history restano sulla superficie di origine
+
+      await page.goBack({ waitUntil: 'domcontentloaded' });
+      if (source === 'Analisi') {
+        await expect(page.getByRole('heading', { name: /Analisi medie/ })).toBeVisible();
+      } else {
+        await expect(page.getByRole('heading', { name: 'Tabellone Classe: ' + CLASS_NAME })).toBeVisible();
+      }
+      await expectNavigation(page, sourceTab);
+      expect(errors).toEqual([]);
+    });
+  }
+
+
+  test('Storico → Modifica A → Annulla modifica → Storico senza salvare né riaprire editor A', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Prova sintetica A');
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closeSaveNotice(page);
+    const storico = page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME });
+    await expect(storico).toBeVisible();
+    // A successful save must update both React and the browser entry.
+    // Otherwise a subsequent edit cancellation cannot restore the real origin.
+    await expectNavigation(page, 'storico');
+    await expect(page.getByText('Prova sintetica A', { exact: true })).toBeVisible();
+
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expectNavigation(page, 'voti');
+    await expect(page.getByPlaceholder('es. 7.5').first()).toHaveValue('8');
+
+    // These are volatile changes, intentionally never submitted.
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Modifica temporanea non salvata');
+    await page.getByPlaceholder('es. 7.5').first().fill('6');
+    await page.getByRole('button', { name: 'Annulla Modifica' }).click();
+
+    await expect(storico).toBeVisible();
+    await expectNavigation(page, 'storico');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toHaveCount(0);
+    await expect(page.getByText('Prova sintetica A', { exact: true })).toBeVisible();
+    await expect(page.getByText('Modifica temporanea non salvata', { exact: true })).toHaveCount(0);
+
+    // The professional record must remain unchanged after cancellation.
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica A');
+    await expect(page.getByPlaceholder('es. 7.5').first()).toHaveValue('8');
+    await page.getByRole('button', { name: 'Annulla Modifica' }).click();
+    await expect(storico).toBeVisible();
+    await expectNavigation(page, 'storico');
+
+    // Back after a later visit must not resurrect the cancelled editor or blank new form.
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'storico');
+    await expect(storico).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('Modifica A → elimina A → Indietro non riapre la valutazione eliminata', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Valutazione sintetica da eliminare');
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closeSaveNotice(page);
+    await expect(page.getByText('Valutazione sintetica da eliminare', { exact: true })).toBeVisible();
+
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expectNavigation(page, 'voti');
+
+    await fromDrawer(page, 'Storico prove');
+    await expectNavigation(page, 'storico');
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('button[title="Elimina prova"]').first().click();
+    await expect(page.getByText('Valutazione sintetica da eliminare', { exact: true })).toHaveCount(0);
+
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toHaveCount(0);
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'storico');
+    await expect(page.getByText('Valutazione sintetica da eliminare', { exact: true })).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('Valutazioni da menu mantiene la modifica già visualizzata dopo Back', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Storico prove');
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Prova sintetica NAV-S1-A');
+    await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
+    await page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true }).click();
+    await closeSaveNotice(page);
+    await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
+
+    await page.locator('button[title="Modifica valutazione"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+    await expectNavigation(page, 'voti');
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await page.locator('nav').getByRole('button', { name: 'Valutazioni', exact: true }).click();
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+
+    const entry = await page.evaluate(() => history.state);
+    expect(entry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
+    const firstTitle = await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').inputValue();
+    expect(JSON.stringify(entry)).not.toContain(firstTitle);
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Modifica Valutazione Esistente' })).toBeVisible();
+    await expect(page.getByPlaceholder('es. Verifica su Fonti Rinnovabili')).toHaveValue('Prova sintetica NAV-S1-A');
+
+    // "Nuova valutazione" is an explicit fresh editor, never an inherited edit A.
+    await fromDrawer(page, 'Storico prove');
+    await page.getByRole('button', { name: /Nuova Valutazione/ }).first().click();
+    await expectNavigation(page, 'voti');
+    await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => history.state?.__registroSpecialistTargetEntry)).toBeUndefined();
+    expect(errors).toEqual([]);
+  });
+
+  test('Scheda alunno dal menu → seconda selezione → Analisi → Indietro conserva lo studente', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await fromDrawer(page, 'Scheda alunno');
+    await expect(page.getByRole('heading', { name: /Scheda Alunno & Profilo delle Competenze/ })).toBeVisible();
+    await expectNavigation(page, 'report');
+
+    const selector = page.locator('main select').first();
+    await selector.selectOption({ label: OTHER_STUDENT_NAME });
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    const selectedId = await selector.locator('option:checked').getAttribute('value');
+    expect(selectedId).toBeTruthy();
+
+    // Browser history carries an opaque token, never the student identifier.
+    const entry = await page.evaluate(() => history.state);
+    expect(entry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
+    expect(JSON.stringify(entry)).not.toContain(selectedId);
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    expect(errors).toEqual([]);
+  });
+
+
+  test('Scheda da menu conserva lo studente già mostrato senza altra selezione', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await prepareSyntheticClass(page);
+    await page.locator('main').getByRole('button', { name: 'Analisi', exact: true }).click();
+    const detail = page.getByTestId('mobile-analytics-student-detail');
+    await detail.locator('summary').click();
+    await detail.getByRole('button', { name: /Bianchi Anna/ }).click();
+    const selector = page.locator('main select').first();
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await fromDrawer(page, 'Scheda alunno');
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    // The newly opened menu route must capture the target even without another select change.
+    const selectedId = await selector.locator('option:checked').getAttribute('value');
+    expect(selectedId).toBeTruthy();
+    const historyEntry = await page.evaluate(() => history.state);
+    expect(historyEntry.__registroSpecialistTargetEntry).toEqual(expect.any(String));
+    expect(JSON.stringify(historyEntry)).not.toContain(selectedId);
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    expect(errors).toEqual([]);
+  });
+
+  test('Indietro e Avanti ripristinano lo studente corretto fra più schede aperte', async ({ page }) => {
+    await prepareSyntheticClass(page);
+    await page.locator('main').getByRole('button', { name: 'Analisi', exact: true }).click();
+    const detail = page.getByTestId('mobile-analytics-student-detail');
+    await detail.locator('summary').click();
+    await detail.getByRole('button', { name: /Rossi Mario/ }).click();
+    const reportHeading = page.getByRole('heading', { name: /Scheda Alunno & Profilo delle Competenze/ });
+    await expect(reportHeading).toBeVisible();
+    const selector = page.locator('main select').first();
+    await expect(selector.locator('option:checked')).toHaveText(STUDENT_NAME);
+    await expectNavigation(page, 'report');
+
+    await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expectNavigation(page, 'analytics');
+    await detail.locator('summary').click();
+    await detail.getByRole('button', { name: /Bianchi Anna/ }).click();
+    await expect(reportHeading).toBeVisible();
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+    await expectNavigation(page, 'report');
+    // Only an opaque entry token belongs to history; selection IDs remain in vault-session memory.
+    const selectedId = await selector.locator('option:checked').getAttribute('value');
+    const stateText = await page.evaluate(() => JSON.stringify(history.state));
+    expect(stateText).not.toContain(OTHER_STUDENT_NAME);
+    expect(selectedId).toBeTruthy();
+    expect(stateText).not.toContain(selectedId);
+
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'analytics');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(STUDENT_NAME); // RED: stato globale ancora su B
+
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'analytics');
+    await page.goForward({ waitUntil: 'domcontentloaded' });
+    await expectNavigation(page, 'report');
+    await expect(selector.locator('option:checked')).toHaveText(OTHER_STUDENT_NAME);
+  });
+
+});

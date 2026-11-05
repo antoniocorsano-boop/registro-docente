@@ -153,6 +153,15 @@ import {
 import { buildRegistroSemanticMemorySnapshot } from './semanticMemory/projections';
 import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 
+import {
+  SPECIALIST_TARGET_HISTORY_KEY,
+  recallSpecialistTarget,
+  forgetSpecialistTarget,
+  rememberSpecialistTarget,
+  updateStudentSpecialistTarget,
+  type SpecialistTarget,
+  type SpecialistTargetMemory
+} from './navigation/specialistTargetMemory';
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
@@ -311,6 +320,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
+  // Only an opaque history token leaves this unlocked-session memory; IDs never enter history.state.
+  const specialistTargetMemoryRef = useRef<SpecialistTargetMemory>(new Map());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
@@ -490,9 +501,45 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean } = {}
+    options: {
+      preserveRecordSession?: boolean;
+      specialistTarget?: SpecialistTarget | null;
+      returnTab?: ActiveTab;
+      navigationMode?: 'push' | 'replace';
+    } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
+    const classId = currentClassIdRef.current;
+    const classSnapshot = appDataRef.current.classes.find(c => c.id === classId);
+    const currentClassStudents = classSnapshot?.students ?? [];
+    const currentClassGrades = classSnapshot?.grades ?? [];
+    // The menu can open the report with a student already selected. Capture the
+    // class-authorized target on entry, even when the selector is not changed.
+    const requestedStudentId = options.specialistTarget?.kind === 'student'
+      ? options.specialistTarget.studentId
+      : selectedStudentForReport;
+    const visibleStudentId = tab === 'report'
+      ? (currentClassStudents.some(s => s.id === requestedStudentId)
+          ? requestedStudentId
+          : currentClassStudents[0]?.id ?? null)
+      : null;
+    // A menu route snapshots the batch already being edited. An explicit request
+    // for a new evaluation (or a recording flow) must not inherit the old batch.
+    const requestedBatchId = options.specialistTarget === null || options.preserveRecordSession
+      ? null
+      : options.specialistTarget?.kind === 'evaluation'
+        ? options.specialistTarget.batchId
+        : editingBatchId;
+    const visibleBatchId = tab === 'voti' && requestedBatchId
+      && currentClassGrades.some(g => g.batchId === requestedBatchId)
+      ? requestedBatchId : null;
+    const specialistTarget: SpecialistTarget | undefined = tab === 'report'
+      ? (visibleStudentId ? { kind: 'student', studentId: visibleStudentId } : undefined)
+      : tab === 'voti'
+        ? (visibleBatchId ? { kind: 'evaluation', batchId: visibleBatchId } : undefined)
+        : (options.specialistTarget ?? undefined);
+    if (tab === 'voti') setEditingBatchId(visibleBatchId);
+    if (tab === 'report') setSelectedStudentForReport(visibleStudentId);
     setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
@@ -504,16 +551,35 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setTodayAction(null);
     }
 
-    const classId = currentClassIdRef.current;
+    let specialistToken: string | null = null;
     try {
-      const state = { classId, tab };
+      if (specialistTarget && classId) {
+        const candidate = crypto.randomUUID();
+        if (rememberSpecialistTarget(
+          specialistTargetMemoryRef.current, candidate, classId, tab, specialistTarget
+        )) specialistToken = candidate;
+      }
+      const state = {
+        classId,
+        tab,
+        ...(options.returnTab ? { returnTab: options.returnTab } : {}),
+        ...(specialistToken ? { [SPECIALIST_TARGET_HISTORY_KEY]: specialistToken } : {})
+      };
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
-      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
-    } catch (e) {}
-  }, [publishRecordSession, setActiveTab]);
+      if (options.navigationMode === 'replace') {
+        history.replaceState(state, '', query ? `?${query}` : window.location.pathname);
+      } else {
+        history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+      }
+    } catch (e) {
+      // The browser can refuse an entry; no professional data is written.
+      // A failed push never authorizes reuse of the transient specialist token.
+      if (specialistToken) specialistTargetMemoryRef.current.delete(specialistToken);
+    }
+  }, [editingBatchId, publishRecordSession, selectedStudentForReport, setActiveTab]);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1403,10 +1469,36 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const nextCurrentClassId = e.state?.classId || null;
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
+      const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
+      const specialist = recallSpecialistTarget(
+        specialistTargetMemoryRef.current,
+        e.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+        nextCurrentClassId,
+        nextTab
+      );
+      // An entry can outlive a deleted batch or student. Never resurrect an
+      // editor from an opaque token whose authorized target no longer exists.
+      const currentClass = appDataRef.current.classes.find(c => c.id === nextCurrentClassId);
+      const available = specialist?.kind === 'evaluation'
+        ? Boolean(currentClass?.grades.some(g => g.batchId === specialist.batchId))
+        : specialist?.kind === 'student'
+          ? Boolean(currentClass?.students.some(s => s.id === specialist.studentId))
+          : true;
+      if (specialist && !available) {
+        forgetSpecialistTarget(
+          specialistTargetMemoryRef.current,
+          e.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+          nextCurrentClassId,
+          nextTab
+        );
+      }
+      const restoredSpecialist = available ? specialist : null;
+      setEditingBatchId(restoredSpecialist?.kind === 'evaluation' ? restoredSpecialist.batchId : null);
+      setSelectedStudentForReport(restoredSpecialist?.kind === 'student' ? restoredSpecialist.studentId : null);
       setTodayAction(null);
       publishReviewSession(null);
       publishRecordSession(null);
-      setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
+      setActiveTab(nextTab);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -1770,7 +1862,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
         if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
-          setActiveTab('storico');
+          // Route only within the authorized class and only after the save was committed.
+          // Replacing, rather than pushing, completes the editor history entry.
+          if (currentClassIdRef.current === classId) {
+            handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null });
+          }
         }
       }
     }).then(() => undefined);
@@ -1813,8 +1909,48 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Edit batch
   const handleEditBatch = (batchId: string) => {
     setEditingBatchId(batchId);
-    setActiveTab('voti');
+    const fromStorico = window.history.state?.tab === 'storico'
+      && window.history.state?.classId === currentClassIdRef.current;
+    handleNavigateTab('voti', {
+      specialistTarget: { kind: 'evaluation', batchId },
+      ...(fromStorico ? { returnTab: 'storico' } : {})
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // "Annulla Modifica" is an exit from the editor, not an instruction to
+  // start another evaluation. Restore the originating Storico whenever it is
+  // a verified immediately preceding app entry.
+  const handleCancelEvaluationEdit = () => {
+    const classId = currentClassIdRef.current;
+    const entry = window.history.state;
+    forgetSpecialistTarget(
+      specialistTargetMemoryRef.current,
+      entry?.[SPECIALIST_TARGET_HISTORY_KEY],
+      classId,
+      'voti'
+    );
+    setEditingBatchId(null);
+
+    if (classId && entry?.tab === 'voti' && entry?.classId === classId
+      && entry?.returnTab === 'storico' && window.history.length > 1) {
+      try {
+        // Replace the cancelled editor before POP, so Forward also cannot
+        // resurrect the cancelled editing surface or show a blank new form.
+        const query = new URLSearchParams({ class: classId, tab: 'storico' });
+        history.replaceState({ classId, tab: 'storico' }, '', `?${query.toString()}`);
+        setActiveTab('storico');
+        history.back();
+        return;
+      } catch {
+        // If the browser refuses history traversal, use a safe replacement.
+      }
+    }
+
+    // A menu-initiated editor may not have Storico immediately behind it.
+    // Replace its current entry rather than pushing a misleading blank editor.
+    handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   // Delete batch
@@ -2246,7 +2382,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
-            onCancelEdit={() => setEditingBatchId(null)}
+            onCancelEdit={handleCancelEvaluationEdit}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
@@ -2270,7 +2406,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             onOpenStudentReport={(studentId) => {
               setSelectedStudentForReport(studentId);
-              setActiveTab('report');
+              handleNavigateTab('report', { specialistTarget: { kind: 'student', studentId } });
             }}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
@@ -2282,7 +2418,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onOpenStudentReport={(studentId) => {
               setSelectedStudentForReport(studentId);
-              setActiveTab('report');
+              handleNavigateTab('report', { specialistTarget: { kind: 'student', studentId } });
             }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
@@ -2297,7 +2433,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteBatch={handleDeleteBatch}
             onNewEvaluation={() => {
               setEditingBatchId(null);
-              setActiveTab('voti');
+              handleNavigateTab('voti', { specialistTarget: null });
             }}
           />
         )}
@@ -2307,7 +2443,32 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <StudentReportView
             currentClass={currentClass}
             selectedStudentId={selectedStudentForReport}
-            onSelectStudent={setSelectedStudentForReport}
+            onSelectStudent={(studentId) => {
+              setSelectedStudentForReport(studentId);
+              const classId = currentClassIdRef.current;
+              const entry = window.history.state;
+              // An item chosen from the navigation menu has no specialist token yet.
+              // Attach one to this exact entry; never place the student ID in history or URL.
+              if (
+                !classId || currentClass?.id !== classId || activeTab !== 'report'
+                || entry?.classId !== classId || entry?.tab !== 'report'
+              ) return;
+              const memory = specialistTargetMemoryRef.current;
+              if (updateStudentSpecialistTarget(
+                memory, entry[SPECIALIST_TARGET_HISTORY_KEY], classId, studentId
+              )) return;
+              const token = crypto.randomUUID();
+              if (!rememberSpecialistTarget(memory, token, classId, 'report', {
+                kind: 'student', studentId
+              })) return;
+              try {
+                window.history.replaceState({
+                  ...entry, [SPECIALIST_TARGET_HISTORY_KEY]: token
+                }, '', window.location.href);
+              } catch {
+                memory.delete(token);
+              }
+            }}
             settings={settings}
             udas={udas}
             isPrivacyShieldActive={isPrivacyShieldActive}

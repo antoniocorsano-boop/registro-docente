@@ -28,7 +28,12 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     const evaluations = sectionBetween('// Save evaluations batch', '// Save behavior notes');
     expect(evaluations).toContain('commitAppDataMutation');
     expect(evaluations).toContain('afterCommit');
-    expect(evaluations.indexOf("setActiveTab('storico')")).toBeGreaterThan(evaluations.indexOf('afterCommit'));
+    // After a durable evaluation commit, navigation must update React and the
+    // browser entry together; the old bare setActiveTab left stale history.
+    const postCommitNavigation = "handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null })";
+    expect(evaluations.indexOf(postCommitNavigation)).toBeGreaterThan(evaluations.indexOf('afterCommit'));
+    expect(evaluations.slice(0, evaluations.indexOf('afterCommit'))).not.toContain(postCommitNavigation);
+    expect(evaluations.indexOf('setEditingBatchId(null)')).toBeGreaterThan(evaluations.indexOf('afterCommit'));
 
     const behaviors = sectionBetween('// Save behavior notes', '// Edit batch');
     expect(behaviors).toContain('commitAppDataMutation');
