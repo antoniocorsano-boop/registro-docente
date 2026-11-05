@@ -70,20 +70,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTogglePrivacyShield
 }) => {
   const [confirmHomeOpen, setConfirmHomeOpen] = useState(false);
+  const hasMobileSecurity = Boolean(headerSecurity);
   const drawerPreviouslyOpen = useRef(false);
   const confirmationCancelRef = useRef<HTMLButtonElement>(null);
 
   // Focus is moved into the drawer and returned to the brand when closing.
   // This is mobile-only: the established desktop navigation remains unchanged.
   useEffect(() => {
-    if (!headerSecurity || !window.matchMedia('(max-width: 767px)').matches) return;
+    if (!hasMobileSecurity || !window.matchMedia('(max-width: 767px)').matches) return;
     if (isDrawerOpen) {
       document.querySelector<HTMLButtonElement>('[data-testid="header01-go-home"]')?.focus();
     } else if (drawerPreviouslyOpen.current && !confirmHomeOpen) {
       document.querySelector<HTMLButtonElement>('[data-testid="header01-brand-navigation"]')?.focus();
     }
     drawerPreviouslyOpen.current = isDrawerOpen;
-  }, [headerSecurity, isDrawerOpen, confirmHomeOpen]);
+  }, [hasMobileSecurity, isDrawerOpen, confirmHomeOpen]);
 
   useEffect(() => {
     if (confirmHomeOpen) confirmationCancelRef.current?.focus();
@@ -136,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       {headerSecurity && (
-        <div data-testid="header01-mobile-integration" className="md:hidden">
+        <div data-testid="header01-mobile-integration" className="sticky top-0 z-40 md:hidden">
           <Header01TopBar
             context={resolveHeaderContext({
               activeTab,
