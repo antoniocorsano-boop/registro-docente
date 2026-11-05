@@ -137,10 +137,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="neon-card neon-card-highlight p-4 sm:p-5" aria-labelledby="today-heading">
         <div>
           <h2 id="today-heading" className="text-xl font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
-            Oggi
+            <span className="md:hidden">Da dove vuoi iniziare?</span>
+            <span className="hidden md:inline">Oggi</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Da dove vuoi iniziare? Scegli il lavoro da fare; la classe resta sempre una tua scelta esplicita.
+            Scegli il lavoro da fare; la classe resta sempre una tua scelta esplicita.
           </p>
         </div>
 
