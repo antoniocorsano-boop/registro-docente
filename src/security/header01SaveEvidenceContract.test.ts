@@ -50,6 +50,21 @@ describe('HEADER-01 / Task 4 — indicazione di salvataggio basata su evidenza',
     });
   });
 
+  test('un errore irrisolto resta prioritario anche senza identificativo operazione', () => {
+    for (const operationId of ['', '   ']) {
+      const result = resolveHeaderSaveNotice({
+        pendingWrites: 1,
+        confirmedCommit: { operationId: 'previous', scope: 'registro', durableConfirmed: true },
+        unresolvedFailure: { operationId, scope: 'programmazione', unresolved: true },
+      });
+      expect(result).toEqual({
+        kind: 'error',
+        message: 'Salvataggio non riuscito',
+        scope: 'programmazione',
+      });
+    }
+  });
+
   test('modifiche non salvate prevalgono su un vecchio successo solo quando verificate', () => {
     const latest = { operationId: 'c1', scope: 'registro' as const, durableConfirmed: true };
     expect(resolveHeaderSaveNotice({ confirmedCommit: latest, verifiedUnsavedChanges: true })).toEqual({
