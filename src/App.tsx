@@ -501,7 +501,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean; specialistTarget?: SpecialistTarget | null } = {}
+    options: {
+      preserveRecordSession?: boolean;
+      specialistTarget?: SpecialistTarget | null;
+      returnTab?: ActiveTab;
+      navigationMode?: 'push' | 'replace';
+    } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
     const classId = currentClassIdRef.current;
@@ -554,14 +559,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           specialistTargetMemoryRef.current, candidate, classId, tab, specialistTarget
         )) specialistToken = candidate;
       }
-      const state = specialistToken
-        ? { classId, tab, [SPECIALIST_TARGET_HISTORY_KEY]: specialistToken }
-        : { classId, tab };
+      const state = {
+        classId,
+        tab,
+        ...(options.returnTab ? { returnTab: options.returnTab } : {}),
+        ...(specialistToken ? { [SPECIALIST_TARGET_HISTORY_KEY]: specialistToken } : {})
+      };
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
-      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+      if (options.navigationMode === 'replace') {
+        history.replaceState(state, '', query ? `?${query}` : window.location.pathname);
+      } else {
+        history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+      }
     } catch (e) {
       // The browser can refuse an entry; no professional data is written.
       // A failed push never authorizes reuse of the transient specialist token.
@@ -1893,8 +1905,43 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Edit batch
   const handleEditBatch = (batchId: string) => {
     setEditingBatchId(batchId);
-    handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId } });
+    handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId }, returnTab: 'storico' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // "Annulla Modifica" is an exit from the editor, not an instruction to
+  // start another evaluation. Restore the originating Storico whenever it is
+  // a verified immediately preceding app entry.
+  const handleCancelEvaluationEdit = () => {
+    const classId = currentClassIdRef.current;
+    const entry = window.history.state;
+    forgetSpecialistTarget(
+      specialistTargetMemoryRef.current,
+      entry?.[SPECIALIST_TARGET_HISTORY_KEY],
+      classId,
+      'voti'
+    );
+    setEditingBatchId(null);
+
+    if (classId && entry?.tab === 'voti' && entry?.classId === classId
+      && entry?.returnTab === 'storico' && window.history.length > 1) {
+      try {
+        // Replace the cancelled editor before POP, so Forward also cannot
+        // resurrect the cancelled editing surface or show a blank new form.
+        const query = new URLSearchParams({ class: classId, tab: 'storico' });
+        history.replaceState({ classId, tab: 'storico' }, '', `?${query.toString()}`);
+        setActiveTab('storico');
+        history.back();
+        return;
+      } catch {
+        // If the browser refuses history traversal, use a safe replacement.
+      }
+    }
+
+    // A menu-initiated editor may not have Storico immediately behind it.
+    // Replace its current entry rather than pushing a misleading blank editor.
+    handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   // Delete batch
@@ -2326,17 +2373,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
-            onCancelEdit={() => {
-              // Cancellation changes the meaning of this existing history entry.
-              // Without invalidation, Back could silently re-open the old batch editor.
-              forgetSpecialistTarget(
-                specialistTargetMemoryRef.current,
-                window.history.state?.[SPECIALIST_TARGET_HISTORY_KEY],
-                currentClassIdRef.current,
-                'voti'
-              );
-              setEditingBatchId(null);
-            }}
+            onCancelEdit={handleCancelEvaluationEdit}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
