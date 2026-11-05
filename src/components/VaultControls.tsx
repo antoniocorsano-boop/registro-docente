@@ -9,6 +9,8 @@ interface VaultControlsProps {
   onAutoLockChange: (minutes: AutoLockMinutes) => void;
   onLock: () => void;
   copilotSurfaceOpen?: boolean;
+  /** Keep legacy mobile portal available only for non-HEADER-01 consumers. */
+  mobileControlsEnabled?: boolean;
 }
 
 export const VaultControls: React.FC<VaultControlsProps> = ({
@@ -16,6 +18,7 @@ export const VaultControls: React.FC<VaultControlsProps> = ({
   onAutoLockChange,
   onLock,
   copilotSurfaceOpen = false,
+  mobileControlsEnabled = true,
 }) => {
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [mobileHeaderHost, setMobileHeaderHost] = useState<HTMLElement | null>(null);
@@ -24,8 +27,10 @@ export const VaultControls: React.FC<VaultControlsProps> = ({
   // SecureRegistroRoot. The portal changes only the visual placement;
   // Vault state and handlers remain owned by the secure root.
   useLayoutEffect(() => {
-    setMobileHeaderHost(document.getElementById('registro-vault-header-actions'));
-  }, []);
+    if (mobileControlsEnabled) {
+      setMobileHeaderHost(document.getElementById('registro-vault-header-actions'));
+    }
+  }, [mobileControlsEnabled]);
 
   useEffect(() => {
     if (copilotSurfaceOpen) setMobileSettingsOpen(false);
@@ -78,7 +83,7 @@ export const VaultControls: React.FC<VaultControlsProps> = ({
 
   return (
     <>
-      {mobileHeaderHost && createPortal(mobileControls, mobileHeaderHost)}
+      {mobileControlsEnabled && mobileHeaderHost && createPortal(mobileControls, mobileHeaderHost)}
 
       <div className="hidden md:flex fixed bottom-3 right-3 z-50 items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/95 p-2 text-xs text-slate-200 shadow-xl">
         <label htmlFor="vault-auto-lock-desktop" className="sr-only">Blocco automatico Registro</label>
