@@ -2475,7 +2475,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
             showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
-            suppressMobileTrigger={['voti', 'comportamenti', 'dati', 'verifiche-online', 'uda-gantt', 'programmazione', 'biblioteca', 'impostazioni', 'privacy'].includes(activeTab)}
+            suppressMobileTrigger={['voti', 'comportamenti'].includes(activeTab)}
           />
           <LibraryCopilotComposer
               library={library}
