@@ -63,13 +63,16 @@ describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
     expect(browser).toContain('Modifica A → elimina A → Indietro non riapre la valutazione eliminata');
   });
 
-  test('Annulla Modifica invalidates the current history target without a professional write', () => {
-    const handler = between('onCancelEdit={() => {', 'isPrivacyShieldActive={isPrivacyShieldActive}');
+  test('Annulla Modifica discards only volatile changes and returns to Storico, never a blank new form', () => {
+    const view = between('{/* TAB 3: Inserisci Valutazioni */}', '{/* TAB 4: Valutazione Comportamenti */}');
+    expect(view).toContain('onCancelEdit={handleCancelEvaluationEdit}');
+    const handler = between('const handleCancelEvaluationEdit =', '// Delete batch');
     expect(handler).toContain('forgetSpecialistTarget(');
-    expect(handler).toContain("currentClassIdRef.current,");
-    expect(handler).toContain("'voti'");
-    expect(handler).toContain('setEditingBatchId(null)');
-    expect(browser).toContain('Storico → Modifica A → Annulla modifica → Analisi → Indietro');
+    expect(handler).toContain("currentClassIdRef.current");
+    expect(handler).toContain('history.replaceState(');
+    expect(handler).toContain("tab: 'storico'");
+    expect(browser).toContain('Storico → Modifica A → Annulla modifica → Storico senza salvare né riaprire editor A');
+    expect(browser).toContain('Modifica temporanea non salvata');
   });
 
   test('Chromium tests browser Back and URL/history agreement on synthetic classes', () => {
