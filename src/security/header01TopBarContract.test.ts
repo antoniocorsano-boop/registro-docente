@@ -62,7 +62,8 @@ describe('HEADER-01 / UX REWORK — logo come unico accesso alla navigazione', (
   });
 
   test('tutte le azioni essenziali hanno area minima di 48px e stato focus visibile', () => {
-    expect((source.match(/min-h-12 min-w-12/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(source).toContain('min-h-[48px] min-w-[48px]');
+    expect(source).toContain('className={\`${iconButton}');
     expect(source).toContain('min-w-0 flex-1');
     expect(source).toContain('truncate');
     expect(source).toContain('focus-visible:outline');
@@ -98,7 +99,7 @@ describe('HEADER-01 / UX REWORK — logo come unico accesso alla navigazione', (
       expect(securityDrawer).toContain(value);
     }
     expect(securityDrawer).toContain('onAutoLockChange');
-    expect(securityDrawer).not.toContain('SecureRegistroRoot');
+    expect(securityDrawer).not.toContain('useEffect(');
     expect(securityDrawer).not.toContain('localStorage');
   });
 
