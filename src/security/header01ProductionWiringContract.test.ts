@@ -5,6 +5,7 @@ const nav = readFileSync('src/components/Navbar.tsx', 'utf8');
 const app = readFileSync('src/App.tsx', 'utf8');
 const root = readFileSync('src/components/SecureRegistroRoot.tsx', 'utf8');
 const vault = readFileSync('src/components/VaultControls.tsx', 'utf8');
+const home = readFileSync('src/components/HomeView.tsx', 'utf8');
 const browser = readFileSync('tests/browser/header-01-navbar-integration.spec.cjs', 'utf8');
 
 describe('HEADER-01 / Task 5 — collegamento professionale protetto (isolato)', () => {
@@ -46,6 +47,11 @@ describe('HEADER-01 / Task 5 — collegamento professionale protetto (isolato)',
     expect(nav).toContain('Rimani qui');
     expect(nav).toContain('Torna a Oggi');
     expect(nav).toContain('La sessione corrente');
+  });
+
+  test('Oggi non viene duplicato come intestazione della scheda su smartphone', () => {
+    expect(home).toContain('<span className="md:hidden">Da dove vuoi iniziare?</span>');
+    expect(home).toContain('<span className="hidden md:inline">Oggi</span>');
   });
 
   test('il pannello mobile preserva tastiera, focus e controllo Esc', () => {
