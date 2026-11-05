@@ -74,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .header01-browser-tools browser-evidence
-          printf '%s\\n' '{"name":"header-01-browser-tools","private":true}' > .header01-browser-tools/package.json
+          echo '{"name":"header-01-browser-tools","private":true}' > .header01-browser-tools/package.json
           npm --prefix .header01-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
           ./.header01-browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/header-01-compact-isolated.spec.cjs .header01-browser-tools/header-01-compact-isolated.spec.cjs
@@ -100,9 +100,7 @@ jobs:
         run: |
           set -euo pipefail
           cd .header01-browser-tools
-          HEADER01_BASE_URL='http://127.0.0.1:4173' \\
-            ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs \\
-              --workers=1 --reporter=line --output=../browser-evidence/results
+          HEADER01_BASE_URL='http://127.0.0.1:4173' ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
 
       - name: Preserve isolated browser evidence
         if: always()
