@@ -45,6 +45,30 @@ jobs:
       - name: Install dependencies from lockfile
         run: bun install --frozen-lockfile
 
+      - name: Validate protected invariant registry
+        run: bun scripts/qualification/check-invariants.mjs
+
+      - name: Derive exact-SHA invariant impact against stacked base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin feat/header-01-stage2-save-evidence
+          base_sha="$(git rev-parse origin/feat/header-01-stage2-save-evidence)"
+          git cat-file -e "${base_sha}^{commit}"
+          echo "HEADER01_BASE_SHA=${base_sha}" >> "$GITHUB_ENV"
+          bun scripts/qualification/impact.mjs "${base_sha}" "${CANDIDATE_SHA}" --manifest qualification-manifest.json
+          cat qualification-manifest.json
+
+      - name: Verify all affected inherited invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected="$(bun scripts/qualification/impact.mjs "${HEADER01_BASE_SHA}" "${CANDIDATE_SHA}" --tests)"
+          if [[ -n "${selected}" ]]; then
+            read -r -a contracts <<< "${selected}"
+            bun test "${contracts[@]}"
+          fi
+
       - name: HEADER-01 pure component contracts
         run: |
           bun test \
