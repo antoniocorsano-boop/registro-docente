@@ -26,10 +26,14 @@ for (const width of [390, 320]) {
     page.on('pageerror', error => errors.push(error.message));
     await prepare(page);
 
+    // Gestione alunni is a writing surface where the launcher is intentionally
+    // suppressed. Use the read-only Tabellone for adaptive visibility tests.
+    const navigation = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Tabellone', exact: true }) });
+    await navigation.getByRole('button', { name: 'Tabellone', exact: true }).click();
+    await expect(page.getByRole('heading', { name: /Tabellone Classe:/ })).toBeVisible();
     const trigger = page.getByTestId('library-copilot-trigger');
     const lock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
     const vault = lock.locator('..');
-    const navigation = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Tabellone', exact: true }) });
     await expect(trigger).toBeVisible();
     await expect(lock).toBeVisible();
     const initial = await trigger.boundingBox();
@@ -65,10 +69,12 @@ for (const width of [390, 320]) {
     });
     await expect(trigger).toBeVisible();
 
-    const input = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
-    await input.focus();
+    // The period filter is an editable select on a permitted read-only surface.
+    const periodSelect = page.locator('select').filter({ has: page.locator('option[value="ALL"]') });
+    await expect(periodSelect).toBeVisible();
+    await periodSelect.focus();
     await expect(trigger).toBeHidden();
-    await input.blur();
+    await periodSelect.blur();
     await expect(trigger).toBeVisible();
 
     await trigger.click();
