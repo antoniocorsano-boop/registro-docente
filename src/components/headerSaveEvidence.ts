@@ -57,7 +57,8 @@ export function resolveHeaderSaveNotice(
   evidence: Readonly<HeaderPersistenceEvidence>,
 ): HeaderSaveNotice {
   const failure = evidence.unresolvedFailure;
-  if (failure?.unresolved === true && failure.operationId.trim()) {
+  // A missing operation ID must never suppress a known unresolved failure.
+  if (failure?.unresolved === true) {
     return {
       kind: 'error',
       message: 'Salvataggio non riuscito',
