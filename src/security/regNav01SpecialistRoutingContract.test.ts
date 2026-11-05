@@ -16,7 +16,7 @@ function between(first: string, after: string): string {
 describe('REG-NAV-01 / NAV-S1 — one authority for specialist entry', () => {
   test('Storico uses the history-aware transition for new or edited evaluations', () => {
     expect(between('const handleEditBatch', '// Delete batch'))
-      .toContain("handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId } })");
+      .toContain("handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId }, returnTab: 'storico' })");
     expect(between('onNewEvaluation={() => {', '{/* TAB 8:'))
       .toContain("handleNavigateTab('voti', { specialistTarget: null })");
   });
