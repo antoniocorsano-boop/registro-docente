@@ -703,13 +703,16 @@
         "tests/browser/fixtures/header01-navbar.html",
         "tests/browser/fixtures/header01-navbar-fixture.tsx",
         "tests/browser/header-01-navbar-integration.spec.cjs",
-        ".github/workflows/header-01-isolated-qualification.yml"
+        ".github/workflows/header-01-isolated-qualification.yml",
+        "src/components/HomeView.tsx",
+        "src/security/today01HomeUiContract.test.ts"
       ],
       "tests": [
         "src/security/header01ProductionWiringContract.test.ts",
         "src/security/header01TopBarContract.test.ts",
         "src/security/mobileActions01Contract.test.ts",
-        "src/security/homeNavigationDuringSaveIntegrity.test.ts"
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/today01HomeUiContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/header-01-navbar-integration.spec.cjs"
