@@ -57,7 +57,7 @@ export const Header01TopBar: React.FC<Header01TopBarProps> = ({
   const announcement = getHeaderSaveAnnouncement(saveNotice);
 
   const iconButton =
-    'flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-xl border border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300';
+    'flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-xl border border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300';
 
   return (
     <header
@@ -74,7 +74,7 @@ export const Header01TopBar: React.FC<Header01TopBarProps> = ({
           aria-expanded={navigationPresentation.expanded}
           aria-controls={menuId}
           title={navigationPresentation.label}
-          className="relative flex min-h-12 min-w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-variant)] text-[var(--primary)] transition-colors hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+          className="relative flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-variant)] text-[var(--primary)] transition-colors hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
         >
           <BookOpen className="h-6 w-6" aria-hidden="true" />
           <ChevronDown
