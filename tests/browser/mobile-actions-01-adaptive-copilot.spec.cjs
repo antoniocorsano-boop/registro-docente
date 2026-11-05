@@ -48,10 +48,21 @@ for (const width of [390, 320]) {
       document.querySelector('main').style.minHeight = '2400px';
       window.scrollTo(0, 0);
     });
-    await page.evaluate(() => window.scrollTo(0, 550));
+    // Slow 4px events must accumulate; a single large scroll jump is insufficient evidence.
+    await page.evaluate(async () => {
+      for (let y = 4; y <= 400; y += 4) {
+        window.scrollTo(0, y);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+    });
     await expect(trigger).toBeHidden();
     await expect(lock).toBeVisible();
-    await page.evaluate(() => window.scrollTo(0, 120));
+    await page.evaluate(async () => {
+      for (let y = 396; y >= 120; y -= 4) {
+        window.scrollTo(0, y);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+    });
     await expect(trigger).toBeVisible();
 
     const input = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
@@ -61,9 +72,22 @@ for (const width of [390, 320]) {
     await expect(trigger).toBeVisible();
 
     await trigger.click();
-    await expect(page.getByTestId('copilot-deck')).toBeVisible();
+    const deck = page.getByTestId('copilot-deck');
+    await expect(deck).toBeVisible();
     await expect(trigger).toHaveCount(0);
     await expect(lock).toBeVisible();
+    // Scrolling inside the Copilota overlay must not hide the launcher after closing.
+    await deck.evaluate(async panel => {
+      const syntheticFiller = document.createElement('div');
+      syntheticFiller.style.height = '1200px';
+      syntheticFiller.setAttribute('data-test-only', 'copilot-scroll-filler');
+      panel.appendChild(syntheticFiller);
+      for (let y = 10; y <= 180; y += 10) {
+        panel.scrollTop = y;
+        panel.dispatchEvent(new Event('scroll', { bubbles: false }));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+    });
     await page.getByRole('button', { name: 'Chiudi opportunità del Copilota' }).click();
     await expect(trigger).toBeVisible();
     expect(errors).toEqual([]);
