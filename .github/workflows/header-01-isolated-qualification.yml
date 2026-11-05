@@ -6,9 +6,11 @@ on:
   push:
     branches:
       - feat/header-01-stage3-compact-bar
+      - feat/header-01-stage4-integration
   pull_request:
     branches:
       - feat/header-01-stage2-save-evidence
+      - feat/header-01-stage3-compact-bar
 
 permissions:
   contents: read
@@ -74,7 +76,8 @@ jobs:
           bun test \
             src/security/header01ContextContract.test.ts \
             src/security/header01SaveEvidenceContract.test.ts \
-            src/security/header01TopBarContract.test.ts
+            src/security/header01TopBarContract.test.ts \
+            src/security/header01ProductionWiringContract.test.ts
 
       - name: Verify inherited mobile Vault and privacy contracts
         run: bun test src/security/mobileActions01Contract.test.ts src/security/uxTrust01Integrity.test.ts
@@ -102,6 +105,7 @@ jobs:
           npm --prefix .header01-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
           ./.header01-browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/header-01-compact-isolated.spec.cjs .header01-browser-tools/header-01-compact-isolated.spec.cjs
+          cp tests/browser/header-01-navbar-integration.spec.cjs .header01-browser-tools/header-01-navbar-integration.spec.cjs
 
       - name: Start Vite synthetic fixture server
         shell: bash
@@ -124,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           cd .header01-browser-tools
-          HEADER01_BASE_URL='http://127.0.0.1:4173' ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
+          HEADER01_BASE_URL='http://127.0.0.1:4173' ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs header-01-navbar-integration.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
 
       - name: Preserve isolated browser evidence
         if: always()
