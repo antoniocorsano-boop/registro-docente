@@ -102,12 +102,14 @@
       "impactPaths": [
         "src/persistence/",
         "src/security/secureAppStorage.ts",
-        "src/App.tsx"
+        "src/App.tsx",
+        "src/security/durableAppMutationIntegrity.test.ts"
       ],
       "tests": [
         "src/security/persist01hCoordinatorContract.test.ts",
         "src/security/persist01hStorageContract.test.ts",
-        "src/security/durableMutationCoordinator.test.ts"
+        "src/security/durableMutationCoordinator.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
