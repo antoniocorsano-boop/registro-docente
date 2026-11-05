@@ -1,0 +1,65 @@
+# Local GitHub Actions qualification for the isolated HEADER-01 stack.
+# Does not deploy or change GitHub's canonical main-branch workflows.
+name: HEADER-01 Isolated Qualification
+
+on:
+  push:
+    branches:
+      - feat/header-01-stage3-compact-bar
+  pull_request:
+    branches:
+      - feat/header-01-stage2-save-evidence
+
+permissions:
+  contents: read
+
+concurrency:
+  group: header-01-isolated-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify-header-01:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout the exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Confirm the exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected: ${CANDIDATE_SHA}"
+          echo "Actual:   ${actual_sha}"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: HEADER-01 pure component contracts
+        run: |
+          bun test \
+            src/security/header01ContextContract.test.ts \
+            src/security/header01SaveEvidenceContract.test.ts \
+            src/security/header01TopBarContract.test.ts
+
+      - name: Verify inherited mobile Vault and privacy contracts
+        run: bun test src/security/mobileActions01Contract.test.ts src/security/uxTrust01Integrity.test.ts
+
+      - name: Type-check entire application
+        run: bun run lint
+
+      - name: Run security and memory regression suites
+        run: bun run test:security
+
+      - name: Build without deploying
+        run: bun run build
