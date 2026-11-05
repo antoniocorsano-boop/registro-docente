@@ -153,7 +153,7 @@ import {
 import { buildRegistroSemanticMemorySnapshot } from './semanticMemory/projections';
 import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 
-import { Navbar } from './components/Navbar';
+import { Navbar, type Header01SecurityBindings } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
 import { RecordMissionBanner } from './components/RecordMissionBanner';
@@ -196,9 +196,10 @@ export interface AppProps {
   secureStorage: SecureAppStorage;
   onFactoryReset: () => Promise<void>;
   onCopilotSurfaceOpenChange?: (isOpen: boolean) => void;
+  headerSecurity?: Header01SecurityBindings;
 }
 
-export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange }: AppProps) {
+export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity }: AppProps) {
   // 1. Settings & Theme
   const [settings, setSettings] = useState<AppSettings>(() => {
     const persisted = initialSnapshot.settings;
@@ -2152,6 +2153,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
       {/* Main Navbar & Navigation Drawer */}
       <Navbar
+        headerSecurity={headerSecurity}
         activeTab={activeTab}
         setActiveTab={handleNavigateTab}
         currentClass={currentClass}
