@@ -23,6 +23,9 @@ for (const width of [320, 390]) {
     await expect(page.locator('[aria-label="Imposta blocco automatico"]:visible')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Blocca Registro' })).toHaveCount(1);
     await expect(page.locator('[data-testid="header01-open-menu"]')).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, 420));
+    await expect(brand).toBeInViewport();
+    await page.evaluate(() => window.scrollTo(0, 0));
 
     const sizes = await page.evaluate(() => {
       const ids = ['header01-brand-navigation', 'header01-privacy', 'header01-lock'];
@@ -47,7 +50,9 @@ for (const width of [320, 390]) {
     await expect(page.getByTestId('header01-go-home')).toBeFocused();
     await expect(page.getByTestId('header01-integration-active-tab')).toHaveText('voti');
     await expect(page.getByTestId('header01-integration-home-visits')).toContainText('Visite Oggi: 0');
+    await page.getByTestId('header01-auto-lock').focus();
     await page.getByTestId('header01-auto-lock').selectOption('30');
+    await expect(page.getByTestId('header01-auto-lock')).toBeFocused();
     await expect(page.getByTestId('header01-integration-auto-lock')).toContainText('30 minuti');
 
     await page.keyboard.press('Escape');
