@@ -63,6 +63,7 @@ for (const width of [320, 390]) {
     await expect(page.getByTestId('header01-integration-active-tab')).toHaveText('voti');
     await page.getByRole('button', { name: 'Rimani qui' }).click();
     await expect(page.getByTestId('header01-home-confirm')).toHaveCount(0);
+    await expect(brand).toBeFocused();
     await expect(page.getByTestId('header01-integration-home-visits')).toContainText('Visite Oggi: 0');
 
     await brand.click();
