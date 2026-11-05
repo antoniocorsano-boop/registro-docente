@@ -231,12 +231,18 @@ export const SecureRegistroRoot: React.FC = () => {
             secureStorage={storageRef.current}
             onFactoryReset={handleFactoryReset}
             onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
+            headerSecurity={{
+              autoLockMinutes,
+              onAutoLockChange: handleAutoLockChange,
+              onLock: handleLock,
+            }}
           />
           <VaultControls
             autoLockMinutes={autoLockMinutes}
             onAutoLockChange={handleAutoLockChange}
             onLock={handleLock}
             copilotSurfaceOpen={isCopilotSurfaceOpen}
+            mobileControlsEnabled={false}
           />
         </>
       ) : null}
