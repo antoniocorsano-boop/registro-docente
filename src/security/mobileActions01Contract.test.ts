@@ -40,7 +40,9 @@ describe('MOBILE-ACTIONS-01 / A — Copilota mobile contestuale', () => {
   test('direct secure Vault lock and five-place bottom navigation remain independent', () => {
     expect(vault).toContain('aria-label="Blocca Registro"');
     expect(vault).toContain('aria-label="Imposta blocco automatico"');
-    expect(vault).toContain('fixed bottom-16 right-3');
+    expect(vault).toContain('createPortal(');
+    expect(vault).toContain("document.getElementById('registro-vault-header-actions')");
+    expect(vault).not.toContain('fixed bottom-16 right-3');
     expect(navbar).toContain('md:hidden fixed bottom-0');
     for (const tab of ["'dashboard'", "'voti'", "'comportamenti'", "'tabellone'", "'analytics'"]) {
       expect(navbar).toContain("handleNav(" + tab + ")");
