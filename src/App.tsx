@@ -1861,13 +1861,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       afterCommit: () => {
         const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
-        if (!recordCompleted
-          && navigationVersionRef.current === navigationVersionAtSave
-          && currentClassIdRef.current === classId) {
-          // The saved view and browser history must agree. Keep this as
-          // a replacement: saving completes the editor rather than opening
-          // another professional navigation step.
-          handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null });
+        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
+          // Route only within the authorized class and only after the save was committed.
+          // Replacing, rather than pushing, completes the editor history entry.
+          if (currentClassIdRef.current === classId) {
+            handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null });
+          }
         }
       }
     }).then(() => undefined);
