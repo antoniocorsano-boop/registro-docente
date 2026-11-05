@@ -10,6 +10,7 @@ import {
   Target,
   X
 } from 'lucide-react';
+import { useAdaptiveMobileActionVisibility } from './useAdaptiveMobileActionVisibility';
 import type { CopilotMissionPreviewV1, CopilotMissionV1, MissionResumeDecision } from '../copilot/mission';
 import { stageMissionReview } from '../copilot/missionReviewHandoff';
 import type {
@@ -147,6 +148,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
   showClosedTrigger = true
 }) => {
   const isOpen = surfaceMode === 'home';
+  const { hiddenOnMobile } = useAdaptiveMobileActionVisibility();
   const [previewBinding, setPreviewBinding] = useState<{ id: string; materialFingerprint: string } | null>(null);
   const [showOverflow, setShowOverflow] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -184,10 +186,11 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
           aria-label="Apri Copilota"
           aria-expanded={false}
           onClick={() => onSurfaceModeChange('home')}
-          className="fixed right-4 bottom-36 md:bottom-20 z-[72] min-h-[44px] rounded-full border border-cyan-400/50 bg-slate-950/95 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-2xl backdrop-blur"
+          className={`fixed left-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:right-4 md:left-auto md:bottom-20 z-[72] inline-flex min-h-12 min-w-12 items-center justify-center rounded-full border border-cyan-400/50 bg-slate-950/95 p-3 text-sm font-semibold text-cyan-100 shadow-2xl backdrop-blur focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 md:px-4 md:py-2.5 ${hiddenOnMobile ? 'max-md:hidden' : ''}`}
+          title="Apri Copilota"
         >
-          <Sparkles className="mr-2 inline h-4 w-4" aria-hidden="true" />
-          Copilota
+          <Sparkles className="h-5 w-5 md:mr-2 md:h-4 md:w-4" aria-hidden="true" />
+          <span className="hidden md:inline">Copilota</span>
         </button>
       )}
 
