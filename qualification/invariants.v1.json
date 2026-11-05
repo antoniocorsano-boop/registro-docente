@@ -661,6 +661,32 @@
       "browserSmoke": [
         "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs"
       ]
+    },
+    {
+      "id": "HEADER-01-I01",
+      "owner": "HEADER-01",
+      "statement": "The contextual top bar remains an isolated, controlled presentation until human authorization: its class context is explicit, privacy and lock actions are accessible delegates, and save success or failure is derived exclusively from verified durable-operation evidence. No cloud sync, student-data access, new vault authority, or implicit professional navigation is introduced.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/headerContext.ts",
+        "src/components/headerSaveEvidence.ts",
+        "src/components/headerTopBarPresentation.ts",
+        "src/components/Header01TopBar.tsx",
+        "src/security/header01ContextContract.test.ts",
+        "src/security/header01SaveEvidenceContract.test.ts",
+        "src/security/header01TopBarContract.test.ts",
+        "tests/browser/fixtures/",
+        "tests/browser/header-01-compact-isolated.spec.cjs",
+        ".github/workflows/header-01-isolated-qualification.yml"
+      ],
+      "tests": [
+        "src/security/header01ContextContract.test.ts",
+        "src/security/header01SaveEvidenceContract.test.ts",
+        "src/security/header01TopBarContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/header-01-compact-isolated.spec.cjs"
+      ]
     }
   ]
 }
