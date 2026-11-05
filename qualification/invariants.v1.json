@@ -665,7 +665,7 @@
     {
       "id": "HEADER-01-I01",
       "owner": "HEADER-01",
-      "statement": "The contextual top bar remains an isolated, controlled presentation until human authorization: its class context is explicit, privacy and lock actions are accessible delegates, and save success or failure is derived exclusively from verified durable-operation evidence. No cloud sync, student-data access, new vault authority, or implicit professional navigation is introduced.",
+      "statement": "The contextual top bar's single brand control opens navigation, never implicitly resets the work session; Oggi is an explicit guarded destination. Privacy and one-tap locking remain separate 48px controls delegated to existing authority, automatic locking stays a controlled secondary drawer setting, and save status is shown only from verified durable-operation evidence. No cloud sync, student data access, new vault authority or automatic destructive professional navigation is introduced.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/components/headerContext.ts",
@@ -677,7 +677,8 @@
         "src/security/header01TopBarContract.test.ts",
         "tests/browser/fixtures/",
         "tests/browser/header-01-compact-isolated.spec.cjs",
-        ".github/workflows/header-01-isolated-qualification.yml"
+        ".github/workflows/header-01-isolated-qualification.yml",
+        "src/components/Header01DrawerSecurity.tsx"
       ],
       "tests": [
         "src/security/header01ContextContract.test.ts",
