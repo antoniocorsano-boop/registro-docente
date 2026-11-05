@@ -63,3 +63,52 @@ jobs:
 
       - name: Build without deploying
         run: bun run build
+
+      - name: Setup Node for isolated Chromium
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .header01-browser-tools browser-evidence
+          printf '%s\\n' '{"name":"header-01-browser-tools","private":true}' > .header01-browser-tools/package.json
+          npm --prefix .header01-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.header01-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/header-01-compact-isolated.spec.cjs .header01-browser-tools/header-01-compact-isolated.spec.cjs
+
+      - name: Start Vite synthetic fixture server
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01.html' > /dev/null; then
+              echo "HEADER-01 synthetic fixture is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+
+      - name: Run HEADER-01 isolated Chromium across three viewports
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .header01-browser-tools
+          HEADER01_BASE_URL='http://127.0.0.1:4173' \\
+            ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs \\
+              --workers=1 --reporter=line --output=../browser-evidence/results
+
+      - name: Preserve isolated browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: header-01-isolated-browser-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
