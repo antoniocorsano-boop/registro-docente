@@ -1,9 +1,34 @@
+import type { HeaderContext } from './headerContext';
 import type { HeaderSaveNotice } from './headerSaveEvidence';
 
 /**
- * Presentation-only semantics of the compact header.
- * Never reads the secure vault, student data, storage, or transient toasts.
+ * HEADER-01: narrow professional app bar. Display context is a presentation
+ * projection only. It never changes the actual class, route, or save authority.
  */
+export interface HeaderVisualContext {
+  title: string;
+  subtitle: string | null;
+}
+
+export function getHeaderVisualContext(context: Readonly<HeaderContext>): HeaderVisualContext {
+  return context.showBrand && context.subtitle === 'Oggi'
+    ? { title: 'Oggi', subtitle: context.title }
+    : { title: context.title, subtitle: context.subtitle };
+}
+
+export interface HeaderNavigationPresentation {
+  expanded: boolean;
+  label: string;
+}
+
+/** The brand is a *single* explicit navigation trigger, never Home. */
+export function getHeaderNavigationPresentation(expanded: boolean): HeaderNavigationPresentation {
+  return {
+    expanded,
+    label: expanded ? 'Chiudi navigazione del Registro' : 'Apri navigazione del Registro',
+  };
+}
+
 export interface HeaderPrivacyPresentation {
   pressed: boolean;
   label: string;
