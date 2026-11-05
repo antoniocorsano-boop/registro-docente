@@ -646,12 +646,16 @@
         "src/components/VaultControls.tsx",
         "src/components/Navbar.tsx",
         "src/App.tsx",
-        "src/security/mobileActions01NoOcclusion.test.ts"
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "src/security/p2CoreProductIntegrity.test.ts"
       ],
       "tests": [
         "src/security/mobileActions01Contract.test.ts",
         "src/security/mobileActions01ScrollPolicy.test.ts",
-        "src/security/mobileActions01NoOcclusion.test.ts"
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "src/security/p2CoreProductIntegrity.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs"
