@@ -10,9 +10,13 @@ describe('P2-CORE-01 daily workflow safety and trust', () => {
     const navbar = await source('src/components/Navbar.tsx');
 
     expect(navbar).toContain('md:hidden fixed bottom-0');
-    expect(controls).toContain('md:hidden fixed bottom-16 right-3 z-50');
+    expect(navbar).toContain('id="registro-vault-header-actions"');
+    expect(controls).toContain('createPortal(');
+    expect(controls).toContain('onClick={onLock}');
+    expect(controls).toContain('aria-label="Blocca Registro"');
+    expect(controls).toContain('aria-label="Imposta blocco automatico"');
     expect(controls).toContain('hidden md:flex fixed bottom-3 right-3 z-50');
-    expect(controls).not.toContain('md:hidden fixed bottom-3 right-3 z-50');
+    expect(controls).not.toContain('md:hidden fixed bottom-16 right-3 z-50');
   });
 
   test('dashboard sufficiency is fail-closed when no valid averages exist', async () => {
