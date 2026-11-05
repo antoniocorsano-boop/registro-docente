@@ -60,6 +60,7 @@ function Fixture() {
         <p data-testid="header01-integration-lock-count">Blocchi: {lockClicks}</p>
         <p data-testid="header01-integration-auto-lock">Blocco automatico: {autoLockMinutes} minuti</p>
         <input aria-label="Campo di prova tastiera" className="mt-6 w-full rounded border p-3 text-black"/>
+        <div aria-hidden="true" className="h-[1800px]" />
       </main>
     </>
   );
