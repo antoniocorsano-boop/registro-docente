@@ -1861,8 +1861,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       afterCommit: () => {
         const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
-        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
-          setActiveTab('storico');
+        if (!recordCompleted
+          && navigationVersionRef.current === navigationVersionAtSave
+          && currentClassIdRef.current === classId) {
+          // The saved view and browser history must agree. Keep this as
+          // a replacement: saving completes the editor rather than opening
+          // another professional navigation step.
+          handleNavigateTab('storico', { navigationMode: 'replace', specialistTarget: null });
         }
       }
     }).then(() => undefined);
@@ -1905,7 +1910,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Edit batch
   const handleEditBatch = (batchId: string) => {
     setEditingBatchId(batchId);
-    handleNavigateTab('voti', { specialistTarget: { kind: 'evaluation', batchId }, returnTab: 'storico' });
+    const fromStorico = window.history.state?.tab === 'storico'
+      && window.history.state?.classId === currentClassIdRef.current;
+    handleNavigateTab('voti', {
+      specialistTarget: { kind: 'evaluation', batchId },
+      ...(fromStorico ? { returnTab: 'storico' } : {})
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
