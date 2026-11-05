@@ -19,10 +19,13 @@ Ridurre gli ingombri dell'accesso al Copilota senza cambiare la sua autorità, i
 - Il trigger desktop continua a mostrare l'etichetta «Copilota» e la stessa destinazione; accessibilità: nome, fuoco, bersaglio 48px, assenza di duplicazioni, `prefers-reduced-motion` rispettato non introducendo animazioni di percorso.
 - L'apertura esistente passa al `CopilotDeck`, e poi alla conversazione controllata. Nessun avvio automatico di missione.
 
-### Incremento B — coordinamento strutturale dei controlli (NON implementato qui)
-- Valutare un alloggiamento riservato per la sicurezza, che lasci **Blocca Registro** sempre direttamente accessibile e mantenga il comando di blocco automatico riconoscibile.
-- Risolvere l'occlusione residua del gruppo Vault (voti, pulsanti Salva/Aggiorna) con prova geometrica, senza nasconderlo arbitrariamente.
-- Non riprogettare e non spostare comandi di sicurezza nel presente incremento: `VaultControls`, `SecureRegistroRoot` e i tempi di blocco restano invariati.
+### Incremento B — coordinamento strutturale dopo HPR REWORK (ora candidato nella PR #118)
+L'evidenza del docente del 5 novembre (PR #118, commento #6660110129) mostra Copilota e Vault sovrapposti a «Salva Valutazioni di Classe». L'incremento A da solo non soddisfa quindi il criterio di non-occlusione.
+- Le due azioni mobile Vault hanno **un alloggiamento reale nell'intestazione stabile** di Navbar. `SecureRegistroRoot` mantiene l'autorità su cifratura, password, blocco manuale e timer; `VaultControls` ne trasferisce soltanto la presentazione nel contenitore mediante portale React. Nessuna toolbar mobile `fixed bottom` sopra voti e salvataggi.
+- **Blocca Registro** resta un controllo direttamente raggiungibile in un tocco. **Imposta blocco automatico** conserva le scelte Mai/15/30/60 minuti e il popup accessibile; la versione desktop rimane invariata.
+- Il Copilota non mostra il pulsante flottante su smartphone nelle superfici di compilazione e configurazione (`voti`, `comportamenti`, `dati`, `verifiche-online`, `uda-gantt`, `programmazione`, `biblioteca`, `impostazioni`, `privacy`). Rimane disponibile nelle superfici di consultazione e nella versione desktop.
+- Accettazione obbligatoria: geometria della CTA «Salva Valutazioni di Classe» libera da sovrapposizioni su 320×700 e 390×844; intestazione senza overflow orizzontale; pulsante Blocca sempre raggiungibile; test di apertura impostazioni e focus in modulo. Le prove umane precedenti restano **REWORK** fino a nuova verifica Android sulla versione corretta.
+- Il portale cambia soltanto la collocazione dell'interfaccia, non i gestori né la durata del blocco. Non introdurre nuove autorizzazioni o eseguire scritture professionali.
 
 ## Invarianti
 1. Nessuna variazione di dati personali, cifratura, timeout, esportazioni o operazioni di persistenza.
@@ -37,7 +40,7 @@ Ridurre gli ingombri dell'accesso al Copilota senza cambiare la sua autorità, i
 - **GREEN:** test Bun e Chromium 390×844, 320×700, 1280×900; verificare distanza geometrica dal gruppo Vault e dalla barra inferiore e aprire il Copilota senza nuova azione professionale.
 - Proteggere le funzioni inusuali: schermata vuota, blocco Vault, dialogo Copilota aperto, cambio classe, ritorno cronologico.
 - Quattro gate CI sullo stesso SHA, revisione indipendente, Human Review sul telefono con dati fittizi.
-- L'incremento A **non** può essere dichiarato soluzione completa alle sovrapposizioni: occorre il B.
+- Il solo incremento A non era sufficiente: l'incremento B è candidato, ma nessun PASS UX complessivo viene concesso senza HPR Android successiva e revisione indipendente.
 
 ## Decisioni di progettazione
 Il posizionamento del Copilota a sinistra è intenzionale: la sicurezza resta sul lato destro e non viene messa in competizione con il comando contestuale. La scomparsa durante lo scorrimento è una riduzione dell'ingombro del solo Copilota; non modifica lo stato delle missioni né le selezioni professionali.
