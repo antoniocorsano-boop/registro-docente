@@ -99,6 +99,7 @@ jobs:
           cp tests/browser/library-contextual-copilot-handoff.spec.cjs .browser-tools/library-contextual-copilot-handoff.spec.cjs
           cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
           cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
+          cp tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs .browser-tools/mobile-actions-01-adaptive-copilot.spec.cjs
           cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
           cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
           cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
@@ -244,6 +245,20 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/aic-07-test-results
+
+      - name: Run MOBILE-ACTIONS-01 Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            mobile-actions-01-adaptive-copilot.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/mobile-actions-01-test-results
 
       - name: Run historical Chromium qualification
         shell: bash
