@@ -23,6 +23,9 @@ describe('MOBILE-ACTIONS-01/B — no occlusion of professional writes', () => {
     expect(app).toContain('suppressMobileTrigger={');
     expect(app).toContain("'voti'");
     expect(app).toContain("'comportamenti'");
+    const bridge = readFileSync('src/components/CopilotExperience.tsx', 'utf8');
+    expect(bridge).toContain('suppressMobileTrigger?: boolean');
+    expect(bridge).toContain('suppressMobileTrigger={suppressMobileTrigger}');
     expect(deck).toContain('suppressMobileTrigger?: boolean');
     expect(deck).toContain('suppressMobileTrigger = false');
     expect(deck).toContain('max-md:hidden');
