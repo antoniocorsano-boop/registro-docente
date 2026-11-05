@@ -121,6 +121,9 @@ test.describe('REG-NAV-01 / NAV-S1 — ritorno da superfici specialistiche', () 
     await closeSaveNotice(page);
     const storico = page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME });
     await expect(storico).toBeVisible();
+    // A successful save must update both React and the browser entry.
+    // Otherwise a subsequent edit cancellation cannot restore the real origin.
+    await expectNavigation(page, 'storico');
     await expect(page.getByText('Prova sintetica A', { exact: true })).toBeVisible();
 
     await page.locator('button[title="Modifica valutazione"]').first().click();
