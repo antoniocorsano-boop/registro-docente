@@ -68,6 +68,13 @@ for (const width of [320, 390]) {
 
     await brand.click();
     await page.getByTestId('header01-go-home').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('header01-home-confirm')).toHaveCount(0);
+    await expect(brand).toBeFocused();
+    await expect(page.getByTestId('header01-integration-active-tab')).toHaveText('voti');
+
+    await brand.click();
+    await page.getByTestId('header01-go-home').click();
     await page.getByRole('button', { name: 'Torna a Oggi' }).click();
     await expect(page.getByTestId('header01-integration-active-tab')).toHaveText('home');
     await expect(page.getByTestId('header01-integration-home-visits')).toContainText('Visite Oggi: 1');
