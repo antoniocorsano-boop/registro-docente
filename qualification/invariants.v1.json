@@ -661,6 +661,19 @@
       "browserSmoke": [
         "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs"
       ]
+    },
+    {
+      "id": "DEPLOY-GUARD-I01",
+      "owner": "DEPLOY-GUARD-01",
+      "statement": "Automatic Git-triggered Vercel deployments must remain disabled for the Registro Docente repository until an explicitly approved deployment policy replaces this guard; no main or preview push may implicitly publish school workflows.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "vercel.json",
+        "src/security/vercelDeploymentGuard.test.ts"
+      ],
+      "tests": [
+        "src/security/vercelDeploymentGuard.test.ts"
+      ]
     }
   ]
 }
