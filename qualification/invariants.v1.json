@@ -687,6 +687,19 @@
       "tests": [
         "src/security/header01ContextContract.test.ts"
       ]
+    },
+    {
+      "id": "HEADER-01-I02",
+      "owner": "HEADER-01",
+      "statement": "The contextual header save status is a pure view-only projection of verified persistence evidence: a saved state requires a confirmed durable local write and a nonblank operation ID; unresolved failures, even with a missing operation ID, always take precedence over in-flight writes and unrelated successes; transient notifications, route changes, or unverified edits never imply a saved or synchronized state.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/headerSaveEvidence.ts",
+        "src/security/header01SaveEvidenceContract.test.ts"
+      ],
+      "tests": [
+        "src/security/header01SaveEvidenceContract.test.ts"
+      ]
     }
   ]
 }
