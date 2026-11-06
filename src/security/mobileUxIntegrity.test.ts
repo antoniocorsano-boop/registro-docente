@@ -33,7 +33,8 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
     expect(analytics).toContain('data-testid="mobile-analytics-student-detail"');
     expect(analytics).toContain('className="md:hidden group rounded-lg');
     expect(analytics).toContain('className="hidden md:block overflow-x-auto');
-    expect(analytics).toContain('onClick={() => onOpenStudentReport(m.student.id)}');
+    expect(analytics).toContain('onOpenStudentReport(m.student.id, {');
+    expect(analytics).toContain('studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false');
   });
 
   test('student report selector and radar mode controls meet mobile touch sizing', async () => {
@@ -62,7 +63,8 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
     expect(matrix).toContain('Voti recenti');
     expect(matrix).toContain('Medie per tipologia');
     expect(matrix).toContain('Medie periodo');
-    expect(matrix).toContain('onOpenStudentReport={() => onOpenStudentReport(s.id)}');
+    expect(matrix).toContain('onOpenStudentReport={() => onOpenStudentReport(s.id, {');
+    expect(matrix).toContain("originTab: 'tabellone'");
     expect(compactRow).toContain('min-h-[60px]');
     expect(compactRow).toContain('aria-expanded={expanded}');
     expect(compactRow).toContain('onClick={onOpenStudentReport}');
