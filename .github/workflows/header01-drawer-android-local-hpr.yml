@@ -1,0 +1,145 @@
+# Temporary isolated Android HPR artifact; no deployments, tokens or real data.
+# This runner checks out the already qualified exact PR #130 commit.
+name: HEADER-01 Drawer Android local HPR artifact
+
+on:
+  push:
+    branches:
+      - hpr/header01-drawer-android-1068937
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: '1068937823c199bfaf3f4f1dafc5b2c1096b24aa'
+  PORT: '4173'
+
+jobs:
+  local-artifact:
+    name: Build and verify isolated synthetic local bundle
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact qualified candidate (no saved credentials)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Assert source SHA is the qualified PR commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          echo "Source verified: $CANDIDATE_SHA"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build synthetic application as static local artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .nav-hpr-local-vite.config.mts <<'CONFIG'
+          import path from 'node:path';
+          import { defineConfig } from 'vite';
+          import react from '@vitejs/plugin-react';
+          import tailwindcss from '@tailwindcss/vite';
+          export default defineConfig({
+            plugins: [react(), tailwindcss()],
+            base: './',
+            resolve: { alias: { '@': path.resolve(process.cwd(), '.') } },
+            build: {
+              outDir: 'android-hpr-site',
+              emptyOutDir: true,
+              sourcemap: false,
+              rollupOptions: {
+                input: path.resolve(process.cwd(), 'tests/browser/fixtures/nav-back-01-app.html')
+              }
+            }
+          });
+          CONFIG
+          ./node_modules/.bin/vite build --config .nav-hpr-local-vite.config.mts
+          test -f android-hpr-site/tests/browser/fixtures/nav-back-01-app.html
+          cat > android-hpr-site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="it"><head><meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=tests/browser/fixtures/nav-back-01-app.html">
+          <title>Registro Docente — HEADER-01 Drawer, collaudo locale con dati sintetici</title>
+          </head><body><p>Collaudo HEADER-01 Drawer con dati sintetici.</p></body></html>
+          HTML
+          cat > ANDROID-HPR-README.txt <<'TEXT'
+          HEADER-01 Drawer — Android HPR, offline/local-only
+          Source commit: 1068937823c199bfaf3f4f1dafc5b2c1096b24aa
+          No production, no Vault real data, no accounts, no cloud deployment.
+          Synthetic fixture: two invented students and two invented grades.
+
+          After downloading this GitHub Actions artifact ZIP to Android,
+          unzip it into a local folder with android-hpr-site inside.
+          In Termux, with Python installed, serve the folder:
+          python -m http.server 4173 --bind 127.0.0.1 --directory /PATH/TO/android-hpr-site
+          In Android Chrome visit: http://127.0.0.1:4173/
+
+          HPR journeys:
+          1. On the synthetic Oggi screen, confirm the Copilot sparkle button
+             is visible at the bottom left.
+          2. Open the Register navigation from the book logo in the header.
+             Verify that the Copilot sparkle button disappears.
+          3. In the open Drawer, scroll to Esporta backup cifrato.
+             Verify that it is fully visible and unobstructed. Do NOT press it.
+          4. Close the Drawer using its X control.
+             Verify that Copilot sparkle button is again available.
+          5. Optionally open the synthetic class and confirm normal navigation.
+          Do not use real names, credentials or professional records.
+          Stop Termux HTTP server with Ctrl+C when finished.
+          Do not enter real personal or professional data.
+          TEXT
+      - name: Install isolated Chromium test tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .hpr-browser-tools browser-evidence
+          echo '{"name":"header01-drawer-hpr-tools","private":true}' > .hpr-browser-tools/package.json
+          npm --prefix .hpr-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.hpr-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .hpr-browser-tools/
+          cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .hpr-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .hpr-browser-tools/
+      - name: Serve exactly the static bundle (loopback only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server "$PORT" --bind 127.0.0.1 --directory android-hpr-site > browser-evidence/local-server.log 2>&1 &
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent "http://127.0.0.1:$PORT/tests/browser/fixtures/nav-back-01-app.html" > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/local-server.log
+          exit 1
+      - name: Check Android-style journeys against packaged artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .hpr-browser-tools
+          HEADER01_DRAWER_BASE_URL="http://127.0.0.1:${PORT}" \
+          NAV_CONTEXT_BASE_URL="http://127.0.0.1:${PORT}" \
+          NAV_BACK_BASE_URL="http://127.0.0.1:${PORT}" \
+            ./node_modules/.bin/playwright test \
+              header-01-copilot-drawer-occlusion.spec.cjs \
+              nav-context-01-return-origin.spec.cjs \
+              nav-back-01-student-report.spec.cjs \
+              --workers=1 --reporter=line \
+              --output=../browser-evidence/local-bundle-tests
+      - name: Upload only synthetic offline site and instructions
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: header01-drawer-android-local-hpr-1068937
+          path: |
+            android-hpr-site/
+            ANDROID-HPR-README.txt
+          if-no-files-found: error
+          retention-days: 7
