@@ -1,0 +1,168 @@
+# Local GitHub Actions qualification for the isolated HEADER-01 stack, anchored to main.
+# Does not deploy or change GitHub's canonical main-branch workflows.
+name: HEADER-01 Isolated Qualification
+
+on:
+  push:
+    branches:
+      - feat/header-01-stage3-compact-bar
+  pull_request:
+    branches:
+      - feat/header-01-stage2-save-evidence
+
+permissions:
+  contents: read
+
+concurrency:
+  group: header-01-isolated-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify-header-01:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout the exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Confirm the exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected: ${CANDIDATE_SHA}"
+          echo "Actual:   ${actual_sha}"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Validate protected invariant registry
+        run: bun scripts/qualification/check-invariants.mjs
+
+      - name: Derive exact-SHA invariant impact against canonical main ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base_sha="$(git merge-base "${CANDIDATE_SHA}" origin/main)"
+          git cat-file -e "${base_sha}^{commit}"
+          echo "HEADER01_BASE_SHA=${base_sha}" >> "$GITHUB_ENV"
+          bun scripts/qualification/impact.mjs "${base_sha}" "${CANDIDATE_SHA}" --manifest qualification-manifest.json
+          cat qualification-manifest.json
+
+      - name: Verify all affected inherited invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected="$(bun scripts/qualification/impact.mjs "${HEADER01_BASE_SHA}" "${CANDIDATE_SHA}" --tests)"
+          if [[ -n "${selected}" ]]; then
+            read -r -a contracts <<< "${selected}"
+            bun test "${contracts[@]}"
+          fi
+
+      - name: HEADER-01 pure component contracts
+        run: |
+          bun test \
+            src/security/header01ContextContract.test.ts \
+            src/security/header01SaveEvidenceContract.test.ts \
+            src/security/header01TopBarContract.test.ts
+
+      - name: Verify inherited mobile Vault and privacy contracts
+        run: bun test src/security/mobileActions01Contract.test.ts src/security/uxTrust01Integrity.test.ts
+
+      - name: Type-check entire application
+        run: bun run lint
+
+      - name: Run security and memory regression suites
+        run: bun run test:security
+
+      - name: Build without deploying
+        run: bun run build
+
+      - name: Setup Node for isolated Chromium
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .header01-browser-tools browser-evidence
+          echo '{"name":"header-01-browser-tools","private":true}' > .header01-browser-tools/package.json
+          npm --prefix .header01-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.header01-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/header-01-compact-isolated.spec.cjs .header01-browser-tools/header-01-compact-isolated.spec.cjs
+
+      - name: Start Vite synthetic fixture server
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01.html' > /dev/null; then
+              echo "HEADER-01 synthetic fixture is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+
+      - name: Run HEADER-01 isolated Chromium across three viewports
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .header01-browser-tools
+          HEADER01_BASE_URL='http://127.0.0.1:4173' ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
+
+      - name: Verify exact-SHA browser evidence completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = 'browser-evidence';
+          const expected = [
+            'geometry-320x700', 'geometry-390x844', 'geometry-1280x900',
+            'save-evidence', 'keyboard-390x844', 'text-200-percent-320x700',
+          ];
+          for (const caseId of expected) {
+            const file = path.join(dir, 'header01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.qualificationError || evidence.screenshotError ||
+                evidence.screenshot !== 'screenshots/' + caseId + '.png') {
+              throw new Error('Invalid or failing HEADER-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty HEADER-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: six exact-SHA browser evidence JSON files and screenshots');
+          NODE
+
+      - name: Preserve isolated browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: header-01-isolated-browser-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
