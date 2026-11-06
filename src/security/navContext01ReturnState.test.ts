@@ -79,7 +79,7 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(app).toContain("originContext?.studentId === studentId");
     expect(app).toContain('returnContext={returningToStudentOrigin?.originTab');
     const navCode = app.slice(app.indexOf('const handleNavigateTab ='), app.indexOf('const handleOpenStudentReport ='));
-    expect(navCode).not.toContain('studentReportReturnContextRef.current');
+    expect(navCode).toContain("if (tab !== 'report') studentReportReturnContextRef.current = null");
     expect(navCode).not.toContain('scrollY');
     expect(navCode).not.toContain('studentSearch');
     expect(navCode).not.toContain("params.set('student'");
@@ -100,7 +100,8 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
 
   test('Analisi reopens the mobile detail, but never restores a name search under privacy', () => {
     const analytics = readFileSync('src/components/AnalyticsView.tsx', 'utf8');
-    expect(analytics).toContain('defaultOpen={restored?.ui.studentDetailOpen ?? false}');
+    expect(analytics).toContain('open={mobileStudentDetailsOpen}');
+    expect(analytics).toContain('onToggle={event => setMobileStudentDetailsOpen(event.currentTarget.open)}');
     expect(analytics).toContain("originTab: 'analytics'");
     expect(analytics).toContain('studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false');
     expect(analytics).toContain("studentSearch: isPrivacyShieldActive ? '' : studentSearch");
