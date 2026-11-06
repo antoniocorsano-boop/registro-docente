@@ -729,8 +729,7 @@
         "src/security/mobileDensity01TabelloneContract.test.ts",
         "tests/browser/fixtures/mobile-density-01-tabellone.html",
         "tests/browser/fixtures/mobile-density-01-tabellone-fixture.tsx",
-        "tests/browser/mobile-density-01-tabellone.spec.cjs",
-        ".github/workflows/mobile-density-01-isolated.yml"
+        "tests/browser/mobile-density-01-tabellone.spec.cjs"
       ],
       "tests": [
         "src/security/mobileDensity01TabelloneContract.test.ts",
