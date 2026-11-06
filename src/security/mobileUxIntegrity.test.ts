@@ -50,16 +50,21 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
     expect(report).toContain('height={280}');
   });
 
-  test('tabellone provides dedicated teacher-first mobile cards while preserving the desktop matrix', async () => {
+  test('tabellone uses compact private mobile rows while preserving the desktop matrix', async () => {
     const matrix = await source('src/components/MatrixView.tsx');
+    const compactRow = await source('src/components/CompactStudentDisclosureRow.tsx');
 
-    expect(matrix).toContain('Mobile student cards');
-    expect(matrix).toContain('className="md:hidden space-y-3"');
+    expect(matrix).toContain('Mobile student list: one compact row per student');
+    expect(matrix).toContain('data-testid="matrix-compact-list"');
+    expect(matrix).toContain('<CompactStudentDisclosureRow');
+    expect(matrix).toContain('displayName={formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive)}');
     expect(matrix).toContain('className="hidden md:block overflow-x-auto');
-    expect(matrix).toContain('min-h-[44px]');
     expect(matrix).toContain('Voti recenti');
     expect(matrix).toContain('Medie per tipologia');
     expect(matrix).toContain('Medie periodo');
-    expect(matrix).toContain('onClick={() => onOpenStudentReport(s.id)}');
+    expect(matrix).toContain('onOpenStudentReport={() => onOpenStudentReport(s.id)}');
+    expect(compactRow).toContain('min-h-[60px]');
+    expect(compactRow).toContain('aria-expanded={expanded}');
+    expect(compactRow).toContain('onClick={onOpenStudentReport}');
   });
 });
