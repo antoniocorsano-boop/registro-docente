@@ -370,7 +370,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
 
-  const setActiveTab = useCallback((tab: ActiveTab) => {
+  const setActiveTab = useCallback((
+    tab: ActiveTab,
+    options: { preserveStudentReturnContext?: boolean } = {}
+  ) => {
+    // Central navigation authority: direct routes (including backup, history,
+    // editing and the Drawer) must invalidate the previous report detour.
+    if (!options.preserveStudentReturnContext) {
+      studentReportReturnContextRef.current = null;
+      setReturningToStudentOrigin(null);
+    }
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
 
@@ -499,10 +508,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
-    // Navbar and ordinary tab navigation must not inherit a previous report detour.
-    if (!options.preserveStudentReturnContext) studentReportReturnContextRef.current = null;
-    setReturningToStudentOrigin(null);
-    setActiveTab(tab);
+    setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
@@ -1380,6 +1386,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
   const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
 
+  useEffect(() => {
+    if (!isPrivacyShieldActive) return;
+    // The privacy setting may change while the report is mounted, with the
+    // originating Analytics view unmounted. Scrub BOTH snapshots immediately.
+    const current = studentReportReturnContextRef.current;
+    if (current?.originTab === 'analytics' && current.ui.studentSearch) {
+      studentReportReturnContextRef.current = {
+        ...current,
+        ui: { ...current.ui, studentSearch: '' }
+      };
+    }
+    setReturningToStudentOrigin(previous => {
+      if (previous?.originTab !== 'analytics' || !previous.ui.studentSearch) return previous;
+      return { ...previous, ui: { ...previous.ui, studentSearch: '' } };
+    });
+  }, [isPrivacyShieldActive]);
+
   const handleTogglePrivacyShield = useCallback(() => {
     setIsPrivacyShieldActive(prev => {
       const next = !prev;
@@ -1492,7 +1515,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         studentReportReturnContextRef.current = null;
       }
       setReturningToStudentOrigin(returningContext);
-      setActiveTab(effectiveTab);
+      setActiveTab(effectiveTab, { preserveStudentReturnContext: true });
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
