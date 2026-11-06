@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { navigationButton } = require('./header01-navigation.cjs');
+const { navigationButton, closeMobileDrawerWithEscape } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const password = 'mobile-actions-01-synthetic-only';
@@ -150,8 +150,7 @@ for (const width of [390, 320]) {
     await settings.selectOption('30');
     await expect(settings).toHaveValue('30');
     await expect(lock).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(settings).toBeHidden();
+    await closeMobileDrawerWithEscape(page);
 
     // Focus in the editing field does not resurrect a floating trigger over Save.
     const title = page.getByPlaceholder('es. Verifica su Fonti Rinnovabili');

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { navigationButton, privacyButton, settleOggiNavigation } = require('./header01-navigation.cjs');
+const { navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape } = require('./header01-navigation.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -183,8 +183,7 @@ test('UXT-A compact Vault and operational controls are touch-safe — mobile 390
   expect(autoLockBox.height, 'mobile auto-lock height').toBeGreaterThanOrEqual(44);
   await mobileAutoLock.selectOption('30');
   await expect(mobileAutoLock).toHaveValue('30');
-  await page.keyboard.press('Escape');
-  await expect(mobileAutoLock).toBeHidden();
+  await closeMobileDrawerWithEscape(page);
 
   await createSyntheticClassAndStudent(page);
 

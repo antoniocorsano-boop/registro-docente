@@ -25,4 +25,13 @@ async function settleOggiNavigation(page) {
   }
 }
 
-module.exports = { navigationButton, privacyButton, settleOggiNavigation };
+// Move focus out of a native select before testing the drawer's Escape shortcut.
+async function closeMobileDrawerWithEscape(page) {
+  const first = page.getByTestId('header01-go-home');
+  await expect(first).toBeVisible();
+  await first.focus();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('header01-auto-lock')).toBeHidden();
+}
+
+module.exports = { navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape };

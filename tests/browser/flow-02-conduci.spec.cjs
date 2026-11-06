@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
+const { navigationButton, settleOggiNavigation, closeMobileDrawerWithEscape } = require('./header01-navigation.cjs');
 const path = require('node:path');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
@@ -181,8 +181,7 @@ async function assertVaultControlsClearOperationalActions(page, panel) {
   await expect(autoLock).toBeVisible();
   await autoLock.selectOption('30');
   await expect(autoLock).toHaveValue('30');
-  await page.keyboard.press('Escape');
-  await expect(autoLock).toBeHidden();
+  await closeMobileDrawerWithEscape(page);
 }
 
 async function openConductCopilot(page, panel) {

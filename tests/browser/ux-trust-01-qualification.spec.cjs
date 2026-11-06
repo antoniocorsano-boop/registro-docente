@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
+const { navigationButton, settleOggiNavigation, closeMobileDrawerWithEscape } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const vaultPassword = 'ux-trust-01-qualification-only';
@@ -65,8 +65,7 @@ test('UXT-A compact Vault stays touch-safe above mobile workflow navigation — 
   expect(lockBox.height).toBeGreaterThanOrEqual(44);
   expect(clusterBox.y + clusterBox.height).toBeLessThanOrEqual(navBox.y + 1);
 
-  await page.keyboard.press('Escape');
-  await expect(autoLock).toBeHidden();
+  await closeMobileDrawerWithEscape(page);
 
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   expect(pageErrors).toEqual([]);
