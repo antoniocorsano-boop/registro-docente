@@ -156,7 +156,11 @@ describe('FLOW-04 App lifecycle contract', () => {
     expect(tabSetter).toContain('setTodayAction(null);');
 
     expect(navigation).toContain('const hadReviewSession = reviewSessionRef.current !== null;');
-    expect(navigation).toContain('setActiveTab(tab);');
+    // Specialist transitions still pass through the shared setter while also
+    // invalidating unrelated return-to-student state by default.
+    expect(navigation).toContain('setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });');
+    expect(tabSetter).toContain('if (!options.preserveStudentReturnContext) {');
+    expect(tabSetter).toContain('setReturningToStudentOrigin(null);');
     expect(navigation).toContain("if (!hadReviewSession && tab !== 'dashboard')");
     expect(navigation).not.toContain('enterReviewSurface(activeReviewSession, tab)');
     expect(navigation).not.toContain('returnToReviewRouter(activeReviewSession)');
