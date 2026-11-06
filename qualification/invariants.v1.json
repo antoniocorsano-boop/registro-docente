@@ -629,6 +629,38 @@
       "browserSmoke": [
         "tests/browser/flow-04-review-session.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-ACTIONS-01-I01",
+      "owner": "MOBILE-ACTIONS-01",
+      "statement": "On mobile an adaptive, compact, accessible Copilota entry occupies the left side above the existing bottom navigation, yields to downward scroll and focused input, returns on upward scroll, and does not interfere with direct Vault lock or professional writes. Desktop entry remains unchanged. In professional editing screens every Save/Update/Cancel action must remain unobstructed, and Vault lock controls must occupy a directly accessible header slot instead of a floating content overlay.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/CopilotDeck.tsx",
+        "src/components/useAdaptiveMobileActionVisibility.ts",
+        "src/security/mobileActions01Contract.test.ts",
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        ".github/workflows/browser-qualification.yml",
+        "src/components/mobileActionScrollPolicy.ts",
+        "src/security/mobileActions01ScrollPolicy.test.ts",
+        "src/components/VaultControls.tsx",
+        "src/components/Navbar.tsx",
+        "src/App.tsx",
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "src/security/p2CoreProductIntegrity.test.ts",
+        "src/components/CopilotExperience.tsx"
+      ],
+      "tests": [
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/mobileActions01ScrollPolicy.test.ts",
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "src/security/p2CoreProductIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs"
+      ]
     }
   ]
 }

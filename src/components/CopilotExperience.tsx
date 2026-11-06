@@ -39,6 +39,7 @@ interface CopilotExperienceProps {
   surfaceMode: CopilotSurfaceMode;
   onSurfaceModeChange: (mode: CopilotSurfaceMode) => void;
   showClosedTrigger?: boolean;
+  suppressMobileTrigger?: boolean;
   onStart?: (opportunity: CopilotOpportunityV1, preview: CopilotMissionPreviewV1, contextFingerprint: string) => Promise<void>;
 }
 
@@ -63,6 +64,7 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
   surfaceMode,
   onSurfaceModeChange,
   showClosedTrigger = true,
+  suppressMobileTrigger = false,
   onStart
 }) => {
   const projection = useMemo(() => buildCopilotContextProjection({
@@ -168,6 +170,7 @@ export const CopilotExperience: React.FC<CopilotExperienceProps> = ({
       surfaceMode={surfaceMode}
       onSurfaceModeChange={onSurfaceModeChange}
       showClosedTrigger={showClosedTrigger}
+      suppressMobileTrigger={suppressMobileTrigger}
       {...(onStart ? {
         onStart: (
           opportunity: CopilotOpportunityV1,
