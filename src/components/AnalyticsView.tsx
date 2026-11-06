@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, EvaluationType } from '../types';
 import {
   calcAvg,
@@ -66,6 +66,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     () => restored?.ui.studentSort ?? 'register'
   );
   const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    // A protected view must never retain a previously typed visible name.
+    if (isPrivacyShieldActive) setStudentSearch('');
+  }, [isPrivacyShieldActive]);
   useRestoreStudentReturnScroll(
     restored?.scrollY ?? null,
     restored ? `${restored.classId}:${restored.studentId}:analytics` : null
