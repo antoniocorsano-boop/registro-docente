@@ -93,7 +93,7 @@ test('MOBILE-DENSITY-01 — desktop retains full table, mobile compact list is h
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('matrix-compact-list')).toBeHidden();
   await expect(page.getByRole('table').first()).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'MEDIA' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'MEDIA', exact: true })).toBeVisible();
 });
 
 test('MOBILE-DENSITY-01 — 200% text at 320px keeps touch target and detail accessible', async ({ browser }) => {
