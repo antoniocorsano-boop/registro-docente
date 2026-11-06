@@ -160,10 +160,20 @@ for (const viewport of [
     const shield = privacyButton(page);
     await expect(shield).toBeVisible();
     await shield.click();
-    await expect(shield).toHaveClass(/bg-slate-800/);
+    if (viewport.width < 768) {
+      await expect(shield).toHaveAttribute('aria-pressed', 'false');
+      await expect(shield).toHaveAttribute('data-privacy-state', 'visible');
+    } else {
+      await expect(shield).toHaveClass(/bg-slate-800/);
+    }
     await assertNoDocumentOverflow(page, 'Privacy Shield disabled');
     await shield.click();
-    await expect(shield).toHaveClass(/bg-purple-950/);
+    if (viewport.width < 768) {
+      await expect(shield).toHaveAttribute('aria-pressed', 'true');
+      await expect(shield).toHaveAttribute('data-privacy-state', 'protected');
+    } else {
+      await expect(shield).toHaveClass(/bg-purple-950/);
+    }
     await assertNoDocumentOverflow(page, 'Privacy Shield enabled');
     visited.items.push({ label: 'Privacy Shield', toggledOffAndOn: true });
 
