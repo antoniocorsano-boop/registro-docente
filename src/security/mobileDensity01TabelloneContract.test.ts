@@ -49,7 +49,7 @@ describe('MOBILE-DENSITY-01 / Tabellone mobile', () => {
   });
 
   test('isolated browser must verify mobile/desktop and private data', () => {
-    for (const token of ['320', '390', '1280', 'matrix-compact-list', 'matrix-compact-toggle', 'aria-expanded', 'Persona Fittizia', 'Tabellone']) {
+    for (const token of ['320', '390', '1280', 'matrix-compact-list', 'matrix-compact-toggle', 'aria-expanded', 'Persona Fittizia', 'mobile-density-01-tabellone.html']) {
       expect(browser).toContain(token);
     }
   });
