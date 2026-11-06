@@ -80,6 +80,46 @@ test('NAV-CONTEXT-01 / Android 390 — Analisi reopens student details and retai
   await context.close();
 });
 
+test('NAV-CONTEXT-01 — an explicit Analisi → Tabellone → Analisi route resets mobile student detail', async ({ browser }) => {
+  for (const width of [390, 320]) {
+    const context = await browser.newContext({
+      viewport: { width, height: 844 }, isMobile: true, hasTouch: true
+    });
+    try {
+      const page = await context.newPage();
+      await openClass(page);
+      await navigateTo(page, 'Analisi');
+      let section = page.getByTestId('mobile-analytics-student-detail');
+
+      // Ordinary navigation must discard manually expanded UI state.
+      await section.locator('summary').click();
+      await expect(section).toHaveAttribute('open', '');
+      await navigateTo(page, 'Tabellone');
+      await navigateTo(page, 'Analisi');
+      section = page.getByTestId('mobile-analytics-student-detail');
+      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section.getByPlaceholder('Cerca alunno')).toBeHidden();
+
+      // Legitimate report Back still restores an open detail, but only once.
+      await section.locator('summary').click();
+      await section.locator('article button').first().click();
+      await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
+      await page.goBack();
+      await expect(page.getByTestId('header01-context')).toContainText('Analisi');
+      section = page.getByTestId('mobile-analytics-student-detail');
+      await expect(section).toHaveAttribute('open', '');
+
+      await navigateTo(page, 'Tabellone');
+      await navigateTo(page, 'Analisi');
+      section = page.getByTestId('mobile-analytics-student-detail');
+      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section.getByPlaceholder('Cerca alunno')).toBeHidden();
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test('NAV-CONTEXT-01 / Android 320 — report detour does not reveal a private student name or overflow the viewport', async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 320, height: 700 }, isMobile: true, hasTouch: true
