@@ -126,6 +126,38 @@ jobs:
           cd .header01-browser-tools
           HEADER01_BASE_URL='http://127.0.0.1:4173' ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
 
+      - name: Verify exact-SHA browser evidence completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = 'browser-evidence';
+          const expected = [
+            'geometry-320x700', 'geometry-390x844', 'geometry-1280x900',
+            'save-evidence', 'keyboard-390x844', 'text-200-percent-320x700',
+          ];
+          for (const caseId of expected) {
+            const file = path.join(dir, 'header01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.qualificationError || evidence.screenshotError ||
+                evidence.screenshot !== 'screenshots/' + caseId + '.png') {
+              throw new Error('Invalid or failing HEADER-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty HEADER-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: six exact-SHA browser evidence JSON files and screenshots');
+          NODE
+
       - name: Preserve isolated browser evidence
         if: always()
         uses: actions/upload-artifact@v4
