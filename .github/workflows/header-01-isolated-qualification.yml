@@ -1,4 +1,4 @@
-# Local GitHub Actions qualification for the isolated HEADER-01 stack.
+# Local GitHub Actions qualification for the isolated HEADER-01 stack, anchored to main.
 # Does not deploy or change GitHub's canonical main-branch workflows.
 name: HEADER-01 Isolated Qualification
 
@@ -48,12 +48,12 @@ jobs:
       - name: Validate protected invariant registry
         run: bun scripts/qualification/check-invariants.mjs
 
-      - name: Derive exact-SHA invariant impact against stacked base
+      - name: Derive exact-SHA invariant impact against canonical main ancestry
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin feat/header-01-stage2-save-evidence
-          base_sha="$(git rev-parse origin/feat/header-01-stage2-save-evidence)"
+          git fetch origin main
+          base_sha="$(git merge-base "${CANDIDATE_SHA}" origin/main)"
           git cat-file -e "${base_sha}^{commit}"
           echo "HEADER01_BASE_SHA=${base_sha}" >> "$GITHUB_ENV"
           bun scripts/qualification/impact.mjs "${base_sha}" "${CANDIDATE_SHA}" --manifest qualification-manifest.json
