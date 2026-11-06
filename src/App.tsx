@@ -514,6 +514,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         ? (options.studentId
           ?? appDataRef.current.classes.find(candidate => candidate.id === classId)?.students[0]?.id)
         : undefined;
+      if (tab === 'report') setSelectedStudentForReport(studentId ?? null);
       const state = tab === 'report' && classId && studentId
         ? createStudentReportHistoryState(classId, studentId)
         : { classId, tab };
@@ -530,7 +531,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const classId = currentClassIdRef.current;
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
     if (!selectedClass?.students.some(student => student.id === studentId)) return;
-    setSelectedStudentForReport(studentId);
     handleNavigateTab('report', { studentId });
   }, [handleNavigateTab]);
 
