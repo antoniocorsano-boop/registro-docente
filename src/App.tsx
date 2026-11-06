@@ -2356,6 +2356,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {/* TAB 5: Analisi & Soglie D.M. 221/2025 */}
         {activeTab === 'analytics' && currentClass && (
           <AnalyticsView
+            key={currentClass.id}
             currentClass={currentClass}
             settings={settings}
             onOpenStudentReport={handleOpenStudentReport}
@@ -2369,6 +2370,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {/* TAB 6: Tabellone Classe */}
         {activeTab === 'tabellone' && currentClass && (
           <MatrixView
+            key={currentClass.id}
             currentClass={currentClass}
             onOpenStudentReport={handleOpenStudentReport}
             isPrivacyShieldActive={isPrivacyShieldActive}
