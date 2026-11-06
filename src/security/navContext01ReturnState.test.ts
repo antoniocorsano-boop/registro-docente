@@ -74,7 +74,7 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(app).toContain('studentReportReturnContextRef = useRef<StudentReportReturnContext | null>(null)');
     expect(app).toContain('resolveStudentReportReturnContext(');
     expect(app).toContain('setReturningToStudentOrigin(returningContext)');
-    expect(app).toContain("if (tab !== 'report') studentReportReturnContextRef.current = null");
+    expect(app).toContain("if (!options.preserveStudentReturnContext) studentReportReturnContextRef.current = null");
     expect(app).toContain('studentReportReturnContextRef.current = null;');
     expect(app).toContain("originContext?.studentId === studentId");
     expect(app).toContain('returnContext={returningToStudentOrigin?.originTab');
