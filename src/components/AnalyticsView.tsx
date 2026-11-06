@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, EvaluationType } from '../types';
 import {
   calcAvg,
@@ -66,9 +66,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     () => restored?.ui.studentSort ?? 'register'
   );
   const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
-  const [mobileStudentDetailsOpen, setMobileStudentDetailsOpen] = useState(
-    () => restored?.ui.studentDetailOpen ?? false
-  );
+  // Native <details> is the sole authority for toggles. On each mount,
+  // only a validated report Back can reopen it; ordinary navigation starts closed.
+  // Avoid mirroring the browser's asynchronous toggle event in React state.
+  useLayoutEffect(() => {
+    const details = mobileStudentDetailsRef.current;
+    if (details) details.open = restored?.ui.studentDetailOpen === true;
+  }, [currentClass.id, restored?.ui.studentDetailOpen]);
   useEffect(() => {
     // A protected view must never retain a previously typed visible name.
     if (isPrivacyShieldActive) setStudentSearch('');
@@ -479,8 +483,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         <details
           ref={mobileStudentDetailsRef}
           data-testid="mobile-analytics-student-detail"
-          open={mobileStudentDetailsOpen}
-          onToggle={event => setMobileStudentDetailsOpen(event.currentTarget.open)}
           className="md:hidden group rounded-lg border border-[var(--border)] bg-slate-900/30 overflow-hidden min-w-0"
         >
           <summary className="min-h-[56px] cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-3">
