@@ -31,7 +31,15 @@ async function closeMobileDrawerWithEscape(page) {
   await expect(first).toBeVisible();
   await first.focus();
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('header01-auto-lock')).toBeHidden();
+  const drawer = page.locator('#registro-navigation-drawer');
+  const brand = page.getByTestId('header01-brand-navigation');
+  await expect(drawer).toHaveAttribute('aria-hidden', 'true');
+  await expect(drawer).toHaveAttribute('inert', '');
+  await expect(brand).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(async () => {
+    const bounds = await drawer.boundingBox();
+    return bounds ? bounds.x + bounds.width : 0;
+  }).toBeLessThanOrEqual(1);
 }
 
 module.exports = { navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape };
