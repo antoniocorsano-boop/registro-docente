@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppSettings, ClassData, EvaluationType, Grade } from '../types';
 import {
   calcAvg,
@@ -31,6 +31,11 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   const [viewMode, setViewMode] = useState<'cron' | 'type' | 'avg'>('cron');
   const [showProposedGrade, setShowProposedGrade] = useState<boolean>(true);
   const [expandedMobileStudent, setExpandedMobileStudent] = useState<{ classId: string; studentId: string } | null>(null);
+
+  // Switching class invalidates any previous disclosure, including when returning later.
+  useEffect(() => {
+    setExpandedMobileStudent(null);
+  }, [currentClass.id]);
 
   const students = currentClass.students || [];
   const allGrades = currentClass.grades || [];
