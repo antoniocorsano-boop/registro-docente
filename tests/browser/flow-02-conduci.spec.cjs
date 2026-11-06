@@ -68,6 +68,15 @@ async function assertSelectedClassStillVisible(page) {
     return;
   }
 
+  // HEADER-01 presents the authoritative class as "Classe <nome>" in its
+  // mobile context subtitle; assert this projection instead of the removed
+  // legacy standalone label. The Registra region is checked independently.
+  const headerContext = page.getByTestId('header01-context');
+  if (await headerContext.isVisible().catch(() => false)) {
+    await expect(headerContext).toContainText(`Classe ${CLASS_NAME}`);
+    return;
+  }
+
   await expect.poll(async () => {
     const labels = page.getByText(CLASS_NAME, { exact: true });
     const count = await labels.count();
