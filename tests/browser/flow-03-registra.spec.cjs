@@ -144,6 +144,14 @@ async function assertSelectedClassStillVisible(page) {
     return;
   }
 
+  // The mobile HEADER-01 projection names the active class as "Classe <nome>".
+  // All Registra ownership and UDA assertions remain separately enforced.
+  const headerContext = page.getByTestId('header01-context');
+  if (await headerContext.isVisible().catch(() => false)) {
+    await expect(headerContext).toContainText(`Classe ${CLASS_NAME}`);
+    return;
+  }
+
   await expect.poll(async () => {
     const labels = page.getByText(CLASS_NAME, { exact: true });
     const count = await labels.count();
