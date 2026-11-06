@@ -146,7 +146,14 @@ for (const width of [320, 390]) {
     await expect(page.getByTestId('header01-auto-lock')).toBeFocused();
     await expect(page.getByTestId('header01-integration-auto-lock')).toContainText('30 minuti');
 
+    // Move focus out of the native select, which may consume the first Escape.
+    // The drawer itself must become inaccessible, not merely leave the viewport.
+    await page.getByTestId('header01-go-home').focus();
+    await expect(page.getByTestId('header01-go-home')).toBeFocused();
     await page.keyboard.press('Escape');
+    await expect(page.locator('#registro-navigation-drawer')).toHaveAttribute('aria-hidden', 'true');
+    await expect(page.locator('#registro-navigation-drawer')).toHaveAttribute('inert', '');
+    await expect(brand).toHaveAttribute('aria-expanded', 'false');
     await expect(brand).toBeFocused();
     await brand.click();
     await page.getByTestId('header01-go-home').click();
