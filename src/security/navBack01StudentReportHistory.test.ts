@@ -44,7 +44,7 @@ describe('NAV-BACK-01 — cronologia professionale Scheda alunno', () => {
   test('due sorgenti reali condividono un handler registrato in browser history', () => {
     const app = readFileSync('src/App.tsx', 'utf8');
     expect(app.split('onOpenStudentReport={handleOpenStudentReport}')).toHaveLength(3);
-    expect(app).toContain("handleNavigateTab('report', { studentId })");
+    expect(app).toContain("handleNavigateTab('report', { studentId, preserveStudentReturnContext: true })");
     expect(app).toContain('history.pushState(state');
     expect(app).toContain("createStudentReportHistoryState(classId, studentId)");
     expect(app).toContain("setSelectedStudentForReport(restoredStudentId)");
