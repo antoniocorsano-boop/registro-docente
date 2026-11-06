@@ -58,20 +58,23 @@ for (const width of [320, 390]) {
 }
 
 test('MOBILE-DENSITY-01 — privacy never exposes synthetic names while protected, including open details', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
+  const mobileList = page.getByTestId('matrix-compact-list');
+  await expect(mobileList.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
   await page.getByTestId('matrix-compact-toggle').first().click();
-  await expect(page.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
+  await expect(mobileList.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
   await page.getByTestId('fixture-toggle-privacy').click();
-  await expect(page.getByText('Persona Fittizia 01', { exact: true })).toBeVisible();
+  await expect(mobileList.getByText('Persona Fittizia 01', { exact: true })).toBeVisible();
   await page.getByTestId('fixture-toggle-privacy').click();
-  await expect(page.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
+  await expect(mobileList.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
   await expect(page.getByTestId('matrix-compact-toggle').first()).toHaveAttribute('aria-expanded', 'true');
   const accessible = await page.getByTestId('matrix-compact-toggle').first().getAttribute('aria-label');
   expect(accessible).not.toContain('Persona Fittizia 01');
 });
 
 test('MOBILE-DENSITY-01 — mode, filter, support indicator and detailed report still work', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.getByTestId('matrix-compact-toggle').first().click();
   await expect(page.getByRole('region', { name: 'Voti recenti' })).toBeVisible();
