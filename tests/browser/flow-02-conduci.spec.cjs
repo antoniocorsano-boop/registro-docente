@@ -160,8 +160,8 @@ async function assertVaultControlsClearOperationalActions(page, panel) {
   const privacyBox = await privacy.boundingBox();
   expect(privacyBox).not.toBeNull();
 
-  for (const label of ['Imposta blocco automatico', 'Blocca Registro']) {
-    const control = page.getByRole('button', { name: label, exact: true });
+  // The mobile security controls live in the one sticky top bar.
+  for (const control of [page.getByTestId('header01-privacy'), page.getByTestId('header01-lock')]) {
     await expect(control).toBeVisible();
     const controlBox = await control.boundingBox();
     expect(controlBox).not.toBeNull();
@@ -174,6 +174,15 @@ async function assertVaultControlsClearOperationalActions(page, panel) {
     );
     expect(intersects).toBe(false);
   }
+
+  // Automatic locking is secondary, but remains directly configurable.
+  await navigationButton(page).click();
+  const autoLock = page.getByTestId('header01-auto-lock');
+  await expect(autoLock).toBeVisible();
+  await autoLock.selectOption('30');
+  await expect(autoLock).toHaveValue('30');
+  await page.keyboard.press('Escape');
+  await expect(autoLock).toBeHidden();
 }
 
 async function openConductCopilot(page, panel) {
