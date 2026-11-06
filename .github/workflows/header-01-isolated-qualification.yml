@@ -1,4 +1,4 @@
-# Local GitHub Actions qualification for the isolated HEADER-01 stack.
+# Local GitHub Actions qualification for the isolated HEADER-01 stack, anchored to main.
 # Does not deploy or change GitHub's canonical main-branch workflows.
 name: HEADER-01 Isolated Qualification
 
@@ -11,6 +11,7 @@ on:
     branches:
       - feat/header-01-stage2-save-evidence
       - feat/header-01-stage3-compact-bar
+      - main
 
 permissions:
   contents: read
@@ -50,12 +51,12 @@ jobs:
       - name: Validate protected invariant registry
         run: bun scripts/qualification/check-invariants.mjs
 
-      - name: Derive exact-SHA invariant impact against stacked base
+      - name: Derive exact-SHA invariant impact against canonical main ancestry
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin feat/header-01-stage2-save-evidence
-          base_sha="$(git rev-parse origin/feat/header-01-stage2-save-evidence)"
+          git fetch origin main
+          base_sha="$(git merge-base "${CANDIDATE_SHA}" origin/main)"
           git cat-file -e "${base_sha}^{commit}"
           echo "HEADER01_BASE_SHA=${base_sha}" >> "$GITHUB_ENV"
           bun scripts/qualification/impact.mjs "${base_sha}" "${CANDIDATE_SHA}" --manifest qualification-manifest.json
@@ -129,6 +130,40 @@ jobs:
           set -euo pipefail
           cd .header01-browser-tools
           HEADER01_BASE_URL='http://127.0.0.1:4173' ./node_modules/.bin/playwright test header-01-compact-isolated.spec.cjs header-01-navbar-integration.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
+
+      - name: Verify exact-SHA browser evidence completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = 'browser-evidence';
+          const expected = [
+            'geometry-320x700', 'geometry-390x844', 'geometry-1280x900',
+            'save-evidence', 'keyboard-390x844', 'text-200-percent-320x700',
+            'navbar-mobile-320', 'navbar-mobile-390', 'navbar-desktop-1280',
+            'navbar-keyboard-390',
+          ];
+          for (const caseId of expected) {
+            const file = path.join(dir, 'header01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.qualificationError || evidence.screenshotError ||
+                evidence.screenshot !== 'screenshots/' + caseId + '.png') {
+              throw new Error('Invalid or failing HEADER-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty HEADER-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: ten exact-SHA browser evidence JSON files and screenshots');
+          NODE
 
       - name: Preserve isolated browser evidence
         if: always()
