@@ -39,9 +39,9 @@ export const CompactStudentDisclosureRow: React.FC<CompactStudentDisclosureRowPr
         onClick={onToggle}
         className="flex min-h-[60px] w-full min-w-0 items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-800/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-cyan-300"
       >
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">{displayName}</span>
+        <span className="min-w-0 flex-1 truncate text-base font-semibold text-slate-100">{displayName}</span>
         <span className="shrink-0 text-right">
-          <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-400">{primaryLabel}</span>
+          <span className="block text-xs font-medium text-slate-400">{primaryLabel}</span>
           <span data-testid="matrix-compact-average" className="block text-base font-bold tabular-nums text-slate-100">{primaryValue}</span>
         </span>
         <ChevronDown
