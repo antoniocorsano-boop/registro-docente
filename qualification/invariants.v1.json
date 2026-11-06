@@ -744,7 +744,9 @@
         "tests/browser/header-01-navbar-integration.spec.cjs",
         ".github/workflows/header-01-isolated-qualification.yml",
         "src/components/HomeView.tsx",
-        "src/security/today01HomeUiContract.test.ts"
+        "src/security/today01HomeUiContract.test.ts",
+        "tests/browser/",
+        ".github/workflows/browser-qualification.yml"
       ],
       "tests": [
         "src/security/header01ProductionWiringContract.test.ts",

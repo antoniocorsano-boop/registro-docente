@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const vaultPassword = 'ux-trust-01-qualification-only';
@@ -35,17 +36,19 @@ test('UXT-A compact Vault stays touch-safe above mobile workflow navigation — 
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await closePersistenceConfirmation(page);
 
-  const lockButton = page.getByRole('button', { name: 'Blocca Registro', exact: true });
-  const cluster = lockButton.locator('..');
-  const autoLockToggle = cluster.getByRole('button', { name: 'Imposta blocco automatico', exact: true });
+  const lockButton = page.getByTestId('header01-lock');
+  const privacyButton = page.getByTestId('header01-privacy');
+  const cluster = page.getByRole('group', { name: 'Riservatezza e blocco del Registro' });
   const bottomNavButton = page.getByRole('button', { name: 'Riepilogo', exact: true });
 
   await expect(lockButton).toBeVisible();
-  await expect(autoLockToggle).toBeVisible();
+  await expect(privacyButton).toBeVisible();
   await expect(bottomNavButton).toBeVisible();
-  await autoLockToggle.click();
-  const autoLock = page.locator('#vault-auto-lock-mobile');
+  await navigationButton(page).click();
+  const autoLock = page.getByTestId('header01-auto-lock');
   await expect(autoLock).toBeVisible();
+  await autoLock.selectOption('30');
+  await expect(autoLock).toHaveValue('30');
 
   const clusterBox = await cluster.boundingBox();
   const autoLockBox = await autoLock.boundingBox();
@@ -56,12 +59,14 @@ test('UXT-A compact Vault stays touch-safe above mobile workflow navigation — 
   expect(autoLockBox).not.toBeNull();
   expect(lockBox).not.toBeNull();
   expect(navBox).not.toBeNull();
-
   expect(clusterBox.width).toBeLessThanOrEqual(200);
   expect(autoLockBox.height).toBeGreaterThanOrEqual(44);
   expect(lockBox.width).toBeGreaterThanOrEqual(44);
   expect(lockBox.height).toBeGreaterThanOrEqual(44);
   expect(clusterBox.y + clusterBox.height).toBeLessThanOrEqual(navBox.y + 1);
+
+  await page.keyboard.press('Escape');
+  await expect(autoLock).toBeHidden();
 
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   expect(pageErrors).toEqual([]);
@@ -215,7 +220,7 @@ test('UXT-C strong competency profile stays relative while below-threshold evide
   await closePersistenceConfirmation(page);
   await expect(page.getByText('Colloquio tecnico UXT-C', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Menu' }).click();
+  await navigationButton(page).click();
   await page.getByRole('button', { name: 'Scheda alunno', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Scheda Alunno & Profilo delle Competenze' })).toBeVisible();
 
@@ -259,7 +264,7 @@ test('UXT-D active UDA without formal evidence stays watch while an ended gap is
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
   await closePersistenceConfirmation(page);
 
-  await page.getByRole('button', { name: 'Menu' }).click();
+  await navigationButton(page).click();
   await page.getByRole('button', { name: 'UDA', exact: true }).click();
 
   const createUda = async ({ title, startMonth, duration }) => {

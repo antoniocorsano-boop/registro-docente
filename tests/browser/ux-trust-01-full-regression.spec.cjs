@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, privacyButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
@@ -36,7 +37,7 @@ function primaryWorkflowButton(page, label) {
 }
 
 async function openDrawerDestination(page, label) {
-  await page.getByRole('button', { name: 'Menu' }).click();
+  await navigationButton(page).click();
   await page.getByRole('button', { name: label, exact: true }).click();
 }
 
@@ -156,7 +157,7 @@ for (const viewport of [
     await openDrawerDestination(page, 'Privacy');
     await checkpoint(page, visited.items, 'Privacy', page.getByRole('heading', { name: /Privacy First & Protezione dei dati/ }));
 
-    const shield = page.locator('button[title^="Privacy Shield"]').first();
+    const shield = privacyButton(page);
     await expect(shield).toBeVisible();
     await shield.click();
     await expect(shield).toHaveClass(/bg-slate-800/);

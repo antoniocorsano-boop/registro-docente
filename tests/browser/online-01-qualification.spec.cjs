@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
@@ -124,7 +125,7 @@ async function assertNoHorizontalOverflow(page) {
 }
 
 async function openTeacherDestination(page, label) {
-  await page.getByRole('button', { name: 'Menu' }).click();
+  await navigationButton(page).click();
   await page.getByRole('button', { name: label, exact: true }).click();
 }
 

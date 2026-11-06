@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -36,7 +37,7 @@ async function reloadAndUnlock(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
@@ -240,7 +241,7 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await expect(page.getByRole('heading', { name: TEXT_TITLE, exact: true })).toBeVisible();
 
   // 8-9. Drawer placement and desktop overflow/touch safety.
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   await expect(page.getByRole('button', { name: 'Biblioteca privata', exact: true })).toHaveCount(1);
   await page.getByRole('button', { name: 'Biblioteca privata', exact: true }).click();
   await assertAtLeast44(page.getByRole('button', { name: 'Aggiungi fonte', exact: true }), 'desktop add-source');
@@ -298,7 +299,7 @@ test('LIB-01A library remains secondary, touch-safe and overflow-free — mobile
   }
   await expect(mobileNav.getByRole('button', { name: 'Biblioteca privata', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const libraryEntry = page.getByRole('button', { name: 'Biblioteca privata', exact: true });
   await expect(libraryEntry).toHaveCount(1);
   await assertAtLeast44(libraryEntry, 'mobile library drawer entry');

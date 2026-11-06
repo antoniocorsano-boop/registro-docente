@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, privacyButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -33,7 +34,7 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function disablePrivacyShield(page) {
-  const shield = page.locator('button[title^="Privacy Shield"]').first();
+  const shield = privacyButton(page);
   await expect(shield).toBeVisible();
   await shield.click();
 }
@@ -160,24 +161,30 @@ test('UXT-A compact Vault and operational controls are touch-safe — mobile 390
 
   await setupFreshUxVault(page);
 
-  const mobileLock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
-  const mobileVault = mobileLock.locator('..');
-  const mobileAutoLockToggle = mobileVault.getByRole('button', { name: 'Imposta blocco automatico', exact: true });
+  const mobileLock = page.getByTestId('header01-lock');
+  const mobilePrivacy = page.getByTestId('header01-privacy');
+  const mobileVault = page.getByRole('group', { name: 'Riservatezza e blocco del Registro' });
   const desktopAutoLock = page.locator('#vault-auto-lock-desktop');
 
   await expect(mobileVault).toBeVisible();
   await expect(desktopAutoLock).toBeHidden();
   const vaultBox = await mobileVault.boundingBox();
   expect(vaultBox).not.toBeNull();
-  expect(vaultBox.width, 'mobile Vault cluster width').toBeLessThanOrEqual(200);
-  await assertAtLeast44(mobileAutoLockToggle, 'mobile auto-lock disclosure');
+  expect(vaultBox.width, 'mobile security group width').toBeLessThanOrEqual(200);
+  await assertAtLeast44(mobilePrivacy, 'mobile privacy toggle');
   await assertAtLeast44(mobileLock, 'mobile lock button');
-  await mobileAutoLockToggle.click();
-  const mobileAutoLock = page.locator('#vault-auto-lock-mobile');
+
+  // Automatic locking is a secondary drawer setting, not an extra header button.
+  await navigationButton(page).click();
+  const mobileAutoLock = page.getByTestId('header01-auto-lock');
   await expect(mobileAutoLock).toBeVisible();
   const autoLockBox = await mobileAutoLock.boundingBox();
   expect(autoLockBox).not.toBeNull();
   expect(autoLockBox.height, 'mobile auto-lock height').toBeGreaterThanOrEqual(44);
+  await mobileAutoLock.selectOption('30');
+  await expect(mobileAutoLock).toHaveValue('30');
+  await page.keyboard.press('Escape');
+  await expect(mobileAutoLock).toBeHidden();
 
   await createSyntheticClassAndStudent(page);
 
@@ -259,7 +266,7 @@ test('EDU-PLAN-01B previews Arena handoff read-only and persists only after expl
   page.on('pageerror', error => pageErrors.push(String(error)));
 
   await setupFreshUxVault(page);
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   await page.getByRole('button', { name: 'Programmazione didattica', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Programmazione didattica' })).toBeVisible();
 

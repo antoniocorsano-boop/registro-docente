@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const password = 'mobile-actions-01-synthetic-only';
@@ -124,16 +125,16 @@ for (const width of [390, 320]) {
     await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
 
     const save = page.getByRole('button', { name: 'Salva Valutazioni di Classe', exact: true });
-    const lock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
-    const settings = page.getByRole('button', { name: 'Imposta blocco automatico', exact: true });
+    const lock = page.getByTestId('header01-lock');
+    const privacy = page.getByTestId('header01-privacy');
     const trigger = page.getByTestId('library-copilot-trigger');
     await expect(trigger).toBeHidden();
     await expect(lock).toBeVisible();
-    await expect(settings).toBeVisible();
+    await expect(privacy).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(save).toBeVisible();
     await expectNoOverlap(save, lock);
-    await expectNoOverlap(save, settings);
+    await expectNoOverlap(save, privacy);
     await expectNoOverlap(save, navigation);
 
     const fit = await page.evaluate(() => ({
@@ -142,10 +143,15 @@ for (const width of [390, 320]) {
     }));
     expect(fit.scrollWidth).toBeLessThanOrEqual(fit.innerWidth + 1);
 
-    await settings.click();
-    await expect(page.getByRole('combobox', { name: 'Blocco automatico Registro' })).toBeVisible();
+    // Keep one-tap locking visible, and verify the secondary setting in the drawer.
+    await navigationButton(page).click();
+    const settings = page.getByTestId('header01-auto-lock');
+    await expect(settings).toBeVisible();
+    await settings.selectOption('30');
+    await expect(settings).toHaveValue('30');
     await expect(lock).toBeVisible();
-    await settings.click();
+    await page.keyboard.press('Escape');
+    await expect(settings).toBeHidden();
 
     // Focus in the editing field does not resurrect a floating trigger over Save.
     const title = page.getByPlaceholder('es. Verifica su Fonti Rinnovabili');
