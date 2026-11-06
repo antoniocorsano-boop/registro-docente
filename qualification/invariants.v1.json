@@ -729,12 +729,14 @@
         "src/security/mobileDensity01TabelloneContract.test.ts",
         "tests/browser/fixtures/mobile-density-01-tabellone.html",
         "tests/browser/fixtures/mobile-density-01-tabellone-fixture.tsx",
-        "tests/browser/mobile-density-01-tabellone.spec.cjs"
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "src/security/mobileUxIntegrity.test.ts"
       ],
       "tests": [
         "src/security/mobileDensity01TabelloneContract.test.ts",
         "src/security/header01ProductionWiringContract.test.ts",
-        "src/security/mobileActions01Contract.test.ts"
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/mobileUxIntegrity.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile-density-01-tabellone.spec.cjs"
