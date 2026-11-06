@@ -496,10 +496,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean; studentId?: string } = {}
+    options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
-    if (tab !== 'report') studentReportReturnContextRef.current = null;
+    // Navbar and ordinary tab navigation must not inherit a previous report detour.
+    if (!options.preserveStudentReturnContext) studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
     setActiveTab(tab);
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
@@ -551,7 +552,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           appDataRef.current.classes
         )
       : null;
-    handleNavigateTab('report', { studentId });
+    handleNavigateTab('report', { studentId, preserveStudentReturnContext: true });
   }, [activeTab, handleNavigateTab]);
 
   /** Switching students within the report replaces only the current history entry. */
