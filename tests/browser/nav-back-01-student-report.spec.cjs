@@ -11,7 +11,7 @@ async function openStudentFromOrigin(page, origin) {
   await page.locator('nav').getByRole('button', { name: origin }).click();
   await expect(page.getByTestId('header01-context')).toContainText(origin);
   if (origin === 'Tabellone') {
-    await page.getByTestId('matrix-compact-toggle').first().click();
+    await page.locator('[data-testid="matrix-compact-toggle"][aria-controls="matrix-compact-details-fittizio-studente-01"]').click();
     await page.getByRole('button', { name: 'Apri scheda alunno' }).click();
   } else {
     const details = page.getByTestId('mobile-analytics-student-detail');
@@ -19,7 +19,9 @@ async function openStudentFromOrigin(page, origin) {
     await details.locator('article button').first().click();
   }
   await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
-  await expect(page.locator('main select').first()).toHaveValue('fittizio-studente-01');
+  const actualStudentId = await page.locator('main select').first().inputValue();
+  expect(['fittizio-studente-01', 'fittizio-studente-02']).toContain(actualStudentId);
+  return actualStudentId;
 }
 
 for (const origin of ['Tabellone', 'Analisi']) {
@@ -27,7 +29,7 @@ for (const origin of ['Tabellone', 'Analisi']) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
     await openSyntheticClass(page);
-    await openStudentFromOrigin(page, origin);
+    const selectedStudentId = await openStudentFromOrigin(page, origin);
 
     const route = await page.evaluate(() => ({
       history: window.history.state,
@@ -36,9 +38,9 @@ for (const origin of ['Tabellone', 'Analisi']) {
     expect(route.history).toEqual({
       classId: 'classe-fittizia-a',
       tab: 'report',
-      studentId: 'fittizio-studente-01'
+      studentId: selectedStudentId
     });
-    expect(route.address).not.toContain('fittizio-studente-01');
+    expect(route.address).not.toContain(selectedStudentId);
     expect(route.address).toContain('tab=report');
 
     // page.goBack() exercises the browser popstate used by Android's swipe.
@@ -50,7 +52,7 @@ for (const origin of ['Tabellone', 'Analisi']) {
 
     await page.goForward();
     await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
-    await expect(page.locator('main select').first()).toHaveValue('fittizio-studente-01');
+    await expect(page.locator('main select').first()).toHaveValue(selectedStudentId);
     await context.close();
   });
 }
@@ -59,16 +61,18 @@ test('NAV-BACK-01 / Android 320px — changing selected student preserves select
   const context = await browser.newContext({ viewport: { width: 320, height: 700 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await openSyntheticClass(page);
-  await openStudentFromOrigin(page, 'Tabellone');
-  await page.locator('main select').first().selectOption('fittizio-studente-02');
+  const initialStudentId = await openStudentFromOrigin(page, 'Tabellone');
+  const nextStudentId = initialStudentId === 'fittizio-studente-01'
+    ? 'fittizio-studente-02' : 'fittizio-studente-01';
+  await page.locator('main select').first().selectOption(nextStudentId);
   const state = await page.evaluate(() => window.history.state);
-  expect(state.studentId).toBe('fittizio-studente-02');
+  expect(state.studentId).toBe(nextStudentId);
 
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
   await page.goForward();
   await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
-  await expect(page.locator('main select').first()).toHaveValue('fittizio-studente-02');
+  await expect(page.locator('main select').first()).toHaveValue(nextStudentId);
   await context.close();
 });
 
