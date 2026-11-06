@@ -79,7 +79,7 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(app).toContain("originContext?.studentId === studentId");
     expect(app).toContain('returnContext={returningToStudentOrigin?.originTab');
     const navCode = app.slice(app.indexOf('const handleNavigateTab ='), app.indexOf('const handleOpenStudentReport ='));
-    expect(navCode).toContain("if (tab !== 'report') studentReportReturnContextRef.current = null");
+    expect(navCode).toContain("if (!options.preserveStudentReturnContext) studentReportReturnContextRef.current = null");
     expect(navCode).not.toContain('scrollY');
     expect(navCode).not.toContain('studentSearch');
     expect(navCode).not.toContain("params.set('student'");
