@@ -53,6 +53,10 @@ for (const width of [320, 390]) {
     await expect(rows).toHaveCount(25);
     await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
     await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
+    // A -> B -> A must not resurrect a previously expanded student's details.
+    await page.getByTestId('fixture-change-class').click();
+    await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
+    await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
     await context.close();
   });
 }
