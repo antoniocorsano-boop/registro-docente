@@ -66,6 +66,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     () => restored?.ui.studentSort ?? 'register'
   );
   const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
+  const [mobileStudentDetailsOpen, setMobileStudentDetailsOpen] = useState(
+    () => restored?.ui.studentDetailOpen ?? false
+  );
   useEffect(() => {
     // A protected view must never retain a previously typed visible name.
     if (isPrivacyShieldActive) setStudentSearch('');
@@ -476,7 +479,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         <details
           ref={mobileStudentDetailsRef}
           data-testid="mobile-analytics-student-detail"
-          defaultOpen={restored?.ui.studentDetailOpen ?? false}
+          open={mobileStudentDetailsOpen}
+          onToggle={event => setMobileStudentDetailsOpen(event.currentTarget.open)}
           className="md:hidden group rounded-lg border border-[var(--border)] bg-slate-900/30 overflow-hidden min-w-0"
         >
           <summary className="min-h-[56px] cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-3">
