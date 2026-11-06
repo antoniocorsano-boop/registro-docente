@@ -1,0 +1,81 @@
+# Exact-SHA qualification of HEADER-01 stacked upstream parents.
+# No access to secrets, no deployments, no edits to PR candidate branches.
+name: HEADER-01 Parents Exact SHA Qualification
+
+on:
+  push:
+    branches:
+      - audit/header-01-parents-120-122-exact-sha
+
+permissions:
+  contents: read
+
+jobs:
+  parent-exact-qualification:
+    name: PR ${{ matrix.pr }} exact source (invariants / Bun / TypeScript / build)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pr: '120'
+            sha: '8a647a3556af24af3bb6ed2f68c757b6dae7ccc4'
+            contract: ''
+          - pr: '121'
+            sha: '65792fdc18cb6e82b39da79d86876038c16daf46'
+            contract: 'src/security/header01ContextContract.test.ts'
+          - pr: '122'
+            sha: '28ce7e6146e61d3331bcb4bc9f58045c7b1d3197'
+            contract: 'src/security/header01SaveEvidenceContract.test.ts'
+    env:
+      EXACT_SHA: ${{ matrix.sha }}
+      CONTRACT_PATH: ${{ matrix.contract }}
+      PR_NUMBER: ${{ matrix.pr }}
+    steps:
+      - name: Checkout immutable candidate, no retained credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact PR head SHA
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate registry of protected invariants
+        run: bun scripts/qualification/check-invariants.mjs
+      - name: Check specific contract or documentation-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$CONTRACT_PATH" ]; then
+            bun test "$CONTRACT_PATH"
+          else
+            test "$PR_NUMBER" = "120"
+            test -s docs/superpowers/plans/2026-11-05-header-01-contextual-topbar.md
+            test -s docs/superpowers/specs/2026-11-05-header-01-contextual-topbar-design.md
+          fi
+      - name: Typecheck complete application
+        run: bun run lint
+      - name: Run security and memory suite
+        run: bun run test:security
+      - name: Compile application without deployment
+        run: bun run build
+      - name: Record exact candidate receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'PR=%s\nSOURCE_SHA=%s\nCONTRACT=%s\nRESULT=PASS\n' \
+            "$PR_NUMBER" "$EXACT_SHA" "$CONTRACT_PATH" > qualification-receipt.txt
+      - name: Preserve only non-sensitive receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: header01-parent-${{ matrix.pr }}-${{ matrix.sha }}
+          path: qualification-receipt.txt
+          retention-days: 14
+          if-no-files-found: warn
