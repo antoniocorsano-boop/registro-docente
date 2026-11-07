@@ -535,15 +535,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
   ) => {
+    // A previous inline Back may still be pending when another control fires.
+    // ALL destinations, including the student report, must be serialized here.
+    // Only a report requested without a pending exit bypasses inline collapse.
+    if (pendingMobileMatrixExitRef.current) {
+      pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current
+        ? () => {} // latest tap cancels a requested route change
+        : () => handleNavigateTab(tab, options);
+      return;
+    }
     if (tab !== 'report') {
-      // Buttons can be tapped twice before history.back() emits popstate:
-      // update the pending destination without another Back traversal.
-      if (pendingMobileMatrixExitRef.current) {
-        pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current
-          ? () => {} // the latest tap cancels a requested route change
-          : () => handleNavigateTab(tab, options);
-        return;
-      }
       if (isMobileMatrixDisclosureState(window.history.state, currentClassIdRef.current ?? '')) {
         if (tab === activeTabRef.current) {
           // The active Tabellone button is just an inline collapse.

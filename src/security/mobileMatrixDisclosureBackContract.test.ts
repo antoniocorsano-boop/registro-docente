@@ -48,6 +48,12 @@ describe('NAV-MOBILE-BACK-01 — inline Tabellone disclosure has a real Back ste
     expect(app).toContain('pendingMobileMatrixExitRef');
     expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = proceed;');
     expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current');
+    const pendingGuard = app.indexOf('if (pendingMobileMatrixExitRef.current) {', app.indexOf('const handleNavigateTab ='));
+    const reportGuard = app.indexOf("if (tab !== 'report') {", app.indexOf('const handleNavigateTab ='));
+    expect(pendingGuard).toBeGreaterThan(-1);
+    expect(reportGuard).toBeGreaterThan(pendingGuard);
+    expect(browser).toContain('Scheda alunno overrides a pending Valutazioni exit');
+    expect(browser).toContain('report requested after manual close is the final destination');
     expect(browser).toContain('two rapid navigation requests consume exactly one Back step');
     expect(browser).toContain('two manual collapse taps cause only one history Back');
     expect(browser).toContain('manual collapse immediately followed by navigation');

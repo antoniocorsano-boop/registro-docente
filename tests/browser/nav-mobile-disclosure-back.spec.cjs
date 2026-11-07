@@ -229,3 +229,65 @@ test('NAV-MOBILE-BACK / 390 — manual collapse immediately followed by navigati
     await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
   } finally { await context.close(); }
 });
+
+test('NAV-MOBILE-BACK / 390 — Scheda alunno overrides a pending Valutazioni exit', async ({ browser }) => {
+  const { context, page } = await openClass(browser);
+  try {
+    await nav(page, 'Tabellone');
+    const row = firstRow(page);
+    await row.click();
+
+    await page.evaluate(() => {
+      const navigation = Array.from(document.querySelectorAll('nav')).find(
+        element => typeof element.className === 'string' && element.className.includes('md:hidden')
+      );
+      const evaluations = Array.from(navigation?.querySelectorAll('button') ?? [])
+        .find(element => element.textContent?.trim() === 'Valutazioni');
+      const row = document.querySelector(
+        '[data-testid="matrix-compact-toggle"][aria-controls="matrix-compact-details-fittizio-studente-01"]'
+      )?.closest('article');
+      const report = Array.from(row?.querySelectorAll('button') ?? [])
+        .find(element => element.textContent?.trim() === 'Apri scheda alunno');
+      if (!evaluations || !report) throw new Error('Missing synthetic navigation actions');
+      evaluations.click();
+      report.click(); // same synchronous task; popstate from previous Back has not fired
+    });
+
+    await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
+    const reportState = await page.evaluate(() => history.state);
+    expect(reportState).toEqual({
+      classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01'
+    });
+    expect(page.url()).not.toContain('fittizio-studente-01');
+
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
+  } finally { await context.close(); }
+});
+
+test('NAV-MOBILE-BACK / 320 — report requested after manual close is the final destination', async ({ browser }) => {
+  const { context, page } = await openClass(browser, 320);
+  try {
+    await nav(page, 'Tabellone');
+    await firstRow(page).click();
+
+    await page.evaluate(() => {
+      const row = document.querySelector(
+        '[data-testid="matrix-compact-toggle"][aria-controls="matrix-compact-details-fittizio-studente-01"]'
+      )?.closest('article');
+      const buttons = Array.from(row?.querySelectorAll('button') ?? []);
+      const toggle = buttons.find(element => element.getAttribute('data-testid') === 'matrix-compact-toggle');
+      const report = buttons.find(element => element.textContent?.trim() === 'Apri scheda alunno');
+      if (!toggle || !report) throw new Error('Missing synthetic row actions');
+      toggle.click();
+      report.click(); // queued report must override pending no-op collapse
+    });
+
+    await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
+    expect((await page.evaluate(() => history.state)).tab).toBe('report');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+  } finally { await context.close(); }
+});
