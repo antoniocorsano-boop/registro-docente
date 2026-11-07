@@ -76,7 +76,9 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(app).toContain('setReturningToStudentOrigin(returningContext)');
     expect(app).toContain("if (!options.preserveStudentReturnContext) {");
     expect(app).toContain('studentReportReturnContextRef.current = null;');
-    expect(app).toContain("originContext?.studentId === studentId");
+    expect(app).toContain("safeOriginContext?.studentId === studentId");
+    expect(app).toContain("pendingInlineCollapse && originContext?.originTab === 'tabellone'");
+    expect(app).toContain("expandedStudentId: null");
     expect(app).toContain('returnContext={returningToStudentOrigin?.originTab');
     expect(app).toContain('const current = studentReportReturnContextRef.current;');
     expect(app).toContain("ui: { ...current.ui, studentSearch: '' }");
