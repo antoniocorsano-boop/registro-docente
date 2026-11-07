@@ -101,6 +101,7 @@ jobs:
           cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
           cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
           cp tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs .browser-tools/mobile-actions-01-adaptive-copilot.spec.cjs
+          cp tests/browser/reg-nav-01-main-reconciled.spec.cjs .browser-tools/reg-nav-01-main-reconciled.spec.cjs
           cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
           cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
           cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
@@ -300,6 +301,7 @@ jobs:
             ux-qa-01-navigation.spec.cjs \
             ux-qa-01-review-regressions.spec.cjs \
             ux-qa-02-progressive-disclosure.spec.cjs \
+            reg-nav-01-main-reconciled.spec.cjs \
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/test-results

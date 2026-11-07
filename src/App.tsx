@@ -156,6 +156,13 @@ import {
 import { buildRegistroSemanticMemorySnapshot } from './semanticMemory/projections';
 import { syncRegistroSemanticMemory } from './semanticMemory/sync';
 
+import {
+  SPECIALIST_TARGET_HISTORY_KEY,
+  recallSpecialistTarget,
+  forgetSpecialistTarget,
+  rememberSpecialistTarget,
+  type SpecialistTargetMemory
+} from './navigation/specialistTargetMemory';
 import { Navbar, type Header01SecurityBindings } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
@@ -316,12 +323,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
+  // Batch IDs never enter the browser history; only per-unlocked-session opaque tokens do.
+  const evaluationTargetMemoryRef = useRef<SpecialistTargetMemory>(new Map());
   // Only one report detour can be active. Never persisted or added to history.state.
   const studentReportReturnContextRef = useRef<StudentReportReturnContext | null>(null);
   const [returningToStudentOrigin, setReturningToStudentOrigin] = useState<StudentReportReturnContext | null>(null);
   // A pending explicit route consumes the temporary inline Tabellone history
   // step before adding the new destination, avoiding a phantom Back entry.
   const pendingMobileMatrixExitRef = useRef<{ classId: string; proceed: () => void } | null>(null);
+  // Only one cancellation traversal may be outstanding. New destinations are
+  // queued until its matching popstate is delivered (latest intent wins).
+  const pendingEvaluationCancelRef = useRef<{ classId: string; proceed: (() => void) | null } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
@@ -533,8 +545,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
+    options: {
+      preserveRecordSession?: boolean;
+      studentId?: string;
+      preserveStudentReturnContext?: boolean;
+      evaluationBatchId?: string | null;
+      returnTab?: ActiveTab;
+      navigationMode?: 'push' | 'replace';
+    } = {}
   ) => {
+    if (pendingEvaluationCancelRef.current) {
+      // Do not push on top of a history traversal that has not yet finished.
+      pendingEvaluationCancelRef.current.proceed = tab === 'storico'
+        ? null
+        : () => handleNavigateTab(tab, options);
+      return;
+    }
     // A previous inline Back may still be pending when another control fires.
     // ALL destinations, including the student report, must be serialized here.
     // Only a report requested without a pending exit bypasses inline collapse.
@@ -574,16 +600,41 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           ?? appDataRef.current.classes.find(candidate => candidate.id === classId)?.students[0]?.id)
         : undefined;
       if (tab === 'report') setSelectedStudentForReport(studentId ?? null);
+      // Existing student-report history remains authoritative (#128/#130/#134).
+      // Only evaluation editing receives an additional session-only target token.
+      const requestedBatch = tab === 'voti'
+        ? (options.evaluationBatchId === undefined ? editingBatchId : options.evaluationBatchId)
+        : null;
+      const currentClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
+      const validBatch = requestedBatch && currentClass?.grades.some(grade => grade.batchId === requestedBatch)
+        ? requestedBatch : null;
+      let evaluationToken: string | null = null;
+      if (classId && validBatch) {
+        const token = crypto.randomUUID();
+        if (rememberSpecialistTarget(evaluationTargetMemoryRef.current, token, classId, 'voti', {
+          kind: 'evaluation', batchId: validBatch
+        })) evaluationToken = token;
+      }
       const state = tab === 'report' && classId && studentId
         ? createStudentReportHistoryState(classId, studentId)
-        : { classId, tab };
+        : {
+            classId, tab,
+            ...(evaluationToken ? { [SPECIALIST_TARGET_HISTORY_KEY]: evaluationToken } : {}),
+            ...(options.returnTab ? { returnTab: options.returnTab } : {})
+          };
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
-      history.pushState(state, '', query ? `?${query}` : window.location.pathname);
-    } catch (e) {}
-  }, [publishRecordSession, queueMobileMatrixExit, setActiveTab]);
+      if (options.navigationMode === 'replace') {
+        history.replaceState(state, '', query ? `?${query}` : window.location.pathname);
+      } else {
+        history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+      }
+    } catch {
+      // History API failures never authorize a professional write.
+    }
+  }, [editingBatchId, publishRecordSession, queueMobileMatrixExit, setActiveTab]);
 
   /** Open one student's report as a REAL browser-history route, not only a React tab. */
   const handleOpenStudentReport = useCallback((
@@ -1542,6 +1593,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         : null;
       const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
 
+      // Cancelled evaluation editors use their own serialized Back traversal.
+      // Resolve it before allowing another explicit destination to be pushed.
+      const pendingEvaluationCancel = pendingEvaluationCancelRef.current;
+      if (pendingEvaluationCancel) pendingEvaluationCancelRef.current = null;
+      const queuedEvaluationDestination = pendingEvaluationCancel
+        && nextCurrentClassId === pendingEvaluationCancel.classId && nextTab === 'storico'
+          ? pendingEvaluationCancel.proceed : null;
+
       const pendingExit = pendingMobileMatrixExitRef.current;
       if (pendingExit) {
         pendingMobileMatrixExitRef.current = null;
@@ -1555,9 +1614,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // A Back/Forward within one mobile Tabellone is a disclosure toggle,
       // not a professional navigation. Do not terminate Rivedi/record sessions.
       // MatrixView listens to this same event to close/reopen a valid row.
-      if (nextCurrentClassId === currentClassIdRef.current
+      if (!pendingEvaluationCancel
+        && nextCurrentClassId === currentClassIdRef.current
         && nextTab === activeTabRef.current
-        && nextTab !== 'report') {
+        && nextTab !== 'report' && nextTab !== 'voti') {
         return;
       }
 
@@ -1566,6 +1626,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         nextCurrentClassId,
         appDataRef.current.classes
       );
+      const savedEvaluation = recallSpecialistTarget(
+        evaluationTargetMemoryRef.current, e.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+        nextCurrentClassId, nextTab
+      );
+      const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === nextCurrentClassId);
+      const restoredBatch = savedEvaluation?.kind === 'evaluation'
+        && selectedClass?.grades.some(grade => grade.batchId === savedEvaluation.batchId)
+          ? savedEvaluation.batchId : null;
+      if (savedEvaluation?.kind === 'evaluation' && !restoredBatch) {
+        forgetSpecialistTarget(
+          evaluationTargetMemoryRef.current, e.state?.[SPECIALIST_TARGET_HISTORY_KEY],
+          nextCurrentClassId, nextTab
+        );
+      }
+      setEditingBatchId(nextTab === 'voti' ? restoredBatch : null);
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
       setSelectedStudentForReport(restoredStudentId);
@@ -1589,6 +1664,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       }
       setReturningToStudentOrigin(returningContext);
       setActiveTab(effectiveTab, { preserveStudentReturnContext: true });
+      // Execute only after restoring the legitimate underlying history entry.
+      // A class mismatch discards the queued destination rather than guessing.
+      queuedEvaluationDestination?.();
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -1819,6 +1897,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    if (pendingEvaluationCancelRef.current) {
+      pendingEvaluationCancelRef.current.proceed = () => handleSelectClass(classId);
+      return;
+    }
     if (queueMobileMatrixExit(() => handleSelectClass(classId))) return;
     studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
@@ -1854,6 +1936,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   const handleNavigateHome = () => {
+    if (pendingEvaluationCancelRef.current) {
+      pendingEvaluationCancelRef.current.proceed = handleNavigateHome;
+      return;
+    }
     if (queueMobileMatrixExit(handleNavigateHome)) return;
     studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
@@ -1958,7 +2044,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
         if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
-          setActiveTab('storico');
+          if (currentClassIdRef.current === classId) {
+            handleNavigateTab('storico', { navigationMode: 'replace', evaluationBatchId: null });
+          }
         }
       }
     }).then(() => undefined);
@@ -1998,11 +2086,51 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }).then(() => undefined);
   };
 
-  // Edit batch
+  // Edit batch: create a navigable history entry associated with the authorized class.
   const handleEditBatch = (batchId: string) => {
+    if (pendingEvaluationCancelRef.current) {
+      // Defer BOTH the selected batch and the history transition. Merely
+      // queuing handleNavigateTab would let popstate reset editingBatchId.
+      pendingEvaluationCancelRef.current.proceed = () => handleEditBatch(batchId);
+      return;
+    }
+    const classId = currentClassIdRef.current;
+    const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
+    if (!selectedClass?.grades.some(grade => grade.batchId === batchId)) return;
     setEditingBatchId(batchId);
-    setActiveTab('voti');
+    const fromStorico = window.history.state?.classId === classId
+      && window.history.state?.tab === 'storico';
+    handleNavigateTab('voti', {
+      evaluationBatchId: batchId,
+      ...(fromStorico ? { returnTab: 'storico' } : {})
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Annulla Modifica: never write, and never leave an orphaned new-evaluation editor.
+  const handleCancelEvaluationEdit = () => {
+    const classId = currentClassIdRef.current;
+    const entry = window.history.state;
+    forgetSpecialistTarget(
+      evaluationTargetMemoryRef.current,
+      entry?.[SPECIALIST_TARGET_HISTORY_KEY], classId, 'voti'
+    );
+    setEditingBatchId(null);
+    if (classId && entry?.classId === classId && entry?.tab === 'voti'
+      && entry?.returnTab === 'storico' && window.history.length > 1) {
+      try {
+        const query = new URLSearchParams({ class: classId, tab: 'storico' });
+        history.replaceState({ classId, tab: 'storico' }, '', `?${query.toString()}`);
+        pendingEvaluationCancelRef.current = { classId, proceed: null };
+        setActiveTab('storico');
+        history.back();
+        return;
+      } catch {
+        pendingEvaluationCancelRef.current = null;
+        // Fallback to an explicit safe replacement.
+      }
+    }
+    if (classId) handleNavigateTab('storico', { navigationMode: 'replace', evaluationBatchId: null });
   };
 
   // Delete batch
@@ -2435,7 +2563,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
-            onCancelEdit={() => setEditingBatchId(null)}
+            onCancelEdit={handleCancelEvaluationEdit}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
@@ -2489,7 +2617,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteBatch={handleDeleteBatch}
             onNewEvaluation={() => {
               setEditingBatchId(null);
-              setActiveTab('voti');
+              handleNavigateTab('voti', { evaluationBatchId: null });
             }}
           />
         )}

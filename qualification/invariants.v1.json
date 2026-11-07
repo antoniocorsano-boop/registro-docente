@@ -865,6 +865,36 @@
         "tests/browser/nav-back-01-student-report.spec.cjs",
         "tests/browser/nav-context-01-return-origin.spec.cjs"
       ]
+    },
+    {
+      "id": "REG-NAV-01-I01",
+      "owner": "REG-NAV-01",
+      "statement": "Specialist evaluation editing in the current class creates a browser-history entry with a session-only opaque evaluation token, while keeping the latest student-report and mobile Tabellone navigation contracts unchanged. Cancel editing discards only volatile changes, returns to Storico and invalidates the canceled editor route. Back/Forward never restores a deleted or cross-class evaluation. Saving changes the browser route only after a confirmed durable commit; no grade, batch or student identity is added to the evaluation URL or history.state.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/navigation/specialistTargetMemory.ts",
+        "src/navigation/specialistTargetMemory.test.ts",
+        "src/security/regNav01ReconciledEvaluationContract.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts",
+        "tests/browser/reg-nav-01-main-reconciled.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/regNav01ReconciledEvaluationContract.test.ts",
+        "src/navigation/specialistTargetMemory.test.ts",
+        "src/security/navBack01StudentReportHistory.test.ts",
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/mobileMatrixDisclosureBackContract.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/reg-nav-01-main-reconciled.spec.cjs",
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/nav-mobile-disclosure-back.spec.cjs"
+      ]
     }
   ]
 }

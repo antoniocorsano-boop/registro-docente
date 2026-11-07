@@ -28,7 +28,10 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     const evaluations = sectionBetween('// Save evaluations batch', '// Save behavior notes');
     expect(evaluations).toContain('commitAppDataMutation');
     expect(evaluations).toContain('afterCommit');
-    expect(evaluations.indexOf("setActiveTab('storico')")).toBeGreaterThan(evaluations.indexOf('afterCommit'));
+    const routeUpdate = "handleNavigateTab('storico', { navigationMode: 'replace', evaluationBatchId: null })";
+    expect(evaluations.indexOf(routeUpdate)).toBeGreaterThan(evaluations.indexOf('afterCommit'));
+    expect(evaluations).toContain('navigationVersionRef.current === navigationVersionAtSave');
+    expect(evaluations).toContain('currentClassIdRef.current === classId');
 
     const behaviors = sectionBetween('// Save behavior notes', '// Edit batch');
     expect(behaviors).toContain('commitAppDataMutation');
