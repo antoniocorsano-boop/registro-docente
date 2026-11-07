@@ -43,6 +43,9 @@ describe('NAV-MOBILE-BACK-01 — inline Tabellone disclosure has a real Back ste
     expect(code).toContain('lastExpandedMobileStudentIdRef.current');
     const app = readFileSync('src/App.tsx', 'utf8');
     expect(app).toContain('pendingMobileMatrixExitRef');
+    expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = proceed;');
+    expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current');
+    expect(browser).toContain('two rapid navigation requests consume exactly one Back step');
     expect(app).toContain('queueMobileMatrixExit(() => handleNavigateTab(tab, options))');
     expect(app).toContain('queueMobileMatrixExit(() => handleSelectClass(classId))');
     expect(app).toContain('queueMobileMatrixExit(handleNavigateHome)');

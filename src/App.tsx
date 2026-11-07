@@ -513,6 +513,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // the requested explicit navigation from its preceding collapsed route.
   // The report route is different: it must preserve the originating detail.
   const queueMobileMatrixExit = useCallback((proceed: () => void): boolean => {
+    // Last explicit destination wins; never traverse Back a second time
+    // while the first asynchronous browser popstate is still pending.
+    if (pendingMobileMatrixExitRef.current) {
+      pendingMobileMatrixExitRef.current.proceed = proceed;
+      return true;
+    }
     const classId = currentClassIdRef.current;
     if (!classId || !isMobileMatrixDisclosureState(window.history.state, classId)) return false;
     pendingMobileMatrixExitRef.current = { classId, proceed };
@@ -529,13 +535,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
   ) => {
-    if (tab !== 'report' && isMobileMatrixDisclosureState(window.history.state, currentClassIdRef.current ?? '')) {
-      if (tab === activeTabRef.current) {
-        // Tapping the already active Tabellone behaves like a single Back.
-        window.history.back();
+    if (tab !== 'report') {
+      // Buttons can be tapped twice before history.back() emits popstate:
+      // update the pending destination without another Back traversal.
+      if (pendingMobileMatrixExitRef.current) {
+        pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current
+          ? () => {} // the latest tap cancels a requested route change
+          : () => handleNavigateTab(tab, options);
         return;
       }
-      if (queueMobileMatrixExit(() => handleNavigateTab(tab, options))) return;
+      if (isMobileMatrixDisclosureState(window.history.state, currentClassIdRef.current ?? '')) {
+        if (tab === activeTabRef.current) {
+          // The active Tabellone button is just an inline collapse.
+          if (queueMobileMatrixExit(() => {})) return;
+        }
+        if (queueMobileMatrixExit(() => handleNavigateTab(tab, options))) return;
+      }
     }
     const hadReviewSession = reviewSessionRef.current !== null;
     setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });

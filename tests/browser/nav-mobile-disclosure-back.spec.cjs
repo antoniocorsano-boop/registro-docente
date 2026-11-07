@@ -156,3 +156,31 @@ test('NAV-MOBILE-BACK / 390 — Rivedi mission survives an inline Back and an ex
     await expect(mission.getByRole('button', { name: 'Torna a Rivedi' })).toBeVisible();
   } finally { await context.close(); }
 });
+
+
+test('NAV-MOBILE-BACK / 390 — two rapid navigation requests consume exactly one Back step', async ({ browser }) => {
+  const { context, page } = await openClass(browser);
+  try {
+    await nav(page, 'Tabellone');
+    await firstRow(page).click();
+    await page.evaluate(() => {
+      const mobile = Array.from(document.querySelectorAll('nav')).find(
+        element => typeof element.className === 'string' && element.className.includes('md:hidden')
+      );
+      if (!mobile) throw new Error('Missing mobile navigation');
+      const buttons = Array.from(mobile.querySelectorAll('button'));
+      const open = (label) => {
+        const button = buttons.find(element => element.textContent?.trim() === label);
+        if (!button) throw new Error('Missing navigation: ' + label);
+        button.click();
+      };
+      open('Valutazioni');
+      open('Analisi');
+    });
+    await expect(page.getByTestId('header01-context')).toContainText('Analisi');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
+  } finally { await context.close(); }
+});
