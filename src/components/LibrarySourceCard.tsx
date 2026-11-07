@@ -32,6 +32,7 @@ interface LibrarySourceCardProps {
   onUnlink: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDelete: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
+  onPrepareAssessment: (sourceId: string) => void;
   isCopilotOpen: boolean;
 }
 
@@ -135,6 +136,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   onUnlink,
   onDelete,
   onOpenCopilot,
+  onPrepareAssessment,
   isCopilotOpen
 }) => {
   const [targetUdaId, setTargetUdaId] = useState('');
@@ -645,6 +647,17 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               </div>
             ) : (
               <div className="grid gap-2">
+                {source.privacy === 'teacher-professional' && source.status === 'ready' && currentClassName && (
+                  <button
+                    type="button"
+                    data-testid="int02-prepare-assessment"
+                    onClick={() => onPrepareAssessment(source.id)}
+                    disabled={isPending}
+                    className="min-h-[44px] w-full rounded-lg border border-cyan-500 bg-cyan-950/40 px-3 text-sm font-semibold text-cyan-100 disabled:opacity-50"
+                  >
+                    Prepara una verifica con questa fonte
+                  </button>
+                )}
                 {LIBRARY_USE_ACTIONS.map(action => (
                   <button
                     key={action.intent}
