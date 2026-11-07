@@ -380,7 +380,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             data-testid="header01-go-home"
             onClick={() => {
-              if (headerSecurity) {
+              // Keep the established desktop Oggi route; only the new mobile
+              // header requests an explicit confirmation before leaving a class.
+              if (headerSecurity && window.matchMedia('(max-width: 767px)').matches) {
                 requestNavigateHome();
               } else {
                 onNavigateHome();
