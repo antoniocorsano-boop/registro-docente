@@ -957,7 +957,9 @@
         "src/components/VerificheOnlineView.tsx",
         "src/library/assessmentHandoff.ts",
         "src/library/assessmentHandoff.test.ts",
-        "src/security/int02AssessmentHandoffContract.test.ts"
+        "src/security/int02AssessmentHandoffContract.test.ts",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
       ],
       "tests": [
         "src/library/assessmentHandoff.test.ts",
@@ -968,6 +970,7 @@
         "src/security/int01DidacticContinuityUiContract.test.ts"
       ],
       "browserSmoke": [
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
         "tests/browser/aic-04-cross-surface-entry.spec.cjs",
         "tests/browser/int-01-didactic-continuity.spec.cjs"
       ]
