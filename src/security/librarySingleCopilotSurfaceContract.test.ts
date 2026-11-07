@@ -58,7 +58,7 @@ describe('single contextual Copilot surface contract', () => {
     expect(appSource).toContain('onOpenCopilot={openLibraryCopilot}');
     expect(udaWorkspaceSource).toContain('onOpenCopilot');
     expect(udaWorkspaceSource).toContain("surface: 'uda'");
-    expect(udaWorkspaceSource).toContain('className: uda.className');
+    expect(udaWorkspaceSource).toContain('className: currentClassName || uda.className');
     expect(udaWorkspaceSource).toContain('udaId: uda.id');
     expect(udaWorkspaceSource).toContain('Usa con Copilota');
   });
