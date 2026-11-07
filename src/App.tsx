@@ -1897,6 +1897,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    if (pendingEvaluationCancelRef.current) {
+      pendingEvaluationCancelRef.current.proceed = () => handleSelectClass(classId);
+      return;
+    }
     if (queueMobileMatrixExit(() => handleSelectClass(classId))) return;
     studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
@@ -1932,6 +1936,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   const handleNavigateHome = () => {
+    if (pendingEvaluationCancelRef.current) {
+      pendingEvaluationCancelRef.current.proceed = handleNavigateHome;
+      return;
+    }
     if (queueMobileMatrixExit(handleNavigateHome)) return;
     studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
