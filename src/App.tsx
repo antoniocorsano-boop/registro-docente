@@ -595,10 +595,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!selectedClass?.students.some(student => student.id === studentId)) return;
 
     // Accept a context only from the currently open professional surface.
-    // No student names, grades, or search queries ever enter browser history.
-    studentReportReturnContextRef.current = originContext?.studentId === studentId
+    // If an earlier inline Back is already consuming its detail marker,
+    // the report returns to the COLLAPSED Tabellone. Otherwise a later
+    // Back would restore an expanded row without its corresponding step.
+    // Keep the other transient filters but never put names or grades in history.
+    const pendingInlineCollapse = pendingMobileMatrixExitRef.current !== null;
+    const safeOriginContext = pendingInlineCollapse && originContext?.originTab === 'tabellone'
+      ? { ...originContext, ui: { ...originContext.ui, expandedStudentId: null } }
+      : originContext;
+    studentReportReturnContextRef.current = safeOriginContext?.studentId === studentId
       ? resolveStudentReportReturnContext(
-          originContext,
+          safeOriginContext,
           classId,
           activeTab,
           appDataRef.current.classes

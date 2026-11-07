@@ -262,6 +262,8 @@ test('NAV-MOBILE-BACK / 390 — Scheda alunno overrides a pending Valutazioni ex
 
     await page.goBack();
     await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    // The previously consumed disclosure step cannot reopen the old row.
+    await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
     await page.goBack();
     await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
   } finally { await context.close(); }
@@ -289,5 +291,8 @@ test('NAV-MOBILE-BACK / 320 — report requested after manual close is the final
     expect((await page.evaluate(() => history.state)).tab).toBe('report');
     await page.goBack();
     await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
   } finally { await context.close(); }
 });

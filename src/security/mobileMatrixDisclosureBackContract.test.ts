@@ -48,6 +48,9 @@ describe('NAV-MOBILE-BACK-01 — inline Tabellone disclosure has a real Back ste
     expect(app).toContain('pendingMobileMatrixExitRef');
     expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = proceed;');
     expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current');
+    expect(app).toContain("pendingInlineCollapse && originContext?.originTab === 'tabellone'");
+    expect(app).toContain('expandedStudentId: null');
+    expect(browser).toContain('previously consumed disclosure step cannot reopen the old row');
     const pendingGuard = app.indexOf('if (pendingMobileMatrixExitRef.current) {', app.indexOf('const handleNavigateTab ='));
     const reportGuard = app.indexOf("if (tab !== 'report') {", app.indexOf('const handleNavigateTab ='));
     expect(pendingGuard).toBeGreaterThan(-1);
