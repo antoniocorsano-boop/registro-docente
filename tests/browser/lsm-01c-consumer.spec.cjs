@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -36,7 +37,7 @@ async function reloadAndUnlock(page) {
 }
 
 async function openLibrary(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.getByRole('complementary').getByRole('button', { name: 'Biblioteca privata', exact: true });
   await expect(item).toBeVisible();
   await item.click();
@@ -44,7 +45,7 @@ async function openLibrary(page) {
 }
 
 async function openSettings(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.getByRole('complementary').getByRole('button', { name: 'Impostazioni', exact: true });
   await expect(item).toBeVisible();
   await item.click();
@@ -74,7 +75,7 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();

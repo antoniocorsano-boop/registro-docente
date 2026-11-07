@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -22,7 +23,7 @@ async function setupFreshVault(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.locator('aside').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();

@@ -54,6 +54,15 @@ describe('HEADER-01 / Task 5 — collegamento professionale protetto (isolato)',
     expect(home).toContain('<span className="hidden md:inline">Oggi</span>');
   });
 
+
+  test('TODAY-01 resta nominato Oggi per le tecnologie assistive; la conferma è solo mobile', () => {
+    expect(home).toContain('<h2 id="today-heading" aria-label="Oggi"');
+    expect(home).toContain('<span className="md:hidden">Da dove vuoi iniziare?</span>');
+    expect(nav).toContain("if (headerSecurity && window.matchMedia('(max-width: 767px)').matches)");
+    expect(nav).toContain('requestNavigateHome();');
+    expect(nav).toContain('onNavigateHome();');
+  });
+
   test('il pannello mobile preserva tastiera, focus e controllo Esc', () => {
     expect(nav).toContain('id="registro-navigation-drawer"');
     expect(nav).toContain('aria-label="Navigazione del Registro"');

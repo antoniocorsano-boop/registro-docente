@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const path = require('node:path');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
@@ -26,11 +27,12 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function openOggiFromDrawer(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   const oggi = drawer.getByRole('button', { name: 'Oggi', exact: true });
   await expect(oggi).toBeVisible();
   await oggi.click();
+  await settleOggiNavigation(page);
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 }
 

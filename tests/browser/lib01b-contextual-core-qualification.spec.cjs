@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
@@ -32,7 +33,7 @@ async function reloadAndUnlock(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();

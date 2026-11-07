@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const vaultPassword = 'qualification-invariant-smoke';
@@ -14,7 +15,7 @@ async function assertNoRoutineBackupInterruption(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.getByRole('complementary').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
