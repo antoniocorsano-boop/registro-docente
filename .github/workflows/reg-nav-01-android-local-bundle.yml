@@ -1,0 +1,45 @@
+name: "REG-NAV-01 Android local-only static bundle"
+
+on:
+  push:
+    branches:
+      - tools/reg-nav-01-termux-bundle-305aacb8
+
+permissions:
+  contents: read
+
+jobs:
+  static-bundle:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact engineering-qualified source
+        uses: actions/checkout@v4
+        with:
+          ref: 305aacb8fca1878a9175f8834e11e474b1db5c61
+          persist-credentials: false
+      - name: Verify immutable source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "305aacb8fca1878a9175f8834e11e474b1db5c61"
+          echo "Exact source: $(git rev-parse HEAD)"
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies from frozen lockfile
+        run: bun install --frozen-lockfile
+      - name: Build static site with same qualified build command
+        run: bun run build
+      - name: Attach source identification without touching application assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          printf '%s\n' '305aacb8fca1878a9175f8834e11e474b1db5c61' > dist/REG_NAV_01_SOURCE_SHA.txt
+      - name: Upload static bundle (downloadable to Termux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-navs1-android-local-305aacb8
+          path: dist/
+          if-no-files-found: error
+          retention-days: 5
