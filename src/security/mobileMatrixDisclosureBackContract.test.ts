@@ -38,14 +38,19 @@ describe('NAV-MOBILE-BACK-01 — inline Tabellone disclosure has a real Back ste
     const code = readFileSync('src/components/MatrixView.tsx', 'utf8');
     const browser = readFileSync('tests/browser/nav-mobile-disclosure-back.spec.cjs', 'utf8');
     expect(code).toContain('window.history.pushState(state,');
-    expect(code).toContain("window.history.back();");
+    expect(code).toContain('onRequestMobileDisclosureCollapse();');
+    expect(code).not.toContain('window.history.back();');
+
     expect(code).toContain("window.addEventListener('popstate', handleMobileDisclosurePopState)");
     expect(code).toContain('lastExpandedMobileStudentIdRef.current');
     const app = readFileSync('src/App.tsx', 'utf8');
+    expect(app).toContain('onRequestMobileDisclosureCollapse={() => { queueMobileMatrixExit(() => {}); }}');
     expect(app).toContain('pendingMobileMatrixExitRef');
     expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = proceed;');
     expect(app).toContain('pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current');
     expect(browser).toContain('two rapid navigation requests consume exactly one Back step');
+    expect(browser).toContain('two manual collapse taps cause only one history Back');
+    expect(browser).toContain('manual collapse immediately followed by navigation');
     expect(app).toContain('queueMobileMatrixExit(() => handleNavigateTab(tab, options))');
     expect(app).toContain('queueMobileMatrixExit(() => handleSelectClass(classId))');
     expect(app).toContain('queueMobileMatrixExit(handleNavigateHome)');

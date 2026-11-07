@@ -2464,6 +2464,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             key={currentClass.id}
             currentClass={currentClass}
             onOpenStudentReport={handleOpenStudentReport}
+            onRequestMobileDisclosureCollapse={() => { queueMobileMatrixExit(() => {}); }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
             returnContext={returningToStudentOrigin?.originTab === 'tabellone'

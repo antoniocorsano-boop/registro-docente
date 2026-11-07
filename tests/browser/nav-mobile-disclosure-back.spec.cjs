@@ -184,3 +184,48 @@ test('NAV-MOBILE-BACK / 390 — two rapid navigation requests consume exactly on
     await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
   } finally { await context.close(); }
 });
+
+
+test('NAV-MOBILE-BACK / 390 — two manual collapse taps cause only one history Back', async ({ browser }) => {
+  const { context, page } = await openClass(browser);
+  try {
+    await nav(page, 'Tabellone');
+    const row = firstRow(page);
+    await row.click();
+    await page.evaluate(() => {
+      const button = document.querySelector('[data-testid="matrix-compact-toggle"][aria-controls="matrix-compact-details-fittizio-studente-01"]');
+      if (!button) throw new Error('Missing synthetic row');
+      button.click();
+      button.click(); // both clicks arrive before the asynchronous popstate
+    });
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
+  } finally { await context.close(); }
+});
+
+test('NAV-MOBILE-BACK / 390 — manual collapse immediately followed by navigation remains one history step', async ({ browser }) => {
+  const { context, page } = await openClass(browser);
+  try {
+    await nav(page, 'Tabellone');
+    await firstRow(page).click();
+    await page.evaluate(() => {
+      const button = document.querySelector('[data-testid="matrix-compact-toggle"][aria-controls="matrix-compact-details-fittizio-studente-01"]');
+      const mobile = Array.from(document.querySelectorAll('nav')).find(
+        element => typeof element.className === 'string' && element.className.includes('md:hidden')
+      );
+      const evaluations = Array.from(mobile?.querySelectorAll('button') ?? [])
+        .find(element => element.textContent?.trim() === 'Valutazioni');
+      if (!button || !evaluations) throw new Error('Missing navigation controls');
+      button.click();
+      evaluations.click();
+    });
+    await expect(page.getByTestId('header01-context')).toContainText('Valutazioni');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
+  } finally { await context.close(); }
+});

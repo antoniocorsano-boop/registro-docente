@@ -22,6 +22,7 @@ type MatrixReturnContext = Extract<StudentReportReturnContext, { originTab: 'tab
 interface MatrixViewProps {
   currentClass: ClassData;
   onOpenStudentReport: (studentId: string, originContext?: StudentReportReturnContext) => void;
+  onRequestMobileDisclosureCollapse?: () => void;
   isPrivacyShieldActive?: boolean;
   settings?: AppSettings;
   returnContext?: MatrixReturnContext;
@@ -30,6 +31,7 @@ interface MatrixViewProps {
 export const MatrixView: React.FC<MatrixViewProps> = ({
   currentClass,
   onOpenStudentReport,
+  onRequestMobileDisclosureCollapse,
   isPrivacyShieldActive = true,
   settings,
   returnContext
@@ -88,9 +90,11 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
     const isOpen = expandedMobileStudent?.classId === currentClass.id
       && expandedMobileStudent.studentId === studentId;
     if (isOpen) {
-      if (isMobileMatrixDisclosureState(window.history.state, currentClass.id)) {
-        // A manual collapse must consume the same entry as Android Back.
-        window.history.back();
+      if (isMobileMatrixDisclosureState(window.history.state, currentClass.id)
+        && onRequestMobileDisclosureCollapse) {
+        // Use the same App-owned navigation queue as tabs, classes and Home.
+        // A second rapid tap updates the pending callback, never calls Back twice.
+        onRequestMobileDisclosureCollapse();
       } else {
         setExpandedMobileStudent(null);
       }
