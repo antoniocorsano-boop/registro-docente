@@ -64,6 +64,11 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
 
   await page.getByTestId('int02-open-assessment-editor').click();
   await expect(page.getByRole('heading', { name: 'Crea Nuova Verifica Formativa' })).toBeVisible();
+  await expect(page.getByTestId('int02-open-assessment-editor')).toHaveCount(0);
+  await expect(handoff.getByRole('status')).toContainText('Editor già aperto');
+  const titleInput = page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale');
+  await titleInput.fill('BOZZA NON SALVATA INT-02');
+  await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
   const udaSelect = page.getByText('Collega a UDA Curricolare').locator('..').locator('select');
   await expect(udaSelect).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Salva Verifica' })).toBeVisible();
