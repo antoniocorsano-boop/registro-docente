@@ -727,6 +727,39 @@
       "browserSmoke": [
         "tests/browser/header-01-compact-isolated.spec.cjs"
       ]
+    },
+    {
+      "id": "HEADER-01-I04",
+      "owner": "HEADER-01",
+      "statement": "Real mobile-header wiring delegates lock and auto-lock changes directly to SecureRegistroRoot, does not create duplicate mobile Vault controls or false save confirmations, uses the brand exclusively to open navigation, requires explicit confirmation before the Oggi route resets professional context, and preserves desktop specialist navigation. No actual records are mutated in qualification.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/components/Navbar.tsx",
+        "src/components/SecureRegistroRoot.tsx",
+        "src/components/VaultControls.tsx",
+        "src/security/header01ProductionWiringContract.test.ts",
+        "tests/browser/fixtures/header01-navbar.html",
+        "tests/browser/fixtures/header01-navbar-fixture.tsx",
+        "tests/browser/header-01-navbar-integration.spec.cjs",
+        ".github/workflows/header-01-isolated-qualification.yml",
+        "src/components/HomeView.tsx",
+        "src/security/today01HomeUiContract.test.ts",
+        "tests/browser/",
+        ".github/workflows/browser-qualification.yml",
+        "src/security/mobileActions01NoOcclusion.test.ts"
+      ],
+      "tests": [
+        "src/security/header01ProductionWiringContract.test.ts",
+        "src/security/header01TopBarContract.test.ts",
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/today01HomeUiContract.test.ts",
+        "src/security/mobileActions01NoOcclusion.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/header-01-navbar-integration.spec.cjs"
+      ]
     }
   ]
 }

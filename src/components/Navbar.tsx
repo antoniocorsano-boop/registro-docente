@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Header01TopBar } from './Header01TopBar';
+import { Header01DrawerSecurity, type HeaderAutoLockMinutes } from './Header01DrawerSecurity';
+import { resolveHeaderContext } from './headerContext';
 import { ActiveTab, ClassData } from '../types';
 import {
   Menu,
@@ -26,7 +29,15 @@ import {
 } from 'lucide-react';
 
 
+export interface Header01SecurityBindings {
+  autoLockMinutes: HeaderAutoLockMinutes;
+  onAutoLockChange: (minutes: HeaderAutoLockMinutes) => void;
+  onLock: () => void;
+}
+
 interface NavbarProps {
+  /** Authoritative controls passed directly from SecureRegistroRoot. */
+  headerSecurity?: Header01SecurityBindings;
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   currentClass: ClassData | undefined;
@@ -43,6 +54,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  headerSecurity,
   activeTab,
   setActiveTab,
   currentClass,
@@ -57,6 +69,67 @@ export const Navbar: React.FC<NavbarProps> = ({
   isPrivacyShieldActive,
   onTogglePrivacyShield
 }) => {
+  const [confirmHomeOpen, setConfirmHomeOpen] = useState(false);
+  const hasMobileSecurity = Boolean(headerSecurity);
+  const drawerPreviouslyOpen = useRef(false);
+  const confirmationPreviouslyOpen = useRef(false);
+  const confirmationCancelRef = useRef<HTMLButtonElement>(null);
+
+  // Focus is moved into the drawer and returned to the brand when closing.
+  // This is mobile-only: the established desktop navigation remains unchanged.
+  useEffect(() => {
+    if (!hasMobileSecurity || !window.matchMedia('(max-width: 767px)').matches) return;
+    if (isDrawerOpen) {
+      document.querySelector<HTMLButtonElement>('[data-testid="header01-go-home"]')?.focus();
+    } else if (drawerPreviouslyOpen.current && !confirmHomeOpen) {
+      document.querySelector<HTMLButtonElement>('[data-testid="header01-brand-navigation"]')?.focus();
+    }
+    drawerPreviouslyOpen.current = isDrawerOpen;
+  }, [hasMobileSecurity, isDrawerOpen, confirmHomeOpen]);
+
+  useEffect(() => {
+    if (confirmHomeOpen) {
+      confirmationCancelRef.current?.focus();
+    } else if (confirmationPreviouslyOpen.current && hasMobileSecurity) {
+      document.querySelector<HTMLButtonElement>('[data-testid="header01-brand-navigation"]')?.focus();
+    }
+    confirmationPreviouslyOpen.current = confirmHomeOpen;
+  }, [confirmHomeOpen, hasMobileSecurity]);
+
+  // The logo NEVER resets professional state; the explicit Oggi command
+  // requests confirmation before invoking the existing App owner.
+  const requestNavigateHome = () => {
+    setIsDrawerOpen(false);
+    if (activeTab === 'home' && !currentClass) {
+      onNavigateHome();
+      return;
+    }
+    setConfirmHomeOpen(true);
+  };
+
+  const handleDrawerKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsDrawerOpen(false);
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const elements = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], select:not(:disabled), input:not(:disabled), [tabindex="0"]',
+      ),
+    ).filter(element => element.getClientRects().length > 0);
+    if (!elements.length) return;
+    const first = elements[0];
+    const last = elements[elements.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   const handleNav = (tab: ActiveTab) => {
     if (!currentClass && ['dashboard', 'voti', 'comportamenti', 'analytics', 'tabellone', 'storico', 'report', 'dati'].includes(tab)) {
@@ -69,8 +142,26 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--border)] px-3 sm:px-4 py-2.5 flex items-center justify-between shadow-lg">
+      {headerSecurity && (
+        <div data-testid="header01-mobile-integration" className="sticky top-0 z-40 md:hidden">
+          <Header01TopBar
+            context={resolveHeaderContext({
+              activeTab,
+              currentClassName: currentClass?.name,
+            })}
+            saveNotice={{ kind: 'unknown', message: null, scope: null }}
+            isPrivacyShieldActive={isPrivacyShieldActive}
+            isMenuOpen={isDrawerOpen}
+            menuId="registro-navigation-drawer"
+            onToggleMenu={() => setIsDrawerOpen(!isDrawerOpen)}
+            onTogglePrivacyShield={onTogglePrivacyShield}
+            onLock={headerSecurity.onLock}
+          />
+        </div>
+      )}
+
+      {/* Legacy tablet/desktop header: hidden on mobile when HEADER-01 is wired. */}
+      <header className={`${headerSecurity ? 'hidden md:flex' : 'flex'} sticky top-0 z-40 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--border)] px-3 sm:px-4 py-2.5 items-center justify-between shadow-lg`}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsDrawerOpen(true)}
@@ -229,7 +320,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       )}
 
       {/* Class active banner for small screens */}
-      {currentClass && activeTab !== 'home' && (
+      {!headerSecurity && currentClass && activeTab !== 'home' && (
         <div className="md:hidden bg-[var(--surface-variant)] border-b border-[var(--border)] px-4 py-2 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 overflow-hidden">
             <span className="text-[var(--primary)] font-bold truncate">
@@ -258,6 +349,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Side Drawer */}
       <aside
+        id="registro-navigation-drawer"
+        aria-label="Navigazione del Registro"
+        aria-hidden={!isDrawerOpen}
+        inert={!isDrawerOpen}
+        onKeyDown={handleDrawerKeyDown}
         className={`fixed top-0 bottom-0 left-0 w-80 max-w-[85vw] bg-[var(--surface)] border-r border-[var(--border)] z-50 p-5 flex flex-col transition-transform duration-300 ease-out shadow-2xl ${
           isDrawerOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -281,9 +377,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <button
+            type="button"
+            data-testid="header01-go-home"
             onClick={() => {
-              onNavigateHome();
-              setIsDrawerOpen(false);
+              // Keep the established desktop Oggi route; only the new mobile
+              // header requests an explicit confirmation before leaving a class.
+              if (headerSecurity && window.matchMedia('(max-width: 767px)').matches) {
+                requestNavigateHome();
+              } else {
+                onNavigateHome();
+                setIsDrawerOpen(false);
+              }
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
               activeTab === 'home'
@@ -417,6 +521,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
 
+        {headerSecurity && (
+          <div className="md:hidden">
+            <Header01DrawerSecurity
+              autoLockMinutes={headerSecurity.autoLockMinutes}
+              onAutoLockChange={headerSecurity.onAutoLockChange}
+            />
+          </div>
+        )}
+
         {/* Drawer footer with backup actions */}
         <div className="pt-4 border-t border-[var(--border)] space-y-2 text-xs">
           <button
@@ -446,6 +559,66 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       </aside>
+
+      {confirmHomeOpen && (
+        <div
+          data-testid="header01-home-confirm"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/85 px-5"
+        >
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="header01-confirm-title"
+            aria-describedby="header01-confirm-description"
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setConfirmHomeOpen(false);
+              }
+              if (event.key === 'Tab') {
+                const controls = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+                if (controls.length === 2) {
+                  if (event.shiftKey && document.activeElement === controls[0]) {
+                    event.preventDefault();
+                    controls[1].focus();
+                  } else if (!event.shiftKey && document.activeElement === controls[1]) {
+                    event.preventDefault();
+                    controls[0].focus();
+                  }
+                }
+              }
+            }}
+            className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-slate-900 p-5 text-slate-100 shadow-2xl"
+          >
+            <h2 id="header01-confirm-title" className="text-base font-semibold">
+              Tornare a Oggi?
+            </h2>
+            <p id="header01-confirm-description" className="mt-2 text-sm leading-6 text-slate-300">
+              La sessione corrente verrà interrotta. Salva eventuali modifiche prima di uscire.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                ref={confirmationCancelRef}
+                type="button"
+                className="min-h-[48px] rounded-xl border border-slate-600 px-4 text-sm"
+                onClick={() => setConfirmHomeOpen(false)}
+              >
+                Rimani qui
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] rounded-xl bg-cyan-500 px-4 text-sm font-semibold text-slate-950"
+                onClick={() => {
+                  setConfirmHomeOpen(false);
+                  onNavigateHome();
+                }}
+              >
+                Torna a Oggi
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Bottom Navigation for mobile */}
       {currentClass && (

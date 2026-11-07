@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, privacyButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
 const { revealMaterialSourceSelect, expectDirectCopilotLaunch } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
@@ -57,7 +58,7 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   const item = drawer.getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
@@ -70,7 +71,7 @@ async function createSyntheticClassAndStudent(page) {
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await closePersistenceConfirmation(page);
 
-  const shield = page.locator('button[title^="Privacy Shield"]').first();
+  const shield = privacyButton(page);
   if (await shield.isVisible().catch(() => false)) await shield.click();
 
   const studentInput = page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)');
