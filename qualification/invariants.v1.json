@@ -926,7 +926,8 @@
         "src/context/udaClassScope.ts",
         "src/security/int01FinalReviewScopeContract.test.ts",
         "src/security/appVaultWiring.test.ts",
-        "tests/browser/ux-qa-01-review-regressions.spec.cjs"
+        "tests/browser/ux-qa-01-review-regressions.spec.cjs",
+        "src/security/int01NavCatalogFreshnessContract.test.ts"
       ],
       "tests": [
         "src/security/int01PlanningFrameContract.test.ts",
@@ -937,7 +938,8 @@
         "src/security/int01QualificationContract.test.ts",
         "src/security/int01CurricularSubjectCodeContract.test.ts",
         "src/security/int01FinalReviewScopeContract.test.ts",
-        "src/security/appVaultWiring.test.ts"
+        "src/security/appVaultWiring.test.ts",
+        "src/security/int01NavCatalogFreshnessContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-01-didactic-continuity.spec.cjs"
