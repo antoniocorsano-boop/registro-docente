@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+/** Session-only guard; drafts persist only after an explicit successful save. */
+export interface PlanningDraftGuard {
+  hasUnsavedChanges: () => boolean;
+  saveChanges: () => Promise<boolean>;
+  discardChanges: () => void;
+}
 import { calculateEffectiveCapacity } from '../../planning/capacity';
 import { getFirstCycleNormativeReference } from '../../planning/normative/italianFirstCycle';
 import type {
@@ -12,20 +18,29 @@ import { validateTeachingProfile } from '../../planning/validation';
 interface PlanningProfileEditorProps {
   profile?: TeachingProfile;
   onSave: (profile: TeachingProfile) => Promise<void>;
+  defaultSubjectCode?: string;
+  subjectDisplayLabel?: string;
+  defaultGradeLevel?: number;
+  onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
 }
 
 type PlanningSection = 'profile' | 'calendar' | 'organization';
 
-const createDraftProfile = (): TeachingProfile => {
+const createDraftProfile = (
+  defaultSubjectCode = 'tecnologia',
+  defaultGradeLevel = 1
+): TeachingProfile => {
   const schoolYear = '2026/27';
   const schoolOrder: SchoolOrder = 'lower_secondary';
-  const subjectCode = 'tecnologia';
+  const subjectCode = defaultSubjectCode.trim() || 'tecnologia';
+  const gradeLevel = Number.isInteger(defaultGradeLevel)
+    && defaultGradeLevel >= 1 && defaultGradeLevel <= 5 ? defaultGradeLevel : 1;
   return {
     id: `planning-profile-${Date.now()}`,
     schoolYear,
     schoolOrder,
-    gradeLevel: 1,
-    cohortRef: '2026-grade-1',
+    gradeLevel,
+    cohortRef: `2026-grade-${gradeLevel}`,
     subjectCode,
     normativeRegime: '',
     normativeReference: getFirstCycleNormativeReference({ schoolOrder, subjectCode, schoolYear }),
@@ -52,20 +67,94 @@ const sectionButtonClass = (active: boolean) =>
       : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-700 hover:text-white'
   }`;
 
-export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({ profile, onSave }) => {
-  const [draft, setDraft] = useState<TeachingProfile>(() => profile ?? createDraftProfile());
+export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({
+  profile, onSave, defaultSubjectCode = 'tecnologia', subjectDisplayLabel = '', defaultGradeLevel = 1,
+  onRegisterDraftGuard
+}) => {
+  const [draft, setDraft] = useState<TeachingProfile>(() =>
+    profile ?? createDraftProfile(defaultSubjectCode, defaultGradeLevel)
+  );
   const [activeSection, setActiveSection] = useState<PlanningSection>('profile');
   const [editingSection, setEditingSection] = useState<PlanningSection | null>(() => profile ? null : 'profile');
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // Durable profile is the baseline; opening/closing a panel never persists drafts.
+  const persistedRef = useRef(JSON.stringify(draft));
+  const draftRef = useRef(draft);
+  const dirtyRef = useRef(false);
+  const savePendingRef = useRef(false);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  draftRef.current = draft;
+  dirtyRef.current = JSON.stringify(draft) !== persistedRef.current;
 
   useEffect(() => {
     if (profile) {
+      persistedRef.current = JSON.stringify(profile);
+      draftRef.current = profile;
+      dirtyRef.current = false;
       setDraft(profile);
       setEditingSection(null);
     }
   }, [profile]);
+
+  const saveDraftChanges = useCallback(async (): Promise<boolean> => {
+    if (savePendingRef.current) return false;
+    const candidate = draftRef.current;
+    setAttempted(true);
+    setSaveError('');
+    if (validateTeachingProfile(candidate).length > 0) return false;
+    savePendingRef.current = true;
+    setSaving(true);
+    try {
+      await onSaveRef.current(candidate);
+      persistedRef.current = JSON.stringify(candidate);
+      dirtyRef.current = false;
+      setEditingSection(null);
+      return true;
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Salvataggio non riuscito.');
+      return false;
+    } finally {
+      savePendingRef.current = false;
+      setSaving(false);
+    }
+  }, []);
+
+  const discardDraftChanges = useCallback(() => {
+    // Rehydrate the last persisted snapshot even when routing to another
+    // history entry of the *same* class/profile keeps this editor mounted.
+    if (savePendingRef.current) return;
+    const restored = JSON.parse(persistedRef.current) as TeachingProfile;
+    draftRef.current = restored;
+    dirtyRef.current = false;
+    setDraft(restored);
+    setEditingSection(null);
+    setAttempted(false);
+    setSaveError('');
+  }, []);
+
+  useEffect(() => {
+    if (!onRegisterDraftGuard) return;
+    const guard: PlanningDraftGuard = {
+      hasUnsavedChanges: () => dirtyRef.current,
+      saveChanges: saveDraftChanges,
+      discardChanges: discardDraftChanges
+    };
+    onRegisterDraftGuard(guard);
+    return () => onRegisterDraftGuard(null);
+  }, [onRegisterDraftGuard, saveDraftChanges, discardDraftChanges]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, []);
 
   const errors = useMemo(() => validateTeachingProfile(draft), [draft]);
   const capacity = useMemo(() => errors.length === 0 ? calculateEffectiveCapacity(draft) : null, [draft, errors]);
@@ -133,20 +222,9 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({ pr
     setEditingSection(profile ? null : section);
   };
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    setAttempted(true);
-    setSaveError('');
-    if (errors.length > 0 || saving) return;
-    setSaving(true);
-    try {
-      await onSave(draft);
-      setEditingSection(null);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Salvataggio non riuscito.');
-    } finally {
-      setSaving(false);
-    }
+    void saveDraftChanges();
   };
 
   const saveFooter = editingSection ? (
@@ -162,7 +240,7 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({ pr
     <form onSubmit={submit} className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-white">Programmazione didattica</h2>
-        <p className="text-sm text-slate-400 mt-1">Configura il profilo reale prima di collegare il curricolo Arena.</p>
+        <p className="text-sm text-slate-400 mt-1">{profile ? "Consulta o aggiorna il profilo già disponibile." : "Completa il profilo per definire la Programmazione della classe."}</p>
       </div>
 
       <div role="group" aria-label="Sezioni programmazione" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -204,9 +282,16 @@ export const PlanningProfileEditor: React.FC<PlanningProfileEditorProps> = ({ pr
               <label className="text-sm text-slate-300">Classe/livello
                 <input type="number" min="1" max="5" value={draft.gradeLevel} onChange={e => setDraft(current => ({ ...current, gradeLevel: Number(e.target.value) }))} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
               </label>
-              <label className="text-sm text-slate-300">Disciplina
-                <input value={draft.subjectCode} onChange={e => updateIdentity({ subjectCode: e.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
-              </label>
+              <div>
+                <label className="block text-sm text-slate-300">Disciplina
+                  <input value={draft.subjectCode} onChange={e => updateIdentity({ subjectCode: e.target.value })} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
+                </label>
+                {subjectDisplayLabel.trim() && subjectDisplayLabel.trim().toLocaleLowerCase('it') !== draft.subjectCode.trim().toLocaleLowerCase('it') && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Denominazione nelle impostazioni: {subjectDisplayLabel}. Codice curricolare: {draft.subjectCode}.
+                  </p>
+                )}
+              </div>
               <label className="text-sm text-slate-300 md:col-span-2">Coorte
                 <input value={draft.cohortRef} onChange={e => setDraft(current => ({ ...current, cohortRef: e.target.value }))} className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2" />
               </label>
