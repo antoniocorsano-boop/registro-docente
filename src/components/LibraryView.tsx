@@ -38,6 +38,7 @@ interface LibraryViewProps {
   onUnlinkSource: (sourceId: string, link: LibrarySourceLink) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onOpenCopilot: (context: CopilotLaunchContext) => void;
+  onPrepareAssessment: (sourceId: string) => void;
   isCopilotOpen: boolean;
 }
 
@@ -79,6 +80,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onUnlinkSource,
   onDeleteSource,
   onOpenCopilot,
+  onPrepareAssessment,
   isCopilotOpen
 }) => {
   const [query, setQuery] = useState('');
@@ -420,6 +422,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         onUnlink={onUnlinkSource}
                         onDelete={onDeleteSource}
                         onOpenCopilot={onOpenCopilot}
+                        onPrepareAssessment={onPrepareAssessment}
                         isCopilotOpen={isCopilotOpen}
                       />
                     </div>
@@ -477,6 +480,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               onUnlink={onUnlinkSource}
               onDelete={onDeleteSource}
               onOpenCopilot={onOpenCopilot}
+              onPrepareAssessment={onPrepareAssessment}
               isCopilotOpen={isCopilotOpen}
             />
           ))}
