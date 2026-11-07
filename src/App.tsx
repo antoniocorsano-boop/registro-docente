@@ -12,6 +12,7 @@ import {
   UdaRecord
 } from './types';
 import type { ArenaPlanningContextPreview, PlanningState, TeachingProfile } from './planning/types';
+import type { PlanningDraftGuard } from './components/planning/PlanningProfileEditor';
 import { bindAcceptedArenaPlanningContext } from './planning/arenaPlanningContext';
 import { validateTeachingProfile } from './planning/validation';
 import { createEmptyPlanningState } from './planning/emptyPlanningState';
@@ -47,6 +48,11 @@ import {
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
+import { resolvePlanningFrame } from './planning/planningFrameResolver';
+import { resolveCurricularSubjectCode } from './planning/curricularSubjectCode';
+import { keepTeachingFocusForClass, resolveTeachingFocusForClass, transitionTeachingFocusForTab } from './context/teachingFocus';
+import type { LibraryTeachingContext } from './library/teachingContext';
+import { buildTeachingUdaCatalog, buildTeachingUdaClassReconciliationIndex } from './teaching/teachingUdaCatalog';
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import { createStudentReportHistoryState, restoreStudentReportFromHistory } from './navigation/studentReportHistory';
@@ -303,9 +309,260 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   });
   const [isSemanticMemorySyncing, setIsSemanticMemorySyncing] = useState(false);
 
+  // INT-01: catalog is a derived read model; UDA authority remains with its source.
+  const teachingUdaCatalog = React.useMemo(() => buildTeachingUdaCatalog({
+    localUdas: udas,
+    acceptedProjections: planning.docenteOsProjections,
+    classReconciliation: buildTeachingUdaClassReconciliationIndex(planning.docenteOsProjections),
+    classes: appData.classes
+  }), [udas, planning.docenteOsProjections, appData.classes]);
+
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const activeTabRef = useRef<ActiveTab>('home');
+  // Opt-in, preview-only. No class IDs, URLs, form values, credentials or vault data.
+  const [hprTraceEnabled] = useState(() =>
+    import.meta.env.VITE_INT01_HPR_TRACE === '1' && typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).get('int01Trace') === '1'
+  );
+  const [hprTrace, setHprTrace] = useState<string[]>([]);
+  const traceHpr = useCallback((event: string, destination: ActiveTab | null = null) => {
+    if (!hprTraceEnabled) return;
+    setHprTrace(prev => [
+      ...prev.slice(-13),
+      `${event} | attuale: ${activeTabRef.current} | destinazione: ${destination ?? 'nessuna'}`
+    ]);
+  }, [hprTraceEnabled]);
+  // A reload or browser restoration must be distinguishable from an SPA tab switch.
+  // The event list remains memory-only; no data or identifiers are persisted.
+  const [hprLoadKind] = useState(() => {
+    if (!hprTraceEnabled) return 'disabled';
+    const navigation = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    return navigation?.type ?? 'unknown';
+  });
+  const withHprTraceQuery = useCallback((target: string): string => {
+    if (!hprTraceEnabled) return target;
+    const resolved = new URL(target, window.location.href);
+    if (resolved.origin !== window.location.origin) return target;
+    resolved.searchParams.set('int01Trace', '1');
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  }, [hprTraceEnabled]);
+  useEffect(() => {
+    if (!hprTraceEnabled) return;
+    traceHpr(`avvio-app:${hprLoadKind}`);
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) traceHpr('ripristino-cache-browser');
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [hprTraceEnabled, hprLoadKind, traceHpr]);
+  const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const planningExitBypassRef = useRef(false);
+  const historyPositionRef = useRef<number | null>(null);
+  // Positions have meaning only inside the same, continuous app-owned epoch.
+  const historyEpochRef = useRef<string | null>(null);
+  const historyEntryIdRef = useRef<string | null>(null);
+  const historyFallbackRef = useRef<{
+    originUrl: string;
+    classId: string | null;
+  } | null>(null);
+  const browserHistoryIndexRef = useRef<number | null>(null);
+  const historyUrlRef = useRef('');
+  const historyRestorePendingRef = useRef<{
+    delta: number;
+    originPosition: number | null;
+    originEntryId: string;
+    originBrowserIndex: number | null;
+    originUrl: string;
+    destinationTab: ActiveTab;
+  } | null>(null);
+  const readBrowserHistoryIndex = (): number | null => {
+    const index = (window as Window & {
+      navigation?: { currentEntry?: { index?: number } };
+    }).navigation?.currentEntry?.index;
+    return typeof index === 'number' && Number.isSafeInteger(index) ? index : null;
+  };
+  const historyApprovedTraversalRef = useRef<number | null>(null);
+  const markHistoryPush = useCallback(() => {
+    const state = history.state && typeof history.state === 'object' ? history.state : {};
+    // Never manufacture position 1 after entering an unmarked legacy entry.
+    const nextPosition = historyPositionRef.current !== null && historyEpochRef.current !== null
+      ? historyPositionRef.current + 1 : null;
+    const entryId = crypto.randomUUID();
+    const nextState: Record<string, unknown> = { ...state, __tramaHistoryEntryId: entryId };
+    if (nextPosition !== null) {
+      nextState.__tramaHistoryPosition = nextPosition;
+      nextState.__tramaHistoryEpoch = historyEpochRef.current;
+    } else {
+      delete nextState.__tramaHistoryPosition;
+      delete nextState.__tramaHistoryEpoch;
+    }
+    history.replaceState(nextState, '', window.location.href);
+    historyPositionRef.current = nextPosition;
+    historyEntryIdRef.current = entryId;
+    historyUrlRef.current = window.location.href;
+    browserHistoryIndexRef.current = readBrowserHistoryIndex();
+  }, []);
+
+  useEffect(() => {
+    const state = history.state && typeof history.state === 'object' ? history.state : {};
+    const recordedPosition = Number.isSafeInteger(state.__tramaHistoryPosition)
+      ? state.__tramaHistoryPosition as number : 0;
+    // Bootstrap can adopt an old number, but not pretend its old neighbours
+    // share the same coordinate system after reload or vault unlock.
+    const epoch = typeof state.__tramaHistoryEpoch === 'string'
+      && state.__tramaHistoryEpoch.length > 0
+      ? state.__tramaHistoryEpoch : crypto.randomUUID();
+    const entryId = typeof state.__tramaHistoryEntryId === 'string'
+      && state.__tramaHistoryEntryId.length > 0
+      ? state.__tramaHistoryEntryId : crypto.randomUUID();
+    historyPositionRef.current = recordedPosition;
+    historyEpochRef.current = epoch;
+    historyEntryIdRef.current = entryId;
+    historyUrlRef.current = window.location.href;
+    browserHistoryIndexRef.current = readBrowserHistoryIndex();
+    if (!Number.isSafeInteger(state.__tramaHistoryPosition)
+      || state.__tramaHistoryEpoch !== epoch || state.__tramaHistoryEntryId !== entryId) {
+      history.replaceState({
+        ...state,
+        __tramaHistoryPosition: recordedPosition,
+        __tramaHistoryEpoch: epoch,
+        __tramaHistoryEntryId: entryId
+      }, '', window.location.href);
+    }
+  }, []);
+  const pendingExitRef = useRef<(() => void) | null>(null);
+  const planningExitDialogRef = useRef<HTMLDivElement | null>(null);
+  const planningExitOriginFocusRef = useRef<HTMLElement | null>(null);
+  const planningExitRestoreFocusRef = useRef(false);
+  const [planningExitOpen, setPlanningExitOpen] = useState(false);
+  const [planningExitSaving, setPlanningExitSaving] = useState(false);
+  const [planningExitError, setPlanningExitError] = useState('');
+  const [planningExitDestination, setPlanningExitDestination] = useState<ActiveTab | null>(null);
+  const [planningExitFromBrowser, setPlanningExitFromBrowser] = useState(false);
+  const [historyFallbackWarning, setHistoryFallbackWarning] = useState(false);
+  // UI feedback only; the ref is the synchronous safety gate during async history restoration.
+  const [historyRestoringOrigin, setHistoryRestoringOrigin] = useState(false);
+  const registerPlanningDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
+    planningGuardRef.current = guard;
+  }, []);
+  const requestPlanningDeparture = useCallback((
+    commit: () => void, destination: ActiveTab | null = null
+  ): boolean => {
+    traceHpr('richiesta-navigazione', destination);
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && planningGuardRef.current?.hasUnsavedChanges()) {
+      if (pendingExitRef.current) return false; // Never replace an unconfirmed navigation.
+      planningExitOriginFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement : null;
+      pendingExitRef.current = commit;
+      setPlanningExitDestination(destination);
+      setPlanningExitFromBrowser(false);
+      traceHpr('conferma-aperta', destination);
+      setPlanningExitError('');
+      setPlanningExitOpen(true);
+      return false;
+    }
+    commit();
+    return true;
+  }, [traceHpr]);
+  const cancelPlanningExit = () => {
+    if (planningExitSaving || historyRestorePendingRef.current !== null) return;
+    const fallback = historyFallbackRef.current;
+    if (fallback) {
+      // A browser without a verifiable entry index cannot traverse back to an
+      // unknown origin safely. Explicitly re-enter the original URL instead;
+      // this replaces the forward branch, disclosed in the recovery dialog.
+      try {
+        const entryId = crypto.randomUUID();
+        history.pushState({
+          classId: fallback.classId,
+          tab: 'programmazione',
+          __tramaHistoryEntryId: entryId
+        }, '', withHprTraceQuery(fallback.originUrl));
+        historyPositionRef.current = null;
+        historyEpochRef.current = null;
+        historyEntryIdRef.current = entryId;
+        browserHistoryIndexRef.current = readBrowserHistoryIndex();
+        historyUrlRef.current = window.location.href;
+      } catch {
+        setPlanningExitError('Non è stato possibile ritornare alla Programmazione. Salva o continua senza salvare.');
+        return;
+      }
+    }
+    historyFallbackRef.current = null;
+    setHistoryFallbackWarning(false);
+    planningExitRestoreFocusRef.current = true;
+    pendingExitRef.current = null;
+    setPlanningExitDestination(null);
+    setPlanningExitFromBrowser(false);
+    traceHpr('uscita-annullata');
+    setPlanningExitOpen(false);
+    setPlanningExitError('');
+  };
+  const performPlanningExit = (discardUnsavedDraft = false) => {
+    // A confirmation must never execute a stale UDA callback while history.go
+    // is still traversing to the verified Programmazione origin.
+    if (historyRestorePendingRef.current !== null) return;
+    // A Back to an older history entry may show the *same* Programmazione
+    // component, so unmounting is not sufficient to discard its dirty draft.
+    if (discardUnsavedDraft) planningGuardRef.current?.discardChanges();
+    traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
+    planningExitRestoreFocusRef.current = false;
+    const commit = pendingExitRef.current;
+    pendingExitRef.current = null;
+    setPlanningExitDestination(null);
+    setPlanningExitFromBrowser(false);
+    historyFallbackRef.current = null;
+    setHistoryFallbackWarning(false);
+    setPlanningExitOpen(false);
+    setPlanningExitError('');
+    planningExitBypassRef.current = true;
+    try {
+      commit?.();
+      traceHpr(commit ? 'azione-eseguita' : 'azione-assente', planningExitDestination);
+    } finally {
+      planningExitBypassRef.current = false;
+    }
+  };
+  const saveAndLeavePlanning = async () => {
+    const guard = planningGuardRef.current;
+    if (!guard || planningExitSaving || historyRestorePendingRef.current !== null) return;
+    setPlanningExitSaving(true);
+    setPlanningExitError('');
+    try {
+      if (await guard.saveChanges()) {
+        performPlanningExit();
+      } else {
+        setPlanningExitError('Il profilo non è stato salvato. Correggi i dati o riprova.');
+      }
+    } catch {
+      setPlanningExitError('Salvataggio non riuscito. La Programmazione rimane aperta.');
+    } finally {
+      setPlanningExitSaving(false);
+    }
+  };
+  // Keep background surfaces inert while the unsaved-changes decision is modal.
+  useEffect(() => {
+    if (!planningExitOpen) return;
+    const dialog = planningExitDialogRef.current;
+    const parent = dialog?.parentElement;
+    const siblings = parent
+      ? Array.from(parent.children).filter(node => node !== dialog && node instanceof HTMLElement)
+      : [];
+    const prior = siblings.map(node => (node as HTMLElement).inert);
+    siblings.forEach(node => { (node as HTMLElement).inert = true; });
+    dialog?.querySelector<HTMLButtonElement>('[data-int01-stay]')?.focus();
+    return () => {
+      siblings.forEach((node, index) => { (node as HTMLElement).inert = prior[index] ?? false; });
+      if (planningExitRestoreFocusRef.current) {
+        planningExitRestoreFocusRef.current = false;
+        planningExitOriginFocusRef.current?.focus();
+      }
+    };
+  }, [planningExitOpen]);
+
+  const [teachingFocus, setTeachingFocus] = useState<LibraryTeachingContext | null>(null);
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);
   const reviewSessionRef = useRef<ReviewSessionContext | null>(null);
@@ -1531,6 +1788,28 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  // Separate the settings' display label from the authoritative curriculum code.
+  const curricularSubjectCode = React.useMemo(
+    () => resolveCurricularSubjectCode(settings.subject),
+    [settings.subject]
+  );
+  const planningFrame = React.useMemo(() => resolvePlanningFrame({
+    className: currentClass?.name ?? null,
+    planning,
+    schoolYear: settings.year,
+    subjectCode: curricularSubjectCode
+  }), [currentClass?.name, planning, settings.year, curricularSubjectCode]);
+  const resolvedTeachingFocus = resolveTeachingFocusForClass({
+    focus: teachingFocus,
+    currentClassId: currentClass?.id ?? null,
+    catalog: teachingUdaCatalog
+  });
+  const activeTeachingCandidate = resolvedTeachingFocus.status === 'resolved'
+    ? teachingUdaCatalog.find(candidate => candidate.id === resolvedTeachingFocus.context.udaId)
+    : null;
+  const activeTeachingLesson = resolvedTeachingFocus.status === 'resolved'
+    ? activeTeachingCandidate?.lessons.find(lesson => lesson.id === resolvedTeachingFocus.context.lessonId)
+    : null;
   const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass?.id;
   const conductContext = currentClass
     ? resolveConductContext({
@@ -1550,7 +1829,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     activeTab === 'home' ? 'home'
       : activeTab === 'dashboard' ? 'class-dashboard'
         : activeTab === 'biblioteca' ? 'library'
-          : activeTab === 'uda-gantt' ? 'other-teacher-surface'
+          : activeTab === 'uda-gantt'
+            ? resolvedTeachingFocus.status === 'resolved'
+              ? resolvedTeachingFocus.context.lessonId ? 'lesson' : 'uda'
+              : 'other-teacher-surface'
             : activeTab === 'programmazione' ? 'planning'
               : activeTab === 'verifiche-online' ? 'online-tests'
                 : activeTab === 'voti' ? 'evaluations'
@@ -1560,6 +1842,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const ambientProfessionalContext = resolveProfessionalContext({
     surface: ambientCopilotSurface,
     currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    planningFrame: activeTab === 'programmazione' || activeTab === 'uda-gantt' ? planningFrame : null,
+    teachingContext: (activeTab === 'programmazione' || activeTab === 'uda-gantt')
+      && resolvedTeachingFocus.status === 'resolved'
+      ? resolvedTeachingFocus.context
+      : null,
     privacyScope:
       activeTab === 'voti'
       || activeTab === 'tabellone'
@@ -2484,6 +2771,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         onTogglePrivacyShield={handleTogglePrivacyShield}
       />
 
+      {hprTraceEnabled && (
+        <details aria-label="Diagnostica navigazione INT-01"
+          className="mx-auto w-full max-w-5xl border-b border-cyan-800 bg-slate-950 px-4 py-2 text-xs text-slate-200">
+          <summary className="cursor-pointer font-semibold">Diagnostica INT-01 — {hprLoadKind === 'reload' ? 'ricaricamento pagina' : hprLoadKind === 'back_forward' ? 'ritorno dalla cronologia' : hprLoadKind === 'navigate' ? 'nuovo caricamento' : 'tipo di avvio non disponibile'}</summary>
+          <p className="py-2 text-slate-400">Solo eventi e nomi di schermate; nessun dato della classe o della password.</p>
+          <ol aria-label="Eventi INT-01" className="max-h-40 list-decimal space-y-1 overflow-auto pl-5">
+            {hprTrace.map((event, index) => <li key={index}>{event}</li>)}
+          </ol>
+        </details>
+      )}
+
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5">
         {/* TAB 1: Cruscotto Istituto */}
@@ -2679,7 +2977,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             profiles={planning.profiles}
             arenaContexts={planning.arenaContexts}
             onSaveProfile={handleSaveTeachingProfile}
+            onRegisterDraftGuard={registerPlanningDraftGuard}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
+            currentClassName={currentClass?.name ?? null}
+            planningFrame={planningFrame}
+            focusedProfileId={planningFrame.status === 'resolved' ? planningFrame.profile.id : null}
+            defaultSubjectCode={curricularSubjectCode}
+            subjectDisplayLabel={settings.subject}
+            teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
+            udaTitle={activeTeachingCandidate?.title ?? null}
+            lessonTitle={activeTeachingLesson?.topic ?? null}
+            onOpenUda={() => handleNavigateTab('uda-gantt')}
           />
         )}
 
@@ -2719,6 +3027,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             tests={tests}
             onSaveUdas={handleSaveUdas}
+            currentClassName={currentClass?.name ?? null}
+            planningFrame={planningFrame}
+            teachingFocus={resolvedTeachingFocus.status === 'resolved' ? teachingFocus : null}
+            teachingContext={resolvedTeachingFocus.status === 'resolved' ? resolvedTeachingFocus.context : null}
+            udaTitle={activeTeachingCandidate?.title ?? null}
+            lessonTitle={activeTeachingLesson?.topic ?? null}
+            onTeachingFocusChange={focus => setTeachingFocus(
+              keepTeachingFocusForClass(focus, currentClass?.id ?? null, teachingUdaCatalog)
+            )}
+            onOpenPlanning={() => handleNavigateTab('programmazione')}
             onNavigateTab={handleNavigateTab}
             recordLessonPrefill={recordSession?.status === 'editing' && recordSession.evidenceKind === 'lesson-log'
               && recordSession.context.classId === currentClass?.id
@@ -2828,6 +3146,76 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               isPending={isLibraryMutationPending}
             />
         </>
+      )}
+
+      {planningExitOpen && (
+        <div ref={planningExitDialogRef}
+          role="dialog" aria-modal="true" aria-labelledby="planning-exit-title"
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelPlanningExit();
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = Array.from(planningExitDialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []);
+            if (focusable.length === 0) { event.preventDefault(); return; }
+            const index = focusable.indexOf(document.activeElement as HTMLButtonElement);
+            if (event.shiftKey && index <= 0) {
+              event.preventDefault();
+              focusable[focusable.length - 1]?.focus();
+            } else if (!event.shiftKey && (index === focusable.length - 1 || index < 0)) {
+              event.preventDefault();
+              focusable[0]?.focus();
+            }
+          }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-amber-800 bg-slate-950 p-5 shadow-2xl">
+            <h2 id="planning-exit-title" className="text-xl font-bold text-white">Modifiche non salvate</h2>
+            <p className="text-sm text-slate-300">
+              Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
+            </p>
+            {planningExitFromBrowser && (
+              <p role="note" className="text-sm font-semibold text-amber-200">
+                Una navigazione del browser ha sostituito il percorso iniziale.
+                Controlla la destinazione prima di confermare.
+              </p>
+            )}
+            {planningExitDestination && (
+              <p role="status" aria-label="Destinazione richiesta" className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-sm font-semibold text-white">
+                Destinazione: {planningExitDestination === 'uda-gantt' ? 'Unità didattiche (UDA)'
+                  : planningExitDestination === 'dashboard' ? 'Panoramica della classe'
+                  : planningExitDestination === 'home' ? 'Oggi'
+                  : 'schermata selezionata'}.
+              </p>
+            )}
+            {historyRestoringOrigin && (
+              <p role="status" className="text-sm text-amber-200">
+                Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.
+              </p>
+            )}
+            {historyFallbackWarning && (
+              <p role="status" className="text-sm text-amber-200">
+                Il navigatore non permette di verificare il percorso precedente. La bozza è ancora disponibile.
+                Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.
+              </p>
+            )}
+            {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving || historyRestoringOrigin}
+                className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
+                {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
+              </button>
+              <button type="button" onClick={() => performPlanningExit(true)} disabled={planningExitSaving || historyRestoringOrigin}
+                className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
+                Continua senza salvare
+              </button>
+              <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
+                className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                Rimani nella Programmazione
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Persistence confirmation modal */}
