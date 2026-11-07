@@ -648,6 +648,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveStudentReturnContext?: boolean } = {}
   ) => {
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && tab !== 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+      requestPlanningDeparture(() => setActiveTab(tab, options), tab);
+      return;
+    }
+    traceHpr('scheda-attivata', tab);
     // Central navigation authority: direct routes (including backup, history,
     // editing and the Drawer) must invalidate the previous report detour.
     if (!options.preserveStudentReturnContext) {
@@ -657,6 +663,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     navigationVersionRef.current += 1;
     activeTabRef.current = tab;
     setActiveTabState(tab);
+    setTeachingFocus(previous =>
+      transitionTeachingFocusForTab(previous, currentClassIdRef.current, tab, teachingUdaCatalog)
+    );
 
     const storedReviewSession = reviewSessionRef.current;
     if (!storedReviewSession) return;
@@ -670,7 +679,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [publishReviewSession]);
+  }, [publishReviewSession, requestPlanningDeparture, teachingUdaCatalog, traceHpr]);
+
+  // A removed or no-longer-reconciled UDA can never remain a latent focus.
+  useEffect(() => {
+    setTeachingFocus(previous =>
+      previous
+        ? keepTeachingFocusForClass(previous, appData.currentClassId, teachingUdaCatalog)
+        : null
+    );
+  }, [appData.currentClassId, teachingUdaCatalog]);
 
   const handleConnectSemanticMemory = useCallback(async ({
     endpoint
@@ -811,6 +829,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       navigationMode?: 'push' | 'replace';
     } = {}
   ) => {
+    traceHpr('click-navigazione', tab);
+    // Browser-history writes must be delayed with the actual tab change.
+    // Never let a dirty planning draft remain behind a new route.
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && tab !== 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+      requestPlanningDeparture(() => handleNavigateTab(tab, options), tab);
+      return;
+    }
     if (pendingEvaluationCancelRef.current) {
       // Do not push on top of a history traversal that has not yet finished.
       pendingEvaluationCancelRef.current.proceed = tab === 'storico'
@@ -883,15 +909,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
       const query = params.toString();
+      const nextHistoryUrl = withHprTraceQuery(query ? `?${query}` : window.location.pathname);
       if (options.navigationMode === 'replace') {
-        history.replaceState(state, '', query ? `?${query}` : window.location.pathname);
+        history.replaceState(state, '', nextHistoryUrl);
       } else {
-        history.pushState(state, '', query ? `?${query}` : window.location.pathname);
+        history.pushState(state, '', nextHistoryUrl);
+        markHistoryPush();
       }
     } catch {
       // History API failures never authorize a professional write.
     }
-  }, [editingBatchId, publishRecordSession, queueMobileMatrixExit, setActiveTab]);
+  }, [editingBatchId, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
 
   /** Open one student's report as a REAL browser-history route, not only a React tab. */
   const handleOpenStudentReport = useCallback((
