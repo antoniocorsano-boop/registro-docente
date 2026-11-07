@@ -1,0 +1,114 @@
+# Isolated exact-SHA gate for a stacked PR after retargeting to main.
+# No production data, no publishing, and no changes to the candidate branch.
+name: Mobile Stack Exact-SHA Pre-Merge Gate
+on:
+  push:
+    branches:
+      - audit/mobile-stack-merge-gate-20261107
+permissions:
+  contents: read
+env:
+  PR_NUMBER: '126'
+  CANDIDATE_SHA: '18b72d9c97804c4afd4ddf88f6b8256f26548a1d'
+  BASE_SHA: 'f19826501555dff83678f148ef46addaf77c3297'
+  EXPECTED_MERGE_BASE: 'cc3542df0993ce7717a3f31fa3e828d53f615ab0'
+  SPEC: 'mobile-density-01-tabellone.spec.cjs'
+  PORT: '4173'
+jobs:
+  exact-candidate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact PR source, without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source and current integration base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git cat-file -e "$BASE_SHA^{commit}"
+          test "$(git merge-base "$BASE_SHA" "$CANDIDATE_SHA")" = "$EXPECTED_MERGE_BASE"
+          echo "Source verified: $CANDIDATE_SHA"
+          echo "Base verified: $BASE_SHA"
+          git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" > /tmp/changed-files
+          cat /tmp/changed-files
+          test "$(wc -l </tmp/changed-files)" -eq 8
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact lockfile
+        run: bun install --frozen-lockfile
+      - name: Check invariant registry
+        run: bun scripts/qualification/check-invariants.mjs
+      - name: Check impact vs newly merged main and select inherited contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --manifest qualification-manifest.json
+          tests="$(bun scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --tests)"
+          if [[ -n "$tests" ]]; then
+            read -r -a selected <<< "$tests"
+            bun test "${selected[@]}"
+          fi
+      - name: Validate own contract
+        run: bun test src/security/mobileDensity01TabelloneContract.test.ts
+      - name: Typecheck and lint
+        run: bun run lint
+      - name: Complete security/memory tests
+        run: bun run test:security
+      - name: FLOW-03 inherited contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in src/security/flow03*.test.ts; do bun test "$f"; done
+      - name: Complete library tests
+        run: bun run test:library
+      - name: Build candidate without deployment
+        run: bun run build
+      - name: Production server startup smoke, no data mutation
+        shell: bash
+        run: |
+          set +e
+          NODE_ENV=production PORT=0 timeout 5s node server.ts
+          result=$?
+          if [[ "$result" -eq 124 ]]; then exit 0; fi
+          exit "$result"
+      - name: Install isolated Chromium test tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .merge-gate-tools
+          echo '{"name":"mobile-stack-merge-gate","private":true}' > .merge-gate-tools/package.json
+          npm --prefix .merge-gate-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.merge-gate-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp "tests/browser/$SPEC" ".merge-gate-tools/$SPEC"
+      - name: Start local synthetic fixture (loopback only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT" --strictPort > /tmp/mobile-stack-merge-vite.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent "http://127.0.0.1:$PORT/tests/browser/fixtures/mobile-density-01-tabellone.html" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/mobile-stack-merge-vite.log
+          exit 1
+      - name: Browser qualification — actual candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .merge-gate-tools
+          DENSITY01_BASE_URL="http://127.0.0.1:${PORT}" ./node_modules/.bin/playwright test "$SPEC" --workers=1 --reporter=line
+      - name: Upload inspection manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-stack-merge-gate-126
+          path: qualification-manifest.json
+          if-no-files-found: warn
+          retention-days: 14
