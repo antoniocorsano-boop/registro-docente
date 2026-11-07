@@ -1,0 +1,46 @@
+name: "INT-01 Android localhost package (exact SHA)"
+
+on:
+  pull_request:
+    branches:
+      - feat/int-01-main-reconciled
+
+permissions:
+  contents: read
+
+jobs:
+  build-static-hpr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable INT-01 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: e8a6fed673dc1f4c43ced71e951e9146c6758784
+          persist-credentials: false
+      - name: Verify immutable SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "e8a6fed673dc1f4c43ced71e951e9146c6758784"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build static HPR with opt-in diagnostic support
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+      - name: Stamp source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          printf '%s\n' 'e8a6fed673dc1f4c43ced71e951e9146c6758784' > dist/INT_01_SOURCE_SHA.txt
+      - name: Upload localhost-only browser artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-int01-local-e8a6fed6
+          path: dist/
+          if-no-files-found: error
+          retention-days: 5
