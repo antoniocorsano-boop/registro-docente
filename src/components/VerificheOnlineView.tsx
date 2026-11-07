@@ -513,15 +513,21 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             Non è stata creata alcuna verifica e non è stata assegnata un'UDA.
             Se necessario, sceglila esplicitamente nell'editor.
           </p>
-          <button
-            data-testid="int02-open-assessment-editor"
-            type="button"
-            onClick={() => handleStartNewInteractiveTest()}
-            disabled={isSavingTest}
-            className="min-h-[44px] w-full rounded-lg bg-[var(--primary)] px-4 font-semibold text-slate-950 disabled:opacity-50"
-          >
-            Apri editor verifica
-          </button>
+          {!isEditingTest ? (
+            <button
+              data-testid="int02-open-assessment-editor"
+              type="button"
+              onClick={() => handleStartNewInteractiveTest()}
+              disabled={isSavingTest}
+              className="min-h-[44px] w-full rounded-lg bg-[var(--primary)] px-4 font-semibold text-slate-950 disabled:opacity-50"
+            >
+              Apri editor verifica
+            </button>
+          ) : (
+            <p role="status" className="text-xs text-cyan-100">
+              Editor già aperto: termina o chiudi la bozza prima di iniziarne un'altra.
+            </p>
+          )}
         </section>
       )}
       {/* Sub-navigation Header Bar */}
