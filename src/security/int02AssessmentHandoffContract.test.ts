@@ -36,6 +36,8 @@ describe('INT-02/S1 source-to-assessment UI and mutation separation', () => {
     expect(view).toContain('assessmentHandoff?: ResolvedAssessmentHandoff | null;');
     expect(view).toContain('data-testid="int02-assessment-handoff"');
     expect(view).toContain('data-testid="int02-open-assessment-editor"');
+    expect(view).toContain('!isEditingTest ? (');
+    expect(view).toContain('Editor già aperto: termina o chiudi la bozza');
     expect(view).toContain('setEditorUdaId(\'\');');
     expect(view).toContain('Fonte professionale:');
     expect(view).toContain('Non è stata creata alcuna verifica');
