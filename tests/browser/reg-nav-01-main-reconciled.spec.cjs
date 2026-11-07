@@ -45,9 +45,12 @@ async function prepareSyntheticHistory(page) {
     await closeSaveNotice(page);
 
     // The privacy shield can be disabled only inside this disposable synthetic Vault.
-    const shield = page.locator('button[title^="Privacy Shield"]');
+    const shield = page.getByTestId('header01-privacy');
     await expect(shield).toBeVisible();
-    await shield.click();
+    if (await shield.getAttribute('data-privacy-state') === 'protected') {
+      await shield.click();
+    }
+    await expect(shield).toHaveAttribute('data-privacy-state', 'visible');
     for (const student of [FIRST_STUDENT, SECOND_STUDENT]) {
       await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(student);
       await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
