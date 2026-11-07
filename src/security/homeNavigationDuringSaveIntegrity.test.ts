@@ -40,7 +40,10 @@ describe('PERSIST-01 navigation remains independent from in-flight app-data pers
     expect(evaluations).toContain('const recordSessionAtSave = recordSessionRef.current;');
     expect(evaluations).toContain("const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);");
     expect(evaluations).toContain('if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave)');
-    expect(evaluations).toContain("setActiveTab('storico')");
+    // A successful evaluation must synchronize the browser route, not only the React tab.
+    expect(evaluations).toContain('if (currentClassIdRef.current === classId)');
+    expect(evaluations).toContain("handleNavigateTab('storico', { navigationMode: 'replace', evaluationBatchId: null })");
+    expect(evaluations).not.toContain("setActiveTab('storico')");
 
     const behaviors = sectionBetween(source, '// Save behavior notes', '// Edit batch');
     expect(behaviors).toContain('const navigationVersionAtSave = navigationVersionRef.current;');
