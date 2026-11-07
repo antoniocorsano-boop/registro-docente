@@ -1,0 +1,46 @@
+name: "INT-01 Android localhost bundle (isolated)"
+
+on:
+  pull_request:
+    branches:
+      - feat/int-01-main-reconciled
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-static-int01:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable qualified candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 064df7aa7c130b5525e7abd489c7258bb079d4ea
+          persist-credentials: false
+      - name: Verify exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "064df7aa7c130b5525e7abd489c7258bb079d4ea"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build browser-equivalent HPR static application
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+      - name: Mark exact source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          printf '%s\n' '064df7aa7c130b5525e7abd489c7258bb079d4ea' > dist/INT_01_SOURCE_SHA.txt
+      - name: Store static artifact for local-only Termux
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-int01-android-local-064df7aa
+          path: dist/
+          if-no-files-found: error
+          retention-days: 5
