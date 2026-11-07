@@ -1907,6 +1907,35 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         ? requestedClassId
         : null;
       const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
+      // INT-01 guards only the dirty planning editor; NAV-S1 popstate remains
+      // the sole authority for student report, evaluation and Tabellone returns.
+      traceHpr('evento-cronologia-browser', nextTab);
+      const targetPosition = Number.isSafeInteger(e.state?.__tramaHistoryPosition)
+        ? e.state.__tramaHistoryPosition as number : null;
+      const targetEpoch = typeof e.state?.__tramaHistoryEpoch === 'string'
+        && e.state.__tramaHistoryEpoch.length > 0
+        ? e.state.__tramaHistoryEpoch as string : null;
+      const browserIndex = readBrowserHistoryIndex();
+      const targetEntryId = typeof e.state?.__tramaHistoryEntryId === 'string'
+        && e.state.__tramaHistoryEntryId.length > 0
+        ? e.state.__tramaHistoryEntryId as string : null;
+      const navigate = () => {
+        const currentEntryId = targetEntryId ?? crypto.randomUUID();
+        if (!targetEntryId) {
+          history.replaceState({
+            ...(e.state && typeof e.state === 'object' ? e.state : {}),
+            __tramaHistoryEntryId: currentEntryId
+          }, '', window.location.href);
+        }
+        historyPositionRef.current = targetPosition;
+        historyEpochRef.current = targetPosition !== null ? targetEpoch : null;
+        historyEntryIdRef.current = currentEntryId;
+        browserHistoryIndexRef.current = browserIndex;
+        historyUrlRef.current = window.location.href;
+        // Browser-approved traversal bypasses only the planning-draft prompt,
+        // never its class/record authorization or specialist navigation guards.
+        planningExitBypassRef.current = true;
+        try {
 
       // Cancelled evaluation editors use their own serialized Back traversal.
       // Resolve it before allowing another explicit destination to be pushed.
@@ -1982,6 +2011,137 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // Execute only after restoring the legitimate underlying history entry.
       // A class mismatch discards the queued destination rather than guessing.
       queuedEvaluationDestination?.();
+        } finally {
+          planningExitBypassRef.current = false;
+        }
+      };
+
+      const openUnverifiableDeparture = () => {
+        // No history index and no common marker epoch: guessing Back/Forward
+        // could leave the editor under another class's URL or hang forever.
+        historyRestorePendingRef.current = null;
+        setHistoryRestoringOrigin(false);
+        if (!historyFallbackRef.current) {
+          historyFallbackRef.current = {
+            originUrl: historyUrlRef.current,
+            classId: currentClassIdRef.current
+          };
+          setHistoryFallbackWarning(true);
+          // If a navigation button already opened the modal, it has already
+          // registered a pending action. Recovery must replace that action
+          // with the browser's *actual* destination, not refuse the update.
+          if (pendingExitRef.current) {
+            pendingExitRef.current = navigate;
+            setPlanningExitDestination(nextTab);
+            setPlanningExitFromBrowser(true);
+            traceHpr('sostituzione-da-cronologia', nextTab);
+          } else {
+            requestPlanningDeparture(navigate, nextTab);
+          }
+        } else {
+          // Browser controls may still navigate while a modal is open: the
+          // confirmation must always apply to the *actual* current entry.
+          pendingExitRef.current = navigate;
+          setPlanningExitDestination(nextTab);
+          setPlanningExitFromBrowser(true);
+          traceHpr('sostituzione-da-cronologia', nextTab);
+        }
+      };
+
+      if (historyFallbackRef.current) {
+        pendingExitRef.current = navigate;
+        setPlanningExitDestination(nextTab);
+        setPlanningExitFromBrowser(true);
+        traceHpr('sostituzione-da-cronologia', nextTab);
+        return;
+      }
+      const restoring = historyRestorePendingRef.current;
+      if (restoring) {
+        const originVerified =
+          (browserIndex !== null && restoring.originBrowserIndex !== null
+            && browserIndex === restoring.originBrowserIndex)
+          || (targetEntryId !== null && targetEntryId === restoring.originEntryId);
+        if (originVerified && window.location.href === restoring.originUrl) {
+          historyRestorePendingRef.current = null;
+          setHistoryRestoringOrigin(false);
+          browserHistoryIndexRef.current = browserIndex;
+          // A browser traversal supersedes an earlier «Apri UDA» click
+          // whose confirmation is still open. Replace the stale callback
+          // only after verifying the exact history origin and URL.
+          const replayVerifiedTraversal = () => {
+            historyApprovedTraversalRef.current = restoring.delta;
+            history.go(restoring.delta);
+          };
+          if (pendingExitRef.current) {
+            pendingExitRef.current = replayVerifiedTraversal;
+            setPlanningExitDestination(restoring.destinationTab);
+            setPlanningExitFromBrowser(true);
+            traceHpr('sostituzione-da-cronologia', restoring.destinationTab);
+          } else {
+            requestPlanningDeparture(replayVerifiedTraversal, restoring.destinationTab);
+          }
+          return;
+        }
+        // Do not scan blindly toward an unverified origin.
+        openUnverifiableDeparture();
+        return;
+      }
+
+      if (historyApprovedTraversalRef.current !== null) {
+        historyApprovedTraversalRef.current = null;
+        planningExitBypassRef.current = true;
+        try { navigate(); } finally { planningExitBypassRef.current = false; }
+        return;
+      }
+
+      const currentPosition = historyPositionRef.current;
+      if (activeTabRef.current === 'programmazione' &&
+        planningGuardRef.current?.hasUnsavedChanges()) {
+        const absoluteDelta = browserIndex !== null && browserHistoryIndexRef.current !== null
+          ? browserIndex - browserHistoryIndexRef.current : null;
+        const markedDelta = targetPosition !== null && currentPosition !== null
+          && targetEpoch !== null && targetEpoch === historyEpochRef.current
+          ? targetPosition - currentPosition : null;
+        const delta = absoluteDelta
+          ?? (targetEntryId === historyEntryIdRef.current ? 0 : markedDelta);
+
+        if (delta === null) {
+          openUnverifiableDeparture();
+          return;
+        }
+        if (delta !== 0) {
+          historyRestorePendingRef.current = {
+            delta,
+            originPosition: currentPosition,
+            originEntryId: historyEntryIdRef.current ?? '',
+            originBrowserIndex: browserHistoryIndexRef.current,
+            originUrl: historyUrlRef.current,
+            destinationTab: nextTab
+          };
+          setHistoryRestoringOrigin(true);
+          history.go(-delta);
+          return;
+        }
+        if (window.location.href !== historyUrlRef.current) {
+          // Never overwrite a foreign browser entry just because numeric
+          // positions happen to collide. Leave the dirty editor untouched.
+          if (targetEntryId !== historyEntryIdRef.current) {
+            openUnverifiableDeparture();
+            return;
+          }
+          history.replaceState(
+            { ...(history.state && typeof history.state === 'object' ? history.state : {}),
+              ...(currentPosition !== null ? { __tramaHistoryPosition: currentPosition } : {}),
+              ...(historyEpochRef.current !== null ? { __tramaHistoryEpoch: historyEpochRef.current } : {}),
+              __tramaHistoryEntryId: historyEntryIdRef.current },
+            '',
+            historyUrlRef.current
+          );
+          return;
+        }
+      }
+      navigate();
+
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
