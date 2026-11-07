@@ -61,6 +61,6 @@ describe('REG-NAV-01 reconciled — specialist evaluation navigation', () => {
     expect(navigation).toContain('rememberSpecialistTarget(');
     expect(navigation).toContain("if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab)");
     expect(navigation).not.toContain("params.set('batch'");
-    expect(navigation).not.toContain('batchId: validBatch');
+    expect(navigation).not.toContain("params.set('evaluation'");
   });
 });
