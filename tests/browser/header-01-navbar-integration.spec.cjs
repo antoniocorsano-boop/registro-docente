@@ -1,14 +1,105 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs');
+const path = require('node:path');
+const evidenceDir = path.resolve(process.env.HEADER01_EVIDENCE_DIR || '../browser-evidence');
 
-const url = (process.env.HEADER01_BASE_URL || 'http://127.0.0.1:4173') + '/tests/browser/fixtures/header01-navbar.html';
+function errorText(error) {
+  return error instanceof Error ? error.stack || error.message : String(error);
+}
+
+// Exact-candidate, fail-closed evidence for each synthetic browser journey.
+async function withEvidence(browser, viewport, caseId, action) {
+  fs.mkdirSync(path.join(evidenceDir, 'screenshots'), { recursive: true });
+
+  const pageErrors = [];
+  const consoleErrors = [];
+  const crashes = [];
+  let context = null;
+  let page = null;
+  let failure = null;
+  let screenshotError = null;
+  let screenshot = null;
+  let result = 'FAIL';
+
+  try {
+    context = await browser.newContext({
+      viewport,
+      isMobile: viewport.width < 500,
+      hasTouch: viewport.width < 500,
+      deviceScaleFactor: 1,
+    });
+    page = await context.newPage();
+    page.on('pageerror', error => pageErrors.push(errorText(error)));
+    page.on('console', message => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('crash', () => crashes.push('Chromium page crashed'));
+    await action(page);
+  } catch (error) {
+    failure = error;
+  }
+
+  // Required screenshot precedes the FINAL pageerror assertion; a capture error is FAIL.
+  if (page) {
+    try {
+      screenshot = path.join('screenshots', caseId + '.png');
+      await page.screenshot({ path: path.join(evidenceDir, screenshot), fullPage: true });
+    } catch (error) {
+      screenshotError = errorText(error);
+      screenshot = null;
+      if (!failure) failure = error;
+    }
+  } else if (!failure) {
+    failure = new Error('No browser page was created for ' + caseId);
+  }
+
+  // Include browser shutdown in the observed lifecycle before declaring PASS.
+  try {
+    if (context) await context.close();
+  } catch (error) {
+    if (!failure) failure = error;
+  }
+
+  try {
+    expect(screenshot, 'A screenshot is mandatory for ' + caseId).not.toBeNull();
+    expect(pageErrors, 'Uncaught browser pageerrors are forbidden for ' + caseId).toEqual([]);
+    expect(crashes, 'Chromium crashes are forbidden for ' + caseId).toEqual([]);
+    if (!failure) result = 'PASS';
+  } catch (error) {
+    if (!failure) failure = error;
+  }
+
+  // Even on failure, persist exact-SHA, errors and FAIL as an inspectable artifact.
+  const evidence = {
+    schema: 'registro.header01.browser-evidence/v1',
+    candidateSha: process.env.CANDIDATE_SHA || null,
+    caseId,
+    viewport,
+    baseURL: baseUrl,
+    result,
+    screenshot,
+    screenshotError,
+    pageErrors,
+    consoleErrors,
+    crashes,
+    qualificationError: failure ? errorText(failure) : null,
+  };
+  fs.writeFileSync(
+    path.join(evidenceDir, 'header01-' + caseId + '.json'),
+    JSON.stringify(evidence, null, 2) + '\n',
+  );
+  if (failure) throw failure;
+}
+
+
+
+const baseUrl = process.env.HEADER01_BASE_URL || 'http://127.0.0.1:4173';
+const url = baseUrl + '/tests/browser/fixtures/header01-navbar.html';
 
 for (const width of [320, 390]) {
   test(`HEADER-01 real Navbar / ${width}px: one logo, one lock, no false saved status`, async ({ browser }) => {
-    const context = await browser.newContext({
-      viewport: { width, height: width === 320 ? 700 : 844 }, isMobile: true, hasTouch: true,
-    });
-    const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await withEvidence(browser, { width, height: width === 320 ? 700 : 844 }, `navbar-mobile-${width}`, async (page) => {
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
     const brand = page.getByTestId('header01-brand-navigation');
     const privacy = page.getByTestId('header01-privacy');
     const lock = page.getByTestId('header01-lock');
@@ -55,7 +146,14 @@ for (const width of [320, 390]) {
     await expect(page.getByTestId('header01-auto-lock')).toBeFocused();
     await expect(page.getByTestId('header01-integration-auto-lock')).toContainText('30 minuti');
 
+    // Move focus out of the native select, which may consume the first Escape.
+    // The drawer itself must become inaccessible, not merely leave the viewport.
+    await page.getByTestId('header01-go-home').focus();
+    await expect(page.getByTestId('header01-go-home')).toBeFocused();
     await page.keyboard.press('Escape');
+    await expect(page.locator('#registro-navigation-drawer')).toHaveAttribute('aria-hidden', 'true');
+    await expect(page.locator('#registro-navigation-drawer')).toHaveAttribute('inert', '');
+    await expect(brand).toHaveAttribute('aria-expanded', 'false');
     await expect(brand).toBeFocused();
     await brand.click();
     await page.getByTestId('header01-go-home').click();
@@ -83,25 +181,25 @@ for (const width of [320, 390]) {
     await expect(privacy).toHaveAttribute('aria-pressed', 'false');
     await lock.click();
     await expect(page.getByTestId('header01-integration-lock-count')).toContainText('Blocchi: 1');
-    await context.close();
+    });
   });
 }
 
-test('HEADER-01 real Navbar desktop keeps existing specialist navigation and Vault controls', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+test('HEADER-01 real Navbar desktop keeps existing specialist navigation and Vault controls', async ({ browser }) => {
+  await withEvidence(browser, { width: 1280, height: 900 }, 'navbar-desktop-1280', async (page) => {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('header01-mobile-integration')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Imposta blocco automatico' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Blocca Registro' })).toHaveCount(1);
   await expect(page.getByText('Tabellone', { exact: true }).first()).toBeVisible();
+  });
 });
 
 test('HEADER-01 real Navbar: keyboard remains usable and lock reachable with focused editor', async ({ browser }) => {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  const page = await context.newPage();
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await withEvidence(browser, { width: 390, height: 844 }, 'navbar-keyboard-390', async (page) => {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.getByRole('textbox', { name: 'Campo di prova tastiera' }).focus();
   await expect(page.getByTestId('header01-privacy')).toBeVisible();
   await expect(page.getByTestId('header01-lock')).toBeVisible();
-  await context.close();
+  });
 });

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const vaultPassword = 'ux-qa-01-review-regressions';
@@ -25,7 +26,7 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.locator('aside').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation, closeMobileDrawerWithEscape } = require('./header01-navigation.cjs');
 const path = require('node:path');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
@@ -27,11 +28,12 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function openOggiFromDrawer(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   const oggi = drawer.getByRole('button', { name: 'Oggi', exact: true });
   await expect(oggi).toBeVisible();
   await oggi.click();
+  await settleOggiNavigation(page);
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 }
 
@@ -63,6 +65,15 @@ async function assertSelectedClassStillVisible(page) {
     await expect.poll(() => quickSwitcher.evaluate(select =>
       select.selectedOptions[0]?.textContent?.trim() ?? ''
     )).toBe(CLASS_NAME);
+    return;
+  }
+
+  // HEADER-01 presents the authoritative class as "Classe <nome>" in its
+  // mobile context subtitle; assert this projection instead of the removed
+  // legacy standalone label. The Registra region is checked independently.
+  const headerContext = page.getByTestId('header01-context');
+  if (await headerContext.isVisible().catch(() => false)) {
+    await expect(headerContext).toContainText(`Classe ${CLASS_NAME}`);
     return;
   }
 
@@ -158,8 +169,8 @@ async function assertVaultControlsClearOperationalActions(page, panel) {
   const privacyBox = await privacy.boundingBox();
   expect(privacyBox).not.toBeNull();
 
-  for (const label of ['Imposta blocco automatico', 'Blocca Registro']) {
-    const control = page.getByRole('button', { name: label, exact: true });
+  // The mobile security controls live in the one sticky top bar.
+  for (const control of [page.getByTestId('header01-privacy'), page.getByTestId('header01-lock')]) {
     await expect(control).toBeVisible();
     const controlBox = await control.boundingBox();
     expect(controlBox).not.toBeNull();
@@ -172,6 +183,14 @@ async function assertVaultControlsClearOperationalActions(page, panel) {
     );
     expect(intersects).toBe(false);
   }
+
+  // Automatic locking is secondary, but remains directly configurable.
+  await navigationButton(page).click();
+  const autoLock = page.getByTestId('header01-auto-lock');
+  await expect(autoLock).toBeVisible();
+  await autoLock.selectOption('30');
+  await expect(autoLock).toHaveValue('30');
+  await closeMobileDrawerWithEscape(page);
 }
 
 async function openConductCopilot(page, panel) {

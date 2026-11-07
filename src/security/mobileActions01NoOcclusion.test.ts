@@ -38,8 +38,13 @@ describe('MOBILE-ACTIONS-01/B — no occlusion of professional writes', () => {
     expect(browser).toContain('MOBILE-ACTIONS-01/B');
     expect(browser).toContain("name: 'Salva Valutazioni di Classe'");
     expect(browser).toContain('expectNoOverlap(');
-    expect(browser).toContain("name: 'Blocca Registro'");
-    expect(browser).toContain("name: 'Imposta blocco automatico'");
+    expect(browser).toContain("page.getByTestId('header01-lock')");
+    expect(browser).toContain("page.getByTestId('header01-privacy')");
+    expect(browser).toContain("page.getByTestId('header01-auto-lock')");
+    expect(browser).toContain("await navigationButton(page).click()");
+    expect(browser).toContain("await settings.selectOption('30')");
+    expect(browser).toContain("await expectNoOverlap(save, lock)");
+    expect(browser).toContain("await expectNoOverlap(save, privacy)");
     expect(browser).toContain('390');
     expect(browser).toContain('320');
   });

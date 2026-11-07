@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, privacyButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const path = require('node:path');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
@@ -38,18 +39,19 @@ async function closePersistenceConfirmationIfPresent(page) {
 }
 
 async function disablePrivacyShield(page) {
-  const shield = page.locator('button[title^="Privacy Shield"]').first();
+  const shield = privacyButton(page);
   await expect(shield).toBeVisible();
   await shield.click();
 }
 
 async function openOggiFromDrawer(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const oggi = page.getByRole('complementary')
     .filter({ has: page.getByRole('button', { name: 'Oggi', exact: true }) })
     .getByRole('button', { name: 'Oggi', exact: true });
   await expect(oggi).toBeVisible();
   await oggi.click();
+  await settleOggiNavigation(page);
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 }
 

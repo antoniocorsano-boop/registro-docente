@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 
@@ -23,9 +24,10 @@ async function createClassAndReturnHome(page, className) {
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
   await closePersistenceConfirmation(page);
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   await drawer.getByRole('button', { name: 'Oggi', exact: true }).click();
+  await settleOggiNavigation(page);
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
