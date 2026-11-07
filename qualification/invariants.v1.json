@@ -747,7 +747,10 @@
         "src/security/today01HomeUiContract.test.ts",
         "tests/browser/",
         ".github/workflows/browser-qualification.yml",
-        "src/security/mobileActions01NoOcclusion.test.ts"
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        ".github/workflows/header01-copilot-drawer-isolated-qualification.yml",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "tests/browser/header-01-copilot-drawer-occlusion.spec.cjs"
       ],
       "tests": [
         "src/security/header01ProductionWiringContract.test.ts",
@@ -755,10 +758,12 @@
         "src/security/mobileActions01Contract.test.ts",
         "src/security/homeNavigationDuringSaveIntegrity.test.ts",
         "src/security/today01HomeUiContract.test.ts",
-        "src/security/mobileActions01NoOcclusion.test.ts"
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/header01CopilotDrawerOcclusion.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/header-01-navbar-integration.spec.cjs"
+        "tests/browser/header-01-navbar-integration.spec.cjs",
+        "tests/browser/header-01-copilot-drawer-occlusion.spec.cjs"
       ]
     },
     {
