@@ -2065,7 +2065,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       params.set('tab', route.tab);
-      history.pushState({ classId, tab: route.tab }, '', `?${params.toString()}`);
+      history.pushState({ classId, tab: route.tab }, '', withHprTraceQuery(`?${params.toString()}`));
+      markHistoryPush();
     } catch (e) {}
   }, [publishRecordSession, setActiveTab]);
 
@@ -2212,6 +2213,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && planningGuardRef.current?.hasUnsavedChanges()) {
+      requestPlanningDeparture(() => handleSelectClass(classId), 'dashboard');
+      return;
+    }
     if (pendingEvaluationCancelRef.current) {
       pendingEvaluationCancelRef.current.proceed = () => handleSelectClass(classId);
       return;
@@ -2224,6 +2230,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       && currentClassIdRef.current === null
       && reviewSessionRef.current === null;
     publishReviewSession(null);
+    setTeachingFocus(null);
     currentClassIdRef.current = classId;
     setAppData(prev => ({ ...prev, currentClassId: classId }));
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
@@ -2245,12 +2252,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
-      history.pushState({ classId, tab: 'dashboard' }, '', `?class=${classId}`);
+      history.pushState({ classId, tab: 'dashboard' }, '', withHprTraceQuery(`?class=${classId}`));
+      markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigateHome = () => {
+    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
+      && planningGuardRef.current?.hasUnsavedChanges()) {
+      requestPlanningDeparture(handleNavigateHome, 'home');
+      return;
+    }
     if (pendingEvaluationCancelRef.current) {
       pendingEvaluationCancelRef.current.proceed = handleNavigateHome;
       return;
@@ -2267,7 +2280,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     setEditingBatchId(null);
     setSelectedStudentForReport(null);
     try {
-      history.pushState(null, '', window.location.pathname);
+      history.pushState(null, '', withHprTraceQuery(window.location.pathname));
+      markHistoryPush();
     } catch (e) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
