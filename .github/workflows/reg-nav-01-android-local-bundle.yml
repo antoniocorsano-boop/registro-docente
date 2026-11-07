@@ -1,9 +1,9 @@
 name: "REG-NAV-01 Android local-only static bundle"
 
 on:
-  push:
+  pull_request:
     branches:
-      - tools/reg-nav-01-termux-bundle-305aacb8
+      - feat/reg-nav-01-main-reconciled
 
 permissions:
   contents: read
