@@ -50,6 +50,7 @@ import { resolveProfessionalContext, toCopilotContextProjection } from './contex
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import { createStudentReportHistoryState, restoreStudentReportFromHistory } from './navigation/studentReportHistory';
+import { isMobileMatrixDisclosureState } from './navigation/mobileMatrixDisclosureHistory';
 import { resolveStudentReportReturnContext, type StudentReportReturnContext } from './navigation/studentReportReturnContext';
 import { resolveConductContext } from './conduct/conductSession';
 import {
@@ -297,6 +298,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
+  const activeTabRef = useRef<ActiveTab>('home');
   const [todayAction, setTodayAction] = useState<TodayAction | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSessionContext | null>(null);
   const reviewSessionRef = useRef<ReviewSessionContext | null>(null);
@@ -317,6 +319,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Only one report detour can be active. Never persisted or added to history.state.
   const studentReportReturnContextRef = useRef<StudentReportReturnContext | null>(null);
   const [returningToStudentOrigin, setReturningToStudentOrigin] = useState<StudentReportReturnContext | null>(null);
+  // A pending explicit route consumes the temporary inline Tabellone history
+  // step before adding the new destination, avoiding a phantom Back entry.
+  const pendingMobileMatrixExitRef = useRef<{ classId: string; proceed: () => void } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
@@ -381,6 +386,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setReturningToStudentOrigin(null);
     }
     navigationVersionRef.current += 1;
+    activeTabRef.current = tab;
     setActiveTabState(tab);
 
     const storedReviewSession = reviewSessionRef.current;
@@ -503,10 +509,50 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
   }, [invalidateSemanticMemorySession, isSemanticMemorySyncing, semanticMemorySession.endpoint, semanticMemorySession.status]);
 
+  // Consume only an actual owned Tabellone inline-detail entry, then perform
+  // the requested explicit navigation from its preceding collapsed route.
+  // The report route is different: it must preserve the originating detail.
+  const queueMobileMatrixExit = useCallback((proceed: () => void): boolean => {
+    // Last explicit destination wins; never traverse Back a second time
+    // while the first asynchronous browser popstate is still pending.
+    if (pendingMobileMatrixExitRef.current) {
+      pendingMobileMatrixExitRef.current.proceed = proceed;
+      return true;
+    }
+    const classId = currentClassIdRef.current;
+    if (!classId || !isMobileMatrixDisclosureState(window.history.state, classId)) return false;
+    pendingMobileMatrixExitRef.current = { classId, proceed };
+    try {
+      window.history.back();
+      return true;
+    } catch {
+      pendingMobileMatrixExitRef.current = null;
+      return false;
+    }
+  }, []);
+
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
     options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
   ) => {
+    // A previous inline Back may still be pending when another control fires.
+    // ALL destinations, including the student report, must be serialized here.
+    // Only a report requested without a pending exit bypasses inline collapse.
+    if (pendingMobileMatrixExitRef.current) {
+      pendingMobileMatrixExitRef.current.proceed = tab === activeTabRef.current
+        ? () => {} // latest tap cancels a requested route change
+        : () => handleNavigateTab(tab, options);
+      return;
+    }
+    if (tab !== 'report') {
+      if (isMobileMatrixDisclosureState(window.history.state, currentClassIdRef.current ?? '')) {
+        if (tab === activeTabRef.current) {
+          // The active Tabellone button is just an inline collapse.
+          if (queueMobileMatrixExit(() => {})) return;
+        }
+        if (queueMobileMatrixExit(() => handleNavigateTab(tab, options))) return;
+      }
+    }
     const hadReviewSession = reviewSessionRef.current !== null;
     setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
@@ -537,7 +583,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const query = params.toString();
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
-  }, [publishRecordSession, setActiveTab]);
+  }, [publishRecordSession, queueMobileMatrixExit, setActiveTab]);
 
   /** Open one student's report as a REAL browser-history route, not only a React tab. */
   const handleOpenStudentReport = useCallback((
@@ -549,10 +595,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!selectedClass?.students.some(student => student.id === studentId)) return;
 
     // Accept a context only from the currently open professional surface.
-    // No student names, grades, or search queries ever enter browser history.
-    studentReportReturnContextRef.current = originContext?.studentId === studentId
+    // If an earlier inline Back is already consuming its detail marker,
+    // the report returns to the COLLAPSED Tabellone. Otherwise a later
+    // Back would restore an expanded row without its corresponding step.
+    // Keep the other transient filters but never put names or grades in history.
+    const pendingInlineCollapse = pendingMobileMatrixExitRef.current !== null;
+    const safeOriginContext = pendingInlineCollapse && originContext?.originTab === 'tabellone'
+      ? { ...originContext, ui: { ...originContext.ui, expandedStudentId: null } }
+      : originContext;
+    studentReportReturnContextRef.current = safeOriginContext?.studentId === studentId
       ? resolveStudentReportReturnContext(
-          originContext,
+          safeOriginContext,
           classId,
           activeTab,
           appDataRef.current.classes
@@ -1488,6 +1541,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         ? requestedClassId
         : null;
       const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
+
+      const pendingExit = pendingMobileMatrixExitRef.current;
+      if (pendingExit) {
+        pendingMobileMatrixExitRef.current = null;
+        // Only the expected collapsed row destination may complete this action.
+        if (nextCurrentClassId === pendingExit.classId && nextTab === 'tabellone') {
+          pendingExit.proceed();
+          return;
+        }
+      }
+
+      // A Back/Forward within one mobile Tabellone is a disclosure toggle,
+      // not a professional navigation. Do not terminate Rivedi/record sessions.
+      // MatrixView listens to this same event to close/reopen a valid row.
+      if (nextCurrentClassId === currentClassIdRef.current
+        && nextTab === activeTabRef.current
+        && nextTab !== 'report') {
+        return;
+      }
+
       const restoredStudentId = restoreStudentReportFromHistory(
         e.state,
         nextCurrentClassId,
@@ -1746,6 +1819,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    if (queueMobileMatrixExit(() => handleSelectClass(classId))) return;
     studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
     const shouldStartPendingReview =
@@ -1780,6 +1854,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   const handleNavigateHome = () => {
+    if (queueMobileMatrixExit(handleNavigateHome)) return;
     studentReportReturnContextRef.current = null;
     setReturningToStudentOrigin(null);
     setTodayAction(null);
@@ -2397,6 +2472,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             key={currentClass.id}
             currentClass={currentClass}
             onOpenStudentReport={handleOpenStudentReport}
+            onRequestMobileDisclosureCollapse={() => { queueMobileMatrixExit(() => {}); }}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
             returnContext={returningToStudentOrigin?.originTab === 'tabellone'

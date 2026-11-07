@@ -14,6 +14,7 @@ import { Sparkline } from './Sparkline';
 import { CompactStudentDisclosureRow } from './CompactStudentDisclosureRow';
 import { captureReturnScrollY, type StudentReportReturnContext } from '../navigation/studentReportReturnContext';
 import { useRestoreStudentReturnScroll } from '../navigation/useRestoreStudentReturnScroll';
+import { createMobileMatrixDisclosureState, isMobileMatrixDisclosureState } from '../navigation/mobileMatrixDisclosureHistory';
 import { Table, Filter, Sparkles, User, Calendar, Award, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
 type MatrixReturnContext = Extract<StudentReportReturnContext, { originTab: 'tabellone' }>;
@@ -21,6 +22,7 @@ type MatrixReturnContext = Extract<StudentReportReturnContext, { originTab: 'tab
 interface MatrixViewProps {
   currentClass: ClassData;
   onOpenStudentReport: (studentId: string, originContext?: StudentReportReturnContext) => void;
+  onRequestMobileDisclosureCollapse?: () => void;
   isPrivacyShieldActive?: boolean;
   settings?: AppSettings;
   returnContext?: MatrixReturnContext;
@@ -29,6 +31,7 @@ interface MatrixViewProps {
 export const MatrixView: React.FC<MatrixViewProps> = ({
   currentClass,
   onOpenStudentReport,
+  onRequestMobileDisclosureCollapse,
   isPrivacyShieldActive = true,
   settings,
   returnContext
@@ -50,13 +53,67 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         : null
   );
 
+  // Student selection is session-only; never put names, IDs or grades in the
+  // inline disclosure's browser-history entry.
+  const lastExpandedMobileStudentIdRef = useRef<string | null>(restored?.ui.expandedStudentId ?? null);
+
   // A report return may restore one row on mount. A genuine class change
   // must still close it, including A → B → A.
   const previousClassIdRef = useRef(currentClass.id);
   useEffect(() => {
-    if (previousClassIdRef.current !== currentClass.id) setExpandedMobileStudent(null);
+    if (previousClassIdRef.current !== currentClass.id) {
+      setExpandedMobileStudent(null);
+      lastExpandedMobileStudentIdRef.current = null;
+    }
     previousClassIdRef.current = currentClass.id;
   }, [currentClass.id]);
+
+  // An inline detail is a history step on mobile: Android Back closes it
+  // before leaving the Tabellone. Forward may reopen only a still-valid row
+  // from this mounted class, without persisting its identity.
+  useEffect(() => {
+    const handleMobileDisclosurePopState = (event: PopStateEvent) => {
+      const studentId = lastExpandedMobileStudentIdRef.current;
+      const validStudent = studentId !== null
+        && currentClass.students.some(student => student.id === studentId);
+      setExpandedMobileStudent(
+        isMobileMatrixDisclosureState(event.state, currentClass.id) && validStudent
+          ? { classId: currentClass.id, studentId }
+          : null
+      );
+    };
+    window.addEventListener('popstate', handleMobileDisclosurePopState);
+    return () => window.removeEventListener('popstate', handleMobileDisclosurePopState);
+  }, [currentClass.id, currentClass.students]);
+
+  const handleToggleMobileStudent = (studentId: string) => {
+    const isOpen = expandedMobileStudent?.classId === currentClass.id
+      && expandedMobileStudent.studentId === studentId;
+    if (isOpen) {
+      if (isMobileMatrixDisclosureState(window.history.state, currentClass.id)
+        && onRequestMobileDisclosureCollapse) {
+        // Use the same App-owned navigation queue as tabs, classes and Home.
+        // A second rapid tap updates the pending callback, never calls Back twice.
+        onRequestMobileDisclosureCollapse();
+      } else {
+        setExpandedMobileStudent(null);
+      }
+      return;
+    }
+
+    const state = createMobileMatrixDisclosureState(window.history.state, currentClass.id);
+    if (state && !isMobileMatrixDisclosureState(window.history.state, currentClass.id)) {
+      try {
+        // Same address and a non-identifying marker. No professional data in history.
+        window.history.pushState(state, '', window.location.href);
+      } catch {
+        // The detail can still expand when browser history is unavailable.
+      }
+    }
+    lastExpandedMobileStudentIdRef.current = studentId;
+    setExpandedMobileStudent({ classId: currentClass.id, studentId });
+  };
+
   useRestoreStudentReturnScroll(
     restored?.scrollY ?? null,
     restored ? `${restored.classId}:${restored.studentId}:tabellone` : null
@@ -245,10 +302,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                 primaryLabel="Media"
                 primaryValue={formatGrade(mobileAvg)}
                 expanded={expanded}
-                onToggle={() => setExpandedMobileStudent(current =>
-                  current?.classId === currentClass.id && current.studentId === s.id
-                    ? null : { classId: currentClass.id, studentId: s.id }
-                )}
+                onToggle={() => handleToggleMobileStudent(s.id)}
                 onOpenStudentReport={() => onOpenStudentReport(s.id, {
                   classId: currentClass.id,
                   studentId: s.id,

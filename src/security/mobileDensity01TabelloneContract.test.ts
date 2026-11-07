@@ -18,7 +18,8 @@ describe('MOBILE-DENSITY-01 / Tabellone mobile', () => {
   test('only one expanded student from the current class is visible', () => {
     expect(matrix).toContain('expandedMobileStudent?.classId === currentClass.id');
     expect(matrix).toContain('expandedMobileStudent.studentId === s.id');
-    expect(matrix).toContain('current?.classId === currentClass.id && current.studentId === s.id');
+    expect(matrix).toContain('onToggle={() => handleToggleMobileStudent(s.id)}');
+    expect(matrix).toContain("isMobileMatrixDisclosureState(event.state, currentClass.id)");
     expect(row).toContain('hidden={!expanded}');
     expect(row).toContain('{expanded && (');
   });
