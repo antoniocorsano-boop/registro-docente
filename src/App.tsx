@@ -320,6 +320,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // 6. Navigation and UI state
   const [activeTab, setActiveTabState] = useState<ActiveTab>('home');
   const activeTabRef = useRef<ActiveTab>('home');
+  // Popstate may outlive a render. Always validate restored UDA focus against the
+  // *live* catalog, including UDA created or projected after initial unlock.
+  const teachingUdaCatalogRef = useRef(teachingUdaCatalog);
+  teachingUdaCatalogRef.current = teachingUdaCatalog;
   // Opt-in, preview-only. No class IDs, URLs, form values, credentials or vault data.
   const [hprTraceEnabled] = useState(() =>
     import.meta.env.VITE_INT01_HPR_TRACE === '1' && typeof window !== 'undefined'
@@ -664,7 +668,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     activeTabRef.current = tab;
     setActiveTabState(tab);
     setTeachingFocus(previous =>
-      transitionTeachingFocusForTab(previous, currentClassIdRef.current, tab, teachingUdaCatalog)
+      transitionTeachingFocusForTab(previous, currentClassIdRef.current, tab, teachingUdaCatalogRef.current)
     );
 
     const storedReviewSession = reviewSessionRef.current;
@@ -679,7 +683,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [publishReviewSession, requestPlanningDeparture, teachingUdaCatalog, traceHpr]);
+  }, [publishReviewSession, requestPlanningDeparture, traceHpr]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -2145,7 +2149,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab, traceHpr]);
 
   const handleOpenPreparationCopilot = useCallback(() => {
     const launchContext = buildPreparationCopilotLaunchContext(currentClass);
