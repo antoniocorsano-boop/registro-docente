@@ -1,0 +1,55 @@
+name: NAV-MOBILE-BACK isolated observation
+on:
+  push:
+    branches:
+      - audit/nav-mobile-back-5ed81ade
+permissions:
+  contents: read
+env:
+  APPLICATIVE_BASE_SHA: '5ed81ade307e8365229e483693f27bbc31d3a822'
+jobs:
+  mobile-browser:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Confirm application code is untouched by audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$APPLICATIVE_BASE_SHA" || test "$(git merge-base HEAD "$APPLICATIVE_BASE_SHA")" = "$APPLICATIVE_BASE_SHA"
+          git diff --name-only "$APPLICATIVE_BASE_SHA" HEAD | grep -v -E '^(tests/browser/nav-mobile-back-observation.spec.cjs|.github/workflows/nav-mobile-back-isolated-observation.yml)$' > /tmp/modified-product-paths
+          test ! -s /tmp/modified-product-paths
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - name: Install Chromium isolated
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .nav-back-tools
+          echo '{"name":"nav-back-tools","private":true}' > .nav-back-tools/package.json
+          npm --prefix .nav-back-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.nav-back-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-mobile-back-observation.spec.cjs .nav-back-tools/
+      - name: Start synthetic fixture only on loopback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort >/tmp/nav-mobile-browser.log 2>&1 &
+          for attempt in $(seq 1 35); do
+            if curl -fsS http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/nav-mobile-browser.log
+          exit 1
+      - name: Observe page history and Back on Android-size Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .nav-back-tools
+          NAV_MOBILE_BACK_BASE_URL=http://127.0.0.1:4173 ./node_modules/.bin/playwright test nav-mobile-back-observation.spec.cjs --reporter=line --workers=1
