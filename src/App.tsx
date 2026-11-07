@@ -1614,7 +1614,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // A Back/Forward within one mobile Tabellone is a disclosure toggle,
       // not a professional navigation. Do not terminate Rivedi/record sessions.
       // MatrixView listens to this same event to close/reopen a valid row.
-      if (nextCurrentClassId === currentClassIdRef.current
+      if (!pendingEvaluationCancel
+        && nextCurrentClassId === currentClassIdRef.current
         && nextTab === activeTabRef.current
         && nextTab !== 'report' && nextTab !== 'voti') {
         return;
