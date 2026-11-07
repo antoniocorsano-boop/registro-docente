@@ -760,6 +760,30 @@
       "browserSmoke": [
         "tests/browser/header-01-navbar-integration.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-DENSITY-01-I01",
+      "owner": "MOBILE-DENSITY-01",
+      "statement": "The mobile Tabellone displays one compact accessible row per student and only one expanded detail at a time, with the student report action separate. It preserves per-period and per-type grade calculations, proposed-indicator settings, privacy masking and accessible labels, while the desktop table and all professional persistence remain unchanged. Expansion state is scoped to the current class and no real student data is used in qualification.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/MatrixView.tsx",
+        "src/components/CompactStudentDisclosureRow.tsx",
+        "src/security/mobileDensity01TabelloneContract.test.ts",
+        "tests/browser/fixtures/mobile-density-01-tabellone.html",
+        "tests/browser/fixtures/mobile-density-01-tabellone-fixture.tsx",
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "src/security/mobileUxIntegrity.test.ts"
+      ],
+      "tests": [
+        "src/security/mobileDensity01TabelloneContract.test.ts",
+        "src/security/header01ProductionWiringContract.test.ts",
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/mobileUxIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile-density-01-tabellone.spec.cjs"
+      ]
     }
   ]
 }
