@@ -8,11 +8,11 @@ on:
 permissions:
   contents: read
 env:
-  PR_NUMBER: '126'
-  CANDIDATE_SHA: '18b72d9c97804c4afd4ddf88f6b8256f26548a1d'
-  BASE_SHA: 'f19826501555dff83678f148ef46addaf77c3297'
-  EXPECTED_MERGE_BASE: 'cc3542df0993ce7717a3f31fa3e828d53f615ab0'
-  SPEC: 'mobile-density-01-tabellone.spec.cjs'
+  PR_NUMBER: '128'
+  CANDIDATE_SHA: '9ccdc48670def105dc9dd2b9ede382495a73452e'
+  BASE_SHA: 'ffab3b3de3acfbb1cc07080c7669a10e51c3dcd5'
+  EXPECTED_MERGE_BASE: '18b72d9c97804c4afd4ddf88f6b8256f26548a1d'
+  SPEC: 'nav-back-01-student-report.spec.cjs'
   PORT: '4173'
 jobs:
   exact-candidate:
@@ -36,7 +36,7 @@ jobs:
           echo "Base verified: $BASE_SHA"
           git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" > /tmp/changed-files
           cat /tmp/changed-files
-          test "$(wc -l </tmp/changed-files)" -eq 8
+          test "$(wc -l </tmp/changed-files)" -eq 7
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
@@ -56,7 +56,7 @@ jobs:
             bun test "${selected[@]}"
           fi
       - name: Validate own contract
-        run: bun test src/security/mobileDensity01TabelloneContract.test.ts
+        run: bun test src/security/navBack01StudentReportHistory.test.ts
       - name: Typecheck and lint
         run: bun run lint
       - name: Complete security/memory tests
@@ -93,7 +93,7 @@ jobs:
           set -euo pipefail
           ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT" --strictPort > /tmp/mobile-stack-merge-vite.log 2>&1 &
           for i in $(seq 1 40); do
-            if curl --fail --silent "http://127.0.0.1:$PORT/tests/browser/fixtures/mobile-density-01-tabellone.html" >/dev/null; then exit 0; fi
+            if curl --fail --silent "http://127.0.0.1:$PORT/tests/browser/fixtures/nav-back-01-app.html" >/dev/null; then exit 0; fi
             sleep 1
           done
           cat /tmp/mobile-stack-merge-vite.log
@@ -103,12 +103,12 @@ jobs:
         run: |
           set -euo pipefail
           cd .merge-gate-tools
-          DENSITY01_BASE_URL="http://127.0.0.1:${PORT}" ./node_modules/.bin/playwright test "$SPEC" --workers=1 --reporter=line
+          NAV_BACK_BASE_URL="http://127.0.0.1:${PORT}" ./node_modules/.bin/playwright test "$SPEC" --workers=1 --reporter=line
       - name: Upload inspection manifest
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-stack-merge-gate-126
+          name: mobile-stack-merge-gate-128
           path: qualification-manifest.json
           if-no-files-found: warn
           retention-days: 14
