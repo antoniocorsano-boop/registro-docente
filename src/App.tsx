@@ -1856,6 +1856,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     ? assessmentHandoffResolution.handoff
     : null;
 
+  // Reclassification, source deletion and class changes revoke the old handoff.
+  useEffect(() => {
+    if (assessmentHandoffRequest && assessmentHandoffResolution?.status === 'unavailable') {
+      setAssessmentHandoffRequest(null);
+    }
+  }, [assessmentHandoffRequest, assessmentHandoffResolution?.status]);
+
   // Separate the settings' display label from the authoritative curriculum code.
   const curricularSubjectCode = React.useMemo(
     () => resolveCurricularSubjectCode(settings.subject),
