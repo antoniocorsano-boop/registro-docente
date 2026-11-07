@@ -26,6 +26,12 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
+  // A fresh class can open the existing durable-save acknowledgement.
+  const saveNotice = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  if (await saveNotice.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+    await expect(saveNotice).toBeHidden();
+  }
 
   await openDrawerItem(page, 'Biblioteca privata');
   await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
