@@ -851,7 +851,8 @@
         "src/navigation/mobileMatrixDisclosureHistory.ts",
         "src/security/mobileMatrixDisclosureBackContract.test.ts",
         "src/security/mobileDensity01TabelloneContract.test.ts",
-        "tests/browser/nav-mobile-disclosure-back.spec.cjs"
+        "tests/browser/nav-mobile-disclosure-back.spec.cjs",
+        ".github/workflows/nav-mobile-disclosure-back-isolated-qualification.yml"
       ],
       "tests": [
         "src/security/mobileMatrixDisclosureBackContract.test.ts",
