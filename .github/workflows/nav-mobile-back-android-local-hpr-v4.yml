@@ -1,0 +1,163 @@
+# Temporary isolated Android HPR artifact; no deployments, tokens or real data.
+# This runner checks out the already qualified exact PR #130 commit.
+name: NAV-MOBILE-BACK Android local HPR artifact
+
+on:
+  push:
+    branches:
+      - hpr/nav-mobile-back-android-local-8ce29077
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: '8ce2907746567f69fa8e09864bbc1ed778132e6a'
+  PORT: '4173'
+
+jobs:
+  local-artifact:
+    name: Build and verify isolated synthetic local bundle
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact qualified candidate (no saved credentials)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Assert source SHA is the qualified PR commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          echo "Source verified: $CANDIDATE_SHA"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build synthetic application as static local artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .nav-hpr-local-vite.config.mts <<'CONFIG'
+          import path from 'node:path';
+          import { defineConfig } from 'vite';
+          import react from '@vitejs/plugin-react';
+          import tailwindcss from '@tailwindcss/vite';
+          export default defineConfig({
+            plugins: [react(), tailwindcss()],
+            base: './',
+            resolve: { alias: { '@': path.resolve(process.cwd(), '.') } },
+            build: {
+              outDir: 'android-hpr-site',
+              emptyOutDir: true,
+              sourcemap: false,
+              rollupOptions: {
+                input: path.resolve(process.cwd(), 'tests/browser/fixtures/nav-back-01-app.html')
+              }
+            }
+          });
+          CONFIG
+          ./node_modules/.bin/vite build --config .nav-hpr-local-vite.config.mts
+          test -f android-hpr-site/tests/browser/fixtures/nav-back-01-app.html
+          cat > android-hpr-site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="it"><head><meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=tests/browser/fixtures/nav-back-01-app.html">
+          <title>Registro Docente — NAV-MOBILE-BACK-01, collaudo locale con dati sintetici</title>
+          </head><body><p>Collaudo NAV-CONTEXT-01 con dati sintetici.</p></body></html>
+          HTML
+          cat > ANDROID-HPR-README.txt <<'TEXT'
+          NAV-MOBILE-BACK-01 + HEADER01 + MOBILE-DENSITY + NAV-BACK + NAV-CONTEXT + DRAWER — Android HPR, offline/local-only
+          Source commit: 8ce2907746567f69fa8e09864bbc1ed778132e6a
+          No production, no Vault real data, no accounts, no cloud deployment. GitHub artifact only.
+          Synthetic fixture: two invented students and two invented grades.
+
+          After downloading this GitHub Actions artifact ZIP to Android,
+          unzip it into a local folder with android-hpr-site inside.
+          In Termux, with Python installed, serve the folder:
+          python -m http.server 4173 --bind 127.0.0.1 --directory /PATH/TO/android-hpr-site
+          In Android Chrome visit: http://127.0.0.1:4173/
+
+          HPR journeys:
+          1. Open synthetic class; Analisi > Dettaglio alunni > Scheda > Android Back;
+             expect detail open and exact class preserved.
+          2. Analisi (detail open) > Tabellone > Analisi;
+             expect detail CLOSED after explicit navigation.
+          3. Tabellone > expand student > Scheda > Android Back;
+             expect same student still expanded.
+          4. From Oggi: open menu (logo) and confirm Copilot floating button hidden;
+             backup command stays accessible; close menu and confirm Copilot returns.
+          5. From Riepilogo, open Valutazioni then Tabellone; expand one row;
+             Android Back must CLOSE the row while staying in Tabellone;
+             a second Back must return to Valutazioni. Repeat opening a
+             row, entering Scheda alunno and Android Back: the same row
+             remains open, and the next Back closes it without leaving.
+          6. With a row open, navigate explicitly to Valutazioni; Android Back
+             must return to Tabellone CLOSED, and a second Back to Riepilogo,
+             without an invisible extra Tabellone step.
+          7. In Oggi open Rivedi > synthetic class > Tabellone; open a row,
+             Android Back should close it while Torna a Rivedi remains visible.
+          8. With a row open, tap two different bottom tabs rapidly. The
+             last tab chosen should open, and one Android Back should return
+             to Tabellone; a second Back goes to Riepilogo, with no phantom.
+          9. Open a Tabellone row, tap the same expanded row twice rapidly;
+             it must close without exiting Tabellone. Also try closing then
+             immediately selecting Valutazioni: Back returns to Tabellone,
+             and then to Riepilogo without a duplicate history step.
+          Stop Termux HTTP server with Ctrl+C when finished.
+          Do not enter real personal or professional data.
+          TEXT
+      - name: Install isolated Chromium test tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .hpr-browser-tools browser-evidence
+          echo '{"name":"nav-context-hpr-tools","private":true}' > .hpr-browser-tools/package.json
+          npm --prefix .hpr-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.hpr-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .hpr-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .hpr-browser-tools/
+          cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .hpr-browser-tools/
+          cp tests/browser/nav-mobile-disclosure-back.spec.cjs .hpr-browser-tools/
+      - name: Serve exactly the static bundle (loopback only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server "$PORT" --bind 127.0.0.1 --directory android-hpr-site > browser-evidence/local-server.log 2>&1 &
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent "http://127.0.0.1:$PORT/tests/browser/fixtures/nav-back-01-app.html" > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/local-server.log
+          exit 1
+      - name: Check Android-style journeys against packaged artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .hpr-browser-tools
+          HEADER01_DRAWER_BASE_URL="http://127.0.0.1:${PORT}" \
+          NAV_CONTEXT_BASE_URL="http://127.0.0.1:${PORT}" \
+          NAV_BACK_BASE_URL="http://127.0.0.1:${PORT}" \
+          NAV_MOBILE_DISCLOSURE_BASE_URL="http://127.0.0.1:${PORT}" \
+            ./node_modules/.bin/playwright test \
+              nav-context-01-return-origin.spec.cjs \
+              nav-back-01-student-report.spec.cjs \
+              header-01-copilot-drawer-occlusion.spec.cjs \
+              nav-mobile-disclosure-back.spec.cjs \
+              --workers=1 --reporter=line \
+              --output=../browser-evidence/local-bundle-tests
+      - name: Upload only synthetic offline site and instructions
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nav-mobile-back-android-local-hpr-8ce29077
+          path: |
+            android-hpr-site/
+            ANDROID-HPR-README.txt
+          if-no-files-found: error
+          retention-days: 7
