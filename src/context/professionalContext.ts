@@ -4,6 +4,7 @@ import {
   type CopilotLocalSurface
 } from '../copilot/contextProjection';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
+import type { PlanningFrameResolution } from '../planning/planningFrameResolver';
 import type { LibraryPlanningContextResolution } from '../library/planningContextBridge';
 import type {
   LibraryTeachingContext,
@@ -46,6 +47,7 @@ export interface ResolveProfessionalContextInput {
   currentClass?: { id: string; name: string } | null;
   teachingContext?: ResolvedLibraryTeachingContext | null;
   planningContext?: LibraryPlanningContextResolution | null;
+  planningFrame?: PlanningFrameResolution | null;
   sourceId?: string | null;
   assessmentId?: string | null;
   goal?: string | null;
@@ -79,19 +81,33 @@ export function resolveProfessionalContext(
   const planningClassName = input.planningContext?.status === 'resolved'
     ? optionalTrimmed(input.planningContext.teachingContext.className)
     : undefined;
+  const frameClassName = input.planningFrame?.status === 'resolved'
+    ? optionalTrimmed(input.planningFrame.className)
+    : undefined;
 
   const declaredClassNames = [
     currentClassName,
     teachingClassName,
-    planningClassName
+    planningClassName,
+    frameClassName
   ].filter((value): value is string => Boolean(value));
 
   if (new Set(declaredClassNames).size > 1) {
     conflicts.push('CLASS_MISMATCH');
   }
 
-  if (input.planningContext?.status === 'ambiguous') {
+  if (input.planningContext?.status === 'ambiguous' || input.planningFrame?.status === 'ambiguous') {
     conflicts.push('PLANNING_CONTEXT_AMBIGUOUS');
+  }
+  if (input.planningContext?.status === 'resolved' && input.planningFrame?.status === 'resolved') {
+    if (
+      input.planningContext.profile.id !== input.planningFrame.profile.id
+      || input.planningContext.arenaContext?.id !== input.planningFrame.arenaContext?.id
+    ) {
+      if (!conflicts.includes('PLANNING_CONTEXT_AMBIGUOUS')) {
+        conflicts.push('PLANNING_CONTEXT_AMBIGUOUS');
+      }
+    }
   }
 
   if (conflicts.length > 0) {
@@ -111,6 +127,8 @@ export function resolveProfessionalContext(
     context.className = currentClassName;
   } else if (teachingClassName) {
     context.className = teachingClassName;
+  } else if (frameClassName) {
+    context.className = frameClassName;
   }
 
   const udaId = optionalTrimmed(input.teachingContext?.udaId);
@@ -118,9 +136,14 @@ export function resolveProfessionalContext(
   if (udaId) context.udaId = udaId;
   if (lessonId) context.lessonId = lessonId;
 
-  if (input.planningContext?.status === 'resolved') {
-    const planningProfileId = optionalTrimmed(input.planningContext.profile.id);
-    const arenaContextId = optionalTrimmed(input.planningContext.arenaContext?.id);
+  const resolvedPlanning = input.planningFrame?.status === 'resolved'
+    ? input.planningFrame
+    : input.planningContext?.status === 'resolved'
+      ? input.planningContext
+      : null;
+  if (resolvedPlanning) {
+    const planningProfileId = optionalTrimmed(resolvedPlanning.profile.id);
+    const arenaContextId = optionalTrimmed(resolvedPlanning.arenaContext?.id);
     if (planningProfileId) context.planningProfileId = planningProfileId;
     if (arenaContextId) context.arenaContextId = arenaContextId;
   }
