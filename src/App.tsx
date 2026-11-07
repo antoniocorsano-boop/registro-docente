@@ -2013,9 +2013,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       afterCommit: () => {
         const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
-        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave
-          && currentClassIdRef.current === classId) {
-          handleNavigateTab('storico', { navigationMode: 'replace', evaluationBatchId: null });
+        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
+          if (currentClassIdRef.current === classId) {
+            handleNavigateTab('storico', { navigationMode: 'replace', evaluationBatchId: null });
+          }
         }
       }
     }).then(() => undefined);
