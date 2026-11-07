@@ -1,0 +1,102 @@
+# No-secrets, exact-SHA qualification for a small UI fix stacked on NAV-CONTEXT-01.
+# Do not merge or deploy from this workflow.
+name: NAV-MOBILE-BACK inline disclosure isolated qualification
+
+on:
+  push:
+    branches:
+      - feat/nav-mobile-disclosure-back-01
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.sha }}
+
+jobs:
+  contracts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify exact commit
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: oven-sh/setup-bun@v2
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Verify protected invariants
+        run: bun scripts/qualification/check-invariants.mjs
+      - name: Verify mobile Back disclosure contract
+        run: bun test src/security/mobileMatrixDisclosureBackContract.test.ts src/security/mobileDensity01TabelloneContract.test.ts
+      - name: Verify whole-app security and integrity
+        run: bun run test:security
+      - name: TypeScript
+        run: bun run lint
+      - name: Build (no deployment)
+        run: bun run build
+
+  chromium:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify exact commit
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - name: Install isolated Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .header01-browser-tools header01-evidence
+          echo '{"name":"header01-browser-qualification","private":true}' > .header01-browser-tools/package.json
+          npm --prefix .header01-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.header01-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .header01-browser-tools/
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .header01-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .header01-browser-tools/
+          cp tests/browser/nav-mobile-disclosure-back.spec.cjs .header01-browser-tools/
+      - name: Start synthetic App fixture on loopback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > header01-evidence/server.log 2>&1 &
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html' >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat header01-evidence/server.log
+          exit 1
+      - name: Run targeted Drawer and preserved navigation regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .header01-browser-tools
+          HEADER01_DRAWER_BASE_URL='http://127.0.0.1:4173' \
+          NAV_CONTEXT_BASE_URL='http://127.0.0.1:4173' \
+          NAV_BACK_BASE_URL='http://127.0.0.1:4173' \
+          NAV_MOBILE_DISCLOSURE_BASE_URL='http://127.0.0.1:4173' \
+          ./node_modules/.bin/playwright test \
+            header-01-copilot-drawer-occlusion.spec.cjs \
+            nav-context-01-return-origin.spec.cjs \
+            nav-back-01-student-report.spec.cjs \
+            nav-mobile-disclosure-back.spec.cjs \
+            --workers=1 --reporter=line \
+            --output=../header01-evidence/results
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nav-mobile-back-${{ env.CANDIDATE_SHA }}
+          path: header01-evidence/
+          retention-days: 14
+          if-no-files-found: warn
