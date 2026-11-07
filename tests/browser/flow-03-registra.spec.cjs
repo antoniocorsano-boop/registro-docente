@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, privacyButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const path = require('node:path');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
@@ -37,17 +38,18 @@ async function closePersistenceConfirmationIfPresent(page) {
 }
 
 async function disablePrivacyShield(page) {
-  const shield = page.locator('button[title^="Privacy Shield"]').first();
+  const shield = privacyButton(page);
   await expect(shield).toBeVisible();
   await shield.click();
 }
 
 async function openOggiFromDrawer(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   const oggi = drawer.getByRole('button', { name: 'Oggi', exact: true });
   await expect(oggi).toBeVisible();
   await oggi.click();
+  await settleOggiNavigation(page);
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 }
 
@@ -139,6 +141,14 @@ async function assertSelectedClassStillVisible(page) {
     await expect.poll(() => quickSwitcher.evaluate(select =>
       select.selectedOptions[0]?.textContent?.trim() ?? ''
     )).toBe(CLASS_NAME);
+    return;
+  }
+
+  // The mobile HEADER-01 projection names the active class as "Classe <nome>".
+  // All Registra ownership and UDA assertions remain separately enforced.
+  const headerContext = page.getByTestId('header01-context');
+  if (await headerContext.isVisible().catch(() => false)) {
+    await expect(headerContext).toContainText(`Classe ${CLASS_NAME}`);
     return;
   }
 
@@ -295,7 +305,7 @@ test.describe('FLOW-03 desktop qualification', () => {
   await expect(mission).toBeVisible();
 
   // Ordinary navigation must invalidate Registra before a later standalone evaluation.
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
   await expect(mission).toBeHidden();
@@ -434,13 +444,13 @@ test.describe('FLOW-03 ordinary UDA navigation invalidation qualification', () =
   await page.getByRole('button', { name: 'Chiudi Fascicolo', exact: true }).click();
   await expect(page.getByText('Registrazione rapida', { exact: true })).toBeHidden();
 
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const drawer = page.getByRole('complementary');
   await drawer.getByRole('button', { name: 'Storico prove', exact: true }).click();
   await expect(mission).toBeHidden();
   await expect(page.getByRole('heading', { name: `Storico Prove Registrate: ${CLASS_NAME}` })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   await drawer.getByRole('button', { name: 'UDA', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Unità didattiche', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: `Missione Registra per ${CLASS_NAME}` })).toBeHidden();

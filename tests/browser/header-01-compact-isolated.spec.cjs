@@ -1,4 +1,96 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs');
+const path = require('node:path');
+const evidenceDir = path.resolve(process.env.HEADER01_EVIDENCE_DIR || '../browser-evidence');
+
+function errorText(error) {
+  return error instanceof Error ? error.stack || error.message : String(error);
+}
+
+// Exact-candidate, fail-closed evidence for each synthetic browser journey.
+async function withEvidence(browser, viewport, caseId, action) {
+  fs.mkdirSync(path.join(evidenceDir, 'screenshots'), { recursive: true });
+
+  const pageErrors = [];
+  const consoleErrors = [];
+  const crashes = [];
+  let context = null;
+  let page = null;
+  let failure = null;
+  let screenshotError = null;
+  let screenshot = null;
+  let result = 'FAIL';
+
+  try {
+    context = await browser.newContext({
+      viewport,
+      isMobile: viewport.width < 500,
+      hasTouch: viewport.width < 500,
+      deviceScaleFactor: 1,
+    });
+    page = await context.newPage();
+    page.on('pageerror', error => pageErrors.push(errorText(error)));
+    page.on('console', message => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('crash', () => crashes.push('Chromium page crashed'));
+    await action(page);
+  } catch (error) {
+    failure = error;
+  }
+
+  // Required screenshot precedes the FINAL pageerror assertion; a capture error is FAIL.
+  if (page) {
+    try {
+      screenshot = path.join('screenshots', caseId + '.png');
+      await page.screenshot({ path: path.join(evidenceDir, screenshot), fullPage: true });
+    } catch (error) {
+      screenshotError = errorText(error);
+      screenshot = null;
+      if (!failure) failure = error;
+    }
+  } else if (!failure) {
+    failure = new Error('No browser page was created for ' + caseId);
+  }
+
+  // Include browser shutdown in the observed lifecycle before declaring PASS.
+  try {
+    if (context) await context.close();
+  } catch (error) {
+    if (!failure) failure = error;
+  }
+
+  try {
+    expect(screenshot, 'A screenshot is mandatory for ' + caseId).not.toBeNull();
+    expect(pageErrors, 'Uncaught browser pageerrors are forbidden for ' + caseId).toEqual([]);
+    expect(crashes, 'Chromium crashes are forbidden for ' + caseId).toEqual([]);
+    if (!failure) result = 'PASS';
+  } catch (error) {
+    if (!failure) failure = error;
+  }
+
+  // Even on failure, persist exact-SHA, errors and FAIL as an inspectable artifact.
+  const evidence = {
+    schema: 'registro.header01.browser-evidence/v1',
+    candidateSha: process.env.CANDIDATE_SHA || null,
+    caseId,
+    viewport,
+    baseURL: baseUrl,
+    result,
+    screenshot,
+    screenshotError,
+    pageErrors,
+    consoleErrors,
+    crashes,
+    qualificationError: failure ? errorText(failure) : null,
+  };
+  fs.writeFileSync(
+    path.join(evidenceDir, 'header01-' + caseId + '.json'),
+    JSON.stringify(evidence, null, 2) + '\n',
+  );
+  if (failure) throw failure;
+}
+
 
 const baseUrl = process.env.HEADER01_BASE_URL || 'http://127.0.0.1:4173';
 const fixture = baseUrl + '/tests/browser/fixtures/header01.html';
@@ -9,14 +101,8 @@ for (const { width, height } of [
   { width: 1280, height: 900 },
 ]) {
   test(`HEADER-01 redesigned — single brand navigation and geometry at ${width}x${height}`, async ({ browser }) => {
-    const context = await browser.newContext({
-      viewport: { width, height },
-      isMobile: width < 500,
-      hasTouch: width < 500,
-      deviceScaleFactor: 1,
-    });
-    const page = await context.newPage();
-    await page.goto(fixture, { waitUntil: 'domcontentloaded' });
+    await withEvidence(browser, { width, height }, `geometry-${width}x${height}`, async (page) => {
+      await page.goto(fixture, { waitUntil: 'domcontentloaded' });
 
     const header = page.getByTestId('header01-topbar');
     const brand = page.getByTestId('header01-brand-navigation');
@@ -90,12 +176,13 @@ for (const { width, height } of [
       viewportWidth: document.documentElement.clientWidth,
     }));
     expect(longTitle.scrollWidth).toBeLessThanOrEqual(width + 1);
-    await context.close();
+    });
   });
 }
 
-test('HEADER-01 redesigned — save evidence, never persistent anonymous green', async ({ page }) => {
-  await page.goto(fixture, { waitUntil: 'domcontentloaded' });
+test('HEADER-01 redesigned — save evidence, never persistent anonymous green', async ({ browser }) => {
+  await withEvidence(browser, { width: 1280, height: 900 }, 'save-evidence', async (page) => {
+    await page.goto(fixture, { waitUntil: 'domcontentloaded' });
 
   await expect(page.getByTestId('header01-save-notice')).toHaveCount(0);
   await page.getByTestId('header01-show-error').click();
@@ -110,23 +197,20 @@ test('HEADER-01 redesigned — save evidence, never persistent anonymous green',
   await expect(saved).toHaveAttribute('role', 'status');
   await expect(saved).toContainText("Salvato nell'archivio locale");
   await expect(page.locator('.animate-ping')).toHaveCount(0);
+  });
 });
 
 test('HEADER-01 redesigned — keyboard focus does not displace critical security controls', async ({ browser }) => {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
-  });
-  const page = await context.newPage();
+  await withEvidence(browser, { width: 390, height: 844 }, 'keyboard-390x844', async (page) => {
   await page.goto(fixture, { waitUntil: 'domcontentloaded' });
   await page.getByRole('textbox', { name: 'Campo di prova tastiera' }).focus();
   await expect(page.getByTestId('header01-privacy')).toBeVisible();
   await expect(page.getByTestId('header01-lock')).toBeVisible();
-  await context.close();
+  });
 });
 
 test('HEADER-01 redesigned — 200% text size at 320px retains all critical controls', async ({ browser }) => {
-  const context = await browser.newContext({ viewport: { width: 320, height: 700 }, isMobile: true, hasTouch: true });
-  const page = await context.newPage();
+  await withEvidence(browser, { width: 320, height: 700 }, 'text-200-percent-320x700', async (page) => {
   await page.goto(fixture, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
   await expect(page.getByTestId('header01-brand-navigation')).toBeVisible();
@@ -139,5 +223,5 @@ test('HEADER-01 redesigned — 200% text size at 320px retains all critical cont
   }));
   expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport + 1);
   expect(geometry.right).toBeLessThanOrEqual(geometry.viewport + 1);
-  await context.close();
+  });
 });

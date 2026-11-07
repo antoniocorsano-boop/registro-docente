@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -38,7 +39,7 @@ async function closePersistenceConfirmation(page) {
 }
 
 async function openDrawerItem(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).click();
   const item = page.locator('aside').getByRole('button', { name: label, exact: true });
   await expect(item).toBeVisible();
   await item.click();
@@ -258,7 +259,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
   const touchTargets = [];
   for (const locator of [
     page.getByRole('button', { name: /Nuova Classe/ }),
-    page.getByRole('button', { name: 'Menu', exact: true }),
+    navigationButton(page),
     main.getByRole('button', { name: 'Classi', exact: true }),
     main.getByRole('button', { name: 'Sintesi', exact: true }),
     main.getByRole('button', { name: 'Confronto', exact: true })
