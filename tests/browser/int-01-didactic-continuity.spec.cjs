@@ -30,11 +30,26 @@ async function closeSaveConfirmation(page) {
 }
 
 async function fromDrawer(page, label) {
-  // HEADER-01: navigation is now opened from the branded header button.
-  await page.getByTestId('header01-brand-navigation').click();
+  // HEADER-01 uses a branded navigation button on mobile; desktop retains
+  // the qualified legacy Menu button. These are distinct responsive surfaces.
+  const mobileNavigation = page.getByTestId('header01-brand-navigation');
+  if (await mobileNavigation.isVisible()) {
+    await mobileNavigation.click();
+  } else {
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  }
   const drawer = page.getByRole('complementary')
     .filter({ has: page.getByRole('button', { name: label, exact: true }) });
   await drawer.getByRole('button', { name: label, exact: true }).click();
+  // After creating a class the drawer intentionally asks for confirmation
+  // before abandoning the active class to return to Oggi.
+  if (label === 'Oggi') {
+    const confirmation = page.getByRole('alertdialog')
+      .filter({ has: page.getByRole('heading', { name: 'Tornare a Oggi?' }) });
+    if (await confirmation.isVisible()) {
+      await confirmation.getByRole('button', { name: 'Torna a Oggi', exact: true }).click();
+    }
+  }
 }
 
 async function createSyntheticClass(page, name) {
