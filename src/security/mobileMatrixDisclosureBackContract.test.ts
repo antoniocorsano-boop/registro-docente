@@ -41,6 +41,15 @@ describe('NAV-MOBILE-BACK-01 — inline Tabellone disclosure has a real Back ste
     expect(code).toContain("window.history.back();");
     expect(code).toContain("window.addEventListener('popstate', handleMobileDisclosurePopState)");
     expect(code).toContain('lastExpandedMobileStudentIdRef.current');
+    const app = readFileSync('src/App.tsx', 'utf8');
+    expect(app).toContain('pendingMobileMatrixExitRef');
+    expect(app).toContain('queueMobileMatrixExit(() => handleNavigateTab(tab, options))');
+    expect(app).toContain('queueMobileMatrixExit(() => handleSelectClass(classId))');
+    expect(app).toContain('queueMobileMatrixExit(handleNavigateHome)');
+    expect(app).toContain('nextTab === activeTabRef.current');
+    expect(app.indexOf('nextTab === activeTabRef.current')).toBeLessThan(app.indexOf('publishReviewSession(null);', app.indexOf('const handlePopState =')));
+    expect(browser).toContain('ghost Tabellone entries');
+    expect(browser).toContain('Rivedi mission survives');
     expect(code).toContain('onToggle={() => handleToggleMobileStudent(s.id)}');
     expect(code).toContain('className="hidden md:block overflow-x-auto');
     expect(code).toContain('displayName={formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive)}');

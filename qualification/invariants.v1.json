@@ -837,9 +837,10 @@
     {
       "id": "NAV-MOBILE-BACK-01-I01",
       "owner": "NAV-MOBILE-BACK-01",
-      "statement": "On Android/mobile, opening a compact Tabellone student row creates one non-identifying browser-history detail step: first Back collapses the row without leaving the class, second Back returns to the preceding section; Forward and manual collapse preserve coherent steps for the still-current class. Row identities, student names, grades and temporary report-return context never enter the inline history state or the URL. At most one row is expanded, stale or cross-class information cannot revive, report-origin Back remains authoritative, and desktop tables and professional persistence do not change.",
+      "statement": "On Android/mobile, opening a compact Tabellone student row creates one non-identifying browser-history detail step: first Back collapses the row without leaving the class, second Back returns to the preceding section; Forward and manual collapse preserve coherent steps for the still-current class. Row identities, student names, grades and temporary report-return context never enter the inline history state or the URL. At most one row is expanded, stale or cross-class information cannot revive, report-origin Back remains authoritative, and desktop tables and professional persistence do not change. Explicit navigation to another section, class or Home consumes the transient disclosure step first so Back does not visit duplicate Tabellone entries, while an inline Back/Forward within the same class and surface must preserve the active Rivedi professional session.",
       "impactPaths": [
         "qualification/invariants.v1.json",
+        "src/App.tsx",
         "src/components/MatrixView.tsx",
         "src/navigation/mobileMatrixDisclosureHistory.ts",
         "src/security/mobileMatrixDisclosureBackContract.test.ts",
@@ -849,7 +850,8 @@
       "tests": [
         "src/security/mobileMatrixDisclosureBackContract.test.ts",
         "src/security/mobileDensity01TabelloneContract.test.ts",
-        "src/security/navContext01ReturnState.test.ts"
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/flow04ReviewSessionContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/nav-mobile-disclosure-back.spec.cjs",

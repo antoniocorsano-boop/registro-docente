@@ -115,3 +115,44 @@ test('NAV-MOBILE-BACK / 390 — explicit tab navigation does not resurrect an ol
     await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
   } finally { await context.close(); }
 });
+
+
+test('NAV-MOBILE-BACK / 390 — leaving an expanded row through the menu does not leave ghost Tabellone entries', async ({ browser }) => {
+  const { context, page } = await openClass(browser);
+  try {
+    await nav(page, 'Tabellone');
+    await firstRow(page).click();
+    await nav(page, 'Valutazioni');
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+    await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
+  } finally { await context.close(); }
+});
+
+test('NAV-MOBILE-BACK / 390 — Rivedi mission survives an inline Back and an explicit row collapse', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Rivedi', exact: true }).click();
+    await page.getByRole('button', { name: /Apri classe 3ª A.*Prova sintetica/i }).click();
+    const review = page.getByRole('region', { name: /Rivedi la classe 3ª A.*Prova sintetica/ });
+    await expect(review).toBeVisible();
+    await review.getByRole('button', { name: /^Tabellone/ }).click();
+    const mission = page.getByRole('complementary', { name: /Sessione Rivedi per la classe 3ª A.*Prova sintetica/ });
+    await expect(mission).toBeVisible();
+
+    const row = firstRow(page);
+    await row.click();
+    await page.goBack();
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await expect(mission).toBeVisible();
+    await row.click();
+    await row.click();
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await expect(mission).toBeVisible();
+    await expect(mission.getByRole('button', { name: 'Torna a Rivedi' })).toBeVisible();
+  } finally { await context.close(); }
+});
