@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
+import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
 import { formatStudentNameWithPrivacy, uid } from '../utils';
 import {
   FileQuestion,
@@ -35,6 +36,7 @@ interface VerificheOnlineViewProps {
   settings?: AppSettings;
   isPrivacyShieldActive?: boolean;
   initialClassName?: string;
+  assessmentHandoff?: ResolvedAssessmentHandoff | null;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => Promise<void>;
@@ -50,6 +52,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   settings,
   isPrivacyShieldActive = true,
   initialClassName,
+  assessmentHandoff = null,
   onSaveNewTest,
   onDeleteTest,
   onDeleteSubmission,
@@ -57,7 +60,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   onSimulateTest
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'bacheca' | 'editor' | 'stampa' | 'analisi'>('bacheca');
-  const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.name || '3ª A');
+  const [selectedClass, setSelectedClass] = useState<string>(assessmentHandoff?.className ?? classes[0]?.name ?? '');
 
   useEffect(() => {
     if (!initialClassName) return;
@@ -67,6 +70,15 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       setActiveSubTab('analisi');
     }
   }, [classes, initialClassName]);
+
+  useEffect(() => {
+    if (!assessmentHandoff) return;
+    const currentClass = classes.find(item =>
+      item.id === assessmentHandoff.classId
+      && item.name === assessmentHandoff.className
+    );
+    if (currentClass) setSelectedClass(currentClass.name);
+  }, [assessmentHandoff?.classId, assessmentHandoff?.className, classes]);
 
   const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
   const [isParsingFile, setIsParsingFile] = useState(false);
@@ -99,7 +111,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setEditingTestId(null);
     setEditorTitle('');
     setEditorDescription('');
-    setEditorUdaId(udas[0]?.id || '');
+    // A new verification must never inherit the first UDA arbitrarily.
+    setEditorUdaId('');
     setEditorDuration(15);
     setEditorQuestions([
       {
@@ -483,6 +496,34 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   return (
     <div className="space-y-4">
+      {assessmentHandoff && (
+        <section
+          data-testid="int02-assessment-handoff"
+          aria-label="Fonte selezionata per la verifica"
+          className="rounded-xl border border-cyan-700/60 bg-cyan-950/20 p-4 space-y-3"
+        >
+          <h2 className="text-base font-semibold text-cyan-100">Prepara una verifica da questa fonte</h2>
+          <p className="text-sm text-slate-200">
+            Fonte professionale: <strong>{assessmentHandoff.sourceTitle}</strong>
+          </p>
+          <p className="text-sm text-slate-200">
+            Classe di lavoro: <strong>{assessmentHandoff.className}</strong>
+          </p>
+          <p className="text-xs text-slate-400">
+            Non è stata creata alcuna verifica e non è stata assegnata un'UDA.
+            Se necessario, sceglila esplicitamente nell'editor.
+          </p>
+          <button
+            data-testid="int02-open-assessment-editor"
+            type="button"
+            onClick={() => handleStartNewInteractiveTest()}
+            disabled={isSavingTest}
+            className="min-h-[44px] w-full rounded-lg bg-[var(--primary)] px-4 font-semibold text-slate-950 disabled:opacity-50"
+          >
+            Apri editor verifica
+          </button>
+        </section>
+      )}
       {/* Sub-navigation Header Bar */}
       <div className="neon-card p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
