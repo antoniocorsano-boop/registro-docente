@@ -50,6 +50,7 @@ import { resolveProfessionalContext, toCopilotContextProjection } from './contex
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
 import { createStudentReportHistoryState, restoreStudentReportFromHistory } from './navigation/studentReportHistory';
+import { resolveStudentReportReturnContext, type StudentReportReturnContext } from './navigation/studentReportReturnContext';
 import { resolveConductContext } from './conduct/conductSession';
 import {
   buildRecordSession,
@@ -313,6 +314,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
+  // Only one report detour can be active. Never persisted or added to history.state.
+  const studentReportReturnContextRef = useRef<StudentReportReturnContext | null>(null);
+  const [returningToStudentOrigin, setReturningToStudentOrigin] = useState<StudentReportReturnContext | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
@@ -366,7 +370,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const submissionsRef = useRef(submissions);
   const libraryMutationPendingCountRef = useRef(0);
 
-  const setActiveTab = useCallback((tab: ActiveTab) => {
+  const setActiveTab = useCallback((
+    tab: ActiveTab,
+    options: { preserveStudentReturnContext?: boolean } = {}
+  ) => {
+    // Central navigation authority: direct routes (including backup, history,
+    // editing and the Drawer) must invalidate the previous report detour.
+    if (!options.preserveStudentReturnContext) {
+      studentReportReturnContextRef.current = null;
+      setReturningToStudentOrigin(null);
+    }
     navigationVersionRef.current += 1;
     setActiveTabState(tab);
 
@@ -492,10 +505,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean; studentId?: string } = {}
+    options: { preserveRecordSession?: boolean; studentId?: string; preserveStudentReturnContext?: boolean } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
-    setActiveTab(tab);
+    setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
@@ -527,12 +540,26 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   }, [publishRecordSession, setActiveTab]);
 
   /** Open one student's report as a REAL browser-history route, not only a React tab. */
-  const handleOpenStudentReport = useCallback((studentId: string) => {
+  const handleOpenStudentReport = useCallback((
+    studentId: string,
+    originContext?: StudentReportReturnContext
+  ) => {
     const classId = currentClassIdRef.current;
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
     if (!selectedClass?.students.some(student => student.id === studentId)) return;
-    handleNavigateTab('report', { studentId });
-  }, [handleNavigateTab]);
+
+    // Accept a context only from the currently open professional surface.
+    // No student names, grades, or search queries ever enter browser history.
+    studentReportReturnContextRef.current = originContext?.studentId === studentId
+      ? resolveStudentReportReturnContext(
+          originContext,
+          classId,
+          activeTab,
+          appDataRef.current.classes
+        )
+      : null;
+    handleNavigateTab('report', { studentId, preserveStudentReturnContext: true });
+  }, [activeTab, handleNavigateTab]);
 
   /** Switching students within the report replaces only the current history entry. */
   const handleSelectStudentInReport = useCallback((studentId: string) => {
@@ -1359,6 +1386,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Privacy Shield (Modalità LIM: maschera i nomi degli studenti)
   const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(true);
 
+  useEffect(() => {
+    if (!isPrivacyShieldActive) return;
+    // The privacy setting may change while the report is mounted, with the
+    // originating Analytics view unmounted. Scrub BOTH snapshots immediately.
+    const current = studentReportReturnContextRef.current;
+    if (current?.originTab === 'analytics' && current.ui.studentSearch) {
+      studentReportReturnContextRef.current = {
+        ...current,
+        ui: { ...current.ui, studentSearch: '' }
+      };
+    }
+    setReturningToStudentOrigin(previous => {
+      if (previous?.originTab !== 'analytics' || !previous.ui.studentSearch) return previous;
+      return { ...previous, ui: { ...previous.ui, studentSearch: '' } };
+    });
+  }, [isPrivacyShieldActive]);
+
   const handleTogglePrivacyShield = useCallback(() => {
     setIsPrivacyShieldActive(prev => {
       const next = !prev;
@@ -1456,9 +1500,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       publishReviewSession(null);
       publishRecordSession(null);
       // Never open a student report from stale or cross-class history state.
-      setActiveTab(nextTab === 'report' && !restoredStudentId
+      const effectiveTab = nextTab === 'report' && !restoredStudentId
         ? (nextCurrentClassId ? 'dashboard' : 'home')
-        : nextTab);
+        : nextTab;
+      const returningContext = resolveStudentReportReturnContext(
+        studentReportReturnContextRef.current,
+        nextCurrentClassId,
+        effectiveTab,
+        appDataRef.current.classes
+      );
+      // Forward back into a report keeps the context available for another Back.
+      // Unrelated navigation permanently invalidates the temporary snapshot.
+      if (effectiveTab !== 'report' && !returningContext) {
+        studentReportReturnContextRef.current = null;
+      }
+      setReturningToStudentOrigin(returningContext);
+      setActiveTab(effectiveTab, { preserveStudentReturnContext: true });
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -1689,6 +1746,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
+    studentReportReturnContextRef.current = null;
+    setReturningToStudentOrigin(null);
     const shouldStartPendingReview =
       todayAction === 'review'
       && currentClassIdRef.current === null
@@ -1721,6 +1780,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   const handleNavigateHome = () => {
+    studentReportReturnContextRef.current = null;
+    setReturningToStudentOrigin(null);
     setTodayAction(null);
     publishReviewSession(null);
     publishRecordSession(null);
@@ -2319,20 +2380,28 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {/* TAB 5: Analisi & Soglie D.M. 221/2025 */}
         {activeTab === 'analytics' && currentClass && (
           <AnalyticsView
+            key={currentClass.id}
             currentClass={currentClass}
             settings={settings}
             onOpenStudentReport={handleOpenStudentReport}
             isPrivacyShieldActive={isPrivacyShieldActive}
+            returnContext={returningToStudentOrigin?.originTab === 'analytics'
+              && returningToStudentOrigin.classId === currentClass.id
+                ? returningToStudentOrigin : undefined}
           />
         )}
 
         {/* TAB 6: Tabellone Classe */}
         {activeTab === 'tabellone' && currentClass && (
           <MatrixView
+            key={currentClass.id}
             currentClass={currentClass}
             onOpenStudentReport={handleOpenStudentReport}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
+            returnContext={returningToStudentOrigin?.originTab === 'tabellone'
+              && returningToStudentOrigin.classId === currentClass.id
+                ? returningToStudentOrigin : undefined}
           />
         )}
 

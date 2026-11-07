@@ -806,6 +806,34 @@
       "browserSmoke": [
         "tests/browser/nav-back-01-student-report.spec.cjs"
       ]
+    },
+    {
+      "id": "NAV-CONTEXT-01-I01",
+      "owner": "NAV-CONTEXT-01",
+      "statement": "After browser/Android Back from a student report to its actual origin, only a temporary class-scoped mobile consultative snapshot may restore the previously expanded Tabellone row or Analisi student detail, local filters and approximate scroll. The snapshot is never written to URL, history.state, Secure Local Vault, or persisted professional records. An unrelated route, missing student, class change or protected-name search must not resurrect stale data or expose student names. Report navigation, per-student calculations and desktop grids remain authoritative and unchanged.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/components/MatrixView.tsx",
+        "src/components/AnalyticsView.tsx",
+        "src/navigation/studentReportReturnContext.ts",
+        "src/navigation/useRestoreStudentReturnScroll.ts",
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/mobileUxIntegrity.test.ts",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        ".github/workflows/nav-context-01-isolated-qualification.yml"
+      ],
+      "tests": [
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/navBack01StudentReportHistory.test.ts",
+        "src/security/mobileDensity01TabelloneContract.test.ts",
+        "src/security/mobileUxIntegrity.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/nav-back-01-student-report.spec.cjs"
+      ]
     }
   ]
 }

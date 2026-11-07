@@ -193,8 +193,12 @@ describe('UX-TRUST-01 Option B integrity', () => {
     const analytics = await source('components/AnalyticsView.tsx');
     const comparison = await source('components/ClassComparisonBarChart.tsx');
 
-    expect(analytics).toContain("const [studentSearch, setStudentSearch] = useState('');");
-    expect(analytics).toContain("const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>('register');");
+    // A real student-report Back may restore a safe query/sort; ordinary routes start empty/register.
+    // Privacy is authoritative and prevents restoring name searches while protected.
+    expect(analytics).toContain("() => !isPrivacyShieldActive ? (restored?.ui.studentSearch ?? '') : ''");
+    expect(analytics).toContain("() => restored?.ui.studentSort ?? 'register'");
+    expect(analytics).toContain("if (isPrivacyShieldActive) setStudentSearch('')");
+    expect(analytics).toContain('if (details) details.open = restored?.ui.studentDetailOpen === true');
     expect(analytics).toContain('data-testid="mobile-analytics-student-detail"');
     expect(analytics).toContain('Dettaglio alunni');
     expect(analytics).toContain('Cerca alunno');

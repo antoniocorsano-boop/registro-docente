@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, EvaluationType } from '../types';
 import {
   calcAvg,
@@ -11,6 +11,8 @@ import {
   TYPES_LABEL
 } from '../utils';
 import { Sparkline } from './Sparkline';
+import { captureReturnScrollY, type StudentReportReturnContext } from '../navigation/studentReportReturnContext';
+import { useRestoreStudentReturnScroll } from '../navigation/useRestoreStudentReturnScroll';
 import { StudentGradesTimelineChart } from './StudentGradesTimelineChart';
 import { ClassComparisonBarChart } from './ClassComparisonBarChart';
 
@@ -31,24 +33,54 @@ import {
   Info
 } from 'lucide-react';
 
+type AnalyticsReturnContext = Extract<StudentReportReturnContext, { originTab: 'analytics' }>;
+
 interface AnalyticsViewProps {
   currentClass: ClassData;
   settings: AppSettings;
-  onOpenStudentReport: (studentId: string) => void;
+  onOpenStudentReport: (studentId: string, originContext?: StudentReportReturnContext) => void;
   isPrivacyShieldActive?: boolean;
+  returnContext?: AnalyticsReturnContext;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   currentClass,
   settings,
   onOpenStudentReport,
-  isPrivacyShieldActive = true
+  isPrivacyShieldActive = true,
+  returnContext
 }) => {
-  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>('ALL');
-  const [useWeighted, setUseWeighted] = useState<boolean>(settings.useWeightedAverage ?? false);
+  const restored = returnContext?.classId === currentClass.id ? returnContext : undefined;
+  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>(
+    () => restored?.ui.periodFilter ?? 'ALL'
+  );
+  const [useWeighted, setUseWeighted] = useState<boolean>(
+    () => restored?.ui.useWeighted ?? (settings.useWeightedAverage ?? false)
+  );
   const [isExporting, setIsExporting] = useState(false);
-  const [studentSearch, setStudentSearch] = useState('');
-  const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>('register');
+  // Search can contain a name. Never re-display its text when privacy is enabled.
+  const [studentSearch, setStudentSearch] = useState(
+    () => !isPrivacyShieldActive ? (restored?.ui.studentSearch ?? '') : ''
+  );
+  const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>(
+    () => restored?.ui.studentSort ?? 'register'
+  );
+  const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
+  // Native <details> is the sole authority for toggles. On each mount,
+  // only a validated report Back can reopen it; ordinary navigation starts closed.
+  // Avoid mirroring the browser's asynchronous toggle event in React state.
+  useLayoutEffect(() => {
+    const details = mobileStudentDetailsRef.current;
+    if (details) details.open = restored?.ui.studentDetailOpen === true;
+  }, [currentClass.id, restored?.ui.studentDetailOpen]);
+  useEffect(() => {
+    // A protected view must never retain a previously typed visible name.
+    if (isPrivacyShieldActive) setStudentSearch('');
+  }, [isPrivacyShieldActive]);
+  useRestoreStudentReturnScroll(
+    restored?.scrollY ?? null,
+    restored ? `${restored.classId}:${restored.studentId}:analytics` : null
+  );
 
   const students = currentClass.students || [];
   const allGrades = currentClass.grades || [];
@@ -449,6 +481,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
         {/* Mobile student detail: secondary to the class summary */}
         <details
+          ref={mobileStudentDetailsRef}
           data-testid="mobile-analytics-student-detail"
           className="md:hidden group rounded-lg border border-[var(--border)] bg-slate-900/30 overflow-hidden min-w-0"
         >
@@ -501,7 +534,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     <article key={m.student.id} className="min-w-0 rounded-lg border border-[var(--border)] bg-slate-900/45 p-3 space-y-3">
                       <button
                         type="button"
-                        onClick={() => onOpenStudentReport(m.student.id)}
+                        onClick={() => onOpenStudentReport(m.student.id, {
+                          classId: currentClass.id,
+                          studentId: m.student.id,
+                          originTab: 'analytics',
+                          scrollY: captureReturnScrollY(),
+                          ui: {
+                            periodFilter,
+                            useWeighted,
+                            studentSearch: isPrivacyShieldActive ? '' : studentSearch,
+                            studentSort,
+                            studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false
+                          }
+                        })}
                         className="min-h-[44px] w-full min-w-0 text-left flex items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-slate-100 hover:text-[var(--primary)] hover:bg-slate-800/70"
                       >
                         <span className="min-w-0 truncate">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</span>

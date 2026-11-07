@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, EvaluationType, Grade } from '../types';
 import {
   calcAvg,
@@ -12,30 +12,55 @@ import {
 } from '../utils';
 import { Sparkline } from './Sparkline';
 import { CompactStudentDisclosureRow } from './CompactStudentDisclosureRow';
+import { captureReturnScrollY, type StudentReportReturnContext } from '../navigation/studentReportReturnContext';
+import { useRestoreStudentReturnScroll } from '../navigation/useRestoreStudentReturnScroll';
 import { Table, Filter, Sparkles, User, Calendar, Award, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+
+type MatrixReturnContext = Extract<StudentReportReturnContext, { originTab: 'tabellone' }>;
 
 interface MatrixViewProps {
   currentClass: ClassData;
-  onOpenStudentReport: (studentId: string) => void;
+  onOpenStudentReport: (studentId: string, originContext?: StudentReportReturnContext) => void;
   isPrivacyShieldActive?: boolean;
   settings?: AppSettings;
+  returnContext?: MatrixReturnContext;
 }
 
 export const MatrixView: React.FC<MatrixViewProps> = ({
   currentClass,
   onOpenStudentReport,
   isPrivacyShieldActive = true,
-  settings
+  settings,
+  returnContext
 }) => {
-  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>('ALL');
-  const [viewMode, setViewMode] = useState<'cron' | 'type' | 'avg'>('cron');
-  const [showProposedGrade, setShowProposedGrade] = useState<boolean>(true);
-  const [expandedMobileStudent, setExpandedMobileStudent] = useState<{ classId: string; studentId: string } | null>(null);
+  const restored = returnContext?.classId === currentClass.id ? returnContext : undefined;
+  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'Q1' | 'Q2'>(
+    () => restored?.ui.periodFilter ?? 'ALL'
+  );
+  const [viewMode, setViewMode] = useState<'cron' | 'type' | 'avg'>(
+    () => restored?.ui.viewMode ?? 'cron'
+  );
+  const [showProposedGrade, setShowProposedGrade] = useState<boolean>(
+    () => restored?.ui.showProposedGrade ?? true
+  );
+  const [expandedMobileStudent, setExpandedMobileStudent] = useState<{ classId: string; studentId: string } | null>(
+    () => restored?.ui.expandedStudentId
+      && currentClass.students.some(s => s.id === restored.ui.expandedStudentId)
+        ? { classId: currentClass.id, studentId: restored.ui.expandedStudentId }
+        : null
+  );
 
-  // Switching class invalidates any previous disclosure, including when returning later.
+  // A report return may restore one row on mount. A genuine class change
+  // must still close it, including A → B → A.
+  const previousClassIdRef = useRef(currentClass.id);
   useEffect(() => {
-    setExpandedMobileStudent(null);
+    if (previousClassIdRef.current !== currentClass.id) setExpandedMobileStudent(null);
+    previousClassIdRef.current = currentClass.id;
   }, [currentClass.id]);
+  useRestoreStudentReturnScroll(
+    restored?.scrollY ?? null,
+    restored ? `${restored.classId}:${restored.studentId}:tabellone` : null
+  );
 
   const students = currentClass.students || [];
   const allGrades = currentClass.grades || [];
@@ -224,7 +249,18 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                   current?.classId === currentClass.id && current.studentId === s.id
                     ? null : { classId: currentClass.id, studentId: s.id }
                 )}
-                onOpenStudentReport={() => onOpenStudentReport(s.id)}
+                onOpenStudentReport={() => onOpenStudentReport(s.id, {
+                  classId: currentClass.id,
+                  studentId: s.id,
+                  originTab: 'tabellone',
+                  scrollY: captureReturnScrollY(),
+                  ui: {
+                    periodFilter,
+                    viewMode,
+                    showProposedGrade,
+                    expandedStudentId: s.id
+                  }
+                })}
               >
                 <div className={`grid gap-2 ${showProposedGrade ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/60 p-2">
