@@ -331,6 +331,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // A pending explicit route consumes the temporary inline Tabellone history
   // step before adding the new destination, avoiding a phantom Back entry.
   const pendingMobileMatrixExitRef = useRef<{ classId: string; proceed: () => void } | null>(null);
+  // Only one cancellation traversal may be outstanding. New destinations are
+  // queued until its matching popstate is delivered (latest intent wins).
+  const pendingEvaluationCancelRef = useRef<{ classId: string; proceed: (() => void) | null } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
@@ -551,6 +554,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       navigationMode?: 'push' | 'replace';
     } = {}
   ) => {
+    if (pendingEvaluationCancelRef.current) {
+      // Do not push on top of a history traversal that has not yet finished.
+      pendingEvaluationCancelRef.current.proceed = tab === 'storico'
+        ? null
+        : () => handleNavigateTab(tab, options);
+      return;
+    }
     // A previous inline Back may still be pending when another control fires.
     // ALL destinations, including the student report, must be serialized here.
     // Only a report requested without a pending exit bypasses inline collapse.
@@ -1583,6 +1593,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         : null;
       const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
 
+      // Cancelled evaluation editors use their own serialized Back traversal.
+      // Resolve it before allowing another explicit destination to be pushed.
+      const pendingEvaluationCancel = pendingEvaluationCancelRef.current;
+      if (pendingEvaluationCancel) pendingEvaluationCancelRef.current = null;
+      const queuedEvaluationDestination = pendingEvaluationCancel
+        && nextCurrentClassId === pendingEvaluationCancel.classId && nextTab === 'storico'
+          ? pendingEvaluationCancel.proceed : null;
+
       const pendingExit = pendingMobileMatrixExitRef.current;
       if (pendingExit) {
         pendingMobileMatrixExitRef.current = null;
@@ -1645,6 +1663,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       }
       setReturningToStudentOrigin(returningContext);
       setActiveTab(effectiveTab, { preserveStudentReturnContext: true });
+      // Execute only after restoring the legitimate underlying history entry.
+      // A class mismatch discards the queued destination rather than guessing.
+      queuedEvaluationDestination?.();
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -2058,6 +2079,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Edit batch: create a navigable history entry associated with the authorized class.
   const handleEditBatch = (batchId: string) => {
+    if (pendingEvaluationCancelRef.current) {
+      // Defer BOTH the selected batch and the history transition. Merely
+      // queuing handleNavigateTab would let popstate reset editingBatchId.
+      pendingEvaluationCancelRef.current.proceed = () => handleEditBatch(batchId);
+      return;
+    }
     const classId = currentClassIdRef.current;
     const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
     if (!selectedClass?.grades.some(grade => grade.batchId === batchId)) return;
@@ -2085,10 +2112,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       try {
         const query = new URLSearchParams({ class: classId, tab: 'storico' });
         history.replaceState({ classId, tab: 'storico' }, '', `?${query.toString()}`);
+        pendingEvaluationCancelRef.current = { classId, proceed: null };
         setActiveTab('storico');
         history.back();
         return;
       } catch {
+        pendingEvaluationCancelRef.current = null;
         // Fallback to an explicit safe replacement.
       }
     }
