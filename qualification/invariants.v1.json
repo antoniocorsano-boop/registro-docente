@@ -876,7 +876,8 @@
         "src/navigation/specialistTargetMemory.ts",
         "src/navigation/specialistTargetMemory.test.ts",
         "src/security/regNav01ReconciledEvaluationContract.test.ts",
-        "src/security/homeNavigationDuringSaveIntegrity.test.ts"
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts"
       ],
       "tests": [
         "src/security/regNav01ReconciledEvaluationContract.test.ts",
@@ -884,7 +885,8 @@
         "src/security/navBack01StudentReportHistory.test.ts",
         "src/security/navContext01ReturnState.test.ts",
         "src/security/mobileMatrixDisclosureBackContract.test.ts",
-        "src/security/homeNavigationDuringSaveIntegrity.test.ts"
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts"
       ]
     }
   ]
