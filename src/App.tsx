@@ -24,6 +24,7 @@ import {
 } from './planning/docenteOsProjectionReconciliation';
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
+import { resolveAssessmentHandoff, type AssessmentHandoffRequest } from './library/assessmentHandoff';
 import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
 import { resolveLibraryTeachingContext } from './library/teachingContext';
 import {
@@ -603,6 +604,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [libraryMutationError, setLibraryMutationError] = useState<string | null>(null);
   const [professionalMemoryError, setProfessionalMemoryError] = useState<string | null>(null);
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
+  // INT-02: a transient reference only; never written to URL, history, vault or grades.
+  const [assessmentHandoffRequest, setAssessmentHandoffRequest] = useState<AssessmentHandoffRequest | null>(null);
   const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
   const [copilotSurfaceMode, setCopilotSurfaceMode] = useState<CopilotSurfaceMode>('closed');
 
@@ -658,6 +661,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       return;
     }
     traceHpr('scheda-attivata', tab);
+    if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
     // Central navigation authority: direct routes (including backup, history,
     // editing and the Drawer) must invalidate the previous report detour.
     if (!options.preserveStudentReturnContext) {
@@ -924,6 +928,24 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // History API failures never authorize a professional write.
     }
   }, [editingBatchId, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
+
+  /** INT-02/S1: navigate only with the validated teacher-owned source reference. */
+  const handlePrepareAssessmentFromLibrary = useCallback((sourceId: string) => {
+    const classId = currentClassIdRef.current;
+    const request: AssessmentHandoffRequest = { sourceId, classId: classId ?? '' };
+    const resolution = resolveAssessmentHandoff({
+      request,
+      library: libraryRef.current,
+      classes: appDataRef.current.classes,
+      activeClassId: classId
+    });
+    if (resolution.status !== 'ready') {
+      setAssessmentHandoffRequest(null);
+      return;
+    }
+    setAssessmentHandoffRequest(request);
+    handleNavigateTab('verifiche-online');
+  }, [handleNavigateTab]);
 
   /** Open one student's report as a REAL browser-history route, not only a React tab. */
   const handleOpenStudentReport = useCallback((
@@ -1820,6 +1842,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Current selected class
   const currentClass = appData.classes.find(c => c.id === appData.currentClassId);
+  // Resolve again on arrival and on every render; revoked sources and changed
+  // classes cannot retain a stale handoff even if history revisits this tab.
+  const assessmentHandoffResolution = assessmentHandoffRequest
+    ? resolveAssessmentHandoff({
+        request: assessmentHandoffRequest,
+        library,
+        classes: appData.classes,
+        activeClassId: currentClass?.id
+      })
+    : null;
+  const activeAssessmentHandoff = assessmentHandoffResolution?.status === 'ready'
+    ? assessmentHandoffResolution.handoff
+    : null;
+
   // Separate the settings' display label from the authoritative curriculum code.
   const curricularSubjectCode = React.useMemo(
     () => resolveCurricularSubjectCode(settings.subject),
@@ -3158,6 +3194,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             submissions={submissions}
             udas={udas}
             settings={settings}
+            assessmentHandoff={activeAssessmentHandoff}
             initialClassName={recordSession?.status === 'editing'
               && recordSession.evidenceKind === 'online-outcomes'
               && recordSession.context.classId === currentClass?.id
@@ -3219,6 +3256,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onUnlinkSource={handleUnlinkLibrarySource}
             onDeleteSource={handleDeleteLibrarySource}
             onOpenCopilot={openLibraryCopilot}
+            onPrepareAssessment={handlePrepareAssessmentFromLibrary}
             isCopilotOpen={copilotSurfaceMode === 'compose'}
             isPending={isLibraryMutationPending}
             errorMessage={libraryMutationError}
