@@ -49,6 +49,7 @@ import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import { resolveTodayRoute, type TodayAction } from './today/todayRouter';
 import { buildPreparationCopilotLaunchContext } from './preparation/preparationRouter';
+import { createStudentReportHistoryState, restoreStudentReportFromHistory } from './navigation/studentReportHistory';
 import { resolveConductContext } from './conduct/conductSession';
 import {
   buildRecordSession,
@@ -491,7 +492,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleNavigateTab = useCallback((
     tab: ActiveTab,
-    options: { preserveRecordSession?: boolean } = {}
+    options: { preserveRecordSession?: boolean; studentId?: string } = {}
   ) => {
     const hadReviewSession = reviewSessionRef.current !== null;
     setActiveTab(tab);
@@ -507,7 +508,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
     const classId = currentClassIdRef.current;
     try {
-      const state = { classId, tab };
+      // Every professional transition must enter the browser history.
+      // Keep the student ID in history.state, never in the URL.
+      const studentId = tab === 'report'
+        ? (options.studentId
+          ?? appDataRef.current.classes.find(candidate => candidate.id === classId)?.students[0]?.id)
+        : undefined;
+      if (tab === 'report') setSelectedStudentForReport(studentId ?? null);
+      const state = tab === 'report' && classId && studentId
+        ? createStudentReportHistoryState(classId, studentId)
+        : { classId, tab };
       const params = new URLSearchParams();
       if (classId) params.set('class', classId);
       if (tab !== 'home' && tab !== 'dashboard') params.set('tab', tab);
@@ -515,6 +525,33 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       history.pushState(state, '', query ? `?${query}` : window.location.pathname);
     } catch (e) {}
   }, [publishRecordSession, setActiveTab]);
+
+  /** Open one student's report as a REAL browser-history route, not only a React tab. */
+  const handleOpenStudentReport = useCallback((studentId: string) => {
+    const classId = currentClassIdRef.current;
+    const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
+    if (!selectedClass?.students.some(student => student.id === studentId)) return;
+    handleNavigateTab('report', { studentId });
+  }, [handleNavigateTab]);
+
+  /** Switching students within the report replaces only the current history entry. */
+  const handleSelectStudentInReport = useCallback((studentId: string) => {
+    const classId = currentClassIdRef.current;
+    const selectedClass = appDataRef.current.classes.find(candidate => candidate.id === classId);
+    if (!classId || !selectedClass?.students.some(student => student.id === studentId)) return;
+    setSelectedStudentForReport(studentId);
+    try {
+      if (history.state?.classId === classId && history.state?.tab === 'report') {
+        history.replaceState(
+          createStudentReportHistoryState(classId, studentId),
+          '',
+          window.location.href
+        );
+      }
+    } catch (error) {
+      // The visible selection still succeeds when history is unavailable.
+    }
+  }, []);
 
   const mutationCoordinatorRef = useRef<ReturnType<typeof createDurableMutationCoordinator> | null>(null);
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
@@ -1401,13 +1438,27 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Synchronize URL query params
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      const nextCurrentClassId = e.state?.classId || null;
+      const requestedClassId = typeof e.state?.classId === 'string' ? e.state.classId : null;
+      // An old/deleted/foreign class in browser history must never select a class implicitly.
+      const nextCurrentClassId = appDataRef.current.classes.some(c => c.id === requestedClassId)
+        ? requestedClassId
+        : null;
+      const nextTab: ActiveTab = e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home');
+      const restoredStudentId = restoreStudentReportFromHistory(
+        e.state,
+        nextCurrentClassId,
+        appDataRef.current.classes
+      );
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
+      setSelectedStudentForReport(restoredStudentId);
       setTodayAction(null);
       publishReviewSession(null);
       publishRecordSession(null);
-      setActiveTab(e.state?.tab || (nextCurrentClassId ? 'dashboard' : 'home'));
+      // Never open a student report from stale or cross-class history state.
+      setActiveTab(nextTab === 'report' && !restoredStudentId
+        ? (nextCurrentClassId ? 'dashboard' : 'home')
+        : nextTab);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -2270,10 +2321,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <AnalyticsView
             currentClass={currentClass}
             settings={settings}
-            onOpenStudentReport={(studentId) => {
-              setSelectedStudentForReport(studentId);
-              setActiveTab('report');
-            }}
+            onOpenStudentReport={handleOpenStudentReport}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}
@@ -2282,10 +2330,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {activeTab === 'tabellone' && currentClass && (
           <MatrixView
             currentClass={currentClass}
-            onOpenStudentReport={(studentId) => {
-              setSelectedStudentForReport(studentId);
-              setActiveTab('report');
-            }}
+            onOpenStudentReport={handleOpenStudentReport}
             isPrivacyShieldActive={isPrivacyShieldActive}
             settings={settings}
           />
@@ -2309,7 +2354,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <StudentReportView
             currentClass={currentClass}
             selectedStudentId={selectedStudentForReport}
-            onSelectStudent={setSelectedStudentForReport}
+            onSelectStudent={handleSelectStudentInReport}
             settings={settings}
             udas={udas}
             isPrivacyShieldActive={isPrivacyShieldActive}
