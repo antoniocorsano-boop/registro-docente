@@ -820,7 +820,8 @@
         "src/navigation/useRestoreStudentReturnScroll.ts",
         "src/security/navContext01ReturnState.test.ts",
         "src/security/mobileUxIntegrity.test.ts",
-        "tests/browser/nav-context-01-return-origin.spec.cjs"
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        ".github/workflows/nav-context-01-isolated-qualification.yml"
       ],
       "tests": [
         "src/security/navContext01ReturnState.test.ts",
