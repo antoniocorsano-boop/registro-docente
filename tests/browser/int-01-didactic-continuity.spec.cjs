@@ -30,7 +30,8 @@ async function closeSaveConfirmation(page) {
 }
 
 async function fromDrawer(page, label) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  // HEADER-01: navigation is now opened from the branded header button.
+  await page.getByTestId('header01-brand-navigation').click();
   const drawer = page.getByRole('complementary')
     .filter({ has: page.getByRole('button', { name: label, exact: true }) });
   await drawer.getByRole('button', { name: label, exact: true }).click();
