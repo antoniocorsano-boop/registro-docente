@@ -29,7 +29,7 @@ describe('FLOW-03 focused authoritative UDA diary contract', () => {
     const gantt = await source('src/components/UdaGanttView.tsx');
     const dossier = sectionBetween(
       gantt,
-      '{selectedUdaForDetail && (() => {',
+      '{selectedUdaForDetail && (!currentClassName || udaBelongsToActiveClass(selectedUdaForDetail.className, currentClassName, classes)) && (() => {',
       '{/* MODAL: INFO INDICE ATTIVITÀ UDA */}'
     );
 

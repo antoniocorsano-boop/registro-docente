@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData, OnlineTest, UdaRecord } from '../types';
 import type { CopilotLaunchContext } from '../library/copilotLaunchContext';
 import { uid } from '../utils';
+import type { PlanningFrameResolution } from '../planning/planningFrameResolver';
+import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
+import { DidacticContinuityBar } from './DidacticContinuityBar';
+import { classScopedUdaMutationAllowed, udaBelongsToActiveClass } from '../context/udaClassScope';
 import { UdaGanttView as LegacyUdaGanttView } from './UdaGanttView.tsx';
 import type { RecordLessonPrefill } from './UdaGanttView.tsx';
 
@@ -18,6 +22,14 @@ interface UdaWorkspaceViewProps {
   getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   onOpenCopilot?: (context: CopilotLaunchContext) => void;
+  currentClassName?: string | null;
+  planningFrame?: PlanningFrameResolution | null;
+  teachingFocus?: LibraryTeachingContext | null;
+  teachingContext?: ResolvedLibraryTeachingContext | null;
+  udaTitle?: string | null;
+  lessonTitle?: string | null;
+  onTeachingFocusChange?: (focus: LibraryTeachingContext | null) => void;
+  onOpenPlanning?: () => void;
 }
 
 const MONTHS = ['Settembre', 'Ottobre', 'Novembre', 'Dicembre', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno'];
@@ -39,13 +51,23 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   recordLessonPrefill,
   getRecordLessonNavigationVersion,
   onRecordLessonCommitted,
-  onOpenCopilot
+  onOpenCopilot,
+  currentClassName = null,
+  planningFrame = null,
+  teachingFocus = null,
+  teachingContext = null,
+  udaTitle = null,
+  lessonTitle = null,
+  onTeachingFocusChange,
+  onOpenPlanning
 }) => {
   const [activeView, setActiveView] = useState<WorkspaceView>('uda');
-  const [classFilter, setClassFilter] = useState('all');
+  const activeViewRef = useRef<WorkspaceView>(activeView);
+  activeViewRef.current = activeView;
+  const [classFilter, setClassFilter] = useState(currentClassName || 'all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newClass, setNewClass] = useState(classes[0]?.name ?? '');
+  const [newClass, setNewClass] = useState(currentClassName || classes[0]?.name || '');
   const [newHours, setNewHours] = useState(10);
   const [newPeriod, setNewPeriod] = useState<'Q1' | 'Q2'>('Q1');
   const [newStartMonth, setNewStartMonth] = useState(0);
@@ -78,9 +100,27 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
     setClassFilter(recordLessonPrefill.className);
   }, [recordLessonPrefill]);
 
+  // INT-01 is class-first. Class change invalidates the prior focus in App; no UDA is guessed here.
+  useEffect(() => {
+    if (!currentClassName || recordLessonPrefill) return;
+    setClassFilter(currentClassName);
+    setNewClass(currentClassName);
+  }, [currentClassName, recordLessonPrefill]);
+
+  // Only a validated explicit focus can open the existing specialist planning dossier.
+  useEffect(() => {
+    if (recordLessonPrefill || !currentClassName || !teachingFocus?.udaId) return;
+    // A local Analysis selection updates shared focus without stealing the current specialist view.
+    if (activeViewRef.current === 'analysis' || activeViewRef.current === 'progress') return;
+    if (teachingContext?.udaId !== teachingFocus.udaId || teachingContext.className !== currentClassName) return;
+    setActiveView('planning');
+  }, [recordLessonPrefill, currentClassName, teachingFocus?.udaId, teachingContext?.udaId, teachingContext?.className]);
+
   const filteredUdas = useMemo(
-    () => classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),
-    [classFilter, udas]
+    () => currentClassName
+      ? udas.filter(uda => udaBelongsToActiveClass(uda.className, currentClassName, classes))
+      : classFilter === 'all' ? udas : udas.filter(uda => uda.className === classFilter),
+    [classFilter, classes, currentClassName, udas]
   );
 
   const focusedClassUdas = useMemo(
@@ -106,7 +146,7 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   }, [filteredUdas]);
 
   const openCreate = () => {
-    setNewClass(classes[0]?.name ?? '');
+    setNewClass(currentClassName || classes[0]?.name || '');
     setSaveError(null);
     setIsCreateOpen(true);
   };
@@ -114,11 +154,15 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   const createUda = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newTitle.trim() || !newClass || isSaving) return;
+    if (currentClassName && newClass !== currentClassName) {
+      setSaveError('La classe selezionata non corrisponde alla classe di lavoro.');
+      return;
+    }
 
     const record: UdaRecord = {
       id: uid(),
       title: newTitle.trim(),
-      className: newClass,
+      className: currentClassName || newClass,
       hours: Number(newHours) || 10,
       period: newPeriod,
       startMonth: Math.max(0, Math.min(9, Number(newStartMonth))),
@@ -136,10 +180,16 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
       dependencies: []
     };
 
+    const nextUdas = [...udas, record];
+    if (!classScopedUdaMutationAllowed(udas, nextUdas, currentClassName, classes)) {
+      setSaveError('La nuova UDA non rispetta il contesto della classe selezionata.');
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
     try {
-      await onSaveUdas([...udas, record]);
+      await onSaveUdas(nextUdas);
       setNewTitle('');
       setIsCreateOpen(false);
       setStatusMessage(`Nuova UDA "${record.title}" creata con successo`);
@@ -206,6 +256,17 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
 
   return (
     <div className="space-y-5">
+      {currentClassName && onOpenPlanning && (
+        <DidacticContinuityBar
+          className={currentClassName}
+          planningFrame={planningFrame}
+          teachingContext={teachingContext}
+          udaTitle={udaTitle}
+          lessonTitle={lessonTitle}
+          destination="programmazione"
+          onNavigate={onOpenPlanning}
+        />
+      )}
       <section className="rounded-2xl border border-slate-800 bg-slate-950/35 p-4 md:p-5 space-y-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">Programmazione</p>
@@ -230,13 +291,26 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
       {activeView === 'uda' && (
         <section className="rounded-2xl border border-slate-800 bg-slate-950/35 p-4 md:p-5 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            {currentClassName ? (
+              <div aria-label="Classe corrente nella vista UDA" className="flex flex-col gap-1 text-sm text-slate-300 sm:min-w-64">
+                <span>Classe di lavoro</span>
+                <span className="flex min-h-[44px] items-center rounded-lg border border-cyan-800 bg-cyan-950/30 px-3 font-semibold text-cyan-100">{currentClassName}</span>
+              </div>
+            ) : (
             <label className="text-sm text-slate-300 sm:min-w-64">
               Classe di lavoro
-              <select value={classFilter} onChange={event => setClassFilter(event.target.value)} className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3">
-                <option value="all">Tutte le classi</option>
-                {classes.map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
+              <select
+                value={classFilter}
+                onChange={event => setClassFilter(currentClassName || event.target.value)}
+                disabled={Boolean(currentClassName)}
+                className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 disabled:opacity-80"
+              >
+                {!currentClassName && <option value="all">Tutte le classi</option>}
+                {classes.filter(item => !currentClassName || item.name === currentClassName)
+                  .map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
               </select>
-            </label>
+            </label>            )}
+
             <button type="button" aria-label="Nuova UDA" onClick={openCreate} className="min-h-[44px] rounded-xl bg-cyan-400 px-5 py-2 font-semibold text-slate-950">+ Nuova UDA</button>
           </div>
 
@@ -260,11 +334,20 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                     <span className="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-400">{(uda.lessons ?? []).length} lezioni</span>
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    <button type="button" onClick={() => setActiveView('planning')} className="min-h-[44px] w-full rounded-lg border border-cyan-900 px-3 py-2 text-sm font-semibold text-cyan-300">Gestisci in Pianificazione</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentClassName && udaBelongsToActiveClass(uda.className, currentClassName, classes)) {
+                          onTeachingFocusChange?.({ udaId: uda.id });
+                        }
+                        setActiveView('planning');
+                      }}
+                      className="min-h-[44px] w-full rounded-lg border border-cyan-900 px-3 py-2 text-sm font-semibold text-cyan-300"
+                    >Gestisci in Pianificazione</button>
                     {onOpenCopilot && (
                       <button
                         type="button"
-                        onClick={() => onOpenCopilot({ surface: 'uda', className: uda.className, udaId: uda.id })}
+                        onClick={() => onOpenCopilot({ surface: 'uda', className: currentClassName || uda.className, udaId: uda.id })}
                         className="min-h-[44px] w-full rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-700 hover:text-cyan-200"
                       >
                         Usa con Copilota
@@ -309,6 +392,13 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
             recordLessonPrefill={recordLessonPrefill}
             getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}
             onRecordLessonCommitted={onRecordLessonCommitted}
+            currentClassName={currentClassName}
+            planningFrame={planningFrame}
+            teachingFocus={teachingFocus}
+            teachingContext={teachingContext}
+            udaTitle={udaTitle}
+            lessonTitle={lessonTitle}
+            onTeachingFocusChange={onTeachingFocusChange}
           />
         </section>
       )}
@@ -319,7 +409,19 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
             <h3 className="font-semibold text-violet-200">Analisi</h3>
             <p className="mt-1 text-sm text-slate-400">Gap, indicatori e strumenti diagnostici avanzati, visibili solo quando servono.</p>
           </div>
-          <LegacyUdaGanttView classes={classes} udas={udas} settings={settings} tests={tests} onSaveUdas={onSaveUdas} onNavigateTab={onNavigateTab} />
+          <LegacyUdaGanttView
+            classes={classes}
+            udas={udas}
+            settings={settings}
+            tests={tests}
+            onSaveUdas={onSaveUdas}
+            onNavigateTab={onNavigateTab}
+            currentClassName={currentClassName}
+            teachingFocus={teachingFocus}
+            teachingContext={teachingContext}
+            onTeachingFocusChange={onTeachingFocusChange}
+            autoOpenTeachingFocus={false}
+          />
         </section>
       )}
 
@@ -339,8 +441,13 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
                 <input autoFocus value={newTitle} onChange={event => setNewTitle(event.target.value)} placeholder="es. UDA 4: Energie Rinnovabili e Sostenibilità" className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3" />
               </label>
               <label className="block text-sm text-slate-300">Classe
-                <select value={newClass} onChange={event => setNewClass(event.target.value)} className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3">
-                  {classes.map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
+                <select
+                  value={newClass}
+                  onChange={event => setNewClass(currentClassName || event.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3"
+                >
+                  {classes.filter(item => !currentClassName || item.name === currentClassName)
+                    .map(item => <option key={item.id} value={item.name}>{item.name}</option>)}
                 </select>
               </label>
               <div className="grid grid-cols-2 gap-3">

@@ -72,11 +72,18 @@ describe('AIC-01 remote context privacy contract', () => {
     }
   });
 
-  test('App maps teacher work surfaces without treating an ambient UDA tab as an explicit UDA context', () => {
+  test('App promotes UDA surface only for a validated explicit teaching focus', () => {
     expect(appSource).toContain("activeTab === 'home' ? 'home'");
     expect(appSource).toContain("activeTab === 'dashboard' ? 'class-dashboard'");
     expect(appSource).toContain("activeTab === 'biblioteca' ? 'library'");
-    expect(appSource).toContain("activeTab === 'uda-gantt' ? 'other-teacher-surface'");
+    // INT-01 makes the session's explicit and validated UDA focus visible to CTX-01.
+    // Merely visiting UDA still remains a generic surface, with no invented target.
+    expect(appSource).toContain("activeTab === 'uda-gantt'");
+    expect(appSource).toContain("resolvedTeachingFocus.status === 'resolved'");
+    expect(appSource).toContain("resolvedTeachingFocus.context.lessonId ? 'lesson' : 'uda'");
+    expect(appSource).toContain(": 'other-teacher-surface'");
+    expect(appSource).toContain("resolveTeachingFocusForClass({");
+    expect(appSource).toContain("currentClassId: currentClass?.id ?? null");
     expect(appSource).toContain("activeTab === 'programmazione' ? 'planning'");
     expect(appSource).toContain("activeTab === 'verifiche-online' ? 'online-tests'");
     expect(appSource).toContain("activeTab === 'voti' ? 'evaluations'");

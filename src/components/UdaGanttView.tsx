@@ -53,7 +53,11 @@ import {
   MINISTERIAL_COMPETENCY_DESCRIPTORS
 } from '../services/embeddingService';
 import { createUdaSnapshotMutation } from '../persistence/udaSnapshotMutation';
+import type { PlanningFrameResolution } from '../planning/planningFrameResolver';
+import type { LibraryTeachingContext, ResolvedLibraryTeachingContext } from '../library/teachingContext';
+import { DidacticContinuityBar } from './DidacticContinuityBar';
 import { getSchoolMonthIndex, getUdaGapSeverity, getUdaRemediationCopy } from '../analytics/udaSemantics';
+import { buildUdaDeletionSnapshot, classScopedUdaMutationAllowed, hasForeignUdaDependencyOn, udaBelongsToActiveClass } from '../context/udaClassScope';
 
 export interface RecordLessonPrefill {
   className: string;
@@ -75,6 +79,15 @@ interface UdaGanttViewProps {
   getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   focusedRecordMode?: boolean;
+  currentClassName?: string | null;
+  planningFrame?: PlanningFrameResolution | null;
+  teachingFocus?: LibraryTeachingContext | null;
+  teachingContext?: ResolvedLibraryTeachingContext | null;
+  udaTitle?: string | null;
+  lessonTitle?: string | null;
+  onTeachingFocusChange?: (focus: LibraryTeachingContext | null) => void;
+  onOpenPlanning?: () => void;
+  autoOpenTeachingFocus?: boolean;
 }
 
 // Internal planning coefficients for the UDA activity index; not a normative scale
@@ -461,7 +474,16 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   recordLessonPrefill,
   getRecordLessonNavigationVersion,
   onRecordLessonCommitted,
-  focusedRecordMode = false
+  focusedRecordMode = false,
+  currentClassName = null,
+  planningFrame = null,
+  teachingFocus = null,
+  teachingContext = null,
+  udaTitle = null,
+  lessonTitle = null,
+  onTeachingFocusChange,
+  onOpenPlanning,
+  autoOpenTeachingFocus = true
 }) => {
   // Master class filter at the top bar that keeps all views aligned
   const [selectedMasterClass, setSelectedMasterClass] = useState<string>('all');
@@ -469,7 +491,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   // Modal for new/quick UDA
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newClass, setNewClass] = useState(classes[0]?.name || '3ª A');
+  const [newClass, setNewClass] = useState(currentClassName || classes[0]?.name || '3ª A');
   const [newHours, setNewHours] = useState(14);
   const [newPeriod, setNewPeriod] = useState<'Q1' | 'Q2'>('Q1');
   const [newStartMonth, setNewStartMonth] = useState(0); // 0=Set
@@ -483,6 +505,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   // Filter state for summary & Gantt
   const [summaryClassFilter, setSummaryClassFilter] = useState<string>('all');
   const [classFilter, setClassFilter] = useState<string>('all');
+  // Class-first scope is enforced at the data boundary, not only at selectors.
+  const effectiveClassFilter = currentClassName || classFilter;
+  const scopedUdas = currentClassName
+    ? udas.filter(uda => udaBelongsToActiveClass(uda.className, currentClassName, classes))
+    : udas;
   const [periodFilter, setPeriodFilter] = useState<'all' | 'Q1' | 'Q2'>('all');
 
   // Filters specific to Gap Analysis
@@ -496,6 +523,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   // Dedicated Gantt Bar Click Modal (Activity Detail, Objectives & Key Competencies)
   const [ganttSelectedUda, setGanttSelectedUda] = useState<UdaRecord | null>(null);
+  const locallyPublishedFocusIdRef = useRef<string | null>(null);
 
   // Modal explanation for Formative Credits Calculation
   const [isCreditsInfoOpen, setIsCreditsInfoOpen] = useState(false);
@@ -544,6 +572,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       .catch(() => undefined)
       .then(() => {
         nextUdas = mutation(udaCommittedSnapshotRef.current);
+        if (!classScopedUdaMutationAllowed(udaCommittedSnapshotRef.current, nextUdas, currentClassName, classes)) {
+          throw new Error('UDA_CLASS_SCOPE_REJECTED');
+        }
       })
       .then(() => onSaveUdas(nextUdas));
 
@@ -585,6 +616,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           throw new Error('UDA_MUTATION_VALIDATION_REJECTED');
         }
         nextUdas = mutation(udaCommittedSnapshotRef.current);
+        if (!classScopedUdaMutationAllowed(udaCommittedSnapshotRef.current, nextUdas, currentClassName, classes)) {
+          throw new Error('UDA_CLASS_SCOPE_REJECTED');
+        }
         await onSaveUdas(nextUdas);
         udaCommittedSnapshotRef.current = nextUdas;
       });
@@ -632,7 +666,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     }
     setIsSearchingSemantic(true);
     try {
-      const candidates = udas.map(u => ({
+      const candidates = scopedUdas.map(u => ({
         id: u.id,
         text: `${u.title}. ${u.description || ''} ${u.competencies || ''} ${u.authenticTask || ''}`
       }));
@@ -653,7 +687,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   // Suggest prerequisite dependencies using local embeddings
   const handleSuggestDependenciesSemantic = async (currentUda: UdaRecord) => {
-    const candidateUdas = udas.filter(u => u.id !== currentUda.id);
+    const candidateUdas = scopedUdas.filter(u => u.id !== currentUda.id);
     if (candidateUdas.length === 0) return;
 
     setIsAnalyzingDependenciesSemantic(true);
@@ -791,10 +825,59 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
   // Synchronize master class filter
   const handleMasterClassChange = (className: string) => {
+    if (currentClassName && className !== currentClassName) return;
     setSelectedMasterClass(className);
     setClassFilter(className);
     setGapClassFilter(className);
     setSummaryClassFilter(className);
+  };
+
+  // A class-first entry scopes existing specialist filters without choosing an UDA.
+  useEffect(() => {
+    if (!currentClassName || recordLessonPrefill) return;
+    setSelectedMasterClass(currentClassName);
+    setClassFilter(currentClassName);
+    setGapClassFilter(currentClassName);
+    setSummaryClassFilter(currentClassName);
+    setNewClass(currentClassName);
+    setNewPredecessorId('');
+    setCascadeProposal(null);
+    setSelectedUdaForDetail(null);
+    setGanttSelectedUda(null);
+    locallyPublishedFocusIdRef.current = null;
+  }, [currentClassName, recordLessonPrefill]);
+
+  // External focus may open the dossier, but a locally selected Gantt sheet must remain the only modal.
+  useEffect(() => {
+    if (!autoOpenTeachingFocus || !currentClassName || recordLessonPrefill
+      || !teachingFocus?.udaId || teachingContext?.writableByRegistro === false) return;
+    if (locallyPublishedFocusIdRef.current === teachingFocus.udaId) return;
+    const target = scopedUdas.find(uda => uda.id === teachingFocus.udaId);
+    if (target) {
+      setGanttSelectedUda(null);
+      setSelectedUdaForDetail(target);
+    }
+  }, [autoOpenTeachingFocus, currentClassName, recordLessonPrefill, teachingFocus?.udaId, teachingContext?.writableByRegistro]);
+
+  const publishExplicitUdaFocus = (uda: UdaRecord) => {
+    locallyPublishedFocusIdRef.current = uda.id;
+    onTeachingFocusChange?.(currentClassName && udaBelongsToActiveClass(uda.className, currentClassName, classes)
+      ? { udaId: uda.id }
+      : null);
+  };
+
+  const openGanttSheet = (uda: UdaRecord) => {
+    if (currentClassName && !udaBelongsToActiveClass(uda.className, currentClassName, classes)) return;
+    setSelectedUdaForDetail(null);
+    setGanttSelectedUda(uda);
+    publishExplicitUdaFocus(uda);
+  };
+
+  const openUdaDossier = (uda: UdaRecord) => {
+    if (currentClassName && !udaBelongsToActiveClass(uda.className, currentClassName, classes)) return;
+    setGanttSelectedUda(null);
+    setSelectedUdaForDetail(uda);
+    publishExplicitUdaFocus(uda);
   };
 
   // New lesson form inside detail modal
@@ -880,9 +963,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   ];
 
   // Global dependency audit: check if there are timing conflicts in the entire curriculum
-  const allConflicts = udas.map(u => ({
+  const allConflicts = scopedUdas.map(u => ({
     uda: u,
-    ...checkUdaDependencyConflict(u, udas)
+    ...checkUdaDependencyConflict(u, scopedUdas)
   })).filter(c => c.hasConflict);
 
   // Request a date or duration change with automatic cascade detection
@@ -891,7 +974,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     targetStartMonth: number,
     targetDurationMonths: number
   ) => {
-    const parent = udas.find(u => u.id === udaId);
+    const parent = scopedUdas.find(u => u.id === udaId);
     if (!parent) return;
 
     // Bounds checking
@@ -905,8 +988,13 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     // If no real change, return
     if (clampedStart === oldStart && clampedDuration === oldDuration) return;
 
-    // Compute potential cascade shifts
-    const suggestedShifts = computeCascadeShifts(udaId, clampedStart, clampedDuration, udas);
+    // The proposal and its visible children must be strictly class-local.
+    const suggestedShifts = computeCascadeShifts(udaId, clampedStart, clampedDuration, scopedUdas);
+    const affectedUdaIds = [udaId, ...suggestedShifts.map(shift => shift.childUda.id)];
+    if (hasForeignUdaDependencyOn(udas, affectedUdaIds, currentClassName, classes)) {
+      showStatus('Modifica non eseguita: sono presenti dipendenze tra classi.');
+      return;
+    }
 
     if (suggestedShifts.length > 0) {
       // Open cascade proposal modal so teacher can inspect and confirm
@@ -1019,7 +1107,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   // Toggle dependency on an UDA
   const handleToggleDependency = (udaId: string, predecessorId: string) => {
     const targetUda = udas.find(u => u.id === udaId);
-    if (!targetUda) return;
+    if (!targetUda || (currentClassName && !scopedUdas.some(u => u.id === udaId))) return;
+    if (currentClassName && !scopedUdas.some(u => u.id === predecessorId)) return;
 
     const currentDeps = targetUda.dependencies || [];
     const isAlreadyDep = currentDeps.includes(predecessorId);
@@ -1101,12 +1190,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   // Add new UDA
   const handleAddUda = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || (currentClassName && newClass !== currentClassName)) return;
 
     const newRecord: UdaRecord = {
       id: uid(),
       title: newTitle.trim(),
-      className: newClass,
+      className: currentClassName || newClass,
       hours: Number(newHours) || 10,
       period: newPeriod,
       startMonth: Number(newStartMonth),
@@ -1136,6 +1225,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   };
 
   const handleDelete = (id: string) => {
+    if (currentClassName && !scopedUdas.some(uda => uda.id === id)) return;
     const hasChildren = getUdaSuccessors(id, udas);
     let promptMsg = 'Eliminare questa Unità Didattica (UDA)?';
     if (hasChildren.length > 0) {
@@ -1143,14 +1233,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     }
 
     if (confirm(promptMsg)) {
-      // Remove this ID from dependencies of any other UDA
-      const nextUdas = udas
-        .filter(u => u.id !== id)
-        .map(u => ({
-          ...u,
-          dependencies: (u.dependencies || []).filter(depId => depId !== id)
-        }));
-
+      // Only actual dependency links may change; other classes keep their original records.
+      const nextUdas = buildUdaDeletionSnapshot(udas, id);
       void commitUdaViewMutation(nextUdas, () => {
         if (selectedUdaForDetail?.id === id) {
           setSelectedUdaForDetail(null);
@@ -1159,6 +1243,10 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           setGanttSelectedUda(null);
         }
         showStatus('UDA eliminata');
+      }).then(committed => {
+        if (!committed) {
+          showStatus('Eliminazione non completata: verifica eventuali dipendenze tra classi.');
+        }
       });
     }
   };
@@ -1244,9 +1332,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   };
 
   // Filtered and Semantically Ranked UDAs for Gantt
-  const filteredUdas = udas
+  const filteredUdas = scopedUdas
     .filter(u => {
-      if (classFilter !== 'all' && u.className !== classFilter) return false;
+      if (!currentClassName && classFilter !== 'all' && u.className !== classFilter) return false;
       if (periodFilter !== 'all' && u.period !== periodFilter) return false;
       if (searchQuery.trim()) {
         if (isSemanticSearch) {
@@ -1272,15 +1360,15 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     });
 
   // Calculate base stats
-  const totalPlannedHours = udas.reduce((acc, u) => acc + (u.hours || 0), 0);
-  const totalDoneHours = udas.reduce((acc, u) => {
+  const totalPlannedHours = scopedUdas.reduce((acc, u) => acc + (u.hours || 0), 0);
+  const totalDoneHours = scopedUdas.reduce((acc, u) => {
     const lesSum = (u.lessons || []).reduce((lAcc, l) => lAcc + (l.hours || 0), 0);
     return acc + lesSum;
   }, 0);
-  const civicCount = udas.filter(u => u.civicEducation).length;
+  const civicCount = scopedUdas.filter(u => u.civicEducation).length;
 
   // Crediti formativi engine
-  const creditsBreakdownByUda = udas.map(u => {
+  const creditsBreakdownByUda = scopedUdas.map(u => {
     const creditStats = calcUdaCompetenceCredits(u, classes);
     return {
       uda: u,
@@ -1320,7 +1408,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   // Gap Analysis Data
   const currentSchoolMonthIndex = getSchoolMonthIndex(new Date());
 
-  const gapAnalysisData = udas.map(u => {
+  const gapAnalysisData = scopedUdas.map(u => {
     const startM = u.startMonth || 0;
     const duration = u.durationMonths || 1;
     const endM = Math.min(9, startM + duration - 1);
@@ -1558,7 +1646,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   });
 
   const filteredGapData = gapAnalysisData.filter(item => {
-    if (gapClassFilter !== 'all' && item.uda.className !== gapClassFilter) return false;
+    if (!currentClassName && gapClassFilter !== 'all' && item.uda.className !== gapClassFilter) return false;
     if (gapPeriodFilter !== 'all' && item.uda.period !== gapPeriodFilter) return false;
     if (gapStatusFilter === 'with_gaps') return item.hasAnyGap;
     if (gapStatusFilter === 'critical') return item.hasCriticalGap;
@@ -1590,6 +1678,18 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         </div>
       )}
 
+      {!focusedRecordMode && !recordLessonPrefill && currentClassName && onOpenPlanning && (
+        <DidacticContinuityBar
+          className={currentClassName}
+          planningFrame={planningFrame}
+          teachingContext={teachingContext}
+          udaTitle={udaTitle}
+          lessonTitle={lessonTitle}
+          destination="programmazione"
+          onNavigate={onOpenPlanning}
+        />
+      )}
+
       {!focusedRecordMode && (
         <>
       {/* ============================================================== */}
@@ -1602,10 +1702,17 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
             <span>Classe di Lavoro:</span>
           </div>
 
+          {currentClassName ? (
+            <span aria-label="Classe corrente UDA" className="inline-flex min-h-[44px] items-center rounded-lg border border-cyan-700 bg-cyan-950/40 px-3 text-sm font-semibold text-cyan-100">
+              {currentClassName}
+            </span>
+          ) : (
           <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button
               type="button"
               onClick={() => handleMasterClassChange('all')}
+              disabled={Boolean(currentClassName)}
+              title={currentClassName ? 'Per cambiare classe torna alla selezione delle classi' : 'Tutte le classi'}
               className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                 selectedMasterClass === 'all'
                   ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
@@ -1619,6 +1726,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                 key={c.id}
                 type="button"
                 onClick={() => handleMasterClassChange(c.name)}
+                disabled={Boolean(currentClassName && currentClassName !== c.name)}
                 className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                   selectedMasterClass === c.name
                     ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
@@ -1629,6 +1737,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
               </button>
             ))}
           </div>
+          )}
 
           {/* Conflict status indicator */}
           {allConflicts.length > 0 ? (
@@ -1662,7 +1771,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { setNewClass(currentClassName || classes[0]?.name || '3ª A'); setIsModalOpen(true); }}
             className="px-3.5 py-1.5 rounded-lg neon-btn-primary text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4" />
@@ -1922,21 +2031,30 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   </button>
                 </div>
 
+                {currentClassName ? (
+                  <div aria-label="Classe corrente nel cronoprogramma" className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-100">
+                    <Filter className="h-3 w-3 text-cyan-400" />
+                    <span>Classe {currentClassName}</span>
+                  </div>
+                ) : (
                 <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800">
                   <Filter className="w-3 h-3 text-slate-400" />
                   <select
-                    value={classFilter}
-                    onChange={e => setClassFilter(e.target.value)}
-                    className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
+                    aria-label="Filtra classe UDA"
+                    value={effectiveClassFilter}
+                    onChange={e => { if (!currentClassName) setClassFilter(e.target.value); }}
+                    disabled={Boolean(currentClassName)}
+                    className="bg-transparent text-white font-medium focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                   >
-                    <option value="all">Tutte le Classi</option>
-                    {classes.map(c => (
+                    {!currentClassName && <option value="all">Tutte le Classi</option>}
+                    {classes.filter(c => !currentClassName || c.name === currentClassName).map(c => (
                       <option key={c.id} value={c.name} className="bg-slate-900">
                         {c.name}
                       </option>
                     ))}
                   </select>
                 </div>
+                )}
 
                 <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800">
                   <select
@@ -1985,9 +2103,9 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       const creditStats = calcUdaCompetenceCredits(u, classes);
                       const doneHours = creditStats.totalRawHours;
 
-                      const predecessors = getUdaPredecessors(u, udas);
-                      const successors = getUdaSuccessors(u.id, udas);
-                      const conflictInfo = checkUdaDependencyConflict(u, udas);
+                      const predecessors = getUdaPredecessors(u, scopedUdas);
+                      const successors = getUdaSuccessors(u.id, scopedUdas);
+                      const conflictInfo = checkUdaDependencyConflict(u, scopedUdas);
 
                       const isHighlighted = hoveredDependencyUdaId === u.id || (u.dependencies || []).includes(hoveredDependencyUdaId || '');
 
@@ -2004,7 +2122,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                           <td className="p-2.5 text-left sticky left-0 z-10 bg-[var(--surface)] border-r border-[var(--border)] max-w-[280px]">
                             <div className="space-y-1">
                               <div
-                                onClick={() => setGanttSelectedUda(u)}
+                                onClick={() => openGanttSheet(u)}
                                 className="font-semibold text-slate-200 hover:text-[var(--primary)] cursor-pointer flex items-center justify-between gap-1 transition-colors"
                                 title={`Clicca per aprire la scheda di "${u.title}"`}
                               >
@@ -2042,7 +2160,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setGanttSelectedUda(p);
+                                          openGanttSheet(p);
                                         }}
                                         className="font-mono text-cyan-300 hover:underline truncate max-w-[120px]"
                                         title={`Predecessore: ${p.title} (${MONTHS_LABELS[p.startMonth]} - ${MONTHS_LABELS[Math.min(9, p.startMonth + p.durationMonths - 1)]})`}
@@ -2126,7 +2244,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                             return (
                               <td
                                 key={mIdx}
-                                onClick={() => isActive && setGanttSelectedUda(u)}
+                                onClick={() => isActive && openGanttSheet(u)}
                                 className={`p-1.5 border-r border-[var(--border)] ${
                                   isActive
                                     ? 'bg-[var(--primary)]/20 text-[var(--primary)] font-bold cursor-pointer hover:bg-[var(--primary)]/35 transition-colors'
@@ -2139,7 +2257,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setGanttSelectedUda(u);
+                                      openGanttSheet(u);
                                     }}
                                     className={`w-full h-6 rounded flex items-center justify-center text-[10px] uppercase font-bold text-[var(--primary-text)] bg-[var(--primary)] shadow-[0_0_8px_var(--primary)] hover:brightness-110 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer ${
                                       isStart ? 'rounded-l-md' : 'rounded-l-none'
@@ -2364,7 +2482,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSelectedUdaForDetail(u)}
+                          onClick={() => openUdaDossier(u)}
                           className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
@@ -2398,7 +2516,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {udas.map(u => {
+            {scopedUdas.map(u => {
               const creditInfo = calcUdaCompetenceCredits(u, classes);
               const doneHours = creditInfo.totalRawHours;
               const plannedHours = u.hours || 10;
@@ -2568,22 +2686,22 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       {/* ============================================================== */}
       {/* GANTT BAR CLICK MODAL: ATTIVITÀ, OBIETTIVI, COMPETENZE & CRONO */}
       {/* ============================================================== */}
-      {ganttSelectedUda && (() => {
+      {ganttSelectedUda && (!currentClassName || udaBelongsToActiveClass(ganttSelectedUda.className, currentClassName, classes)) && (() => {
         const u = ganttSelectedUda;
         const creditStats = calcUdaCompetenceCredits(u, classes);
         const doneHours = creditStats.totalRawHours;
         const plannedHours = u.hours || 10;
         const hoursPct = plannedHours > 0 ? Math.min(100, Math.round((doneHours / plannedHours) * 100)) : 0;
 
-        const predecessors = getUdaPredecessors(u, udas);
-        const successors = getUdaSuccessors(u.id, udas);
-        const conflictInfo = checkUdaDependencyConflict(u, udas);
+        const predecessors = getUdaPredecessors(u, scopedUdas);
+        const successors = getUdaSuccessors(u.id, scopedUdas);
+        const conflictInfo = checkUdaDependencyConflict(u, scopedUdas);
 
         const startMonthName = MONTHS_LABELS[u.startMonth] || 'Settembre';
         const endMonthName = MONTHS_LABELS[Math.min(9, u.startMonth + u.durationMonths - 1)] || 'Novembre';
 
         return (
-          <div className="fixed inset-0 z-50 bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto">
+          <div className="fixed inset-0 z-[70] bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Scheda UDA nel cronoprogramma">
             <div className="w-full max-w-3xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-5 animate-in fade-in duration-200">
               {/* Header */}
               <div className="flex items-start justify-between pb-4 border-b border-[var(--border)]">
@@ -2779,12 +2897,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       {/* ============================================================== */}
       {/* DETAILED UDA PROJECT DOSSIER MODAL WITH DEPENDENCY MANAGER */}
       {/* ============================================================== */}
-      {selectedUdaForDetail && (() => {
+      {selectedUdaForDetail && (!currentClassName || udaBelongsToActiveClass(selectedUdaForDetail.className, currentClassName, classes)) && (() => {
         const creditStats = calcUdaCompetenceCredits(selectedUdaForDetail, classes);
-        const otherUdas = udas.filter(u => u.id !== selectedUdaForDetail.id);
+        const otherUdas = scopedUdas.filter(u => u.id !== selectedUdaForDetail.id);
 
         return (
-          <div className="fixed inset-0 z-50 bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto">
+          <div className="fixed inset-0 z-[70] bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Fascicolo UDA">
             <div className="w-full max-w-4xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-6">
               {focusedRecordMode && (
                 <div className="rounded-xl border border-cyan-800/70 bg-cyan-950/30 p-3">
@@ -3314,10 +3432,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   </label>
                   <select
                     value={newClass}
-                    onChange={e => setNewClass(e.target.value)}
-                    className="w-full p-2.5 neon-input text-white bg-slate-900 cursor-pointer"
+                    onChange={e => { if (!currentClassName) setNewClass(e.target.value); }}
+                    disabled={Boolean(currentClassName)}
+                    className="w-full p-2.5 neon-input text-white bg-slate-900 cursor-pointer disabled:cursor-not-allowed"
                   >
-                    {classes.map(c => (
+                    {classes.filter(c => !currentClassName || c.name === currentClassName).map(c => (
                       <option key={c.id} value={c.name}>
                         {c.name}
                       </option>
@@ -3398,7 +3517,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
                   className="w-full p-2.5 neon-input text-white bg-slate-900 cursor-pointer"
                 >
                   <option value="">Nessun predecessore (UDA iniziale)</option>
-                  {udas.map(u => (
+                  {scopedUdas.map(u => (
                     <option key={u.id} value={u.id}>
                       {u.title} ({u.className} · {MONTHS_LABELS[u.startMonth]})
                     </option>
