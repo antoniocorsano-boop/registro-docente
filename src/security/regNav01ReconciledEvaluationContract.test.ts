@@ -31,6 +31,25 @@ describe('REG-NAV-01 reconciled — specialist evaluation navigation', () => {
     expect(source).toContain('onCancelEdit={handleCancelEvaluationEdit}');
   });
 
+  test('Cancel serializes competing explicit destinations until the matching popstate', () => {
+    const nav = section('const handleNavigateTab = useCallback(', 'const handleOpenStudentReport = useCallback(');
+    const pop = section('const handlePopState = (e: PopStateEvent) => {', "window.addEventListener('popstate', handlePopState)");
+    const cancel = section('const handleCancelEvaluationEdit =', '// Delete batch');
+    const selectClass = section('const handleSelectClass =', 'const handleNavigateHome =');
+    const home = section('const handleNavigateHome =', '// Add new class');
+    const edit = section('const handleEditBatch =', 'const handleCancelEvaluationEdit =');
+    expect(nav).toContain('pendingEvaluationCancelRef.current.proceed =');
+    expect(pop).toContain('const pendingEvaluationCancel = pendingEvaluationCancelRef.current');
+    expect(pop).toContain("nextTab === 'storico'");
+    expect(pop).toContain('queuedEvaluationDestination?.()');
+    expect(pop).toContain('if (!pendingEvaluationCancel');
+    expect(cancel).toContain("pendingEvaluationCancelRef.current = { classId, proceed: null }");
+    expect(cancel).toContain('pendingEvaluationCancelRef.current = null;');
+    expect(selectClass).toContain('pendingEvaluationCancelRef.current.proceed =');
+    expect(home).toContain('pendingEvaluationCancelRef.current.proceed = handleNavigateHome');
+    expect(edit).toContain('pendingEvaluationCancelRef.current.proceed = () => handleEditBatch(batchId)');
+  });
+
   test('after successful durable save the current history entry reflects Storico', () => {
     const save = section('const handleSaveEvaluations =', '// Save behavior notes');
     expect(save).toContain('afterCommit:');
