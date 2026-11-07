@@ -1,0 +1,115 @@
+# Exact-commit qualification of two current parent PR candidates after stack re-alignment.
+# Audit branch only; no Vercel, no deployment, no mutation of #126/#128.
+name: NAV Stack Parents Exact SHA Audit 2026-11-07
+
+on:
+  push:
+    branches:
+      - audit/nav-chain-126-128-exact-20261107
+
+permissions:
+  contents: read
+
+jobs:
+  exact-parent-candidate:
+    name: PR ${{ matrix.pr }} exact SHA (Bun and Chromium)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pr: '126'
+            sha: '18b72d9c97804c4afd4ddf88f6b8256f26548a1d'
+            browser_spec: 'mobile-density-01-tabellone.spec.cjs'
+            fixture_page: 'mobile-density-01-tabellone.html'
+            contract: 'src/security/mobileDensity01TabelloneContract.test.ts'
+          - pr: '128'
+            sha: '9ccdc48670def105dc9dd2b9ede382495a73452e'
+            browser_spec: 'nav-back-01-student-report.spec.cjs'
+            fixture_page: 'nav-back-01-app.html'
+            contract: 'src/security/navBack01StudentReportHistory.test.ts'
+    env:
+      CANDIDATE_SHA: ${{ matrix.sha }}
+      SPEC: ${{ matrix.browser_spec }}
+      FIXTURE_PAGE: ${{ matrix.fixture_page }}
+      CONTRACT: ${{ matrix.contract }}
+      PORT: '4173'
+    steps:
+      - name: Checkout exact parent PR commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert immutable candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          printf 'PR %s exact candidate %s\n' '${{ matrix.pr }}' "$CANDIDATE_SHA"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+      - name: Check registry of protected invariants
+        run: bun scripts/qualification/check-invariants.mjs
+      - name: Run own exact-SHA contract
+        run: bun test "$CONTRACT"
+      - name: Typecheck complete candidate
+        run: bun run lint
+      - name: Run complete security and memory suite
+        run: bun run test:security
+      - name: Build candidate (not deploy)
+        run: bun run build
+      - name: Install isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .parent-audit-browser-tools parent-audit-evidence
+          echo '{"name":"nav-stack-parent-audit","private":true}' > .parent-audit-browser-tools/package.json
+          npm --prefix .parent-audit-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.parent-audit-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp "tests/browser/$SPEC" ".parent-audit-browser-tools/$SPEC"
+      - name: Start Vite synthetic fixture bound to loopback
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT" --strictPort > parent-audit-evidence/server.log 2>&1 &
+          echo "$!" > parent-audit-evidence/server.pid
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent "http://127.0.0.1:$PORT/tests/browser/fixtures/$FIXTURE_PAGE" > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat parent-audit-evidence/server.log
+          exit 1
+      - name: Execute real Chromium synthetic regressions on exact parent SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .parent-audit-browser-tools
+          DENSITY01_BASE_URL="http://127.0.0.1:${PORT}" \
+          NAV_BACK_BASE_URL="http://127.0.0.1:${PORT}" \
+          ./node_modules/.bin/playwright test "$SPEC" \
+            --workers=1 --reporter=line \
+            --output=../parent-audit-evidence/browser-results
+      - name: Create exact-SHA receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'PR=%s\nCANDIDATE_SHA=%s\nRESULT=PASS\nCHROMIUM_SPEC=%s\n' \
+            '${{ matrix.pr }}' "$CANDIDATE_SHA" "$SPEC" > parent-audit-evidence/qualification-receipt.txt
+      - name: Upload non-sensitive receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nav-stack-parent-${{ matrix.pr }}-${{ matrix.sha }}
+          path: |
+            parent-audit-evidence/qualification-receipt.txt
+            parent-audit-evidence/server.log
+          if-no-files-found: warn
+          retention-days: 14
