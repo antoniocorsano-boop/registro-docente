@@ -107,6 +107,49 @@ describe('INT-02/IMPORT-01 — safe grade reconciliation', () => {
     expect(ambiguousClass.preview.blockedByReason.CLASS_AMBIGUOUS).toBe(1);
   });
 
+  test('duplicate canonical class IDs block every grade without modifying either class', () => {
+    const rows = classes();
+    rows[1] = { ...rows[1], id: rows[0].id };
+    const result = reconcile(rows, [submission('duplicate-canonical-class')]);
+    expect(result.importedCount).toBe(0);
+    expect(result.preview.blockedByReason.CLASS_AMBIGUOUS).toBe(1);
+    expect(result.classes).toEqual(rows);
+  });
+
+  test('duplicate canonical student IDs block even when names differ', () => {
+    const rows = classes();
+    rows[0].students.push({ id: 'student-a', name: 'Bianchi Lucia' });
+    const result = reconcile(rows, [submission('duplicate-canonical-student')]);
+    expect(result.importedCount).toBe(0);
+    expect(result.preview.blockedByReason.STUDENT_AMBIGUOUS).toBe(1);
+    expect(result.classes[0].grades).toHaveLength(0);
+  });
+
+  test('a duplicated UDA identifier cannot authorize imports across classes', () => {
+    const catalog = udas();
+    catalog.push({ ...catalog[1], id: 'uda-a' });
+    const result = reconcile(classes(), [submission('duplicate-uda')], selection(), tests(), catalog);
+    expect(result.importedCount).toBe(0);
+    expect(result.preview.blockedByReason.UDA_INVALID).toBe(1);
+  });
+
+  test('changed test title or question count rejects stale submission metadata', () => {
+    const renamed = tests();
+    renamed['test-a'] = { ...renamed['test-a'], title: 'Agricoltura modificata' };
+    const result = reconcile(classes(), [submission('old-title')], selection(), renamed);
+    expect(result.importedCount).toBe(0);
+    expect(result.preview.blockedByReason.TEST_METADATA_MISMATCH).toBe(1);
+
+    const withQuestion = tests();
+    withQuestion['test-a'] = {
+      ...withQuestion['test-a'],
+      questions: [{ q: 'Domanda sintetica', options: ['A', 'B'], correct: 0 }]
+    };
+    const staleCount = reconcile(classes(), [submission('old-question-count')], selection(), withQuestion);
+    expect(staleCount.importedCount).toBe(0);
+    expect(staleCount.preview.blockedByReason.TEST_METADATA_MISMATCH).toBe(1);
+  });
+
   test('reimport never silently replaces a teacher-edited grade', () => {
     const first = reconcile();
     const original = first.classes[0].grades[0];
