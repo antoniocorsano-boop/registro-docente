@@ -99,14 +99,14 @@ describe('PERSIST-01H teacher UI pending and draft-preservation contract', () =>
   test('teacher submission delete and import share one Promise-aware in-flight boundary', async () => {
     const text = await source('src/components/VerificheOnlineView.tsx');
     expect(text).toContain('onDeleteSubmission: (submissionId: string) => Promise<void>;');
-    expect(text).toContain('onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;');
+    expect(text).toContain('onImportSubmissionsToRegister: (selection: SubmissionImportSelection, confirmedSignature: string) => Promise<void>;');
     expect(text).toContain('const [isSubmissionActionPending, setIsSubmissionActionPending] = useState(false);');
     expect(text).toContain('const submissionActionPendingRef = useRef(false);');
     expect(text).toContain('const commitSubmissionAction = async (action: () => Promise<void>): Promise<boolean> =>');
     expect(text).toContain('if (submissionActionPendingRef.current) return false;');
     expect(text).toContain('await action();');
     expect(text).toContain('await commitSubmissionAction(() => onDeleteSubmission(sub.id));');
-    expect(text).toContain('await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId));');
+    expect(text).toContain('await onImportSubmissionsToRegister(selection, preview.signature);');
     expect(text).toContain('disabled={isSubmissionActionPending}');
   });
 });
