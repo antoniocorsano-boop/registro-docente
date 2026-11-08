@@ -3,17 +3,23 @@ import type { PlanningDraftGuard } from './PlanningProfileEditor';
 import type {
   ArenaPlanningContext,
   ArenaPlanningContextPreview,
+  PlanningState,
   TeachingProfile
 } from '../../planning/types';
 import { resolveClassGradeLevel, type PlanningFrameResolution } from '../../planning/planningFrameResolver';
 import type { ResolvedLibraryTeachingContext } from '../../library/teachingContext';
+import type { ClassData } from '../../types';
 import { DidacticContinuityBar } from '../DidacticContinuityBar';
+import { DocenteOsProjectionPanel } from './DocenteOsProjectionPanel';
 import { ArenaPlanningContextPanel } from './ArenaPlanningContextPanel';
 import { PlanningProfileEditor } from './PlanningProfileEditor';
 
 interface PlanningProfileViewProps {
   profiles: TeachingProfile[];
   arenaContexts: ArenaPlanningContext[];
+  planning: PlanningState;
+  classes: ClassData[];
+  onAcceptDocenteOsProjection: (payload: unknown) => Promise<PlanningState>;
   onSaveProfile: (profile: TeachingProfile) => Promise<void>;
   onAcceptArenaContext: (context: ArenaPlanningContextPreview) => Promise<void>;
   currentClassName?: string | null;
@@ -31,6 +37,9 @@ interface PlanningProfileViewProps {
 export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   profiles,
   arenaContexts,
+  planning,
+  classes,
+  onAcceptDocenteOsProjection,
   onSaveProfile,
   onAcceptArenaContext,
   currentClassName = null,
@@ -80,6 +89,12 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
     setSelectionWarning('');
     setManualChoice({ scope, id });
   };
+  const acceptProjection = useCallback((payload: unknown) => {
+    if (editorGuardRef.current?.hasUnsavedChanges()) {
+      return Promise.reject(new Error('Salva o annulla la bozza della Programmazione prima di acquisire la proiezione.'));
+    }
+    return onAcceptDocenteOsProjection(payload);
+  }, [onAcceptDocenteOsProjection]);
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [mobileArenaOpen, setMobileArenaOpen] = useState(false);
   const resolvedFrame = planningFrame?.status === 'resolved' ? planningFrame : null;
@@ -248,6 +263,13 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           </div>
         </section>
       )}
+      <section aria-label="Importazione proiezione Docente OS" className="space-y-2">
+        <DocenteOsProjectionPanel
+          planning={planning}
+          classes={classes}
+          onAccept={acceptProjection}
+        />
+      </section>
     </section>
   );
 };
