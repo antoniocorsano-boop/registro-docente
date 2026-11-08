@@ -1,0 +1,125 @@
+name: "A4-R2B Task 7 Android localhost package (corrected exact SHA)"
+
+on:
+  pull_request:
+    branches:
+      - feat/a4-r2b-projection-import-preview-main
+
+permissions:
+  contents: read
+
+jobs:
+  build-static-hpr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout immutable INT-02 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 9b4b21e33fdacaa55fb4fec3e712c50c3260062d
+          persist-credentials: false
+      - name: Verify immutable source and disabled hosted deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "9b4b21e33fdacaa55fb4fec3e712c50c3260062d"
+          test -f vercel.json
+          grep -Eq '"deploymentEnabled" *: *false' vercel.json
+      - name: Setup Node for isolated package build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Bun from npm (avoid GitHub release HTTP 504)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund bun@1.4.4
+          bun --version
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build production static assets
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+      - name: Prepare isolated Chromium for A4-R2B mobile regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .a4-browser-tools
+          printf '%s\n' '{"name":"a4r2b-task7-browser","private":true}' > .a4-browser-tools/package.json
+          npm --prefix .a4-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          .a4-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/a4-r2b-projection-import-preview.spec.cjs .a4-browser-tools/
+      - name: Launch synthetic-only local preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 > /tmp/a4r2b-task7-preview.log 2>&1 &
+          echo $! > /tmp/a4r2b-task7-preview.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/a4r2b-task7-preview.log
+          exit 1
+      - name: Run S1 plus A4-R2B Chromium synthetic mobile qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .a4-browser-tools
+          BASE_URL=http://127.0.0.1:4173 ./node_modules/.bin/playwright test a4-r2b-projection-import-preview.spec.cjs --workers=1 --reporter=line
+
+      - name: Assemble ready-to-run Termux local package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          APP="package/registro_a4r2b_import_9b4b21e"
+          mkdir -p "$APP"
+          cp -a dist/. "$APP/"
+          printf '%s\n' '9b4b21e33fdacaa55fb4fec3e712c50c3260062d' > "$APP/A4R2B_IMPORT_SOURCE_SHA.txt"
+          cat > "$APP/avvia-termux.sh" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          if ! command -v python >/dev/null 2>&1; then
+            echo "Python non disponibile: eseguire pkg install python"
+            exit 1
+          fi
+          echo "Registro Docente A4-R2B/Task7 9b4b21e (solo dati sintetici)"
+          echo "Aprire Chrome: http://127.0.0.1:4175"
+          echo "Interrompere con Ctrl+C."
+          exec python -m http.server 4175 --bind 127.0.0.1 --directory "$DIR"
+          SCRIPT
+          chmod +x "$APP/avvia-termux.sh"
+          cat > "$APP/GUIDA-TERMUX.txt" <<'TXT'
+          REGISTRO DOCENTE - A4-R2B/Task7 - COLLAUDO ANDROID SELEZIONI
+          Versione prodotto: 9b4b21e33fdacaa55fb4fec3e712c50c3260062d
+          Collaudo A4-R2B/Task7: classe/test espliciti per Padlet e simulazione; importazione esiti e schede storiche invariate.
+          Archiviazione SOLO locale, nessun Vercel e nessun merge in main.
+          Mantenere gli stessi dati sintetici gia' presenti su http://127.0.0.1:4175.
+          Prima interrompere la precedente sessione Termux sulla porta 4175 (Ctrl+C).
+          Aprire Termux ed eseguire:
+            pkg install -y python unzip
+            cd "$HOME"
+            unzip -o "$HOME/storage/downloads/registro-a4r2b-task7-android-local-9b4b21e.zip"
+            cd "$HOME/registro_a4r2b_import_9b4b21e"
+            bash avvia-termux.sh
+          Aprire Chrome all'indirizzo: http://127.0.0.1:4175
+          Usare soltanto classi fittizie. In Programmazione > Importa da Docente OS, verificare la lettura di un file JSON fittizio, l'anteprima e la riconciliazione classi. Non effettuare salvataggi su dati professionali reali.
+          Non cancellare i dati del sito Chrome, altrimenti l'archivio locale viene perso.
+          TXT
+          test -s "$APP/index.html"
+          test -s "$APP/A4R2B_IMPORT_SOURCE_SHA.txt"
+          test -x "$APP/avvia-termux.sh"
+          echo "Source SHA in artifact:"; cat "$APP/A4R2B_IMPORT_SOURCE_SHA.txt"
+          (cd package && find . -type f -print | sort)
+      - name: Upload Android local package
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-a4r2b-task7-android-local-9b4b21e
+          path: package/
+          if-no-files-found: error
+          retention-days: 7
