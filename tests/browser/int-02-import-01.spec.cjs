@@ -36,6 +36,8 @@ test('IMPORT-01 mobile: teacher scope, explicit confirmation, durable import and
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${CLASS_NAME}` })).toBeVisible();
   await closeSavedNotice(page);
+  const privacyShield = page.getByRole('button', { name: /LIM Shield Attivo/ });
+  if (await privacyShield.isVisible().catch(() => false)) await privacyShield.click();
 
   await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(STUDENT_NAME);
   await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
