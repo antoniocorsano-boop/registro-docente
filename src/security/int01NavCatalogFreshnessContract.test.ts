@@ -14,7 +14,7 @@ describe('INT-01 / NAV-S1 merged history authority', () => {
     // The old mount-only handler retained a stale navigation callback. Rebinding
     // when its dependencies change preserves the browser history contracts.
     expect(app).toContain(
-      '}, [publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab, traceHpr]);'
+      '}, [hasUnsavedActiveDraft, publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab, traceHpr]);'
     );
   });
 
