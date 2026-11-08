@@ -5,6 +5,7 @@ import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, Questio
 import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
 import { isAssessmentUdaForClass, isAssessmentUdaSelectionAllowed } from '../library/assessmentUdaScope';
 import { resolveAssessmentShareTarget } from '../library/assessmentShareSelection';
+import type { SubmissionImportSelection, SubmissionImportPreview } from '../persistence/submissionGradeImport';
 
 export interface AssessmentDraftGuard {
   hasUnsavedChanges: () => boolean;
@@ -50,7 +51,8 @@ interface VerificheOnlineViewProps {
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => Promise<void>;
-  onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;
+  onPreviewSubmissionImport: (selection: SubmissionImportSelection) => SubmissionImportPreview;
+  onImportSubmissionsToRegister: (selection: SubmissionImportSelection, confirmedSignature: string) => Promise<void>;
   onSimulateTest: (testId: string, className: string) => void;
 }
 
@@ -68,6 +70,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   onSaveNewTest,
   onDeleteTest,
   onDeleteSubmission,
+  onPreviewSubmissionImport,
   onImportSubmissionsToRegister,
   onSimulateTest
 }) => {
@@ -75,6 +78,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [selectedClass, setSelectedClass] = useState<string>(assessmentHandoff?.className ?? '');
   // Separate Padlet/simulation choice from the historical analysis/grade-import selector.
   const [shareSelectedTestId, setShareSelectedTestId] = useState<string>('');
+  const [importClassId, setImportClassId] = useState<string>('');
+  const [importTestId, setImportTestId] = useState<string>('');
+  const [importPeriod, setImportPeriod] = useState<'' | 'Q1' | 'Q2'>('');
   const previousActiveClassNameRef = useRef(activeClassName);
 
   useEffect(() => {
@@ -105,6 +111,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     previousActiveClassNameRef.current = activeClassName;
     setSelectedClass('');
     setShareSelectedTestId('');
+    setImportClassId('');
+    setImportTestId('');
+    setImportPeriod('');
   }, [activeClassName]);
 
   // Never leave a removed/ambiguous class or deleted test selected in the mobile UI.
@@ -406,7 +415,29 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   };
 
   const handleImportSubmissions = async () => {
-    await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId));
+    if (!importClassId || !importTestId || !importPeriod) {
+      alert('Selezionare classe, verifica e periodo prima dell’importazione.');
+      return;
+    }
+    const selection: SubmissionImportSelection = {
+      classId: importClassId, testId: importTestId, period: importPeriod
+    };
+    await commitSubmissionAction(async () => {
+      const preview = onPreviewSubmissionImport(selection);
+      if (preview.creatableCount === 0) {
+        alert(`Nessuna nuova valutazione importabile. Già presenti: ${preview.unchangedCount}; da verificare: ${preview.blockedCount}.`);
+        return;
+      }
+      const approved = window.confirm(
+        `Confermare l'importazione delle valutazioni?\n\n`
+        + `Nuove valutazioni: ${preview.creatableCount}\n`
+        + `Già presenti e non modificate: ${preview.unchangedCount}\n`
+        + `Consegne escluse da verificare: ${preview.blockedCount}\n\n`
+        + 'Le consegne escluse saranno conservate. I voti già registrati non verranno sovrascritti.'
+      );
+      if (!approved) return;
+      await onImportSubmissionsToRegister(selection, preview.signature);
+    });
   };
 
   // Save interactive test
@@ -1640,14 +1671,71 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleImportSubmissions}
-                disabled={isSubmissionActionPending}
-                className="px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto"
-              >
-                <Download className="w-4 h-4" /> Importa Voti nel Registro
-              </button>
+              <div className="flex flex-col gap-2 w-full sm:max-w-lg">
+                <p className="text-xs text-slate-300">
+                  Importazione controllata: scegliere esplicitamente classe, verifica e periodo.
+                  Le consegne con associazioni non sicure resteranno disponibili.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className="text-xs text-slate-300">
+                    Classe
+                    <select
+                      aria-label="Classe per importazione esiti"
+                      value={importClassId}
+                      onChange={event => {
+                        setImportClassId(event.target.value);
+                        setImportTestId('');
+                        setImportPeriod('');
+                      }}
+                      disabled={isSubmissionActionPending}
+                      className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
+                    >
+                      <option value="">Scegli classe</option>
+                      {classes.map(item => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">
+                    Verifica
+                    <select
+                      aria-label="Verifica per importazione esiti"
+                      value={importTestId}
+                      onChange={event => setImportTestId(event.target.value)}
+                      disabled={isSubmissionActionPending || !importClassId}
+                      className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
+                    >
+                      <option value="">Scegli verifica</option>
+                      {Object.values(tests).map(item => (
+                        <option key={item.id} value={item.id}>{item.title}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">
+                    Periodo
+                    <select
+                      aria-label="Periodo per importazione esiti"
+                      value={importPeriod}
+                      onChange={event => setImportPeriod(event.target.value as '' | 'Q1' | 'Q2')}
+                      disabled={isSubmissionActionPending || !importTestId}
+                      className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
+                    >
+                      <option value="">Scegli periodo</option>
+                      <option value="Q1">Primo periodo</option>
+                      <option value="Q2">Secondo periodo</option>
+                    </select>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImportSubmissions}
+                  disabled={isSubmissionActionPending || !importClassId || !importTestId || !importPeriod}
+                  data-testid="import-01-confirmed-scope"
+                  className="px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" /> Anteprima e conferma importazione
+                </button>
+              </div>
             </div>
 
             {submissions.length === 0 ? (
