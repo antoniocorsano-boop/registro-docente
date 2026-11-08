@@ -1,0 +1,135 @@
+name: "IMPORT-01 Android local HPR package (exact qualified SHA)"
+
+on:
+  pull_request:
+    branches:
+      - fix/int02-scoped-outcomes-import-20261108
+
+permissions:
+  contents: read
+
+jobs:
+  android-local-hpr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact qualified product commit, never instrumentation branch
+        uses: actions/checkout@v4
+        with:
+          ref: 76a8ffaa346f9b5ee80916110a5b5dad9ae6d916
+          persist-credentials: false
+      - name: Verify product SHA and deployment disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "76a8ffaa346f9b5ee80916110a5b5dad9ae6d916"
+          test -f vercel.json
+          grep -Eq '"deploymentEnabled" *: *false' vercel.json
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Bun
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund bun@1.4.4
+          test "$(bun --version)" = "1.4.4"
+      - name: Install frozen dependencies and build immutable candidate
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run build
+          test -s dist/index.html
+      - name: Prepare isolated Chromium qualification
+        run: |
+          set -euo pipefail
+          mkdir -p .import01-browser-tools browser-evidence
+          printf '%s\n' '{"name":"import01-android-hpr-toolchain","private":true}' > .import01-browser-tools/package.json
+          npm --prefix .import01-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          .import01-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/int-02-import-01.spec.cjs .import01-browser-tools/
+      - name: Start loopback-only synthetic preview
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 > /tmp/import01-preview.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/import01-preview.log
+          exit 1
+      - name: Re-run exact candidate mobile synthetic IMPORT-01 end-to-end
+        run: |
+          set -euo pipefail
+          cd .import01-browser-tools
+          BASE_URL=http://127.0.0.1:4173 ./node_modules/.bin/playwright test int-02-import-01.spec.cjs --workers=1 --reporter=line
+      - name: Assemble Termux-only package and local first-step guide
+        run: |
+          set -euo pipefail
+          APP="package/registro_import01_android_76a8ffaa"
+          mkdir -p "$APP"
+          cp -a dist/. "$APP/"
+          printf '%s\n' '76a8ffaa346f9b5ee80916110a5b5dad9ae6d916' > "$APP/IMPORT01_PRODUCT_SOURCE_SHA.txt"
+          cat > "$APP/avvia-termux.sh" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          if ! command -v python >/dev/null 2>&1; then
+            echo "Python non disponibile: pkg install python"
+            exit 1
+          fi
+          echo "Registro Docente IMPORT-01 | prodotto 76a8ffaa | SOLO dati sintetici"
+          echo "Aprire Chrome su http://127.0.0.1:4176"
+          echo "Arrestare con Ctrl+C in Termux"
+          exec python -m http.server 4176 --bind 127.0.0.1 --directory "$DIR"
+          SCRIPT
+          chmod +x "$APP/avvia-termux.sh"
+          cat > "$APP/GUIDA-ANDROID-IMPORT01.txt" <<'TXT'
+          REGISTRO DOCENTE - PR #158 - IMPORT-01 - HPR ANDROID
+          Compilazione del prodotto: 76a8ffaa346f9b5ee80916110a5b5dad9ae6d916.
+          Nessuna integrazione main. Nessuna pubblicazione Vercel. NESSUN DATO PERSONALE REALE.
+
+          1) Il pacchetto e' separato dal collaudo precedente: porta 4176.
+          2) Scaricare da GitHub Actions l'artefatto:
+             registro-import01-android-local-76a8ffaa.zip
+             nel normale percorso Download di Android.
+          3) In Termux:
+             pkg install -y python unzip
+             termux-setup-storage
+             cd "$HOME"
+             unzip -o "$HOME/storage/downloads/registro-import01-android-local-76a8ffaa.zip"
+             cd "$HOME/registro_import01_android_76a8ffaa"
+             bash avvia-termux.sh
+          4) In Chrome Android aprire http://127.0.0.1:4176
+             (non il vecchio indirizzo con porta 4175).
+          5) Configurare un archivio fittizio nuovo, NON importare dati reali.
+          6) Primo controllo A1: aprire Verifiche online > Esiti & Item Analysis.
+             Verificare il comando "Anteprima e conferma importazione"
+             DISABILITATO quando non sono selezionate esplicitamente classe,
+             verifica, periodo e UDA di destinazione.
+          7) Per A2-A7 usare SOLO la classe sintetica
+             "Classe Sintetica IMPORT-01" con un alunno
+             "Studente Sintetico IMPORT-01"; la verifica integrata
+             "A cosa serve l'energia" (ID energia), periodo Q1,
+             scelta esplicita "Nessuna UDA". Non inserire nomi autentici.
+          8) Verificare in conferma: classe, verifica, periodo, destinazione,
+             conteggi, motivi di esclusione e avviso su provenienza storica.
+             Annullare prima di una eventuale conferma con sola fonte sintetica.
+          9) La verifica su Android reale deve essere documentata dal docente;
+             il test Chromium qui eseguito NON e' una prova umana.
+          TXT
+          test -s "$APP/index.html"
+          test -s "$APP/IMPORT01_PRODUCT_SOURCE_SHA.txt"
+          test -x "$APP/avvia-termux.sh"
+          cat "$APP/IMPORT01_PRODUCT_SOURCE_SHA.txt"
+      - name: Upload loopback Android local HPR package
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-import01-android-local-76a8ffaa
+          path: package/
+          if-no-files-found: error
+          retention-days: 7
