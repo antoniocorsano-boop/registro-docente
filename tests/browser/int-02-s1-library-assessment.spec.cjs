@@ -24,6 +24,17 @@ async function expectNoHorizontalOverflow(page) {
   })).toBeLessThanOrEqual(1);
 }
 
+// The drawer is marked aria-hidden before its 300ms slide-out completes.
+// Visual evidence must be captured after it is entirely offscreen.
+async function expectDrawerFullyOffscreen(page) {
+  const drawer = page.locator('#registro-navigation-drawer');
+  await expect(drawer).toHaveAttribute('aria-hidden', 'true');
+  await expect.poll(async () => {
+    const bounds = await drawer.boundingBox();
+    return bounds ? bounds.x + bounds.width : 0;
+  }).toBeLessThanOrEqual(1);
+}
+
 test('INT-02/S1: class-scoped professional source reaches unsaved test editor without UDA or URL payload', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
@@ -228,6 +239,7 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   const originStatus = page.getByTestId('int02-s2b-origin-status');
   await expect(originStatus).toContainText('attualmente disponibile');
   await originStatus.scrollIntoViewIfNeeded();
+  await expectDrawerFullyOffscreen(page);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({
     path: `${evidenceDir}/int-02-s2b-03-origine-disponibile-390.png`
@@ -247,8 +259,9 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   await savedCard.getByRole('button', { name: 'Modifica', exact: true }).click();
   const unavailable = page.getByTestId('int02-s2b-origin-status');
   await expect(unavailable).toContainText('non disponibile o non verificabile');
-  await expectNoHorizontalOverflow(page);
   await unavailable.scrollIntoViewIfNeeded();
+  await expectDrawerFullyOffscreen(page);
+  await expectNoHorizontalOverflow(page);
   await page.screenshot({
     path: `${evidenceDir}/int-02-s2b-04-origine-non-disponibile-390.png`
   });
