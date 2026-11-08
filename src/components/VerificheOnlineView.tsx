@@ -44,6 +44,7 @@ interface VerificheOnlineViewProps {
   isPrivacyShieldActive?: boolean;
   initialClassName?: string;
   assessmentHandoff?: ResolvedAssessmentHandoff | null;
+  activeClassName?: string | null;
   onRegisterDraftGuard?: (guard: AssessmentDraftGuard | null) => void;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
@@ -61,6 +62,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   isPrivacyShieldActive = true,
   initialClassName,
   assessmentHandoff = null,
+  activeClassName = null,
   onRegisterDraftGuard,
   onSaveNewTest,
   onDeleteTest,
@@ -188,7 +190,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     commit?.();
   };
 
-  const assessmentClassName = assessmentHandoff?.className ?? selectedClass;
+  // Active class from App is authoritative; Padlet's independent selector is not.
+  const assessmentClassName = assessmentHandoff?.className ?? activeClassName ?? '';
   const eligibleUdas = udas.filter(uda => isAssessmentUdaForClass(uda, assessmentClassName));
 
   // Print Mode State
