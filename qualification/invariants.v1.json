@@ -948,7 +948,7 @@
     {
       "id": "INT-02-S1-I01",
       "owner": "INT-02",
-      "statement": "The teacher may explicitly navigate from a ready teacher-professional Library source to the existing Verifiche workspace using only session-local source and active-class references. A pure resolver revalidates classification and active class at departure and arrival; source deletion, revocation and class change fail closed. The destination presents context and requires a second explicit action to open a new unsaved editor; no UDA is chosen by array position and the handoff alone never creates a test, writes a student record, grants Copilot authority, persists a source payload or adds source data to browser history/URL. All existing professional save coordinators and protected mobile routes remain authoritative.",
+      "statement": "The teacher may explicitly navigate from a ready teacher-professional Library source to the existing Verifiche workspace using only session-local source and active-class references. A pure resolver revalidates classification and active class at departure and arrival; source deletion, revocation and class change fail closed. The destination presents context and requires a second explicit action to open a new unsaved editor; no UDA is chosen by array position and the handoff alone never creates a test, writes a student record, grants Copilot authority, persists a source payload or adds source data to browser history/URL. All existing professional save coordinators and protected mobile routes remain authoritative. The assessment editor now guards modified unsaved drafts across Android Back and explicit navigation, preserves the option to remain or discard, restricts UDA choices and save-time UDA authority to the active class (including short/full class labels), and scrolls the contextual handoff into view on arrival; no implicit save, foreign-class UDA association or source payload propagation is permitted.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/App.tsx",
@@ -959,7 +959,9 @@
         "src/library/assessmentHandoff.test.ts",
         "src/security/int02AssessmentHandoffContract.test.ts",
         "tests/browser/int-02-s1-library-assessment.spec.cjs",
-        ".github/workflows/browser-qualification.yml"
+        ".github/workflows/browser-qualification.yml",
+        "src/library/assessmentUdaScope.ts",
+        "src/library/assessmentUdaScope.test.ts"
       ],
       "tests": [
         "src/library/assessmentHandoff.test.ts",
@@ -967,7 +969,8 @@
         "src/security/lib01LibraryUiContract.test.ts",
         "src/security/flow01PreparationRouterContract.test.ts",
         "src/security/testEditorPersistenceIntegrity.test.ts",
-        "src/security/int01DidacticContinuityUiContract.test.ts"
+        "src/security/int01DidacticContinuityUiContract.test.ts",
+        "src/library/assessmentUdaScope.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs",
