@@ -1,0 +1,87 @@
+name: "INT-02 S2a Android localhost package (corrected exact SHA)"
+
+on:
+  pull_request:
+    branches:
+      - feat/int-02-s2a-explicit-share-selection
+
+permissions:
+  contents: read
+
+jobs:
+  build-static-hpr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout immutable INT-02 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fd0b6af1b52d3d0ac0581d313cc973936b644a19
+          persist-credentials: false
+      - name: Verify immutable source and disabled hosted deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "fd0b6af1b52d3d0ac0581d313cc973936b644a19"
+          test -f vercel.json
+          grep -Eq '"deploymentEnabled" *: *false' vercel.json
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build production static assets
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+      - name: Assemble ready-to-run Termux local package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          APP="package/registro_int02_s2a_fd0b6af"
+          mkdir -p "$APP"
+          cp -a dist/. "$APP/"
+          printf '%s\n' 'fd0b6af1b52d3d0ac0581d313cc973936b644a19' > "$APP/INT02_S2A_SOURCE_SHA.txt"
+          cat > "$APP/avvia-termux.sh" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          if ! command -v python >/dev/null 2>&1; then
+            echo "Python non disponibile: eseguire pkg install python"
+            exit 1
+          fi
+          echo "Registro Docente INT-02/S2a fd0b6af (solo dati sintetici)"
+          echo "Aprire Chrome: http://127.0.0.1:4175"
+          echo "Interrompere con Ctrl+C."
+          exec python -m http.server 4175 --bind 127.0.0.1 --directory "$DIR"
+          SCRIPT
+          chmod +x "$APP/avvia-termux.sh"
+          cat > "$APP/GUIDA-TERMUX.txt" <<'TXT'
+          REGISTRO DOCENTE - INT-02/S2a - COLLAUDO ANDROID SELEZIONI
+          Versione prodotto: fd0b6af1b52d3d0ac0581d313cc973936b644a19
+          Collaudo INT-02/S2a: classe/test espliciti per Padlet e simulazione; importazione esiti e schede storiche invariate.
+          Archiviazione SOLO locale, nessun Vercel e nessun merge in main.
+          Mantenere gli stessi dati sintetici gia' presenti su http://127.0.0.1:4175.
+          Prima interrompere la precedente sessione Termux sulla porta 4175 (Ctrl+C).
+          Aprire Termux ed eseguire:
+            pkg install -y python unzip
+            cd "$HOME"
+            unzip -o "$HOME/storage/downloads/registro-int02-s2a-android-local-fd0b6af.zip"
+            cd "$HOME/registro_int02_s2a_fd0b6af"
+            bash avvia-termux.sh
+          Aprire Chrome all'indirizzo: http://127.0.0.1:4175
+          Usare solo classi e verifiche sintetiche. In Verifiche online > Condivisione Padlet controllare i selettori vuoti all'accesso diretto; scegliere esplicitamente classe e verifica; verificare i comandi abilitati; non importare voti.
+          Non cancellare i dati del sito Chrome, altrimenti l'archivio locale viene perso.
+          TXT
+          test -s "$APP/index.html"
+          test -s "$APP/INT02_S2A_SOURCE_SHA.txt"
+          test -x "$APP/avvia-termux.sh"
+          echo "Source SHA in artifact:"; cat "$APP/INT02_S2A_SOURCE_SHA.txt"
+          (cd package && find . -type f -print | sort)
+      - name: Upload Android local package
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-int02-s2a-android-local-fd0b6af
+          path: package/
+          if-no-files-found: error
+          retention-days: 7
