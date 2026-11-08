@@ -1000,6 +1000,31 @@
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "A4-R2B-I06",
+      "owner": "A4-R2B Task 7",
+      "statement": "The optional local Docente OS projection preview must validate a versioned professional JSON before any action, reconcile all real classes without ambiguity and refresh at the serialized planning commit; a user action and durable save are required before showing success, without altering UDA authority or planning draft privacy.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/planning/DocenteOsProjectionPanel.tsx",
+        "src/components/planning/PlanningProfileView.tsx",
+        "src/planning/docenteOsProjectionReconciliation.ts",
+        "src/App.tsx",
+        "src/security/a4R2ProjectionImportUiContract.test.ts",
+        "tests/browser/a4-r2b-projection-import-preview.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/a4R2ProjectionImportUiContract.test.ts",
+        "src/security/a4R2ProjectionAcceptancePersistence.test.ts",
+        "src/planning/docenteOsProjectionReconciliation.test.ts",
+        "src/security/int01DidacticContinuityUiContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/a4-r2b-projection-import-preview.spec.cjs",
+        "tests/browser/int-01-didactic-continuity.spec.cjs"
+      ]
     }
   ]
 }

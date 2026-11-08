@@ -92,6 +92,7 @@ jobs:
           cp tests/browser/aic-07-supervised-copilot.spec.cjs .browser-tools/aic-07-supervised-copilot.spec.cjs
           cp tests/browser/a4-r1-teacher-first.spec.cjs .browser-tools/a4-r1-teacher-first.spec.cjs
           cp tests/browser/a4-r2-canonical-class.spec.cjs .browser-tools/a4-r2-canonical-class.spec.cjs
+          cp tests/browser/a4-r2b-projection-import-preview.spec.cjs .browser-tools/a4-r2b-projection-import-preview.spec.cjs
           cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
           cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
           cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
@@ -257,6 +258,21 @@ jobs:
             --max-failures=1 \
             --reporter=line \
             --output=../browser-evidence/int-02-s1-test-results
+
+      - name: Run A4-R2B projection preview Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            a4-r2b-projection-import-preview.spec.cjs \
+            --workers=1 \
+            --max-failures=1 \
+            --reporter=line \
+            --output=../browser-evidence/a4-r2b-projection-results
 
       - name: Run LSM-01C consumer Chromium qualification
         shell: bash

@@ -1162,6 +1162,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         previousAcceptedProjection?.classReconciliation
       );
 
+      if (reconciliation.some(item => item.status !== 'resolved')) {
+        throw new Error('Riconciliazione classi Docente OS incompleta: verifica le classi prima di accettare.');
+      }
+
       return bindAcceptedDocenteOsTeachingProjection(
         current,
         preview.projection,
@@ -3249,6 +3253,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <PlanningProfileView
             profiles={planning.profiles}
             arenaContexts={planning.arenaContexts}
+            planning={planning}
+            classes={appData.classes}
+            onAcceptDocenteOsProjection={handleAcceptDocenteOsTeachingProjection}
             onSaveProfile={handleSaveTeachingProfile}
             onRegisterDraftGuard={registerPlanningDraftGuard}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
