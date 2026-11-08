@@ -93,9 +93,9 @@ describe('PERSIST-01H App mutation boundary contract', () => {
   test('submission import is Promise-returning and reconciles deterministic submission grades at execution time', () => {
     expect(appSource).toContain("import { reconcileSubmissionGrades");
     const importSection = sectionBetween('// Import submissions into class grades', '// Save UDAs');
-    expect(importSection).toContain('const handleImportSubmissionsToRegister = (targetUdaId?: string): Promise<void> =>');
+    expect(importSection).toContain('const handleImportSubmissionsToRegister = (');
     expect(importSection).toContain('return commitAppDataMutation(current =>');
-    expect(importSection).toContain('reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId)');
+    expect(importSection).toContain('reconcileSubmissionGrades(current.classes, submissionsRef.current, {');
     expect(importSection).not.toContain('batchId: `online_${uid()}`');
     expect(importSection).not.toContain('void commitAppDataMutation');
   });
@@ -151,7 +151,7 @@ describe('PERSIST-01H pending intent boundaries', () => {
 
   test('teacher submission delete and register import are Promise-aware and share an in-flight guard', () => {
     expect(verificheSource).toContain('onDeleteSubmission: (submissionId: string) => Promise<void>;');
-    expect(verificheSource).toContain('onImportSubmissionsToRegister: (targetUdaId?: string) => Promise<void>;');
+    expect(verificheSource).toContain('onImportSubmissionsToRegister: (selection: SubmissionImportSelection, confirmedSignature: string) => Promise<void>;');
     expect(verificheSource).toContain('const [isSubmissionActionPending, setIsSubmissionActionPending] = useState(false);');
     expect(verificheSource).toContain('const submissionActionPendingRef = useRef(false);');
     expect(verificheSource).toContain('const commitSubmissionAction = async (action: () => Promise<void>)');
@@ -163,7 +163,7 @@ describe('PERSIST-01H pending intent boundaries', () => {
     expect(actionBoundary).toContain('submissionActionPendingRef.current = false;');
 
     expect(verificheSource).toContain('disabled={isSubmissionActionPending}');
-    expect(verificheSource).toContain('await commitSubmissionAction(() => onImportSubmissionsToRegister(currentSelectedTest?.udaId))');
+    expect(verificheSource).toContain('await onImportSubmissionsToRegister(selection, preview.signature);');
     expect(verificheSource).toContain('await commitSubmissionAction(() => onDeleteSubmission(sub.id))');
   });
 });
