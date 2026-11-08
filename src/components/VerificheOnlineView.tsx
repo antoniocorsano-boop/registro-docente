@@ -3,6 +3,13 @@ import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
 import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
+import { isAssessmentUdaForClass, isAssessmentUdaSelectionAllowed } from '../library/assessmentUdaScope';
+
+export interface AssessmentDraftGuard {
+  hasUnsavedChanges: () => boolean;
+  discardChanges: () => void;
+  isSaving: () => boolean;
+}
 import { formatStudentNameWithPrivacy, uid } from '../utils';
 import {
   FileQuestion,
@@ -37,6 +44,7 @@ interface VerificheOnlineViewProps {
   isPrivacyShieldActive?: boolean;
   initialClassName?: string;
   assessmentHandoff?: ResolvedAssessmentHandoff | null;
+  onRegisterDraftGuard?: (guard: AssessmentDraftGuard | null) => void;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => Promise<void>;
@@ -53,6 +61,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   isPrivacyShieldActive = true,
   initialClassName,
   assessmentHandoff = null,
+  onRegisterDraftGuard,
   onSaveNewTest,
   onDeleteTest,
   onDeleteSubmission,
@@ -100,6 +109,87 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [editorUdaId, setEditorUdaId] = useState('');
   const [editorDuration, setEditorDuration] = useState(15);
   const [editorQuestions, setEditorQuestions] = useState<Question[]>([]);
+  // The editor's baseline is session-only, never stored in the vault.
+  const editorBaselineRef = useRef<string | null>(null);
+  const editorDirtyRef = useRef(false);
+  const editorSavingRef = useRef(false);
+  const pendingEditorExitRef = useRef<(() => void) | null>(null);
+  const [editorExitOpen, setEditorExitOpen] = useState(false);
+  const editorExitDialogRef = useRef<HTMLDivElement | null>(null);
+  const handoffPanelRef = useRef<HTMLElement | null>(null);
+
+  const editorSnapshot = (fields: {
+    editingTestId: string | null;
+    editorTitle: string;
+    editorDescription: string;
+    editorUdaId: string;
+    editorDuration: number;
+    editorQuestions: Question[];
+  }) => JSON.stringify(fields);
+
+  editorDirtyRef.current = isEditingTest && editorBaselineRef.current !== editorSnapshot({
+    editingTestId, editorTitle, editorDescription, editorUdaId, editorDuration, editorQuestions
+  });
+  editorSavingRef.current = isSavingTest;
+
+  useEffect(() => {
+    if (!onRegisterDraftGuard) return;
+    const guard: AssessmentDraftGuard = {
+      hasUnsavedChanges: () => editorDirtyRef.current,
+      isSaving: () => editorSavingRef.current,
+      discardChanges: () => {
+        editorBaselineRef.current = null;
+        editorDirtyRef.current = false;
+        setIsEditingTest(false);
+        setEditingTestId(null);
+        setEditorExitOpen(false);
+        pendingEditorExitRef.current = null;
+      }
+    };
+    onRegisterDraftGuard(guard);
+    return () => onRegisterDraftGuard(null);
+  }, [onRegisterDraftGuard]);
+
+  useEffect(() => {
+    if (!assessmentHandoff) return;
+    const frame = window.requestAnimationFrame(() => {
+      handoffPanelRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [assessmentHandoff?.classId, assessmentHandoff?.sourceId]);
+
+  useEffect(() => {
+    if (!editorExitOpen) return;
+    editorExitDialogRef.current?.querySelector<HTMLButtonElement>('[data-assessment-stay]')?.focus();
+  }, [editorExitOpen]);
+
+  const requestLocalEditorExit = (commit: () => void) => {
+    if (editorSavingRef.current || pendingEditorExitRef.current) return;
+    if (editorDirtyRef.current) {
+      pendingEditorExitRef.current = commit;
+      setEditorExitOpen(true);
+      return;
+    }
+    commit();
+  };
+
+  const cancelLocalEditorExit = () => {
+    pendingEditorExitRef.current = null;
+    setEditorExitOpen(false);
+  };
+
+  const discardLocalEditorAndExit = () => {
+    if (editorSavingRef.current) return;
+    const commit = pendingEditorExitRef.current;
+    pendingEditorExitRef.current = null;
+    editorDirtyRef.current = false;
+    editorBaselineRef.current = null;
+    setEditorExitOpen(false);
+    commit?.();
+  };
+
+  const assessmentClassName = assessmentHandoff?.className ?? selectedClass;
+  const eligibleUdas = udas.filter(uda => isAssessmentUdaForClass(uda, assessmentClassName));
 
   // Print Mode State
   const [printDocenteMode, setPrintDocenteMode] = useState(false);
@@ -108,21 +198,24 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   // Open interactive editor for new test
   const handleStartNewInteractiveTest = () => {
+    const defaultQuestion: Question = {
+      q: 'Inserisci qui la prima domanda formativa...',
+      options: ['Opzione A', 'Opzione B', 'Opzione C'],
+      correct: 0,
+      explanation: 'Fornisci una breve spiegazione del perché questa risposta è corretta.',
+      type: 'multiple_choice'
+    };
+    editorBaselineRef.current = editorSnapshot({
+      editingTestId: null, editorTitle: '', editorDescription: '',
+      editorUdaId: '', editorDuration: 15, editorQuestions: [defaultQuestion]
+    });
     setEditingTestId(null);
     setEditorTitle('');
     setEditorDescription('');
     // A new verification must never inherit the first UDA arbitrarily.
     setEditorUdaId('');
     setEditorDuration(15);
-    setEditorQuestions([
-      {
-        q: 'Inserisci qui la prima domanda formativa...',
-        options: ['Opzione A', 'Opzione B', 'Opzione C'],
-        correct: 0,
-        explanation: 'Fornisci una breve spiegazione del perché questa risposta è corretta.',
-        type: 'multiple_choice'
-      }
-    ]);
+    setEditorQuestions([defaultQuestion]);
     setIsEditingTest(true);
     setActiveSubTab('editor');
   };
@@ -130,6 +223,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   // Open interactive editor for existing test
   const handleEditExistingTest = (test: OnlineTest) => {
     if (isParsingFile || isSavingTest) return;
+    editorBaselineRef.current = editorSnapshot({
+      editingTestId: test.id, editorTitle: test.title,
+      editorDescription: test.description || '', editorUdaId: test.udaId || '',
+      editorDuration: test.durationMinutes || 15, editorQuestions: test.questions
+    });
     setEditingTestId(test.id);
     setEditorTitle(test.title);
     setEditorDescription(test.description || '');
@@ -264,6 +362,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       alert('Inserisci almeno una domanda.');
       return;
     }
+    if (!isAssessmentUdaSelectionAllowed(editorUdaId, udas, assessmentClassName)) {
+      alert('L’unità didattica scelta non appartiene alla classe di lavoro. Seleziona un’unità pertinente oppure nessuna.');
+      return;
+    }
 
     const savedTest = await commitTestSaveIntent(() => {
       const testId = editingTestId || `test_${uid()}`;
@@ -277,6 +379,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       };
     });
     if (!savedTest) return;
+    editorBaselineRef.current = null;
     setSelectedTestId(savedTest.id);
     setIsEditingTest(false);
     alert(`Test "${savedTest.title}" salvato con successo!`);
@@ -373,7 +476,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         id: `test_auto_${uid()}`,
         title: testTitle,
         questions,
-        udaId: udas[0]?.id
+        udaId: undefined
       }));
       if (!savedTest) return;
       setSelectedTestId(savedTest.id);
@@ -391,6 +494,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     e.preventDefault();
     if (!manualTitle.trim() || !manualRawText.trim()) {
       alert('Inserisci sia il titolo del test sia il testo con domande e risposte.');
+      return;
+    }
+    if (!isAssessmentUdaSelectionAllowed(manualUdaId, udas, assessmentClassName)) {
+      alert('L’unità didattica scelta non appartiene alla classe di lavoro.');
       return;
     }
 
@@ -498,6 +605,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     <div className="space-y-4">
       {assessmentHandoff && (
         <section
+          ref={handoffPanelRef}
+          style={{ scrollMarginTop: '92px' }}
           data-testid="int02-assessment-handoff"
           aria-label="Fonte selezionata per la verifica"
           className="rounded-xl border border-cyan-700/60 bg-cyan-950/20 p-4 space-y-3"
@@ -544,7 +653,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
           <button
             type="button"
             disabled={isSavingTest || isParsingFile}
-            onClick={() => { setActiveSubTab('bacheca'); setIsEditingTest(false); }}
+            onClick={() => requestLocalEditorExit(() => { setActiveSubTab('bacheca'); setIsEditingTest(false); })}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'bacheca'
                 ? 'bg-[var(--primary)] text-[var(--primary-text)] font-bold shadow-[0_0_8px_var(--primary)]'
@@ -570,7 +679,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
           <button
             type="button"
             disabled={isSavingTest || isParsingFile}
-            onClick={() => { setActiveSubTab('stampa'); setIsEditingTest(false); }}
+            onClick={() => requestLocalEditorExit(() => { setActiveSubTab('stampa'); setIsEditingTest(false); })}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'stampa'
                 ? 'bg-[var(--primary)] text-[var(--primary-text)] font-bold shadow-[0_0_8px_var(--primary)]'
@@ -583,7 +692,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
           <button
             type="button"
             disabled={isSavingTest || isParsingFile}
-            onClick={() => { setActiveSubTab('analisi'); setIsEditingTest(false); }}
+            onClick={() => requestLocalEditorExit(() => { setActiveSubTab('analisi'); setIsEditingTest(false); })}
             className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
               activeSubTab === 'analisi'
                 ? 'bg-[var(--primary)] text-[var(--primary-text)] font-bold shadow-[0_0_8px_var(--primary)]'
@@ -856,7 +965,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                       className="p-2.5 neon-input text-xs text-white bg-slate-900"
                     >
                       <option value="">-- Seleziona UDA di riferimento (opzionale) --</option>
-                      {udas.map(u => (
+                      {eligibleUdas.map(u => (
                         <option key={u.id} value={u.id}>
                           {u.className} · {u.title}
                         </option>
@@ -906,7 +1015,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsEditingTest(false)}
+                    onClick={() => requestLocalEditorExit(() => setIsEditingTest(false))}
                     className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1"
                   >
                     <X className="w-4 h-4" /> Chiudi
@@ -940,7 +1049,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
                   >
                     <option value="">-- Nessuna UDA associata --</option>
-                    {udas.map(u => (
+                    {eligibleUdas.map(u => (
                       <option key={u.id} value={u.id}>
                         {u.className} · {u.title}
                       </option>
@@ -1132,7 +1241,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsEditingTest(false)}
+                  onClick={() => requestLocalEditorExit(() => setIsEditingTest(false))}
                   className="px-5 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold"
                 >
                   Annulla
@@ -1513,6 +1622,42 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {editorExitOpen && (
+        <div
+          ref={editorExitDialogRef}
+          role="dialog" aria-modal="true" aria-labelledby="assessment-exit-title"
+          onKeyDown={event => {
+            if (event.key === 'Escape') { event.preventDefault(); cancelLocalEditorExit(); }
+            if (event.key !== 'Tab') return;
+            const buttons = Array.from(editorExitDialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []);
+            if (buttons.length === 0) { event.preventDefault(); return; }
+            const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            if (event.shiftKey && index <= 0) {
+              event.preventDefault(); buttons[buttons.length - 1]?.focus();
+            } else if (!event.shiftKey && (index < 0 || index === buttons.length - 1)) {
+              event.preventDefault(); buttons[0]?.focus();
+            }
+          }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4"
+        >
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-amber-800 bg-slate-950 p-5 shadow-2xl">
+            <h2 id="assessment-exit-title" className="text-xl font-bold text-white">Modifiche non salvate</h2>
+            <p className="text-sm text-slate-300">
+              La verifica contiene modifiche non salvate. Vuoi rimanere nell'editor o uscire senza salvarle?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={cancelLocalEditorExit} autoFocus data-assessment-stay
+                className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950">
+                Rimani nell'editor
+              </button>
+              <button type="button" onClick={discardLocalEditorAndExit}
+                className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 font-semibold text-amber-200">
+                Esci senza salvare
+              </button>
+            </div>
           </div>
         </div>
       )}
