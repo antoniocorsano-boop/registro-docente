@@ -1,0 +1,60 @@
+name: "INT-02 S1 Android localhost package (exact SHA)"
+
+on:
+  pull_request:
+    branches:
+      - feat/int-02-s1-library-assessment-handoff
+
+permissions:
+  contents: read
+
+jobs:
+  build-static-hpr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout immutable INT-02 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 564f306e984be8bb0ed732d1fe5e5ea4d5f80bb7
+          persist-credentials: false
+      - name: Verify immutable source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "564f306e984be8bb0ed732d1fe5e5ea4d5f80bb7"
+          test -f vercel.json
+          grep -Eq '"deploymentEnabled" *: *false' vercel.json
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Compile only static production assets for local Android HPR
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+      - name: Stamp source revision and local-only instructions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          printf '%s\n' '564f306e984be8bb0ed732d1fe5e5ea4d5f80bb7' > dist/INT02_S1_SOURCE_SHA.txt
+          cat > dist/ISTRUZIONI_INT02_S1_LOCALE.txt <<'TXT'
+          REGISTRO DOCENTE — INT-02/S1 — COLLAUDO ANDROID LOCALE
+          SOURCE SHA: 564f306e984be8bb0ed732d1fe5e5ea4d5f80bb7
+          DATI: usare soltanto un archivio nuovo e interamente fittizio.
+          Nessuna distribuzione Vercel o aggiornamento del ramo main.
+          Questa cartella contiene soltanto i file statici della versione qualificata.
+          Servire la cartella (non il file HTML da solo) tramite un server HTTP locale,
+          sulla porta 4175 per tenere separata la versione precedente 4174.
+          URL: http://127.0.0.1:4175
+          Per il test, verificare la fonte fittizia: non classificata, poi professionale.
+          Non immettere dati reali, password ordinarie o documenti professionali.
+          TXT
+      - name: Upload local-only static artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-int02-s1-android-local-564f306e
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
