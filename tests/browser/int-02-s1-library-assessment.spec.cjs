@@ -94,6 +94,7 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   const udaSelect = page.getByText('Collega a UDA Curricolare').locator('..').locator('select');
   await expect(udaSelect).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Salva Verifica' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Salva verifica e chiudi' })).toBeVisible();
   await expect(udaSelect.locator('option').filter({ hasText: '3ª B' })).toHaveCount(0);
 
   // Internal navigation must not silently discard a modified assessment.
@@ -111,6 +112,7 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await page.goBack();
   const exitDialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
   await expect(exitDialog).toBeVisible();
+  await expect(exitDialog.getByRole('status', { name: 'Destinazione richiesta' })).toContainText('Biblioteca privata');
   await exitDialog.getByRole('button', { name: 'Rimani nell’editor' }).click();
   await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
   await expect(handoff).toBeVisible();
