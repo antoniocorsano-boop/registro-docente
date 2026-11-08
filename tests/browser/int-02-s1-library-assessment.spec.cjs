@@ -105,6 +105,15 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
 
   await page.getByTestId('int02-open-assessment-editor').click();
   await expect(page.getByRole('heading', { name: 'Crea Nuova Verifica Formativa' })).toBeVisible();
+  // S2b: permanent source provenance is opt-in, separate from the S1 route.
+  const confirmOrigin = page.getByTestId('int02-s2b-confirm-origin');
+  await expect(confirmOrigin).toBeVisible();
+  await expect(confirmOrigin).not.toBeChecked();
+  await confirmOrigin.check();
+  await expect(confirmOrigin).toBeChecked();
+  await confirmOrigin.uncheck();
+  await expect(confirmOrigin).not.toBeChecked();
+  await expectNoHorizontalOverflow(page);
   await expect(page.getByTestId('int02-open-assessment-editor')).toHaveCount(0);
   await expect(handoff.getByRole('status')).toContainText('Editor già aperto');
   const titleInput = page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale');
