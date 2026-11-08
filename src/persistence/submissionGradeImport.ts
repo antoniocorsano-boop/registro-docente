@@ -20,6 +20,7 @@ export type SubmissionImportBlockReason =
   | 'STUDENT_UNMATCHED'
   | 'STUDENT_AMBIGUOUS'
   | 'MISSING_TEST'
+  | 'TEST_METADATA_MISMATCH'
   | 'UDA_INVALID'
   | 'INVALID_SCORE'
   | 'INVALID_DATE'
@@ -73,6 +74,7 @@ function isUnchangedGrade(existing: Grade, next: Grade): boolean {
 function gradeFromSubmission(
   submission: OnlineSubmission,
   studentId: string,
+  verifiedTestTitle: string,
   period: SubmissionImportSelection['period'],
   udaId?: string
 ): Grade {
@@ -84,7 +86,7 @@ function gradeFromSubmission(
     date: submission.date.slice(0, 10),
     type: 'test',
     period,
-    title: `Flashcard: ${submission.testTitle}`,
+    title: `Flashcard: ${verifiedTestTitle}`,
     value: String(grade10),
     ...(udaId ? { udaId } : {})
   };
@@ -133,11 +135,13 @@ export function reconcileSubmissionGrades(
   const classMatches = classes.filter(item =>
     normalizeAssessmentClassName(item.name) === selectedClassKey
   );
+  const canonicalClassIds = classes.filter(item => item.id === selection.classId);
 
   const sourceTest = tests[selection.testId];
   const testExists = sourceTest?.id === selection.testId;
   const classNames = classes.map(item => item.name);
-  const udaAllowed = testExists && isAssessmentUdaSelectionAllowed(
+  const udaIdentityUnique = !sourceTest?.udaId || udas.filter(item => item.id === sourceTest.udaId).length === 1;
+  const udaAllowed = testExists && udaIdentityUnique && isAssessmentUdaSelectionAllowed(
     sourceTest.udaId, udas as UdaRecord[], selectedClass.name, classNames
   );
 
@@ -153,12 +157,20 @@ export function reconcileSubmissionGrades(
   };
 
   for (const submission of scoped) {
-    if (classMatches.length !== 1) {
+    if (classMatches.length !== 1 || canonicalClassIds.length !== 1) {
       markBlocked('CLASS_AMBIGUOUS');
       continue;
     }
     if (!testExists) {
       markBlocked('MISSING_TEST');
+      continue;
+    }
+    // Test metadata are editable, but the submission records the original
+    // title and size. Reject detectable drift rather than silently attributing
+    // a historical outcome to the currently edited assessment.
+    if (submission.testTitle !== sourceTest.title
+      || (sourceTest.questions.length > 0 && submission.total !== sourceTest.questions.length)) {
+      markBlocked('TEST_METADATA_MISMATCH');
       continue;
     }
     if (!udaAllowed) {
@@ -186,9 +198,15 @@ export function reconcileSubmissionGrades(
       markBlocked(students.length === 0 ? 'STUDENT_UNMATCHED' : 'STUDENT_AMBIGUOUS');
       continue;
     }
+    // A student name can be unique while its canonical ID is duplicated.
+    // Grade writes key by studentId, so that identity must be unique as well.
+    if (selectedClass.students.filter(item => item.id === students[0].id).length !== 1) {
+      markBlocked('STUDENT_AMBIGUOUS');
+      continue;
+    }
 
     const nextGrade = gradeFromSubmission(
-      submission, students[0].id, selection.period, sourceTest.udaId
+      submission, students[0].id, sourceTest.title, selection.period, sourceTest.udaId
     );
     const existingGrades = classes.flatMap(item =>
       (item.grades || []).filter(grade =>
