@@ -8,15 +8,22 @@
 - INT-02/S1 PR #142 integrata, A1–A4.1 HPR Android PASS, 5 suite tecniche PASS. NON riaprire le correzioni già chiuse.
 - Codice attuale: `selectedClass` e `selectedTestId` nella vista Verifiche possono partire dal primo elemento in assenza di handoff; `editorUdaId` e import DOCX/ZIP NON associano la prima UDA.
 - `OnlineTest` è un catalogo comune, `OnlineSubmission` registra separatamente classe e test, `LibrarySource` è autoritativa sulle fonti. Le fonti non passano nel payload URL/history.
-- Due binari indipendenti: **S2a (scelte)**, **S2b (provenienza durevole)**. S2b non parte senza autorizzazione esplicita dello schema.
+- Due binari indipendenti: **S2a (scelte di condivisione/simulazione)**, **S2b (provenienza durevole)**. Il percorso **importazione batch degli esiti** possiede un consenso e un contratto di persistenza separati: non dipende dalla coppia classe/test Padlet. S2b non parte senza autorizzazione esplicita dello schema.
 
 ## S2a — Scelte professionali per classe e test
 
-1. **RED:** fixture con 3ª A, 3ª B, test diversi e primo elemento deliberatamente sbagliato. Controllare creazione link, copia, simulazione, cambio classe, cancellazione classe e test, accesso diretto, handoff da Biblioteca.
+1. **RED:** fixture con 3ª A, 3ª B, test diversi e primo elemento deliberatamente sbagliato. Controllare creazione link, copia, simulazione, cambio classe, cancellazione classe e test, accesso diretto, handoff da Biblioteca. Asserire che le modifiche alla scelta Padlet non cambiano le consegne storiche o il perimetro d'importazione.
 2. **GREEN:** risolutore di scelta esplicita classe+test (o contesto unico convalidato); placeholder informativi e azioni non attive se target assente. Nessuna «prima classe» o «primo test» capace di provocare condivisione involontaria.
-3. **Regressione:** `initialClassName` da sessione Registra, analisi, stampa, catalogo comune, edit con `udaId` preesistente e import DOCX/ZIP. Preservare i contenuti, non reimpostare automaticamente gli ID di test/UDA.
+3. **Regressione:** `initialClassName` da sessione Registra, analisi, stampa, catalogo comune, edit con `udaId` preesistente e import DOCX/ZIP. Preservare i contenuti, non reimpostare automaticamente gli ID di test/UDA. **Separare** il controllo d'importazione voti: batch di classi/test differenti, verifica eliminata, UDA del test selezionato diversa da quella delle consegne, esiti già importati. Non imporre una scelta test+classe Padlet per eseguire l'importazione.
 4. **Qualificazione:** lint, test sicurezza e biblioteca, invarianti, PREDEPLOY, FLOW-03, HEADER-01, Chromium completo e prova dedicata S2a; revisione Codex, HPR Android su dati sintetici.
 5. **Decisione:** S2a può essere proposta per merge in maniera autonoma, senza attendere S2b; nessun deploy Vercel.
+
+## Confine S2a / Registra — consenso importazione distinto
+
+1. Registrare esplicitamente il comportamento attuale: `handleImportSubmissionsToRegister` passa **tutte** le `OnlineSubmission` al riconciliatore; `handleImportSubmissions` inoltra `currentSelectedTest?.udaId` come UDA comune; il riconciliatore usa `targetUdaId || submission.testId` per il campo `udaId`. Queste sono evidenze di rischio, **non** un comportamento UDA già qualificato.
+2. Le preselezioni Padlet non devono cambiare, limitare o ampliare automaticamente le consegne da importare. Consegne relative a test eliminati rimangono gestibili senza selezionare un test sostitutivo.
+3. Progettare separatamente il riepilogo e il **consenso esplicito all'importazione** con convalida delle associazioni UDA per ogni classe/consegna. Una UDA globale non deve essere applicata a classi diverse senza autorizzazione e controllo di compatibilità; `testId` non è una UDA.
+4. Prima di modificare il percorso `Registra`, richiedere test RED→GREEN dedicati a multi-classe, omonimie, test assente, import ripetuto, rifiuto dell'associazione curricolare arbitraria e persistenza/rollback. Non introdurre questa modifica applicativa nella PR documentale né usarla come presupposto per il via libera delle preselezioni S2a.
 
 ## S2b — Provenienza: prima decidere il modello
 
