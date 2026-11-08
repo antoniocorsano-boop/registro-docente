@@ -113,7 +113,7 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expect(exitDialog).toBeVisible();
   await exitDialog.getByRole('button', { name: 'Rimani nell’editor' }).click();
   await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
-  await expect(page.getByRole('heading', { name: 'Verifiche online', exact: true })).toBeVisible();
+  await expect(handoff).toBeVisible();
 
   await page.goBack();
   await expect(exitDialog).toBeVisible();
