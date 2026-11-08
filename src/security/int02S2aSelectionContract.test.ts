@@ -9,6 +9,8 @@ describe('INT-02/S2a — condivisione non è importazione', () => {
     expect(view).toContain('shareTarget.testId');
     expect(view).toContain('shareTarget.className');
     expect(view).toContain('disabled={!shareTarget}');
+    expect(view).toContain('cursor-not-allowed shadow-none');
+    expect(view).toContain("? 'neon-btn-primary'");
     expect(view).toContain('data-testid="int02-s2a-share-required"');
     expect(view).toContain('setShareSelectedTestId(\'\');');
     expect(view).not.toContain("classes[0]?.name");
