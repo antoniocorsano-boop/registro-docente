@@ -268,7 +268,9 @@ async function openBehaviourFromRecord(page, record) {
 
 async function openOnlineOutcomesFromRecord(page, record) {
   await record.getByRole('button', { name: 'Esiti verifica online', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Importa Voti nel Registro', exact: true })).toBeVisible();
+  const importAction = page.getByTestId('import-01-confirmed-scope');
+  await expect(importAction).toBeVisible();
+  await expect(importAction).toBeDisabled(); // FLOW-03 navigation never authorizes a grade import.
   await assertSelectedClassStillVisible(page);
   await assertNoAutomaticMutation(page);
 
