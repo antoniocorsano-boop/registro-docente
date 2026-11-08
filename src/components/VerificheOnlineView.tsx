@@ -5,7 +5,7 @@ import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, Questio
 import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
 import { isAssessmentUdaForClass, isAssessmentUdaSelectionAllowed } from '../library/assessmentUdaScope';
 import { resolveAssessmentShareTarget } from '../library/assessmentShareSelection';
-import type { SubmissionImportSelection, SubmissionImportPreview } from '../persistence/submissionGradeImport';
+import type { SubmissionImportSelection, SubmissionImportPreview, SubmissionImportBlockReason } from '../persistence/submissionGradeImport';
 
 export interface AssessmentDraftGuard {
   hasUnsavedChanges: () => boolean;
@@ -414,6 +414,20 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     await commitSubmissionAction(() => onDeleteSubmission(sub.id));
   };
 
+  // Native dialogs never reveal student names or IDs in diagnostics.
+  const importBlockReasons: Record<SubmissionImportBlockReason, string> = {
+    CLASS_AMBIGUOUS: 'Classe non identificata univocamente',
+    STUDENT_UNMATCHED: 'Alunno non trovato',
+    STUDENT_AMBIGUOUS: 'Identità alunno ambigua',
+    MISSING_TEST: 'Verifica di origine non trovata',
+    TEST_METADATA_MISMATCH: 'Verifica modificata rispetto alla consegna',
+    UDA_INVALID: 'Associazione UDA non valida',
+    INVALID_SCORE: 'Punteggio non valido',
+    INVALID_DATE: 'Data non valida',
+    DUPLICATE_SUBMISSION: 'Consegna duplicata',
+    GRADE_CONFLICT: 'Valutazione già modificata o in conflitto'
+  };
+
   const handleImportSubmissions = async () => {
     if (!importClassId || !importTestId || !importPeriod) {
       alert('Selezionare classe, verifica e periodo prima dell’importazione.');
@@ -424,16 +438,31 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     };
     await commitSubmissionAction(async () => {
       const preview = onPreviewSubmissionImport(selection);
+      const blockedDetails = Object.entries(preview.blockedByReason)
+        .filter(([, count]) => Boolean(count))
+        .map(([reason, count]) =>
+          `${importBlockReasons[reason as SubmissionImportBlockReason]}: ${count}`
+        ).join('\n');
       if (preview.creatableCount === 0) {
-        alert(`Nessuna nuova valutazione importabile. Già presenti: ${preview.unchangedCount}; da verificare: ${preview.blockedCount}.`);
+        alert(`Nessuna nuova valutazione importabile. Già presenti: ${preview.unchangedCount}; da verificare: ${preview.blockedCount}.'`
+          + (blockedDetails ? `\n${blockedDetails}` : ''));
         return;
       }
+      const selectedTest = tests[selection.testId];
+      const associatedUda = selectedTest?.udaId
+        ? udas.find(item => item.id === selectedTest.udaId)?.title ?? 'Non identificata'
+        : 'Nessuna';
       const approved = window.confirm(
         `Confermare l'importazione delle valutazioni?\n\n`
+        + `Classe: ${classes.find(item => item.id === selection.classId)?.name ?? 'Non identificata'}\n`
+        + `Verifica: ${selectedTest?.title ?? 'Non identificata'}\n`
+        + `Periodo: ${selection.period}\n`
+        + `UDA: ${associatedUda}\n\n`
         + `Nuove valutazioni: ${preview.creatableCount}\n`
         + `Già presenti e non modificate: ${preview.unchangedCount}\n`
-        + `Consegne escluse da verificare: ${preview.blockedCount}\n\n`
-        + 'Le consegne escluse saranno conservate. I voti già registrati non verranno sovrascritti.'
+        + `Consegne escluse da verificare: ${preview.blockedCount}\n`
+        + (blockedDetails ? `${blockedDetails}\n` : '')
+        + '\nLe consegne escluse saranno conservate. I voti già registrati non verranno sovrascritti.'
       );
       if (!approved) return;
       await onImportSubmissionsToRegister(selection, preview.signature);
