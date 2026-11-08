@@ -49,7 +49,7 @@ function submission(
 }
 
 const selection = (overrides: Partial<SubmissionImportSelection> = {}): SubmissionImportSelection => ({
-  classId: 'class-a', testId: 'test-a', period: 'Q1', ...overrides
+  classId: 'class-a', testId: 'test-a', period: 'Q1', targetUdaId: 'uda-a', ...overrides
 });
 
 const reconcile = (
@@ -60,7 +60,7 @@ const reconcile = (
 });
 
 describe('INT-02/IMPORT-01 — safe grade reconciliation', () => {
-  test('only explicitly selected class and test are imported, with their own UDA', () => {
+  test('only the selected class/test imports, with explicitly declared destination UDA', () => {
     const result = reconcile(classes(), [
       submission('a1'),
       submission('c1', {
@@ -77,19 +77,46 @@ describe('INT-02/IMPORT-01 — safe grade reconciliation', () => {
   test('no testId is ever substituted for udaId when a source has no UDA', () => {
     const result = reconcile(classes(), [
       submission('free', { testId: 'test-none', testTitle: 'Test libero' })
-    ], selection({ testId: 'test-none' }));
+    ], selection({ testId: 'test-none', targetUdaId: null }));
     expect(result.importedCount).toBe(1);
     expect(result.classes[0].grades[0].udaId).toBeUndefined();
   });
 
-  test('stale or foreign UDA prevents grade creation without losing the submission', () => {
-    const catalog = tests();
-    catalog['test-a'] = { ...catalog['test-a'], udaId: 'uda-c' };
-    const result = reconcile(classes(), [submission('foreign')], selection(), catalog);
+  test('a foreign destination UDA blocks creation without losing the submission', () => {
+    const result = reconcile(classes(), [submission('foreign')], selection({ targetUdaId: 'uda-c' }));
     expect(result.importedCount).toBe(0);
     expect(result.preview.blockedCount).toBe(1);
     expect(result.preview.blockedByReason.UDA_INVALID).toBe(1);
     expect(result.classes[0].grades).toHaveLength(0);
+  });
+
+  test('historical UDA is never inferred from editable test metadata', () => {
+    const editedTest = tests();
+    editedTest['test-a'] = { ...editedTest['test-a'], udaId: 'uda-c' };
+
+    // The current test points elsewhere; with an explicit 'no UDA' decision
+    // historical submissions cannot be retroactively assigned to it.
+    const withoutUda = reconcile(
+      classes(), [submission('historical-1')],
+      selection({ targetUdaId: null }), editedTest
+    );
+    expect(withoutUda.importedCount).toBe(1);
+    expect(withoutUda.classes[0].grades[0].udaId).toBeUndefined();
+
+    // A teacher may explicitly choose a same-class destination UDA. This
+    // is a present-day teaching decision, NOT a verified historical source.
+    const manualDestination = reconcile(
+      classes(), [submission('historical-2')],
+      selection({ targetUdaId: 'uda-a' }), editedTest
+    );
+    expect(manualDestination.importedCount).toBe(1);
+    expect(manualDestination.classes[0].grades[0].udaId).toBe('uda-a');
+  });
+
+  test('missing explicit UDA decision must block import', () => {
+    expect(() => reconcile(classes(), [submission('no-decision')],
+      { classId: 'class-a', testId: 'test-a', period: 'Q1' } as SubmissionImportSelection
+    )).toThrow();
   });
 
   test('partial names, duplicated names and ambiguous classes fail closed', () => {
