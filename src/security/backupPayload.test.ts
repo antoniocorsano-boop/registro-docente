@@ -242,4 +242,46 @@ describe('SEC-1 backup application payload', () => {
     expect(() => normalizeBackupPayload({ ...payload, app: 'other-app' }, current)).toThrow(/registro-docente/i);
     expect(() => normalizeBackupPayload({ ...payload, snapshot: { settings: current.settings } }, current)).toThrow(/completo/i);
   });
+
+  test('INT-02/S2b: keeps confirmed metadata in an encrypted-backup round-trip and old tests without metadata', () => {
+    const current = currentSnapshot();
+    const provenance = {
+      version: 1 as const, kind: 'library-source' as const, sourceId: 'teacher-source', confirmedByTeacher: true as const
+    };
+    const snapshot = {
+      ...current,
+      customTests: {
+        historical: { id: 'historical', title: 'Storica', questions: [] },
+        linked: { id: 'linked', title: 'Fonte confermata', questions: [], provenance }
+      }
+    };
+    const payload = createBackupPayload(snapshot);
+    const restored = normalizeBackupPayload(JSON.parse(JSON.stringify(payload)), current);
+    expect(restored.customTests).toEqual(snapshot.customTests);
+    expect(restored.customTests.linked.provenance).toEqual(provenance);
+    expect(restored.customTests.historical.provenance).toBeUndefined();
+  });
+
+  test('INT-02/S2b: rejects malformed provenance in v2–v6 and legacy without modifying current data', () => {
+    const current = currentSnapshot();
+    const malformed = { id: 'bad', title: 'Verifica', questions: [], provenance: {
+      version: 1, kind: 'library-source', sourceId: 'teacher-source', confirmedByTeacher: false
+    } };
+    const v6 = createBackupPayload({ ...current, customTests: { bad: malformed as any } });
+    const v4 = v4Payload({ ...current, customTests: { bad: malformed as any } });
+    const { professionalMemory: _memory, copilotState: _copilot, ...v5Snapshot } = v6.snapshot;
+    // v5 requires professionalMemory, but no copilotState.
+    const v5 = { ...v6, backupDataVersion: 5, snapshot: { ...v5Snapshot, professionalMemory: v6.snapshot.professionalMemory } };
+    const { library: _library, ...v3Snapshot } = v4.snapshot;
+    const { planning: _planning, ...v2Snapshot } = v3Snapshot;
+    for (const payload of [
+      v6, v5, v4,
+      { app: 'registro-docente', backupDataVersion: 3, snapshot: v3Snapshot },
+      { app: 'registro-docente', backupDataVersion: 2, snapshot: v2Snapshot },
+      { app: 'registro-docente', classes: [], customTests: { bad: malformed } }
+    ]) {
+      expect(() => normalizeBackupPayload(payload, current)).toThrow();
+    }
+    expect(current.customTests).toEqual({});
+  });
 });
