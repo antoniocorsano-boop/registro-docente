@@ -182,7 +182,7 @@ import { MatrixView } from './components/MatrixView';
 import { HistoryView } from './components/HistoryView';
 import { StudentReportView } from './components/StudentReportView';
 import { StudentsManagementView } from './components/StudentsManagementView';
-import { VerificheOnlineView } from './components/VerificheOnlineView';
+import { VerificheOnlineView, type AssessmentDraftGuard } from './components/VerificheOnlineView';
 import { UdaGanttView } from './components/UdaGanttView';
 import { SettingsView } from './components/SettingsView';
 import { CopilotProactivitySettings } from './components/CopilotProactivitySettings';
@@ -362,6 +362,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return () => window.removeEventListener('pageshow', onPageShow);
   }, [hprTraceEnabled, hprLoadKind, traceHpr]);
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const assessmentDraftGuardRef = useRef<AssessmentDraftGuard | null>(null);
+  const registerAssessmentDraftGuard = useCallback((guard: AssessmentDraftGuard | null) => {
+    assessmentDraftGuardRef.current = guard;
+  }, []);
+  const hasUnsavedActiveDraft = useCallback((): boolean =>
+    (activeTabRef.current === 'programmazione'
+      && Boolean(planningGuardRef.current?.hasUnsavedChanges()))
+    || (activeTabRef.current === 'verifiche-online'
+      && (Boolean(assessmentDraftGuardRef.current?.hasUnsavedChanges())
+        || Boolean(assessmentDraftGuardRef.current?.isSaving()))), []);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
   // Positions have meaning only inside the same, continuous app-owned epoch.
@@ -455,8 +465,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     commit: () => void, destination: ActiveTab | null = null
   ): boolean => {
     traceHpr('richiesta-navigazione', destination);
-    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
-      && planningGuardRef.current?.hasUnsavedChanges()) {
+    if (!planningExitBypassRef.current && hasUnsavedActiveDraft()) {
       if (pendingExitRef.current) return false; // Never replace an unconfirmed navigation.
       planningExitOriginFocusRef.current = document.activeElement instanceof HTMLElement
         ? document.activeElement : null;
@@ -470,7 +479,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
     commit();
     return true;
-  }, [traceHpr]);
+  }, [hasUnsavedActiveDraft, traceHpr]);
   const cancelPlanningExit = () => {
     if (planningExitSaving || historyRestorePendingRef.current !== null) return;
     const fallback = historyFallbackRef.current;
@@ -482,7 +491,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         const entryId = crypto.randomUUID();
         history.pushState({
           classId: fallback.classId,
-          tab: 'programmazione',
+          tab: activeTabRef.current,
           __tramaHistoryEntryId: entryId
         }, '', withHprTraceQuery(fallback.originUrl));
         historyPositionRef.current = null;
@@ -511,7 +520,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (historyRestorePendingRef.current !== null) return;
     // A Back to an older history entry may show the *same* Programmazione
     // component, so unmounting is not sufficient to discard its dirty draft.
-    if (discardUnsavedDraft) planningGuardRef.current?.discardChanges();
+    if (discardUnsavedDraft) {
+      if (activeTabRef.current === 'programmazione') planningGuardRef.current?.discardChanges();
+      if (activeTabRef.current === 'verifiche-online') assessmentDraftGuardRef.current?.discardChanges();
+    }
     traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
     planningExitRestoreFocusRef.current = false;
     const commit = pendingExitRef.current;
@@ -655,8 +667,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     tab: ActiveTab,
     options: { preserveStudentReturnContext?: boolean } = {}
   ) => {
-    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
-      && tab !== 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+    if (!planningExitBypassRef.current && tab !== activeTabRef.current && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => setActiveTab(tab, options), tab);
       return;
     }
@@ -687,7 +698,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [publishReviewSession, requestPlanningDeparture, traceHpr]);
+  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -840,8 +851,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     traceHpr('click-navigazione', tab);
     // Browser-history writes must be delayed with the actual tab change.
     // Never let a dirty planning draft remain behind a new route.
-    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
-      && tab !== 'programmazione' && planningGuardRef.current?.hasUnsavedChanges()) {
+    if (!planningExitBypassRef.current && tab !== activeTabRef.current && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => handleNavigateTab(tab, options), tab);
       return;
     }
@@ -927,7 +937,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } catch {
       // History API failures never authorize a professional write.
     }
-  }, [editingBatchId, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
+  }, [editingBatchId, hasUnsavedActiveDraft, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
 
   /** INT-02/S1: navigate only with the validated teacher-owned source reference. */
   const handlePrepareAssessmentFromLibrary = useCallback((sourceId: string) => {
@@ -2142,8 +2152,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       }
 
       const currentPosition = historyPositionRef.current;
-      if (activeTabRef.current === 'programmazione' &&
-        planningGuardRef.current?.hasUnsavedChanges()) {
+      if (hasUnsavedActiveDraft()) {
         const absoluteDelta = browserIndex !== null && browserHistoryIndexRef.current !== null
           ? browserIndex - browserHistoryIndexRef.current : null;
         const markedDelta = targetPosition !== null && currentPosition !== null
@@ -2192,7 +2201,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab, traceHpr]);
+  }, [hasUnsavedActiveDraft, publishRecordSession, publishReviewSession, requestPlanningDeparture, setActiveTab, traceHpr]);
 
   const handleOpenPreparationCopilot = useCallback(() => {
     const launchContext = buildPreparationCopilotLaunchContext(currentClass);
@@ -2420,8 +2429,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Handle Class selection
   const handleSelectClass = (classId: string) => {
-    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
-      && planningGuardRef.current?.hasUnsavedChanges()) {
+    if (!planningExitBypassRef.current && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => handleSelectClass(classId), 'dashboard');
       return;
     }
@@ -2466,8 +2474,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   const handleNavigateHome = () => {
-    if (!planningExitBypassRef.current && activeTabRef.current === 'programmazione'
-      && planningGuardRef.current?.hasUnsavedChanges()) {
+    if (!planningExitBypassRef.current && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(handleNavigateHome, 'home');
       return;
     }
@@ -3202,6 +3209,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             udas={udas}
             settings={settings}
             assessmentHandoff={activeAssessmentHandoff}
+            onRegisterDraftGuard={registerAssessmentDraftGuard}
             initialClassName={recordSession?.status === 'editing'
               && recordSession.evidenceKind === 'online-outcomes'
               && recordSession.context.classId === currentClass?.id
@@ -3423,7 +3431,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <div className="w-full max-w-md space-y-4 rounded-2xl border border-amber-800 bg-slate-950 p-5 shadow-2xl">
             <h2 id="planning-exit-title" className="text-xl font-bold text-white">Modifiche non salvate</h2>
             <p className="text-sm text-slate-300">
-              Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.
+              {activeTab === 'verifiche-online'
+                ? 'La verifica contiene modifiche non salvate. Scegli se rimanere nell’editor o uscire senza salvare.'
+                : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
             </p>
             {planningExitFromBrowser && (
               <p role="note" className="text-sm font-semibold text-amber-200">
@@ -3441,28 +3451,30 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             )}
             {historyRestoringOrigin && (
               <p role="status" className="text-sm text-amber-200">
-                Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.
+                Ripristino della schermata di modifica in corso. Le scelte saranno disponibili dopo la verifica del percorso.
               </p>
             )}
             {historyFallbackWarning && (
               <p role="status" className="text-sm text-amber-200">
                 Il navigatore non permette di verificare il percorso precedente. La bozza è ancora disponibile.
-                Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.
+                Se scegli «Rimani», sarà ripristinata la schermata di modifica e la cronologia in avanti potrebbe essere sostituita.
               </p>
             )}
             {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
             <div className="flex flex-col gap-2">
-              <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving || historyRestoringOrigin}
-                className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
-                {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
-              </button>
+              {activeTab === 'programmazione' && (
+                <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving || historyRestoringOrigin}
+                  className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
+                  {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
+                </button>
+              )}
               <button type="button" onClick={() => performPlanningExit(true)} disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
-                Continua senza salvare
+                {activeTab === 'verifiche-online' ? 'Esci senza salvare' : 'Continua senza salvare'}
               </button>
               <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                Rimani nella Programmazione
+                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : 'Rimani nella Programmazione'}
               </button>
             </div>
           </div>
