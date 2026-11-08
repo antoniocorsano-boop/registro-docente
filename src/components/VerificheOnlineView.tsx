@@ -859,7 +859,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 type="button"
                 disabled={!shareTarget}
                 onClick={copyPadletLink}
-                className="flex-1 py-2.5 px-4 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-2"
+                className={`flex-1 min-h-[44px] py-2.5 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${shareTarget
+                  ? 'neon-btn-primary'
+                  : 'border border-slate-700 bg-slate-800 text-slate-400 opacity-60 cursor-not-allowed shadow-none'
+                }`}
               >
                 <Copy className="w-4 h-4" /> Copia Link per Studenti
               </button>
@@ -867,7 +870,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 type="button"
                 disabled={!shareTarget}
                 onClick={() => { if (shareTarget) onSimulateTest(shareTarget.testId, shareTarget.className); }}
-                className="py-2.5 px-4 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5"
+                className={`min-h-[44px] py-2.5 px-4 rounded-lg border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${shareTarget
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                  : 'bg-slate-800 text-slate-400 opacity-60 cursor-not-allowed shadow-none'
+                }`}
                 title="Avvia simulazione come alunno"
               >
                 <ExternalLink className="w-4 h-4" /> Prova come Alunno (Flashcard)
