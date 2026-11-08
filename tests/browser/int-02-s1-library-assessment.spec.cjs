@@ -16,6 +16,13 @@ async function openDrawerItem(page, label) {
   await drawer.getByRole('button', { name: label, exact: true }).click();
 }
 
+async function expectNoHorizontalOverflow(page) {
+  await expect.poll(async () => page.evaluate(() => {
+    const root = document.documentElement;
+    return Math.max(root.scrollWidth, document.body.scrollWidth) - root.clientWidth;
+  })).toBeLessThanOrEqual(1);
+}
+
 test('INT-02/S1: class-scoped professional source reaches unsaved test editor without UDA or URL payload', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
@@ -44,6 +51,12 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
 
   await expect(page.getByTestId('int02-prepare-assessment')).toHaveCount(0);
   await page.getByText('Gestisci', { exact: true }).click();
+  // HPR 2026-11-08: the long professional-classification control must not
+  // push the source card and the whole document beyond the Android viewport.
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Classifica come materiale professionale' }).click();
   await expect(page.getByText('Professionale', { exact: true }).first()).toBeVisible();
@@ -51,6 +64,15 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await page.getByRole('button', { name: 'Usa', exact: true }).click();
   const prepare = page.getByTestId('int02-prepare-assessment');
   await expect(prepare).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  const bounds = await prepare.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds.x).toBeGreaterThanOrEqual(-1);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(321);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
   await prepare.click();
 
   const handoff = page.getByTestId('int02-assessment-handoff');
