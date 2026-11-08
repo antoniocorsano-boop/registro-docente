@@ -1161,6 +1161,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         appDataRef.current.classes,
         previousAcceptedProjection?.classReconciliation
       );
+      // Resolve again INSIDE the serialized durable mutation. A stale preview
+      // or a class-list change must never gain acceptance authority.
+      if (reconciliation.length !== preview.projection.classes.length
+          || reconciliation.some(item => item.status !== 'resolved')) {
+        throw new Error('Riconciliazione classi Docente OS incompleta: verifica le classi prima di accettare.');
+      }
 
       return bindAcceptedDocenteOsTeachingProjection(
         current,
@@ -3249,9 +3255,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <PlanningProfileView
             profiles={planning.profiles}
             arenaContexts={planning.arenaContexts}
+            planning={planning}
+            classes={appData.classes}
             onSaveProfile={handleSaveTeachingProfile}
             onRegisterDraftGuard={registerPlanningDraftGuard}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
+            onAcceptDocenteOsProjection={handleAcceptDocenteOsTeachingProjection}
             currentClassName={currentClass?.name ?? null}
             planningFrame={planningFrame}
             focusedProfileId={planningFrame.status === 'resolved' ? planningFrame.profile.id : null}
