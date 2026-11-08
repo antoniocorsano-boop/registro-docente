@@ -41,6 +41,36 @@ jobs:
         env:
           VITE_INT01_HPR_TRACE: '1'
         run: bun run build
+      - name: Prepare isolated Chromium for S2a mobile regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .s2a-browser-tools
+          printf '%s\n' '{"name":"int02-s2a-browser","private":true}' > .s2a-browser-tools/package.json
+          npm --prefix .s2a-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          .s2a-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/int-02-s1-library-assessment.spec.cjs .s2a-browser-tools/
+      - name: Launch synthetic-only local preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 > /tmp/int02-s2a-preview.log 2>&1 &
+          echo $! > /tmp/int02-s2a-preview.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/int02-s2a-preview.log
+          exit 1
+      - name: Run S1 plus S2a Chromium synthetic mobile qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .s2a-browser-tools
+          BASE_URL=http://127.0.0.1:4173 ./node_modules/.bin/playwright test int-02-s1-library-assessment.spec.cjs --workers=1 --reporter=line
+
       - name: Assemble ready-to-run Termux local package
         shell: bash
         run: |
