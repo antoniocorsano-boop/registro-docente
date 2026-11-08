@@ -25,6 +25,7 @@ import {
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
 import { resolveAssessmentHandoff, type AssessmentHandoffRequest } from './library/assessmentHandoff';
+import { isAssessmentUdaSelectionAllowed } from './library/assessmentUdaScope';
 import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
 import { resolveLibraryTeachingContext } from './library/teachingContext';
 import {
@@ -2809,6 +2810,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Save new test
   const handleSaveNewTest = (newTest: OnlineTest): Promise<void> => {
+    // Recheck at the durable mutation boundary: a stale/foreign UDA cannot
+    // be linked even if a UI selector or active class changed since rendering.
+    if (newTest.udaId) {
+      const activeClass = appDataRef.current.classes.find(item =>
+        item.id === currentClassIdRef.current
+      );
+      if (!activeClass || !isAssessmentUdaSelectionAllowed(newTest.udaId, udasRef.current, activeClass.name)) {
+        return Promise.reject(new Error('UDA non appartenente alla classe attiva'));
+      }
+    }
     return commitTestsMutation(current => ({
       ...current,
       [newTest.id]: newTest
@@ -3209,6 +3220,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             udas={udas}
             settings={settings}
             assessmentHandoff={activeAssessmentHandoff}
+            activeClassName={currentClass?.name ?? null}
             onRegisterDraftGuard={registerAssessmentDraftGuard}
             initialClassName={recordSession?.status === 'editing'
               && recordSession.evidenceKind === 'online-outcomes'
