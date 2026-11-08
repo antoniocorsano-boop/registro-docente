@@ -9,7 +9,7 @@
 
 Non introdurre in `main` contenuto da rami storici solo per ridurne la distanza cronologica. Prima distinguere per ogni PR: **(A)** contenuto identico a `main`, **(B)** funzionalità già presente ma implementata in modo successivo, **(C)** funzione assente, **(D)** controlli/prove mancanti, **(E)** conflitto o rischio di regressione. Integrare solo un residuo (C/D) dimostrato e qualificato su un ramo nuovo derivato dal `main` corrente; non riscrivere in massa `App.tsx`, `qualification/invariants.v1.json` o i workflow.
 
-I conteggi `behind` descrivono *commit di distanza*, non quantità di conflitti. Tutte le PR citate sono in bozza e non integrabili automaticamente al momento dell'audit.
+I conteggi `behind` descrivono *commit di distanza*, non quantità di conflitti. Le PR storiche ancora aperte sono in bozza e non integrabili automaticamente al momento dell'audit. **Verifica delle PR successore già completate:** #135 ha riconciliato e integrato NAV-S1, #137 ha riconciliato e integrato INT-01, entrambe con qualificazioni exact-SHA e HPR Android. La funzione residua va verificata rispetto a questi successori e non al solo vecchio ramo.
 
 ## P0 — PR #116: INT-01 continuità Programmazione / UDA / lezione
 
@@ -19,11 +19,9 @@ I conteggi `behind` descrivono *commit di distanza*, non quantità di conflitti.
 - **Differenza (B/E):** `src/App.tsx` del ramo è precedente e molto differente dal `main` (127.499 vs 148.865 caratteri nell'ispezione); `SecureRegistroRoot.tsx` differisce perché `main` passa `headerSecurity` ad App e configura `VaultControls mobileControlsEnabled={false}`, caratteristiche non presenti nel ramo storico. Le prove Browser INT-01 e UX-QA presentano versioni diverse, da confrontare semanticamente, non copiare automaticamente.
 - **Residuo non ancora qualificato:** criterio umano ancora descritto nella PR per «Apri UDA», corretto contesto di classe, ritorno/Indietro e scelta «Continua senza salvare» e comandi mobili; il contenuto identico non dimostra automaticamente PASS del comportamento su `main`.
 
-**Azione P0:**
-1. Usare esclusivamente il `main` corrente per il test diagnostico di continuità Programmazione→UDA→Programmazione e gesti di navigazione con dati sintetici.
-2. Confrontare i contratti browser storici con quelli attualmente in `main`; introdurre dapprima un'asserzione di regressione **solo se** manca nel test vigente.
-3. Se appare un difetto reale: aprire piccola PR INT-01 di riparazione su `main`, con prova RED→GREEN, sicurezza, Browser, revisione indipendente, Human Review Android; mantenere #116 come riferimento storico. **Non** rebasare #116 e non copiarne `App.tsx` su `main`.
-4. Se nessun residuo: registrare in #116 le equivalenze e chiudere il ramo come superato **solo dopo** Human Review dei percorsi residui.
+**Stato del successore già verificato:** [PR #137](https://github.com/antoniocorsano-boop/registro-docente/pull/137), «INT-01/S1 — riconciliazione continuità didattica su main post NAV-S1», è **integrata in `main`** tramite commit `d548adc7e03bf4589ea42059e4ef35b0a3dcf8b1` dal sorgente qualificato `e8a6fed673dc1f4c43ced71e951e9146c6758784`. Il verbale #137 attesta **5 qualificazioni PASS**, Codex senza rilievi, Chromium INT-01 19/19 e storico 71/71 PASS, HPR Android sintetica A0–A5 PASS per i casi osservati. L'episodio iniziale di uscita verso Riepilogo è stato successivamente non riprodotto nel percorso isolato; non equivale a diagnosi certa della prima deviazione.
+
+**Azione P0 completabile senza codice:** marcare la #116 come **sostituita da #137**, chiuderla senza merge e conservarne le evidenze. Le eventuali anomalie future si riproducono solo sull'ultimo `main` e si correggono con nuova PR ristretta, mai reintegrando l'`App.tsx` storico.
 
 ## P1 — PR #117: REG-NAV-01 ritorni specialistici
 
@@ -34,9 +32,11 @@ I conteggi `behind` descrivono *commit di distanza*, non quantità di conflitti.
 - **Evidenza (D):** `regNav01SpecialistRoutingContract.test.ts` e `tests/browser/reg-nav-01-specialist-return.spec.cjs` non sono presenti in `main`; non significa che il comportamento sia assente, ma i controlli vanno confrontati con le prove di navigazione successive. Contratti `durableAppMutationIntegrity.test.ts` e `homeNavigationDuringSaveIntegrity.test.ts` differiscono.
 - **Confine:** non introdurre nella cronologia web ID o nominativi di alunni/valutazioni; il comportamento esistente usa dati sintetici per la qualifica.
 
-**Azione P1:** dopo P0, confrontare gli scenari di REG-NAV-01 con l'attuale navigazione `main`: scheda alunno dal menu, cambio alunno, Analisi/Indietro, ritorno alla vista d'origine, annullamento valutazione, protezione bozza. Aggiungere test mancanti **adattati al router attuale**, non trasferire automaticamente il codice della PR #117. Aprire PR di riparazione solo in caso di scenario realmente non coperto.
+**Stato del successore già verificato:** [PR #135](https://github.com/antoniocorsano-boop/registro-docente/pull/135), «REG-NAV-01/NAV-S1 — riconciliazione mirata con Tabellone e Scheda alunno integrati», **integrata in `main`** tramite commit `4a165521333e816c91dc5c7df1137eddc153341d` da sorgente `305aacb8fca1878a9175f8834e11e474b1db5c61`. Il verbale finale #135 conferma 5 gate PASS, revisione Codex senza thread, HPR Android locale con dati sintetici A0–A5 (annullamento, controllo valori visibili, Indietro/Avanti, navigazione rapida, ritorno al Tabellone espanso). Il limite del controllo A2 è documentato: soltanto voti/flag visibili, non un controllo di tutte le righe non mostrate.
 
-## P2 — PR #92: anteprima importazione proiezione Docente OS
+**Azione P1 completabile senza codice:** marcare la #117 come **sostituita da #135**, chiuderla senza merge conservando le prove originali. Nuove regressioni devono essere diagnosticate nel router attuale, non mediante trasferimento del vecchio `App.tsx`.
+
+## P2 — PR #92: anteprima importazione proiezione Docente OS (primo residuo funzionale non ancora integrato)
 
 - PR: https://github.com/antoniocorsano-boop/registro-docente/pull/92
 - Candidato `4b0dd2e8ca16456bcdc34757acd29078f80e87ff` · **890 behind**, 4 ahead; `mergeable=false`.
@@ -51,8 +51,9 @@ I conteggi `behind` descrivono *commit di distanza*, non quantità di conflitti.
 
 ## Gate e criterio di fine audit
 
-1. Nessun merge, deploy, modifica Vault o personale da questa PR.
+1. Nessun merge, deploy, modifica Vault o personale da questa PR. La chiusura **amministrativa senza merge** dei due rami storici #116 e #117 è consentita una volta documentata la successione rispettivamente con #137 e #135.
 2. Su ogni vecchio ramo registrare la classificazione (A/B/C/D/E) con riferimenti alle prove verificabili.
 3. Prima di ogni eventuale promozione, verificare `main` corrente, SHA esatto, 5 qualificazioni, revisione indipendente e HPR Android nei soli percorsi effettivamente modificati.
 4. Separare **integrazione in `main`** da pubblicazione: `git.deploymentEnabled=false` deve restare in vigore.
-5. Archiviare le PR storiche solo dopo ricognizione e recupero delle evidenze residue, evitando chiusure che farebbero perdere un caso d'uso ancora aperto.
+5. #116 e #117: chiusura amministrativa giustificata dalla promozione dei successori #137/#135 e dalle loro HPR, conservando i riferimenti; #92: mantenere aperta finché la funzione assente non è riprogettata/qualificata; #141/#148: documentazione da riutilizzare selettivamente.
+6. L'ultima Browser Qualification #1729 sul commit sorgente di INT-02/S2a ha eseguito con esito SUCCESS anche i passi «Run INT-01 Chromium qualification» e «Run historical Chromium qualification»; sul merge in main non vi sono differenze di file rispetto alla sorgente qualificata.
