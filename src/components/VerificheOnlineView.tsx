@@ -882,7 +882,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     <BookOpen className="w-5 h-5 text-[var(--primary)]" /> Catalogo Verifiche & Test Didattici
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Crea, modifica e collega le prove formative ai moduli curricolari e alle UDA.
+                    Il catalogo è comune alle classi: le verifiche possono essere riutilizzate. La classe destinataria si sceglie nella sezione Condivisione Padlet; le UDA selezionabili nell’editor appartengono alla classe di lavoro.
                   </p>
                 </div>
 
@@ -1033,7 +1033,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     disabled={isSavingTest}
                     className="px-4 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center gap-1.5"
                   >
-                    <Check className="w-4 h-4" /> Salva Verifica
+                    <Check className="w-4 h-4" /> {editingTestId ? 'Salva modifiche' : 'Salva Verifica'}
                   </button>
                   <button
                     type="button"
@@ -1259,7 +1259,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   disabled={isSavingTest}
                   className="flex-1 py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
                 >
-                  <Check className="w-4 h-4" /> Salva Tutte le Modifiche al Test
+                  <Check className="w-4 h-4" /> {editingTestId ? 'Salva modifiche e chiudi' : 'Salva verifica e chiudi'}
                 </button>
                 <button
                   type="button"
