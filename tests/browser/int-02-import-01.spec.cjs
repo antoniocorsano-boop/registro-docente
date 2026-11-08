@@ -89,6 +89,10 @@ test('IMPORT-01 mobile: teacher scope, explicit confirmation, durable import and
   await importButton.click();
   await expect.poll(() => dialogMessages.some(d =>
     d.type === 'confirm' && d.message.includes('Nuove valutazioni: 1')
+    && d.message.includes(`Classe: ${CLASS_NAME}`)
+    && d.message.includes("Verifica: A cosa serve l'energia")
+    && d.message.includes('Periodo: Q1')
+    && d.message.includes('UDA: Nessuna')
   )).toBe(true);
   await expect.poll(() => dialogMessages.some(d =>
     d.type === 'alert' && d.message.includes('Importazione completata con successo! 1')
