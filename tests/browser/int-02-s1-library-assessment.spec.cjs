@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
+const evidenceDir = process.env.EVIDENCE_DIR || '../browser-evidence';
 const CLASS_NAME = '3ª A Sintetica INT-02';
 const SOURCE_TITLE = 'Fonte esclusivamente sintetica INT-02';
 const SOURCE_TEXT = 'Appunto professionale dimostrativo sulle energie rinnovabili.';
@@ -210,12 +211,12 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   await checkbox.scrollIntoViewIfNeeded();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({
-    path: 'browser-evidence/int-02-s2b-01-consenso-non-selezionato-390.png'
+    path: `${evidenceDir}/int-02-s2b-01-consenso-non-selezionato-390.png`
   });
   await checkbox.check();
   await expect(checkbox).toBeChecked();
   await page.screenshot({
-    path: 'browser-evidence/int-02-s2b-02-consenso-confermato-390.png'
+    path: `${evidenceDir}/int-02-s2b-02-consenso-confermato-390.png`
   });
 
   await page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale').fill(testTitle);
@@ -229,7 +230,7 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   await originStatus.scrollIntoViewIfNeeded();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({
-    path: 'browser-evidence/int-02-s2b-03-origine-disponibile-390.png'
+    path: `${evidenceDir}/int-02-s2b-03-origine-disponibile-390.png`
   });
 
   // A removed source must never delete or silently recertify the saved test.
@@ -249,7 +250,7 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   await expectNoHorizontalOverflow(page);
   await unavailable.scrollIntoViewIfNeeded();
   await page.screenshot({
-    path: 'browser-evidence/int-02-s2b-04-origine-non-disponibile-390.png'
+    path: `${evidenceDir}/int-02-s2b-04-origine-non-disponibile-390.png`
   });
   expect(page.url()).not.toContain(SOURCE_TITLE);
   expect(page.url()).not.toContain(SOURCE_TEXT);
