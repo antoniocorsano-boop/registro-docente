@@ -245,7 +245,9 @@
         "src/components/planning/DocenteOsProjectionPanel.tsx",
         "src/components/planning/PlanningProfileView.tsx",
         "src/security/a4R2ProjectionImportUiContract.test.ts",
-        "src/planning/docenteOsProjectionReconciliation.ts"
+        "src/planning/docenteOsProjectionReconciliation.ts",
+        "tests/browser/docente-os-projection-preview.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
       ],
       "tests": [
         "src/security/a4R2ProjectionImportUiContract.test.ts",
@@ -253,7 +255,8 @@
         "src/security/a4R2DocenteOsProjectionContract.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/qualification-invariant-smoke.spec.cjs"
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "tests/browser/docente-os-projection-preview.spec.cjs"
       ]
     },
     {
