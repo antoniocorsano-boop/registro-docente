@@ -80,6 +80,22 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expect(handoff).toContainText(SOURCE_TITLE);
   await expect(handoff).toContainText(CLASS_NAME);
   await expect(handoff).toContainText('Non è stata creata alcuna verifica');
+
+  // S2a: the S1 source/class handoff is authoritative, but never chooses a test.
+  const shareClass = page.getByLabel('Classe Destinataria');
+  const shareTest = page.getByLabel('Test per condivisione');
+  const copyLink = page.getByRole('button', { name: 'Copia Link per Studenti' });
+  const simulate = page.getByRole('button', { name: 'Prova come Alunno (Flashcard)' });
+  await expect(shareClass).toHaveValue(CLASS_NAME);
+  await expect(shareTest).toHaveValue('');
+  await expect(copyLink).toBeDisabled();
+  await expect(simulate).toBeDisabled();
+  await shareTest.selectOption('energia');
+  await expect(copyLink).toBeEnabled();
+  await expect(simulate).toBeEnabled();
+  await shareTest.selectOption('');
+  await expect(copyLink).toBeDisabled();
+  await expect(simulate).toBeDisabled();
   expect(page.url()).not.toContain(SOURCE_TITLE);
   expect(page.url()).not.toContain(SOURCE_TEXT);
   expect(page.url()).not.toContain('sourceId');
@@ -122,4 +138,22 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await exitDialog.getByRole('button', { name: 'Esci senza salvare' }).click();
   await expect(page.getByRole('heading', { name: 'Biblioteca privata', exact: true })).toBeVisible();
   await expect(page.getByTestId('int02-assessment-handoff')).toHaveCount(0);
+
+  // Direct entry: neither the first class nor the first test may authorize sharing.
+  await openDrawerItem(page, 'Verifiche online');
+  await expect(page.getByLabel('Classe Destinataria')).toHaveValue('');
+  await expect(page.getByLabel('Test per condivisione')).toHaveValue('');
+  await expect(page.getByTestId('int02-s2a-share-required')).toBeVisible();
+  await expect(copyLink).toBeDisabled();
+  await expect(simulate).toBeDisabled();
+  await page.getByLabel('Test per condivisione').selectOption('energia');
+  await expect(copyLink).toBeDisabled();
+  await expect(simulate).toBeDisabled();
+  await page.getByLabel('Classe Destinataria').selectOption(CLASS_NAME);
+  await expect(copyLink).toBeEnabled();
+  await expect(simulate).toBeEnabled();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });
