@@ -3253,6 +3253,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           <PlanningProfileView
             profiles={planning.profiles}
             arenaContexts={planning.arenaContexts}
+            planning={planning}
+            classes={appData.classes}
+            onAcceptDocenteOsProjection={handleAcceptDocenteOsTeachingProjection}
             onSaveProfile={handleSaveTeachingProfile}
             onRegisterDraftGuard={registerPlanningDraftGuard}
             onAcceptArenaContext={handleAcceptArenaPlanningContext}
