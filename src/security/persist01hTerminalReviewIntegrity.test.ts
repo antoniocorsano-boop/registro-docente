@@ -135,11 +135,12 @@ describe('PERSIST-01H terminal review intent integrity', () => {
   test('Bacheca existing-test editor entry is blocked while file parsing owns the save boundary', async () => {
     const text = await source('src/components/VerificheOnlineView.tsx');
     const bacheca = sectionBetween(text, '{/* SUB-TAB 1: BACHECA & CONDIVISIONE PADLET */}', '{/* SUB-TAB 2: EDITOR VISUALE TEST & COLLEGAMENTO UDA */}');
-    const marker = 'onClick={() => handleEditExistingTest(currentSelectedTest)}';
+    const marker = 'onClick={() => { if (shareSelectedTest) handleEditExistingTest(shareSelectedTest); }}';
     const markerIndex = bacheca.indexOf(marker);
     expect(markerIndex).toBeGreaterThan(-1);
-    const buttonWindow = bacheca.slice(Math.max(0, markerIndex - 220), markerIndex + marker.length + 220);
-    expect(buttonWindow).toContain('disabled={isParsingFile || isSavingTest}');
+    const buttonWindow = bacheca.slice(Math.max(0, markerIndex - 240), markerIndex + marker.length + 220);
+    // A missing explicit Padlet test must never weaken the original pending-save guard.
+    expect(buttonWindow).toContain('disabled={isParsingFile || isSavingTest || !shareSelectedTest}');
   });
 
   test('spreadsheet import reports the committed append count instead of the stale parsed count', async () => {
