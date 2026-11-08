@@ -351,7 +351,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   };
 
   return (
-    <article data-source-id={source.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm space-y-3">
+    <article data-source-id={source.id} className="min-w-0 max-w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm space-y-3">
       <div className="flex gap-3 items-start">
         {source.kind === 'image' && source.payload.dataUrl ? (
           <img
@@ -383,7 +383,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       </div>
 
       {excerpt && (
-        <p className="text-sm text-slate-300 leading-relaxed line-clamp-3">{excerpt}</p>
+        <p className="text-sm text-slate-300 leading-relaxed line-clamp-3 break-words [overflow-wrap:anywhere]">{excerpt}</p>
       )}
 
       {source.sourceUrl && (
@@ -398,7 +398,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
         </a>
       )}
 
-      <div className="flex gap-2 items-center">
+      <div className="flex min-w-0 flex-wrap gap-2 items-start">
         <button
           ref={useButtonRef}
           type="button"
@@ -412,12 +412,12 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
           Usa
         </button>
 
-        <details className="relative flex-1 group">
+        <details className="relative min-w-0 flex-1 basis-[12rem] group">
           <summary className="list-none min-h-[44px] px-3 rounded-lg border border-[var(--border)] bg-[var(--surface-variant)] text-slate-200 text-sm inline-flex items-center gap-2 cursor-pointer select-none">
             <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
             Gestisci
           </summary>
-          <div className="mt-2 p-3 rounded-lg border border-[var(--border)] bg-slate-950/70 space-y-3">
+          <div className="mt-2 min-w-0 w-full max-w-full p-3 rounded-lg border border-[var(--border)] bg-slate-950/70 space-y-3">
             {professionalClassification === 'Da classificare' && (
               <div className="rounded-md border border-amber-700/60 bg-amber-950/20 p-3 space-y-2">
                 <p className="text-xs text-amber-100">
@@ -427,7 +427,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                   type="button"
                   onClick={() => void handleProfessionalClassification()}
                   disabled={isPending}
-                  className="min-h-[44px] w-full px-3 rounded-md border border-amber-600 text-sm font-semibold text-amber-100 disabled:opacity-50"
+                  className="min-h-[44px] min-w-0 w-full whitespace-normal break-words px-3 rounded-md border border-amber-600 text-sm font-semibold text-amber-100 disabled:opacity-50"
                 >
                   Classifica come materiale professionale
                 </button>
@@ -453,7 +453,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                   value={targetUdaId}
                   onChange={event => setTargetUdaId(event.target.value)}
                   disabled={isPending || teachingUdaCatalog.length === 0}
-                  className="min-h-[44px] flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                  className="min-h-[44px] min-w-0 w-full sm:flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
                 >
                   <option value="">Seleziona UDA</option>
                   {teachingUdaCatalog.map(candidate => (
@@ -530,10 +530,10 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
           onKeyDown={event => {
             if (isMobileDialog && !isCopilotOpen) trapDialogFocus(event, useSurfaceRef.current);
           }}
-          className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
+          className="fixed inset-0 z-[90] h-[100dvh] max-w-[100vw] overflow-x-hidden overflow-y-auto bg-slate-950 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] text-sm text-cyan-100 space-y-3 md:static md:z-auto md:h-auto md:overflow-visible md:rounded-lg md:border md:border-cyan-800/60 md:bg-cyan-950/30 md:px-3 md:py-3"
         >
-          <div className="sticky top-0 z-10 -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] flex items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
-            <div>
+          <div className="sticky top-0 z-10 -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] flex min-w-0 items-start justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mt-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+            <div className="min-w-0 flex-1 break-words">
               <strong id={`library-source-use-title-${source.id}`} className="block">Che cosa vuoi farne?</strong>
               <span className="text-cyan-200/80">Apri il Copilota per rivedere, collegare o preparare questa fonte nel contesto scelto.</span>
             </div>
@@ -598,7 +598,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                 value={contextSelectionValue}
                 onChange={event => selectTeachingTarget(event.target.value)}
                 disabled={isPending || teachingUdaCatalog.length === 0}
-                className="min-h-[44px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                className="min-h-[44px] min-w-0 w-full max-w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
               >
                 <option value="">Seleziona UDA o lezione</option>
                 {teachingUdaCatalog.flatMap(candidate => [
