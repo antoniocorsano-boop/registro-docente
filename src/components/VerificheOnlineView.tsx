@@ -4,6 +4,7 @@ import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
 import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
 import { isAssessmentUdaForClass, isAssessmentUdaSelectionAllowed } from '../library/assessmentUdaScope';
+import { resolveAssessmentShareTarget } from '../library/assessmentShareSelection';
 
 export interface AssessmentDraftGuard {
   hasUnsavedChanges: () => boolean;
@@ -71,13 +72,17 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   onSimulateTest
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'bacheca' | 'editor' | 'stampa' | 'analisi'>('bacheca');
-  const [selectedClass, setSelectedClass] = useState<string>(assessmentHandoff?.className ?? classes[0]?.name ?? '');
+  const [selectedClass, setSelectedClass] = useState<string>(assessmentHandoff?.className ?? '');
+  // Separate Padlet/simulation choice from the historical analysis/grade-import selector.
+  const [shareSelectedTestId, setShareSelectedTestId] = useState<string>('');
+  const previousActiveClassNameRef = useRef(activeClassName);
 
   useEffect(() => {
     if (!initialClassName) return;
     const safeClass = classes.find(item => item.name === initialClassName);
     if (safeClass) {
       setSelectedClass(safeClass.name);
+      setShareSelectedTestId('');
       setActiveSubTab('analisi');
     }
   }, [classes, initialClassName]);
@@ -88,8 +93,33 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       item.id === assessmentHandoff.classId
       && item.name === assessmentHandoff.className
     );
-    if (currentClass) setSelectedClass(currentClass.name);
-  }, [assessmentHandoff?.classId, assessmentHandoff?.className, classes]);
+    if (currentClass) {
+      setSelectedClass(currentClass.name);
+      setShareSelectedTestId('');
+    }
+  }, [assessmentHandoff?.classId, assessmentHandoff?.className, assessmentHandoff?.sourceId, classes]);
+
+  // A changed professional class invalidates pending sharing choices.
+  useEffect(() => {
+    if (previousActiveClassNameRef.current === activeClassName) return;
+    previousActiveClassNameRef.current = activeClassName;
+    setSelectedClass('');
+    setShareSelectedTestId('');
+  }, [activeClassName]);
+
+  // Never leave a removed/ambiguous class or deleted test selected in the mobile UI.
+  useEffect(() => {
+    if (!selectedClass || classes.filter(item => item.name === selectedClass).length === 1) return;
+    setSelectedClass('');
+    setShareSelectedTestId('');
+  }, [classes, selectedClass]);
+
+  useEffect(() => {
+    if (!shareSelectedTestId) return;
+    if (Object.prototype.hasOwnProperty.call(tests, shareSelectedTestId)
+      && tests[shareSelectedTestId]?.id === shareSelectedTestId) return;
+    setShareSelectedTestId('');
+  }, [shareSelectedTestId, tests]);
 
   const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
   const [isParsingFile, setIsParsingFile] = useState(false);
@@ -217,6 +247,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [printDocenteMode, setPrintDocenteMode] = useState(false);
 
   const currentSelectedTest = tests[selectedTestId] || Object.values(tests)[0];
+  const shareResolution = resolveAssessmentShareTarget({
+    className: selectedClass, testId: shareSelectedTestId, classes, tests
+  });
+  const shareTarget = shareResolution.status === 'ready' ? shareResolution.target : null;
+  const shareSelectedTest = shareSelectedTestId && Object.prototype.hasOwnProperty.call(tests, shareSelectedTestId)
+    ? tests[shareSelectedTestId] : null;
 
   // Open interactive editor for new test
   const handleStartNewInteractiveTest = () => {
@@ -571,9 +607,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   };
 
   const copyPadletLink = () => {
+    if (!shareTarget) return;
     const origin = window.location.origin;
     const path = window.location.pathname;
-    const link = `${origin}${path}?mode=student&test=${selectedTestId}&class=${encodeURIComponent(selectedClass)}`;
+    const link = `${origin}${path}?mode=student&test=${shareTarget.testId}&class=${encodeURIComponent(shareTarget.className)}`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(link).then(() => {
@@ -750,9 +787,13 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 <select
                   aria-label="Classe Destinataria"
                   value={selectedClass}
-                  onChange={e => setSelectedClass(e.target.value)}
+                  onChange={e => {
+                    if (selectedClass && selectedClass !== e.target.value) setShareSelectedTestId('');
+                    setSelectedClass(e.target.value);
+                  }}
                   className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
                 >
+                  <option value="">-- Seleziona una classe --</option>
                   {classes.map(c => (
                     <option key={c.id} value={c.name}>
                       {c.name}
@@ -766,10 +807,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   Test / Verifica Formativa
                 </label>
                 <select
-                  value={selectedTestId}
-                  onChange={e => setSelectedTestId(e.target.value)}
+                  aria-label="Test per condivisione"
+                  value={shareSelectedTestId}
+                  onChange={e => setShareSelectedTestId(e.target.value)}
                   className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
                 >
+                  <option value="">-- Seleziona una verifica --</option>
                   {Object.keys(tests).map(k => (
                     <option key={k} value={k}>
                       {tests[k].title} ({tests[k].questions.length} domande)
@@ -780,33 +823,41 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </div>
             </div>
 
-            {currentSelectedTest && (
+            {shareSelectedTest && (
               <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] mb-4 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                  <span className="font-bold text-white text-sm">{currentSelectedTest.title}</span>
+                  <span className="font-bold text-white text-sm">{shareSelectedTest.title}</span>
                   <div className="flex items-center gap-2">
-                    {currentSelectedTest.udaId && (
+                    {shareSelectedTest.udaId && (
                       <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800">
-                        {udas.find(u => u.id === currentSelectedTest.udaId)?.title || 'UDA Collegata'}
+                        {udas.find(u => u.id === shareSelectedTest.udaId)?.title || 'UDA Collegata'}
                       </span>
                     )}
                     <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">
-                      {currentSelectedTest.questions.length} Quesiti
+                      {shareSelectedTest.questions.length} Quesiti
                     </span>
                   </div>
                 </div>
-                {currentSelectedTest.description && (
-                  <p className="text-slate-400 text-xs mb-2">{currentSelectedTest.description}</p>
+                {shareSelectedTest.description && (
+                  <p className="text-slate-400 text-xs mb-2">{shareSelectedTest.description}</p>
                 )}
-                <p className="text-[11px] text-slate-500 font-mono break-all">
-                  URL Studente: {window.location.origin}{window.location.pathname}?mode=student&test={selectedTestId}&class={encodeURIComponent(selectedClass)}
-                </p>
+                {shareTarget && (
+                  <p className="text-[11px] text-slate-500 font-mono break-all">
+                    URL Studente: {window.location.origin}{window.location.pathname}?mode=student&test={shareTarget.testId}&class={encodeURIComponent(shareTarget.className)}
+                  </p>
+                )}
               </div>
             )}
 
+            {!shareTarget && (
+              <p role="status" data-testid="int02-s2a-share-required" className="mb-3 text-xs text-amber-200">
+                Seleziona esplicitamente una classe e una verifica per copiare il collegamento o avviare la simulazione.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2.5">
               <button
                 type="button"
+                disabled={!shareTarget}
                 onClick={copyPadletLink}
                 className="flex-1 py-2.5 px-4 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-2"
               >
@@ -814,7 +865,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onSimulateTest(selectedTestId, selectedClass)}
+                disabled={!shareTarget}
+                onClick={() => { if (shareTarget) onSimulateTest(shareTarget.testId, shareTarget.className); }}
                 className="py-2.5 px-4 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5"
                 title="Avvia simulazione come alunno"
               >
@@ -822,8 +874,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </button>
               <button
                 type="button"
-                disabled={isParsingFile || isSavingTest}
-                onClick={() => handleEditExistingTest(currentSelectedTest)}
+                disabled={isParsingFile || isSavingTest || !shareSelectedTest}
+                onClick={() => { if (shareSelectedTest) handleEditExistingTest(shareSelectedTest); }}
                 className="py-2.5 px-4 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1.5"
               >
                 <Edit3 className="w-4 h-4" /> Modifica Test
@@ -953,7 +1005,18 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onSimulateTest(t.id, selectedClass)}
+                          onClick={() => {
+                            const resolution = resolveAssessmentShareTarget({
+                              className: selectedClass, testId: t.id, classes, tests
+                            });
+                            if (resolution.status === 'ready') {
+                              onSimulateTest(resolution.target.testId, resolution.target.className);
+                            } else {
+                              // An explicit catalog test choice still needs an authorized class.
+                              setShareSelectedTestId(t.id);
+                              setActiveSubTab('bacheca');
+                            }
+                          }}
                           className="py-1.5 px-3 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold flex items-center justify-center gap-1"
                           title="Simula prova studente"
                         >
