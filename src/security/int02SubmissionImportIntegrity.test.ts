@@ -209,6 +209,67 @@ describe('INT-02/IMPORT-01 — safe grade reconciliation', () => {
     expect(duplicate.preview.blockedByReason.DUPLICATE_SUBMISSION).toBe(2);
   });
 
+  test('A6 invalid calendar dates and unavailable origin tests fail without writes', () => {
+    const badDate = reconcile(classes(), [submission('bad-calendar', { date: '2026-02-30T10:00:00.000Z' })]);
+    expect(badDate.importedCount).toBe(0);
+    expect(badDate.preview.blockedByReason.INVALID_DATE).toBe(1);
+    const malformed = reconcile(classes(), [submission('bad-format', { date: '8 novembre 2026' })]);
+    expect(malformed.preview.blockedByReason.INVALID_DATE).toBe(1);
+
+    const missingTest = reconcile(
+      classes(), [submission('missing-test', { testId: 'deleted-test' })],
+      selection({ testId: 'deleted-test' })
+    );
+    expect(missingTest.importedCount).toBe(0);
+    expect(missingTest.preview.blockedByReason.MISSING_TEST).toBe(1);
+    expect(missingTest.classes[0].grades).toHaveLength(0);
+  });
+
+  test('A6 out-of-scope class or source test cannot be imported as selected', () => {
+    const result = reconcile(classes(), [
+      submission('for-other-class', { class: '2ª C - Secondaria I Grado' }),
+      submission('for-other-test', { testId: 'test-c', testTitle: 'Energia' })
+    ]);
+    expect(result.importedCount).toBe(0);
+    expect(result.preview.scopeCount).toBe(0);
+    expect(result.classes[0].grades).toHaveLength(0);
+    expect(result.classes[1].grades).toHaveLength(0);
+  });
+
+  test('A6 an existing batch in another class is a conflict, not a reassignment', () => {
+    const previous = reconcile();
+    const other = classes();
+    other[1].grades.push({ ...previous.classes[0].grades[0], studentId: 'student-c' });
+    const result = reconcile(other);
+    expect(result.importedCount).toBe(0);
+    expect(result.preview.blockedByReason.GRADE_CONFLICT).toBe(1);
+    expect(result.classes).toEqual(other);
+  });
+
+  test('A4 two genuinely distinct submissions may create separate grades', () => {
+    const source = [submission('attempt-1'), submission('attempt-2', { score: 10 })];
+    const result = reconcile(classes(), source);
+    expect(result.importedCount).toBe(2);
+    expect(result.classes[0].grades.map(item => item.value)).toEqual(['8', '10']);
+    expect(new Set(result.classes[0].grades.map(item => item.batchId)).size).toBe(2);
+    const retry = reconcile(result.classes, source);
+    expect(retry.importedCount).toBe(0);
+    expect(retry.preview.unchangedCount).toBe(2);
+  });
+
+  test('A7 preview freshness tracks each explicit target decision', () => {
+    const initial = reconcile();
+    expect(initial.preview.signature).not.toBe(
+      reconcile(classes(), [submission('sub-a')], selection({ period: 'Q2' })).preview.signature
+    );
+    expect(initial.preview.signature).not.toBe(
+      reconcile(classes(), [submission('sub-a')], selection({ targetUdaId: null })).preview.signature
+    );
+    expect(initial.preview.signature).not.toBe(
+      reconcile(classes(), [submission('sub-a')], selection({ testId: 'test-none' })).preview.signature
+    );
+  });
+
   test('a preview signature changes when grades, submissions or UDA context changes', () => {
     const initial = reconcile();
     expect(initial.preview.creatableCount).toBe(1);
