@@ -80,6 +80,8 @@ test('IMPORT-01 mobile: teacher scope, explicit confirmation, durable import and
   await page.getByLabel('Verifica per importazione esiti').selectOption('energia');
   await expect(importButton).toBeDisabled();
   await page.getByLabel('Periodo per importazione esiti').selectOption('Q1');
+  await expect(importButton).toBeDisabled();
+  await page.getByLabel('UDA di destinazione per importazione esiti').selectOption('none');
   await expect(importButton).toBeEnabled();
 
   page.on('dialog', async dialog => {
@@ -92,7 +94,8 @@ test('IMPORT-01 mobile: teacher scope, explicit confirmation, durable import and
     && d.message.includes(`Classe: ${CLASS_NAME}`)
     && d.message.includes("Verifica: A cosa serve l'energia")
     && d.message.includes('Periodo: Q1')
-    && d.message.includes('UDA: Nessuna')
+    && d.message.includes('UDA di destinazione scelta: Nessuna')
+    && d.message.includes('non certifica la provenienza storica')
   )).toBe(true);
   await expect.poll(() => dialogMessages.some(d =>
     d.type === 'alert' && d.message.includes('Importazione completata con successo! 1')
