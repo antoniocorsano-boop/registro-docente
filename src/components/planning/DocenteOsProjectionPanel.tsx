@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ClassData } from '../../types';
 import type { PlanningState } from '../../planning/types';
 import {
@@ -27,6 +27,8 @@ export const DocenteOsProjectionPanel: React.FC<DocenteOsProjectionPanelProps> =
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isAccepting, setIsAccepting] = useState(false);
+  // Each file choice invalidates all earlier asynchronous reads.
+  const latestFileSelectionRef = useRef(0);
 
   // Recompute on every change of canonical classes or stored projections:
   // a file preview does not authorize a later write with obsolete identities.
@@ -44,6 +46,7 @@ export const DocenteOsProjectionPanel: React.FC<DocenteOsProjectionPanelProps> =
 
   const handleFile = async (file: File) => {
     if (isAccepting) return;
+    const selectionId = ++latestFileSelectionRef.current;
     setPreview(null);
     setErrorMessage('');
     setSuccessMessage('');
@@ -57,6 +60,7 @@ export const DocenteOsProjectionPanel: React.FC<DocenteOsProjectionPanelProps> =
 
     try {
       const text = await file.text();
+      if (selectionId !== latestFileSelectionRef.current) return;
       const result = previewDocenteOsTeachingProjection(JSON.parse(text) as unknown);
       if (!result.ok) {
         setValidationCode(result.code);
@@ -65,6 +69,7 @@ export const DocenteOsProjectionPanel: React.FC<DocenteOsProjectionPanelProps> =
       }
       setPreview(result.projection);
     } catch {
+      if (selectionId !== latestFileSelectionRef.current) return;
       setValidationCode('INVALID_JSON');
       setErrorMessage('Il file selezionato non è un JSON leggibile.');
     }
@@ -109,8 +114,9 @@ export const DocenteOsProjectionPanel: React.FC<DocenteOsProjectionPanelProps> =
             onChange={event => {
               const input = event.currentTarget;
               const file = input.files?.[0];
+              input.value = '';
               if (!file) return;
-              void handleFile(file).finally(() => { input.value = ''; });
+              void handleFile(file);
             }}
           />
         </label>
