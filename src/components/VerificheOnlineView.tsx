@@ -1735,7 +1735,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     <select
                       aria-label="Verifica per importazione esiti"
                       value={importTestId}
-                      onChange={event => { setImportTestId(event.target.value); setImportUdaChoice(''); }}
+                      onChange={event => { setImportTestId(event.target.value); setImportPeriod(''); setImportUdaChoice(''); }}
                       disabled={isSubmissionActionPending || !importClassId}
                       className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
                     >
