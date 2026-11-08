@@ -13,6 +13,8 @@ export interface SubmissionImportSelection {
   classId: string;
   testId: string;
   period: 'Q1' | 'Q2';
+  /** Explicit teacher decision at import, never inferred historical provenance. */
+  targetUdaId: string | null;
 }
 
 export type SubmissionImportBlockReason =
@@ -94,7 +96,8 @@ function gradeFromSubmission(
 
 /**
  * Pure and deterministic reconciliation. No partial matching of names, no
- * reassignments, and no substitution of a testId for an UDA id.
+ * reassignments, no substitution of testId for UDA id, and no inferred historical
+ * UDA provenance from a mutable current test record.
  *
  * Every blocked submission stays in the source submissions collection.
  * Existing grades are never overwritten in this operation.
@@ -106,8 +109,11 @@ export function reconcileSubmissionGrades(
 ): SubmissionImportResult {
   const { selection, tests, udas } = options;
   const selectedClass = classes.find(item => item.id === selection.classId);
-  if (!selectedClass || !selection.testId || !['Q1', 'Q2'].includes(selection.period)) {
-    throw new Error('Selezionare una classe, una verifica e un periodo validi.');
+  if (!selectedClass || !selection.testId || !['Q1', 'Q2'].includes(selection.period)
+    || !Object.prototype.hasOwnProperty.call(selection, 'targetUdaId')
+    || (selection.targetUdaId !== null
+      && (typeof selection.targetUdaId !== 'string' || !selection.targetUdaId.trim()))) {
+    throw new Error('Selezionare classe, verifica, periodo e destinazione UDA espliciti.');
   }
 
   const selectedClassKey = normalizeAssessmentClassName(selectedClass.name);
@@ -140,9 +146,14 @@ export function reconcileSubmissionGrades(
   const sourceTest = tests[selection.testId];
   const testExists = sourceTest?.id === selection.testId;
   const classNames = classes.map(item => item.name);
-  const udaIdentityUnique = !sourceTest?.udaId || udas.filter(item => item.id === sourceTest.udaId).length === 1;
-  const udaAllowed = testExists && udaIdentityUnique && isAssessmentUdaSelectionAllowed(
-    sourceTest.udaId, udas as UdaRecord[], selectedClass.name, classNames
+  // Submission does not retain an historical UDA. Never infer that UDA from
+  // the CURRENT mutable test record. Only a teacher's explicit destination
+  // choice may set a grade's optional UDA relation.
+  const chosenUdaId = selection.targetUdaId ?? undefined;
+  const udaIdentityUnique = !chosenUdaId
+    || udas.filter(item => item.id === chosenUdaId).length === 1;
+  const udaAllowed = udaIdentityUnique && isAssessmentUdaSelectionAllowed(
+    chosenUdaId, udas as UdaRecord[], selectedClass.name, classNames
   );
 
   const idCounts = new Map<string, number>();
@@ -206,7 +217,7 @@ export function reconcileSubmissionGrades(
     }
 
     const nextGrade = gradeFromSubmission(
-      submission, students[0].id, sourceTest.title, selection.period, sourceTest.udaId
+      submission, students[0].id, sourceTest.title, selection.period, chosenUdaId
     );
     const existingGrades = classes.flatMap(item =>
       (item.grades || []).filter(grade =>
