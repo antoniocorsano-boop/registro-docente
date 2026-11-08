@@ -87,7 +87,7 @@ describe('FLOW-03 independent review repairs', () => {
     }] as any;
 
     const result = reconcileSubmissionGrades(classes, submissions, {
-      selection: { classId: 'class-b', testId: 'test-1', period: 'Q1' },
+      selection: { classId: 'class-b', testId: 'test-1', period: 'Q1', targetUdaId: null },
       tests: { 'test-1': { id: 'test-1', title: 'Energia', questions: [] } },
       udas: []
     });
