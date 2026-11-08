@@ -148,6 +148,11 @@ describe('SEC-1 verified vault backup restore', () => {
     await vault.initializeActive('password');
     const storage = new SecureAppStorage(vault);
     const previous = snapshot('old');
+    previous.customTests = {
+      linked: { id: 'linked', title: 'Test con fonte storica', questions: [], provenance: {
+        version: 1, kind: 'library-source', sourceId: 'source-old', confirmedByTeacher: true
+      } }
+    };
 
     await storage.restoreSnapshotVerified(previous);
     store.armOneReadCorruption('appData', 10);
@@ -156,6 +161,7 @@ describe('SEC-1 verified vault backup restore', () => {
 
     const afterFailure = await storage.loadSnapshot();
     expect(afterFailure.settings?.school).toBe('IC old');
+    expect(afterFailure.customTests).toEqual(previous.customTests);
     expect(afterFailure.planning).toEqual(emptyPlanningV2);
     expect(afterFailure.professionalMemory).toEqual(previous.professionalMemory);
     expect(afterFailure.copilotState).toEqual(previous.copilotState);
