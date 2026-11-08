@@ -81,6 +81,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [importClassId, setImportClassId] = useState<string>('');
   const [importTestId, setImportTestId] = useState<string>('');
   const [importPeriod, setImportPeriod] = useState<'' | 'Q1' | 'Q2'>('');
+  const [importUdaChoice, setImportUdaChoice] = useState<string>('');
   const previousActiveClassNameRef = useRef(activeClassName);
 
   useEffect(() => {
@@ -114,6 +115,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setImportClassId('');
     setImportTestId('');
     setImportPeriod('');
+    setImportUdaChoice('');
   }, [activeClassName]);
 
   // Never leave a removed/ambiguous class or deleted test selected in the mobile UI.
@@ -429,12 +431,13 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   };
 
   const handleImportSubmissions = async () => {
-    if (!importClassId || !importTestId || !importPeriod) {
-      alert('Selezionare classe, verifica e periodo prima dell’importazione.');
+    if (!importClassId || !importTestId || !importPeriod || !importUdaChoice) {
+      alert('Selezionare classe, verifica, periodo e destinazione UDA prima dell’importazione.');
       return;
     }
     const selection: SubmissionImportSelection = {
-      classId: importClassId, testId: importTestId, period: importPeriod
+      classId: importClassId, testId: importTestId, period: importPeriod,
+      targetUdaId: importUdaChoice === 'none' ? null : importUdaChoice
     };
     await commitSubmissionAction(async () => {
       const preview = onPreviewSubmissionImport(selection);
@@ -449,15 +452,16 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         return;
       }
       const selectedTest = tests[selection.testId];
-      const associatedUda = selectedTest?.udaId
-        ? udas.find(item => item.id === selectedTest.udaId)?.title ?? 'Non identificata'
+      const associatedUda = selection.targetUdaId
+        ? udas.find(item => item.id === selection.targetUdaId)?.title ?? 'Non identificata'
         : 'Nessuna';
       const approved = window.confirm(
         `Confermare l'importazione delle valutazioni?\n\n`
         + `Classe: ${classes.find(item => item.id === selection.classId)?.name ?? 'Non identificata'}\n`
         + `Verifica: ${selectedTest?.title ?? 'Non identificata'}\n`
         + `Periodo: ${selection.period}\n`
-        + `UDA: ${associatedUda}\n\n`
+        + `UDA di destinazione scelta: ${associatedUda}\n`
+        + 'La scelta UDA non certifica la provenienza storica della consegna.\n\n'
         + `Nuove valutazioni: ${preview.creatableCount}\n`
         + `Già presenti e non modificate: ${preview.unchangedCount}\n`
         + `Consegne escluse da verificare: ${preview.blockedCount}\n`
@@ -1702,10 +1706,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
               <div className="flex flex-col gap-2 w-full sm:max-w-lg">
                 <p className="text-xs text-slate-300">
-                  Importazione controllata: scegliere esplicitamente classe, verifica e periodo.
-                  Le consegne con associazioni non sicure resteranno disponibili.
+                  Importazione controllata: scegliere classe, verifica, periodo e UDA di destinazione.
+                  La destinazione non certifica la provenienza storica. Le consegne escluse restano disponibili.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                   <label className="text-xs text-slate-300">
                     Classe
                     <select
@@ -1715,6 +1719,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                         setImportClassId(event.target.value);
                         setImportTestId('');
                         setImportPeriod('');
+                        setImportUdaChoice('');
                       }}
                       disabled={isSubmissionActionPending}
                       className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
@@ -1730,7 +1735,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     <select
                       aria-label="Verifica per importazione esiti"
                       value={importTestId}
-                      onChange={event => setImportTestId(event.target.value)}
+                      onChange={event => { setImportTestId(event.target.value); setImportUdaChoice(''); }}
                       disabled={isSubmissionActionPending || !importClassId}
                       className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
                     >
@@ -1754,11 +1759,30 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                       <option value="Q2">Secondo periodo</option>
                     </select>
                   </label>
+                  <label className="text-xs text-slate-300">
+                    UDA di destinazione
+                    <select
+                      aria-label="UDA di destinazione per importazione esiti"
+                      value={importUdaChoice}
+                      onChange={event => setImportUdaChoice(event.target.value)}
+                      disabled={isSubmissionActionPending || !importClassId || !importTestId}
+                      className="mt-1 p-2 neon-input w-full text-xs text-white bg-slate-900"
+                    >
+                      <option value="">Scegli UDA</option>
+                      <option value="none">Nessuna UDA</option>
+                      {udas.filter(item => {
+                        const targetClass = classes.find(candidate => candidate.id === importClassId);
+                        return targetClass && isAssessmentUdaForClass(
+                          item, targetClass.name, classes.map(candidate => candidate.name)
+                        );
+                      }).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+                    </select>
+                  </label>
                 </div>
                 <button
                   type="button"
                   onClick={handleImportSubmissions}
-                  disabled={isSubmissionActionPending || !importClassId || !importTestId || !importPeriod}
+                  disabled={isSubmissionActionPending || !importClassId || !importTestId || !importPeriod || !importUdaChoice}
                   data-testid="import-01-confirmed-scope"
                   className="px-3.5 py-2 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
