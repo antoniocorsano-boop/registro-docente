@@ -86,7 +86,11 @@ describe('FLOW-03 independent review repairs', () => {
       testId: 'test-1'
     }] as any;
 
-    const result = reconcileSubmissionGrades(classes, submissions);
+    const result = reconcileSubmissionGrades(classes, submissions, {
+      selection: { classId: 'class-b', testId: 'test-1', period: 'Q1' },
+      tests: { 'test-1': { id: 'test-1', title: 'Energia', questions: [] } },
+      udas: []
+    });
     expect((result as any).importedCountByClassId).toEqual({ 'class-b': 1 });
   });
 
