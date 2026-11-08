@@ -977,6 +977,27 @@
         "tests/browser/aic-04-cross-surface-entry.spec.cjs",
         "tests/browser/int-01-didactic-continuity.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S2A-I01",
+      "owner": "INT-02/S2a",
+      "statement": "Student sharing and simulation require a verified explicit test and class selection; the shared test catalog, S1 UDA scope, editor drafts and independent batch grade import remain authoritative and cannot be altered by Padlet choices.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/library/assessmentShareSelection.ts",
+        "src/library/assessmentShareSelection.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts",
+        "src/components/VerificheOnlineView.tsx",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+      ],
+      "tests": [
+        "src/library/assessmentShareSelection.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts",
+        "src/security/int02AssessmentHandoffContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+      ]
     }
   ]
 }
