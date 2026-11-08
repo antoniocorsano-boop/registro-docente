@@ -1,0 +1,125 @@
+name: "INT-02 S2a Android localhost package (corrected exact SHA)"
+
+on:
+  pull_request:
+    branches:
+      - feat/int-02-s2a-explicit-share-selection
+
+permissions:
+  contents: read
+
+jobs:
+  build-static-hpr:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout immutable INT-02 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: a371f34a24860f871d2db618e32a7b433eac2d13
+          persist-credentials: false
+      - name: Verify immutable source and disabled hosted deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "a371f34a24860f871d2db618e32a7b433eac2d13"
+          test -f vercel.json
+          grep -Eq '"deploymentEnabled" *: *false' vercel.json
+      - name: Setup Node for isolated package build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Bun from npm (avoid GitHub release HTTP 504)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund bun@1.4.4
+          bun --version
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build production static assets
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+      - name: Prepare isolated Chromium for S2a mobile regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .s2a-browser-tools
+          printf '%s\n' '{"name":"int02-s2a-browser","private":true}' > .s2a-browser-tools/package.json
+          npm --prefix .s2a-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          .s2a-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/int-02-s1-library-assessment.spec.cjs .s2a-browser-tools/
+      - name: Launch synthetic-only local preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 > /tmp/int02-s2a-preview.log 2>&1 &
+          echo $! > /tmp/int02-s2a-preview.pid
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/int02-s2a-preview.log
+          exit 1
+      - name: Run S1 plus S2a Chromium synthetic mobile qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .s2a-browser-tools
+          BASE_URL=http://127.0.0.1:4173 ./node_modules/.bin/playwright test int-02-s1-library-assessment.spec.cjs --workers=1 --reporter=line
+
+      - name: Assemble ready-to-run Termux local package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          APP="package/registro_int02_s2a_a371f34"
+          mkdir -p "$APP"
+          cp -a dist/. "$APP/"
+          printf '%s\n' 'a371f34a24860f871d2db618e32a7b433eac2d13' > "$APP/INT02_S2A_SOURCE_SHA.txt"
+          cat > "$APP/avvia-termux.sh" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          if ! command -v python >/dev/null 2>&1; then
+            echo "Python non disponibile: eseguire pkg install python"
+            exit 1
+          fi
+          echo "Registro Docente INT-02/S2a a371f34 (solo dati sintetici)"
+          echo "Aprire Chrome: http://127.0.0.1:4175"
+          echo "Interrompere con Ctrl+C."
+          exec python -m http.server 4175 --bind 127.0.0.1 --directory "$DIR"
+          SCRIPT
+          chmod +x "$APP/avvia-termux.sh"
+          cat > "$APP/GUIDA-TERMUX.txt" <<'TXT'
+          REGISTRO DOCENTE - INT-02/S2a - COLLAUDO ANDROID SELEZIONI
+          Versione prodotto: a371f34a24860f871d2db618e32a7b433eac2d13
+          Collaudo INT-02/S2a: classe/test espliciti per Padlet e simulazione; importazione esiti e schede storiche invariate.
+          Archiviazione SOLO locale, nessun Vercel e nessun merge in main.
+          Mantenere gli stessi dati sintetici gia' presenti su http://127.0.0.1:4175.
+          Prima interrompere la precedente sessione Termux sulla porta 4175 (Ctrl+C).
+          Aprire Termux ed eseguire:
+            pkg install -y python unzip
+            cd "$HOME"
+            unzip -o "$HOME/storage/downloads/registro-int02-s2a-android-local-a371f34.zip"
+            cd "$HOME/registro_int02_s2a_a371f34"
+            bash avvia-termux.sh
+          Aprire Chrome all'indirizzo: http://127.0.0.1:4175
+          Usare solo classi e verifiche sintetiche. In Verifiche online > Condivisione Padlet controllare i selettori vuoti all'accesso diretto; scegliere esplicitamente classe e verifica; verificare i comandi abilitati; non importare voti.
+          Non cancellare i dati del sito Chrome, altrimenti l'archivio locale viene perso.
+          TXT
+          test -s "$APP/index.html"
+          test -s "$APP/INT02_S2A_SOURCE_SHA.txt"
+          test -x "$APP/avvia-termux.sh"
+          echo "Source SHA in artifact:"; cat "$APP/INT02_S2A_SOURCE_SHA.txt"
+          (cd package && find . -type f -print | sort)
+      - name: Upload Android local package
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-int02-s2a-android-local-a371f34
+          path: package/
+          if-no-files-found: error
+          retention-days: 7
