@@ -24,7 +24,8 @@ describe('INT-02/S1 source-to-assessment UI and mutation separation', () => {
     const view = await Bun.file('src/components/VerificheOnlineView.tsx').text();
     const types = await Bun.file('src/types.ts').text();
     const testModel = types.slice(types.indexOf('export interface OnlineTest {'), types.indexOf('export interface OnlineSubmission {'));
-    expect(testModel).not.toMatch(/\\bclassId\\b|\\bclassName\\b/);
+    expect(testModel).not.toContain('classId');
+    expect(testModel).not.toContain('className');
     expect(view).toContain('Object.values(tests).map(t => {');
     expect(view).toContain('Il catalogo è comune alle classi');
     expect(view).toContain('La classe destinataria si sceglie nella sezione Condivisione Padlet');
