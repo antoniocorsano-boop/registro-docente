@@ -118,6 +118,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const pendingEditorExitRef = useRef<(() => void) | null>(null);
   const [editorExitOpen, setEditorExitOpen] = useState(false);
   const editorExitDialogRef = useRef<HTMLDivElement | null>(null);
+  const editorExitOriginFocusRef = useRef<HTMLElement | null>(null);
+  const editorExitRestoreFocusRef = useRef(false);
   const handoffPanelRef = useRef<HTMLElement | null>(null);
 
   const editorSnapshot = (fields: {
@@ -146,6 +148,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         setEditingTestId(null);
         setEditorExitOpen(false);
         pendingEditorExitRef.current = null;
+        editorExitOriginFocusRef.current = null;
+        editorExitRestoreFocusRef.current = false;
       }
     };
     onRegisterDraftGuard(guard);
@@ -163,11 +167,20 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   useEffect(() => {
     if (!editorExitOpen) return;
     editorExitDialogRef.current?.querySelector<HTMLButtonElement>('[data-assessment-stay]')?.focus();
+    return () => {
+      if (editorExitRestoreFocusRef.current) {
+        editorExitRestoreFocusRef.current = false;
+        editorExitOriginFocusRef.current?.focus();
+      }
+    };
   }, [editorExitOpen]);
 
   const requestLocalEditorExit = (commit: () => void) => {
     if (editorSavingRef.current || pendingEditorExitRef.current) return;
     if (editorDirtyRef.current) {
+      editorExitOriginFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement : null;
+      editorExitRestoreFocusRef.current = false;
       pendingEditorExitRef.current = commit;
       setEditorExitOpen(true);
       return;
@@ -177,6 +190,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   const cancelLocalEditorExit = () => {
     pendingEditorExitRef.current = null;
+    editorExitRestoreFocusRef.current = true;
     setEditorExitOpen(false);
   };
 
@@ -184,6 +198,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     if (editorSavingRef.current) return;
     const commit = pendingEditorExitRef.current;
     pendingEditorExitRef.current = null;
+    editorExitRestoreFocusRef.current = false;
+    editorExitOriginFocusRef.current = null;
     editorDirtyRef.current = false;
     editorBaselineRef.current = null;
     setEditorExitOpen(false);
@@ -192,7 +208,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   // Active class from App is authoritative; Padlet's independent selector is not.
   const assessmentClassName = assessmentHandoff?.className ?? activeClassName ?? '';
-  const eligibleUdas = udas.filter(uda => isAssessmentUdaForClass(uda, assessmentClassName));
+  const registeredClassNames = classes.map(item => item.name);
+  const eligibleUdas = udas.filter(uda =>
+    isAssessmentUdaForClass(uda, assessmentClassName, registeredClassNames)
+  );
 
   // Print Mode State
   const [printDocenteMode, setPrintDocenteMode] = useState(false);
@@ -365,7 +384,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       alert('Inserisci almeno una domanda.');
       return;
     }
-    if (!isAssessmentUdaSelectionAllowed(editorUdaId, udas, assessmentClassName)) {
+    if (!isAssessmentUdaSelectionAllowed(editorUdaId, udas, assessmentClassName, registeredClassNames)) {
       alert('L’unità didattica scelta non appartiene alla classe di lavoro. Seleziona un’unità pertinente oppure nessuna.');
       return;
     }
@@ -499,7 +518,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       alert('Inserisci sia il titolo del test sia il testo con domande e risposte.');
       return;
     }
-    if (!isAssessmentUdaSelectionAllowed(manualUdaId, udas, assessmentClassName)) {
+    if (!isAssessmentUdaSelectionAllowed(manualUdaId, udas, assessmentClassName, registeredClassNames)) {
       alert('L’unità didattica scelta non appartiene alla classe di lavoro.');
       return;
     }
