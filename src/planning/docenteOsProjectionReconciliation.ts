@@ -118,6 +118,9 @@ export function bindAcceptedDocenteOsTeachingProjection(
     throw new Error('Data di accettazione della proiezione Docente OS non valida.');
   }
   assertCompleteReconciliation(projection, reconciliation);
+  if (reconciliation.some(item => item.status !== 'resolved')) {
+    throw new Error('Riconciliazione classi Docente OS incompleta: associazioni mancanti o ambigue.');
+  }
 
   const fingerprint = projection.projectionFingerprint.hash;
   if (current.docenteOsProjections.some(item => item.projection.projectionFingerprint.hash === fingerprint)) {
