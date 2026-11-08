@@ -3461,6 +3461,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 Destinazione: {planningExitDestination === 'uda-gantt' ? 'Unità didattiche (UDA)'
                   : planningExitDestination === 'dashboard' ? 'Panoramica della classe'
                   : planningExitDestination === 'home' ? 'Oggi'
+                  : planningExitDestination === 'biblioteca' ? 'Biblioteca privata'
+                  : planningExitDestination === 'verifiche-online' ? 'Verifiche online'
                   : 'schermata selezionata'}.
               </p>
             )}
