@@ -31,7 +31,7 @@ describe('A4-R2B Task 7 — Local Docente OS projection preview and explicit com
     expect(source).toContain('Riconciliazione classi');
     expect(source).toContain("item.status === 'resolved'");
     expect(source).toContain('disabled={!canAccept || isAccepting}');
-    expect(source).toContain('await onAccept(preview.projection)');
+    expect(source).toContain('await onAccept(preview)');
     expect(source).toContain('setSuccessMessage(');
     expect(source).not.toContain('fetch(');
     expect(source).not.toContain('localStorage');
