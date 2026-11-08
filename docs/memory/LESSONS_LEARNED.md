@@ -75,3 +75,18 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: PREDEPLOY #595 RED causale; PREDEPLOY #596 PASS; Browser Qualification #315 PASS; PR #51.
 - Promozione candidata: nessuna per ora; il principio è coperto da fail-closed/causalità, ma resta memoria episodica utile per LIB-03C.
 - Sostituita da: —
+
+### LL-006 — Screenshot mobili attendibili solo dopo la conclusione delle transizioni
+- Stato: ACTIVE
+- Ciclo/data: INT-02/S2b · 2026-11-08
+- Exact SHA/riferimento: candidato `a6d5d24e3e373c75da59f25172046bae7eeb7bb7`; merge `e6b518656efbfaeeaa85e04512fa149ef48bf91a`.
+- Obiettivo: produrre quattro evidenze visive sintetiche della scelta esplicita della provenienza Biblioteca e della sua conservazione nelle verifiche, senza ripetere collaudi manuali Android.
+- Ha funzionato: test Playwright sul runner GitHub, quattro screenshot mobili 390×844 nell'artefatto del browser #1803, revisione umana HPR PASS; codice applicativo immutato dopo il primo candidato qualificato e identità dell'albero del merge verificata.
+- È fallito: una prima immagine acquisita subito dopo il cambio di vista mostrava il pannello di navigazione in uscita ancora parzialmente sovrapposto al contenuto, sebbene i controlli funzionali fossero verdi.
+- Causa reale: `aria-hidden` precede la conclusione dell'animazione del menu laterale (300 ms), perciò la sola verifica di stato logico non garantisce un'immagine visivamente stabile.
+- Regola generalizzabile: quando l'evidenza HPR dipende dall'aspetto dopo una navigazione animata, attendere una condizione geometrica osservabile (pannello completamente fuori dallo schermo) prima dello screenshot; non usare un semplice ritardo arbitrario e non attribuire HPR PASS alla sola qualificazione automatica.
+- Recipe: `TR-003` per la certificazione; asserzione mirata `expectDrawerFullyOffscreen` in `tests/browser/int-02-s1-library-assessment.spec.cjs` per l'evidenza visiva.
+- Non ripetere: fotografie immediatamente dopo il cambio `aria-hidden` o dichiarazione di accettazione umana senza presa visione e approvazione esplicita.
+- Evidenza: PR #160, Browser Qualification #1802 (rilevazione visiva), #1803 PASS (artifact `13635091930`), ricevuta HPR #6727478607, revisione Codex #6727240052.
+- Promozione candidata: nessuna nuova operating rule; caso particolare dei contratti già coperti da `OR-003` e `TR-003`.
+- Sostituita da: —
