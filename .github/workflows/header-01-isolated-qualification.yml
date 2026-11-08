@@ -42,8 +42,17 @@ jobs:
           echo "Actual:   ${actual_sha}"
           test "${actual_sha}" = "${CANDIDATE_SHA}"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node for isolated qualification
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned Bun from npm (GitHub release CDN fallback)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund bun@1.4.4
+          test "$(bun --version)" = "1.4.4"
 
       - name: Install dependencies from lockfile
         run: bun install --frozen-lockfile
