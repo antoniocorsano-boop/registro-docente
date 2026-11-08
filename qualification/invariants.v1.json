@@ -1025,6 +1025,37 @@
         "tests/browser/a4-r2b-projection-import-preview.spec.cjs",
         "tests/browser/int-01-didactic-continuity.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-IMPORT-I01",
+      "owner": "INT-02/IMPORT-01",
+      "statement": "Import of online outcomes to canonical grades requires explicit class, test and assessment period, a teacher-reviewed preview bound to the exact current persisted snapshot, and unambiguous exact student/class identity. Only the selected class/test's submissions may create grades, with UDA derived only from the resolved origin test and verified for the target class. Missing/foreign UDA, ambiguous identity, invalid score/date, duplicate submission identity and prior grade conflicts fail closed without deleting submissions or overwriting teacher modifications; repeated unchanged imports are no-ops. Existing secure mutation and FLOW-03 completion boundaries remain authoritative, and test sharing cannot authorize imports.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/persistence/submissionGradeImport.ts",
+        "src/App.tsx",
+        "src/components/VerificheOnlineView.tsx",
+        "src/security/int02SubmissionImportIntegrity.test.ts",
+        "src/security/persist01hMutationHelpers.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts",
+        "tests/browser/release-01-qualification.spec.cjs"
+      ],
+      "tests": [
+        "src/security/int02SubmissionImportIntegrity.test.ts",
+        "src/security/persist01hMutationHelpers.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/release-01-qualification.spec.cjs"
+      ]
     }
   ]
 }
