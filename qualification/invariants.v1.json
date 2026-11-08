@@ -237,6 +237,26 @@
       ]
     },
     {
+      "id": "A4-R2B-I06",
+      "owner": "A4-R2B",
+      "statement": "Docente OS teaching projections enter Registro only through explicit local JSON import and teacher-facing preview; strict validation and canonical class reconciliation remain fail-closed, unresolved or ambiguous mappings cannot be committed after queue-time drift, and success is shown only after durable acceptance.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/planning/DocenteOsProjectionPanel.tsx",
+        "src/components/planning/PlanningProfileView.tsx",
+        "src/security/a4R2ProjectionImportUiContract.test.ts",
+        "src/planning/docenteOsProjectionReconciliation.ts"
+      ],
+      "tests": [
+        "src/security/a4R2ProjectionImportUiContract.test.ts",
+        "src/security/a4R2ProjectionAcceptancePersistence.test.ts",
+        "src/security/a4R2DocenteOsProjectionContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
       "id": "LSM-01C-I01",
       "owner": "LSM-01C-A",
       "statement": "Registro consumes the exact qualified shared semantic-memory contract as a vendored local package; the package remains derived/provider-neutral and adds no build-time network or external-registry dependency.",
