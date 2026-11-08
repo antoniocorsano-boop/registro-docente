@@ -988,12 +988,14 @@
         "src/library/assessmentShareSelection.test.ts",
         "src/security/int02S2aSelectionContract.test.ts",
         "src/components/VerificheOnlineView.tsx",
-        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "src/security/persist01hTerminalReviewIntegrity.test.ts"
       ],
       "tests": [
         "src/library/assessmentShareSelection.test.ts",
         "src/security/int02S2aSelectionContract.test.ts",
-        "src/security/int02AssessmentHandoffContract.test.ts"
+        "src/security/int02AssessmentHandoffContract.test.ts",
+        "src/security/persist01hTerminalReviewIntegrity.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
