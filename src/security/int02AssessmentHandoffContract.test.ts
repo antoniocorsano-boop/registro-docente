@@ -19,6 +19,22 @@ describe('INT-02/S1 source-to-assessment UI and mutation separation', () => {
     expect(app).toContain("if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);");
   });
 
+  test('shared catalogue remains class-reusable while UDA and navigation labels are explicit', async () => {
+    const app = await Bun.file('src/App.tsx').text();
+    const view = await Bun.file('src/components/VerificheOnlineView.tsx').text();
+    const types = await Bun.file('src/types.ts').text();
+    const testModel = types.slice(types.indexOf('export interface OnlineTest {'), types.indexOf('export interface OnlineSubmission {'));
+    expect(testModel).not.toMatch(/\\bclassId\\b|\\bclassName\\b/);
+    expect(view).toContain('Object.values(tests).map(t => {');
+    expect(view).toContain('Il catalogo è comune alle classi');
+    expect(view).toContain('La classe destinataria si sceglie nella sezione Condivisione Padlet');
+    expect(view).toContain('le UDA selezionabili nell’editor appartengono alla classe di lavoro');
+    expect(view).toContain("editingTestId ? 'Salva modifiche' : 'Salva Verifica'");
+    expect(view).toContain("editingTestId ? 'Salva modifiche e chiudi' : 'Salva verifica e chiudi'");
+    expect(app).toContain("planningExitDestination === 'biblioteca' ? 'Biblioteca privata'");
+    expect(app).toContain("planningExitDestination === 'verifiche-online' ? 'Verifiche online'");
+  });
+
   test('Library surfaces expose one explicit action, only when teacher source is ready and class exists', async () => {
     const card = await Bun.file('src/components/LibrarySourceCard.tsx').text();
     const library = await Bun.file('src/components/LibraryView.tsx').text();
