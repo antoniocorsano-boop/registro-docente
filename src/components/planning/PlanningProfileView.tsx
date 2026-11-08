@@ -3,17 +3,23 @@ import type { PlanningDraftGuard } from './PlanningProfileEditor';
 import type {
   ArenaPlanningContext,
   ArenaPlanningContextPreview,
+  PlanningState,
   TeachingProfile
 } from '../../planning/types';
 import { resolveClassGradeLevel, type PlanningFrameResolution } from '../../planning/planningFrameResolver';
 import type { ResolvedLibraryTeachingContext } from '../../library/teachingContext';
 import { DidacticContinuityBar } from '../DidacticContinuityBar';
+import type { ClassData } from '../../types';
 import { ArenaPlanningContextPanel } from './ArenaPlanningContextPanel';
+import { DocenteOsProjectionPanel } from './DocenteOsProjectionPanel';
 import { PlanningProfileEditor } from './PlanningProfileEditor';
 
 interface PlanningProfileViewProps {
   profiles: TeachingProfile[];
   arenaContexts: ArenaPlanningContext[];
+  planning: PlanningState;
+  classes: ClassData[];
+  onAcceptDocenteOsProjection: (payload: unknown) => Promise<PlanningState>;
   onSaveProfile: (profile: TeachingProfile) => Promise<void>;
   onAcceptArenaContext: (context: ArenaPlanningContextPreview) => Promise<void>;
   currentClassName?: string | null;
@@ -31,6 +37,9 @@ interface PlanningProfileViewProps {
 export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
   profiles,
   arenaContexts,
+  planning,
+  classes,
+  onAcceptDocenteOsProjection,
   onSaveProfile,
   onAcceptArenaContext,
   currentClassName = null,
@@ -248,6 +257,11 @@ export const PlanningProfileView: React.FC<PlanningProfileViewProps> = ({
           </div>
         </section>
       )}
+      <DocenteOsProjectionPanel
+        planning={planning}
+        classes={classes}
+        onAccept={onAcceptDocenteOsProjection}
+      />
     </section>
   );
 };
