@@ -41,7 +41,8 @@ test('IMPORT-01 mobile: teacher scope, explicit confirmation, durable import and
 
   await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(STUDENT_NAME);
   await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
-  await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
+  // The mobile list can mask names; the form resets only after the durable save.
+  await expect(page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)')).toHaveValue('');
   await closeSavedNotice(page);
 
   await page.goto(`${baseURL}/?mode=student&test=energia&class=${encodeURIComponent(CLASS_NAME)}`, {
