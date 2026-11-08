@@ -21,6 +21,8 @@ describe('A4-R2B Task 7 — Local Docente OS projection preview and explicit com
     expect(source).toContain('type="file"');
     expect(source).toContain('accept="application/json,.json"');
     expect(source).toContain('await file.text()');
+    expect(source).toContain('const selectionId = ++latestFileSelectionRef.current');
+    expect(source).toContain('if (selectionId !== latestFileSelectionRef.current) return;');
     expect(source).toContain('previewDocenteOsTeachingProjection');
     expect(source).toContain('reconcileDocenteOsTeachingProjectionClasses');
     expect(source).toContain('findAcceptedDocenteOsTeachingProjectionForSlot');
