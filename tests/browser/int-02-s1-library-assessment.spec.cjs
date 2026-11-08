@@ -94,8 +94,28 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   const udaSelect = page.getByText('Collega a UDA Curricolare').locator('..').locator('select');
   await expect(udaSelect).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Salva Verifica' })).toBeVisible();
+  await expect(udaSelect.locator('option').filter({ hasText: '3ª B' })).toHaveCount(0);
+
+  // Internal navigation must not silently discard a modified assessment.
+  await page.getByRole('button', { name: 'Condivisione Padlet' }).click();
+  const internalExit = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+  await expect(internalExit).toBeVisible();
+  await internalExit.getByRole('button', { name: "Rimani nell'editor" }).click();
+  await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
+
+  // The native Android Back equivalent must restore history before displaying
+  // a confirmation. Staying preserves the edited form; leaving discards only
+  // session form state and does not create a test.
+  await page.goBack();
+  const exitDialog = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+  await expect(exitDialog).toBeVisible();
+  await exitDialog.getByRole('button', { name: 'Rimani nell’editor' }).click();
+  await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
+  await expect(page.getByRole('heading', { name: 'Verifiche online', exact: true })).toBeVisible();
 
   await page.goBack();
+  await expect(exitDialog).toBeVisible();
+  await exitDialog.getByRole('button', { name: 'Esci senza salvare' }).click();
   await expect(page.getByRole('heading', { name: 'Biblioteca privata', exact: true })).toBeVisible();
   await expect(page.getByTestId('int02-assessment-handoff')).toHaveCount(0);
 });
