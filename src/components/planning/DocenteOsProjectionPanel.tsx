@@ -76,7 +76,7 @@ export const DocenteOsProjectionPanel: React.FC<DocenteOsProjectionPanelProps> =
     setErrorMessage('');
     setSuccessMessage('');
     try {
-      await onAccept(preview.projection);
+      await onAccept(preview);
       setPreview(null);
       setSuccessMessage('Proiezione Docente OS accettata e salvata.');
     } catch (error) {
