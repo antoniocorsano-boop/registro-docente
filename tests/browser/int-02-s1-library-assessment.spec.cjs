@@ -90,6 +90,9 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expect(shareTest).toHaveValue('');
   await expect(copyLink).toBeDisabled();
   await expect(simulate).toBeDisabled();
+  await expect(copyLink).not.toHaveClass(/neon-btn-primary/);
+  await expect(copyLink).toHaveClass(/cursor-not-allowed/);
+  await expect(simulate).toHaveClass(/opacity-60/);
   await shareTest.selectOption('energia');
   await expect(copyLink).toBeEnabled();
   await expect(simulate).toBeEnabled();
