@@ -1073,13 +1073,15 @@
         "src/components/VerificheOnlineView.tsx",
         "src/security/backupPayload.ts",
         "src/security/backupPayload.test.ts",
-        "src/security/int02S2bProvenanceContract.test.ts"
+        "src/security/int02S2bProvenanceContract.test.ts",
+        "src/security/backupRestore.test.ts"
       ],
       "tests": [
         "src/library/assessmentProvenance.test.ts",
         "src/security/int02S2bProvenanceContract.test.ts",
         "src/security/backupPayload.test.ts",
-        "src/security/testEditorPersistenceIntegrity.test.ts"
+        "src/security/testEditorPersistenceIntegrity.test.ts",
+        "src/security/backupRestore.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
