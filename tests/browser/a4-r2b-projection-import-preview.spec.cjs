@@ -81,6 +81,36 @@ test('A4-R2B Task 7 — invalid JSON or unresolved class never authorizes projec
   expect(errors).toEqual([]);
 });
 
+test('A4-R2B Task 7 — latest file wins even if a prior read finishes later', async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalText = File.prototype.text;
+    let selectedReads = 0;
+    window.__a4SlowReadDone = false;
+    File.prototype.text = function () {
+      const order = ++selectedReads;
+      return originalText.call(this).then(text => order === 1
+        ? new Promise(resolve => setTimeout(() => {
+            window.__a4SlowReadDone = true;
+            resolve(text);
+          }, 350))
+        : text);
+    };
+  });
+  await configureSyntheticVault(page);
+  const region = await openImport(page);
+  const input = region.locator('input[type="file"]');
+  await input.setInputFiles(projectionFixture); // valid, deliberately delayed
+  await input.setInputFiles({
+    name: 'latest-invalid.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{ latest invalid JSON')
+  });
+  await expect(region.getByRole('alert')).toContainText('non è un JSON leggibile');
+  await expect.poll(() => page.evaluate(() => window.__a4SlowReadDone)).toBe(true);
+  await expect(region.getByRole('region', { name: 'Anteprima proiezione Docente OS' })).toHaveCount(0);
+  await expect(region.getByRole('button', { name: 'Accetta e salva la proiezione' })).toHaveCount(0);
+});
+
 test('A4-R2B Task 7 — local file preview then explicit teacher acceptance after unique class match', async ({ page }) => {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
