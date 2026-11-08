@@ -151,7 +151,7 @@ import {
 } from './persistence/backupCheckpoint';
 import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
 import { applySettingsPatch } from './persistence/settingsMutation';
-import { reconcileSubmissionGrades } from './persistence/submissionGradeImport';
+import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
 import {
   createSemanticMemoryHttpClient,
@@ -2851,11 +2851,18 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     );
   }, [commitSubmissionsMutation]);
 
-  // Import submissions into class grades
-  const handleImportSubmissionsToRegister = (targetUdaId?: string): Promise<void> => {
-    if (submissionsRef.current.length === 0) {
-      alert('Nessuna consegna online ricevuta da importare.');
-      return Promise.resolve();
+  // Import submissions into class grades (IMPORT-01)
+  const handlePreviewSubmissionImport = (selection: SubmissionImportSelection): SubmissionImportPreview =>
+    reconcileSubmissionGrades(appDataRef.current.classes, submissionsRef.current, {
+      selection, tests: testsRef.current, udas: udasRef.current
+    }).preview;
+
+  const handleImportSubmissionsToRegister = (
+    selection: SubmissionImportSelection,
+    confirmedSignature: string
+  ): Promise<void> => {
+    if (!confirmedSignature || submissionsRef.current.length === 0) {
+      return Promise.reject(new Error('Non ci sono consegne approvate per l’importazione.'));
     }
 
     let importedCount = 0;
@@ -2865,7 +2872,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const recordingClassId = recordSessionAtSave?.context.classId;
 
     return commitAppDataMutation(current => {
-      const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId);
+      // Rebuild from the latest committed state INSIDE the serialized mutation.
+      const result = reconcileSubmissionGrades(current.classes, submissionsRef.current, {
+        selection, tests: testsRef.current, udas: udasRef.current
+      });
+      if (result.preview.signature !== confirmedSignature) {
+        throw new Error('Le consegne o i dati sono cambiati. Riesaminare l’anteprima prima di importare.');
+      }
+      if (result.importedCount === 0) {
+        throw new Error('Nessuna valutazione nuova da importare.');
+      }
       importedCount = result.importedCount;
       importedCountByClassId = result.importedCountByClassId;
       return {
@@ -3237,6 +3253,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onSaveNewTest={handleSaveNewTest}
             onDeleteSubmission={handleDeleteSubmission}
+            onPreviewSubmissionImport={handlePreviewSubmissionImport}
             onImportSubmissionsToRegister={handleImportSubmissionsToRegister}
             onSimulateTest={(testId, className) => {
               setStudentMode({

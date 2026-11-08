@@ -50,6 +50,21 @@ function submission(id: string, overrides: Partial<OnlineSubmission> = {}): Onli
   };
 }
 
+function importOptions() {
+  return {
+    selection: { classId: 'class-3a', testId: 'test-energia', period: 'Q1' as const, targetUdaId: 'uda-1' },
+    tests: {
+      'test-energia': {
+        id: 'test-energia', title: 'Energia', questions: [], udaId: 'uda-1'
+      }
+    },
+    udas: [{
+      id: 'uda-1', title: 'Energia', className: '3ª A',
+      hours: 1, period: 'Q1' as const, startMonth: 0, durationMonths: 1
+    }]
+  };
+}
+
 describe('PERSIST-01H pure mutation helpers', () => {
   test('settings diff contains only changed top-level fields and theme patch preserves newer committed fields', async () => {
     const module = await import(settingsModulePath) as {
@@ -130,9 +145,9 @@ describe('PERSIST-01H pure mutation helpers', () => {
 
   test('first submission import uses deterministic batch identity', async () => {
     const module = await import(importModulePath) as {
-      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], targetUdaId?: string) => { classes: ClassData[]; importedCount: number };
+      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], options: ReturnType<typeof importOptions>) => { classes: ClassData[]; importedCount: number; preview: { blockedByReason: Record<string, number | undefined> } };
     };
-    const result = module.reconcileSubmissionGrades(classFixture(), [submission('sub-1')], 'uda-1');
+    const result = module.reconcileSubmissionGrades(classFixture(), [submission('sub-1')], importOptions());
 
     expect(result.importedCount).toBe(1);
     expect(result.classes[0].grades).toHaveLength(1);
@@ -140,24 +155,25 @@ describe('PERSIST-01H pure mutation helpers', () => {
     expect(result.classes[0].grades[0].udaId).toBe('uda-1');
   });
 
-  test('re-import of the same submission reconciles instead of duplicating the grade', async () => {
+  test('re-import with a changed score preserves the previously registered grade', async () => {
     const module = await import(importModulePath) as {
-      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], targetUdaId?: string) => { classes: ClassData[]; importedCount: number };
+      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], options: ReturnType<typeof importOptions>) => { classes: ClassData[]; importedCount: number; preview: { blockedByReason: Record<string, number | undefined> } };
     };
-    const first = module.reconcileSubmissionGrades(classFixture(), [submission('sub-1')]);
-    const second = module.reconcileSubmissionGrades(first.classes, [submission('sub-1', { score: 9 })]);
+    const first = module.reconcileSubmissionGrades(classFixture(), [submission('sub-1')], importOptions());
+    const second = module.reconcileSubmissionGrades(first.classes, [submission('sub-1', { score: 9 })], importOptions());
 
-    expect(second.importedCount).toBe(1);
+    expect(second.importedCount).toBe(0);
+    expect(second.preview.blockedByReason.GRADE_CONFLICT).toBe(1);
     expect(second.classes[0].grades).toHaveLength(1);
     expect(second.classes[0].grades[0].batchId).toBe('online_sub-1');
-    expect(second.classes[0].grades[0].value).toBe('9');
+    expect(second.classes[0].grades[0].value).toBe('8');
   });
 
   test('different submission ids produce distinct deterministic imported batches', async () => {
     const module = await import(importModulePath) as {
-      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], targetUdaId?: string) => { classes: ClassData[]; importedCount: number };
+      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], options: ReturnType<typeof importOptions>) => { classes: ClassData[]; importedCount: number; preview: { blockedByReason: Record<string, number | undefined> } };
     };
-    const result = module.reconcileSubmissionGrades(classFixture(), [submission('sub-1'), submission('sub-2')]);
+    const result = module.reconcileSubmissionGrades(classFixture(), [submission('sub-1'), submission('sub-2')], importOptions());
 
     expect(result.importedCount).toBe(2);
     expect(result.classes[0].grades.map(grade => grade.batchId).sort()).toEqual(['online_sub-1', 'online_sub-2']);
@@ -165,12 +181,12 @@ describe('PERSIST-01H pure mutation helpers', () => {
 
   test('unmatched class or student creates no grade and is not counted', async () => {
     const module = await import(importModulePath) as {
-      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], targetUdaId?: string) => { classes: ClassData[]; importedCount: number };
+      reconcileSubmissionGrades: (classes: ClassData[], submissions: OnlineSubmission[], options: ReturnType<typeof importOptions>) => { classes: ClassData[]; importedCount: number; preview: { blockedByReason: Record<string, number | undefined> } };
     };
     const result = module.reconcileSubmissionGrades(classFixture(), [
       submission('sub-class', { class: '9ª Z' }),
       submission('sub-student', { name: 'Persona Sconosciuta' })
-    ]);
+    ], importOptions());
 
     expect(result.importedCount).toBe(0);
     expect(result.classes[0].grades).toEqual([]);

@@ -22,9 +22,9 @@ describe('INT-02/S2a — condivisione non è importazione', () => {
     const view = await Bun.file('src/components/VerificheOnlineView.tsx').text();
     const app = await Bun.file('src/App.tsx').text();
     const reconciler = await Bun.file('src/persistence/submissionGradeImport.ts').text();
-    expect(view).toContain('onImportSubmissionsToRegister(currentSelectedTest?.udaId)');
-    expect(app).toContain('reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId)');
-    expect(reconciler).toContain('submission.testId');
+    expect(view).toContain('await onImportSubmissionsToRegister(selection, preview.signature);');
+    expect(app).toContain('reconcileSubmissionGrades(current.classes, submissionsRef.current, {');
+    expect(reconciler).toContain('item.testId === selection.testId');
     expect(view).toContain('const [selectedTestId, setSelectedTestId]');
     const submit = view.slice(
       view.indexOf('const handleImportSubmissions = async'),
@@ -32,6 +32,7 @@ describe('INT-02/S2a — condivisione non è importazione', () => {
     );
     expect(submit).not.toContain('shareSelectedTestId');
     expect(submit).not.toContain('shareTarget');
+    expect(submit).not.toContain('currentSelectedTest?.udaId');
   });
 
   test('S1: il filtro UDA e la bozza editor rimangono presenti', async () => {

@@ -52,7 +52,7 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     const afterCommitStart = importSection.indexOf('afterCommit:', deriveStart);
     const preDeriveSection = importSection.slice(0, deriveStart);
     const deriveSection = importSection.slice(deriveStart, afterCommitStart);
-    const executionTimeRead = 'reconcileSubmissionGrades(current.classes, submissionsRef.current, targetUdaId)';
+    const executionTimeRead = 'reconcileSubmissionGrades(current.classes, submissionsRef.current, {';
 
     expect(deriveStart).toBeGreaterThanOrEqual(0);
     expect(afterCommitStart).toBeGreaterThan(deriveStart);

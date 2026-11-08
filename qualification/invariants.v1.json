@@ -1025,6 +1025,40 @@
         "tests/browser/a4-r2b-projection-import-preview.spec.cjs",
         "tests/browser/int-01-didactic-continuity.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-IMPORT-I01",
+      "owner": "INT-02/IMPORT-01",
+      "statement": "Import of online outcomes to canonical grades requires explicit class, test, assessment period and teacher-selected destination UDA (or an explicit no-UDA decision); historical UDA provenance is never inferred from the mutable current test. A teacher-reviewed preview is bound to the exact current persisted snapshot, and class/student identity must be unambiguous. Only submissions for the selected class and test may create grades. Duplicate IDs, stale test title/question-count metadata, missing/foreign destination UDA, ambiguous identity, invalid score/date, duplicate submission identity and prior grade conflicts fail closed without deleting submissions or overwriting teacher modifications; repeated unchanged imports are no-ops. Existing secure mutation and FLOW-03 completion boundaries remain authoritative, and test sharing cannot authorize imports. INT-02/S2b remains a separate future decision.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/persistence/submissionGradeImport.ts",
+        "src/App.tsx",
+        "src/components/VerificheOnlineView.tsx",
+        "src/security/int02SubmissionImportIntegrity.test.ts",
+        "src/security/persist01hMutationHelpers.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts",
+        "tests/browser/release-01-qualification.spec.cjs",
+        "tests/browser/int-02-import-01.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/int02SubmissionImportIntegrity.test.ts",
+        "src/security/persist01hMutationHelpers.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/durableAppMutationIntegrity.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-import-01.spec.cjs",
+        "tests/browser/release-01-qualification.spec.cjs"
+      ]
     }
   ]
 }
