@@ -3463,13 +3463,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             )}
             {historyRestoringOrigin && (
               <p role="status" className="text-sm text-amber-200">
-                Ripristino della schermata di modifica in corso. Le scelte saranno disponibili dopo la verifica del percorso.
+                {activeTab === 'verifiche-online'
+                  ? 'Ripristino della verifica in corso. Le scelte saranno disponibili dopo la verifica del percorso.'
+                  : 'Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.'}
               </p>
             )}
             {historyFallbackWarning && (
               <p role="status" className="text-sm text-amber-200">
                 Il navigatore non permette di verificare il percorso precedente. La bozza è ancora disponibile.
-                Se scegli «Rimani», sarà ripristinata la schermata di modifica e la cronologia in avanti potrebbe essere sostituita.
+                {activeTab === 'verifiche-online'
+                  ? 'Se scegli «Rimani», sarà ripristinato l’editor della verifica e la cronologia in avanti potrebbe essere sostituita.'
+                  : 'Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.'}
               </p>
             )}
             {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
