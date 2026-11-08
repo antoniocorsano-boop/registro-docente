@@ -93,7 +93,7 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
   const udaSelect = page.getByText('Collega a UDA Curricolare').locator('..').locator('select');
   await expect(udaSelect).toHaveValue('');
-  await expect(page.getByRole('button', { name: 'Salva Verifica' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Salva Verifica', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Salva verifica e chiudi' })).toBeVisible();
   await expect(udaSelect.locator('option').filter({ hasText: '3ª B' })).toHaveCount(0);
 
