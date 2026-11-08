@@ -444,7 +444,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
           `${importBlockReasons[reason as SubmissionImportBlockReason]}: ${count}`
         ).join('\n');
       if (preview.creatableCount === 0) {
-        alert(`Nessuna nuova valutazione importabile. Già presenti: ${preview.unchangedCount}; da verificare: ${preview.blockedCount}.'`
+        alert(`Nessuna nuova valutazione importabile. Già presenti: ${preview.unchangedCount}; da verificare: ${preview.blockedCount}.`
           + (blockedDetails ? `\n${blockedDetails}` : ''));
         return;
       }
