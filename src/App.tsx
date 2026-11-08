@@ -2816,7 +2816,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const activeClass = appDataRef.current.classes.find(item =>
         item.id === currentClassIdRef.current
       );
-      if (!activeClass || !isAssessmentUdaSelectionAllowed(newTest.udaId, udasRef.current, activeClass.name)) {
+      if (!activeClass || !isAssessmentUdaSelectionAllowed(
+        newTest.udaId, udasRef.current, activeClass.name,
+        appDataRef.current.classes.map(item => item.name)
+      )) {
         return Promise.reject(new Error('UDA non appartenente alla classe attiva'));
       }
     }
