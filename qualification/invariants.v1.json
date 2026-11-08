@@ -1059,6 +1059,33 @@
         "tests/browser/int-02-import-01.spec.cjs",
         "tests/browser/release-01-qualification.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S2B-I01",
+      "owner": "INT-02/S2b",
+      "statement": "An assessment may gain the optional minimal permanent Biblioteca source reference only after an explicit teacher confirmation and a fresh ready, professional, class-matched source check inside the serialized durable test mutation. Editing preserves immutable historical provenance even after source revocation, unauthorized reassignment fails closed, old tests and backups stay compatible, corrupted provenance rejects restore across v2-v6/legacy, file imports never infer origin, and student projection removes private source metadata without affecting UDA, grade import, or deployment.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/types.ts",
+        "src/library/assessmentProvenance.ts",
+        "src/library/assessmentProvenance.test.ts",
+        "src/App.tsx",
+        "src/components/VerificheOnlineView.tsx",
+        "src/security/backupPayload.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/int02S2bProvenanceContract.test.ts",
+        "src/security/backupRestore.test.ts"
+      ],
+      "tests": [
+        "src/library/assessmentProvenance.test.ts",
+        "src/security/int02S2bProvenanceContract.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/testEditorPersistenceIntegrity.test.ts",
+        "src/security/backupRestore.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+      ]
     }
   ]
 }

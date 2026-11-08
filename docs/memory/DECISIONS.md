@@ -33,3 +33,13 @@ Decisioni che definiscono confini o metodi durevoli. Le voci obsolete restano vi
 - Motivazione: preservare il confine tra evidenza tecnica e decisione irreversibile.
 - Origine: MEM-QUAL-01 / OR-006.
 - Sostituisce: —
+
+## D-005 — INT-02/S2b: provenienza professionale minima, opzionale e governata
+- Stato: ACTIVE (contratto adottato; implementazione in qualificazione, NON integrata)
+- Data: 2026-11-08
+- Decisione: scegliere la soluzione B per le nuove verifiche avviate da una fonte Biblioteca: `OnlineTest.provenance?` può conservare soltanto `{ version: 1, kind: 'library-source', sourceId, confirmedByTeacher: true }` dopo conferma esplicita del docente, riesame della fonte `ready` e `teacher-professional` e identità della classe al commit serializzato. Il riferimento non è autorità su UDA, classi, condivisione, valutazioni o permanenza della fonte. Le verifiche storiche e i riferimenti resi non disponibili restano editabili senza riassegnazione o ricertificazione; i metadati non compaiono nelle proiezioni per studenti.
+- Compatibilità: nessuna nuova chiave del Vault o incremento della versione di backup; test precedenti privi del campo restano validi, metadati malformati sono rifiutati nel ripristino delle versioni supportate. La conferma non trasferisce contenuti della fonte.
+- Promozione: l'adozione del contratto non autorizza merge o deploy. Sono vincolanti test RED→GREEN, qualificazioni esatte, revisione indipendente e HPR Android su prove sintetiche prima della promozione di PR #160.
+- Motivazione: tracciabilità utile al docente senza duplicare Biblioteca, violare minimizzazione/privacy o introdurre una seconda autorità.
+- Origine: issue #140 audit S2b (2026-11-08), roadmap #104, PR #160.
+- Sostituisce: stato S2b differito della specifica storica 2026-11-08; non modifica D-001–D-004.

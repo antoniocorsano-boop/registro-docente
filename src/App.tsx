@@ -25,6 +25,7 @@ import {
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
 import { resolveAssessmentHandoff, type AssessmentHandoffRequest } from './library/assessmentHandoff';
+import { prepareAssessmentTestForCommit, projectAssessmentsForStudent, resolveSavedAssessmentOrigin } from './library/assessmentProvenance';
 import { isAssessmentUdaSelectionAllowed } from './library/assessmentUdaScope';
 import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
 import { resolveLibraryTeachingContext } from './library/teachingContext';
@@ -2827,10 +2828,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         return Promise.reject(new Error('UDA non appartenente alla classe attiva'));
       }
     }
-    return commitTestsMutation(current => ({
-      ...current,
-      [newTest.id]: newTest
-    })).then(() => undefined);
+    return commitTestsMutation(current => {
+      // Validate the teacher's explicit source choice inside the serialized
+      // durable mutation, against the current committed library and class.
+      const verified = prepareAssessmentTestForCommit({
+        nextTest: newTest,
+        previousTest: current[newTest.id],
+        request: assessmentHandoffRequest,
+        library: libraryRef.current,
+        classes: appDataRef.current.classes,
+        activeClassId: currentClassIdRef.current
+      });
+      return { ...current, [verified.id]: verified };
+    }).then(() => undefined);
   };
 
   // Delete submission
@@ -3029,7 +3039,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       {/* If in Student Portal Mode */}
       {studentMode.isOpen && (
         <StudentPortal
-          tests={tests}
+          tests={projectAssessmentsForStudent(tests)}
           classNames={appData.classes.map(c => c.name)}
           defaultTestId={studentMode.testId}
           defaultClassName={studentMode.className}
@@ -3243,6 +3253,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             udas={udas}
             settings={settings}
             assessmentHandoff={activeAssessmentHandoff}
+            assessmentOriginStatuses={Object.fromEntries(Object.entries(tests).map(
+              ([id, test]) => [id, resolveSavedAssessmentOrigin(test, library)]
+            ))}
             activeClassName={currentClass?.name ?? null}
             onRegisterDraftGuard={registerAssessmentDraftGuard}
             initialClassName={recordSession?.status === 'editing'

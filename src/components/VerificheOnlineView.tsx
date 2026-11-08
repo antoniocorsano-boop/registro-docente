@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
 import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
+import type { SavedAssessmentOrigin } from '../library/assessmentProvenance';
 import { isAssessmentUdaForClass, isAssessmentUdaSelectionAllowed } from '../library/assessmentUdaScope';
 import { resolveAssessmentShareTarget } from '../library/assessmentShareSelection';
 import type { SubmissionImportSelection, SubmissionImportPreview, SubmissionImportBlockReason } from '../persistence/submissionGradeImport';
@@ -46,6 +47,7 @@ interface VerificheOnlineViewProps {
   isPrivacyShieldActive?: boolean;
   initialClassName?: string;
   assessmentHandoff?: ResolvedAssessmentHandoff | null;
+  assessmentOriginStatuses?: Record<string, SavedAssessmentOrigin>;
   activeClassName?: string | null;
   onRegisterDraftGuard?: (guard: AssessmentDraftGuard | null) => void;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
@@ -65,6 +67,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   isPrivacyShieldActive = true,
   initialClassName,
   assessmentHandoff = null,
+  assessmentOriginStatuses = {},
   activeClassName = null,
   onRegisterDraftGuard,
   onSaveNewTest,
@@ -152,6 +155,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [editorUdaId, setEditorUdaId] = useState('');
   const [editorDuration, setEditorDuration] = useState(15);
   const [editorQuestions, setEditorQuestions] = useState<Question[]>([]);
+  const [confirmSourceForAssessment, setConfirmSourceForAssessment] = useState(false);
   // The editor's baseline is session-only, never stored in the vault.
   const editorBaselineRef = useRef<string | null>(null);
   const editorDirtyRef = useRef(false);
@@ -172,9 +176,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     editorQuestions: Question[];
   }) => JSON.stringify(fields);
 
-  editorDirtyRef.current = isEditingTest && editorBaselineRef.current !== editorSnapshot({
+  editorDirtyRef.current = isEditingTest && (confirmSourceForAssessment || editorBaselineRef.current !== editorSnapshot({
     editingTestId, editorTitle, editorDescription, editorUdaId, editorDuration, editorQuestions
-  });
+  }));
   editorSavingRef.current = isSavingTest;
 
   useEffect(() => {
@@ -281,6 +285,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setEditingTestId(null);
     setEditorTitle('');
     setEditorDescription('');
+    setConfirmSourceForAssessment(false);
     // A new verification must never inherit the first UDA arbitrarily.
     setEditorUdaId('');
     setEditorDuration(15);
@@ -298,6 +303,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       editorDuration: test.durationMinutes || 15, editorQuestions: test.questions
     });
     setEditingTestId(test.id);
+    setConfirmSourceForAssessment(false);
     setEditorTitle(test.title);
     setEditorDescription(test.description || '');
     setEditorUdaId(test.udaId || '');
@@ -488,6 +494,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       alert('L’unità didattica scelta non appartiene alla classe di lavoro. Seleziona un’unità pertinente oppure nessuna.');
       return;
     }
+    if (!editingTestId && confirmSourceForAssessment && !assessmentHandoff) {
+      alert('La fonte professionale non è più disponibile: rivedi il collegamento prima di salvare.');
+      return;
+    }
 
     const savedTest = await commitTestSaveIntent(() => {
       const testId = editingTestId || `test_${uid()}`;
@@ -497,10 +507,21 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         description: editorDescription.trim(),
         udaId: editorUdaId || undefined,
         durationMinutes: Number(editorDuration) || 15,
-        questions: editorQuestions
+        questions: editorQuestions,
+        // Opt-in only on new tests; existing provenance is immutable and is
+        // preserved by the canonical commit boundary, including after source revocation.
+        ...(!editingTestId && confirmSourceForAssessment && assessmentHandoff ? {
+          provenance: {
+            version: 1 as const,
+            kind: 'library-source' as const,
+            sourceId: assessmentHandoff.sourceId,
+            confirmedByTeacher: true as const
+          }
+        } : {})
       };
     });
     if (!savedTest) return;
+    setConfirmSourceForAssessment(false);
     editorBaselineRef.current = null;
     setSelectedTestId(savedTest.id);
     setIsEditingTest(false);
@@ -1149,6 +1170,29 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             /* Interactive Visual Question-by-Question Form */
             <form onSubmit={handleSaveInteractiveTest} className="neon-card neon-card-highlight p-5 space-y-5">
               <fieldset disabled={isSavingTest} className="space-y-5 border-0 p-0 m-0 min-w-0">
+              {editingTestId ? (
+                <p data-testid="int02-s2b-origin-status" role="status" className="text-xs text-slate-300">
+                  {assessmentOriginStatuses[editingTestId] === 'available'
+                    ? 'Origine Biblioteca registrata e attualmente disponibile.'
+                    : assessmentOriginStatuses[editingTestId] === 'unavailable'
+                      ? 'Origine Biblioteca non disponibile o non verificabile. Il riferimento storico è conservato.'
+                      : 'Origine non registrata.'}
+                </p>
+              ) : assessmentHandoff ? (
+                <label className="flex items-start gap-3 rounded-lg border border-cyan-700/50 p-3 text-sm text-slate-200">
+                  <input
+                    data-testid="int02-s2b-confirm-origin"
+                    type="checkbox"
+                    checked={confirmSourceForAssessment}
+                    onChange={event => setConfirmSourceForAssessment(event.target.checked)}
+                    className="mt-1 h-4 w-4"
+                  />
+                  <span>
+                    Confermo di collegare stabilmente questa verifica alla fonte professionale scelta.
+                    Il riferimento sarà conservato nell’archivio privato; non copia il materiale né assegna automaticamente un’UDA.
+                  </span>
+                </label>
+              ) : null}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
                 <div>
                   <h3 className="text-base font-bold text-[var(--primary)] flex items-center gap-2">

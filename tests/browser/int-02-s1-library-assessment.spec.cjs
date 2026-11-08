@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
+const evidenceDir = process.env.EVIDENCE_DIR || '../browser-evidence';
 const CLASS_NAME = '3ª A Sintetica INT-02';
 const SOURCE_TITLE = 'Fonte esclusivamente sintetica INT-02';
 const SOURCE_TEXT = 'Appunto professionale dimostrativo sulle energie rinnovabili.';
@@ -21,6 +22,17 @@ async function expectNoHorizontalOverflow(page) {
     const root = document.documentElement;
     return Math.max(root.scrollWidth, document.body.scrollWidth) - root.clientWidth;
   })).toBeLessThanOrEqual(1);
+}
+
+// The drawer is marked aria-hidden before its 300ms slide-out completes.
+// Visual evidence must be captured after it is entirely offscreen.
+async function expectDrawerFullyOffscreen(page) {
+  const drawer = page.locator('#registro-navigation-drawer');
+  await expect(drawer).toHaveAttribute('aria-hidden', 'true');
+  await expect.poll(async () => {
+    const bounds = await drawer.boundingBox();
+    return bounds ? bounds.x + bounds.width : 0;
+  }).toBeLessThanOrEqual(1);
 }
 
 test('INT-02/S1: class-scoped professional source reaches unsaved test editor without UDA or URL payload', async ({ page }) => {
@@ -105,6 +117,15 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
 
   await page.getByTestId('int02-open-assessment-editor').click();
   await expect(page.getByRole('heading', { name: 'Crea Nuova Verifica Formativa' })).toBeVisible();
+  // S2b: permanent source provenance is opt-in, separate from the S1 route.
+  const confirmOrigin = page.getByTestId('int02-s2b-confirm-origin');
+  await expect(confirmOrigin).toBeVisible();
+  await expect(confirmOrigin).not.toBeChecked();
+  await confirmOrigin.check();
+  await expect(confirmOrigin).toBeChecked();
+  await confirmOrigin.uncheck();
+  await expect(confirmOrigin).not.toBeChecked();
+  await expectNoHorizontalOverflow(page);
   await expect(page.getByTestId('int02-open-assessment-editor')).toHaveCount(0);
   await expect(handoff.getByRole('status')).toContainText('Editor già aperto');
   const titleInput = page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale');
@@ -159,4 +180,91 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expectNoHorizontalOverflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+});
+
+
+test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', async ({ page }) => {
+  const testTitle = 'Verifica sintetica con origine INT-02/S2b';
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('#vault-password').fill('synthetic-int02-s2b-only');
+  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+
+  page.once('dialog', dialog => dialog.accept(CLASS_NAME));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: ' + CLASS_NAME })).toBeVisible();
+  const saveNotice = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  if (await saveNotice.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+    await expect(saveNotice).toBeHidden();
+  }
+
+  await openDrawerItem(page, 'Biblioteca privata');
+  await page.getByRole('button', { name: 'Aggiungi fonte', exact: true }).click();
+  await page.getByRole('button', { name: 'Testo o idea', exact: true }).click();
+  await page.getByLabel('Tipo').selectOption('concept');
+  await page.getByLabel('Titolo').fill(SOURCE_TITLE);
+  await page.getByLabel('Contenuto').fill(SOURCE_TEXT);
+  await page.getByRole('button', { name: 'Salva in biblioteca', exact: true }).click();
+  await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
+  await page.getByText('Gestisci', { exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Classifica come materiale professionale' }).click();
+  await expect(page.getByText('Professionale', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Usa', exact: true }).click();
+  await page.getByTestId('int02-prepare-assessment').click();
+  await page.getByTestId('int02-open-assessment-editor').click();
+
+  const checkbox = page.getByTestId('int02-s2b-confirm-origin');
+  await expect(checkbox).toBeVisible();
+  await expect(checkbox).not.toBeChecked();
+  await checkbox.scrollIntoViewIfNeeded();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({
+    path: `${evidenceDir}/int-02-s2b-01-consenso-non-selezionato-390.png`
+  });
+  await checkbox.check();
+  await expect(checkbox).toBeChecked();
+  await page.screenshot({
+    path: `${evidenceDir}/int-02-s2b-02-consenso-confermato-390.png`
+  });
+
+  await page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale').fill(testTitle);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Salva Verifica', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Crea Nuova Verifica Formativa' })).toHaveCount(0);
+  const card = page.getByRole('heading', { name: testTitle, exact: true }).locator('xpath=../../..');
+  await card.getByRole('button', { name: 'Modifica', exact: true }).click();
+  const originStatus = page.getByTestId('int02-s2b-origin-status');
+  await expect(originStatus).toContainText('attualmente disponibile');
+  await originStatus.scrollIntoViewIfNeeded();
+  await expectDrawerFullyOffscreen(page);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({
+    path: `${evidenceDir}/int-02-s2b-03-origine-disponibile-390.png`
+  });
+
+  // A removed source must never delete or silently recertify the saved test.
+  await openDrawerItem(page, 'Biblioteca privata');
+  await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toBeVisible();
+  await page.getByText('Gestisci', { exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Elimina', exact: true }).click();
+  await expect(page.getByRole('heading', { name: SOURCE_TITLE, exact: true })).toHaveCount(0);
+
+  await openDrawerItem(page, 'Verifiche online');
+  await page.getByRole('button', { name: 'Editor Verifiche & UDA' }).click();
+  const savedCard = page.getByRole('heading', { name: testTitle, exact: true }).locator('xpath=../../..');
+  await savedCard.getByRole('button', { name: 'Modifica', exact: true }).click();
+  const unavailable = page.getByTestId('int02-s2b-origin-status');
+  await expect(unavailable).toContainText('non disponibile o non verificabile');
+  await unavailable.scrollIntoViewIfNeeded();
+  await expectDrawerFullyOffscreen(page);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({
+    path: `${evidenceDir}/int-02-s2b-04-origine-non-disponibile-390.png`
+  });
+  expect(page.url()).not.toContain(SOURCE_TITLE);
+  expect(page.url()).not.toContain(SOURCE_TEXT);
 });

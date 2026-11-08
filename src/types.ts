@@ -80,6 +80,14 @@ export interface Question {
   type?: QuestionType;
 }
 
+/** Permanent, minimal teacher-confirmed Biblioteca source reference (INT-02/S2b). */
+export interface AssessmentProvenanceV1 {
+  version: 1;
+  kind: 'library-source';
+  sourceId: string;
+  confirmedByTeacher: true;
+}
+
 export interface OnlineTest {
   id: string;
   title: string;
@@ -88,6 +96,7 @@ export interface OnlineTest {
   udaId?: string; // Collegamento all'UDA di riferimento
   description?: string;
   durationMinutes?: number;
+  provenance?: AssessmentProvenanceV1; // Docente-only: never expose to student/public projections
 }
 
 export interface OnlineSubmission {
