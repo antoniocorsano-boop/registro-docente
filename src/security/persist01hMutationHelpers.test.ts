@@ -52,7 +52,7 @@ function submission(id: string, overrides: Partial<OnlineSubmission> = {}): Onli
 
 function importOptions() {
   return {
-    selection: { classId: 'class-3a', testId: 'test-energia', period: 'Q1' as const },
+    selection: { classId: 'class-3a', testId: 'test-energia', period: 'Q1' as const, targetUdaId: 'uda-1' },
     tests: {
       'test-energia': {
         id: 'test-energia', title: 'Energia', questions: [], udaId: 'uda-1'
