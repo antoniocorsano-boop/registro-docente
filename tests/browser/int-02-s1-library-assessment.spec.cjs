@@ -97,10 +97,12 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expect(udaSelect.locator('option').filter({ hasText: '3ª B' })).toHaveCount(0);
 
   // Internal navigation must not silently discard a modified assessment.
-  await page.getByRole('button', { name: 'Condivisione Padlet' }).click();
+  const padletTab = page.getByRole('button', { name: 'Condivisione Padlet' });
+  await padletTab.click();
   const internalExit = page.getByRole('dialog', { name: 'Modifiche non salvate' });
   await expect(internalExit).toBeVisible();
   await internalExit.getByRole('button', { name: "Rimani nell'editor" }).click();
+  await expect(padletTab).toBeFocused();
   await expect(titleInput).toHaveValue('BOZZA NON SALVATA INT-02');
 
   // The native Android Back equivalent must restore history before displaying
