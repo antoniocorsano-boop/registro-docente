@@ -43,7 +43,9 @@ describe('A4-R2B Task 7 — Local Docente OS projection preview and explicit com
     expect(view).toContain('<PlanningProfileEditor');
     expect(view).toContain('onRegisterDraftGuard={registerEditorGuard}');
     expect(view).toContain('<DocenteOsProjectionPanel');
-    expect(view).toContain('onAccept={onAcceptDocenteOsProjection}');
+    expect(view).toContain('onAccept={acceptProjection}');
+    expect(view).toContain('editorGuardRef.current?.hasUnsavedChanges()');
+    expect(view).toContain('return onAcceptDocenteOsProjection(payload)');
     expect(view).toContain('planning={planning}');
     expect(view).toContain('classes={classes}');
     expect(app).toContain('onAcceptDocenteOsProjection={handleAcceptDocenteOsTeachingProjection}');
