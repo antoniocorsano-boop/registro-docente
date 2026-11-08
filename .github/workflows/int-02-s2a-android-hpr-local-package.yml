@@ -25,8 +25,16 @@ jobs:
           test "$(git rev-parse HEAD)" = "fd0b6af1b52d3d0ac0581d313cc973936b644a19"
           test -f vercel.json
           grep -Eq '"deploymentEnabled" *: *false' vercel.json
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node for isolated package build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Bun from npm (avoid GitHub release HTTP 504)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund bun@1.4.4
+          bun --version
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
       - name: Build production static assets
