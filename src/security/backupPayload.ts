@@ -1,4 +1,5 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
+import { areAssessmentProvenancesValid } from '../library/assessmentProvenance';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import {
   isCopilotStateV1,
@@ -144,7 +145,7 @@ function isSnapshotV2(value: unknown): value is SecureBackupSnapshotV2 {
     && Array.isArray((value.appData as Record<string, unknown>).classes)
     && isRecord(value.settings)
     && Array.isArray(value.udas)
-    && isRecord(value.customTests)
+    && areAssessmentProvenancesValid(value.customTests)
     && Array.isArray(value.submissions)
     && isRecord(value.meta);
 }
@@ -496,6 +497,10 @@ export function normalizeBackupPayload(
 
   if (!legacyClasses) {
     throw new Error('Il backup legacy non contiene dati validi del registro-docente.');
+  }
+
+  if (payload.customTests !== undefined && !areAssessmentProvenancesValid(payload.customTests)) {
+    throw new Error('Provenienza delle verifiche non valida nel backup legacy.');
   }
 
   const appData: AppData = legacyData && Array.isArray(legacyData.classes)
