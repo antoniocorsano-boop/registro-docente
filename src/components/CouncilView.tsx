@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData, CouncilSessionKind } from '../types';
 import type { PlanningDraftGuard } from './planning/PlanningProfileEditor';
+import { buildCouncilEvidenceOverview } from '../council/councilEvidenceOverview';
 import { councilRows, formatCouncilDate, isCouncilSessionDateValid, normalizeSchoolYear, parseCouncilValue, readCouncilSessions, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
 import { formatGrade, formatStudentNameWithPrivacy, today, uid } from '../utils';
 import { ClipboardList, Save, Users } from 'lucide-react';
@@ -85,6 +86,11 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const rows = useMemo(
     () => current ? councilRows(current, schoolYear, cutoff, settings) : [],
+    [current, schoolYear, cutoff, settings]
+  );
+  // CDC-02/S2a: live, read-only counts; not a stored snapshot of the selected session.
+  const evidenceOverview = useMemo(
+    () => current ? buildCouncilEvidenceOverview(current, schoolYear, cutoff, settings) : null,
     [current, schoolYear, cutoff, settings]
   );
   const summary = current ? summarizeCouncilValues(current.students, draft) : null;
@@ -336,6 +342,47 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               </div>
             )}
           </section>
+          <section className="rounded-lg border border-[var(--border)] p-4 space-y-3"
+            aria-label="Quadro sintetico delle evidenze della classe">
+            <h2 className="text-lg font-bold text-white">Quadro della classe</h2>
+            {evidenceOverview ? (
+              <>
+                <p className="text-xs text-slate-300">
+                  Dati correnti fino al <strong>{evidenceOverview.effectiveCutoff}</strong> per l’anno
+                  {evidenceOverview.schoolYear}. Non sono una fotografia storica della seduta e
+                  non costituiscono una valutazione collegiale.
+                  {evidenceOverview.cutoffClampedToSchoolYear
+                    ? ' La data richiesta supera la fine dell’anno: il calcolo si ferma al 31 agosto.'
+                    : ''}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {([
+                    ['Alunni', evidenceOverview.totalStudents],
+                    ['Con prove numeriche', evidenceOverview.withNumericEvidence],
+                    ['Senza prove numeriche', evidenceOverview.withoutNumericEvidence],
+                    ['Prove numeriche totali', evidenceOverview.numericEvidenceCount],
+                    ['Con voto di ingresso salvato', evidenceOverview.withSavedTeacherProposal],
+                    ['Senza voto di ingresso salvato', evidenceOverview.withoutSavedTeacherProposal]
+                  ] as const).map(([label, value]) => (
+                    <div key={label} className="rounded-lg border border-[var(--border)] p-3">
+                      <p className="text-xs text-slate-300">{label}</p>
+                      <p className="text-xl font-bold text-white tabular-nums">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400">
+                  «Senza prove» e «senza voto di ingresso» sono condizioni diverse.
+                  Il quadro conta soltanto i voti di ingresso già salvati, non le modifiche ancora in bozza.
+                  Le prove non numeriche non contribuiscono al conteggio delle prove numeriche.
+                </p>
+              </>
+            ) : (
+              <p role="alert" className="text-sm text-amber-300">
+                Quadro non disponibile: controllare anno, data limite e identità della classe.
+              </p>
+            )}
+          </section>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-300 flex items-center gap-2">
               <Users className="w-4 h-4" /> {current.students.length} alunni ·
