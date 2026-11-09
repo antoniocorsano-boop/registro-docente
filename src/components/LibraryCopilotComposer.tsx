@@ -45,6 +45,7 @@ import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
 import { AssessmentCopilotPanel } from './AssessmentCopilotPanel';
 import type { AssessmentGenerationSessionV1 } from '../library/assessmentGeneration';
 import type { AssessmentDraftV1 } from '../library/assessmentDraft';
+import {isAssessmentClassUnambiguous} from '../library/assessmentGenerationClassGate';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
 import { buildMissionContextFingerprint } from '../copilot/mission';
@@ -1660,16 +1661,19 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 source={selectedSource}
                 classId={currentClassId}
                 className={currentClassName}
+                classIsUnambiguous={isAssessmentClassUnambiguous(classes,currentClassId,currentClassName)}
                 aiBudgetProfile={aiBudgetProfile}
                 getLiveContext={() => {
                   const live=assessmentLiveRef.current;
                   const matchingSources=live.library.sources.filter(s=>s.id===selectedSource.id);
-                  const matchingClasses=live.classes.filter(cl=>cl.id===live.currentClassId);
+                  const classesUnambiguous=isAssessmentClassUnambiguous(
+                    live.classes,live.currentClassId,live.currentClassName
+                  );
                   return {
                     source:matchingSources.length===1?matchingSources[0]:null,
                     confirmedSourceId:live.selectedSourceId,
-                    activeClassName:matchingClasses.length===1?matchingClasses[0].name:'',
-                    activeClassId:live.currentClassId
+                    activeClassName:classesUnambiguous?live.currentClassName??'':'',
+                    activeClassId:classesUnambiguous?live.currentClassId:null
                   };
                 }}
                 onAccept={async (session,draft) => {
