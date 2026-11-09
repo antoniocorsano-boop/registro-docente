@@ -72,6 +72,7 @@ jobs:
           ./.browser-tools/node_modules/.bin/playwright install --with-deps chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/cdc-01-consigli.spec.cjs .browser-tools/cdc-01-consigli.spec.cjs
+          cp tests/browser/cdc-02-sessions.spec.cjs .browser-tools/cdc-02-sessions.spec.cjs
           cp tests/browser/today-01-home-oggi-router.spec.cjs .browser-tools/today-01-home-oggi-router.spec.cjs
           cp tests/browser/flow-01-prepara.spec.cjs .browser-tools/flow-01-prepara.spec.cjs
           cp tests/browser/flow-02-conduci.spec.cjs .browser-tools/flow-02-conduci.spec.cjs
@@ -175,6 +176,20 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/cdc-01-consigli-results
+
+      - name: Run CDC-02/S1 council sessions Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            cdc-02-sessions.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/cdc-02-sessions-results
 
       - name: Run TODAY-01 Chromium qualification
         shell: bash
