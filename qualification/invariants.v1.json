@@ -1278,6 +1278,31 @@
       "browserSmoke": [
         "tests/browser/cdc-02-sessions.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-02-S2B-P2-I01",
+      "owner": "CDC-02/S2b-P2",
+      "statement": "Confirmed session snapshots must preserve teacher-confirmed append-only history in encrypted appData and backup v6 without silent loss or schema-version changes. Synchronous backup normalization checks record shape, session identity and revision chain; the active restore path awaits SHA-256 content-digest verification before any Vault write. Existing V2–V6 and legacy backups without snapshots remain readable, while snapshots that disappear or change in replacement require explicit consent. SecureAppStorage validates before appData writes, verifies restored records after readback and uses existing atomic Vault batches. P2 adds no UI snapshot capture, remote storage, merge or deploy.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/councilModel.ts",
+        "src/council/councilEvidenceSnapshots.ts",
+        "src/security/backupPayload.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/cdc02CouncilSnapshotsBackup.test.ts",
+        "src/App.tsx"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSnapshotsBackup.test.ts",
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/security/cdc02CouncilSessions.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
     }
   ]
 }
