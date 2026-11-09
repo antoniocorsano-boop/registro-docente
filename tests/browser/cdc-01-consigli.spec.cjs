@@ -37,6 +37,11 @@ test('CDC-01: teacher explicitly chooses class and saves an independent entrance
 
   await grade.fill('8,5');
   await expect(page.getByText('Modifiche non ancora salvate.')).toBeVisible();
+  // Cancelling a class change must not discard a pending grade.
+  page.once('dialog', dialog => dialog.dismiss());
+  await picker.selectOption('');
+  await expect(picker).not.toHaveValue('');
+  await expect(grade).toHaveValue('8,5');
   await navigate(page, 'Oggi');
   const guard = page.getByRole('dialog', { name: 'Modifiche non salvate' });
   await expect(guard).toBeVisible();
@@ -61,7 +66,13 @@ test('CDC-01: teacher explicitly chooses class and saves an independent entrance
 
 test('CDC-01: legacy JSON import, council decision, encrypted export and restore', async ({ page }) => {
   const fs = require('node:fs');
-  page.on('dialog', dialog => dialog.accept());
+  let acceptBulkProposal = false;
+  page.on('dialog', dialog => {
+    if (dialog.message().includes('Proporre la media delle prove')) {
+      return acceptBulkProposal ? dialog.accept() : dialog.dismiss();
+    }
+    return dialog.accept();
+  });
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await page.locator('#vault-password').fill('cdc-01-import-synthetic');
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
@@ -92,6 +103,13 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   // In privacy mode the name is masked; the average and vote input remain class-scoped.
   await expect(page.getByRole('cell', { name: /^8,5/ })).toBeVisible();
   const vote = page.locator('input[aria-label^="Voto di ingresso per"]');
+  const propose = page.getByRole('button', { name: 'Proponi le medie nei campi vuoti' });
+  await propose.click();
+  await expect(vote).toHaveValue('');
+  acceptBulkProposal = true;
+  await propose.click();
+  await expect(vote).toHaveValue('8.5');
+  // Attribution is independent from the proposed computed average.
   await vote.fill('7');
   await page.getByRole('button', { name: 'Salva valutazioni di ingresso' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Valutazioni di ingresso salvate nell’archivio' })).toBeVisible();
