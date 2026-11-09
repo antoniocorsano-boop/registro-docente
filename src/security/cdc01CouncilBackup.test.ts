@@ -1,0 +1,102 @@
+import { describe, expect, test } from 'bun:test';
+import type { AppData, AppSettings, ClassData } from '../types';
+import { assignCouncilValues, councilRows, isCouncilAppDataValid, parseCouncilValue, readCouncilValues, summarizeCouncilValues, wouldLoseCouncilEntries } from '../council/councilModel';
+import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
+import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
+import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
+import type { CompleteSecureAppSnapshot } from './secureAppStorage';
+
+const settings: AppSettings = {
+  school: 'Istituto di prova', year: '2026/27', teacher: 'Docente', subject: 'Tecnologia', theme: 'cyan'
+};
+function classFixture(): ClassData {
+  return {
+    id: 'C', name: '2C',
+    students: [{ id: 'a', name: 'Alunno Alfa' }, { id: 'b', name: 'Alunno Beta' }, { id: 'c', name: 'Alunno Gamma' }],
+    grades: [
+      { id: 'g1', studentId: 'a', type: 'test', date: '2026-10-04', period: 'Q1', title: 'Test', value: '8' },
+      { id: 'g2', studentId: 'a', type: 'verifica', date: '2026-11-05', period: 'Q1', title: 'Prova', value: '9' },
+      { id: 'g3', studentId: 'b', type: 'orale', date: '2026-10-18', period: 'Q1', title: 'Orale', value: 'A' },
+      { id: 'g4', studentId: 'b', type: 'test', date: '2026-12-01', period: 'Q1', title: 'Prova futura', value: '10' }
+    ],
+    behaviors: []
+  };
+}
+function snapshot(appData: AppData): CompleteSecureAppSnapshot {
+  return {
+    appData, settings, udas: [], customTests: {}, submissions: [],
+    planning: { schemaVersion: 2, profiles: [], arenaContexts: [], resources: [], masterPrograms: [], classInstances: [], docenteOsProjections: [] },
+    library: { schemaVersion: 1, sources: [] },
+    professionalMemory: createEmptyProfessionalMemoryState(),
+    copilotState: createEmptyCopilotState(),
+    meta: { changes: 0, lastBackup: null }
+  };
+}
+const now = '2026-11-09T08:15:00.000Z';
+
+describe('CDC-01 — Consigli di classe', () => {
+  test('legacy source grades remain unchanged, excluded non-numeric and future grades', () => {
+    const c = classFixture();
+    const rows = councilRows(c, settings.year, '2026-11-09', settings);
+    expect(rows[0].count).toBe(2);
+    expect(rows[0].average).toBe(8.5);
+    expect(rows[1].count).toBe(0);
+    expect(rows[1].average).toBeNull();
+    expect(rows[2].average).toBeNull();
+  });
+
+  test('teacher can override average, and score never enters evidence grades', () => {
+    const source: AppData = { classes: [classFixture(), classFixture().id === 'C'
+      ? { ...classFixture(), id: 'D', name: '2D', students: [{ id: 'd', name: 'Alunno Delta' }], grades: [] } : classFixture()
+    ], currentClassId: null };
+    const saved = assignCouncilValues(source, 'C', settings.year, 'ingresso', { a: '7,5', b: '6', c: '' }, now);
+    expect(saved.classes[0].grades).toEqual(source.classes[0].grades);
+    expect(saved.classes[1]).toEqual(source.classes[1]);
+    expect(readCouncilValues(saved.classes[0], settings.year)).toEqual({ a: '7.5', b: '6' });
+    expect(summarizeCouncilValues(saved.classes[0].students, readCouncilValues(saved.classes[0], settings.year)))
+      .toEqual({ counts: { AV: 0, IN: 1, BA: 1, PA: 0 }, assigned: 2, missing: 1, total: 3 });
+    const changed = assignCouncilValues(saved, 'C', settings.year, 'ingresso', { a: '8,5', b: '', c: '5.5' }, now);
+    expect(readCouncilValues(changed.classes[0], settings.year)).toEqual({ a: '8.5', c: '5.5' });
+    expect(changed.classes[0].grades).toEqual(source.classes[0].grades);
+  });
+
+  test('historical council moments are preserved during entrance updates', () => {
+    const c = classFixture();
+    c.councilAssessments = [{ studentId: 'a', schoolYear: '2025/26', moment: 'finale', value: '8', updatedAt: now }];
+    const data = assignCouncilValues({ classes: [c], currentClassId: null }, 'C', settings.year, 'ingresso', { a: '6' }, now);
+    expect(data.classes[0].councilAssessments).toHaveLength(2);
+    expect(data.classes[0].councilAssessments?.[0].schoolYear).toBe('2025/26');
+  });
+
+  test('rejects invalid grades, orphan students, duplicated council keys and corrupted v6 payload', () => {
+    expect(parseCouncilValue('NC')).toBeNull();
+    expect(parseCouncilValue('7+')).toBeNull();
+    expect(parseCouncilValue('0')).toBeNull();
+    expect(parseCouncilValue('11')).toBeNull();
+    const source: AppData = { classes: [classFixture()], currentClassId: null };
+    expect(() => assignCouncilValues(source, 'C', settings.year, 'ingresso', { wrong: '7' }, now)).toThrow();
+    expect(() => assignCouncilValues(source, 'C', settings.year, 'ingresso', { a: '11' }, now)).toThrow();
+    const valid = assignCouncilValues(source, 'C', settings.year, 'ingresso', { a: '7' }, now);
+    expect(isCouncilAppDataValid(valid)).toBe(true);
+    const duplicate = structuredClone(valid);
+    duplicate.classes[0].councilAssessments!.push({ ...duplicate.classes[0].councilAssessments![0] });
+    expect(isCouncilAppDataValid(duplicate)).toBe(false);
+    expect(() => normalizeBackupPayload(createBackupPayload(snapshot(duplicate)), snapshot(source))).toThrow();
+  });
+
+  test('legacy import -> council save -> v6 export and restore retains all grades and council entries', () => {
+    const old = classFixture();
+    const initial = snapshot({ classes: [], currentClassId: null });
+    const legacy = { app: 'registro-docente', classes: [old], settings, version: 2 };
+    const imported = normalizeBackupPayload(legacy, initial);
+    expect(imported.appData.classes[0].grades).toEqual(old.grades);
+    const withCouncil = assignCouncilValues(imported.appData, 'C', settings.year, 'ingresso', { a: '9', b: '5', c: '' }, now);
+    const newBackup = createBackupPayload({ ...imported, appData: withCouncil }, now);
+    expect(newBackup.backupDataVersion).toBe(6);
+    const restored = normalizeBackupPayload(JSON.parse(JSON.stringify(newBackup)), initial);
+    expect(restored.appData).toEqual(withCouncil);
+    expect(restored.appData.classes[0].grades).toEqual(old.grades);
+    expect(wouldLoseCouncilEntries(withCouncil, imported.appData)).toBe(true);
+    expect(wouldLoseCouncilEntries(withCouncil, restored.appData)).toBe(false);
+  });
+});
