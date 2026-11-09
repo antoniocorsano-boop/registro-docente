@@ -1290,14 +1290,18 @@
         "src/security/backupPayload.ts",
         "src/security/secureAppStorage.ts",
         "src/security/cdc02CouncilSnapshotsBackup.test.ts",
-        "src/App.tsx"
+        "src/App.tsx",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts"
       ],
       "tests": [
         "src/security/cdc02CouncilSnapshotsBackup.test.ts",
         "src/security/cdc02CouncilSnapshots.test.ts",
         "src/security/cdc02CouncilSessions.test.ts",
         "src/security/backupPayload.test.ts",
-        "src/security/secureVault.test.ts"
+        "src/security/secureVault.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/cdc-02-sessions.spec.cjs",
