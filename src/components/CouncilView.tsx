@@ -204,7 +204,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
 
   const fillableRows = rows.filter(row => !draft[row.student.id]?.trim() && row.average !== null);
   const fillEmptyFromAverages = () => {
-    if (saving || snapshotWorking || fillableRows.length === 0) return;
+    if (saving || snapshotBusy || fillableRows.length === 0) return;
     if (!window.confirm(
       `Proporre la media delle prove come voto di ingresso per ${fillableRows.length} alunni? I valori saranno soltanto inseriti nella bozza: per salvarli servirà una conferma separata.`
     )) return;
