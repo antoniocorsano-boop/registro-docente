@@ -43,3 +43,13 @@ Decisioni che definiscono confini o metodi durevoli. Le voci obsolete restano vi
 - Motivazione: tracciabilità utile al docente senza duplicare Biblioteca, violare minimizzazione/privacy o introdurre una seconda autorità.
 - Origine: issue #140 audit S2b (2026-11-08), roadmap #104, PR #160.
 - Sostituisce: stato S2b differito della specifica storica 2026-11-08; non modifica D-001–D-004.
+
+## D-006 — CDC-02/S2b: fotografie confermate per seduta e confine del P1
+- Stato: ACTIVE
+- Data: 2026-11-09
+- Decisione: contratto v1 ratificato per fotografie di soli sei aggregati S2a, identificate da classe, anno scolastico e ID stabile della seduta. Distinguere sessionDate, cutoff e capturedAt UTC, conservando captureLocalDate e captureUtcOffsetMinutes dal medesimo istante, protetti dal digest. Le fotografie sono versionate append-only dopo conferma esplicita; impronte e digest non costituiscono firma o anonimizzazione. Non inferire che informazioni registrate in seguito fossero gia disponibili alla data della seduta.
+- Promozione: specifica e piano PR #180 integrati in main con merge `d0eae45216161d81c5e9dae4916407dfc9f502df`; P1 (solo modello puro e test sintetici) PR #181 integrato con merge `700428f6edf2e7b94ff3fa9b2ddf8c5d5b09cc41`, candidato qualificato `a8ccaa4538293d884f3e65181a8994d355ddcb03`. 5/5 gate exact-SHA, seconda review Codex senza finding e thread P2 chiuso. Il confronto con main dopo l'integrazione restituisce zero differenze di file rispetto al candidato qualificato.
+- Confine: P1 non scrive nel Vault e non attiva interfacce, backup o restore. S2b-P2 (compatibilita Vault/backup) e P3 (conferma e interfaccia) richiedono sviluppo e qualificazione separati; nessuna funzionalita di fotografia disponibile in produzione e nessuna distribuzione autorizzata. `vercel.json` mantiene `git.deploymentEnabled=false`.
+- Motivazione: storia delle sedute consultabile in futuro senza retrodatazioni, perdita silenziosa, duplicazione di dati individuali o scambio tra modello isolato e persistenza.
+- Origine: issue #170, PR #180/#181, ratifica umana PR #180 commento 6748338669, ricevuta PR #181 commento 6748973795, decisione di promozione umana del 2026-11-09.
+- Sostituisce: —
