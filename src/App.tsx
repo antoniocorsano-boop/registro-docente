@@ -2830,7 +2830,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         ...targetClass,
         students: targetClass.students.filter(s => s.id !== studentId),
         grades: (targetClass.grades || []).filter(g => g.studentId !== studentId),
-        behaviors: (targetClass.behaviors || []).filter(b => b.studentId !== studentId)
+        behaviors: (targetClass.behaviors || []).filter(b => b.studentId !== studentId),
+        // Keep Council backup references consistent after an explicit pupil deletion.
+        councilAssessments: (targetClass.councilAssessments || [])
+          .filter(entry => entry.studentId !== studentId)
       };
       return {
         ...current,
