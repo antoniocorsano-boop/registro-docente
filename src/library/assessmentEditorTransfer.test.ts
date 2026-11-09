@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ClassData } from '../types';
 import type { LibraryStateV1, LibrarySource } from './types';
-import { prepareAssessmentGenerationSession } from './assessmentGeneration';
+import { prepareAssessmentGenerationSession, isAssessmentGenerationRequestCurrent } from './assessmentGeneration';
 
 const SOURCE: LibrarySource = {
   id:'source-s3c',title:'Trasformazioni di energia',kind:'note',
@@ -30,6 +30,17 @@ const base=()=>({
 });
 
 describe('INT-02/S3c-01 — trasferimento solo in editor di verifica',()=>{
+  test('l’identità della classe resta esclusivamente locale e si ricontrolla dopo la generazione',()=>{
+    expect(SESSION.authorizedClassId).toBe('class-3c');
+    expect(JSON.stringify(SESSION.request)).not.toContain('class-3c');
+    expect(isAssessmentGenerationRequestCurrent(SESSION,{
+      source:SOURCE,confirmedSourceId:SOURCE.id,activeClassName:'3C',activeClassId:'class-3c'
+    })).toBe(true);
+    expect(isAssessmentGenerationRequestCurrent(SESSION,{
+      source:SOURCE,confirmedSourceId:SOURCE.id,activeClassName:'3C',activeClassId:'replacement-3c'
+    })).toBe(false);
+  });
+
   test('materializza un gestore puro, distinto dal salvataggio del Registro',async()=>{
     const module = await import('./assessmentEditorTransfer');
     expect(typeof module.prepareAssessmentEditorTransfer).toBe('function');
