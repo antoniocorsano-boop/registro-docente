@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData } from '../types';
 import type { PlanningDraftGuard } from './planning/PlanningProfileEditor';
-import { councilRows, parseCouncilValue, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
+import { councilRows, normalizeSchoolYear, parseCouncilValue, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
 import { formatGrade, formatStudentNameWithPrivacy, today } from '../utils';
 import { ClipboardList, Save, Users } from 'lucide-react';
 
@@ -24,6 +24,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
   const schoolYear = settings.year;
+  const academicYearValid = normalizeSchoolYear(schoolYear) !== null;
   const current = classes.find(item => item.id === selectedClassId);
 
   useEffect(() => {
@@ -51,6 +52,10 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
     if (savingRef.current) return false;
     if (!dirtyRef.current) return true;
     if (!selectedClassId) return false;
+    if (!academicYearValid) {
+      setStatus('Anno scolastico non valido: correggere il formato nelle Impostazioni.');
+      return false;
+    }
     if (Object.values(draft).some(value => value.trim() !== '' && parseCouncilValue(value) === null)) {
       setStatus('Correggere i voti non validi prima del salvataggio.');
       return false;
@@ -71,7 +76,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [draft, onSave, schoolYear, selectedClassId]);
+  }, [academicYearValid, draft, onSave, schoolYear, selectedClassId]);
 
   useEffect(() => {
     if (!onRegisterDraftGuard) return;
@@ -132,6 +137,12 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         <p className="text-xs text-slate-400 mt-1">
           La media è un riferimento matematico; il voto di ingresso è attribuito e confermato dal docente.
         </p>
+        {!academicYearValid && (
+          <p role="alert" className="text-sm text-amber-300 mt-2">
+            Anno scolastico non riconosciuto. Imposta un valore come 2026/27 o 2026/2027
+            nelle Impostazioni prima di attribuire i voti.
+          </p>
+        )}
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -169,7 +180,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               <Users className="w-4 h-4" /> {current.students.length} alunni ·
               media {settings.useWeightedAverage ? 'ponderata' : 'aritmetica'} delle prove numeriche fino al {cutoff || '—'}
             </p>
-            <button type="button" onClick={fillEmptyFromAverages} disabled={saving || !cutoff || fillableRows.length === 0}
+            <button type="button" onClick={fillEmptyFromAverages} disabled={saving || !academicYearValid || !cutoff || fillableRows.length === 0}
               className="px-3 py-2 min-h-[44px] rounded-lg border border-[var(--border)] text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50">
               Proponi le medie nei campi vuoti
             </button>
@@ -201,7 +212,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                         {formatGrade(row.average)}
                         {row.average !== null && (
                           <button type="button" onClick={() => setValue(row.student.id, String(Number(row.average!.toFixed(2))))}
-                            disabled={saving} title="Usa la media come voto di ingresso"
+                            disabled={saving || !academicYearValid} title="Usa la media come voto di ingresso"
                             aria-label={`Usa media per alunno ${formatStudentNameWithPrivacy(row.student.name, isPrivacyShieldActive)}`}
                             className="block mx-auto text-xs text-[var(--primary)] underline min-h-[28px] disabled:opacity-50">
                             Usa media
@@ -211,7 +222,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                       <td className="p-2 text-center">
                         <input inputMode="decimal" type="text" value={entered}
                           aria-label={`Voto di ingresso per ${formatStudentNameWithPrivacy(row.student.name, isPrivacyShieldActive)}`}
-                          aria-invalid={bad} disabled={saving}
+                          aria-invalid={bad} disabled={saving || !academicYearValid}
                           onChange={event => setValue(row.student.id, event.target.value)}
                           placeholder="—"
                           className={`w-24 p-2 rounded-md border text-center bg-slate-950 text-white ${bad ? 'border-rose-500' : 'border-[var(--border)]'}`} />
@@ -257,7 +268,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             <p role="status" aria-live="polite" className={`text-sm ${invalid ? 'text-rose-300' : dirty ? 'text-amber-300' : 'text-slate-300'}`}>
               {status || (invalid ? 'Almeno un voto non è valido.' : dirty ? 'Modifiche non ancora salvate.' : 'Nessuna modifica da salvare.')}
             </p>
-            <button type="button" disabled={!dirty || invalid || saving} onClick={() => { void handleSave(); }}
+            <button type="button" disabled={!dirty || invalid || saving || !academicYearValid} onClick={() => { void handleSave(); }}
               className="min-h-[44px] flex items-center gap-2 rounded-lg bg-[var(--primary)] text-black font-bold px-4 py-2 disabled:opacity-50">
               <Save className="w-4 h-4" /> {saving ? 'Salvataggio…' : 'Salva valutazioni di ingresso'}
             </button>
