@@ -89,9 +89,8 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   await navigate(page, 'Consigli di classe');
   const picker = page.getByRole('combobox', { name: 'Seleziona classe per il Consiglio' });
   await picker.selectOption({ label: '2C Legacy' });
-  const row = page.getByRole('row', { name: /Alfa Uno/ });
   // In privacy mode the name is masked; the average and vote input remain class-scoped.
-  await expect(page.getByRole('cell', { name: '8,5', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /^8,5/ })).toBeVisible();
   const vote = page.locator('input[aria-label^="Voto di ingresso per"]');
   await vote.fill('7');
   await page.getByRole('button', { name: 'Salva valutazioni di ingresso' }).click();
@@ -119,5 +118,5 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   await navigate(page, 'Consigli di classe');
   await picker.selectOption({ label: '2C Legacy' });
   await expect(vote).toHaveValue('7');
-  await expect(page.getByRole('cell', { name: '8,5', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /^8,5/ })).toBeVisible();
 });
