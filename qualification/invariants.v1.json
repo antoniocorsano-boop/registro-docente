@@ -1210,6 +1210,30 @@
       "browserSmoke": [
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-02-I01",
+      "owner": "CDC-02/S1",
+      "statement": "Dated teacher-authored council sessions are independent from evidence grades and council assessment moments. Creation requires explicit teacher confirmation and a durable encrypted appData write. Every session has stable class-year identity, validated actual date and type; multiple meetings in one period remain distinct, readable after navigation and backup restore. Legacy backups stay valid, corrupted sessions fail closed, and replacement of existing sessions demands explicit warning. No official resolutions, remote sharing, merge or deployment.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/",
+        "src/components/CouncilView.tsx",
+        "src/security/cdc02CouncilSessions.test.ts",
+        "src/security/backupPayload.ts",
+        "src/types.ts",
+        "src/App.tsx",
+        "tests/browser/cdc-02-sessions.spec.cjs"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSessions.test.ts",
+        "src/security/cdc01CouncilBackup.test.ts",
+        "src/security/backupPayload.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
     }
   ]
 }
