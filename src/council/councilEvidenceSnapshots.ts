@@ -66,6 +66,11 @@ function validDate(date: unknown): date is string {
 export function isCaptureClockValid(value: unknown): value is CouncilCaptureClockV1 {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const input = value as Record<string, unknown>;
+  // Never let a structurally assignable clock carry extra snapshot fields.
+  if (Object.keys(input).length !== 3
+    || Object.keys(input).some(key => ![
+      'capturedAt', 'captureLocalDate', 'captureUtcOffsetMinutes'
+    ].includes(key))) return false;
   if (typeof input.capturedAt !== 'string' || !ISO_UTC.test(input.capturedAt)
     || !validDate(input.captureLocalDate)
     || typeof input.captureUtcOffsetMinutes !== 'number'
@@ -312,7 +317,9 @@ export async function prepareCouncilSnapshot(
     sessionDate: session.date, sessionKind: session.kind,
     revision: previous ? previous.revision + 1 : 1,
     ...(previous ? { supersedesSnapshotId: previous.id } : {}),
-    ...clock,
+    capturedAt: clock.capturedAt,
+    captureLocalDate: clock.captureLocalDate,
+    captureUtcOffsetMinutes: clock.captureUtcOffsetMinutes,
     requestedCutoff: context.cutoff,
     effectiveCutoff: overview.effectiveCutoff,
     cutoffClampedToSchoolYear: overview.cutoffClampedToSchoolYear,
@@ -349,7 +356,11 @@ export async function appendConfirmedCouncilSnapshot(
   if (existing) {
     // A retry of exactly the same explicit command is idempotent. No new revision.
     const candidate: Omit<CouncilEvidenceSnapshotV1, 'contentDigest'> = {
-      ...reviewed, ...clock, id, confirmedByTeacher: true
+      ...reviewed,
+      capturedAt: clock.capturedAt,
+      captureLocalDate: clock.captureLocalDate,
+      captureUtcOffsetMinutes: clock.captureUtcOffsetMinutes,
+      id, confirmedByTeacher: true
     };
     if (existing.contentDigest === await hashSnapshot(candidate)) return data;
     throw new Error('ID della fotografia già utilizzato con contenuto diverso.');
