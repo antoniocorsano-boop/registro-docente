@@ -52,6 +52,47 @@ export interface CouncilSession {
   updatedAt: string;
 }
 
+/**
+ * CDC-02/S2b v1: six frozen class totals only; no student names or per-pupil marks.
+ * This is a teacher-confirmed projection, NOT an official council decision.
+ */
+export interface CouncilEvidenceAggregatesV1 {
+  totalStudents: number;
+  withNumericEvidence: number;
+  withoutNumericEvidence: number;
+  numericEvidenceCount: number;
+  withSavedTeacherProposal: number;
+  withoutSavedTeacherProposal: number;
+}
+
+export interface CouncilEvidenceSnapshotV1 {
+  schemaVersion: 1;
+  id: string;
+  classId: string;
+  schoolYear: string;
+  sessionId: string;
+  sessionDate: string;
+  sessionKind: CouncilSessionKind;
+  revision: number;
+  supersedesSnapshotId?: string;
+  /** ISO UTC, sampled with the fields below from one local Date at commit. */
+  capturedAt: string;
+  /** Original civil day of acquisition, preserved across restores/timezones. */
+  captureLocalDate: string;
+  /** JavaScript Date.getTimezoneOffset: UTC minus original local time, minutes. */
+  captureUtcOffsetMinutes: number;
+  confirmedByTeacher: true;
+  requestedCutoff: string;
+  effectiveCutoff: string;
+  cutoffClampedToSchoolYear: boolean;
+  calculationContract: 'council-evidence-overview-v1';
+  aggregates: CouncilEvidenceAggregatesV1;
+  /** Internal encrypted integrity hints, never anonymization or a digital signature. */
+  rosterFingerprint: string;
+  sourceFingerprint: string;
+  contentDigest: string;
+}
+
 export interface ClassData {
   id: string;
   name: string;
@@ -62,6 +103,8 @@ export interface ClassData {
   councilAssessments?: CouncilAssessment[];
   /** Private, dated council-session index; independent from proposals and source grades. */
   councilSessions?: CouncilSession[];
+  /** Optional append-only teacher-confirmed aggregate photographs (CDC-02/S2b). */
+  councilEvidenceSnapshots?: CouncilEvidenceSnapshotV1[];
 }
 
 export type UdaActivityType = 'teoria' | 'laboratorio' | 'compito_realta' | 'digitale' | 'civica';
