@@ -1,3 +1,5 @@
+// CDC-02/S2b-P1 RED: import dell'API ancora assente intenzionalmente.
+// Il primo gate deve fallire per modulo non presente; solo il modello successivo lo risolve.
 import { describe, expect, test } from 'bun:test';
 import type { AppData, AppSettings, ClassData } from '../types';
 import {
