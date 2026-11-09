@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import type { AppData, AppSettings, ClassData } from '../types';
-import { assignCouncilValues, councilRows, isCouncilAppDataValid, parseCouncilValue, readCouncilValues, summarizeCouncilValues, wouldLoseCouncilEntries } from '../council/councilModel';
+import { assignCouncilValues, councilRows, isCouncilAppDataValid, normalizeSchoolYear, parseCouncilValue, readCouncilValues, summarizeCouncilValues, wouldLoseCouncilEntries } from '../council/councilModel';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
 import { createBackupPayload, normalizeBackupPayload } from './backupPayload';
@@ -57,6 +57,47 @@ describe('CDC-01 — Consigli di classe', () => {
     expect(councilRows(c, 'anno non riconosciuto', '2026-11-09', settings)[0].count).toBe(0);
     // A school-year mismatch cannot silently mix evidence from other years.
     expect(councilRows(c, 'anno non riconosciuto', '2026-11-09', settings)[0].count).toBe(0);
+  });
+
+  test('historical year cannot include following-year grades beyond August 31', () => {
+    const c = classFixture();
+    const previousYear = councilRows(c, '2025/26', '2026-11-09', settings);
+    expect(previousYear[0].count).toBe(2);
+    expect(previousYear[0].average).toBe(2);
+    expect(councilRows(c, '2025/2026', '2026-11-09', settings)[0].count).toBe(2);
+    expect(councilRows(c, '2025-2026', '2026-11-09', settings)[0].average).toBe(2);
+    // A cutoff preceding the selected school year must never borrow other years' evidence.
+    expect(councilRows(c, '2025/26', '2025-08-31', settings)[0].count).toBe(0);
+  });
+
+  test('equivalent school year labels share one durable council assessment identity', () => {
+    expect(normalizeSchoolYear('2026/27')).toBe('2026/2027');
+    expect(normalizeSchoolYear('2026/2027')).toBe('2026/2027');
+    expect(normalizeSchoolYear('2026-2027')).toBe('2026/2027');
+    expect(normalizeSchoolYear('2026/2028')).toBeNull();
+    const c = classFixture();
+    c.councilAssessments = [
+      { studentId: 'a', schoolYear: '2026/27', moment: 'ingresso', value: '7', updatedAt: now },
+      { studentId: 'a', schoolYear: '2026/27', moment: 'intermedia', value: '8', updatedAt: now }
+    ];
+    const source: AppData = { classes: [c], currentClassId: null };
+    expect(readCouncilValues(c, '2026/2027')).toEqual({ a: '7' });
+    expect(isCouncilAppDataValid(source)).toBe(true);
+    const renamed = assignCouncilValues(source, 'C', '2026/2027', 'ingresso', { a: '9' }, now);
+    expect(readCouncilValues(renamed.classes[0], '2026/27')).toEqual({ a: '9' });
+    expect(renamed.classes[0].councilAssessments).toHaveLength(2);
+    expect(renamed.classes[0].councilAssessments?.find(e => e.moment === 'ingresso')?.schoolYear).toBe('2026/2027');
+    expect(renamed.classes[0].councilAssessments?.find(e => e.moment === 'intermedia')?.value).toBe('8');
+    const labelOnly = structuredClone(source);
+    labelOnly.classes[0].councilAssessments![0].schoolYear = '2026/2027';
+    expect(wouldLoseCouncilEntries(source, labelOnly)).toBe(false);
+    const duplicate = structuredClone(source);
+    duplicate.classes[0].councilAssessments!.push({
+      studentId: 'a', schoolYear: '2026/2027', moment: 'ingresso', value: '6', updatedAt: now
+    });
+    expect(isCouncilAppDataValid(duplicate)).toBe(false);
+    expect(() => normalizeBackupPayload(createBackupPayload(snapshot(duplicate)), snapshot(source))).toThrow();
+    expect(() => assignCouncilValues(source, 'C', '2026/2028', 'ingresso', { a: '7' }, now)).toThrow();
   });
 
   test('teacher can override average, and score never enters evidence grades', () => {
