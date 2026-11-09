@@ -116,7 +116,6 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     setError(null);
     setPreview(null);
     const controller=new AbortController();
-    abortRef.current?.abort();
     abortRef.current=controller;
     setGenerating(true);
     const deadline=window.setTimeout(()=>{
