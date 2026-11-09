@@ -1307,6 +1307,30 @@
         "tests/browser/cdc-02-sessions.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-02-S2B-P3-I01",
+      "owner": "CDC-02/S2b-P3",
+      "statement": "Council evidence snapshot UI is scoped to an explicitly opened saved session and teacher-chosen cutoff. Preparing a six-aggregate preview never saves; only a distinct explicit confirmation can queue a Vault appData/meta commit, always revalidating stored grades, class/year/session, revision, local capture date/offset and source fingerprint from execution-time committed refs. Pending confirmation blocks session and class changes, failed save never publishes a success or a new historical snapshot, opening sessions never snapshots automatically. Older confirmed revisions remain selectable, no student identities or personal grades are duplicated, retroactive capture does not claim historical provenance, no official minutes, remote transfer, merge or deployment.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/components/CouncilView.tsx",
+        "src/components/CouncilSnapshotSection.tsx",
+        "src/council/councilEvidenceSnapshots.ts",
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/security/cdc02CouncilSnapshotsBackup.test.ts",
+        "src/security/durableMutationCoordinator.test.ts",
+        "src/security/cdc02CouncilSessions.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
     }
   ]
 }
