@@ -706,6 +706,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       requestPlanningDeparture(() => setActiveTab(tab, options), tab);
       return;
     }
+    // Consigli is a general workspace: previous class is never an implicit authority.
+    if (tab === 'consigli' && activeTabRef.current !== 'consigli') {
+      currentClassIdRef.current = null;
+      setAppData(previous => ({ ...previous, currentClassId: null }));
+    }
     traceHpr('scheda-attivata', tab);
     if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
     if (tab !== 'verifiche-online') setPendingCopilotAssessment(null);
@@ -2017,7 +2022,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const ambientProfessionalContext = resolveProfessionalContext({
     surface: ambientCopilotSurface,
-    currentClass: activeTab !== 'consigli' && currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
     planningFrame: activeTab === 'programmazione' || activeTab === 'uda-gantt' ? planningFrame : null,
     teachingContext: (activeTab === 'programmazione' || activeTab === 'uda-gantt')
       && resolvedTeachingFocus.status === 'resolved'
