@@ -87,7 +87,7 @@ export function buildAssessmentGenerationRequest(input: {
   if (!objective || objective.length > 400 || !title || !text) {
     throw new Error('Obiettivo o testo della fonte non disponibili.');
   }
-  if ([title, text, objective].some(appearsStudentPersonal)) {
+  if ([className, title, text, objective].some(appearsStudentPersonal)) {
     throw new Error('Il materiale contiene possibili dati personali: invio remoto bloccato.');
   }
   const activityKey = buildAiBudgetAssessmentKey(className);
@@ -113,20 +113,48 @@ export function buildAssessmentGenerationRequest(input: {
   };
 }
 
+export interface AssessmentGenerationSessionV1 {
+  /** Only the request object leaves the device. */
+  request: AssessmentGenerationRequestV1;
+  /** Session-only identity captured on explicit teacher selection. */
+  authorizedSourceId: string;
+  authorizedClassName: string;
+}
+
+/**
+ * Couple a minimal outbound request with its local identity fingerprint.
+ * The private source identifier must never be serialized to the provider.
+ */
+export function prepareAssessmentGenerationSession(
+  input: Parameters<typeof buildAssessmentGenerationRequest>[0]
+): AssessmentGenerationSessionV1 {
+  const request = buildAssessmentGenerationRequest(input);
+  return {
+    request,
+    authorizedSourceId: input.source.id,
+    authorizedClassName: request.context.className
+  };
+}
+
 /**
  * After asynchronous generation, compare the current Vault source and active
  * professional class against the exact authorized request. Any intervening
  * edit, revocation, replacement or class switch invalidates the result.
  */
 export function isAssessmentGenerationRequestCurrent(
-  request: AssessmentGenerationRequestV1,
+  session: AssessmentGenerationSessionV1,
   live: {
     source: LibrarySource | null;
     confirmedSourceId: string;
     activeClassName: string;
   }
 ): boolean {
-  if (!live.source || live.source.id !== live.confirmedSourceId) return false;
+  const { request, authorizedSourceId, authorizedClassName } = session;
+  if (!live.source || !authorizedSourceId
+    || session.authorizedClassName !== request.context.className
+    || live.activeClassName.trim() !== authorizedClassName
+    || live.confirmedSourceId !== authorizedSourceId
+    || live.source.id !== authorizedSourceId) return false;
   try {
     const fresh = buildAssessmentGenerationRequest({
       source: live.source,
