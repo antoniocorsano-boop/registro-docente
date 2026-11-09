@@ -1086,6 +1086,24 @@
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S3A-I01",
+      "owner": "INT-02/S3a",
+      "statement": "A Copilot-generated assessment proposal must be a strictly validated, bounded, structured and session-only draft. The parser rejects authority-bearing properties such as assessment IDs, class/UDA/source identifiers, source provenance or a persisted/saved flag, as well as malformed questions or answer keys. Projection exposes only editable title, description and questions, without write authority or changing the existing explicit teacher-save boundary. CREATE_ASSESSMENT remains unsupported until the independent generation and editor handoff gates are qualified; no provider call, Vault write, grading or automatic publication is authorized by this slice.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/library/assessmentDraft.ts",
+        "src/library/assessmentDraft.test.ts"
+      ],
+      "tests": [
+        "src/library/assessmentDraft.test.ts",
+        "src/library/agentIntentRouting.test.ts",
+        "src/security/int02S2bProvenanceContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+      ]
     }
   ]
 }
