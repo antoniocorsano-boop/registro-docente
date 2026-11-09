@@ -579,10 +579,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (await guard.saveChanges()) {
         performPlanningExit();
       } else {
-        setPlanningExitError('Il profilo non è stato salvato. Correggi i dati o riprova.');
+        setPlanningExitError(activeTabRef.current === 'consigli'
+          ? 'Voti non salvati: correggi eventuali valori e riprova.'
+          : 'Il profilo non è stato salvato. Correggi i dati o riprova.');
       }
     } catch {
-      setPlanningExitError('Salvataggio non riuscito. La Programmazione rimane aperta.');
+      setPlanningExitError(activeTabRef.current === 'consigli'
+          ? 'Salvataggio non riuscito. Le valutazioni di ingresso rimangono in modifica.'
+          : 'Salvataggio non riuscito. La Programmazione rimane aperta.');
     } finally {
       setPlanningExitSaving(false);
     }
@@ -2013,7 +2017,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const ambientProfessionalContext = resolveProfessionalContext({
     surface: ambientCopilotSurface,
-    currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    currentClass: activeTab !== 'consigli' && currentClass ? { id: currentClass.id, name: currentClass.name } : null,
     planningFrame: activeTab === 'programmazione' || activeTab === 'uda-gantt' ? planningFrame : null,
     teachingContext: (activeTab === 'programmazione' || activeTab === 'uda-gantt')
       && resolvedTeachingFocus.status === 'resolved'
@@ -2021,6 +2025,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       : null,
     privacyScope:
       activeTab === 'voti'
+      || activeTab === 'consigli'
       || activeTab === 'tabellone'
       || activeTab === 'analytics'
       || activeTab === 'storico'
@@ -3535,8 +3540,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
-            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti'].includes(activeTab)}
+            showClosedTrigger={activeTab !== 'consigli' && todayAction !== 'conduct' && !isActiveRecordFocus}
+            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
           />
           <LibraryCopilotComposer
               library={library}
@@ -3599,7 +3604,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             <p className="text-sm text-slate-300">
               {activeTab === 'verifiche-online'
                 ? 'La verifica contiene modifiche non salvate. Scegli se rimanere nell’editor o uscire senza salvare.'
-                : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
+                : activeTab === 'consigli'
+                  ? 'Ci sono valutazioni di ingresso non salvate. Puoi salvarle, scartarle o rimanere qui.'
+                  : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
             </p>
             {planningExitFromBrowser && (
               <p role="note" className="text-sm font-semibold text-amber-200">
@@ -3614,6 +3621,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                   : planningExitDestination === 'home' ? 'Oggi'
                   : planningExitDestination === 'biblioteca' ? 'Biblioteca privata'
                   : planningExitDestination === 'verifiche-online' ? 'Verifiche online'
+                  : planningExitDestination === 'consigli' ? 'Consigli di classe'
                   : 'schermata selezionata'}.
               </p>
             )}
@@ -3621,7 +3629,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               <p role="status" className="text-sm text-amber-200">
                 {activeTab === 'verifiche-online'
                   ? 'Ripristino della verifica in corso. Le scelte saranno disponibili dopo la verifica del percorso.'
-                  : 'Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.'}
+                  : activeTab === 'consigli'
+                    ? 'Ripristino della schermata Consigli in corso. Le scelte saranno disponibili dopo la verifica del percorso.'
+                    : 'Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.'}
               </p>
             )}
             {historyFallbackWarning && (
@@ -3629,12 +3639,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 Il navigatore non permette di verificare il percorso precedente. La bozza è ancora disponibile.
                 {activeTab === 'verifiche-online'
                   ? 'Se scegli «Rimani», sarà ripristinato l’editor della verifica e la cronologia in avanti potrebbe essere sostituita.'
-                  : 'Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.'}
+                  : activeTab === 'consigli'
+                    ? 'Se scegli «Rimani», sarà riaperta la sezione Consigli e la cronologia in avanti potrebbe essere sostituita.'
+                    : 'Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.'}
               </p>
             )}
             {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
             <div className="flex flex-col gap-2">
-              {activeTab === 'programmazione' && (
+              {['programmazione', 'consigli'].includes(activeTab) && (
                 <button type="button" onClick={() => void saveAndLeavePlanning()} disabled={planningExitSaving || historyRestoringOrigin}
                   className="min-h-[44px] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-60">
                   {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
@@ -3646,7 +3658,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               </button>
               <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : 'Rimani nella Programmazione'}
+                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : 'Rimani nella Programmazione'}
               </button>
             </div>
           </div>
