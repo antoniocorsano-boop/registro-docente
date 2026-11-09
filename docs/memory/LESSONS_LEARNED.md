@@ -90,3 +90,33 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: PR #160, Browser Qualification #1802 (rilevazione visiva), #1803 PASS (artifact `13635091930`), ricevuta HPR #6727478607, revisione Codex #6727240052.
 - Promozione candidata: nessuna nuova operating rule; caso particolare dei contratti già coperti da `OR-003` e `TR-003`.
 - Sostituita da: —
+
+### LL-007 — Il clock non puo trasferire proprieta arbitrarie alla fotografia
+- Stato: ACTIVE
+- Ciclo/data: CDC-02/S2b-P1 · 2026-11-09
+- Exact SHA/riferimento: RED `8d2967904f9f08a946994ce8041ec3c2b8298d6b`; GREEN `a8ccaa4538293d884f3e65181a8994d355ddcb03`; merge `700428f6edf2e7b94ff3fa9b2ddf8c5d5b09cc41`.
+- Obiettivo: impedire che i campi temporali introdotti alla conferma riscrivano identita e revisione di una fotografia immutabile.
+- Ha funzionato: test RED causale sulla proprieta `revision: 99` e `sessionId: 'S2'` iniettate nel clock; allowlist di tre chiavi, copia esplicita dei soli campi temporali in preview e nel retry; GREEN invariato e 5/5 gate qualificati, review indipendente senza rilievi successivi.
+- E fallito: un oggetto TypeScript strutturalmente compatibile con il tipo clock conteneva chiavi estranee, propagate con object spread fino ai campi canonici della fotografia. La prima fotografia poteva essere generata con revisione falsa e quindi fallire la validazione successiva.
+- Causa reale: uso di spread di un oggetto di input non verificato come se fosse un insieme chiuso di proprieta autorizzate.
+- Regola generalizzabile: ai confini fra input e record con identita o versione canonica, validare esattamente la forma dell'oggetto e copiare singolarmente solo i campi consentiti; testare tentativi di sovrascrittura attraverso proprieta aggiuntive.
+- Recipe: applicare OR-002, OR-003 e qualificazione TR-001/003; per PR impilate usare il processo provato da LL-004 (base prima, retarget senza cambiare head, merge vincolato a exact-SHA, verifica identita dei contenuti).
+- Non ripetere: trattare un tipo strutturale come garanzia di assenza di proprieta extra a runtime, ne trasferire ai futuri P2/P3 la qualifica P1.
+- Evidenza: PR #181, test `src/security/cdc02CouncilSnapshots.test.ts`, run RED #42679197272, run PASS #42679348812 e Chromium #42679348562, receipt #6748973795.
+- Promozione candidata: nessuna nuova regola globale; principio compreso nei controlli di validazione e OR-007.
+- Sostituita da: —
+
+### LL-008 — Il backup deve rifiutare identita di classe ambigue prima di convalidare lo storico
+- Stato: ACTIVE
+- Ciclo/data: CDC-02/S2b-P2 · 2026-11-09
+- Exact SHA/riferimento: RED `318e34d235e55f837923713001d6401c6e57281e`; GREEN `acd22f5c7b20196af58ebc6fc23d962923d82f15`; merge `b919bbec4da7f3893069ee18dc3042f1cf4f0d41`.
+- Obiettivo: ripristinare e conservare fotografie delle sedute associate a una sola classe, senza perdita silenziosa o identita ambigue.
+- Ha funzionato: revisione indipendente Codex ha identificato il duplicato di ID classe; il test RED ha riprodotto l'accettazione erronea, prima della correzione. Nel GREEN `isCouncilAppDataValid` respinge ID classe duplicati/vuoti e `wouldLoseCouncilEntries` considera non garantita la conservazione degli storici in un backup con classi ambigue. Verifica integrita SHA-256 prima di Vault/restore; 5/5 gate exact-SHA e re-review Codex senza finding residui.
+- E fallito: il controllo iniziale validava ogni classe isolatamente; due classi con lo stesso ID potevano superare l'importazione, mentre il selettore autorevole delle fotografie falliva per ambiguita, rendendo lo storico non consultabile.
+- Causa reale: mancato controllo dell'unicita dell'identita di classe sull'intero AppData prima di validare i record locali e la loro provenienza.
+- Regola generalizzabile: prima di un import/salvataggio autorevole, validare unicita e forma delle identita al livello del contenitore intero, poi integrita dei riferimenti e digest dei record; non confondere validita di ogni sotto-record con validita della struttura globale. Proteggere restore con avviso di perdita e verifica crittografica prima delle scritture.
+- Recipe: OR-002/003/005/007, TR-001/002/003; PR impilate e ricevute aggiornate secondo LL-004.
+- Non ripetere: validare le classi indipendentemente quando le fotografie si collegano mediante ID globale, o attribuire un PASS di revisione a uno SHA precedente alla correzione.
+- Evidenza: PR #183, test `src/security/cdc02CouncilSnapshotsBackup.test.ts`, RED run #42688392188, GREEN Invarianti #42688544625, PREDEPLOY #42688544619, Browser #42688544626, seconda revisione Codex exact-SHA, ricevuta #6750192954.
+- Promozione candidata: nessuna nuova operating rule; controllo di identita e fail-closed gia coerenti con OR-007.
+- Sostituita da: —
