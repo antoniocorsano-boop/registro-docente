@@ -135,7 +135,8 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   await expect(panel.getByText('Fotografia confermata · revisione 2')).toBeVisible();
   expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+1/);
 
-  await history.selectOption({ label: new RegExp('Revisione 1') });
+  const firstRevisionId = await history.locator('option').first().getAttribute('value');
+  await history.selectOption(firstRevisionId);
   await expect(panel.getByText('Fotografia confermata · revisione 1')).toBeVisible();
   expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
 
