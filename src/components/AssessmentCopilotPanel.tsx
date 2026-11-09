@@ -62,6 +62,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   const [providerLabel,setProviderLabel]=useState('servizio remoto configurato');
   const [providerAvailable,setProviderAvailable]=useState<boolean|null>(null);
   const abortRef=useRef<AbortController|null>(null);
+  const deadlineRef=useRef<number|null>(null);
   const liveRef=useRef(getLiveContext);
   liveRef.current=getLiveContext;
 
@@ -80,7 +81,13 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       }).catch(()=>{/* Availability is verified by the explicit POST. */});
     return ()=>{
       controller.abort();
-      abortRef.current?.abort();
+      const pending=abortRef.current;
+      abortRef.current=null;
+      pending?.abort();
+      if(deadlineRef.current!==null){
+        window.clearTimeout(deadlineRef.current);
+        deadlineRef.current=null;
+      }
     };
   },[source.id,classId]);
 
@@ -94,6 +101,10 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     if(!pending)return;
     abortRef.current=null;
     pending.abort();
+    if(deadlineRef.current!==null){
+      window.clearTimeout(deadlineRef.current);
+      deadlineRef.current=null;
+    }
     setGenerating(false);
     setRemoteConsent(false);
     setPreview(null);
@@ -101,7 +112,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   };
 
   const handleGenerate=async()=>{
-    if(generating||adopting||!remoteConsent||!objective.trim())return;
+    if(abortRef.current||generating||adopting||!remoteConsent||!objective.trim())return;
     setError(null);
     setPreview(null);
     const controller=new AbortController();
@@ -111,12 +122,14 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     const deadline=window.setTimeout(()=>{
       if(abortRef.current!==controller)return;
       abortRef.current=null;
+      deadlineRef.current=null;
       controller.abort();
       setGenerating(false);
       setRemoteConsent(false);
       setPreview(null);
       setError('La richiesta ha superato il tempo massimo. Per un nuovo invio è necessario un nuovo consenso.');
     },CLIENT_GENERATION_TIMEOUT_MS);
+    deadlineRef.current=deadline;
     try{
       const session=prepareAssessmentGenerationSession({
         source,
@@ -140,6 +153,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       }
     }finally{
       window.clearTimeout(deadline);
+      if(deadlineRef.current===deadline)deadlineRef.current=null;
       if(abortRef.current===controller){
         abortRef.current=null;
         setGenerating(false);
