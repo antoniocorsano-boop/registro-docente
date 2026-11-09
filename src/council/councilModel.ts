@@ -191,8 +191,11 @@ export function appendCouncilSession(
 // New optional ClassData fields preserve legacy backups and the existing encrypted Vault record.
 export function isCouncilAppDataValid(data: unknown): boolean {
   if (!data || typeof data !== 'object' || !Array.isArray((data as AppData).classes)) return false;
+  const classIds = new Set<string>();
   for (const item of (data as AppData).classes) {
-    if (!item || typeof item !== 'object') return false;
+    if (!item || typeof item !== 'object'
+      || typeof item.id !== 'string' || !item.id.trim() || classIds.has(item.id)) return false;
+    classIds.add(item.id);
     if (item.councilAssessments !== undefined) {
       if (!Array.isArray(item.councilAssessments) || !Array.isArray(item.students)) return false;
       const ids = new Set(item.students.map(student => student.id));
@@ -230,6 +233,14 @@ export function isCouncilAppDataValid(data: unknown): boolean {
 }
 
 export function wouldLoseCouncilEntries(previous: AppData, incoming: AppData): boolean {
+  // An ambiguous class identity cannot prove that historical council records
+  // will survive a replacement, even if the first matching container has them.
+  const incomingIds = new Set<string>();
+  for (const klass of incoming.classes) {
+    if (!klass || typeof klass.id !== 'string'
+      || !klass.id.trim() || incomingIds.has(klass.id)) return true;
+    incomingIds.add(klass.id);
+  }
   for (const priorClass of previous.classes) {
     const nextClass = incoming.classes.find(item => item.id === priorClass.id);
     for (const previousEntry of priorClass.councilAssessments ?? []) {
