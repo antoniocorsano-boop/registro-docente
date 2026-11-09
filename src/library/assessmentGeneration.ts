@@ -2,7 +2,7 @@ import {
   normalizeAiBudgetProfile,
   type AiBudgetAuthorizationV1,
   type AiBudgetProfile
-} from '../copilot/aiBudgetGovernor';
+} from '../copilot/aiBudgetGovernor.ts';
 import type { LibrarySource } from './types';
 
 export type AssessmentGenerationSourceKind = 'text' | 'note' | 'concept' | 'web' | 'internal';
