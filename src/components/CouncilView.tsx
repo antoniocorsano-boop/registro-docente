@@ -382,7 +382,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             {evidenceOverview ? (
               <>
                 <p className="text-xs text-slate-300">
-                  Quadro corrente: prove fino al <strong>{formatCouncilDate(evidenceOverview.effectiveCutoff)}</strong>,
+                  Dati correnti: prove fino al <strong>{formatCouncilDate(evidenceOverview.effectiveCutoff)}</strong>,
                   anno {evidenceOverview.schoolYear}. I voti di ingresso sono quelli già salvati.
                   {evidenceOverview.cutoffClampedToSchoolYear
                     ? ' La data richiesta supera la fine dell’anno: il calcolo si ferma al 31 agosto.'
