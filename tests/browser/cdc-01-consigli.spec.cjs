@@ -51,7 +51,7 @@ test('CDC-01: teacher explicitly chooses class and saves an independent entrance
 
   await page.getByRole('button', { name: 'Salva valutazioni di ingresso' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Valutazioni di ingresso salvate nell’archivio' })).toBeVisible();
-  await expect(page.getByText('Con voto')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Riepilogo delle fasce di ingresso' }).getByText('Con voto')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Riepilogo delle fasce di ingresso' })).toContainText('Alta · 8,5–10');
 
   await navigate(page, 'Oggi');
