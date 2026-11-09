@@ -1318,7 +1318,8 @@
         "src/components/CouncilView.tsx",
         "src/components/CouncilSnapshotSection.tsx",
         "src/council/councilEvidenceSnapshots.ts",
-        "src/security/cdc02CouncilSnapshotUiContract.test.ts"
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "tests/browser/cdc-02-sessions.spec.cjs"
       ],
       "tests": [
         "src/security/cdc02CouncilSnapshotUiContract.test.ts",
