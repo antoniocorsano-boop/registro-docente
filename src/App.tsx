@@ -140,7 +140,7 @@ import type {
   SecureAppStorage,
   SecureMeta
 } from './security/secureAppStorage';
-import { normalizeBackupPayload } from './security/backupPayload';
+import { normalizeBackupPayloadVerified } from './security/backupPayload';
 import { appendCouncilSession, assignCouncilValues, wouldLoseCouncilEntries } from './council/councilModel';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
@@ -3079,10 +3079,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
-      const candidate = normalizeBackupPayload(decryptedData, previousLogical);
+      const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
       if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
-        && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni o sedute dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
-        throw new Error('Importazione annullata: le valutazioni dei Consigli esistenti sono state conservate.');
+        && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
+        throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
       }
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
