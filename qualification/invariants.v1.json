@@ -1175,7 +1175,7 @@
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs",
-        "tests/browser/int-01-mobile-flow.spec.cjs"
+        "tests/browser/int-01-didactic-continuity.spec.cjs"
       ]
     }
   ]
