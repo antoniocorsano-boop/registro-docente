@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const CLASS_NAME = '2Z CDC-01 sintetica';
@@ -7,7 +8,7 @@ test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' })
 test.setTimeout(60000);
 
 async function navigate(page, name) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).first().click();
   const drawer = page.getByRole('complementary');
   await drawer.getByRole('button', { name, exact: true }).click();
 }
