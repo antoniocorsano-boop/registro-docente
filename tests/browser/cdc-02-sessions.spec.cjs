@@ -1,4 +1,7 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
 const { navigationButton } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
@@ -27,9 +30,20 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   const councilCopilot = page.getByRole('button', { name: 'Apri Copilota dai Consigli di classe' });
   await expect(councilCopilot).toBeVisible();
   await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+  const evidenceDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence', 'cdc02-s1ux-hpr');
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  const shots = [];
+  async function capture(filename, surface, options = {}) {
+    const filePath = path.join(evidenceDir, filename);
+    await surface.screenshot({ path: filePath, animations: 'disabled', ...options });
+    const data = fs.readFileSync(filePath);
+    shots.push({ name: filename, bytes: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex') });
+  }
   await councilCopilot.click();
   await expect(page.getByRole('region', { name: 'Opportunità del Copilota' })).toBeVisible();
   await page.getByRole('button', { name: 'Chiudi opportunità del Copilota' }).click();
+  await expect(page.getByRole('region', { name: 'Opportunità del Copilota' })).toBeHidden();
+  await capture('01-consigli-copilota-inline-senza-sovrapposizioni.png', page, { fullPage: true });
 
   const year = await page.getByRole('combobox', { name: 'Seleziona anno scolastico del Consiglio' }).inputValue();
   const start = Number(year.slice(0, 4));
@@ -40,6 +54,8 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   await page.getByRole('button', { name: 'Registra seduta' }).click();
   await expect(page.getByRole('region', { name: 'Dettaglio della seduta' })).toContainText('Seduta salvata');
   await expect(page.getByRole('status').filter({ hasText: 'Seduta salvata.' })).toBeVisible();
+  const archive = page.getByRole('region', { name: 'Archivio sedute del Consiglio' });
+  await capture('02-seduta-salvata-data-italiana.png', archive);
 
   await date.fill(`${start}-11-16`);
   await page.getByRole('button', { name: 'Registra seduta' }).click();
@@ -49,6 +65,7 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   await expect(entries.last()).toContainText(`9 nov ${start}`);
   await entries.last().click();
   await expect(page.getByRole('region', { name: 'Dettaglio della seduta' })).toContainText('Seduta selezionata');
+  await capture('03-due-sedute-selezionata.png', archive);
 
   await navigate(page, 'Oggi');
   const confirmation = page.getByRole('alertdialog').filter({ has: page.getByRole('heading', { name: 'Tornare a Oggi?' }) });
@@ -63,9 +80,19 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   const reopened = page.getByRole('region', { name: 'Dettaglio della seduta' });
   await expect(reopened).toContainText('Seduta riaperta');
   await expect(reopened).toContainText(`9 novembre ${start}`);
+  await capture('04-seduta-riaperta-dopo-oggi.png', archive);
 
   // Historical records are not grades and do not require a student or per-session votes.
   await expect(page.getByRole('region', { name: 'Tabellone delle valutazioni di ingresso' })).toBeVisible();
   const xOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(xOverflow).toBe(false);
+  fs.writeFileSync(path.join(evidenceDir, 'manifest.json'), JSON.stringify({
+    contract: 'CDC-02/S1-UX-HPR-v1',
+    applicationTreeSourceCommit: '48a7eaee4539dd959242639feccd232a07eafa7a',
+    screenshotCaptureCommit: process.env.CANDIDATE_SHA || 'LOCAL_DIAGNOSTIC',
+    viewport: { width: 360, height: 780 },
+    classification: 'synthetic-only',
+    acceptance: 'HUMAN_VISUAL_REVIEW_NOT_AUTOMATIC',
+    screenshots: shots
+  }, null, 2) + '\n');
 });
