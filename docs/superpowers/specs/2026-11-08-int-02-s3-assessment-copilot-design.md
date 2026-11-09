@@ -1,7 +1,7 @@
 # INT-02/S3 — Copilota «Crea verifica»: proposta controllata e adozione esplicita
 
-**Stato:** S3a (contratto bozza) in realizzazione su PR #162; S3b (generazione), S3c (passaggio all'editor) e S3d (qualificazione di esperienza) NON avviate.  
-**Baseline applicativa:** `main@e6b518656efbfaeeaa85e04512fa149ef48bf91a` (S2b integrata, nessun deploy).  
+**Stato:** S3a INTEGRATA (PR #162); S3b in qualificazione sulla PR #163, separata dall'interfaccia; S3c (passaggio all'editor) e S3d (qualificazione di esperienza) NON avviate.  
+**Baseline applicativa:** `main@c27f824b1c637670bdf44e76cf8c421975829be3` (S2b + S3a integrate, nessun deploy).  
 **Governance:** [Roadmap #104](https://github.com/antoniocorsano-boop/registro-docente/issues/104) · [INT-02 #140](https://github.com/antoniocorsano-boop/registro-docente/issues/140) · [S2b #160](https://github.com/antoniocorsano-boop/registro-docente/pull/160).
 
 ## 1. Ricognizione del codice già presente
@@ -51,12 +51,19 @@ Limiti iniziali: 1–12 quesiti; 2–6 opzioni distinte; indice intero nell'inte
 
 **Attenzione:** S3a realizza il formato e il passaggio puro ai campi editor; **non** abilita da solo l'intento o la generazione né rende possibile creare una verifica tramite Copilota.
 
-## 4. S3b — generazione governata, da implementare
+## 4. S3b — generazione remota governata (PR #163, NON integrata)
 
-- Definire endpoint/azione specifica `generate-assessment-draft` con input minimizzato, autorizzazione separata e output strutturato; non modificare il significato di `prepare-activity`.
-- Riutilizzare infrastruttura esistente di provider, timeout, bilancio, errori leggibili, controllo del consenso, rifiuto del materiale non professionale e isolamento del contenuto sorgente come **dati non fidati**.
-- Riesaminare il contesto classe/fonte **prima della richiesta** e **prima della consegna**; in caso di cambio, invalidare la bozza e non consegnarla all'editor.
-- Contratti negativi: fonte cancellata o riclassificata, risposta malformata, risposta con IDs/metadata di autorità, opzioni impossibili, provider non configurato, consenso negato, richiesta duplicata, perdita di rete. Nessuna scrittura nel Vault.
+**Contratto iniziale volutamente ristretto:** generazione di una **bozza non persistente** soltanto da una fonte Biblioteca testuale professionale, pronta e selezionata esplicitamente. Nessun contenuto binario, immagine, documento personale, generazione senza fonte o creazione automatica di UDA. L'obiettivo e la classe devono essere indicati e confermati.
+
+- `src/library/assessmentGeneration.ts`: costruzione della richiesta `generate-assessment-draft` con fonte pronta, `teacher-professional`, classe attiva confermata, obiettivo, consenso esplicito e identificativo di attività budget `assessment:class:...` distinto dai codici UDA. La proiezione trasmessa **non contiene sourceId, UDA, alunni o valutazioni**.
+- `src/server/assessmentGenerationRoute.ts`: gestore separato, con rifiuto restrittivo di campi imprevisti, policy SEC di egress, segnali di dati personali riconoscibili, misurazione dimensioni, `resolvePrepareBudget`, richiesta duplicata simultanea negata, singola chiamata con scadenza e annullamento, gestione sicura degli errori e convalida della risposta tramite `parseAssessmentDraftV1`. Ricevuta limitata a metadati tecnici e budget.
+- `src/server/geminiAssessmentGenerationProvider.ts`: provider con JSON vincolato allo schema, isolamento esplicito della fonte come dato non attendibile, nessuno strumento disponibile e nessuna istruzione di salvataggio o valutazione; modulo separato dal generatore di attività `prepare-activity`.
+- `server.ts`: coppia di endpoint `GET /api/copilot/assessment-draft/provider` e `POST /api/copilot/assessment-draft` con body ridotto, controller di annullamento e provider costruito una sola volta sul server. API disponibile nel codice, **non collegata alla UI**.
+- `src/services/assessmentGenerationService.ts`: una sola POST, senza tentativi automatici, con convalida dell'output e **rivalidazione della fonte e della classe lette dal Vault client** prima di restituire la proposta.
+
+**Confine di fiducia cruciale:** il server non legge lo stato del Vault cifrato nel dispositivo del docente e non può attestare autonomamente che una fonte dichiarata pronta sia ancora tale. L'applicazione client deve pertanto effettuare la selezione autorevole della fonte, la conferma della classe, il consenso e le verifiche prima/dopo l'invio; l'integrazione UI S3c sarà qualificata anche contro cambiamenti concorrenti del contesto. La semplice esistenza dell'endpoint NON autorizza nuove operazioni nell'app.
+
+**Gate:** test RED→GREEN, privacy, limiti IA, provider mock, timeout, deduplicazione, regressione `prepare-activity`, cinque qualifiche exact SHA e Codex prima di dichiarare l'incremento qualificato.
 
 ## 5. S3c — composizione nell'editor, da implementare
 
@@ -73,4 +80,4 @@ Limiti iniziali: 1–12 quesiti; 2–6 opzioni distinte; indice intero nell'inte
 - **S3c:** Chromium mobile 320/390, scorrimento corretto, bozze modificate/back gesture/cambio classe, conferma fonte; prova che nessuna verifica sia salvata prima del comando esplicito. 5/5 gate, revisione indipendente e HPR visiva umana prima di promozione.
 - **S3d/S4:** riprendere continuità didattica soltanto dopo l'integrazione governata di S3.
 
-**Vincolo operativo:** PR #161 è una riconciliazione documentale indipendente ancora in bozza; non usarla come base per mutazioni S3. **Nessuna fusione o distribuzione Vercel deriva automaticamente da questa specifica.**
+**Vincolo operativo:** PR #161 e #162 sono integrate in main; la PR #163 S3b è una nuova proposta separata, senza modifica alla UI. `CREATE_ASSESSMENT` resta `UNSUPPORTED`. **Nessuna fusione o distribuzione Vercel deriva automaticamente da questa specifica.**

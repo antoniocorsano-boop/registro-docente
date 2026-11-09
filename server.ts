@@ -11,6 +11,8 @@ import {
   createTeachingProposalRuntime,
   resolveTeachingProposalRuntimeConfig
 } from './src/server/teachingProposalRuntime.ts';
+import { handleAssessmentGenerationRequest } from './src/server/assessmentGenerationRoute.ts';
+import { createGeminiAssessmentGenerationProvider } from './src/server/geminiAssessmentGenerationProvider.ts';
 import { handleAgentIntentRequest } from './src/server/agentIntentRoute.ts';
 import { createGeminiAgentIntentProvider } from './src/server/geminiAgentIntentProvider.ts';
 import { resolveServerBindHost } from './src/server/runtimeHost.ts';
@@ -35,6 +37,9 @@ const libraryProposalRuntime = createTeachingProposalRuntime(
   resolveTeachingProposalRuntimeConfig(process.env),
   libraryProposalProvider
 );
+const assessmentGenerationProvider = createGeminiAssessmentGenerationProvider({
+  apiKey: process.env.GEMINI_API_KEY
+});
 const agentIntentProvider = createGeminiAgentIntentProvider({
   apiKey: process.env.GEMINI_API_KEY
 });
@@ -96,6 +101,38 @@ app.post(
       const result = await handleAgentIntentRequest(
         req.body,
         agentIntentRuntime,
+        { signal: requestController.signal }
+      );
+      if (res.headersSent || res.writableEnded) return;
+      return res.status(result.status).json(result.body);
+    } finally {
+      req.removeListener('aborted', abortRequest);
+      res.removeListener('close', abortRequest);
+    }
+  }
+);
+
+// INT-02/S3b: isolated professional-only assessment draft route. No Vault writes.
+app.get('/api/copilot/assessment-draft/provider', (_req, res) => {
+  return res.json({
+    available: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    provider: assessmentGenerationProvider.descriptor.displayName,
+    model: assessmentGenerationProvider.descriptor.model
+  });
+});
+
+app.post(
+  '/api/copilot/assessment-draft',
+  express.json({ limit: '96kb' }),
+  async (req, res) => {
+    const requestController = new AbortController();
+    const abortRequest = () => requestController.abort();
+    req.once('aborted', abortRequest);
+    res.once('close', abortRequest);
+    try {
+      const result = await handleAssessmentGenerationRequest(
+        req.body,
+        assessmentGenerationProvider,
         { signal: requestController.signal }
       );
       if (res.headersSent || res.writableEnded) return;
