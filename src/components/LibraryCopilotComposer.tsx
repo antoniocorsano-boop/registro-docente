@@ -1672,7 +1672,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                     activeClassId:live.currentClassId
                   };
                 }}
-                onAccept={onAcceptAssessmentDraft}
+                onAccept={async (session,draft) => {
+                  await onAcceptAssessmentDraft(session,draft);
+                  // Close the entire Copilot surface, not just the inner
+                  // assessment panel, once navigation to Verifiche succeeds.
+                  onSurfaceModeChange('closed');
+                }}
                 onClose={() => setIsAssessmentOpen(false)}
               />
             )}
