@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData, CouncilSessionKind } from '../types';
 import type { PlanningDraftGuard } from './planning/PlanningProfileEditor';
-import { councilRows, isCouncilSessionDateValid, normalizeSchoolYear, parseCouncilValue, readCouncilSessions, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
+import { councilRows, formatCouncilDate, isCouncilSessionDateValid, normalizeSchoolYear, parseCouncilValue, readCouncilSessions, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
 import { formatGrade, formatStudentNameWithPrivacy, today, uid } from '../utils';
 import { ClipboardList, Save, Users } from 'lucide-react';
 
@@ -22,10 +22,11 @@ interface CouncilViewProps {
     classId: string, schoolYear: string, kind: CouncilSessionKind, date: string, sessionId: string
   ) => Promise<void>;
   onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
+  onOpenCopilot: () => void;
 }
 
 export const CouncilView: React.FC<CouncilViewProps> = ({
-  classes, settings, isPrivacyShieldActive, onSave, onCreateSession, onRegisterDraftGuard
+  classes, settings, isPrivacyShieldActive, onSave, onCreateSession, onRegisterDraftGuard, onOpenCopilot
 }) => {
   // Class choice is explicit. Do not infer one from the current navigation context.
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -35,6 +36,9 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   const [sessionSaving, setSessionSaving] = useState(false);
   const [sessionStatus, setSessionStatus] = useState('');
   const [openedSessionId, setOpenedSessionId] = useState('');
+  const [sessionViewState, setSessionViewState] = useState<'saved' | 'selected' | 'reopened'>('selected');
+  // Ephemeral display-only context: nothing new is persisted or inferred from grades.
+  const createdDuringVisit = useRef(new Set<string>());
   const [cutoff, setCutoff] = useState(today);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
@@ -73,6 +77,8 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
     setStatus('');
     setSessionStatus('');
     setOpenedSessionId('');
+    setSessionViewState('selected');
+    createdDuringVisit.current.clear();
     // Only an explicit class/year switch resets the draft, never an unrelated re-render.
   }, [selectedClassId, schoolYear]);
 
@@ -170,7 +176,9 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
     setSessionStatus('Registrazione della seduta nell’archivio cifrato…');
     try {
       await onCreateSession(current.id, schoolYear, sessionKind, sessionDate, id);
+      createdDuringVisit.current.add(id);
       setOpenedSessionId(id);
+      setSessionViewState('saved');
       setSessionStatus('Seduta salvata. Puoi ritrovarla nell’elenco cronologico.');
     } catch {
       setSessionStatus('Salvataggio della seduta non riuscito. I dati precedenti sono invariati.');
@@ -200,6 +208,11 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-[var(--primary)]" /> Consigli di classe
         </h1>
+        <button type="button" onClick={onOpenCopilot}
+          aria-label="Apri Copilota dai Consigli di classe"
+          className="md:hidden mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+          Apri Copilota
+        </button>
         <p className="text-sm text-slate-300 mt-1">Archivio dei Consigli · anno scolastico {schoolYear}.</p>
         <p className="text-xs text-slate-400 mt-1">
           La media è un riferimento matematico; il voto di ingresso è attribuito e confermato dal docente.
@@ -273,10 +286,13 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               </label>
               <label className="text-sm text-slate-300 font-semibold">
                 Data della seduta
-                <input type="date" aria-label="Data di nuova seduta" value={sessionDate}
+                <input type="date" lang="it-IT" aria-label="Data di nuova seduta" aria-describedby="council-session-date-readable" value={sessionDate}
                   onChange={event => setSessionDate(event.target.value)}
                   disabled={sessionSaving || saving}
                   className="mt-1 w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-slate-900 p-2 text-white" />
+                <span id="council-session-date-readable" className="mt-1 block text-xs text-slate-300">
+                  Data selezionata: {formatCouncilDate(sessionDate)}
+                </span>
               </label>
               <button type="button" onClick={() => { void createSession(); }}
                 disabled={!sessionDateValid || !academicYearValid || sessionSaving || saving || dirty}
@@ -296,19 +312,23 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               <ul className="space-y-2" aria-label="Elenco cronologico delle sedute">
                 {sessions.map(session => (
                   <li key={session.id}>
-                    <button type="button" onClick={() => setOpenedSessionId(session.id)}
+                    <button type="button" onClick={() => {
+                      setOpenedSessionId(session.id);
+                      setSessionViewState(createdDuringVisit.current.has(session.id) ? 'selected' : 'reopened');
+                      setSessionStatus('');
+                    }}
                       aria-pressed={openedSessionId === session.id}
                       className={`w-full text-left min-h-[44px] rounded-lg border p-3 text-sm ${openedSessionId === session.id ? 'border-[var(--primary)] text-white bg-slate-800' : 'border-[var(--border)] text-slate-200'}`}>
-                      {session.date} · {SESSION_LABELS[session.kind]}
+                      {formatCouncilDate(session.date, true)} · {SESSION_LABELS[session.kind]}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
             {openedSession && (
-              <div role="region" aria-label="Seduta recuperata" className="rounded-lg bg-slate-900/60 p-3">
+              <div role="region" aria-label="Dettaglio della seduta" className="rounded-lg bg-slate-900/60 p-3">
                 <p className="text-sm font-semibold text-white">
-                  Seduta recuperata: {SESSION_LABELS[openedSession.kind]} del {openedSession.date}
+                  {sessionViewState === 'saved' ? 'Seduta salvata' : sessionViewState === 'selected' ? 'Seduta selezionata' : 'Seduta riaperta'}: {SESSION_LABELS[openedSession.kind]} del {formatCouncilDate(openedSession.date)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
                   Registrazione conservata nel dispositivo. Ordine del giorno, note e seguito saranno aggiunti nella fase CDC-02/S3.
