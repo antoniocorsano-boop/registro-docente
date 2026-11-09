@@ -172,10 +172,31 @@ test('CDC-01: on a narrow smartphone the student stays visible while council col
   expect(Math.abs(await studentCell.evaluate(element => element.getBoundingClientRect().left) - initialStudentLeft)).toBeLessThan(2);
   expect(Math.abs(await studentHeader.evaluate(element => element.getBoundingClientRect().left) - initialHeaderLeft)).toBeLessThan(2);
 
-  // Editing the grade still works after scrolling within the table, without shifting the page horizontally.
-  await grade.scrollIntoViewIfNeeded();
-  await expect(grade).toBeInViewport();
-  await grade.fill('7,5');
+  // Keyboard-only navigation: the sticky name column must not conceal a focused grade.
+  // Check actual rendered geometry; fill() alone succeeds even if an input is occluded.
+  for (const width of [360, 320, 390]) {
+    await page.setViewportSize({ width, height: 780 });
+    await tableRegion.focus();
+    await tableRegion.evaluate(element => { element.scrollLeft = element.scrollWidth - element.clientWidth; });
+    expect(await tableRegion.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+    await page.keyboard.press('Tab');
+    await expect(grade).toBeFocused();
+    await expect.poll(async () => {
+      const [nameBounds, inputBounds, regionBounds] = await Promise.all([
+        studentCell.boundingBox(), grade.boundingBox(), tableRegion.boundingBox()
+      ]);
+      if (!nameBounds || !inputBounds || !regionBounds) return false;
+      return inputBounds.x >= nameBounds.x + nameBounds.width + 2
+        && inputBounds.x + inputBounds.width <= regionBounds.x + regionBounds.width - 2;
+    }, { message: `Il campo voto deve essere interamente a destra del nome fisso a ${width}px` }).toBe(true);
+    expect(await grade.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      return topmost === element || element.contains(topmost);
+    })).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  }
+  await grade.press('ControlOrMeta+A');
+  await page.keyboard.type('7,5');
   await expect(grade).toHaveValue('7,5');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
