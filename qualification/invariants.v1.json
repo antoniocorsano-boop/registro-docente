@@ -1199,7 +1199,8 @@
         "src/components/headerContext.ts",
         "src/App.tsx",
         "tests/browser/cdc-01-consigli.spec.cjs",
-        ".github/workflows/browser-qualification.yml"
+        ".github/workflows/browser-qualification.yml",
+        "src/components/PrivacyView.tsx"
       ],
       "tests": [
         "src/security/cdc01CouncilBackup.test.ts",
