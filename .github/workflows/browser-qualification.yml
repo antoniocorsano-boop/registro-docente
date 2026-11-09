@@ -73,6 +73,7 @@ jobs:
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/cdc-01-consigli.spec.cjs .browser-tools/cdc-01-consigli.spec.cjs
           cp tests/browser/cdc-02-sessions.spec.cjs .browser-tools/cdc-02-sessions.spec.cjs
+          cp tests/browser/cdc-02-s2a-hpr.spec.cjs .browser-tools/cdc-02-s2a-hpr.spec.cjs
           cp tests/browser/today-01-home-oggi-router.spec.cjs .browser-tools/today-01-home-oggi-router.spec.cjs
           cp tests/browser/flow-01-prepara.spec.cjs .browser-tools/flow-01-prepara.spec.cjs
           cp tests/browser/flow-02-conduci.spec.cjs .browser-tools/flow-02-conduci.spec.cjs
@@ -190,6 +191,28 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/cdc-02-sessions-results
+
+      - name: Capture CDC-02/S2a synthetic evidence for human review
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            cdc-02-s2a-hpr.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/cdc02-s2a-hpr-results
+
+      - name: Upload CDC-02/S2a synthetic human-review dossier
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdc02-s2a-hpr-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/cdc02-s2a-human-review/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Run TODAY-01 Chromium qualification
         shell: bash
