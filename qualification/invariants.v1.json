@@ -1234,6 +1234,29 @@
         "tests/browser/cdc-02-sessions.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-02-S2A-I01",
+      "owner": "CDC-02/S2a",
+      "statement": "The class evidence overview is a live and explicitly dated read-only projection: enrolled students, numeric-evidence students and missing students, total numeric evidence, and saved teacher proposals remain distinct. Valid canonical school year and cutoff confine the time range; invalid calendar dates and duplicate student identities fail closed. Never mutate grades, council assessments or sessions, infer a decision, or claim a frozen session snapshot. CDC-01 compact table and navigation remain unchanged.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/councilEvidenceOverview.ts",
+        "src/council/councilModel.ts",
+        "src/components/CouncilView.tsx",
+        "src/security/cdc02CouncilOverview.test.ts",
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "docs/superpowers/specs/2026-11-09-cdc-02-s2-evidence-overview-and-snapshots.md"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilOverview.test.ts",
+        "src/security/cdc02CouncilSessions.test.ts",
+        "src/security/cdc01CouncilBackup.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
     }
   ]
 }
