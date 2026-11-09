@@ -1,5 +1,6 @@
 import type { AppData, AppSettings, ClassData, CouncilAssessment, CouncilMoment, CouncilSession, CouncilSessionKind, Student } from '../types';
 import { calcAvg, calcWeightedAvg, getCompetenceLevel, parseGrade, sortStudents } from '../utils';
+import { validateCouncilSnapshotStructure } from './councilEvidenceSnapshots';
 
 // Presentational only: session identity and Vault values remain ISO YYYY-MM-DD.
 // Explicit Italian month names avoid browser-native MM/DD/YYYY ambiguity.
@@ -223,6 +224,7 @@ export function isCouncilAppDataValid(data: unknown): boolean {
         seen.add(session.id);
       }
     }
+    if (!validateCouncilSnapshotStructure(item)) return false;
   }
   return true;
 }
@@ -246,6 +248,18 @@ export function wouldLoseCouncilEntries(previous: AppData, incoming: AppData): b
         && session.kind === previousSession.kind
         && session.createdAt === previousSession.createdAt
         && session.updatedAt === previousSession.updatedAt
+      )) return true;
+    }
+    // A restored dataset that omits or changes even one confirmed snapshot
+    // must require explicit informed replacement, regardless of retained sessions.
+    for (const prior of priorClass.councilEvidenceSnapshots ?? []) {
+      if (!nextClass?.councilEvidenceSnapshots?.some(candidate =>
+        candidate.id === prior.id
+        && candidate.classId === prior.classId
+        && candidate.schoolYear === prior.schoolYear
+        && candidate.sessionId === prior.sessionId
+        && candidate.revision === prior.revision
+        && candidate.contentDigest === prior.contentDigest
       )) return true;
     }
   }
