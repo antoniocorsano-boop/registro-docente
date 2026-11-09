@@ -1,5 +1,4 @@
 import {
-  buildAiBudgetActivityKey,
   normalizeAiBudgetProfile,
   type AiBudgetAuthorizationV1,
   type AiBudgetProfile
@@ -112,4 +111,36 @@ export function buildAssessmentGenerationRequest(input: {
       ...(input.budgetAuthorization ? { authorization: input.budgetAuthorization } : {})
     }
   };
+}
+
+/**
+ * After asynchronous generation, compare the current Vault source and active
+ * professional class against the exact authorized request. Any intervening
+ * edit, revocation, replacement or class switch invalidates the result.
+ */
+export function isAssessmentGenerationRequestCurrent(
+  request: AssessmentGenerationRequestV1,
+  live: {
+    source: LibrarySource | null;
+    confirmedSourceId: string;
+    activeClassName: string;
+  }
+): boolean {
+  if (!live.source || live.source.id !== live.confirmedSourceId) return false;
+  try {
+    const fresh = buildAssessmentGenerationRequest({
+      source: live.source,
+      confirmedSourceId: live.confirmedSourceId,
+      activeClassName: live.activeClassName,
+      confirmedClassName: request.context.className,
+      objective: request.context.objective,
+      explicitTeacherOptIn: true,
+      aiBudgetProfile: request.budget.profile
+    });
+    return JSON.stringify(fresh.source) === JSON.stringify(request.source)
+      && JSON.stringify(fresh.context) === JSON.stringify(request.context)
+      && fresh.budget.activityKey === request.budget.activityKey;
+  } catch {
+    return false;
+  }
 }
