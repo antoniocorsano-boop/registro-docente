@@ -120,7 +120,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(page.getByTestId('int02-assessment-transfer-notice')).toContainText('Nulla è stato salvato');
   const title=page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale');
   await expect(title).toHaveValue(DRAFT_TITLE);
-  await expect(page.getByText('Quale grandezza misura la potenza?')).toBeVisible();
+  await expect(page.getByPlaceholder('Formula chiaramente la domanda...').first()).toHaveValue(DRAFT.questions[0].q);
   await expect(page.getByTestId('int02-s2b-confirm-origin')).toHaveCount(0);
   await expect(page.getByText('Collega a UDA Curricolare').locator('..').locator('select')).toHaveValue('');
   expect(calls).toBe(1);
