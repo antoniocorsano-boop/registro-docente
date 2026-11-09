@@ -1104,6 +1104,32 @@
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S3B-I01",
+      "owner": "INT-02/S3b",
+      "statement": "Remote assessment draft generation is a separate opt-in TEACHER_PROFESSIONAL route, limited to explicitly selected ready professional text sources and a confirmed active class. Its request excludes student identity, UDA/grade/test IDs, binary attachments, provenance and write authority; the server rejects unknown fields and unsafe classifications before provider invocation, applies bounded timeout, AI budget and duplicate-request controls, and parses generated output through the immutable S3a draft validator. The client revalidates the live source and class after remote completion and never saves, grades, shares or publishes. CREATE_ASSESSMENT remains UNSUPPORTED in the Copilot UI until a separately qualified S3c handoff; Vercel deployment stays off.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/library/assessmentGeneration.ts",
+        "src/security/int02S3bGenerationContract.test.ts",
+        "src/security/int02S3bRuntimeContract.test.ts",
+        "src/server/assessmentGenerationRoute.ts",
+        "src/server/geminiAssessmentGenerationProvider.ts",
+        "src/services/assessmentGenerationService.ts",
+        "server.ts"
+      ],
+      "tests": [
+        "src/security/int02S3bGenerationContract.test.ts",
+        "src/security/int02S3bRuntimeContract.test.ts",
+        "src/library/assessmentDraft.test.ts",
+        "src/library/agentIntentRouting.test.ts",
+        "src/security/lib01eServerRuntimeContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "tests/browser/lib04b-copilot-composer.spec.cjs"
+      ]
     }
   ]
 }
