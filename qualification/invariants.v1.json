@@ -1156,7 +1156,7 @@
     {
       "id": "INT-02-S3C-02-I01",
       "owner": "INT-02/S3c-02",
-      "statement": "The Copilot assessment action requires a teacher-selected professional ready text source, unique current class ID/name, explicit remote consent and a separate explicit review/adoption click. Browser-side remote generation has a bounded deadline, a user-initiated cancellation and no silent retry; the teacher must renew consent for another attempt. Successful adoption closes the entire Copilot surface so the editor is accessible. Generated assessment content can only be carried as a local transient proposal to the existing assessment editor. Both App and editor recheck the active class and source; an unsaved draft or save-in-progress is never overwritten, a generated proposal has no UDA assignment, test ID, permanent provenance, grades, automatic save or publication. No Vercel deploy is enabled.",
+      "statement": "The Copilot assessment action requires a teacher-selected professional ready text source, unique current class ID/name, rejecting duplicate names or IDs before any outbound remote request, explicit remote consent and a separate explicit review/adoption click. Browser-side remote generation has a bounded deadline, a user-initiated cancellation and no silent retry; the teacher must renew consent for another attempt. Successful adoption closes the entire Copilot surface so the editor is accessible. Generated assessment content can only be carried as a local transient proposal to the existing assessment editor. Both App and editor recheck the active class and source; an unsaved draft or save-in-progress is never overwritten, a generated proposal has no UDA assignment, test ID, permanent provenance, grades, automatic save or publication. No Vercel deploy is enabled.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/components/AssessmentCopilotPanel.tsx",
@@ -1165,7 +1165,9 @@
         "src/App.tsx",
         "src/security/int02S3c02UiContract.test.ts",
         ".github/workflows/browser-qualification.yml",
-        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs",
+        "src/library/assessmentGenerationClassGate.ts",
+        "src/library/assessmentGenerationClassGate.test.ts"
       ],
       "tests": [
         "src/security/int02S3c02UiContract.test.ts",
@@ -1173,7 +1175,8 @@
         "src/library/assessmentDraft.test.ts",
         "src/security/int02S3bGenerationContract.test.ts",
         "src/security/int02S3bRuntimeContract.test.ts",
-        "src/security/int02AssessmentHandoffContract.test.ts"
+        "src/security/int02AssessmentHandoffContract.test.ts",
+        "src/library/assessmentGenerationClassGate.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs",
