@@ -1332,6 +1332,30 @@
         "tests/browser/cdc-02-sessions.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-02-S2B-P5-UX-I01",
+      "owner": "CDC-02/S2b-P5-UX",
+      "statement": "The teacher-approved P5 mobile usability rework must prominently compare saved proposal counts in a confirmed immutable council snapshot against the independently dated current class overview, while clearly distinguishing source cutoffs. Other historical and current aggregates remain accessible through disclosure controls, without mutation or silently hiding permanently stored values. The capture time is displayed using the recorded UTC timestamp and captured offset rather than the viewer's present timezone; underlying persisted UTC is unchanged. Prepare, cancel, explicit confirmation, immutable revisions and history remain governed by P3 and Vault invariants; no official minutes or automatic snapshot writes are introduced.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/councilSnapshotPresentation.ts",
+        "src/components/CouncilSnapshotSection.tsx",
+        "src/components/CouncilView.tsx",
+        "src/security/cdc02CouncilSnapshotPresentation.test.ts",
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "tests/browser/cdc-02-sessions.spec.cjs"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSnapshotPresentation.test.ts",
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/security/cdc02CouncilSnapshotsBackup.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
     }
   ]
 }
