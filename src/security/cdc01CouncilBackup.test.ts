@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import type { AppData, AppSettings, ClassData } from '../types';
 import { assignCouncilValues, councilRows, isCouncilAppDataValid, parseCouncilValue, readCouncilValues, summarizeCouncilValues, wouldLoseCouncilEntries } from '../council/councilModel';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
@@ -14,6 +15,7 @@ function classFixture(): ClassData {
     id: 'C', name: '2C',
     students: [{ id: 'a', name: 'Alunno Alfa' }, { id: 'b', name: 'Alunno Beta' }, { id: 'c', name: 'Alunno Gamma' }],
     grades: [
+      { id: 'prior', studentId: 'a', type: 'test', date: '2025-11-02', period: 'Q1', title: 'Anno precedente', value: '1' },
       { id: 'g1', studentId: 'a', type: 'test', date: '2026-10-04', period: 'Q1', title: 'Test', value: '8' },
       { id: 'g2', studentId: 'a', type: 'verifica', date: '2026-11-05', period: 'Q1', title: 'Prova', value: '9' },
       { id: 'g3', studentId: 'b', type: 'orale', date: '2026-10-18', period: 'Q1', title: 'Orale', value: 'A' },
@@ -36,6 +38,14 @@ function snapshot(appData: AppData): CompleteSecureAppSnapshot {
 const now = '2026-11-09T08:15:00.000Z';
 
 describe('CDC-01 — Consigli di classe', () => {
+  test('student removal also removes assigned council entries without affecting others', () => {
+    const code = readFileSync('src/App.tsx', 'utf8');
+    const handler = code.split('const handleRemoveStudent = ')[1]?.split('// Bulk add students')[0] ?? '';
+    expect(handler).toContain('councilAssessments:');
+    expect(handler).toContain('.filter(entry => entry.studentId !== studentId)');
+    expect(handler).toContain('targetClass.grades');
+  });
+
   test('legacy source grades remain unchanged, excluded non-numeric and future grades', () => {
     const c = classFixture();
     const rows = councilRows(c, settings.year, '2026-11-09', settings);
@@ -44,6 +54,7 @@ describe('CDC-01 — Consigli di classe', () => {
     expect(rows[1].count).toBe(0);
     expect(rows[1].average).toBeNull();
     expect(rows[2].average).toBeNull();
+    expect(councilRows(c, 'anno non riconosciuto', '2026-11-09', settings)[0].count).toBe(0);
     // A school-year mismatch cannot silently mix evidence from other years.
     expect(councilRows(c, 'anno non riconosciuto', '2026-11-09', settings)[0].count).toBe(0);
   });
