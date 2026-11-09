@@ -12,6 +12,9 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('requestAssessmentDraftFromCopilot');
     expect(panel).toContain('explicitTeacherOptIn: true');
     expect(panel).toContain('authorizedClassId:');
+    expect(panel).toContain('classIsUnambiguous');
+    expect(panel).toContain('CLIENT_GENERATION_TIMEOUT_MS');
+    expect(panel).toContain('Annulla richiesta');
     expect(panel).toContain('getLiveContext');
     expect(panel).toContain('Crea una proposta');
     expect(panel).toContain('Apri come bozza in Verifiche');
@@ -22,6 +25,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     const composer=await read('src/components/LibraryCopilotComposer.tsx');
     expect(composer).toContain('AssessmentCopilotPanel');
     expect(composer).toContain('onAcceptAssessmentDraft');
+    expect(composer).toContain('isAssessmentClassUnambiguous');
     expect(composer).toContain('currentClassId');
     expect(composer).toContain('Creare una verifica');
     expect(composer).toContain('selectedSource');
