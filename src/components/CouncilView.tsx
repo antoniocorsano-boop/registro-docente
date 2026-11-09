@@ -1,37 +1,84 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AppSettings, ClassData } from '../types';
+import type { AppSettings, ClassData, CouncilSessionKind } from '../types';
 import type { PlanningDraftGuard } from './planning/PlanningProfileEditor';
-import { councilRows, normalizeSchoolYear, parseCouncilValue, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
-import { formatGrade, formatStudentNameWithPrivacy, today } from '../utils';
+import { councilRows, formatCouncilDate, isCouncilSessionDateValid, normalizeSchoolYear, parseCouncilValue, readCouncilSessions, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
+import { formatGrade, formatStudentNameWithPrivacy, today, uid } from '../utils';
 import { ClipboardList, Save, Users } from 'lucide-react';
+
+const SESSION_LABELS: Record<CouncilSessionKind, string> = {
+  ingresso: 'Ingresso',
+  intermedia: 'Primo periodo',
+  monitoraggio: 'Monitoraggio',
+  finale: 'Finale',
+  altro: 'Altra seduta'
+};
 
 interface CouncilViewProps {
   classes: ClassData[];
   settings: AppSettings;
   isPrivacyShieldActive: boolean;
   onSave: (classId: string, schoolYear: string, values: Record<string, string>) => Promise<void>;
+  onCreateSession: (
+    classId: string, schoolYear: string, kind: CouncilSessionKind, date: string, sessionId: string
+  ) => Promise<void>;
   onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
+  onOpenCopilot: () => void;
 }
 
 export const CouncilView: React.FC<CouncilViewProps> = ({
-  classes, settings, isPrivacyShieldActive, onSave, onRegisterDraftGuard
+  classes, settings, isPrivacyShieldActive, onSave, onCreateSession, onRegisterDraftGuard, onOpenCopilot
 }) => {
   // Class choice is explicit. Do not infer one from the current navigation context.
   const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedYear, setSelectedYear] = useState(() => normalizeSchoolYear(settings.year) ?? settings.year);
+  const [sessionKind, setSessionKind] = useState<CouncilSessionKind>('monitoraggio');
+  const [sessionDate, setSessionDate] = useState(today);
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState('');
+  const [openedSessionId, setOpenedSessionId] = useState('');
+  const [sessionViewState, setSessionViewState] = useState<'saved' | 'selected' | 'reopened'>('selected');
+  // Ephemeral display-only context: nothing new is persisted or inferred from grades.
+  const createdDuringVisit = useRef(new Set<string>());
   const [cutoff, setCutoff] = useState(today);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
-  const schoolYear = settings.year;
+  const schoolYear = selectedYear;
   const academicYearValid = normalizeSchoolYear(schoolYear) !== null;
   const current = classes.find(item => item.id === selectedClassId);
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    const currentYear = normalizeSchoolYear(settings.year);
+    if (currentYear) years.add(currentYear);
+    for (const c of classes) {
+      for (const entry of c.councilAssessments ?? []) {
+        const year = normalizeSchoolYear(entry.schoolYear);
+        if (year) years.add(year);
+      }
+      for (const session of c.councilSessions ?? []) {
+        const year = normalizeSchoolYear(session.schoolYear);
+        if (year) years.add(year);
+      }
+    }
+    if (normalizeSchoolYear(selectedYear)) years.add(normalizeSchoolYear(selectedYear)!);
+    return [...years].sort((a, b) => b.localeCompare(a));
+  }, [classes, selectedYear, settings.year]);
+  const sessions = useMemo(
+    () => current ? readCouncilSessions(current, schoolYear) : [], [current, schoolYear]
+  );
+  const openedSession = sessions.find(item => item.id === openedSessionId);
+  const sessionDateValid = isCouncilSessionDateValid(sessionDate, schoolYear);
 
   useEffect(() => {
     const next = current ? readCouncilValues(current, schoolYear) : {};
     setDraft(next);
     setSaved(next);
     setStatus('');
+    setSessionStatus('');
+    setOpenedSessionId('');
+    setSessionViewState('selected');
+    createdDuringVisit.current.clear();
     // Only an explicit class/year switch resets the draft, never an unrelated re-render.
   }, [selectedClassId, schoolYear]);
 
@@ -45,11 +92,13 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
 
   const dirtyRef = useRef(dirty);
   const savingRef = useRef(saving);
+  const sessionSavingRef = useRef(sessionSaving);
   dirtyRef.current = dirty;
   savingRef.current = saving;
+  sessionSavingRef.current = sessionSaving;
 
   const handleSave = useCallback(async (): Promise<boolean> => {
-    if (savingRef.current) return false;
+    if (savingRef.current || sessionSavingRef.current) return false;
     if (!dirtyRef.current) return true;
     if (!selectedClassId) return false;
     if (!academicYearValid) {
@@ -81,7 +130,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   useEffect(() => {
     if (!onRegisterDraftGuard) return;
     const guard: PlanningDraftGuard = {
-      hasUnsavedChanges: () => dirtyRef.current || savingRef.current,
+      hasUnsavedChanges: () => dirtyRef.current || savingRef.current || sessionSavingRef.current,
       saveChanges: handleSave,
       discardChanges: () => {
         setDraft({ ...saved });
@@ -94,7 +143,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!dirtyRef.current && !savingRef.current) return;
+      if (!dirtyRef.current && !savingRef.current && !sessionSavingRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -108,9 +157,35 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   };
 
   const changeClass = (id: string) => {
-    if (savingRef.current) return;
+    if (savingRef.current || sessionSavingRef.current) return;
     if (dirty && !window.confirm('Ci sono valutazioni di ingresso non salvate. Cambiare classe e scartarle?')) return;
     setSelectedClassId(id);
+  };
+
+  const changeYear = (year: string) => {
+    if (savingRef.current || sessionSavingRef.current) return;
+    if (dirty && !window.confirm('Ci sono valutazioni non salvate. Cambiare anno e scartarle?')) return;
+    setSelectedYear(year);
+  };
+
+  const createSession = async () => {
+    if (!current || savingRef.current || sessionSavingRef.current || dirty || !sessionDateValid) return;
+    const id = uid();
+    sessionSavingRef.current = true;
+    setSessionSaving(true);
+    setSessionStatus('Registrazione della seduta nell’archivio cifrato…');
+    try {
+      await onCreateSession(current.id, schoolYear, sessionKind, sessionDate, id);
+      createdDuringVisit.current.add(id);
+      setOpenedSessionId(id);
+      setSessionViewState('saved');
+      setSessionStatus('Seduta salvata. Puoi ritrovarla nell’elenco cronologico.');
+    } catch {
+      setSessionStatus('Salvataggio della seduta non riuscito. I dati precedenti sono invariati.');
+    } finally {
+      sessionSavingRef.current = false;
+      setSessionSaving(false);
+    }
   };
 
   const fillableRows = rows.filter(row => !draft[row.student.id]?.trim() && row.average !== null);
@@ -133,7 +208,12 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-[var(--primary)]" /> Consigli di classe
         </h1>
-        <p className="text-sm text-slate-300 mt-1">Valutazioni di ingresso · anno scolastico {schoolYear}.</p>
+        <button type="button" onClick={onOpenCopilot}
+          aria-label="Apri Copilota dai Consigli di classe"
+          className="md:hidden mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+          Apri Copilota
+        </button>
+        <p className="text-sm text-slate-300 mt-1">Archivio dei Consigli · anno scolastico {schoolYear}.</p>
         <p className="text-xs text-slate-400 mt-1">
           La media è un riferimento matematico; il voto di ingresso è attribuito e confermato dal docente.
         </p>
@@ -145,11 +225,20 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         )}
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label className="text-sm text-slate-300 font-semibold">
+          Anno scolastico
+          <select aria-label="Seleziona anno scolastico del Consiglio" value={schoolYear}
+            onChange={event => changeYear(event.target.value)} disabled={saving || sessionSaving}
+            className="mt-1 w-full p-2.5 rounded-lg border border-[var(--border)] bg-slate-900 text-white">
+            {availableYears.length === 0 && <option value={schoolYear}>{schoolYear}</option>}
+            {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
         <label className="text-sm text-slate-300 font-semibold">
           Classe
           <select aria-label="Seleziona classe per il Consiglio" value={selectedClassId}
-            onChange={event => changeClass(event.target.value)} disabled={saving}
+            onChange={event => changeClass(event.target.value)} disabled={saving || sessionSaving}
             className="mt-1 w-full p-2.5 rounded-lg border border-[var(--border)] bg-slate-900 text-white">
             <option value="">Seleziona una classe</option>
             {classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -175,6 +264,78 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         </p>
       ) : (
         <>
+          <section className="rounded-lg border border-[var(--border)] p-4 space-y-4" aria-label="Archivio sedute del Consiglio">
+            <div>
+              <h2 className="font-bold text-white text-lg">Sedute e storico · {current.name}</h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Registrazioni personali del docente, non verbali né deliberazioni ufficiali.
+                Le sedute restano distinte dalle valutazioni di ingresso.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+              <label className="text-sm text-slate-300 font-semibold">
+                Tipo di seduta
+                <select aria-label="Tipo di nuova seduta" value={sessionKind}
+                  onChange={event => setSessionKind(event.target.value as CouncilSessionKind)}
+                  disabled={sessionSaving || saving}
+                  className="mt-1 w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-slate-900 p-2 text-white">
+                  {(Object.keys(SESSION_LABELS) as CouncilSessionKind[]).map(kind =>
+                    <option key={kind} value={kind}>{SESSION_LABELS[kind]}</option>
+                  )}
+                </select>
+              </label>
+              <label className="text-sm text-slate-300 font-semibold">
+                Data della seduta
+                <input type="date" lang="it-IT" aria-label="Data di nuova seduta" aria-describedby="council-session-date-readable" value={sessionDate}
+                  onChange={event => setSessionDate(event.target.value)}
+                  disabled={sessionSaving || saving}
+                  className="mt-1 w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-slate-900 p-2 text-white" />
+                <span id="council-session-date-readable" className="mt-1 block text-xs text-slate-300">
+                  Data selezionata: {formatCouncilDate(sessionDate)}
+                </span>
+              </label>
+              <button type="button" onClick={() => { void createSession(); }}
+                disabled={!sessionDateValid || !academicYearValid || sessionSaving || saving || dirty}
+                className="min-h-[44px] rounded-lg border border-[var(--border)] px-3 py-2 font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50">
+                {sessionSaving ? 'Salvataggio…' : 'Registra seduta'}
+              </button>
+            </div>
+            {!sessionDateValid && <p role="alert" className="text-sm text-amber-300">
+              La data deve appartenere all’anno scolastico selezionato (1 settembre – 31 agosto).
+            </p>}
+            {dirty && <p className="text-xs text-amber-300">Salva o annulla le modifiche ai voti prima di registrare una seduta.</p>}
+            <p role="status" aria-live="polite" className="text-sm text-slate-300">{sessionStatus}</p>
+            <h3 className="font-semibold text-slate-100">Sedute archiviate ({sessions.length})</h3>
+            {sessions.length === 0 ? (
+              <p className="text-sm text-slate-400">Nessuna seduta registrata per questa classe e questo anno.</p>
+            ) : (
+              <ul className="space-y-2" aria-label="Elenco cronologico delle sedute">
+                {sessions.map(session => (
+                  <li key={session.id}>
+                    <button type="button" onClick={() => {
+                      setOpenedSessionId(session.id);
+                      setSessionViewState(createdDuringVisit.current.has(session.id) ? 'selected' : 'reopened');
+                      setSessionStatus('');
+                    }}
+                      aria-pressed={openedSessionId === session.id}
+                      className={`w-full text-left min-h-[44px] rounded-lg border p-3 text-sm ${openedSessionId === session.id ? 'border-[var(--primary)] text-white bg-slate-800' : 'border-[var(--border)] text-slate-200'}`}>
+                      {formatCouncilDate(session.date, true)} · {SESSION_LABELS[session.kind]}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {openedSession && (
+              <div role="region" aria-label="Dettaglio della seduta" className="rounded-lg bg-slate-900/60 p-3">
+                <p className="text-sm font-semibold text-white">
+                  {sessionViewState === 'saved' ? 'Seduta salvata' : sessionViewState === 'selected' ? 'Seduta selezionata' : 'Seduta riaperta'}: {SESSION_LABELS[openedSession.kind]} del {formatCouncilDate(openedSession.date)}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Registrazione conservata nel dispositivo. Ordine del giorno, note e seguito saranno aggiunti nella fase CDC-02/S3.
+                </p>
+              </div>
+            )}
+          </section>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-300 flex items-center gap-2">
               <Users className="w-4 h-4" /> {current.students.length} alunni ·

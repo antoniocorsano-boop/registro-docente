@@ -141,7 +141,7 @@ import type {
   SecureMeta
 } from './security/secureAppStorage';
 import { normalizeBackupPayload } from './security/backupPayload';
-import { assignCouncilValues, wouldLoseCouncilEntries } from './council/councilModel';
+import { appendCouncilSession, assignCouncilValues, wouldLoseCouncilEntries } from './council/councilModel';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
@@ -192,6 +192,7 @@ import { BehaviorsView } from './components/BehaviorsView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { MatrixView } from './components/MatrixView';
 import { CouncilView } from './components/CouncilView';
+import type { CouncilSessionKind } from './types';
 import { HistoryView } from './components/HistoryView';
 import { StudentReportView } from './components/StudentReportView';
 import { StudentsManagementView } from './components/StudentsManagementView';
@@ -3065,13 +3066,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     ), { successMessage: 'Valutazioni di ingresso salvate', showBackupModal: false }).then(() => undefined);
   };
 
+  // CDC-02/S1: append-only, explicitly confirmed council-session index in the existing Vault.
+  const handleCreateCouncilSession = (
+    classId: string, schoolYear: string, kind: CouncilSessionKind, date: string, sessionId: string
+  ): Promise<void> => {
+    return commitAppDataMutation(current => appendCouncilSession(
+      current, classId, schoolYear, kind, date, sessionId, new Date().toISOString()
+    ), { successMessage: 'Seduta archiviata', showBackupModal: false }).then(() => undefined);
+  };
+
   // Import Encrypted Backup
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
       const candidate = normalizeBackupPayload(decryptedData, previousLogical);
       if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
-        && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
+        && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni o sedute dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: le valutazioni dei Consigli esistenti sono state conservate.');
       }
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
@@ -3319,7 +3329,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             isPrivacyShieldActive={isPrivacyShieldActive}
             onSave={handleSaveCouncilEntries}
+            onCreateSession={handleCreateCouncilSession}
             onRegisterDraftGuard={registerCouncilDraftGuard}
+            onOpenCopilot={() => setCopilotSurfaceMode('home')}
           />
         )}
 
@@ -3549,7 +3561,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
             showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
-            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti'].includes(activeTab)}
+            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
           />
           <LibraryCopilotComposer
               library={library}
