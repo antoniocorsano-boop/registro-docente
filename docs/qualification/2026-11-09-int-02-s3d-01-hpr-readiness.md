@@ -31,10 +31,14 @@ La prova sintetica esistente `tests/browser/int-02-s3c02-copilot-assessment.spec
 
 | File | Evidenza | Dimensioni |
 |---|---|---|
-| `int02-s3d-preview-390.png` | Anteprima con fonte, classe, quesito, risposta proposta e comando «Apri come bozza» | 390×844 |
+| `int02-s3d-preview-context-390.png` | Parte alta del Copilota: classe e fonte autorizzata | 390×844 |
+| `int02-s3d-preview-questions-390.png` | Area scorrevole posizionata sui quesiti e sulle risposte proposte | 390×844 |
+| `int02-s3d-preview-action-390.png` | Area scorrevole posizionata sul comando «Apri come bozza in Verifiche» | 390×844 |
 | `int02-s3d-editor-390.png` | Editor precompilato, UDA non attribuita e salvataggio ancora manuale | 390×844 |
 | `int02-s3d-back-390.png` | Conferma per modifiche non salvate prima di lasciare la bozza | 390×844 |
 | `int02-s3d-synthetic-review.json` | Provenienza, commit esatto della prova, nomi delle immagini, indicazione `syntheticProvider=true` | n.d. |
+
+Le tre immagini di anteprima si riferiscono a **posizioni distinte nell'area scorrevole interna del Copilota**. Prima di ciascuna acquisizione la prova posiziona l'elemento pertinente e verifica che ricada entro il riquadro realmente visibile: una sola immagine dell'intera pagina non rappresenterebbe correttamente i contenuti del dialogo fisso.
 
 Nella medesima prova controllare anche il limite di larghezza a **320×700**, senza attribuire a tale verifica un’accettazione umana. Le immagini con `fullPage` possono essere più alte della finestra dichiarata; nel nome la misura identifica il **viewport**, non le dimensioni finali del file.
 
