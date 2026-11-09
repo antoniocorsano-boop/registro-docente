@@ -138,7 +138,12 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   const history = panel.getByRole('combobox', { name: 'Seleziona versione fotografica' });
   await expect(history.locator('option')).toHaveCount(1);
   const archived = panel.locator('[aria-label="Fotografia archiviata"]');
-  expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
+  const frozenVotes = archived.locator('[aria-label="Voti salvati nella fotografia"]');
+  const currentVotes = archived.locator('[aria-label="Voti salvati nel quadro corrente"]');
+  await expect(frozenVotes.getByText('0', { exact: true })).toBeVisible();
+  await expect(currentVotes.getByText('0', { exact: true })).toBeVisible();
+  await expect(archived.getByText('Acquisita il', { exact: false })).toBeVisible();
+  await expect(archived.getByText('Istante originale UTC:', { exact: false })).toBeHidden();
   await captureP4Frame('cdc02-p4-02-prima-fotografia-confermata-390.png', 'Prima fotografia immutabile; una versione confermata');
 
   // The live assessment changes; the first confirmed snapshot must remain fixed.
@@ -148,21 +153,22 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   await page.getByRole('button', { name: 'Salva valutazioni di ingresso' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Valutazioni di ingresso salvate nell’archivio' })).toBeVisible();
   const liveOverview = page.getByRole('region', { name: 'Quadro sintetico delle evidenze della classe' });
-  await expect(liveOverview.getByText('Con voto di ingresso salvato').locator('..').getByText('1', { exact: true })).toBeVisible();
-  expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
+  await expect(liveOverview.locator('details')).not.toHaveAttribute('open', '');
+  await expect(currentVotes.getByText('1', { exact: true })).toBeVisible();
+  await expect(frozenVotes.getByText('0', { exact: true })).toBeVisible();
   await captureP4Frame('cdc02-p4-03-corrente-diverso-da-congelato-390.png', 'Quadro corrente: un voto salvato; prima fotografia ancora zero');
   await panel.getByRole('button', { name: 'Acquisisci nuova versione' }).click();
   await expect(panel.getByText('Anteprima non salvata · revisione 2')).toBeVisible();
   await panel.getByRole('button', { name: 'Conferma e salva fotografia' }).click();
   await expect(history.locator('option')).toHaveCount(2);
   await expect(panel.getByText('Fotografia confermata · revisione 2')).toBeVisible();
-  expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+1/);
+  await expect(frozenVotes.getByText('1', { exact: true })).toBeVisible();
   await captureP4Frame('cdc02-p4-04-seconda-revisione-confermata-390.png', 'Seconda revisione esplicita; due versioni presenti');
 
   const firstRevisionId = await history.locator('option').first().getAttribute('value');
   await history.selectOption(firstRevisionId);
   await expect(panel.getByText('Fotografia confermata · revisione 1')).toBeVisible();
-  expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
+  await expect(frozenVotes.getByText('0', { exact: true })).toBeVisible();
   await captureP4Frame('cdc02-p4-05-prima-revisione-ancora-consultabile-390.png', 'Selezione e consultazione della prima revisione dopo la seconda');
 
   await navigate(page, 'Oggi');
