@@ -3,6 +3,17 @@ import { calcAvg, calcWeightedAvg, getCompetenceLevel, parseGrade, sortStudents 
 
 const MOMENTS: readonly CouncilMoment[] = ['ingresso', 'intermedia', 'finale'];
 
+// One identity for 2026/27, 2026/2027 and 2026-2027.
+// Legacy labels remain readable; newly assigned values use the extended canonical form.
+export function normalizeSchoolYear(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const match = /^(20\d{2})\s*[/-]\s*(20\d{2}|\d{2})$/.exec(raw.trim());
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = match[2].length === 2 ? Number(match[1].slice(0, 2) + match[2]) : Number(match[2]);
+  return end === start + 1 ? `${start}/${end}` : null;
+}
+
 // These are *teacher-assigned* values, never raw marks. Do not silently coerce A/NC/G or 7+.
 export function parseCouncilValue(raw: unknown): number | null {
   if (typeof raw !== 'string' || !/^(?:10(?:[.,]0{1,2})?|[1-9](?:[.,][0-9]{1,2})?)$/.test(raw.trim())) return null;
@@ -22,20 +33,23 @@ export function readCouncilValues(
   moment: CouncilMoment = 'ingresso'
 ): Record<string, string> {
   const result: Record<string, string> = {};
+  const year = normalizeSchoolYear(schoolYear);
+  if (year === null) return result;
   for (const entry of classData.councilAssessments ?? []) {
-    if (entry.schoolYear === schoolYear && entry.moment === moment) result[entry.studentId] = entry.value;
+    if (normalizeSchoolYear(entry.schoolYear) === year && entry.moment === moment) {
+      result[entry.studentId] = entry.value;
+    }
   }
   return result;
 }
 
 export function councilRows(classData: ClassData, schoolYear: string, cutoff: string, settings: AppSettings) {
   const saved = readCouncilValues(classData, schoolYear);
-  // Ingresso refers to the current *school year*, not every historical grade in the archive.
-  // An unrecognized year must not silently include grades from previous school years.
-  const match = /\b(20\d{2})\s*[/-]\s*(?:20)?(\d{2})\b/.exec(schoolYear);
-  const startYear = match && (Number(match[1]) + 1) % 100 === Number(match[2])
-    ? Number(match[1]) : null;
+  // Clamp by BOTH academic-year boundaries; a later cutoff cannot include the next year.
+  const year = normalizeSchoolYear(schoolYear);
+  const startYear = year === null ? null : Number(year.slice(0, 4));
   const from = startYear === null ? null : `${startYear}-09-01`;
+  const through = startYear === null ? null : `${startYear + 1}-08-31`;
   return sortStudents(classData.students).map(student => {
     const valid = from === null ? [] : classData.grades.filter(grade =>
       grade.studentId === student.id
@@ -43,6 +57,7 @@ export function councilRows(classData: ClassData, schoolYear: string, cutoff: st
       && /^\d{4}-\d{2}-\d{2}$/.test(grade.date)
       && grade.date <= cutoff
       && grade.date >= from
+      && grade.date <= through!
       && typeof grade.value === 'string'
       && parseGrade(grade.value) !== null
     );
@@ -67,21 +82,24 @@ export function assignCouncilValues(
   if (Object.keys(values).some(id => !studentIds.has(id))) {
     throw new Error('Elenco degli alunni modificato: ricontrollare la classe prima di salvare.');
   }
-  if (!schoolYear.trim() || !MOMENTS.includes(moment) || !Number.isFinite(Date.parse(now))) {
-    throw new Error('Contesto del Consiglio non valido.');
+  const canonicalYear = normalizeSchoolYear(schoolYear);
+  if (!canonicalYear || !MOMENTS.includes(moment) || !Number.isFinite(Date.parse(now))) {
+    throw new Error('Anno scolastico o contesto del Consiglio non valido.');
   }
   const prior = selected.councilAssessments ?? [];
   const previousByStudent = new Map(prior
-    .filter(e => e.schoolYear === schoolYear && e.moment === moment)
+    .filter(e => normalizeSchoolYear(e.schoolYear) === canonicalYear && e.moment === moment)
     .map(e => [e.studentId, e]));
   const entries: CouncilAssessment[] = selected.students.flatMap(student => {
     const raw = values[student.id]?.trim() ?? '';
     if (!raw) return [];
     const value = normalizeCouncilValue(raw);
     const old = previousByStudent.get(student.id);
-    return [old?.value === value ? old : { studentId: student.id, schoolYear, moment, value, updatedAt: now }];
+    return [old?.value === value ? old : {
+      studentId: student.id, schoolYear: canonicalYear, moment, value, updatedAt: now
+    }];
   });
-  const kept = prior.filter(e => e.schoolYear !== schoolYear || e.moment !== moment);
+  const kept = prior.filter(e => normalizeSchoolYear(e.schoolYear) !== canonicalYear || e.moment !== moment);
   return {
     ...data,
     classes: data.classes.map(item => item.id !== classId ? item : {
@@ -107,17 +125,18 @@ export function summarizeCouncilValues(students: Student[], values: Record<strin
 export function isCouncilAppDataValid(data: unknown): boolean {
   if (!data || typeof data !== 'object' || !Array.isArray((data as AppData).classes)) return false;
   for (const item of (data as AppData).classes) {
+    if (!item || typeof item !== 'object') return false;
     if (item.councilAssessments === undefined) continue;
     if (!Array.isArray(item.councilAssessments) || !Array.isArray(item.students)) return false;
     const ids = new Set(item.students.map(student => student.id));
     const seen = new Set<string>();
     for (const entry of item.councilAssessments as CouncilAssessment[]) {
       if (!entry || typeof entry !== 'object' || !ids.has(entry.studentId)
-        || typeof entry.schoolYear !== 'string' || !entry.schoolYear.trim()
+        || normalizeSchoolYear(entry.schoolYear) === null
         || !MOMENTS.includes(entry.moment)
         || parseCouncilValue(entry.value) === null
         || typeof entry.updatedAt !== 'string' || !Number.isFinite(Date.parse(entry.updatedAt))) return false;
-      const key = JSON.stringify([entry.studentId, entry.schoolYear, entry.moment]);
+      const key = JSON.stringify([entry.studentId, normalizeSchoolYear(entry.schoolYear), entry.moment]);
       if (seen.has(key)) return false;
       seen.add(key);
     }
@@ -131,7 +150,7 @@ export function wouldLoseCouncilEntries(previous: AppData, incoming: AppData): b
     for (const previousEntry of priorClass.councilAssessments ?? []) {
       if (!nextClass?.councilAssessments?.some(entry =>
         entry.studentId === previousEntry.studentId
-        && entry.schoolYear === previousEntry.schoolYear
+        && normalizeSchoolYear(entry.schoolYear) === normalizeSchoolYear(previousEntry.schoolYear)
         && entry.moment === previousEntry.moment
         && entry.value === previousEntry.value
       )) return true;
