@@ -1163,7 +1163,9 @@
         "src/components/LibraryCopilotComposer.tsx",
         "src/components/VerificheOnlineView.tsx",
         "src/App.tsx",
-        "src/security/int02S3c02UiContract.test.ts"
+        "src/security/int02S3c02UiContract.test.ts",
+        ".github/workflows/browser-qualification.yml",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ],
       "tests": [
         "src/security/int02S3c02UiContract.test.ts",
@@ -1175,7 +1177,8 @@
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs",
-        "tests/browser/int-01-didactic-continuity.spec.cjs"
+        "tests/browser/int-01-didactic-continuity.spec.cjs",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ]
     }
   ]
