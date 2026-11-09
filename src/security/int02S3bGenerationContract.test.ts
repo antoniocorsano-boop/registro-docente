@@ -63,6 +63,20 @@ describe('INT-02/S3b — confine remoto per bozza di verifica', () => {
     }
   });
 
+  test('rifiuta dati personali nel nome classe prima del provider', async () => {
+    if (!await Bun.file(MODULE).exists()) return;
+    const { handleAssessmentGenerationRequest }=await import('../server/assessmentGenerationRoute');
+    const className='3C alunno Marco Rossi';
+    const {instance,calls}=provider();
+    const result=await handleAssessmentGenerationRequest({
+      ...BASE,
+      context:{...BASE.context,className},
+      budget:{...BASE.budget,activityKey:buildAiBudgetAssessmentKey(className)}
+    },instance);
+    expect(result.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
   test('consente una sola produzione governata e restituisce soltanto bozza e ricevuta', async () => {
     if (!await Bun.file(MODULE).exists()) return;
     const { handleAssessmentGenerationRequest } = await import('../server/assessmentGenerationRoute');
@@ -132,8 +146,20 @@ describe('INT-02/S3b — confine remoto per bozza di verifica', () => {
     const options={now:()=> '2026-11-09T00:01:00.000Z'};
     const first=await handleAssessmentGenerationRequest(request,instance,options);
     expect(first.status).toBe(200);
-    const second=await handleAssessmentGenerationRequest(request,instance,options);
+    // Different ISO spellings represent the same instants and must not
+    // revive a consumed one-operation authorization.
+    const changedTimestampRepresentation={
+      ...request,
+      budget:{...request.budget,authorization:{
+        ...authorization,
+        issuedAt:'2026-11-09T00:00:00Z',
+        expiresAt:'2026-11-09T00:05:00Z'
+      }}
+    };
+    const second=await handleAssessmentGenerationRequest(changedTimestampRepresentation,instance,options);
     expect(second.status).toBe(409);
+    const third=await handleAssessmentGenerationRequest(request,instance,options);
+    expect(third.status).toBe(409);
     expect(calls).toHaveLength(1);
   });
 
