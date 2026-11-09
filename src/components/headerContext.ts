@@ -27,6 +27,7 @@ const titles: Record<ActiveTab, string> = {
   comportamenti: 'Comportamento',
   analytics: 'Analisi',
   tabellone: 'Tabellone',
+  consigli: 'Consigli di classe',
   storico: 'Storico prove',
   report: 'Scheda alunno',
   dati: 'Gestione alunni',
@@ -49,7 +50,7 @@ export function resolveHeaderContext({
   }
 
   const className = currentClassName?.trim() ?? '';
-  const classLabel = className ? `Classe ${className}` : null;
+  const classLabel = activeTab === 'consigli' ? null : className ? `Classe ${className}` : null;
   const subtitle = verifiedEditing
     ? [classLabel, 'Modifica in corso'].filter(Boolean).join(' · ')
     : classLabel;
