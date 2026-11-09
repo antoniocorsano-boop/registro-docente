@@ -68,8 +68,9 @@ export function isCaptureClockValid(value: unknown): value is CouncilCaptureCloc
   const input = value as Record<string, unknown>;
   if (typeof input.capturedAt !== 'string' || !ISO_UTC.test(input.capturedAt)
     || !validDate(input.captureLocalDate)
+    || typeof input.captureUtcOffsetMinutes !== 'number'
     || !Number.isInteger(input.captureUtcOffsetMinutes)
-    || Number(input.captureUtcOffsetMinutes) < -840
+    || input.captureUtcOffsetMinutes < -840
     || Number(input.captureUtcOffsetMinutes) > 840) return false;
   const at = Date.parse(input.capturedAt);
   if (!Number.isFinite(at) || new Date(at).toISOString() !== input.capturedAt) return false;
@@ -99,7 +100,8 @@ function isCounts(value: unknown): value is CouncilEvidenceAggregatesV1 {
   const map = value as Record<string, unknown>;
   if (Object.keys(map).length !== COUNTS.length
     || Object.keys(map).some(key => !COUNTS.includes(key as typeof COUNTS[number]))
-    || COUNTS.some(key => !Number.isSafeInteger(map[key]) || Number(map[key]) < 0)) return false;
+    || COUNTS.some(key => typeof map[key] !== 'number'
+      || !Number.isSafeInteger(map[key]) || Number(map[key]) < 0)) return false;
   return Number(map.withNumericEvidence) + Number(map.withoutNumericEvidence) === Number(map.totalStudents)
     && Number(map.withSavedTeacherProposal) + Number(map.withoutSavedTeacherProposal) === Number(map.totalStudents)
     && Number(map.numericEvidenceCount) >= Number(map.withNumericEvidence)
@@ -204,6 +206,7 @@ function validRecordShape(value: unknown, klass: ClassData): value is CouncilEvi
     || record.classId !== klass.id
     || normalizeSchoolYear(record.schoolYear) !== record.schoolYear
     || typeof record.sessionId !== 'string' || !SNAPSHOT_ID.test(record.sessionId)
+    || typeof record.revision !== 'number'
     || !Number.isSafeInteger(record.revision) || Number(record.revision) < 1
     || (record.supersedesSnapshotId !== undefined
       && (typeof record.supersedesSnapshotId !== 'string'
@@ -314,8 +317,14 @@ export async function prepareCouncilSnapshot(
     effectiveCutoff: overview.effectiveCutoff,
     cutoffClampedToSchoolYear: overview.cutoffClampedToSchoolYear,
     calculationContract: SNAPSHOT_CONTRACT,
-    aggregates: Object.fromEntries(COUNTS.map(key => [key, overview[key]]))
-      as unknown as CouncilEvidenceAggregatesV1,
+    aggregates: {
+      totalStudents: overview.totalStudents,
+      withNumericEvidence: overview.withNumericEvidence,
+      withoutNumericEvidence: overview.withoutNumericEvidence,
+      numericEvidenceCount: overview.numericEvidenceCount,
+      withSavedTeacherProposal: overview.withSavedTeacherProposal,
+      withoutSavedTeacherProposal: overview.withoutSavedTeacherProposal
+    },
     ...fingerprints
   };
 }
