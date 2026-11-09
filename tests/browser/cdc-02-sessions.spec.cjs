@@ -22,6 +22,15 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   await navigate(page, 'Consigli di classe');
   const picker = page.getByRole('combobox', { name: 'Seleziona classe per il Consiglio' });
   await picker.selectOption({ label: className });
+  const overview = page.getByRole('region', { name: 'Quadro sintetico delle evidenze della classe' });
+  await expect(overview).toBeVisible();
+  await expect(overview).toContainText('Dati correnti');
+  await expect(overview).toContainText('Con prove numeriche');
+  await expect(overview).toContainText('Senza prove numeriche');
+  await expect(overview).toContainText('Senza voto di ingresso salvato');
+  await expect(overview.getByText('0', { exact: true })).toHaveCount(6);
+  const noSessionBefore = page.getByText('Nessuna seduta registrata per questa classe e questo anno.');
+  await expect(noSessionBefore).toBeVisible();
   const year = await page.getByRole('combobox', { name: 'Seleziona anno scolastico del Consiglio' }).inputValue();
   const start = Number(year.slice(0, 4));
   const date = page.getByRole('textbox', { name: 'Data di nuova seduta' }).or(page.getByLabel('Data di nuova seduta'));
@@ -47,6 +56,8 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   await expect(restoredEntries).toHaveCount(2);
   await restoredEntries.last().click();
   await expect(page.getByRole('region', { name: 'Seduta recuperata' })).toContainText(`${start}-11-09`);
+  // The overview is a live read-only projection; it remains available after navigation.
+  await expect(page.getByRole('region', { name: 'Quadro sintetico delle evidenze della classe' })).toBeVisible();
 
   // Historical records are not grades and do not require a student or per-session votes.
   await expect(page.getByRole('region', { name: 'Tabellone delle valutazioni di ingresso' })).toBeVisible();
