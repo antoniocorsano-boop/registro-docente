@@ -1257,6 +1257,27 @@
         "tests/browser/cdc-02-sessions.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-02-S2B-P1-I01",
+      "owner": "CDC-02/S2b-P1",
+      "statement": "Council evidence snapshots v1 are optional, teacher-confirmed, append-only aggregate records associated with an existing class/year/session identity. Preview is read-only; confirmation revalidates current canonical source, cutoff and local capture clock, rejects drift and orphaned sessions, preserves older versions and never mutates grades, assessments or the live S2a view. Capture UTC instant, civil date and offset remain mutually consistent across timezones; source and content digests are local integrity hints, never signatures or anonymization. P1 alone does not authorize persistence, backup, UI, merge or deployment.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/councilEvidenceSnapshots.ts",
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/types.ts",
+        "docs/superpowers/specs/2026-11-09-cdc-02-s2b-session-evidence-snapshot-design.md",
+        "docs/superpowers/plans/2026-11-09-cdc-02-s2b-session-evidence-snapshot-implementation.md"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/security/cdc02CouncilOverview.test.ts",
+        "src/security/cdc02CouncilSessions.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs"
+      ]
     }
   ]
 }
