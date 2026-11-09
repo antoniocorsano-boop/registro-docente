@@ -173,4 +173,13 @@ describe('CDC-02/S2b P1 — contratto puro (solo dati sintetici)', () => {
     bad.councilEvidenceSnapshots![0].aggregates.withNumericEvidence = 100;
     expect(await validateCouncilSnapshots(bad)).toBe(false);
   });
+  test('P2: proprietà estranee nel clock non possono sostituire revisione o sessione', async () => {
+    const data = fixture();
+    // TypeScript è strutturale: un oggetto con più proprietà è assegnabile al tipo clock.
+    const injected = { ...clock, revision: 99, sessionId: 'S2' } as CouncilCaptureClockV1;
+    await expect(prepareCouncilSnapshot(data, context, settings, injected))
+      .rejects.toThrow(/clock|acquisizione|tempor|campi|valido/i);
+    expect(data.classes[0].councilEvidenceSnapshots).toBeUndefined();
+  });
+
 });
