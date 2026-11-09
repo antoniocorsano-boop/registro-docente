@@ -14,6 +14,7 @@
 - Revisionare specifica e scegliere consapevolmente **aggregati soltanto** per v1; le impronte sono metadati cifrati e non anonimizzazione.
 - Definire la forma serializzata deterministica dei fingerprint (Unicode, ordine liste/chiavi, versioni, trattamento dei decimali e dei dati assenti) con due vettori statici noti.
 - Chiarire limite temporale del calcolo e nomenclatura «Fotografia acquisita per la seduta», non «stato del registro alla data della seduta».
+- **Risoluzione P2 della design review:** il contratto richiede `capturedAt` UTC canonico, `captureLocalDate` e `captureUtcOffsetMinutes`, derivati dallo **stesso Date** al momento del commit e inclusi nel digest. Documentare segno dell'offset (convenzione `getTimezoneOffset`) e formula di ricostruzione; il restore non può dipendere dal fuso corrente. Fissare un vettore di prova trans-fuso e uno incoerente prima di implementare.
 - Verificare con un prototipo isolato che i backup v6 conservino un campo opzionale di ClassData senza perdita; nessun cambio versione sulla sola supposizione.
 - Registrare la decisione durevole in docs/memory/DECISIONS.md **solo dopo** ratifica, con riferimenti al progetto. Non inserire dati reali nel repository.
 
@@ -29,8 +30,11 @@ Percorsi candidati:
 
 Prima scrivere test che falliscano per **assenza** di:
 1. filtro e identità espliciti di classe/anno/seduta;
-2. rispetto cutoff (anno scolastico, sessionDate, capturedAt) e separazione delle tre date;
+2. rispetto cutoff (anno scolastico, sessionDate, captureLocalDate) e separazione delle tre date, con capturedAt UTC + offset locale persistito e coerente;
 3. calcolo dei sei numeri e complementarità; bozza ignorata; zero studenti;
+   - **Vettore orario positivo**: `capturedAt=2026-11-09T23:30:00.000Z`, `captureUtcOffsetMinutes=-60`, `captureLocalDate=2026-11-10`, cutoff `2026-11-10` e sessionDate non precedente; salvare a Roma e ripristinare simulando `TZ=America/New_York`: stessa validità e stesso digest.
+   - **Vettore negativo**: stesso istante/offset ma `captureLocalDate=2026-11-09` deve fallire chiuso su creazione e su import; l'offset non intero, assente o fuori range deve fallire.
+   - **Cambio del giorno tra preview e commit**: se giorno locale/offset mutano, invalidare l'anteprima e richiedere riesame, non modificare silenziosamente la data salvata.
 4. immutabilità della versione precedente, versionamento e idempotenza;
 5. corrispondenza della fonte valutata in anteprima e della fonte confermata al momento della scrittura;
 6. valori e fingerprint malformed, duplicate ID, orfani, alterazione di sessionKind/date/anno.
@@ -55,7 +59,7 @@ Sequenza di verifica: salvataggio→rilettura Vault→esportazione cifrata→rip
 ### S2b-P3 — Anteprima e conferma esplicita nel percorso Consigli
 
 Percorsi:
-- src/components/CouncilView.tsx: accanto alla **seduta selezionata**, azioni «Prepara fotografia», «Conferma e salva fotografia», «Acquisisci nuova versione», «Annulla»; mostrare elenco revisioni, capturedAt, data limite, avvertenza sulle registrazioni retroattive;
+- src/components/CouncilView.tsx: accanto alla **seduta selezionata**, azioni «Prepara fotografia», «Conferma e salva fotografia», «Acquisisci nuova versione», «Annulla»; mostrare elenco revisioni, capturedAt, captureLocalDate e data limite, avvertenza sulle registrazioni retroattive;
 - src/App.tsx: callback che entra nel coordinatore con commit atomico da ref canonici, revalidazione della fonte e gestione esatta degli errori;
 - eventuali componenti piccoli dedicati, senza trasformare l'intero tabellone.
 
@@ -72,9 +76,9 @@ Scenari minimi Playwright su runner GitHub ephemeral, con soli alunni sintetici:
 4. variazione successiva di prove/voti: il quadro S2a cambia, la fotografia precedente no;
 5. nuova versione esplicita: due revisioni in sequenza e la prima ancora consultabile;
 6. doppio tap, cambio classe/anno e mutazione concorrente: nessun doppio record/commits errati;
-7. cutoff futuro, anno incompatibile, seduta orfana, hash invalido: fail closed;
+7. cutoff futuro secondo **captureLocalDate persistita**, anno incompatibile, seduta orfana, hash invalido, timestamp e offset incoerenti: fail closed, invariato con fusi differenti;
 8. import da backup vecchio che eliminerebbe fotografie: avviso e annullamento efficace;
-9. formato mobile 360 e 390 px, Privacy Shield, niente traboccamento della pagina, testo di provenienza comprensibile;
+9. formato mobile 360 e 390 px, Privacy Shield, niente traboccamento della pagina, testo di provenienza comprensibile, date locali coerenti con il record anche cambiando il fuso del dispositivo;
 10. regressione S1, S2a, CDC-01, Browser Qualification esteso.
 
 Gate esatti: Invarianti, PREDEPLOY, FLOW-03, HEADER-01, Browser Qualification **5/5** sul medesimo head SHA. Una prova isolata o un artifact scaricato **non** costituisce il gate Chromium totale. Se un gate fallisce si corregge la causa dimostrata; commit nuovo = nuovo candidato e nuove prove. Richiedere revisione indipendente exact-SHA e zero thread irrisolti.
@@ -105,7 +109,7 @@ Gate esatti: Invarianti, PREDEPLOY, FLOW-03, HEADER-01, Browser Qualification **
 
 1. Si accetta un **v1 di soli aggregati**, rinviando i dati individuali al relativo gate di privacy e prodotto?
 2. I fingerprint su fonti correnti e roster sono sufficienti per segnalare differenze di provenienza senza duplicare voti? Sono descritti correttamente come **controlli interni**, non anonimizzazione o prova forense?
-3. Il vincolo di cutoff fino alla seduta e al giorno di cattura è appropriato per sedute passate/future?
+3. Il vincolo di cutoff fino alla seduta e alla **captureLocalDate persistita, verificata rispetto a capturedAt e offset** è appropriato per sedute passate/future? L'originaria ambiguità P2 del ripristino in altro fuso è coperta dai vettori di prova descritti sopra.
 4. La versione v6 del backup può restare invariata **solo dopo prove di compatibilità documentate**?
 5. I messaggi UI spiegano adeguatamente che una foto retroattiva non ricostruisce il contenuto del registro nella data storica?
 
