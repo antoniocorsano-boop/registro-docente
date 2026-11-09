@@ -131,6 +131,10 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel).toContainText(DRAFT_TITLE);
   await expect(panel).toContainText('Correttezza da verificare');
   expect(calls).toBe(2);
+  // An opt-in is for one remote attempt only; retaining a preview must
+  // not silently authorize a third provider request.
+  await expect(panel.getByTestId('int02-assessment-remote-consent')).not.toBeChecked();
+  await expect(generate).toBeDisabled();
   await expectNoOverflow(page);
 
   await panel.getByTestId('int02-assessment-open-editor').click();
