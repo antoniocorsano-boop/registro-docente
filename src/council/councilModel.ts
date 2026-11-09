@@ -1,5 +1,6 @@
 import type { AppData, AppSettings, ClassData, CouncilAssessment, CouncilMoment, CouncilSession, CouncilSessionKind, Student } from '../types';
 import { calcAvg, calcWeightedAvg, getCompetenceLevel, parseGrade, sortStudents } from '../utils';
+import { validateCouncilSnapshotStructure } from './councilEvidenceSnapshots';
 
 // Presentational only: session identity and Vault values remain ISO YYYY-MM-DD.
 // Explicit Italian month names avoid browser-native MM/DD/YYYY ambiguity.
@@ -190,8 +191,11 @@ export function appendCouncilSession(
 // New optional ClassData fields preserve legacy backups and the existing encrypted Vault record.
 export function isCouncilAppDataValid(data: unknown): boolean {
   if (!data || typeof data !== 'object' || !Array.isArray((data as AppData).classes)) return false;
+  const classIds = new Set<string>();
   for (const item of (data as AppData).classes) {
-    if (!item || typeof item !== 'object') return false;
+    if (!item || typeof item !== 'object'
+      || typeof item.id !== 'string' || !item.id.trim() || classIds.has(item.id)) return false;
+    classIds.add(item.id);
     if (item.councilAssessments !== undefined) {
       if (!Array.isArray(item.councilAssessments) || !Array.isArray(item.students)) return false;
       const ids = new Set(item.students.map(student => student.id));
@@ -223,11 +227,20 @@ export function isCouncilAppDataValid(data: unknown): boolean {
         seen.add(session.id);
       }
     }
+    if (!validateCouncilSnapshotStructure(item)) return false;
   }
   return true;
 }
 
 export function wouldLoseCouncilEntries(previous: AppData, incoming: AppData): boolean {
+  // An ambiguous class identity cannot prove that historical council records
+  // will survive a replacement, even if the first matching container has them.
+  const incomingIds = new Set<string>();
+  for (const klass of incoming.classes) {
+    if (!klass || typeof klass.id !== 'string'
+      || !klass.id.trim() || incomingIds.has(klass.id)) return true;
+    incomingIds.add(klass.id);
+  }
   for (const priorClass of previous.classes) {
     const nextClass = incoming.classes.find(item => item.id === priorClass.id);
     for (const previousEntry of priorClass.councilAssessments ?? []) {
@@ -246,6 +259,18 @@ export function wouldLoseCouncilEntries(previous: AppData, incoming: AppData): b
         && session.kind === previousSession.kind
         && session.createdAt === previousSession.createdAt
         && session.updatedAt === previousSession.updatedAt
+      )) return true;
+    }
+    // A restored dataset that omits or changes even one confirmed snapshot
+    // must require explicit informed replacement, regardless of retained sessions.
+    for (const prior of priorClass.councilEvidenceSnapshots ?? []) {
+      if (!nextClass?.councilEvidenceSnapshots?.some(candidate =>
+        candidate.id === prior.id
+        && candidate.classId === prior.classId
+        && candidate.schoolYear === prior.schoolYear
+        && candidate.sessionId === prior.sessionId
+        && candidate.revision === prior.revision
+        && candidate.contentDigest === prior.contentDigest
       )) return true;
     }
   }

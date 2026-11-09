@@ -5,6 +5,7 @@ import type {
   OnlineTest,
   UdaRecord
 } from '../types';
+import { assertCouncilSnapshotIntegrity } from '../council/councilEvidenceSnapshots';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import {
   isCopilotStateV1,
@@ -178,12 +179,14 @@ export class SecureAppStorage {
     };
   }
 
-  saveAppData(value: AppData): Promise<void> {
-    return this.vault.put('appData', value);
+  async saveAppData(value: AppData): Promise<void> {
+    await assertCouncilSnapshotIntegrity(value);
+    await this.vault.put('appData', value);
   }
 
-  saveAppDataAndMeta(appData: AppData, meta: SecureMeta): Promise<void> {
-    return this.vault.putMany([
+  async saveAppDataAndMeta(appData: AppData, meta: SecureMeta): Promise<void> {
+    await assertCouncilSnapshotIntegrity(appData);
+    await this.vault.putMany([
       { key: 'appData', value: appData },
       { key: 'meta', value: meta }
     ]);
@@ -339,11 +342,14 @@ export class SecureAppStorage {
   ): Promise<CanonicalCompleteSecureAppSnapshot> {
     const previousPhysical = previousLogical ? null : await this.loadSnapshot();
     const canonicalCandidate = canonicalizeCompleteSnapshot(candidate);
+    // Reject malformed or tampered council snapshots before mutating the Vault.
+    await assertCouncilSnapshotIntegrity(canonicalCandidate.appData);
     const canonicalPrevious = previousLogical ? canonicalizeCompleteSnapshot(previousLogical) : null;
 
     try {
       await this.writeCompleteSnapshotAtomic(canonicalCandidate);
       const verified = requireCompleteSnapshot(await this.loadSnapshot());
+      await assertCouncilSnapshotIntegrity(verified.appData);
       if (!snapshotEquals(verified, canonicalCandidate)) {
         throw new Error('Restore non verificabile: il readback non coincide con lo snapshot candidato.');
       }

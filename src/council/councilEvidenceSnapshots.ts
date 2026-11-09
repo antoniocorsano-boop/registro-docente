@@ -242,10 +242,10 @@ function validRecordShape(value: unknown, klass: ClassData): value is CouncilEvi
 }
 
 /**
- * Validates only the isolated S2b field, not all AppData.
- * P2 must integrate this into backupPayload / isCouncilAppDataValid and loss detection.
+ * Synchronous structural and cross-reference gate for legacy synchronous
+ * backup normalization. Digest verification remains asynchronous.
  */
-export async function validateCouncilSnapshots(klass: ClassData): Promise<boolean> {
+export function validateCouncilSnapshotStructure(klass: ClassData): boolean {
   const snapshots: unknown = klass.councilEvidenceSnapshots;
   if (snapshots === undefined) return true;
   if (!Array.isArray(snapshots)) return false;
@@ -256,8 +256,6 @@ export async function validateCouncilSnapshots(klass: ClassData): Promise<boolea
     const s = raw as CouncilEvidenceSnapshotV1;
     if (ids.has(s.id)) return false;
     ids.add(s.id);
-    const { contentDigest: _, ...unsigned } = s;
-    if (await hashSnapshot(unsigned) !== s.contentDigest) return false;
     const list = bySession.get(s.sessionId) ?? [];
     list.push(s);
     bySession.set(s.sessionId, list);
@@ -272,6 +270,28 @@ export async function validateCouncilSnapshots(klass: ClassData): Promise<boolea
     }
   }
   return true;
+}
+
+/** Full fail-closed validation including the canonical SHA-256 content digest. */
+export async function validateCouncilSnapshots(klass: ClassData): Promise<boolean> {
+  if (!validateCouncilSnapshotStructure(klass)) return false;
+  for (const snapshot of klass.councilEvidenceSnapshots ?? []) {
+    const { contentDigest: _, ...unsigned } = snapshot;
+    if (await hashSnapshot(unsigned) !== snapshot.contentDigest) return false;
+  }
+  return true;
+}
+
+/**
+ * Validate all stored snapshot chains before export restore or a Vault write.
+ * Never trust a structurally valid digest without verifying its content.
+ */
+export async function assertCouncilSnapshotIntegrity(data: AppData): Promise<void> {
+  for (const klass of data.classes) {
+    if (!(await validateCouncilSnapshots(klass))) {
+      throw new Error('Archivio fotografico dei Consigli non valido: operazione annullata.');
+    }
+  }
 }
 
 export function readCouncilSnapshots(

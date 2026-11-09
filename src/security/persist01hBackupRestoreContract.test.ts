@@ -39,7 +39,9 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(restore).toContain('const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> =>');
     expect(restore).toContain('return mutationCoordinator.enqueueTask(async () => {');
     expect(restore).toContain('const previousLogical = getCompleteCommittedSnapshot();');
-    expect(restore).toContain('normalizeBackupPayload(decryptedData, previousLogical)');
+    expect(restore).toContain('const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);');
+    expect(restore.indexOf('await normalizeBackupPayloadVerified(decryptedData, previousLogical)'))
+      .toBeLessThan(restore.indexOf('wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)'));
     expect(restore).toContain('await secureStorage.restoreSnapshotVerified(candidate, previousLogical)');
     expect(restore).toContain('const restoredVisibleAppData = { ...restored.appData, currentClassId: null };');
     expect(restore).toContain('currentClassIdRef.current = null;');
