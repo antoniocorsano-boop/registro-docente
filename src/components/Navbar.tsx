@@ -399,6 +399,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Oggi</span>
           </button>
 
+          <button
+            onClick={() => handleNav('consigli')}
+            className={`w-full min-h-[44px] flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${activeTab === 'consigli' ? 'bg-[var(--surface-variant)] text-[var(--primary)] font-semibold' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'}`}
+          >
+            <ClipboardList className="w-4 h-4 shrink-0 text-sky-300" />
+            <span>Consigli di classe</span>
+          </button>
+
           {currentClass && (
             <>
               <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 px-3 pt-3 pb-1 border-t border-[var(--border)] mt-2">
