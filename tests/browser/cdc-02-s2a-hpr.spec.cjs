@@ -60,7 +60,7 @@ test('CDC-02/S2a HPR: snapshot-free live overview distinguishes numeric evidence
   const overview = page.getByRole('region', { name: 'Quadro sintetico delle evidenze della classe' });
   await expect(overview).toBeVisible();
   await expect(overview).toContainText('Dati correnti');
-  await expect(overview).toContainText('non sono una fotografia storica della seduta');
+  await expect(overview).toContainText('Non sono una fotografia storica della seduta');
   const expected = async (values) => {
     const labels = ['Alunni', 'Con prove numeriche', 'Senza prove numeriche',
       'Prove numeriche totali', 'Con voto di ingresso salvato', 'Senza voto di ingresso salvato'];
