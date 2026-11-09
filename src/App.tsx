@@ -141,6 +141,7 @@ import type {
   SecureMeta
 } from './security/secureAppStorage';
 import { normalizeBackupPayload } from './security/backupPayload';
+import { assignCouncilValues, wouldLoseCouncilEntries } from './council/councilModel';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
@@ -190,6 +191,7 @@ import { EvaluationsView } from './components/EvaluationsView';
 import { BehaviorsView } from './components/BehaviorsView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { MatrixView } from './components/MatrixView';
+import { CouncilView } from './components/CouncilView';
 import { HistoryView } from './components/HistoryView';
 import { StudentReportView } from './components/StudentReportView';
 import { StudentsManagementView } from './components/StudentsManagementView';
@@ -380,6 +382,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return () => window.removeEventListener('pageshow', onPageShow);
   }, [hprTraceEnabled, hprLoadKind, traceHpr]);
   const planningGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const councilGuardRef = useRef<PlanningDraftGuard | null>(null);
+  const registerCouncilDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
+    councilGuardRef.current = guard;
+  }, []);
   const assessmentDraftGuardRef = useRef<AssessmentDraftGuard | null>(null);
   const registerAssessmentDraftGuard = useCallback((guard: AssessmentDraftGuard | null) => {
     assessmentDraftGuardRef.current = guard;
@@ -389,7 +395,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       && Boolean(planningGuardRef.current?.hasUnsavedChanges()))
     || (activeTabRef.current === 'verifiche-online'
       && (Boolean(assessmentDraftGuardRef.current?.hasUnsavedChanges())
-        || Boolean(assessmentDraftGuardRef.current?.isSaving()))), []);
+        || Boolean(assessmentDraftGuardRef.current?.isSaving())))
+    || (activeTabRef.current === 'consigli'
+      && Boolean(councilGuardRef.current?.hasUnsavedChanges())), []);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
   // Positions have meaning only inside the same, continuous app-owned epoch.
@@ -541,6 +549,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (discardUnsavedDraft) {
       if (activeTabRef.current === 'programmazione') planningGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'verifiche-online') assessmentDraftGuardRef.current?.discardChanges();
+      if (activeTabRef.current === 'consigli') councilGuardRef.current?.discardChanges();
     }
     traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
     planningExitRestoreFocusRef.current = false;
@@ -561,7 +570,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
   };
   const saveAndLeavePlanning = async () => {
-    const guard = planningGuardRef.current;
+    const guard = activeTabRef.current === 'consigli'
+      ? councilGuardRef.current : planningGuardRef.current;
     if (!guard || planningExitSaving || historyRestorePendingRef.current !== null) return;
     setPlanningExitSaving(true);
     setPlanningExitError('');
@@ -3035,11 +3045,22 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }).then(() => undefined);
   };
 
+  // CDC-01: teacher-assigned council entry values are persisted in the existing appData Vault record.
+  const handleSaveCouncilEntries = (classId: string, schoolYear: string, values: Record<string, string>): Promise<void> => {
+    return commitAppDataMutation(current => assignCouncilValues(
+      current, classId, schoolYear, 'ingresso', values, new Date().toISOString()
+    ), { successMessage: 'Valutazioni di ingresso salvate', showBackupModal: false }).then(() => undefined);
+  };
+
   // Import Encrypted Backup
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
       const candidate = normalizeBackupPayload(decryptedData, previousLogical);
+      if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
+        && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
+        throw new Error('Importazione annullata: le valutazioni dei Consigli esistenti sono state conservate.');
+      }
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
@@ -3275,6 +3296,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             returnContext={returningToStudentOrigin?.originTab === 'tabellone'
               && returningToStudentOrigin.classId === currentClass.id
                 ? returningToStudentOrigin : undefined}
+          />
+        )}
+
+        {/* CDC-01: destination generale, classe scelta esplicitamente in questa sezione. */}
+        {activeTab === 'consigli' && (
+          <CouncilView
+            classes={appData.classes}
+            settings={settings}
+            isPrivacyShieldActive={isPrivacyShieldActive}
+            onSave={handleSaveCouncilEntries}
+            onRegisterDraftGuard={registerCouncilDraftGuard}
           />
         )}
 
