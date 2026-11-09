@@ -49,6 +49,18 @@ export interface AssessmentGenerationResponse {
 const ALLOWED_SOURCE_KINDS = new Set(['text', 'note', 'concept', 'web', 'internal']);
 const ALLOWED_PROFILES = new Set(['economy', 'balanced', 'quality']);
 const activeRequests = new WeakMap<AssessmentGenerationProvider, Set<string>>();
+const consumedOperationAuthorizations = new Map<string, number>();
+
+function consumeBudgetOperationOnce(token: AiBudgetAuthorizationV1, evaluatedAt: string): boolean {
+  const at = Date.parse(evaluatedAt);
+  for (const [key, expiresAt] of consumedOperationAuthorizations) {
+    if (expiresAt <= at) consumedOperationAuthorizations.delete(key);
+  }
+  const key = [token.activityKey, token.issuedAt, token.expiresAt].join('\\u001f');
+  if (consumedOperationAuthorizations.has(key)) return false;
+  consumedOperationAuthorizations.set(key, Date.parse(token.expiresAt));
+  return true;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -182,6 +194,7 @@ export async function handleAssessmentGenerationRequest(
   const textBytes = new TextEncoder().encode([
     request.source.title, request.source.text, request.context.className, request.context.objective
   ].join('\n')).byteLength;
+  const evaluatedAt = (options.now ?? (() => new Date().toISOString()))();
   const budget = resolvePrepareBudget({
     profile: request.budget.profile,
     activityKey: request.budget.activityKey,
@@ -189,9 +202,14 @@ export async function handleAssessmentGenerationRequest(
     inlineBytes: 0,
     memoryItems: 0,
     ...(request.budget.authorization ? { authorization: request.budget.authorization } : {}),
-    now: (options.now ?? (() => new Date().toISOString()))()
+    now: evaluatedAt
   });
   if (budget.kind === 'escalation-required') {
+    return failure('AI_BUDGET_ESCALATION_REQUIRED', 409);
+  }
+  if (budget.escalated
+    && request.budget.authorization?.scope === 'operation'
+    && !consumeBudgetOperationOnce(request.budget.authorization, evaluatedAt)) {
     return failure('AI_BUDGET_ESCALATION_REQUIRED', 409);
   }
   if (options.signal?.aborted) return failure('PROVIDER_ERROR', 499);
@@ -243,6 +261,11 @@ export async function handleAssessmentGenerationRequest(
     let draft;
     try {
       draft = parseAssessmentDraftV1(result.output);
+      if ([draft.title, draft.description, ...draft.questions.flatMap(question => [
+        question.q, question.explanation, ...question.options
+      ])].some(appearsStudentPersonal)) {
+        return failure('PROVIDER_OUTPUT_INVALID', 502);
+      }
     } catch {
       return failure('PROVIDER_OUTPUT_INVALID', 502);
     }
