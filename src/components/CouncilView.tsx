@@ -234,7 +234,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 ['AV', 'Alta · 8,5–10'],
                 ['IN', 'Medio-alta · 7–8,49'],
                 ['BA', 'Base · 6–6,99'],
-                ['PA', 'Sotto soglia · <6']
+                ['PA', 'Sotto soglia · meno di 6']
               ] as const).map(([key, label]) => (
                 <div key={key} className="p-3 border border-[var(--border)] rounded-lg">
                   <div className="text-xs text-slate-300">{label}</div>
