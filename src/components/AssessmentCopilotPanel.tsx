@@ -156,6 +156,9 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       if(abortRef.current===controller){
         abortRef.current=null;
         setGenerating(false);
+        // The opt-in authorizes exactly one outbound attempt, regardless
+        // of success or HTTP failure. A new attempt requires new consent.
+        setRemoteConsent(false);
       }
     }
   };
