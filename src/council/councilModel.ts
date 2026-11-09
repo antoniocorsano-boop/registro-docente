@@ -30,12 +30,19 @@ export function readCouncilValues(
 
 export function councilRows(classData: ClassData, schoolYear: string, cutoff: string, settings: AppSettings) {
   const saved = readCouncilValues(classData, schoolYear);
+  // Ingresso refers to the current *school year*, not every historical grade in the archive.
+  // An unrecognized year must not silently include grades from previous school years.
+  const match = /\\b(20\\d{2})\\s*[/-]\\s*(?:20)?(\\d{2})\\b/.exec(schoolYear);
+  const startYear = match && (Number(match[1]) + 1) % 100 === Number(match[2])
+    ? Number(match[1]) : null;
+  const from = startYear === null ? null : `${startYear}-09-01`;
   return sortStudents(classData.students).map(student => {
-    const valid = classData.grades.filter(grade =>
+    const valid = from === null ? [] : classData.grades.filter(grade =>
       grade.studentId === student.id
       && typeof grade.date === 'string'
+      && /^\\d{4}-\\d{2}-\\d{2}$/.test(grade.date)
       && grade.date <= cutoff
-      && grade.date >= '2000-01-01'
+      && grade.date >= from
       && typeof grade.value === 'string'
       && parseGrade(grade.value) !== null
     );
