@@ -1134,11 +1134,13 @@
     {
       "id": "INT-02-S3C-01-I01",
       "owner": "INT-02/S3c-01",
-      "statement": "A generated assessment draft can only cross into the existing editor as a local, transient, teacher-confirmed prefill. A uniquely identified active class, unchanged professional source ID and source content, live Vault state and strict S3a output validation are required. The editor handoff carries no test ID, UDA assignment, grades, saved flag or permanent provenance; dirty drafts and active saves cannot be overwritten. Revalidation is required before the eventual UI delivery. This increment adds no UI, no implicit save, no remote dispatch and no permission to merge or deploy.",
+      "statement": "A generated assessment draft can only cross into the existing editor as a local, transient, teacher-confirmed prefill. A uniquely identified active class pinned to its original class ID even if recreated under the same name, unchanged professional source ID and source content, live Vault state and strict S3a output validation are required. The editor handoff carries no test ID, UDA assignment, grades, saved flag or permanent provenance; dirty drafts and active saves cannot be overwritten. Revalidation is required before the eventual UI delivery. This increment adds no UI, no implicit save, no remote dispatch and no permission to merge or deploy.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/library/assessmentEditorTransfer.ts",
-        "src/library/assessmentEditorTransfer.test.ts"
+        "src/library/assessmentEditorTransfer.test.ts",
+        "src/library/assessmentGeneration.ts",
+        "src/services/assessmentGenerationService.ts"
       ],
       "tests": [
         "src/library/assessmentEditorTransfer.test.ts",
