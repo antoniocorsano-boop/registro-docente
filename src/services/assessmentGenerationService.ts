@@ -79,7 +79,7 @@ function errorFromHttp(payload:unknown,status:number):AssessmentGenerationError 
 
 export async function requestAssessmentDraftFromCopilot(input: {
   session:AssessmentGenerationSessionV1;
-  getLiveContext:() => {source:LibrarySource|null;confirmedSourceId:string;activeClassName:string};
+  getLiveContext:() => {source:LibrarySource|null;confirmedSourceId:string;activeClassName:string;activeClassId?:string|null};
   signal?:AbortSignal;
 }):Promise<{draft:AssessmentDraftV1;receipt:AssessmentGenerationReceipt}> {
   // Capture an immutable comparison reference before the first await. Source
@@ -87,7 +87,8 @@ export async function requestAssessmentDraftFromCopilot(input: {
   const session:AssessmentGenerationSessionV1={
     request:JSON.parse(JSON.stringify(input.session.request)),
     authorizedSourceId:input.session.authorizedSourceId,
-    authorizedClassName:input.session.authorizedClassName
+    authorizedClassName:input.session.authorizedClassName,
+    ...(input.session.authorizedClassId ? {authorizedClassId:input.session.authorizedClassId} : {})
   };
   const current = () => isAssessmentGenerationRequestCurrent(session,input.getLiveContext());
   if(!current()) throw new AssessmentGenerationError('CONTEXT_CHANGED',409);
