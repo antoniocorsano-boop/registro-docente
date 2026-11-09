@@ -52,7 +52,9 @@ export function prepareAssessmentEditorTransfer(input: AssessmentEditorTransferI
     return {status:'blocked',reason:'CONFIRMATION_REQUIRED'};
   }
   const {session,library,classes,activeClassId} = input;
-  if (!activeClassId || !session.authorizedClassName || !session.request) {
+  if (!activeClassId || !session.authorizedClassId
+    || session.authorizedClassId !== activeClassId
+    || !session.authorizedClassName || !session.request) {
     return {status:'blocked',reason:'CLASS_CHANGED'};
   }
   // A current class is authoritative only when both its ID and name are
@@ -68,7 +70,8 @@ export function prepareAssessmentEditorTransfer(input: AssessmentEditorTransferI
   if (sources.length !== 1 || !isAssessmentGenerationRequestCurrent(session,{
     source:sources[0],
     confirmedSourceId:session.authorizedSourceId,
-    activeClassName:byId[0].name
+    activeClassName:byId[0].name,
+    activeClassId:byId[0].id
   })) {
     return {status:'blocked',reason:'SOURCE_CHANGED'};
   }
