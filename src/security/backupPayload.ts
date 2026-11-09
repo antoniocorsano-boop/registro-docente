@@ -1,5 +1,6 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
 import { isCouncilAppDataValid } from '../council/councilModel';
+import { assertCouncilSnapshotIntegrity } from '../council/councilEvidenceSnapshots';
 import { areAssessmentProvenancesValid } from '../library/assessmentProvenance';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import {
@@ -529,4 +530,18 @@ export function normalizeBackupPayload(
     copilotState: createEmptyCopilotState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
+}
+
+/**
+ * Preferred entry point for importing encrypted backup payloads.
+ * Legacy synchronous normalization remains available for callers that do not
+ * perform Vault writes. Actual restore MUST await the SHA-256 validation.
+ */
+export async function normalizeBackupPayloadVerified(
+  payload: unknown,
+  current: CompleteSecureAppSnapshot
+): Promise<ReturnType<typeof normalizeBackupPayload>> {
+  const normalized = normalizeBackupPayload(payload, current);
+  await assertCouncilSnapshotIntegrity(normalized.appData);
+  return normalized;
 }
