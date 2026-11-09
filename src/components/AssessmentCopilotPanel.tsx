@@ -15,6 +15,7 @@ interface AssessmentCopilotPanelProps {
   source: LibrarySource;
   classId: string;
   className: string;
+  classIsUnambiguous: boolean;
   aiBudgetProfile?: AiBudgetProfile;
   getLiveContext: () => {
     source: LibrarySource | null;
@@ -51,7 +52,7 @@ const remoteErrorCopy: Record<string,string> = {
 const CLIENT_GENERATION_TIMEOUT_MS = 45_000;
 
 export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
-  source, classId, className, aiBudgetProfile, getLiveContext, onAccept, onClose
+  source, classId, className, classIsUnambiguous, aiBudgetProfile, getLiveContext, onAccept, onClose
 }) => {
   const [objective,setObjective]=useState('');
   const [remoteConsent,setRemoteConsent]=useState(false);
@@ -112,7 +113,8 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   };
 
   const handleGenerate=async()=>{
-    if(abortRef.current||generating||adopting||!remoteConsent||!objective.trim())return;
+    if(abortRef.current||generating||adopting||!remoteConsent||!objective.trim()
+      || !classIsUnambiguous)return;
     setError(null);
     setPreview(null);
     const controller=new AbortController();
@@ -210,6 +212,13 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
           Per creare una proposta scegli una fonte testuale pronta e professionale, senza dati degli alunni.
         </p>
       )}
+      {!classIsUnambiguous && (
+        <p role="alert" data-testid="int02-assessment-class-ambiguous"
+          className="text-xs text-amber-200">
+          La classe corrente non è identificata in modo univoco. Riconcilia le classi omonime
+          prima di inviare una richiesta al servizio remoto.
+        </p>
+      )}
       <label className="block text-xs font-semibold text-slate-200" htmlFor="s3c02-objective">
         Obiettivo della verifica
       </label>
@@ -235,7 +244,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       </label>
       <button type="button" onClick={()=>void handleGenerate()}
         data-testid="int02-assessment-generate"
-        disabled={!sourceAllowed||!classId||!objective.trim()||!remoteConsent||generating||adopting||providerAvailable===false}
+        disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||!remoteConsent||generating||adopting||providerAvailable===false}
         className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-semibold text-white disabled:opacity-50">
         {generating?'Generazione in corso…':'Crea una proposta'}
       </button>
