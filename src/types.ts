@@ -39,6 +39,19 @@ export interface CouncilAssessment {
   updatedAt: string;
 }
 
+export type CouncilSessionKind = 'ingresso' | 'intermedia' | 'monitoraggio' | 'finale' | 'altro';
+
+export interface CouncilSession {
+  /** Stable identity; multiple sessions can share the same date and kind. */
+  id: string;
+  schoolYear: string;
+  kind: CouncilSessionKind;
+  /** The teacher-selected, actual or scheduled date, not inferred from kind. */
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ClassData {
   id: string;
   name: string;
@@ -47,6 +60,8 @@ export interface ClassData {
   behaviors: BehaviorRecord[];
   /** Independent teacher-assigned council judgements, never part of grades/averages. */
   councilAssessments?: CouncilAssessment[];
+  /** Private, dated council-session index; independent from proposals and source grades. */
+  councilSessions?: CouncilSession[];
 }
 
 export type UdaActivityType = 'teoria' | 'laboratorio' | 'compito_realta' | 'digitale' | 'civica';
