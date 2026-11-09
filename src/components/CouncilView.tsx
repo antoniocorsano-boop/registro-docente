@@ -194,7 +194,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             aria-label="Tabellone delle valutazioni di ingresso"
             aria-describedby="council-table-scroll-hint"
             tabIndex={0}
-            className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--border)]"
+            className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain scroll-pl-[148px] rounded-lg border border-[var(--border)]"
           >
             <table className="w-full min-w-[680px] table-fixed text-sm text-left">
               <colgroup>
