@@ -39,6 +39,7 @@ async function expectNoOverflow(page){
 
 test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvataggio',async({page})=>{
   let calls=0;
+  let releaseFirstRequest=null;
   const violations=[];
   page.on('pageerror',error=>violations.push(error.message));
   await page.route('**/api/copilot/assessment-draft/provider',route=>route.fulfill({
@@ -46,7 +47,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
     body:JSON.stringify({available:true,provider:'Servizio simulato',model:'test-only'})
   }));
   await page.route('**/api/copilot/assessment-draft',async route=>{
-    calls++;
+    const requestNumber=++calls;
     const body=route.request().postDataJSON();
     expect(body.classification).toBe('TEACHER_PROFESSIONAL');
     expect(body.explicitTeacherOptIn).toBe(true);
@@ -54,13 +55,22 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
     expect(body.source.title).toBe(SOURCE_TITLE);
     expect(body.source.text).toContain(SOURCE_TEXT);
     expect(JSON.stringify(body)).not.toMatch(/sourceId|classId|udaId|studentId|grade|provenance|dataBase64/);
-    await route.fulfill({
-      status:200,contentType:'application/json',
-      body:JSON.stringify({draft:DRAFT,receipt:{
-        requestId:'synthetic-s3c02',provider:'fake',model:'test-only',
-        attemptCount:1,budget:{tier:'remote-low',profile:'balanced',escalated:false}
-      }})
-    });
+    if(requestNumber===1){
+      // The first simulated HTTP response is deliberately held pending. The
+      // teacher must regain control via explicit cancellation, without retry.
+      await new Promise(resolve=>{releaseFirstRequest=resolve;});
+    }
+    try {
+      await route.fulfill({
+        status:200,contentType:'application/json',
+        body:JSON.stringify({draft:DRAFT,receipt:{
+          requestId:'synthetic-s3c02',provider:'fake',model:'test-only',
+          attemptCount:1,budget:{tier:'remote-low',profile:'balanced',escalated:false}
+        }})
+      });
+    }catch(error){
+      if(requestNumber!==1)throw error; // canceled browser request
+    }
   });
   await page.goto(baseURL,{waitUntil:'domcontentloaded'});
   await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
@@ -107,10 +117,20 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await panel.getByTestId('int02-assessment-remote-consent').check();
   await expect(generate).toBeEnabled();
   await generate.click();
+  await expect(panel.getByTestId('int02-assessment-cancel')).toBeVisible();
+  await expect.poll(()=>calls).toBe(1);
+  await panel.getByTestId('int02-assessment-cancel').click();
+  await expect(panel.getByTestId('int02-assessment-error')).toContainText('Richiesta annullata');
+  await expect(generate).toBeDisabled();
+  await expect(panel.getByTestId('int02-assessment-preview')).toHaveCount(0);
+  releaseFirstRequest?.();
+  await panel.getByTestId('int02-assessment-remote-consent').check();
+  await expect(generate).toBeEnabled();
+  await generate.click();
   await expect(panel.getByTestId('int02-assessment-preview')).toBeVisible();
   await expect(panel).toContainText(DRAFT_TITLE);
   await expect(panel).toContainText('Correttezza da verificare');
-  expect(calls).toBe(1);
+  expect(calls).toBe(2);
   await expectNoOverflow(page);
 
   await panel.getByTestId('int02-assessment-open-editor').click();
@@ -123,7 +143,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(page.getByPlaceholder('Formula chiaramente la domanda...').first()).toHaveValue(DRAFT.questions[0].q);
   await expect(page.getByTestId('int02-s2b-confirm-origin')).toHaveCount(0);
   await expect(page.getByText('Collega a UDA Curricolare').locator('..').locator('select')).toHaveValue('');
-  expect(calls).toBe(1);
+  expect(calls).toBe(2);
 
   await page.getByRole('button',{name:'Condivisione Padlet'}).click();
   const editorExit=page.getByRole('dialog',{name:'Modifiche non salvate'});
