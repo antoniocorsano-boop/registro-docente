@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { AppData, AppSettings, ClassData } from '../types';
 import {
-  appendCouncilSession, assignCouncilValues, isCouncilAppDataValid,
+  appendCouncilSession, assignCouncilValues, formatCouncilDate, isCouncilAppDataValid,
   isCouncilSessionDateValid, readCouncilSessions, readCouncilValues,
   wouldLoseCouncilEntries
 } from '../council/councilModel';
@@ -35,6 +35,15 @@ function snapshot(appData: AppData): CompleteSecureAppSnapshot {
 }
 
 describe('CDC-02/S1 — durable archive of council sessions', () => {
+  test('Italian display dates are deterministic while stored session dates remain ISO', () => {
+    expect(formatCouncilDate('2026-11-09')).toBe('9 novembre 2026');
+    expect(formatCouncilDate('2026-11-16', true)).toBe('16 nov 2026');
+    expect(formatCouncilDate('2027-02-29')).toBe('2027-02-29');
+    expect(formatCouncilDate('2026-13-09')).toBe('2026-13-09');
+    const stored = appendCouncilSession(source(), 'C', '2026/27', 'monitoraggio', '2026-11-09', 'synthetic-session', at);
+    expect(stored.classes[0].councilSessions?.[0].date).toBe('2026-11-09');
+  });
+
   test('two sessions with the same kind remain independent; ordering and other classes unchanged', () => {
     const initial = source();
     initial.classes.push({ id: 'D', name: '2D sintetica', students: [], grades: [], behaviors: [] });
