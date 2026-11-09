@@ -191,6 +191,14 @@ jobs:
             --reporter=line \
             --output=../browser-evidence/cdc-02-sessions-results
 
+      - name: Upload CDC-02/S1 synthetic visual review dossier
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdc02-s1-hpr-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/cdc02-s1-human-review/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run TODAY-01 Chromium qualification
         shell: bash
         run: |
