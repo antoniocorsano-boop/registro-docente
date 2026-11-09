@@ -1,6 +1,6 @@
 import {
   isAssessmentGenerationRequestCurrent,
-  type AssessmentGenerationRequestV1
+  type AssessmentGenerationSessionV1
 } from '../library/assessmentGeneration';
 import { parseAssessmentDraftV1, type AssessmentDraftV1 } from '../library/assessmentDraft';
 import type { LibrarySource } from '../library/types';
@@ -78,18 +78,25 @@ function errorFromHttp(payload:unknown,status:number):AssessmentGenerationError 
 }
 
 export async function requestAssessmentDraftFromCopilot(input: {
-  request:AssessmentGenerationRequestV1;
+  session:AssessmentGenerationSessionV1;
   getLiveContext:() => {source:LibrarySource|null;confirmedSourceId:string;activeClassName:string};
   signal?:AbortSignal;
 }):Promise<{draft:AssessmentDraftV1;receipt:AssessmentGenerationReceipt}> {
-  const current = () => isAssessmentGenerationRequestCurrent(input.request,input.getLiveContext());
+  // Capture an immutable comparison reference before the first await. Source
+  // identity is retained locally, never included in the HTTP request.
+  const session:AssessmentGenerationSessionV1={
+    request:JSON.parse(JSON.stringify(input.session.request)),
+    authorizedSourceId:input.session.authorizedSourceId,
+    authorizedClassName:input.session.authorizedClassName
+  };
+  const current = () => isAssessmentGenerationRequestCurrent(session,input.getLiveContext());
   if(!current()) throw new AssessmentGenerationError('CONTEXT_CHANGED',409);
 
   // One POST, no silent retry; an untrusted provider response has no commit authority.
   const response=await fetch('/api/copilot/assessment-draft',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(input.request),
+    body:JSON.stringify(session.request),
     signal:input.signal
   });
   let payload:unknown;
