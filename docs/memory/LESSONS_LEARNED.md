@@ -90,3 +90,18 @@ Ledger append-only delle lesson episodiche. Non riscrivere retroattivamente una 
 - Evidenza: PR #160, Browser Qualification #1802 (rilevazione visiva), #1803 PASS (artifact `13635091930`), ricevuta HPR #6727478607, revisione Codex #6727240052.
 - Promozione candidata: nessuna nuova operating rule; caso particolare dei contratti già coperti da `OR-003` e `TR-003`.
 - Sostituita da: —
+
+### LL-007 — Il clock non puo trasferire proprieta arbitrarie alla fotografia
+- Stato: ACTIVE
+- Ciclo/data: CDC-02/S2b-P1 · 2026-11-09
+- Exact SHA/riferimento: RED `8d2967904f9f08a946994ce8041ec3c2b8298d6b`; GREEN `a8ccaa4538293d884f3e65181a8994d355ddcb03`; merge `700428f6edf2e7b94ff3fa9b2ddf8c5d5b09cc41`.
+- Obiettivo: impedire che i campi temporali introdotti alla conferma riscrivano identita e revisione di una fotografia immutabile.
+- Ha funzionato: test RED causale sulla proprieta `revision: 99` e `sessionId: 'S2'` iniettate nel clock; allowlist di tre chiavi, copia esplicita dei soli campi temporali in preview e nel retry; GREEN invariato e 5/5 gate qualificati, review indipendente senza rilievi successivi.
+- E fallito: un oggetto TypeScript strutturalmente compatibile con il tipo clock conteneva chiavi estranee, propagate con object spread fino ai campi canonici della fotografia. La prima fotografia poteva essere generata con revisione falsa e quindi fallire la validazione successiva.
+- Causa reale: uso di spread di un oggetto di input non verificato come se fosse un insieme chiuso di proprieta autorizzate.
+- Regola generalizzabile: ai confini fra input e record con identita o versione canonica, validare esattamente la forma dell'oggetto e copiare singolarmente solo i campi consentiti; testare tentativi di sovrascrittura attraverso proprieta aggiuntive.
+- Recipe: applicare OR-002, OR-003 e qualificazione TR-001/003; per PR impilate usare il processo provato da LL-004 (base prima, retarget senza cambiare head, merge vincolato a exact-SHA, verifica identita dei contenuti).
+- Non ripetere: trattare un tipo strutturale come garanzia di assenza di proprieta extra a runtime, ne trasferire ai futuri P2/P3 la qualifica P1.
+- Evidenza: PR #181, test `src/security/cdc02CouncilSnapshots.test.ts`, run RED #42679197272, run PASS #42679348812 e Chromium #42679348562, receipt #6748973795.
+- Promozione candidata: nessuna nuova regola globale; principio compreso nei controlli di validazione e OR-007.
+- Sostituita da: —
