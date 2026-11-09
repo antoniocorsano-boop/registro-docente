@@ -142,6 +142,13 @@ import type {
 } from './security/secureAppStorage';
 import { normalizeBackupPayloadVerified } from './security/backupPayload';
 import { appendCouncilSession, assignCouncilValues, wouldLoseCouncilEntries } from './council/councilModel';
+import {
+  appendConfirmedCouncilSnapshot,
+  createCaptureClock,
+  prepareCouncilSnapshot,
+  type CouncilSnapshotContextV1,
+  type CouncilSnapshotPreviewV1
+} from './council/councilEvidenceSnapshots';
 import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
@@ -3075,6 +3082,46 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     ), { successMessage: 'Seduta archiviata', showBackupModal: false }).then(() => undefined);
   };
 
+  // CDC-02/S2b-P3: read-only preview, serialized after preceding durable work.
+  const handlePrepareCouncilSnapshot = (
+    context: CouncilSnapshotContextV1
+  ): Promise<CouncilSnapshotPreviewV1> => {
+    return mutationCoordinator.enqueueTask(async () => {
+      const clock = createCaptureClock(new Date());
+      return prepareCouncilSnapshot(appDataRef.current, context, settingsRef.current, clock);
+    });
+  };
+
+  // Explicit teacher confirmation only. Never derive from a render-time snapshot.
+  // All input verification precedes persistence; React publishes only after the
+  // existing encrypted Vault has committed appData and backup metadata together.
+  const handleConfirmCouncilSnapshot = (
+    reviewed: CouncilSnapshotPreviewV1, snapshotId: string
+  ): Promise<void> => {
+    return mutationCoordinator.enqueueTask(async () => {
+      const previous = appDataRef.current;
+      const previousMeta = metaRef.current;
+      const clock = createCaptureClock(new Date());
+      const candidate = await appendConfirmedCouncilSnapshot(
+        previous, reviewed, settingsRef.current, snapshotId, clock
+      );
+      if (candidate === previous) return; // exact retry, no duplicate write/revision
+      const nextMeta = incrementBackupChanges(previousMeta);
+      await secureStorage.saveAppDataAndMeta(candidate, nextMeta);
+      appDataRef.current = candidate;
+      metaRef.current = nextMeta;
+      const visibleCurrentClassId =
+        currentClassIdRef.current === null
+          ? null
+          : candidate.classes.some(klass => klass.id === currentClassIdRef.current)
+            ? currentClassIdRef.current
+            : candidate.currentClassId;
+      setAppData({ ...candidate, currentClassId: visibleCurrentClassId });
+      setMeta(nextMeta);
+      toast('Fotografia della seduta confermata e salvata');
+    });
+  };
+
   // Import Encrypted Backup
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
@@ -3330,6 +3377,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onSave={handleSaveCouncilEntries}
             onCreateSession={handleCreateCouncilSession}
+            onPrepareSnapshot={handlePrepareCouncilSnapshot}
+            onConfirmSnapshot={handleConfirmCouncilSnapshot}
             onRegisterDraftGuard={registerCouncilDraftGuard}
             onOpenCopilot={() => setCopilotSurfaceMode('home')}
           />
