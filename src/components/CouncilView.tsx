@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData, CouncilSessionKind } from '../types';
+import type { CouncilSnapshotContextV1, CouncilSnapshotPreviewV1 } from '../council/councilEvidenceSnapshots';
+import { CouncilSnapshotSection } from './CouncilSnapshotSection';
 import type { PlanningDraftGuard } from './planning/PlanningProfileEditor';
 import { buildCouncilEvidenceOverview } from '../council/councilEvidenceOverview';
 import { councilRows, formatCouncilDate, isCouncilSessionDateValid, normalizeSchoolYear, parseCouncilValue, readCouncilSessions, readCouncilValues, summarizeCouncilValues } from '../council/councilModel';
@@ -22,12 +24,15 @@ interface CouncilViewProps {
   onCreateSession: (
     classId: string, schoolYear: string, kind: CouncilSessionKind, date: string, sessionId: string
   ) => Promise<void>;
+  onPrepareSnapshot: (context: CouncilSnapshotContextV1) => Promise<CouncilSnapshotPreviewV1>;
+  onConfirmSnapshot: (reviewed: CouncilSnapshotPreviewV1, snapshotId: string) => Promise<void>;
   onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
   onOpenCopilot: () => void;
 }
 
 export const CouncilView: React.FC<CouncilViewProps> = ({
-  classes, settings, isPrivacyShieldActive, onSave, onCreateSession, onRegisterDraftGuard, onOpenCopilot
+  classes, settings, isPrivacyShieldActive, onSave, onCreateSession,
+  onPrepareSnapshot, onConfirmSnapshot, onRegisterDraftGuard, onOpenCopilot
 }) => {
   // Class choice is explicit. Do not infer one from the current navigation context.
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -38,6 +43,8 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   const [sessionStatus, setSessionStatus] = useState('');
   const [openedSessionId, setOpenedSessionId] = useState('');
   const [sessionViewState, setSessionViewState] = useState<'saved' | 'selected' | 'reopened'>('selected');
+  const [snapshotBusy, setSnapshotBusy] = useState(false);
+  const snapshotWorkingRef = useRef(false);
   // Ephemeral display-only context: nothing new is persisted or inferred from grades.
   const createdDuringVisit = useRef(new Set<string>());
   const [cutoff, setCutoff] = useState(today);
@@ -104,7 +111,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   sessionSavingRef.current = sessionSaving;
 
   const handleSave = useCallback(async (): Promise<boolean> => {
-    if (savingRef.current || sessionSavingRef.current) return false;
+    if (savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current) return false;
     if (!dirtyRef.current) return true;
     if (!selectedClassId) return false;
     if (!academicYearValid) {
@@ -136,7 +143,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   useEffect(() => {
     if (!onRegisterDraftGuard) return;
     const guard: PlanningDraftGuard = {
-      hasUnsavedChanges: () => dirtyRef.current || savingRef.current || sessionSavingRef.current,
+      hasUnsavedChanges: () => dirtyRef.current || savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current,
       saveChanges: handleSave,
       discardChanges: () => {
         setDraft({ ...saved });
@@ -149,7 +156,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!dirtyRef.current && !savingRef.current && !sessionSavingRef.current) return;
+      if (!dirtyRef.current && !savingRef.current && !sessionSavingRef.current && !snapshotWorkingRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -163,19 +170,19 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   };
 
   const changeClass = (id: string) => {
-    if (savingRef.current || sessionSavingRef.current) return;
+    if (savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current) return;
     if (dirty && !window.confirm('Ci sono valutazioni di ingresso non salvate. Cambiare classe e scartarle?')) return;
     setSelectedClassId(id);
   };
 
   const changeYear = (year: string) => {
-    if (savingRef.current || sessionSavingRef.current) return;
+    if (savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current) return;
     if (dirty && !window.confirm('Ci sono valutazioni non salvate. Cambiare anno e scartarle?')) return;
     setSelectedYear(year);
   };
 
   const createSession = async () => {
-    if (!current || savingRef.current || sessionSavingRef.current || dirty || !sessionDateValid) return;
+    if (!current || savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current || dirty || !sessionDateValid) return;
     const id = uid();
     sessionSavingRef.current = true;
     setSessionSaving(true);
@@ -235,7 +242,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         <label className="text-sm text-slate-300 font-semibold">
           Anno scolastico
           <select aria-label="Seleziona anno scolastico del Consiglio" value={schoolYear}
-            onChange={event => changeYear(event.target.value)} disabled={saving || sessionSaving}
+            onChange={event => changeYear(event.target.value)} disabled={saving || sessionSaving || snapshotBusy}
             className="mt-1 w-full p-2.5 rounded-lg border border-[var(--border)] bg-slate-900 text-white">
             {availableYears.length === 0 && <option value={schoolYear}>{schoolYear}</option>}
             {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
@@ -244,7 +251,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         <label className="text-sm text-slate-300 font-semibold">
           Classe
           <select aria-label="Seleziona classe per il Consiglio" value={selectedClassId}
-            onChange={event => changeClass(event.target.value)} disabled={saving || sessionSaving}
+            onChange={event => changeClass(event.target.value)} disabled={saving || sessionSaving || snapshotBusy}
             className="mt-1 w-full p-2.5 rounded-lg border border-[var(--border)] bg-slate-900 text-white">
             <option value="">Seleziona una classe</option>
             {classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -301,7 +308,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 </span>
               </label>
               <button type="button" onClick={() => { void createSession(); }}
-                disabled={!sessionDateValid || !academicYearValid || sessionSaving || saving || dirty}
+                disabled={!sessionDateValid || !academicYearValid || sessionSaving || saving || snapshotBusy || dirty}
                 className="min-h-[44px] rounded-lg border border-[var(--border)] px-3 py-2 font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50">
                 {sessionSaving ? 'Salvataggio…' : 'Registra seduta'}
               </button>
@@ -323,6 +330,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                       setSessionViewState(createdDuringVisit.current.has(session.id) ? 'selected' : 'reopened');
                       setSessionStatus('');
                     }}
+                      disabled={snapshotBusy}
                       aria-pressed={openedSessionId === session.id}
                       className={`w-full text-left min-h-[44px] rounded-lg border p-3 text-sm ${openedSessionId === session.id ? 'border-[var(--primary)] text-white bg-slate-800' : 'border-[var(--border)] text-slate-200'}`}>
                       {formatCouncilDate(session.date, true)} · {SESSION_LABELS[session.kind]}
@@ -339,6 +347,19 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 <p className="text-xs text-slate-400 mt-1">
                   Registrazione conservata nel dispositivo. Ordine del giorno, note e seguito saranno aggiunti nella fase CDC-02/S3.
                 </p>
+                <CouncilSnapshotSection
+                  key={`${current.id}:${schoolYear}:${openedSession.id}`}
+                  classData={current}
+                  schoolYear={schoolYear}
+                  session={openedSession}
+                  disabled={dirty || saving || sessionSaving || snapshotBusy}
+                  onPrepareSnapshot={onPrepareSnapshot}
+                  onConfirmSnapshot={onConfirmSnapshot}
+                  onWorkingChange={working => {
+                    snapshotWorkingRef.current = working;
+                    setSnapshotBusy(working);
+                  }}
+                />
               </div>
             )}
           </section>
