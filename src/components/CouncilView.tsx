@@ -108,13 +108,15 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
     setSelectedClassId(id);
   };
 
+  const fillableRows = rows.filter(row => !draft[row.student.id]?.trim() && row.average !== null);
   const fillEmptyFromAverages = () => {
-    if (saving) return;
+    if (saving || fillableRows.length === 0) return;
+    if (!window.confirm(
+      `Proporre la media delle prove come voto di ingresso per ${fillableRows.length} alunni? I valori saranno soltanto inseriti nella bozza: per salvarli servirà una conferma separata.`
+    )) return;
     const next = { ...draft };
-    for (const row of rows) {
-      if (!next[row.student.id]?.trim() && row.average !== null) {
-        next[row.student.id] = String(Number(row.average.toFixed(2)));
-      }
+    for (const row of fillableRows) {
+      next[row.student.id] = String(Number(row.average!.toFixed(2)));
     }
     setDraft(next);
     setStatus('');
@@ -167,7 +169,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               <Users className="w-4 h-4" /> {current.students.length} alunni ·
               media {settings.useWeightedAverage ? 'ponderata' : 'aritmetica'} delle prove numeriche fino al {cutoff || '—'}
             </p>
-            <button type="button" onClick={fillEmptyFromAverages} disabled={saving || !cutoff}
+            <button type="button" onClick={fillEmptyFromAverages} disabled={saving || !cutoff || fillableRows.length === 0}
               className="px-3 py-2 min-h-[44px] rounded-lg border border-[var(--border)] text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50">
               Proponi le medie nei campi vuoti
             </button>
