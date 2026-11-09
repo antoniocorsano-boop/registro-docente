@@ -17,7 +17,8 @@ function classFixture(): ClassData {
       { id: 'g1', studentId: 'a', type: 'test', date: '2026-10-04', period: 'Q1', title: 'Test', value: '8' },
       { id: 'g2', studentId: 'a', type: 'verifica', date: '2026-11-05', period: 'Q1', title: 'Prova', value: '9' },
       { id: 'g3', studentId: 'b', type: 'orale', date: '2026-10-18', period: 'Q1', title: 'Orale', value: 'A' },
-      { id: 'g4', studentId: 'b', type: 'test', date: '2026-12-01', period: 'Q1', title: 'Prova futura', value: '10' }
+      { id: 'g4', studentId: 'b', type: 'test', date: '2026-12-01', period: 'Q1', title: 'Prova futura', value: '10' },
+      { id: 'g5', studentId: 'a', type: 'test', date: '2025-11-03', period: 'Q1', title: 'Anno precedente', value: '3' }
     ],
     behaviors: []
   };
@@ -43,6 +44,8 @@ describe('CDC-01 — Consigli di classe', () => {
     expect(rows[1].count).toBe(0);
     expect(rows[1].average).toBeNull();
     expect(rows[2].average).toBeNull();
+    // A school-year mismatch cannot silently mix evidence from other years.
+    expect(councilRows(c, 'anno non riconosciuto', '2026-11-09', settings)[0].count).toBe(0);
   });
 
   test('teacher can override average, and score never enters evidence grades', () => {
