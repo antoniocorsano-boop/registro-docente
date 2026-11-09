@@ -20,7 +20,7 @@ const DRAFT={
     explanation:'Il watt è l’unità della potenza.'}]
 } as const;
 const SESSION=prepareAssessmentGenerationSession({
-  source:SOURCE,confirmedSourceId:SOURCE.id,activeClassName:'3C',
+  source:SOURCE,confirmedSourceId:SOURCE.id,authorizedClassId:'class-3c',activeClassName:'3C',
   confirmedClassName:'3C',objective:'Conoscere la trasformazione dell’energia',
   explicitTeacherOptIn:true
 });
@@ -40,6 +40,15 @@ describe('INT-02/S3c-01 — trasferimento solo in editor di verifica',()=>{
     expect(prepareAssessmentEditorTransfer(base()).status).toBe('ready');
     expect(prepareAssessmentEditorTransfer({...base(),teacherConfirmedAdoption:false}).status).toBe('blocked');
     expect(prepareAssessmentEditorTransfer({...base(),activeClassId:'class-2c'}).status).toBe('blocked');
+    // The original class was deleted and recreated with the same name.
+    const replacement={...CLASSES[0],id:'replacement-3c'};
+    expect(prepareAssessmentEditorTransfer({
+      ...base(),classes:[replacement,CLASSES[1]],activeClassId:'replacement-3c'
+    }).status).toBe('blocked');
+    // S3b sessions without an original ID cannot be upgraded to editor authority.
+    expect(prepareAssessmentEditorTransfer({
+      ...base(),session:{...SESSION,authorizedClassId:undefined}
+    }).status).toBe('blocked');
     expect(prepareAssessmentEditorTransfer({...base(),library:{...LIBRARY,sources:[{...SOURCE,status:'restricted'}]}}).status).toBe('blocked');
     expect(prepareAssessmentEditorTransfer({...base(),library:{...LIBRARY,sources:[{...SOURCE,id:'replacement',title:SOURCE.title}]}}).status).toBe('blocked');
     expect(prepareAssessmentEditorTransfer({...base(),classes:[...CLASSES,{...CLASSES[0],id:'duplicate'}]}).status).toBe('blocked');
@@ -83,6 +92,10 @@ describe('INT-02/S3c-01 — trasferimento solo in editor di verifica',()=>{
     })).toBe(true);
     expect(checkAssessmentEditorTransferContext(ready.transfer,{
       ...base(),activeClassId:'class-2c'
+    })).toBe(false);
+    expect(checkAssessmentEditorTransferContext(ready.transfer,{
+      ...base(),activeClassId:'replacement-3c',
+      classes:[{...CLASSES[0],id:'replacement-3c'},CLASSES[1]]
     })).toBe(false);
     expect(checkAssessmentEditorTransferContext(ready.transfer,{
       ...base(),library:{...LIBRARY,sources:[{...SOURCE,id:'replacement'}]}
