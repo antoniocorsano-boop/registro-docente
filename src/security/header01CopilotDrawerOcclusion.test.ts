@@ -8,7 +8,7 @@ const browser = readFileSync('tests/browser/header-01-copilot-drawer-occlusion.s
 
 describe('HEADER-01 / Copilota e Drawer senza sovrapposizioni', () => {
   test('l’App nasconde il trigger mobile durante il pannello di navigazione', () => {
-    expect(app).toContain("suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti'].includes(activeTab)}");
+    expect(app).toContain("suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}");
     expect(app).toContain('isDrawerOpen={isDrawerOpen}');
   });
 
