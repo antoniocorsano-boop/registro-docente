@@ -1,7 +1,7 @@
 # INT-02 — Decisioni correnti e gate ancora aperti
 
 **Aggiornamento:** 8 novembre 2026  
-**Riferimento:** `main@d3faf94d3afc1d7134cf75d3b04a5d6a983fddfe`  
+**Riferimento corrente:** `main@e6b518656efbfaeeaa85e04512fa149ef48bf91a` (PR #160 integrata; Vercel disabilitato)  
 **Tracker:** [INT-02 #140](https://github.com/antoniocorsano-boop/registro-docente/issues/140) · [roadmap #104](https://github.com/antoniocorsano-boop/registro-docente/issues/104)  
 **Provenienza decisionale:** [S0 #141](https://github.com/antoniocorsano-boop/registro-docente/pull/141), [S2 #148](https://github.com/antoniocorsano-boop/registro-docente/pull/148); entrambe **proposte storiche**, non codice corrente.
 
@@ -13,29 +13,27 @@
 | S1: fonte Biblioteca → Verifiche | **Integrata** tramite [PR #142](https://github.com/antoniocorsano-boop/registro-docente/pull/142), merge `71e4a437acd9b15bcab28d32a13c6b4026fb29bc` | Completata, non riaprire |
 | S2a: classe e verifica esplicite per condivisione/simulazione | **Integrata** tramite [PR #149](https://github.com/antoniocorsano-boop/registro-docente/pull/149), merge `7333f6eb28fd99101e2d243515c994d1faf99c49` | Completata, HPR Android PASS |
 | A4-R2B/Task7: anteprima locale Docente OS | **Integrata**, tema separato da INT-02, tramite [PR #154](https://github.com/antoniocorsano-boop/registro-docente/pull/154), merge `d3faf94d3afc1d7134cf75d3b04a5d6a983fddfe` | Completata, non introduce nuove autorità UDA |
-| S2b: provenienza permanente fonte→verifica | **Non adottata / in valutazione** | Nessun cambiamento di schema autorizzato |
+| S2b: provenienza permanente fonte→verifica | **Integrata** tramite [PR #160](https://github.com/antoniocorsano-boop/registro-docente/pull/160), merge `e6b518656efbfaeeaa85e04512fa149ef48bf91a` | Qualificazione 5/5, Codex e HPR visiva umana PASS; nessun deploy |
 | Importazione batch esiti → valutazioni / UDA | **Rischio da analizzare separatamente** | Nessuna correzione applicativa approvata da questo documento |
 | S3: proposta di verifica tramite Copilota | **Non avviata da questa linea** | Richiede verifica aggiornata di capacità e contratto di consenso |
 | S4: continuità completa del ciclo | **Non chiusa da questa linea** | Richiede incrementi e HPR propri |
 
 Il catalogo `OnlineTest` rimane condiviso fra classi; non trasformarlo implicitamente in un archivio di proprietà della singola classe. L'handoff sessionale non certifica una provenienza durevole.
 
-## 2. Gate S2b — provenienza durevole della fonte Biblioteca
+## 2. S2b — provenienza durevole della fonte Biblioteca: INTEGRATA
 
-**Decisione da prendere prima di scrivere codice:**
+**Decisione B adottata e integrata.** Il modello `OnlineTest.provenance?` contiene soltanto `{ version: 1, kind: 'library-source', sourceId, confirmedByTeacher: true }` come riferimento permanente **minimo e opzionale**. Non sono trasferiti testo, titolo, URL, allegati o dati personali dalla Biblioteca alla verifica.
 
-- **A — Stato soltanto sessionale (nessuna modifica di schema):** conservare la provenienza nel solo passaggio di lavoro finché il docente prepara il test. Vantaggio: massima compatibilità; limite: nessuna attestazione dopo il salvataggio.
-- **B — Metadato minimo e opzionale in `OnlineTest`:** proposta candidata, mai implicita, ad esempio `provenance?: { version: 1; kind: 'library-source'; sourceId: string; confirmedByTeacher: true }`. Non include titolo, testo, URL, documento né dati di studenti. **Non è uno schema approvato.**
+**Contratto applicativo qualificato:**
+1. La provenienza è registrata solo previa conferma esplicita del docente, inizialmente non selezionata. Il salvataggio riesamina fonte `ready` e `teacher-professional` e classe autorizzata, senza inferenze dal titolo.
+2. I riferimenti storici restano conservati nelle modifiche delle verifiche anche se la fonte viene eliminata o riclassificata; l'interfaccia distingue «Origine non registrata», «Origine disponibile» e «Origine non disponibile o non verificabile».
+3. Il riferimento non è autorità su classe proprietaria, UDA, condivisione, importazione di voti o permanenza della fonte. La proiezione per gli studenti non espone il riferimento.
+4. Compatibilità con Vault cifrato, backup/ripristino v2–v6 e legacy; metadati malformati rifiutati, test precedenti senza provenienza ancora validi.
+5. Nessuna migrazione automatica; import DOCX/ZIP e testo manuale non acquisiscono provenienze implicite.
 
-Prima di un eventuale sì a B:
-1. Identificare l'esatto modello `OnlineTest` attuale, serializzazione di `customTests`, controllo dei campi sconosciuti, versione backup/export, ripristino e cifratura del Vault; testare test storici privi di metadato.
-2. Verificare nello stesso commit che la fonte originaria sia ancora `ready` e `teacher-professional`; la fonte eliminata, non disponibile o riclassificata non è «certificata» per un nuovo salvataggio. Non collegare titoli simili come sostituto di `sourceId`.
-3. Conservare i test già salvati quando la fonte scompare; mostrare «Origine non registrata» (campo assente) o «Origine non disponibile/non verificabile» (riferimento invalidato), senza riesporre il contenuto sorgente.
-4. Impedire che `sourceId` o il contenuto della Biblioteca compaiano in URL per gli studenti, `history.state` usato per trasmettere il materiale, stampe pubbliche, log o richieste remote non autorizzate.
-5. Preservare bozza, cambio classe, UDA esistente, catalogo comune, import DOCX/ZIP, restore/esportazione e test duplicati. La provenienza descrive **l'origine del materiale**, non la classe proprietaria, l'autorizzazione di consultazione o l'attribuzione automatica dell'UDA.
-6. RED→GREEN, 5 qualificazioni exact-SHA, revisione indipendente e HPR Android sintetica **solo se** è autorizzata un'implementazione.
+**Evidenze di promozione:** [PR #160](https://github.com/antoniocorsano-boop/registro-docente/pull/160), candidato `a6d5d24e3e373c75da59f25172046bae7eeb7bb7`, invarianti [#879](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/42524273803), sicurezza [#2155](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/42524273969), FLOW-03 [#655](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/42524273837), HEADER-01 [#229](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/42524273820), browser [#1803](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/42524273802), revisione Codex senza rilievi e [HPR visiva umana PASS](https://github.com/antoniocorsano-boop/registro-docente/pull/160#issuecomment-6727478607) su quattro schermate mobili sintetiche.
 
-**Decisione corrente:** **S2b DIFFERITA**, raccogliere prima una matrice di compatibilità e proposta A/B. Nessuna migrazione automatica.
+**Fusione approvata separatamente dal docente:** commit `e6b518656efbfaeeaa85e04512fa149ef48bf91a`. Identità dell'albero del merge con il candidato qualificato verificata. `vercel.json`: `git.deploymentEnabled=false`. **Nessuna distribuzione autorizzata.**
 
 ## 3. Gate indipendente — importazione delle consegne e associazione UDA
 
