@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildAiBudgetAssessmentKey } from '../library/assessmentGeneration';
+import { createAiBudgetAuthorization } from '../copilot/aiBudgetGovernor';
 
 const MODULE = new URL('../server/assessmentGenerationRoute.ts', import.meta.url);
 const BASE = {
@@ -103,6 +104,37 @@ describe('INT-02/S3b — confine remoto per bozza di verifica', () => {
     },instance);
     expect(result.status).toBe(409);
     expect(calls).toHaveLength(0);
+  });
+
+  test('rifiuta contenuto personale anche se introdotto nella proposta del provider', async () => {
+    if (!await Bun.file(MODULE).exists()) return;
+    const { handleAssessmentGenerationRequest } = await import('../server/assessmentGenerationRoute');
+    const {instance}=provider({...DRAFT,title:'Verifica per alunno Marco Rossi'});
+    const result=await handleAssessmentGenerationRequest(BASE,instance);
+    expect(result.status).toBe(502);
+    expect(result.body).not.toHaveProperty('draft');
+  });
+
+  test('l’autorizzazione di aumento budget per singola operazione non può essere riutilizzata', async () => {
+    if (!await Bun.file(MODULE).exists()) return;
+    const { handleAssessmentGenerationRequest } = await import('../server/assessmentGenerationRoute');
+    const authorization=createAiBudgetAuthorization({
+      scope:'operation',
+      activityKey:BASE.budget.activityKey,
+      issuedAt:'2026-11-09T00:00:00.000Z'
+    });
+    const request={
+      ...BASE,
+      source:{...BASE.source,text:'E'.repeat(20 * 1024)},
+      budget:{...BASE.budget,profile:'economy',authorization}
+    };
+    const {instance,calls}=provider();
+    const options={now:()=> '2026-11-09T00:01:00.000Z'};
+    const first=await handleAssessmentGenerationRequest(request,instance,options);
+    expect(first.status).toBe(200);
+    const second=await handleAssessmentGenerationRequest(request,instance,options);
+    expect(second.status).toBe(409);
+    expect(calls).toHaveLength(1);
   });
 
   test('il provider privo di credenziali non riversa messaggi o dati sensibili nel risultato',async()=>{
