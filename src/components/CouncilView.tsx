@@ -165,6 +165,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   }, []);
 
   const setValue = (studentId: string, value: string) => {
+    if (snapshotWorkingRef.current) return;
     setDraft(previous => ({ ...previous, [studentId]: value }));
     setStatus('');
   };
@@ -203,7 +204,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
 
   const fillableRows = rows.filter(row => !draft[row.student.id]?.trim() && row.average !== null);
   const fillEmptyFromAverages = () => {
-    if (saving || fillableRows.length === 0) return;
+    if (saving || snapshotWorking || fillableRows.length === 0) return;
     if (!window.confirm(
       `Proporre la media delle prove come voto di ingresso per ${fillableRows.length} alunni? I valori saranno soltanto inseriti nella bozza: per salvarli servirà una conferma separata.`
     )) return;
@@ -290,7 +291,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 Tipo di seduta
                 <select aria-label="Tipo di nuova seduta" value={sessionKind}
                   onChange={event => setSessionKind(event.target.value as CouncilSessionKind)}
-                  disabled={sessionSaving || saving}
+                  disabled={sessionSaving || saving || snapshotBusy}
                   className="mt-1 w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-slate-900 p-2 text-white">
                   {(Object.keys(SESSION_LABELS) as CouncilSessionKind[]).map(kind =>
                     <option key={kind} value={kind}>{SESSION_LABELS[kind]}</option>
@@ -301,7 +302,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 Data della seduta
                 <input type="date" lang="it-IT" aria-label="Data di nuova seduta" aria-describedby="council-session-date-readable" value={sessionDate}
                   onChange={event => setSessionDate(event.target.value)}
-                  disabled={sessionSaving || saving}
+                  disabled={sessionSaving || saving || snapshotBusy}
                   className="mt-1 w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-slate-900 p-2 text-white" />
                 <span id="council-session-date-readable" className="mt-1 block text-xs text-slate-300">
                   Data selezionata: {formatCouncilDate(sessionDate)}
@@ -409,7 +410,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               <Users className="w-4 h-4" /> {current.students.length} alunni ·
               media {settings.useWeightedAverage ? 'ponderata' : 'aritmetica'} delle prove numeriche fino al {cutoff || '—'}
             </p>
-            <button type="button" onClick={fillEmptyFromAverages} disabled={saving || !academicYearValid || !cutoff || fillableRows.length === 0}
+            <button type="button" onClick={fillEmptyFromAverages} disabled={saving || snapshotBusy || !academicYearValid || !cutoff || fillableRows.length === 0}
               className="px-3 py-2 min-h-[44px] rounded-lg border border-[var(--border)] text-sm font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50">
               Proponi le medie nei campi vuoti
             </button>
@@ -457,7 +458,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                         {formatGrade(row.average)}
                         {row.average !== null && (
                           <button type="button" onClick={() => setValue(row.student.id, String(Number(row.average!.toFixed(2))))}
-                            disabled={saving || !academicYearValid} title="Usa la media come voto di ingresso"
+                            disabled={saving || snapshotBusy || !academicYearValid} title="Usa la media come voto di ingresso"
                             aria-label={`Usa media per alunno ${formatStudentNameWithPrivacy(row.student.name, isPrivacyShieldActive)}`}
                             className="block mx-auto text-xs text-[var(--primary)] underline min-h-[28px] disabled:opacity-50">
                             Usa media
@@ -467,7 +468,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                       <td className="p-2 text-center">
                         <input inputMode="decimal" type="text" value={entered}
                           aria-label={`Voto di ingresso per ${formatStudentNameWithPrivacy(row.student.name, isPrivacyShieldActive)}`}
-                          aria-invalid={bad} disabled={saving || !academicYearValid}
+                          aria-invalid={bad} disabled={saving || snapshotBusy || !academicYearValid}
                           onChange={event => setValue(row.student.id, event.target.value)}
                           placeholder="—"
                           className={`w-24 p-2 rounded-md border text-center bg-slate-950 text-white ${bad ? 'border-rose-500' : 'border-[var(--border)]'}`} />
@@ -513,7 +514,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             <p role="status" aria-live="polite" className={`text-sm ${invalid ? 'text-rose-300' : dirty ? 'text-amber-300' : 'text-slate-300'}`}>
               {status || (invalid ? 'Almeno un voto non è valido.' : dirty ? 'Modifiche non ancora salvate.' : 'Nessuna modifica da salvare.')}
             </p>
-            <button type="button" disabled={!dirty || invalid || saving || !academicYearValid} onClick={() => { void handleSave(); }}
+            <button type="button" disabled={!dirty || invalid || saving || snapshotBusy || !academicYearValid} onClick={() => { void handleSave(); }}
               className="min-h-[44px] flex items-center gap-2 rounded-lg bg-[var(--primary)] text-black font-bold px-4 py-2 disabled:opacity-50">
               <Save className="w-4 h-4" /> {saving ? 'Salvataggio…' : 'Salva valutazioni di ingresso'}
             </button>
