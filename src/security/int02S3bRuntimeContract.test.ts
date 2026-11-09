@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { buildAssessmentGenerationRequest, isAssessmentGenerationRequestCurrent } from '../library/assessmentGeneration';
+import { buildAssessmentGenerationRequest, isAssessmentGenerationRequestCurrent, prepareAssessmentGenerationSession } from '../library/assessmentGeneration';
 import { createGeminiAssessmentGenerationProvider } from '../server/geminiAssessmentGenerationProvider';
 import { handleAssessmentGenerationRequest } from '../server/assessmentGenerationRoute';
 import { requestAssessmentDraftFromCopilot } from '../services/assessmentGenerationService';
@@ -41,6 +41,7 @@ describe('INT-02/S3b — costruzione locale e trasmissione governata',()=>{
   test('la fonte e la classe devono essere confermate prima dell’invio',()=>{
     expect(()=>buildAssessmentGenerationRequest({...settings,explicitTeacherOptIn:false})).toThrow();
     expect(()=>buildAssessmentGenerationRequest({...settings,confirmedClassName:'2C'})).toThrow();
+    expect(()=>buildAssessmentGenerationRequest({...settings,activeClassName:'3C alunno Marco Rossi',confirmedClassName:'3C alunno Marco Rossi'})).toThrow();
     expect(()=>buildAssessmentGenerationRequest({...settings,confirmedSourceId:'altra'})).toThrow();
     expect(()=>buildAssessmentGenerationRequest({...settings,source:{...SOURCE,privacy:'student-personal'}})).toThrow();
     expect(()=>buildAssessmentGenerationRequest({...settings,source:{...SOURCE,status:'restricted'}})).toThrow();
@@ -59,13 +60,19 @@ describe('INT-02/S3b — costruzione locale e trasmissione governata',()=>{
   });
 
   test('la risposta viene invalidata se la fonte o la classe cambiano',()=>{
-    const req=request();
+    const session=prepareAssessmentGenerationSession(settings);
     const live={source:SOURCE,confirmedSourceId:'source-1',activeClassName:'3C'};
-    expect(isAssessmentGenerationRequestCurrent(req,live)).toBe(true);
-    expect(isAssessmentGenerationRequestCurrent(req,{...live,activeClassName:'2C'})).toBe(false);
-    expect(isAssessmentGenerationRequestCurrent(req,{...live,source:{...SOURCE,status:'restricted'}})).toBe(false);
-    expect(isAssessmentGenerationRequestCurrent(req,{...live,source:{...SOURCE,payload:{text:'Fonte modificata'}}})).toBe(false);
-    expect(isAssessmentGenerationRequestCurrent(req,{...live,source:null})).toBe(false);
+    expect(isAssessmentGenerationRequestCurrent(session,live)).toBe(true);
+    expect(isAssessmentGenerationRequestCurrent(session,{...live,activeClassName:'2C'})).toBe(false);
+    expect(isAssessmentGenerationRequestCurrent(session,{...live,source:{...SOURCE,status:'restricted'}})).toBe(false);
+    expect(isAssessmentGenerationRequestCurrent(session,{...live,source:{...SOURCE,payload:{text:'Fonte modificata'}}})).toBe(false);
+    expect(isAssessmentGenerationRequestCurrent(session,{...live,source:null})).toBe(false);
+    // The replacement source has exactly the same outbound projection, but
+    // must be rejected because its original Vault identity changed.
+    const sameContentReplacement={...SOURCE,id:'source-2'};
+    expect(isAssessmentGenerationRequestCurrent(session,{
+      ...live,source:sameContentReplacement,confirmedSourceId:'source-2'
+    })).toBe(false);
   });
 
   test('il servizio client non restituisce una bozza divenuta estranea alla classe',async()=>{
@@ -85,7 +92,28 @@ describe('INT-02/S3b — costruzione locale e trasmissione governata',()=>{
       }}),{status:200,headers:{'Content-Type':'application/json'}});
     }) as typeof fetch;
     await expect(requestAssessmentDraftFromCopilot({
-      request:req,getLiveContext:()=>({source:SOURCE,confirmedSourceId:'source-1',activeClassName:liveClass})
+      session:prepareAssessmentGenerationSession(settings),getLiveContext:()=>({source:SOURCE,confirmedSourceId:'source-1',activeClassName:liveClass})
+    })).rejects.toMatchObject({code:'CONTEXT_CHANGED'});
+    expect(count).toBe(1);
+  });
+
+  test('il servizio client respinge anche una fonte sostitutiva identica nel contenuto',async()=>{
+    const session=prepareAssessmentGenerationSession(settings);
+    let liveSource: LibrarySource=SOURCE;
+    let selectedId='source-1',count=0;
+    globalThis.fetch=(async(_url,opts)=>{
+      count++;
+      expect(JSON.parse(String(opts?.body))).toEqual(session.request);
+      expect(String(opts?.body)).not.toContain('source-1');
+      liveSource={...SOURCE,id:'source-2'};
+      selectedId='source-2';
+      return new Response(JSON.stringify({draft:DRAFT,receipt:{
+        requestId:'req',provider:'fake',model:'fake',attemptCount:1,
+        budget:{tier:'remote-low',profile:'balanced',escalated:false}
+      }}),{status:200});
+    }) as typeof fetch;
+    await expect(requestAssessmentDraftFromCopilot({
+      session,getLiveContext:()=>({source:liveSource,confirmedSourceId:selectedId,activeClassName:'3C'})
     })).rejects.toMatchObject({code:'CONTEXT_CHANGED'});
     expect(count).toBe(1);
   });
@@ -98,7 +126,7 @@ describe('INT-02/S3b — costruzione locale e trasmissione governata',()=>{
       return new Response(JSON.stringify({draft:{...DRAFT,udaId:'iniettato'},receipt:{}}),{status:200});
     }) as typeof fetch;
     await expect(requestAssessmentDraftFromCopilot({
-      request:req,getLiveContext:()=>({source:SOURCE,confirmedSourceId:'source-1',activeClassName:'3C'})
+      session:prepareAssessmentGenerationSession(settings),getLiveContext:()=>({source:SOURCE,confirmedSourceId:'source-1',activeClassName:'3C'})
     })).rejects.toMatchObject({code:'PROVIDER_OUTPUT_INVALID'});
     expect(count).toBe(1);
   });
