@@ -46,6 +46,10 @@ const remoteErrorCopy: Record<string,string> = {
   PROVIDER_ERROR: 'La proposta non è stata generata.'
 };
 
+// The server provider deadline cannot protect a stalled browser-to-server
+// connection. A client-side deadline must release the UI without retrying.
+const CLIENT_GENERATION_TIMEOUT_MS = 45_000;
+
 export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   source, classId, className, aiBudgetProfile, getLiveContext, onAccept, onClose
 }) => {
@@ -85,6 +89,17 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     setError(null);
   };
 
+  const handleCancelGeneration=()=>{
+    const pending=abortRef.current;
+    if(!pending)return;
+    abortRef.current=null;
+    pending.abort();
+    setGenerating(false);
+    setRemoteConsent(false);
+    setPreview(null);
+    setError('Richiesta annullata. Per un nuovo invio è necessario un nuovo consenso.');
+  };
+
   const handleGenerate=async()=>{
     if(generating||adopting||!remoteConsent||!objective.trim())return;
     setError(null);
@@ -93,6 +108,15 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     abortRef.current?.abort();
     abortRef.current=controller;
     setGenerating(true);
+    const deadline=window.setTimeout(()=>{
+      if(abortRef.current!==controller)return;
+      abortRef.current=null;
+      controller.abort();
+      setGenerating(false);
+      setRemoteConsent(false);
+      setPreview(null);
+      setError('La richiesta ha superato il tempo massimo. Per un nuovo invio è necessario un nuovo consenso.');
+    },CLIENT_GENERATION_TIMEOUT_MS);
     try{
       const session=prepareAssessmentGenerationSession({
         source,
@@ -115,6 +139,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
           : reason instanceof Error ? reason.message : 'La richiesta non è stata completata.');
       }
     }finally{
+      window.clearTimeout(deadline);
       if(abortRef.current===controller){
         abortRef.current=null;
         setGenerating(false);
@@ -155,8 +180,11 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
             Fonte: <strong>{source.title}</strong> · Classe: <strong>{className}</strong>
           </p>
         </div>
-        <button type="button" onClick={onClose}
-          disabled={generating||adopting}
+        <button type="button" onClick={()=>{
+          if(generating)handleCancelGeneration();
+          onClose();
+        }}
+          disabled={adopting}
           className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs text-slate-200">
           Chiudi
         </button>
@@ -195,6 +223,13 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-semibold text-white disabled:opacity-50">
         {generating?'Generazione in corso…':'Crea una proposta'}
       </button>
+      {generating&&(
+        <button type="button" onClick={handleCancelGeneration}
+          data-testid="int02-assessment-cancel"
+          className="min-h-[44px] w-full rounded-lg border border-amber-700 px-4 text-sm font-semibold text-amber-100">
+          Annulla richiesta
+        </button>
+      )}
       {error&&<p role="alert" data-testid="int02-assessment-error" className="text-sm text-amber-200">{error}</p>}
       {preview&&(
         <div data-testid="int02-assessment-preview" className="space-y-3 border-t border-cyan-800 pt-3">
