@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppSettings, ClassData, CouncilSessionKind } from '../types';
 import type { CouncilSnapshotContextV1, CouncilSnapshotPreviewV1 } from '../council/councilEvidenceSnapshots';
+import { readCouncilSnapshots } from '../council/councilEvidenceSnapshots';
 import { CouncilSnapshotSection } from './CouncilSnapshotSection';
 import type { PlanningDraftGuard } from './planning/PlanningProfileEditor';
 import { buildCouncilEvidenceOverview } from '../council/councilEvidenceOverview';
@@ -76,6 +77,8 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
     () => current ? readCouncilSessions(current, schoolYear) : [], [current, schoolYear]
   );
   const openedSession = sessions.find(item => item.id === openedSessionId);
+  const hasOpenedSessionSnapshots = Boolean(current && openedSession
+    && readCouncilSnapshots(current, schoolYear, openedSession.id).length > 0);
   const sessionDateValid = isCouncilSessionDateValid(sessionDate, schoolYear);
 
   useEffect(() => {
@@ -346,13 +349,14 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                   {sessionViewState === 'saved' ? 'Seduta salvata' : sessionViewState === 'selected' ? 'Seduta selezionata' : 'Seduta riaperta'}: {SESSION_LABELS[openedSession.kind]} del {formatCouncilDate(openedSession.date)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Registrazione conservata nel dispositivo. Ordine del giorno, note e seguito saranno aggiunti nella fase CDC-02/S3.
+                  Archivio personale della seduta. Ordine del giorno e note saranno disponibili nella fase CDC-02/S3.
                 </p>
                 <CouncilSnapshotSection
                   key={`${current.id}:${schoolYear}:${openedSession.id}`}
                   classData={current}
                   schoolYear={schoolYear}
                   session={openedSession}
+                  currentOverview={evidenceOverview}
                   disabled={dirty || saving || sessionSaving || snapshotBusy}
                   onPrepareSnapshot={onPrepareSnapshot}
                   onConfirmSnapshot={onConfirmSnapshot}
@@ -367,12 +371,19 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
           <section className="rounded-lg border border-[var(--border)] p-4 space-y-3"
             aria-label="Quadro sintetico delle evidenze della classe">
             <h2 className="text-lg font-bold text-white">Quadro della classe</h2>
+            <details key={`${selectedClassId}:${schoolYear}:${openedSessionId}:${hasOpenedSessionSnapshots}`}
+              open={!hasOpenedSessionSnapshots} className="min-w-0 rounded-lg border border-[var(--border)] p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+                {hasOpenedSessionSnapshots
+                  ? 'Mostra tutti gli indicatori del quadro corrente'
+                  : 'Indicatori del quadro corrente'}
+              </summary>
+              <div className="space-y-3 pt-3">
             {evidenceOverview ? (
               <>
                 <p className="text-xs text-slate-300">
-                  Dati correnti fino al <strong>{evidenceOverview.effectiveCutoff}</strong> per l’anno
-                  {evidenceOverview.schoolYear}. Non sono una fotografia storica della seduta e
-                  non costituiscono una valutazione collegiale.
+                  Quadro corrente: prove fino al <strong>{formatCouncilDate(evidenceOverview.effectiveCutoff)}</strong>,
+                  anno {evidenceOverview.schoolYear}. I voti di ingresso sono quelli già salvati.
                   {evidenceOverview.cutoffClampedToSchoolYear
                     ? ' La data richiesta supera la fine dell’anno: il calcolo si ferma al 31 agosto.'
                     : ''}
@@ -393,9 +404,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                   ))}
                 </div>
                 <p className="text-xs text-slate-400">
-                  «Senza prove» e «senza voto di ingresso» sono condizioni diverse.
-                  Il quadro conta soltanto i voti di ingresso già salvati, non le modifiche ancora in bozza.
-                  Le prove non numeriche non contribuiscono al conteggio delle prove numeriche.
+                  Prove non numeriche escluse dai conteggi; bozze di voto non incluse.
                 </p>
               </>
             ) : (
@@ -403,6 +412,8 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 Quadro non disponibile: controllare anno, data limite e identità della classe.
               </p>
             )}
+              </div>
+            </details>
           </section>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
