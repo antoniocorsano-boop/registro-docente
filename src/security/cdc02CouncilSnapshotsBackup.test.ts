@@ -241,4 +241,18 @@ describe('CDC-02/S2b-P2 — restore verificato e Vault cifrato', () => {
     expect(after.appData).toEqual(saved);
     expect(after.meta).toEqual({ changes: 1, lastBackup: null });
   });
+  test('P2 Codex: classi con ID duplicato non possono rendere ambiguo lo storico', async () => {
+    const saved = await withSnapshot();
+    const ambiguous = structuredClone(saved);
+    ambiguous.classes.push({
+      ...structuredClone(source().classes[0]),
+      name: 'Altra classe sintetica con lo stesso ID'
+    });
+    expect(isCouncilAppDataValid(ambiguous)).toBe(false);
+    await expect(normalizeBackupPayloadVerified(
+      createBackupPayload(full(ambiguous)), full(source())
+    )).rejects.toThrow(/classe|identit|backup/i);
+    expect(wouldLoseCouncilEntries(saved, ambiguous)).toBe(true);
+  });
+
 });
