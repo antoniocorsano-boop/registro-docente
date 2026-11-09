@@ -3540,7 +3540,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={activeTab !== 'consigli' && todayAction !== 'conduct' && !isActiveRecordFocus}
+            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
             suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
           />
           <LibraryCopilotComposer
