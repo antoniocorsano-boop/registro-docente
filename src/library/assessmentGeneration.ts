@@ -119,6 +119,8 @@ export interface AssessmentGenerationSessionV1 {
   /** Session-only identity captured on explicit teacher selection. */
   authorizedSourceId: string;
   authorizedClassName: string;
+  /** Exact local class identity. S3c requires this value; legacy S3b flows may omit it. */
+  authorizedClassId?: string;
 }
 
 /**
@@ -126,13 +128,17 @@ export interface AssessmentGenerationSessionV1 {
  * The private source identifier must never be serialized to the provider.
  */
 export function prepareAssessmentGenerationSession(
-  input: Parameters<typeof buildAssessmentGenerationRequest>[0]
+  input: Parameters<typeof buildAssessmentGenerationRequest>[0] & { authorizedClassId?: string }
 ): AssessmentGenerationSessionV1 {
   const request = buildAssessmentGenerationRequest(input);
+  if (input.authorizedClassId !== undefined && !input.authorizedClassId.trim()) {
+    throw new Error('Identità della classe confermata non valida.');
+  }
   return {
     request,
     authorizedSourceId: input.source.id,
-    authorizedClassName: request.context.className
+    authorizedClassName: request.context.className,
+    ...(input.authorizedClassId ? { authorizedClassId: input.authorizedClassId.trim() } : {})
   };
 }
 
@@ -147,10 +153,12 @@ export function isAssessmentGenerationRequestCurrent(
     source: LibrarySource | null;
     confirmedSourceId: string;
     activeClassName: string;
+    activeClassId?: string | null;
   }
 ): boolean {
   const { request, authorizedSourceId, authorizedClassName } = session;
   if (!live.source || !authorizedSourceId
+    || (session.authorizedClassId !== undefined && live.activeClassId !== session.authorizedClassId)
     || session.authorizedClassName !== request.context.className
     || live.activeClassName.trim() !== authorizedClassName
     || live.confirmedSourceId !== authorizedSourceId
