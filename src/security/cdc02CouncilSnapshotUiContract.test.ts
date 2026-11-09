@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
-const ui = readFileSync('src/components/CouncilView.tsx', 'utf8');
+const ui = readFileSync('src/components/CouncilView.tsx', 'utf8')
+  + readFileSync('src/components/CouncilSnapshotSection.tsx', 'utf8');
 const app = readFileSync('src/App.tsx', 'utf8');
 
 describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografia', () => {
@@ -18,7 +19,8 @@ describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografi
   test('solo conferma esplicita inserisce in coda un commit da ref canonici', () => {
     expect(ui).toContain('Conferma e salva fotografia');
     expect(ui).toContain('Annulla anteprima');
-    expect(ui).toContain('snapshotWorkingRef.current = true;');
+    expect(ui).toContain('snapshotWorkingRef.current = value;');
+    expect(ui).toContain('onWorkingChange(value);');
     expect(app).toContain('const handlePrepareCouncilSnapshot =');
     expect(app).toContain('const handleConfirmCouncilSnapshot =');
     expect(app).toContain('mutationCoordinator.enqueueTask(async () => {');
