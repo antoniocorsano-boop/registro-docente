@@ -29,12 +29,24 @@ export interface BehaviorRecord {
   note?: string;
 }
 
+export type CouncilMoment = 'ingresso' | 'intermedia' | 'finale';
+
+export interface CouncilAssessment {
+  studentId: string;
+  schoolYear: string;
+  moment: CouncilMoment;
+  value: string;
+  updatedAt: string;
+}
+
 export interface ClassData {
   id: string;
   name: string;
   students: Student[];
   grades: Grade[];
   behaviors: BehaviorRecord[];
+  /** Independent teacher-assigned council judgements, never part of grades/averages. */
+  councilAssessments?: CouncilAssessment[];
 }
 
 export type UdaActivityType = 'teoria' | 'laboratorio' | 'compito_realta' | 'digitale' | 'civica';
@@ -160,6 +172,7 @@ export type ActiveTab =
   | 'comportamenti'
   | 'analytics'
   | 'tabellone'
+  | 'consigli'
   | 'storico'
   | 'report'
   | 'dati'

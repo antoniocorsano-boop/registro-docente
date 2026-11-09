@@ -1183,6 +1183,33 @@
         "tests/browser/int-01-didactic-continuity.spec.cjs",
         "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "CDC-01-I01",
+      "owner": "CDC-01",
+      "statement": "Consigli is an explicit class-scoped teacher judgement surface. Mathematically derived evidence averages are read-only and independent from teacher-approved entry grades, which are saved only after durable local Vault commit. Historical legacy grades remain untouched, council entries are optional in appData backups, malformed/orphaned records reject restore, and destructive replacement from a previous archive requires explicit warning. Draft departures are protected. No automatic scrutiny, AI sharing, merge or deployment.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/",
+        "src/components/CouncilView.tsx",
+        "src/security/cdc01CouncilBackup.test.ts",
+        "src/security/backupPayload.ts",
+        "src/types.ts",
+        "src/components/Navbar.tsx",
+        "src/components/headerContext.ts",
+        "src/App.tsx",
+        "tests/browser/cdc-01-consigli.spec.cjs",
+        ".github/workflows/browser-qualification.yml",
+        "src/components/PrivacyView.tsx",
+        "src/components/PrivacyView.tsx"
+      ],
+      "tests": [
+        "src/security/cdc01CouncilBackup.test.ts",
+        "src/security/backupPayload.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
     }
   ]
 }

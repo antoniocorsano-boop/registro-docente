@@ -1,4 +1,5 @@
 import type { AppData, AppSettings, OnlineSubmission, OnlineTest, UdaRecord } from '../types';
+import { isCouncilAppDataValid } from '../council/councilModel';
 import { areAssessmentProvenancesValid } from '../library/assessmentProvenance';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import {
@@ -143,6 +144,7 @@ function isSnapshotV2(value: unknown): value is SecureBackupSnapshotV2 {
   if (!isRecord(value)) return false;
   return isRecord(value.appData)
     && Array.isArray((value.appData as Record<string, unknown>).classes)
+    && isCouncilAppDataValid(value.appData)
     && isRecord(value.settings)
     && Array.isArray(value.udas)
     && areAssessmentProvenancesValid(value.customTests)
@@ -506,6 +508,10 @@ export function normalizeBackupPayload(
   const appData: AppData = legacyData && Array.isArray(legacyData.classes)
     ? legacyData as unknown as AppData
     : { classes: legacyClasses as AppData['classes'], currentClassId: null };
+
+  if (!isCouncilAppDataValid(appData)) {
+    throw new Error('Il backup legacy contiene valutazioni dei Consigli incoerenti.');
+  }
 
   return {
     appData,

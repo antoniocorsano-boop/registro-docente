@@ -113,11 +113,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const handleImportEncrypted = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEncryptedFile) {
-      alert('Seleziona prima il file di backup cifrato (.enc.json).');
-      return;
-    }
-    if (!decryptPassword) {
-      alert('Inserisci la password di decifratura.');
+      alert('Seleziona un file di backup (.enc.json oppure .json precedente).');
       return;
     }
     if (backupOperationPendingRef.current) return;
@@ -128,12 +124,33 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     reader.onload = async (event) => {
       try {
         const encryptedText = event.target?.result as string;
-        const decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
+        // Older Registro releases exported plain JSON; never upload or transmit it.
+        // A recognizable encrypted envelope must ALWAYS pass password authentication.
+        let parsed: unknown;
+        try { parsed = JSON.parse(encryptedText); } catch {
+          throw new Error('Formato JSON del backup non valido.');
+        }
+        const record = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown> : {};
+        const isEncryptedEnvelope = ['salt', 'iv', 'ciphertext', 'privacy_protocol']
+          .some(key => Object.prototype.hasOwnProperty.call(record, key));
+        let decryptedData: unknown;
+        if (isEncryptedEnvelope) {
+          if (!decryptPassword) throw new Error('Inserisci la password del backup cifrato.');
+          decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
+        } else {
+          if (!window.confirm(
+            'Questo file sembra un vecchio backup JSON non cifrato. Verrà letto solo sul dispositivo e trasferito nell’archivio locale cifrato. Conserva l’originale in un luogo protetto. Confermi il ripristino?'
+          )) throw new Error('Importazione del file precedente annullata.');
+          decryptedData = parsed;
+        }
 
         await onImportEncryptedBackup(decryptedData);
         setDecryptPassword('');
         setSelectedEncryptedFile(null);
-        alert('Backup cifrato verificato e ripristinato con successo!');
+        alert(isEncryptedEnvelope
+          ? 'Backup cifrato verificato e ripristinato con successo!'
+          : 'Backup precedente importato nel Registro cifrato. Conserva il file originale in luogo protetto e genera un nuovo backup cifrato.');
       } catch (err: any) {
         console.error(err);
         alert(err.message || 'Password errata o file non valido.');
@@ -311,12 +328,12 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           {/* Import Encrypted Form */}
           <form onSubmit={handleImportEncrypted} className="p-4 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
             <h4 className="text-xs uppercase tracking-wider font-bold text-slate-200 flex items-center gap-1.5">
-              <Upload className="w-3.5 h-3.5 text-cyan-400" /> Ripristina Backup Cifrato
+              <Upload className="w-3.5 h-3.5 text-cyan-400" /> Ripristina Backup Cifrato o Precedente
             </h4>
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                Seleziona File Cifrato
+                Seleziona file di backup (.enc.json oppure .json precedente)
               </label>
               <input
                 type="file"
@@ -329,7 +346,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                Password di Decifratura
+                Password di decifratura (solo per i file cifrati)
               </label>
               <input
                 type="password"
@@ -337,9 +354,13 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
                 value={decryptPassword}
                 onChange={e => setDecryptPassword(e.target.value)}
                 className="w-full p-2 neon-input text-xs text-white"
-                required
               />
             </div>
+
+            <p className="text-xs text-slate-400">
+              I backup precedenti non cifrati vengono letti esclusivamente in locale,
+              previa conferma. Il nuovo backup esportato sarà sempre cifrato.
+            </p>
 
             <button
               type="submit"
