@@ -128,7 +128,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   };
 
   return (
-    <section className="neon-card p-4 sm:p-5 space-y-5" aria-label="Consigli di classe">
+    <section className="neon-card min-w-0 max-w-full p-4 sm:p-5 space-y-5" aria-label="Consigli di classe">
       <header className="border-b border-[var(--border)] pb-4">
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-[var(--primary)]" /> Consigli di classe
@@ -163,7 +163,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         </label>
       </div>
 
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="rounded bg-[var(--surface-variant)] px-3 py-1.5 font-bold text-[var(--primary)]">Ingresso</span>
         <span className="px-3 py-1.5 text-slate-500">Intermedia · successivamente</span>
         <span className="px-3 py-1.5 text-slate-500">Finale · successivamente</span>
@@ -186,11 +186,27 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             </button>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-            <table className="w-full text-sm min-w-[650px] text-left">
+          <p id="council-table-scroll-hint" className="text-xs text-slate-400 sm:hidden">
+            Scorri la tabella orizzontalmente per vedere tutti i valori: la colonna Alunno rimane visibile.
+          </p>
+          <div
+            role="region"
+            aria-label="Tabellone delle valutazioni di ingresso"
+            aria-describedby="council-table-scroll-hint"
+            tabIndex={0}
+            className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain scroll-pl-[148px] rounded-lg border border-[var(--border)]"
+          >
+            <table className="w-full min-w-[680px] table-fixed text-sm text-left">
+              <colgroup>
+                <col className="w-36" />
+                <col className="w-[72px]" />
+                <col className="w-36" />
+                <col className="w-40" />
+                <col className="w-40" />
+              </colgroup>
               <thead className="bg-slate-900 text-slate-200">
                 <tr>
-                  <th scope="col" className="p-3">Alunno</th>
+                  <th scope="col" className="sticky left-0 z-20 w-36 min-w-36 max-w-36 border-r border-[var(--border)] bg-slate-900 p-3">Alunno</th>
                   <th scope="col" className="p-3 text-center">Prove</th>
                   <th scope="col" className="p-3 text-center">Media prove</th>
                   <th scope="col" className="p-3 text-center">Voto di ingresso</th>
@@ -204,7 +220,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                   const bad = entered.trim() !== '' && parseCouncilValue(entered) === null;
                   return (
                     <tr key={row.student.id} className="border-t border-[var(--border)] hover:bg-slate-800/30">
-                      <th scope="row" className="p-3 text-white font-medium">
+                      <th scope="row" className="sticky left-0 z-10 w-36 min-w-36 max-w-36 border-r border-[var(--border)] bg-[var(--surface)] p-3 text-left font-medium leading-snug text-white whitespace-normal break-words">
                         {formatStudentNameWithPrivacy(row.student.name, isPrivacyShieldActive)}
                       </th>
                       <td className="p-3 text-center text-slate-300">{row.count}</td>

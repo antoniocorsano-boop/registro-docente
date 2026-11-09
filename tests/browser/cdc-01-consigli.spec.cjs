@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { navigationButton } = require('./header01-navigation.cjs');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const CLASS_NAME = '2Z CDC-01 sintetica';
@@ -7,7 +8,7 @@ test.use({ viewport: { width: 1280, height: 900 }, trace: 'retain-on-failure' })
 test.setTimeout(60000);
 
 async function navigate(page, name) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await navigationButton(page).first().click();
   const drawer = page.getByRole('complementary');
   await drawer.getByRole('button', { name, exact: true }).click();
 }
@@ -137,4 +138,65 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   await picker.selectOption({ label: '2C Legacy' });
   await expect(vote).toHaveValue('7');
   await expect(page.getByRole('cell', { name: /^8,5/ })).toBeVisible();
+});
+
+
+test('CDC-01: on a narrow smartphone the student stays visible while council columns scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('#vault-password').fill('cdc-01-mobile-synthetic');
+  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+
+  page.once('dialog', dialog => dialog.accept('2M Mobile sintetica'));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill('Alessandrini Maria Caterina');
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+
+  await navigate(page, 'Consigli di classe');
+  await page.getByRole('combobox', { name: 'Seleziona classe per il Consiglio' })
+    .selectOption({ label: '2M Mobile sintetica' });
+
+  const tableRegion = page.getByRole('region', { name: 'Tabellone delle valutazioni di ingresso' });
+  const studentCell = tableRegion.locator('tbody th[scope="row"]').first();
+  const studentHeader = tableRegion.locator('thead th[scope="col"]').first();
+  const grade = tableRegion.locator('input[aria-label^="Voto di ingresso per"]');
+  await expect(studentCell).toBeVisible();
+  await expect(page.getByText(/Scorri la tabella orizzontalmente/)).toBeVisible();
+
+  const initialStudentLeft = await studentCell.evaluate(element => element.getBoundingClientRect().left);
+  const initialHeaderLeft = await studentHeader.evaluate(element => element.getBoundingClientRect().left);
+  await tableRegion.evaluate(element => { element.scrollLeft = element.scrollWidth - element.clientWidth; });
+  expect(await tableRegion.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await studentCell.evaluate(element => getComputedStyle(element).position)).toBe('sticky');
+  expect(Math.abs(await studentCell.evaluate(element => element.getBoundingClientRect().left) - initialStudentLeft)).toBeLessThan(2);
+  expect(Math.abs(await studentHeader.evaluate(element => element.getBoundingClientRect().left) - initialHeaderLeft)).toBeLessThan(2);
+
+  // Keyboard-only navigation: the sticky name column must not conceal a focused grade.
+  // Check actual rendered geometry; fill() alone succeeds even if an input is occluded.
+  for (const width of [360, 320, 390]) {
+    await page.setViewportSize({ width, height: 780 });
+    await tableRegion.focus();
+    await tableRegion.evaluate(element => { element.scrollLeft = element.scrollWidth - element.clientWidth; });
+    expect(await tableRegion.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+    await page.keyboard.press('Tab');
+    await expect(grade).toBeFocused();
+    await expect.poll(async () => {
+      const [nameBounds, inputBounds, regionBounds] = await Promise.all([
+        studentCell.boundingBox(), grade.boundingBox(), tableRegion.boundingBox()
+      ]);
+      if (!nameBounds || !inputBounds || !regionBounds) return false;
+      return inputBounds.x >= nameBounds.x + nameBounds.width + 2
+        && inputBounds.x + inputBounds.width <= regionBounds.x + regionBounds.width - 2;
+    }, { message: `Il campo voto deve essere interamente a destra del nome fisso a ${width}px` }).toBe(true);
+    expect(await grade.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const topmost = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      return topmost === element || element.contains(topmost);
+    })).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  }
+  await grade.press('ControlOrMeta+A');
+  await page.keyboard.type('7,5');
+  await expect(grade).toHaveValue('7,5');
 });
