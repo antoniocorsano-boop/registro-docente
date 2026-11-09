@@ -75,6 +75,14 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   const table = page.getByRole('region', { name: 'Tabellone delle valutazioni di ingresso' });
   await expect(table).toBeVisible();
   const studentName = table.locator('tbody th[scope="row"]').first();
+  // Privacy Shield is ON by default. Explicitly reveal only the synthetic name
+  // for this visual check, via the same user control that the teacher uses.
+  const privacyToggle = page.getByTestId('header01-privacy');
+  await expect(privacyToggle).toBeVisible();
+  if (await privacyToggle.getAttribute('data-privacy-state') === 'protected') {
+    await privacyToggle.click();
+  }
+  await expect(privacyToggle).toHaveAttribute('data-privacy-state', 'visible');
   await expect(studentName).toContainText('Alessandrini');
   const leftBefore = await studentName.evaluate(el => el.getBoundingClientRect().left);
   await table.evaluate(el => { el.scrollLeft = el.scrollWidth - el.clientWidth; });
