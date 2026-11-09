@@ -148,7 +148,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         await onImportEncryptedBackup(decryptedData);
         setDecryptPassword('');
         setSelectedEncryptedFile(null);
-        alert('Backup cifrato verificato e ripristinato con successo!');
+        alert(isEncryptedEnvelope
+          ? 'Backup cifrato verificato e ripristinato con successo!'
+          : 'Backup precedente importato nel Registro cifrato. Conserva il file originale in luogo protetto e genera un nuovo backup cifrato.');
       } catch (err: any) {
         console.error(err);
         alert(err.message || 'Password errata o file non valido.');
