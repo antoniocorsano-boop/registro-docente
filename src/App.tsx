@@ -25,6 +25,15 @@ import {
 import type { LibrarySource, LibrarySourceLink, LibraryStateV1 } from './library/types';
 import { createEmptyLibraryState } from './library/emptyLibraryState';
 import { resolveAssessmentHandoff, type AssessmentHandoffRequest } from './library/assessmentHandoff';
+import {
+  prepareAssessmentEditorTransfer,
+  checkAssessmentEditorTransferContext,
+  canAcceptAssessmentEditorTransfer,
+  type AssessmentEditorTransferV1
+} from './library/assessmentEditorTransfer';
+import type { AssessmentGenerationSessionV1 } from './library/assessmentGeneration';
+import type { AssessmentDraftV1 } from './library/assessmentDraft';
+
 import { prepareAssessmentTestForCommit, projectAssessmentsForStudent, resolveSavedAssessmentOrigin } from './library/assessmentProvenance';
 import { isAssessmentUdaSelectionAllowed } from './library/assessmentUdaScope';
 import { resolvePlanningContextForLibraryRelevance } from './library/relevancePresentation';
@@ -205,6 +214,13 @@ import type {
   CopilotMissionLaunchV1,
   LibraryCopilotLaunchRequest
 } from './library/copilotLaunchContext';
+
+interface PendingCopilotAssessmentTransfer {
+  nonce: string;
+  session: AssessmentGenerationSessionV1;
+  draft: AssessmentDraftV1;
+  transfer: AssessmentEditorTransferV1;
+}
 
 const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non è stata applicata.';
 
@@ -620,6 +636,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [launchRequest, setLaunchRequest] = useState<LibraryCopilotLaunchRequest | null>(null);
   // INT-02: a transient reference only; never written to URL, history, vault or grades.
   const [assessmentHandoffRequest, setAssessmentHandoffRequest] = useState<AssessmentHandoffRequest | null>(null);
+  // Ephemeral: no URL, browser history, Vault, backup or grades.
+  const [pendingCopilotAssessment, setPendingCopilotAssessment] = useState<PendingCopilotAssessmentTransfer | null>(null);
+  const [assessmentTransferNotice, setAssessmentTransferNotice] = useState<string | null>(null);
   const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
   const [copilotSurfaceMode, setCopilotSurfaceMode] = useState<CopilotSurfaceMode>('closed');
 
@@ -675,6 +694,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
     traceHpr('scheda-attivata', tab);
     if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
+    if (tab !== 'verifiche-online') setPendingCopilotAssessment(null);
     // Central navigation authority: direct routes (including backup, history,
     // editing and the Drawer) must invalidate the previous report detour.
     if (!options.preserveStudentReturnContext) {
@@ -940,6 +960,40 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // History API failures never authorize a professional write.
     }
   }, [editingBatchId, hasUnsavedActiveDraft, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
+
+  /** INT-02/S3c-02: explicit teacher adoption opens only a transient editor draft. */
+  const handleAcceptAssessmentDraft = useCallback(async (
+    session:AssessmentGenerationSessionV1,
+    draft:AssessmentDraftV1
+  ):Promise<void> => {
+    // Never permit a Copilot transfer to replace an unsaved editor or a
+    // pending canonical mutation. Navigation guards remain authoritative.
+    if (hasUnsavedActiveDraft()
+      || !canAcceptAssessmentEditorTransfer({
+        hasUnsavedChanges: Boolean(assessmentDraftGuardRef.current?.hasUnsavedChanges()),
+        isSaving: Boolean(assessmentDraftGuardRef.current?.isSaving())
+      })) {
+      throw new Error('Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.');
+    }
+    const activeClassId=currentClassIdRef.current;
+    const resolved=prepareAssessmentEditorTransfer({
+      session,draft,
+      library:libraryRef.current,
+      classes:appDataRef.current.classes,
+      activeClassId,
+      teacherConfirmedAdoption:true
+    });
+    if(resolved.status!=='ready') {
+      throw new Error('La fonte o la classe non è più valida. Richiedi una nuova proposta.');
+    }
+    setAssessmentTransferNotice(null);
+    setAssessmentHandoffRequest(null);
+    setPendingCopilotAssessment({
+      nonce:crypto.randomUUID(),
+      session,draft,transfer:resolved.transfer
+    });
+    handleNavigateTab('verifiche-online');
+  },[handleNavigateTab,hasUnsavedActiveDraft]);
 
   /** INT-02/S1: navigate only with the validated teacher-owned source reference. */
   const handlePrepareAssessmentFromLibrary = useCallback((sourceId: string) => {
@@ -1871,6 +1925,23 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const activeAssessmentHandoff = assessmentHandoffResolution?.status === 'ready'
     ? assessmentHandoffResolution.handoff
     : null;
+
+  const pendingCopilotAssessmentValid = pendingCopilotAssessment
+    ? checkAssessmentEditorTransferContext(pendingCopilotAssessment.transfer,{
+        session:pendingCopilotAssessment.session,
+        draft:pendingCopilotAssessment.draft,
+        library,
+        classes:appData.classes,
+        activeClassId:currentClass?.id ?? null,
+        teacherConfirmedAdoption:true
+      })
+    : false;
+
+  useEffect(()=>{
+    if(!pendingCopilotAssessment || pendingCopilotAssessmentValid) return;
+    setPendingCopilotAssessment(null);
+    setAssessmentTransferNotice('La fonte o la classe è cambiata. La proposta non è stata aperta.');
+  },[pendingCopilotAssessment,pendingCopilotAssessmentValid]);
 
   // Reclassification, source deletion and class changes revoke the old handoff.
   useEffect(() => {
@@ -3253,6 +3324,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             udas={udas}
             settings={settings}
             assessmentHandoff={activeAssessmentHandoff}
+            assessmentEditorTransfer={pendingCopilotAssessmentValid ? pendingCopilotAssessment : null}
+            assessmentTransferNotice={assessmentTransferNotice}
+            onAssessmentTransferResult={(nonce,success)=>{
+              setPendingCopilotAssessment(previous=>previous?.nonce===nonce ? null : previous);
+              setAssessmentTransferNotice(success
+                ? 'Bozza del Copilota aperta. Nulla è stato salvato.'
+                : 'La proposta non è stata aperta: controlla la classe o la bozza già presente.');
+            }}
+            activeClassId={currentClass?.id ?? null}
             assessmentOriginStatuses={Object.fromEntries(Object.entries(tests).map(
               ([id, test]) => [id, resolveSavedAssessmentOrigin(test, library)]
             ))}
@@ -3434,7 +3514,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               aiBudgetProfile={settings.aiBudgetProfile}
               copilotProactivity={settings.copilotProactivity}
               memoryError={professionalMemoryError}
+              currentClassId={currentClass?.id ?? null}
               currentClassName={currentClass?.name ?? null}
+              onAcceptAssessmentDraft={handleAcceptAssessmentDraft}
               classes={appData.classes}
               launchRequest={launchRequest}
               openRequestNonce={copilotOpenRequestNonce}

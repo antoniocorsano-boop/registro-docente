@@ -3,6 +3,10 @@ import JSZip from 'jszip';
 import * as mammoth from 'mammoth';
 import { AppSettings, ClassData, OnlineSubmission, OnlineTest, Question, QuestionType, UdaRecord } from '../types';
 import type { ResolvedAssessmentHandoff } from '../library/assessmentHandoff';
+import {
+  canAcceptAssessmentEditorTransfer,
+  type AssessmentEditorTransferV1
+} from '../library/assessmentEditorTransfer';
 import type { SavedAssessmentOrigin } from '../library/assessmentProvenance';
 import { isAssessmentUdaForClass, isAssessmentUdaSelectionAllowed } from '../library/assessmentUdaScope';
 import { resolveAssessmentShareTarget } from '../library/assessmentShareSelection';
@@ -47,6 +51,10 @@ interface VerificheOnlineViewProps {
   isPrivacyShieldActive?: boolean;
   initialClassName?: string;
   assessmentHandoff?: ResolvedAssessmentHandoff | null;
+  assessmentEditorTransfer?: {nonce:string;transfer:AssessmentEditorTransferV1}|null;
+  assessmentTransferNotice?: string|null;
+  onAssessmentTransferResult?: (nonce:string,success:boolean)=>void;
+  activeClassId?: string|null;
   assessmentOriginStatuses?: Record<string, SavedAssessmentOrigin>;
   activeClassName?: string | null;
   onRegisterDraftGuard?: (guard: AssessmentDraftGuard | null) => void;
@@ -67,6 +75,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   isPrivacyShieldActive = true,
   initialClassName,
   assessmentHandoff = null,
+  assessmentEditorTransfer = null,
+  assessmentTransferNotice = null,
+  onAssessmentTransferResult,
+  activeClassId = null,
   assessmentOriginStatuses = {},
   activeClassName = null,
   onRegisterDraftGuard,
@@ -158,6 +170,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [confirmSourceForAssessment, setConfirmSourceForAssessment] = useState(false);
   // The editor's baseline is session-only, never stored in the vault.
   const editorBaselineRef = useRef<string | null>(null);
+  const lastCopilotTransferNonceRef=useRef<string|null>(null);
   const editorDirtyRef = useRef(false);
   const editorSavingRef = useRef(false);
   const pendingEditorExitRef = useRef<(() => void) | null>(null);
@@ -200,6 +213,44 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     onRegisterDraftGuard(guard);
     return () => onRegisterDraftGuard(null);
   }, [onRegisterDraftGuard]);
+
+  // INT-02/S3c-02: consume once, only after App has revalidated the live
+  // source/class. Never issue a canonical save here, and do not assign UDA
+  // or durable source provenance from a generated proposal.
+  useEffect(()=>{
+    if(!assessmentEditorTransfer || !onAssessmentTransferResult) return;
+    const {nonce,transfer}=assessmentEditorTransfer;
+    if(lastCopilotTransferNonceRef.current===nonce)return;
+    lastCopilotTransferNonceRef.current=nonce;
+    const classMatches=Boolean(activeClassId)
+      && transfer.classId===activeClassId
+      && transfer.className===activeClassName
+      && classes.filter(cl=>cl.id===activeClassId&&cl.name===activeClassName).length===1;
+    if(!classMatches||!canAcceptAssessmentEditorTransfer({
+      hasUnsavedChanges:editorDirtyRef.current,
+      isSaving:editorSavingRef.current
+    })){
+      onAssessmentTransferResult(nonce,false);
+      return;
+    }
+    const prefill=transfer.prefill;
+    editorBaselineRef.current = null;
+    editorDirtyRef.current = true;
+    setEditingTestId(null);
+    setEditorTitle(prefill.title);
+    setEditorDescription(prefill.description ?? '');
+    setEditorUdaId('');
+    setEditorDuration(15);
+    setEditorQuestions(prefill.questions.map(question=>({
+      ...question,options:[...question.options]
+    })));
+    setConfirmSourceForAssessment(false);
+    setSelectedClass(transfer.className);
+    setShareSelectedTestId('');
+    setIsEditingTest(true);
+    setActiveSubTab('editor');
+    onAssessmentTransferResult(nonce,true);
+  },[assessmentEditorTransfer,activeClassId,activeClassName,classes,onAssessmentTransferResult]);
 
   useEffect(() => {
     if (!assessmentHandoff) return;
@@ -747,6 +798,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   return (
     <div className="space-y-4">
+      {assessmentTransferNotice && (
+        <p role="status" data-testid="int02-assessment-transfer-notice"
+          className="rounded-lg border border-cyan-800 bg-cyan-950/30 p-3 text-sm text-cyan-100">
+          {assessmentTransferNotice}
+        </p>
+      )}
       {assessmentHandoff && (
         <section
           ref={handoffPanelRef}

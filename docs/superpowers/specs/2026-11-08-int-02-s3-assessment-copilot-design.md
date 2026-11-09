@@ -1,7 +1,7 @@
 # INT-02/S3 — Copilota «Crea verifica»: proposta controllata e adozione esplicita
 
-**Stato:** S3a INTEGRATA (PR #162); S3b INTEGRATA (PR #163); S3c-01 contratto puro di trasferimento in qualificazione (PR #164), senza interfaccia; S3c-02 raccordo Copilota→editor e S3d (qualificazione di esperienza) NON avviate.  
-**Baseline applicativa:** `main@c81c8a79426ea46e27530e64abfefcb919f8fff9` (S2b, S3a e S3b integrate, PREDEPLOY post-merge PASS; nessun deploy).  
+**Stato:** S3a INTEGRATA (PR #162); S3b INTEGRATA (PR #163); S3c-01 contratto di trasferimento INTEGRATO (PR #164); S3c-02 interfaccia Copilota→anteprima→editor su PR #165, in qualificazione, senza distribuzione; S3d revisione umana dell'esperienza ancora aperta.  
+**Baseline applicativa:** `main@9b940f94f8029d4cfcec910f42a1347b45752d77` (S2b, S3a, S3b e S3c-01 integrate; PREDEPLOY post-merge #42564434718 PASS; nessun deploy).  
 **Governance:** [Roadmap #104](https://github.com/antoniocorsano-boop/registro-docente/issues/104) · [INT-02 #140](https://github.com/antoniocorsano-boop/registro-docente/issues/140) · [S2b #160](https://github.com/antoniocorsano-boop/registro-docente/pull/160).
 
 ## 1. Ricognizione del codice già presente
@@ -71,13 +71,19 @@ Limiti iniziali: 1–12 quesiti; 2–6 opzioni distinte; indice intero nell'inte
 
 L'oggetto di trasferimento contiene i riferimenti locali alla classe e alla fonte **solo per controllare il passaggio**, mai come assegnazione di UDA o provenienza canonica. Non contiene test ID, voti, consegne, salvataggio o pubblicazione. Nessun canale di persistenza viene aggiunto. La sola funzione pura non rende attivo `CREATE_ASSESSMENT`.
 
-**S3c-02 e qualificazione UI (da realizzare):**
+**S3c-02 — interfaccia realizzata su PR #165, ancora in qualificazione:**
 
 1. Richiesta «Crea verifica» nel Copilota esistente; classe e obiettivo visibili, fonte testuale professionale selezionata come prevede S3b. Non assumere una classe o fonte dall'ordine dell'elenco.
 2. Proposta leggibile prima dell'adozione con numero dei quesiti, risposte e spiegazioni e avvertenza: correttezza da controllare dal docente.
 3. Pulsante esplicito **«Apri come bozza in Verifiche»**, con nuova verifica non salvata e nuovo controllo fonte/classe prima della consegna dei campi `AssessmentEditorPrefill` a `VerificheOnlineView`. Mai scavalcare il controllo delle bozze sporche.
 4. Editor consente modifiche e annullamento; nessuna UDA assegnata automaticamente; l'eventuale provenienza S2b richiede checkbox autonoma. Il comportamento Android «Indietro» resta governato dai controlli di navigazione esistenti.
 5. Solo il comando **«Salva Verifica»** del docente invoca il percorso canonico `handleSaveNewTest`; prima di allora il numero di verifiche nel Vault resta invariato.
+
+**Precondizione aggiuntiva di univocità:** una classe con **nome omonimo** o ID duplicato non può dare avvio alla generazione remota, anche se il relativo ID è attivo. La funzione pura `isAssessmentClassUnambiguous` controlla entrambi gli aspetti prima dell'invio e il contesto vivo viene riletto prima del passaggio alla rete; la stessa regola era già prevista all'adozione in editor S3c-01. In caso di ambiguità, mostrare una spiegazione e disabilitare il comando, senza consumare il budget del provider.
+
+**Controlli aggiuntivi richiesti dalla revisione Codex/Chromium:** al termine della conferma «Apri come bozza in Verifiche», chiudere **l'intera superficie del Copilota**, non solo il pannello interno: il primo browser test sulla PR #165 ha individuato un dialogo mobile ancora aperto sopra l'editor. Imporre un **termine massimo lato browser** per una richiesta HTTP sospesa, con **«Annulla richiesta»** e ripristino della possibilità di operare, senza re-invio implicito e richiedendo nuovo consenso. Nella prova browser con provider simulato verificare un annullamento effettivo e il passaggio riuscito al secondo invio esplicitamente autorizzato.
+
+**Vincolo S3c-02:** nessuna promozione dalla sola qualificazione del contratto S3c-01; completare tutti i cinque gate sul commit esatto, revisione indipendente e revisione umana dell'esperienza prima di un'eventuale distribuzione. La PR rimane in bozza fino alla risoluzione dei rilievi.
 
 ## 6. Qualificazione e condizioni di avanzamento
 
@@ -86,4 +92,4 @@ L'oggetto di trasferimento contiene i riferimenti locali alla classe e alla font
 - **S3c:** Chromium mobile 320/390, scorrimento corretto, bozze modificate/back gesture/cambio classe, conferma fonte; prova che nessuna verifica sia salvata prima del comando esplicito. 5/5 gate, revisione indipendente e HPR visiva umana prima di promozione.
 - **S3d/S4:** riprendere continuità didattica soltanto dopo l'integrazione governata di S3.
 
-**Vincolo operativo:** PR #161, #162 e #163 sono integrate in main; la PR #164 avvia il solo contratto S3c-01 senza nuova UI. `CREATE_ASSESSMENT` resta `UNSUPPORTED`. **Nessuna fusione o distribuzione Vercel deriva automaticamente da questa specifica.**
+**Vincolo operativo:** PR #161, #162, #163 e #164 sono integrate in `main`; la PR #165 sviluppa la nuova interfaccia S3c-02 in un ramo separato, non ancora integrato. La funzione `CREATE_ASSESSMENT` è attiva soltanto come percorso guidato in tale ramo, non nell'applicazione distribuita. **Nessuna fusione o distribuzione Vercel deriva automaticamente da questa specifica.**

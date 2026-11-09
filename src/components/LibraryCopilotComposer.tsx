@@ -42,6 +42,10 @@ import {
   type ContextualReviewRelevanceLevel
 } from '../library/contextualDidacticReview';
 import { resolveCopilotLinkTarget } from '../library/copilotLinkTarget';
+import { AssessmentCopilotPanel } from './AssessmentCopilotPanel';
+import type { AssessmentGenerationSessionV1 } from '../library/assessmentGeneration';
+import type { AssessmentDraftV1 } from '../library/assessmentDraft';
+import {isAssessmentClassUnambiguous} from '../library/assessmentGenerationClassGate';
 import { LibraryProposalPanel } from './LibraryProposalPanel';
 import { assertMissionRuntimeExecutionAuthorized, CopilotMissionBridge } from './CopilotMissionBridge';
 import { buildMissionContextFingerprint } from '../copilot/mission';
@@ -83,7 +87,9 @@ interface LibraryCopilotComposerProps {
   aiBudgetProfile?: AiBudgetProfile;
   copilotProactivity?: CopilotProactivityProfile;
   memoryError?: string | null;
+  currentClassId?: string | null;
   currentClassName?: string | null;
+  onAcceptAssessmentDraft: (session:AssessmentGenerationSessionV1,draft:AssessmentDraftV1)=>Promise<void>;
   classes?: ClassData[];
   launchRequest?: LibraryCopilotLaunchRequest | null;
   openRequestNonce?: number;
@@ -194,7 +200,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   aiBudgetProfile,
   copilotProactivity,
   memoryError = null,
+  currentClassId = null,
   currentClassName = null,
+  onAcceptAssessmentDraft,
   classes = [],
   launchRequest = null,
   openRequestNonce = 0,
@@ -218,6 +226,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 }) => {
   const isOpen = surfaceMode === 'compose';
   const [selectedSourceId, setSelectedSourceId] = useState('');
+  const [isAssessmentOpen, setIsAssessmentOpen] = useState(false);
+  const assessmentLiveRef = useRef({library, classes, currentClassId, currentClassName, selectedSourceId});
+  assessmentLiveRef.current = {library, classes, currentClassId, currentClassName, selectedSourceId};
   const [message, setMessage] = useState('');
   const [teacherFirstResolution, setTeacherFirstResolution] = useState<TeacherFirstRequestResolution | null>(null);
   const [teacherFirstClassId, setTeacherFirstClassId] = useState<string | null>(null);
@@ -1456,6 +1467,10 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => chooseTeacherFirstGoal('prepare', 'Preparare un’attività')} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Preparare un’attività</button>
                 <button type="button" onClick={() => chooseTeacherFirstGoal('material', 'Lavorare su un materiale')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Lavorare su un materiale</button>
+                <button data-testid="int02-s3c02-create-assessment" type="button" onClick={() => {
+                  chooseTeacherFirstGoal('material', 'Creare una verifica da un materiale');
+                  setIsAssessmentOpen(true);
+                }} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Creare una verifica</button>
                 <button type="button" onClick={() => chooseTeacherFirstGoal('link', 'Collegare un materiale a una UDA')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Collegare a una UDA</button>
                 <button type="button" onClick={() => chooseTeacherFirstGoal('review', 'Rivedere un materiale nel contesto didattico')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Rivedere qualcosa</button>
               </div>
@@ -1611,6 +1626,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             onChange={event => {
               resolutionEpochRef.current += 1;
               setSelectedSourceId(event.target.value);
+              setIsAssessmentOpen(false);
               setIsPrepareOpen(false);
               setResolution(null);
               setIsReviewUnavailableOpen(false);
@@ -1627,6 +1643,48 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             ))}
           </select>
             </div>
+            {!isBoundMissionFlow && selectedSource && !isAssessmentOpen && (
+              <button type="button" data-testid="int02-s3c02-start-assessment"
+                onClick={() => setIsAssessmentOpen(true)}
+                className="min-h-[44px] w-full rounded-lg border border-cyan-700 px-3 text-sm font-semibold text-cyan-100">
+                Crea verifica da questa fonte
+              </button>
+            )}
+            {!isBoundMissionFlow && isAssessmentOpen && (!selectedSource || !currentClassId || !currentClassName) && (
+              <p role="status" className="rounded-lg border border-amber-900 p-3 text-xs text-amber-200">
+                Seleziona una fonte professionale e una classe attiva nel Registro prima di creare la verifica.
+              </p>
+            )}
+            {!isBoundMissionFlow && isAssessmentOpen && selectedSource && currentClassId && currentClassName && (
+              <AssessmentCopilotPanel
+                key={`${selectedSource.id}:${currentClassId}:${selectedSource.status}:${selectedSource.privacy}`}
+                source={selectedSource}
+                classId={currentClassId}
+                className={currentClassName}
+                classIsUnambiguous={isAssessmentClassUnambiguous(classes,currentClassId,currentClassName)}
+                aiBudgetProfile={aiBudgetProfile}
+                getLiveContext={() => {
+                  const live=assessmentLiveRef.current;
+                  const matchingSources=live.library.sources.filter(s=>s.id===selectedSource.id);
+                  const classesUnambiguous=isAssessmentClassUnambiguous(
+                    live.classes,live.currentClassId,live.currentClassName
+                  );
+                  return {
+                    source:matchingSources.length===1?matchingSources[0]:null,
+                    confirmedSourceId:live.selectedSourceId,
+                    activeClassName:classesUnambiguous?live.currentClassName??'':'',
+                    activeClassId:classesUnambiguous?live.currentClassId:null
+                  };
+                }}
+                onAccept={async (session,draft) => {
+                  await onAcceptAssessmentDraft(session,draft);
+                  // Close the entire Copilot surface, not just the inner
+                  // assessment panel, once navigation to Verifiche succeeds.
+                  onSurfaceModeChange('closed');
+                }}
+                onClose={() => setIsAssessmentOpen(false)}
+              />
+            )}
             <details className="rounded-xl border border-slate-800 bg-slate-900/50">
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-200">
             <FilePlus2 size={17} className="text-cyan-300" aria-hidden="true" />
