@@ -1,6 +1,22 @@
 import type { AppData, AppSettings, ClassData, CouncilAssessment, CouncilMoment, CouncilSession, CouncilSessionKind, Student } from '../types';
 import { calcAvg, calcWeightedAvg, getCompetenceLevel, parseGrade, sortStudents } from '../utils';
 
+// Presentational only: session identity and Vault values remain ISO YYYY-MM-DD.
+// Explicit Italian month names avoid browser-native MM/DD/YYYY ambiguity.
+const ITALIAN_MONTHS = [
+  'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'
+] as const;
+
+export function formatCouncilDate(isoDate: string, abbreviated = false): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== isoDate) return isoDate;
+  const monthLabel = ITALIAN_MONTHS[month - 1];
+  return `${day} ${abbreviated ? monthLabel.slice(0, 3) : monthLabel} ${year}`;
+}
+
 const MOMENTS: readonly CouncilMoment[] = ['ingresso', 'intermedia', 'finale'];
 const SESSION_KINDS: readonly CouncilSessionKind[] = ['ingresso', 'intermedia', 'monitoraggio', 'finale', 'altro'];
 
