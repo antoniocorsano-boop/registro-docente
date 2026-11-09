@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { navigationButton } = require('./header01-navigation.cjs');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 test.use({ viewport: { width: 360, height: 780 }, trace: 'retain-on-failure' });
@@ -81,6 +83,21 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
 });
 
 test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sintetico', async ({ page }) => {
+  // P4: keep HPR frames in browser-evidence/, the directory actually uploaded
+  // by the canonical qualification workflow. The previous test.info.attach()
+  // alone did not yield an image in the published ZIP.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const reviewDir = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence');
+  const reviewFrames = [];
+  async function captureP4Frame(file, meaning) {
+    await fs.promises.mkdir(reviewDir, { recursive: true });
+    const imageFile = path.join(reviewDir, file);
+    await page.screenshot({ path: imageFile, fullPage: true, animations: 'disabled' });
+    const size = (await fs.promises.stat(imageFile)).size;
+    expect(size).toBeGreaterThan(5_000);
+    reviewFrames.push({ file, meaning, sizeBytes: size, viewport: '390x844',
+      syntheticDataOnly: true });
+  }
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await page.locator('#vault-password').fill('cdc-02-p3-synthetic');
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
@@ -109,6 +126,7 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   await panel.getByRole('button', { name: 'Prepara fotografia' }).click();
   await expect(panel.getByText('Anteprima non salvata · revisione 1')).toBeVisible();
   await expect(panel.getByText('Nessuna fotografia confermata per questa seduta.')).toBeVisible();
+  await captureP4Frame('cdc02-p4-01-anteprima-non-salvata-390.png', 'Anteprima esplicitamente preparata; zero fotografie salvate');
   await panel.getByRole('button', { name: 'Annulla anteprima' }).click();
   await expect(panel.getByText('Anteprima non salvata · revisione 1')).toHaveCount(0);
   await expect(panel.getByText('Nessuna fotografia confermata per questa seduta.')).toBeVisible();
@@ -121,6 +139,7 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   await expect(history.locator('option')).toHaveCount(1);
   const archived = panel.locator('[aria-label="Fotografia archiviata"]');
   expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
+  await captureP4Frame('cdc02-p4-02-prima-fotografia-confermata-390.png', 'Prima fotografia immutabile; una versione confermata');
 
   // The live assessment changes; the first confirmed snapshot must remain fixed.
   const vote = page.locator('input[aria-label^="Voto di ingresso per"]');
@@ -128,17 +147,23 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   await expect(panel.getByRole('button', { name: 'Acquisisci nuova versione' })).toBeDisabled();
   await page.getByRole('button', { name: 'Salva valutazioni di ingresso' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Valutazioni di ingresso salvate nell’archivio' })).toBeVisible();
+  const liveOverview = page.getByRole('region', { name: 'Quadro sintetico delle evidenze della classe' });
+  await expect(liveOverview.getByText('Con voto di ingresso salvato').locator('..').getByText('1', { exact: true })).toBeVisible();
+  expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
+  await captureP4Frame('cdc02-p4-03-corrente-diverso-da-congelato-390.png', 'Quadro corrente: un voto salvato; prima fotografia ancora zero');
   await panel.getByRole('button', { name: 'Acquisisci nuova versione' }).click();
   await expect(panel.getByText('Anteprima non salvata · revisione 2')).toBeVisible();
   await panel.getByRole('button', { name: 'Conferma e salva fotografia' }).click();
   await expect(history.locator('option')).toHaveCount(2);
   await expect(panel.getByText('Fotografia confermata · revisione 2')).toBeVisible();
   expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+1/);
+  await captureP4Frame('cdc02-p4-04-seconda-revisione-confermata-390.png', 'Seconda revisione esplicita; due versioni presenti');
 
   const firstRevisionId = await history.locator('option').first().getAttribute('value');
   await history.selectOption(firstRevisionId);
   await expect(panel.getByText('Fotografia confermata · revisione 1')).toBeVisible();
   expect(await archived.innerText()).toMatch(/Con voto di ingresso salvato\s+0/);
+  await captureP4Frame('cdc02-p4-05-prima-revisione-ancora-consultabile-390.png', 'Selezione e consultazione della prima revisione dopo la seconda');
 
   await navigate(page, 'Oggi');
   const confirmation = page.getByRole('alertdialog').filter({ has: page.getByRole('heading', { name: 'Tornare a Oggi?' }) });
@@ -155,5 +180,9 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
     await page.setViewportSize({ width, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(2);
   }
+  await fs.promises.writeFile(path.join(reviewDir, 'cdc02-p4-evidence-manifest.json'),
+    JSON.stringify({ candidateSha: process.env.CANDIDATE_SHA ?? 'unspecified',
+      evidenceContract: 'CDC-02/S2b-P4', reviewStatus: 'HPR_PENDING',
+      frames: reviewFrames }, null, 2) + '\n');
   await test.info().attach('cdc02-p3-mobile-history', { body: await page.screenshot(), contentType: 'image/png' });
 });
