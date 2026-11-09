@@ -56,7 +56,7 @@ function consumeBudgetOperationOnce(token: AiBudgetAuthorizationV1, evaluatedAt:
   for (const [key, expiresAt] of consumedOperationAuthorizations) {
     if (expiresAt <= at) consumedOperationAuthorizations.delete(key);
   }
-  const key = [token.activityKey, token.issuedAt, token.expiresAt].join('\\u001f');
+  const key = [token.activityKey, Date.parse(token.issuedAt), Date.parse(token.expiresAt)].join('|');
   if (consumedOperationAuthorizations.has(key)) return false;
   consumedOperationAuthorizations.set(key, Date.parse(token.expiresAt));
   return true;
@@ -188,7 +188,7 @@ export async function handleAssessmentGenerationRequest(
   const config = options.config ?? resolveTeachingProposalRuntimeConfig();
   const request = parseRequest(raw, config.maxTextBytes);
   if (!request) return failure('REQUEST_INVALID', 400);
-  if ([request.context.objective, request.source.title, request.source.text].some(appearsStudentPersonal)) {
+  if ([request.context.className, request.context.objective, request.source.title, request.source.text].some(appearsStudentPersonal)) {
     return failure('REMOTE_POLICY_DENIED', 403);
   }
   const textBytes = new TextEncoder().encode([
