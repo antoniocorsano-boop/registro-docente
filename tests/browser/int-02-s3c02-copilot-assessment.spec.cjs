@@ -104,6 +104,12 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await composer.getByTestId('int02-s3c02-create-assessment').click();
   const sourceSelect=composer.getByLabel('Materiale',{exact:true});
   await expect(sourceSelect).toBeVisible();
+  await expect(sourceSelect).toBeFocused();
+  await composer.getByRole('button',{name:'Cambia attività'}).click();
+  const assessmentGoal=composer.getByTestId('int02-s3c02-create-assessment');
+  await expect(assessmentGoal).toBeFocused();
+  await assessmentGoal.click();
+  await expect(sourceSelect).toBeFocused();
   await sourceSelect.selectOption({label:SOURCE_TITLE});
   await composer.getByTestId('int02-s3c02-start-assessment').click();
 
