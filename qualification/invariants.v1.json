@@ -1307,6 +1307,24 @@
         "tests/browser/cdc-02-sessions.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S4B-I01",
+      "owner": "INT-02/S4b",
+      "statement": "Entering Stampa or Analisi does not silently choose the first saved assessment from the shared catalogue. Teacher explicitly selects a valid existing test for display, or a direct intentional editor/catalogue action provides the identity. A deleted or invalid selected ID fails closed without falling back to another test; switching professional class invalidates hidden choices. Rendering a sheet or item analysis is distinct from selecting a recipient class, sharing a link or authorizing grade import, and never writes a test, vote or UDA. Verify on two synthetic tests in both catalogue orders, mobile 320/390 px, and preserve legacy explicit editor choice.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/security/int02S4ExplicitTestSelection.test.ts",
+        "src/components/VerificheOnlineView.tsx",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+      ],
+      "tests": [
+        "src/security/int02S4ExplicitTestSelection.test.ts",
+        "src/security/int02S2aAssessmentShareSelection.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+      ]
     }
   ]
 }
