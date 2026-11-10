@@ -174,12 +174,9 @@ test('INT-02/S4c: Prepara, test salvato, consegna, Registra e Rivedi mantengono 
   await closeSaveNotice(page);
   const savedRecord = page.getByRole('region', { name: 'Registra per ' + CLASS_NAME });
   await expect(savedRecord).toContainText('Registrazione completata');
-  await importButton.click();
-  await expect.poll(() => dialogLog.some(d => d.type === 'alert'
-    && d.text.includes('Nessuna nuova valutazione importabile'))).toBe(true);
 
-  // Post-record review keeps the class and the kind of evidence without
-  // assigning a new test or producing additional assessments.
+  // Confirmed import ends in the Record router, not the online-test surface.
+  // First inspect the real, same-class Rivedi handoff.
   await savedRecord.getByRole('button', { name: 'Rivedi', exact: true }).click();
   const review = page.getByRole('region', { name: 'Rivedi la classe ' + CLASS_NAME });
   await expect(review).toBeVisible();
@@ -193,6 +190,25 @@ test('INT-02/S4c: Prepara, test salvato, consegna, Registra e Rivedi mantengono 
   await expect(mission).toContainText('Superficie corrente: Storico');
   await expect(page.getByRole('heading', { name: 'Storico Prove Registrate: ' + CLASS_NAME })).toBeVisible();
 
+  // Reimport is a new explicit professional action: reopen Verifiche and
+  // re-establish all four choices. An unchanged submission must not write.
+  await fromDrawer(page, 'Verifiche online');
+  await page.getByRole('button', { name: 'Esiti & Item Analysis (1)', exact: true }).click();
+  const retryImport = page.getByTestId('import-01-confirmed-scope');
+  await expect(retryImport).toBeDisabled();
+  await page.getByLabel('Classe per importazione esiti').selectOption({ label: CLASS_NAME });
+  await page.getByLabel('Verifica per importazione esiti').selectOption(testId);
+  await page.getByLabel('Periodo per importazione esiti').selectOption('Q1');
+  await page.getByLabel('UDA di destinazione per importazione esiti').selectOption('none');
+  await expect(retryImport).toBeEnabled();
+  const successfulImportsBeforeRetry = dialogLog.filter(d => d.type === 'alert'
+    && d.text.includes('Importazione completata con successo!')).length;
+  await retryImport.click();
+  await expect.poll(() => dialogLog.some(d => d.type === 'alert'
+    && d.text.includes('Nessuna nuova valutazione importabile'))).toBe(true);
+  expect(dialogLog.filter(d => d.type === 'alert'
+    && d.text.includes('Importazione completata con successo!')).length)
+    .toBe(successfulImportsBeforeRetry);
   expect(pageErrors).toEqual([]);
   await fs.writeFile(path.join(EVIDENCE, 'int-02-s4c-synthetic-manifest.json'), JSON.stringify({
     candidateSha: process.env.CANDIDATE_SHA || 'local',
