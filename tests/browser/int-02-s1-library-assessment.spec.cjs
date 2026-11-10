@@ -362,6 +362,10 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   // Keep the student test selected and generate no personal data.
   await page.setViewportSize({ width: 794, height: 1123 });
   await page.emulateMedia({ media: 'print' });
+  // Actual print media must contain only the assessment sheet, never the dark app shell.
+  await expect(page.getByTestId('assessment-print-sheet')).toBeVisible();
+  await expect(page.getByText('Verifiche sulle Lezioni & Flashcards Formative')).toBeHidden();
+  await expect(page.locator('#root')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.getByTestId('assessment-print-footer')).toHaveCSS('flex-direction', 'row');
   const [a4Instructions, a4Signature] = await Promise.all([
     page.getByTestId('assessment-print-instructions').boundingBox(),
