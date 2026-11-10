@@ -205,22 +205,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     <section data-testid="int02-s3c02-assessment-panel"
       aria-label="Proposta di verifica dal Copilota"
       className="space-y-3 rounded-xl border border-cyan-700/60 bg-cyan-950/20 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-bold text-cyan-100">Prepara una verifica</h3>
-          <p className="mt-1 text-xs text-slate-300">
-            Classe <strong>{className}</strong> · {source.title}
-          </p>
-        </div>
-        <button type="button" onClick={()=>{
-          if(generating)handleCancelGeneration();
-          onClose();
-        }}
-          disabled={adopting}
-          className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs text-slate-200">
-          Chiudi
-        </button>
-      </div>
+      {!preview&&<h3 className="text-base font-bold text-cyan-100">Prepara una verifica</h3>}
       {!sourceAllowed && (
         <p role="alert" className="text-xs text-amber-200">
           Per creare una proposta scegli una fonte testuale pronta e professionale, senza dati degli alunni.
@@ -288,7 +273,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
             </p>
           </div>
           <p className="text-xs font-semibold text-amber-200">
-            Correttezza da verificare nell'editor: controlla risposte e spiegazioni.
+            Controlla le risposte prima di salvare.
           </p>
           {error&&<p role="alert" data-testid="int02-assessment-error"
             className="text-sm text-amber-200">{error}</p>}
