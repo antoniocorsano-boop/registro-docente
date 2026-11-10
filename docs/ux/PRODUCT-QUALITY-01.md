@@ -1,6 +1,6 @@
 # PRODUCT-QUALITY-01 — Qualità di prodotto per Registro Docente
 
-- **Stato:** PROPOSTA DI REGOLA PERMANENTE (attiva soltanto dopo integrazione approvata)
+- **Stato:** ACTIVE nel ramo principale dopo l'integrazione approvata della PR #198; prima dell'integrazione resta una proposta
 - **Data:** 2026-11-10
 - **Ambito:** tutte le nuove funzionalità e modifiche a Registro Docente, incluse interfacce, contenuti, navigazione, messaggi, Copilota, verifiche, dati e manutenzione.
 - **Autorità:** integra senza sostituire la specifica normativa `UX-GOV-01-registro-docente-user-flow-baseline-v1.md`. In caso di conflitto prevalgono i vincoli di UX-GOV-01, sicurezza, privacy, accessibilità e i contratti canonici.
