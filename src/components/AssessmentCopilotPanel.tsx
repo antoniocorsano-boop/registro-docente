@@ -228,7 +228,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100"
       />
       <details data-testid="int02-assessment-provider-details"
-        className="rounded-lg border border-slate-800 text-xs text-slate-300">
+        className="rounded-lg border border-slate-800 text-sm text-slate-300">
         <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm">Informazioni sull'invio</summary>
         <p className="border-t border-slate-800 px-3 py-3 leading-relaxed">
           Il materiale e l'obiettivo saranno inviati a un servizio esterno solo con la tua autorizzazione.
@@ -268,11 +268,11 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
           <div>
             <h4 ref={previewHeadingRef} tabIndex={-1} className="font-semibold text-slate-100">Proposta di verifica</h4>
             <p className="mt-1 text-sm text-slate-200">{preview.draft.title}</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-sm text-slate-400">
               {preview.draft.questions.length} {preview.draft.questions.length===1?'domanda':'domande'} · Da rivedere · Non salvata
             </p>
           </div>
-          <p className="text-xs font-semibold text-amber-200">
+          <p className="text-sm font-semibold text-amber-200">
             Rivedi domande e risposte prima di salvare la verifica.
           </p>
           {error&&<p role="alert" data-testid="int02-assessment-error"
