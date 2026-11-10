@@ -1416,7 +1416,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             <MessageCircle size={18} className="text-cyan-300" aria-hidden="true" />
             Copilota
           </div>
-          <p className="mt-0.5 truncate text-xs text-slate-400">{contextLabel}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-400">{isAssessmentOpen ? `Classe ${currentClassName ?? 'da scegliere'}` : contextLabel}</p>
         </div>
         <button
           ref={composerCloseButtonRef}
@@ -1447,7 +1447,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       </div>
 
       <div data-testid="library-copilot-scroll" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {!hasCompleteDirectLaunch && !isBoundMissionFlow && (
+        {!hasCompleteDirectLaunch && !isBoundMissionFlow && !isAssessmentOpen && (
           <section className="space-y-3" data-testid="teacher-first-copilot-entry">
             <div>
               <h3 className="text-sm font-bold text-slate-100">{isConductLaunch ? 'Supporto durante la lezione' : 'Cosa vuoi fare?'}</h3>
@@ -1618,7 +1618,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Da quale materiale vuoi partire?</div>
             <div>
           <label htmlFor="copilot-source" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Fonte della Biblioteca
+            {isAssessmentOpen ? 'Materiale' : 'Fonte della Biblioteca'}
           </label>
           <select
             id="copilot-source"
@@ -1637,7 +1637,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             }}
             className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
           >
-            <option value="">Scegli una fonte…</option>
+            <option value="">Scegli un materiale…</option>
             {library.sources.map(source => (
               <option key={source.id} value={source.id}>{source.title}</option>
             ))}
@@ -1685,7 +1685,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 onClose={() => setIsAssessmentOpen(false)}
               />
             )}
-            <details className="rounded-xl border border-slate-800 bg-slate-900/50">
+            <details className={isAssessmentOpen ? 'hidden' : 'rounded-xl border border-slate-800 bg-slate-900/50'}>
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-200">
             <FilePlus2 size={17} className="text-cyan-300" aria-hidden="true" />
             Aggiungi una nuova fonte
