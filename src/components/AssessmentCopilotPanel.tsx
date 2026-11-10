@@ -218,6 +218,8 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
           La classe non è identificata con certezza. Scegli quella corretta prima di creare la verifica.
         </p>
       )}
+      {!preview&&(
+        <>
       <label className="block text-sm font-semibold text-slate-200" htmlFor="s3c02-objective">
         Che cosa vuoi verificare?
       </label>
@@ -260,6 +262,8 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         </button>
       )}
       {error&&<p role="alert" data-testid="int02-assessment-error" className="text-sm text-amber-200">{error}</p>}
+        </>
+      )}
       {preview&&(
         <div data-testid="int02-assessment-preview" className="space-y-3 border-t border-cyan-800 pt-3">
           <div>
@@ -298,6 +302,11 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
             data-testid="int02-assessment-open-editor"
             className="min-h-[48px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50">
             {adopting?'Apertura in corso…':'Apri e modifica'}
+          </button>
+          <button type="button" onClick={()=>setPreview(null)}
+            disabled={adopting}
+            className="min-h-[44px] w-full text-sm text-slate-300 underline underline-offset-4 disabled:opacity-50">
+            Modifica la richiesta
           </button>
         </div>
       )}
