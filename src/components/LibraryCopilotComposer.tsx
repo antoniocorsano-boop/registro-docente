@@ -227,6 +227,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const isOpen = surfaceMode === 'compose';
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [isAssessmentOpen, setIsAssessmentOpen] = useState(false);
+  useEffect(()=>{
+    if(!isOpen)setIsAssessmentOpen(false);
+  },[isOpen]);
   const assessmentLiveRef = useRef({library, classes, currentClassId, currentClassName, selectedSourceId});
   assessmentLiveRef.current = {library, classes, currentClassId, currentClassName, selectedSourceId};
   const [message, setMessage] = useState('');
@@ -1615,7 +1618,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
         {showMaterialControls && (
           <div className="space-y-3" data-testid="teacher-first-material-step">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Da quale materiale vuoi partire?</div>
+            {isAssessmentOpen ? (
+              <button type="button" onClick={()=>setIsAssessmentOpen(false)}
+                className="min-h-[44px] text-sm font-semibold text-cyan-200 underline underline-offset-4">
+                Cambia attività
+              </button>
+            ) : (
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Da quale materiale vuoi partire?</div>
+            )}
             <div>
           <label htmlFor="copilot-source" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
             {isAssessmentOpen ? 'Materiale' : 'Fonte della Biblioteca'}
@@ -1826,7 +1836,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
 
 
-        {!isBoundMissionFlow && teacherFirstResolution && teacherFirstResolution.goalKind !== 'unknown' && selectedSource && (teacherFirstGoalKind === 'material' || resolvedTeachingContext) && (
+        {!isAssessmentOpen && !isBoundMissionFlow && teacherFirstResolution && teacherFirstResolution.goalKind !== 'unknown' && selectedSource && (teacherFirstGoalKind === 'material' || resolvedTeachingContext) && (
           <section data-testid="teacher-first-preview" className="space-y-3 rounded-xl border border-cyan-900/60 bg-slate-900/60 p-3">
             <div className="text-xs font-bold uppercase tracking-wide text-cyan-300">Prima di continuare</div>
             <div className="text-sm text-slate-100"><span className="font-semibold">Obiettivo:</span> {message.trim()}</div>
