@@ -1531,7 +1531,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       {/* SUB-TAB 3: SCHEDA CARTACEA / STAMPA & PDF */}
       {/* ============================================================== */}
       {activeSubTab === 'stampa' && (
-        <div className="space-y-4">
+        <div data-testid="assessment-read-panel" className="space-y-4">
           {/* Controls Bar */}
           <div className="neon-card p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 no-print">
             <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
@@ -1615,7 +1615,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                       [ CHIAVE DI CORREZIONE E GRIGLIA DOCENTE ]
                     </span>
                   ) : (
-                    <span>Verifica Formativa delle Competenze (D.M. 221/2025)</span>
+                    <span>Scheda di verifica</span>
                   )}
                 </div>
               </div>
@@ -1690,10 +1690,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             {/* Bottom Evaluation Box */}
             <div className="mt-10 pt-4 border-t-2 border-slate-900 flex justify-between items-end text-xs text-slate-700">
               <div>
-                <p className="italic">Note per l'alunno: Barrare una sola risposta per ogni quesito.</p>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Generato con Registro Docente & Flashcards Pro Neon
-                </p>
+                <p className="italic">Indicazioni: segui le istruzioni del docente per ciascun quesito.</p>
               </div>
               <div className="text-right">
                 <div className="border-t border-slate-400 pt-1 w-48 text-center">
@@ -1714,7 +1711,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       {/* SUB-TAB 4: ESITI, ITEM ANALYSIS & DIDATTICA FORMATIVA */}
       {/* ============================================================== */}
       {activeSubTab === 'analisi' && (
-        <div className="space-y-4">
+        <div data-testid="assessment-read-panel" className="space-y-4">
           {/* Item Analysis Card for Selected Test */}
           <div className="neon-card neon-card-highlight p-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
