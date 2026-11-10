@@ -1650,8 +1650,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             value={selectedSourceId}
             onChange={event => {
               resolutionEpochRef.current += 1;
+              // Changing material keeps the teacher in the assessment task.
+              // The keyed panel remounts for the newly selected source.
               setSelectedSourceId(event.target.value);
-              setIsAssessmentOpen(false);
               setIsPrepareOpen(false);
               setResolution(null);
               setIsReviewUnavailableOpen(false);
