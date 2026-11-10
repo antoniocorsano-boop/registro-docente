@@ -304,6 +304,12 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
 
   // Re-entering Verifiche is not choosing the first catalogue item.
   await openDrawerItem(page, 'Oggi');
+  // The app's existing guarded-home route requires an explicit teacher
+  // confirmation. This is not a test-selection failure.
+  const homeConfirmation = page.getByTestId('header01-home-confirm');
+  if (await homeConfirmation.isVisible().catch(() => false)) {
+    await homeConfirmation.getByRole('button', { name: 'Torna a Oggi', exact: true }).click();
+  }
   await openDrawerItem(page, 'Verifiche online');
   await page.getByRole('button', { name: 'Scheda Cartacea / PDF' }).click();
   await expect(page.getByLabel('Test da Stampare')).toHaveValue('');
