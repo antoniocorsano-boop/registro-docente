@@ -1589,7 +1589,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
           {/* Printable Sheet Canvas (never render a test chosen by catalog order). */}
           {currentSelectedTest ? (
-          <div className="bg-white text-slate-950 p-8 sm:p-12 rounded-xl shadow-xl max-w-4xl mx-auto border border-slate-300 font-sans print:p-0 print:border-none print:shadow-none">
+          <div data-testid="assessment-print-sheet" className="bg-white text-slate-950 p-8 sm:p-12 rounded-xl shadow-xl max-w-4xl mx-auto border border-slate-300 font-sans print:p-0 print:border-none print:shadow-none">
             {/* School Header */}
             <div className="border-b-2 border-slate-900 pb-4 mb-6">
               <div className="flex justify-between items-start text-xs text-slate-700 mb-2">
