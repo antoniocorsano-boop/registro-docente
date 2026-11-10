@@ -16,16 +16,16 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('CLIENT_GENERATION_TIMEOUT_MS');
     expect(panel).toContain('Annulla richiesta');
     expect(panel).toContain('getLiveContext');
-    expect(panel).toContain('Crea la proposta');
+    expect(panel).toContain('Prepara le domande');
     expect(panel).toContain('Apri e modifica');
-    expect(panel).toContain('Controlla le risposte prima di salvare.');
+    expect(panel).toContain('Rivedi domande e risposte prima di salvare la verifica.');
     expect(panel).toContain('Che cosa vuoi verificare?');
-    expect(panel).toContain('Come funziona l\'invio');
+    expect(panel).toContain('Informazioni sull\'invio');
     expect(panel).toContain('int02-assessment-questions-details');
     expect(panel).toContain('role="alert" data-testid="int02-assessment-error"');
     expect(panel).toContain('objectiveRef.current?.focus()');
     expect(panel).toContain('previewHeadingRef.current?.focus()');
-    expect(panel).toContain('Confermo l\'invio del materiale e dell\'obiettivo');
+    expect(panel).toContain('Autorizzo l\'invio del materiale e dell\'obiettivo');
     expect(panel).not.toContain('onSaveNewTest');
   });
   test('ricollega il pannello al Copilota esistente, senza sostituirne le altre azioni',async()=>{
@@ -38,7 +38,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(composer).toContain('selectedSource');
     expect(composer).toContain('!isAssessmentOpen && (');
     expect(composer).toContain('!isAssessmentOpen && !isBoundMissionFlow && teacherFirstResolution');
-    expect(composer).toContain('Cambia attività');
+    expect(composer).toContain('Altre attività');
     expect(composer).toContain('assessmentSourceSelectRef.current?.focus()');
     expect(composer).toContain('assessmentGoalButtonRef.current?.focus()');
     expect(composer).not.toContain('setSelectedSourceId(event.target.value);\n              setIsAssessmentOpen(false);');
