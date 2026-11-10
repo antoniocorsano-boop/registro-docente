@@ -1354,7 +1354,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   <div className="space-y-3 p-3 pt-0">
                     <label className="block text-sm text-slate-200">
                       <span className="mb-1 block font-semibold">UDA</span>
-                      <select value={editorUdaId} onChange={e => setEditorUdaId(e.target.value)}
+                      <select aria-label="UDA" value={editorUdaId} onChange={e => setEditorUdaId(e.target.value)}
                         className="w-full min-h-[44px] neon-input bg-slate-900 text-sm text-white">
                         <option value="">Nessuna UDA associata</option>
                         {eligibleUdas.map(u => (
