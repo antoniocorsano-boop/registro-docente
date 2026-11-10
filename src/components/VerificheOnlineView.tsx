@@ -826,6 +826,30 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     };
   });
 
+  // Additional questions are secondary during a Copilota review: show them after existing ones.
+  const addQuestionActions = (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAddQuestionToEditor('multiple_choice')}
+                    className={focusedCopilotReview
+                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
+                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
+                  >
+                    <Plus className="w-3.5 h-3.5 text-cyan-400" /> {focusedCopilotReview ? 'Aggiungi domanda' : '+ Domanda Scelta Multipla'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddQuestionToEditor('true_false')}
+                    className={focusedCopilotReview
+                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
+                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" /> {focusedCopilotReview ? 'Aggiungi vero/falso' : '+ Vero / Falso'}
+                  </button>
+                </div>
+  );
+
   // Print test handler
   const handlePrint = () => {
     if (!currentSelectedTest) return;
@@ -834,7 +858,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {assessmentTransferNotice && (
+      {assessmentTransferNotice
+        && (!focusedCopilotReview || assessmentTransferNotice !== 'Proposta aperta. Nulla è stato salvato.')
+        && (
         <p role="status" data-testid="int02-assessment-transfer-notice"
           className="rounded-lg border border-cyan-800 bg-cyan-950/30 p-3 text-sm text-cyan-100">
           {assessmentTransferNotice}
@@ -1452,26 +1478,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   {focusedCopilotReview ? 'Domande' : 'Quesiti del Test'} ({editorQuestions.length})
                 </h4>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestionToEditor('multiple_choice')}
-                    className={focusedCopilotReview
-                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
-                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
-                  >
-                    <Plus className="w-3.5 h-3.5 text-cyan-400" /> {focusedCopilotReview ? 'Aggiungi domanda' : '+ Domanda Scelta Multipla'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestionToEditor('true_false')}
-                    className={focusedCopilotReview
-                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
-                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
-                  >
-                    <Plus className="w-3.5 h-3.5 text-emerald-400" /> {focusedCopilotReview ? 'Aggiungi vero/falso' : '+ Vero / Falso'}
-                  </button>
-                </div>
+                {!focusedCopilotReview && addQuestionActions}
+
               </div>
 
               {/* Questions Editor Cards */}
@@ -1600,6 +1608,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   </div>
                 ))}
               </div>
+              {focusedCopilotReview && addQuestionActions}
 
               <div className={focusedCopilotReview
                 ? "flex flex-wrap gap-3 pt-3 border-t border-[var(--border)]"
