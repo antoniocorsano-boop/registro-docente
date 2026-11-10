@@ -37,6 +37,8 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(composer).toContain('!isAssessmentOpen && (');
     expect(composer).toContain('!isAssessmentOpen && !isBoundMissionFlow && teacherFirstResolution');
     expect(composer).toContain('Cambia attività');
+    expect(composer).toContain('assessmentSourceSelectRef.current?.focus()');
+    expect(composer).toContain('assessmentGoalButtonRef.current?.focus()');
     expect(composer).toContain('showMaterialControls && !isAssessmentOpen');
     expect(composer).toContain('if(!isOpen)setIsAssessmentOpen(false)');
     expect(composer).toContain('isAssessmentOpen ? \'Materiale\' : \'Fonte della Biblioteca\'');
