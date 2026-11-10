@@ -46,3 +46,8 @@ Regole stabili del progetto. Applicare tutte le voci `ACTIVE` pertinenti.
 - Stato: ACTIVE
 - Regola: prima di qualsiasi `create_file`/`update_file`/`delete_file` destinata a un branch non-default, creare il branch, verificarne l'exact base SHA e passare esplicitamente quel branch alla mutation. Non usare `main` come fallback quando il branch target manca o una mutation fallisce.
 - Origine: LL-003.
+
+## OR-010 — Product quality before technical closure
+- Stato: ACTIVE
+- Regola: ogni ciclo su Registro Docente parte dal compito professionale dell'insegnante e applica la guida `docs/ux/PRODUCT-QUALITY-01.md`, subordinata alla specifica UX-GOV-01. Ogni intervento deve verificare coerenza di linguaggio scolastico, percorsi, presentazione e autorità del docente; le modifiche all'interfaccia richiedono revisione di prodotto separata dalle prove tecniche prima dell'accettazione. Se l'intervento non ha impatto sull'esperienza, documentare motivatamente la non pertinenza. Nessun PASS tecnico equivale a PASS di prodotto.
+- Origine: feedback professionale sul Copilota PR #197 e roadmap #104; decisione D-007.

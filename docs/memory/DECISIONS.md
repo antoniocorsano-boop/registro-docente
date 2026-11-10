@@ -54,3 +54,12 @@ Decisioni che definiscono confini o metodi durevoli. Le voci obsolete restano vi
 - Motivazione: storia delle sedute consultabile in futuro senza retrodatazioni, perdita silenziosa, duplicazione di dati individuali o scambio tra modello isolato e persistenza.
 - Origine: issue #170, PR #180/#181/#183, ratifica umana PR #180 commento 6748338669, ricevuta PR #181 commento 6748973795, ricevuta PR #183 commento 6750192954, decisioni umane di promozione del 2026-11-09.
 - Sostituisce: —
+
+## D-007 — Registro Docente è un prodotto professionale per insegnanti
+- Stato: ACTIVE
+- Data: 2026-11-10
+- Decisione: la qualità dell'esperienza docente è un vincolo trasversale dello sviluppo. La progettazione parte da un'attività professionale reale e deve produrre percorsi semplici, terminologia didattica precisa, stile visivo coerente, messaggi comprensibili e decisioni esplicite del docente. `docs/ux/PRODUCT-QUALITY-01.md` è la guida di riferimento, coerente con e subordinata a UX-GOV-01; `AGENTS.md` ne richiede la lettura e la verifica nelle attività future.
+- Accettazione: specificare lo scenario docente e il risultato atteso; mantenere separati controlli tecnici e revisione visiva/professionale. Per interventi esclusivamente interni senza impatto utente, documentare la non pertinenza. Nessuna sola qualifica tecnica consente accettazione UX, integrazione o distribuzione.
+- Motivazione: il superamento dei gate della PR #197 non elimina linguaggio di sistema, densità visuale e incoerenze di prodotto osservate dal docente.
+- Origine: roadmap #104, UX-TEACHER-01 issue #196, PR #197 e decisione professionale del 2026-11-10.
+- Sostituisce: — 
