@@ -3,7 +3,7 @@
 ## Qualità di prodotto trasversale
 
 - **Guida di prodotto:** [PRODUCT-QUALITY-01 — linguaggio, percorsi e accettazione docente](./PRODUCT-QUALITY-01.md).
-- **Regola permanente candidata:** ogni lavorazione parte dal compito reale del docente; test tecnici e revisione di prodotto restano separati. La guida integra, senza sostituire, la baseline normativa UX-GOV-01.
+- **Regola permanente (dopo integrazione):** ogni lavorazione parte dal compito reale del docente; test tecnici e revisione di prodotto restano separati. La guida integra, senza sostituire, la baseline normativa UX-GOV-01.
 
 ## Canonical baseline
 
