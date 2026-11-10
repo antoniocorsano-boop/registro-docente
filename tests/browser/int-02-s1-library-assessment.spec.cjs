@@ -388,6 +388,8 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   });
   expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   await page.emulateMedia({ media: 'screen' });
+  // The paper-only light scheme must not leak into the dark application.
+  await expect(page.locator('html')).not.toHaveCSS('color-scheme', 'light');
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
