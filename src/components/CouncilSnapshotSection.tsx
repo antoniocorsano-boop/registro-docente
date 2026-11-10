@@ -118,14 +118,7 @@ export const CouncilSnapshotSection: React.FC<CouncilSnapshotSectionProps> = ({
   return (
     <section className="mt-3 min-w-0 max-w-full space-y-3 border-t border-[var(--border)] pt-3"
       aria-label="Fotografie storiche della seduta">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-bold text-white">Fotografie confermate</h3>
-        {selectedSnapshot && (
-          <span className="rounded-full border border-emerald-700/60 bg-emerald-950/50 px-2.5 py-1 text-xs font-semibold text-emerald-200">
-            Confermata
-          </span>
-        )}
-      </div>
+      <h3 className="text-base font-bold text-white">Fotografie confermate</h3>
       <p className="text-xs leading-relaxed text-slate-300">
         Dati aggregati del docente, non un verbale ufficiale.
       </p>
@@ -161,41 +154,38 @@ export const CouncilSnapshotSection: React.FC<CouncilSnapshotSectionProps> = ({
               </time>
             </p>
             <p className="text-xs text-slate-400">
-              Seduta: {formatCouncilDate(selectedSnapshot.sessionDate)} ·
-              prove fino al {formatCouncilDate(selectedSnapshot.requestedCutoff)}
+              Seduta: {formatCouncilDate(selectedSnapshot.sessionDate)}
             </p>
           </div>
           <section aria-label="Confronto tra fotografia e quadro corrente" className="space-y-2">
+            <h4 className="text-sm font-semibold text-slate-200">Alunni con voto di ingresso salvato</h4>
             <div className="grid grid-cols-2 gap-2">
-              <div className="min-w-0 rounded-lg border border-cyan-800/60 bg-cyan-950/20 p-3"
+              <div className="flex min-w-0 flex-col rounded-lg border border-cyan-800/60 bg-cyan-950/20 p-3"
                 aria-label="Alunni con voto di ingresso salvato nella fotografia">
                 <p className="text-xs font-bold leading-snug text-white">Fotografia</p>
-                <p className="mt-1 text-xs leading-snug text-slate-200">Alunni con voto di ingresso salvato</p>
-                <p className="mt-1 text-xs leading-snug text-slate-300">
-                  Prove considerate fino al {formatCouncilDate(selectedSnapshot.requestedCutoff)}
-                </p>
-                <p className="mt-2 text-3xl font-bold tabular-nums text-white">
+                <p className="my-1 text-3xl font-bold tabular-nums text-white">
                   {selectedSnapshot.aggregates.withSavedTeacherProposal}
                 </p>
+                <p className="mt-auto text-xs leading-snug text-slate-300">
+                  Prove fino al {formatCouncilDate(selectedSnapshot.requestedCutoff)}
+                </p>
               </div>
-              <div className="min-w-0 rounded-lg border border-[var(--border)] bg-slate-950/50 p-3"
+              <div className="flex min-w-0 flex-col rounded-lg border border-[var(--border)] bg-slate-950/50 p-3"
                 aria-label="Alunni con voto di ingresso salvato nel quadro corrente">
                 <p className="text-xs font-bold leading-snug text-white">Quadro corrente</p>
-                <p className="mt-1 text-xs leading-snug text-slate-200">Alunni con voto di ingresso salvato</p>
-                <p className="mt-1 text-xs leading-snug text-slate-300">
-                  Prove considerate fino al {currentOverview
+                <p className="my-1 text-3xl font-bold tabular-nums text-white">
+                  {currentOverview?.withSavedTeacherProposal ?? '—'}
+                </p>
+                <p className="mt-auto text-xs leading-snug text-slate-300">
+                  Prove fino al {currentOverview
                     ? formatCouncilDate(currentOverview.effectiveCutoff)
                     : 'data non disponibile'}
-                </p>
-                <p className="mt-2 text-3xl font-bold tabular-nums text-white">
-                  {currentOverview?.withSavedTeacherProposal ?? '—'}
                 </p>
               </div>
             </div>
             <p className="text-xs leading-relaxed text-slate-300">
-              La fotografia resta invariata. I numeri indicano gli alunni con un voto di ingresso
-              salvato, non il totale dei voti. La data riguarda soltanto le prove considerate.
-              Non indica quando il voto di ingresso fu inserito.
+              La fotografia non cambia; il quadro corrente può cambiare.
+              {' '}I limiti delle prove non attestano quando i voti furono registrati.
             </p>
           </section>
           <details className="rounded-lg border border-[var(--border)] p-2.5"
