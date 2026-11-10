@@ -1681,7 +1681,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             )}
             {!isBoundMissionFlow && isAssessmentOpen && (!selectedSource || !currentClassId || !currentClassName) && (
               <p role="status" className="rounded-lg border border-amber-900 p-3 text-xs text-amber-200">
-                Scegli un materiale della Biblioteca e apri la classe per cui vuoi preparare la verifica.
+                {!selectedSource
+                  ? 'Scegli un materiale della Biblioteca per preparare la verifica.'
+                  : 'Apri nel Registro la classe per cui vuoi preparare la verifica.'}
               </p>
             )}
             {!isBoundMissionFlow && isAssessmentOpen && selectedSource && currentClassId && currentClassName && (
