@@ -17,6 +17,10 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('Annulla richiesta');
     expect(panel).toContain('getLiveContext');
     expect(panel).toContain('Prepara le domande');
+    expect(panel).toContain('Proposta di verifica');
+    expect(panel).toContain('Non salvata');
+    expect(panel).not.toContain('Verifica pronta');
+    expect(panel).not.toContain('reason.message');
     expect(panel).toContain('Apri e modifica');
     expect(panel).toContain('Rivedi domande e risposte prima di salvare la verifica.');
     expect(panel).toContain('Che cosa vuoi verificare?');
