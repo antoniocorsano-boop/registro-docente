@@ -1393,6 +1393,24 @@
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S4C-I01",
+      "owner": "INT-02/S4c",
+      "statement": "The same synthetic teacher journey through Prepara, explicit assessment save and sharing, a student submission, explicit Registra import scope with a dismissed preview and then authorized grade mutation, and Rivedi must preserve class identity and teacher authority. No source, UDA, verification, grade, or remote provider is selected by catalogue order or implicit navigation. Reimporting an unchanged submission cannot overwrite a grade. The Copilota S3c mocked-provider unsaved-editor test remains independent and required. This invariant adds tests only and makes no new persistence or provider contract.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        ".github/workflows/browser-qualification.yml",
+        "tests/browser/int-02-s4-teacher-cycle.spec.cjs",
+        "src/security/int02S4TeacherCycleContinuity.test.ts"
+      ],
+      "tests": [
+        "src/security/int02S4TeacherCycleContinuity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s4-teacher-cycle.spec.cjs",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+      ]
     }
   ]
 }
