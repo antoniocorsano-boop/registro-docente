@@ -661,6 +661,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Ephemeral: no URL, browser history, Vault, backup or grades.
   const [pendingCopilotAssessment, setPendingCopilotAssessment] = useState<PendingCopilotAssessmentTransfer | null>(null);
   const [assessmentTransferNotice, setAssessmentTransferNotice] = useState<string | null>(null);
+  const [isAssessmentEditorFocus, setIsAssessmentEditorFocus] = useState(false);
   const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
   const [copilotSurfaceMode, setCopilotSurfaceMode] = useState<CopilotSurfaceMode>('closed');
 
@@ -3432,10 +3433,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             assessmentHandoff={activeAssessmentHandoff}
             assessmentEditorTransfer={pendingCopilotAssessmentValid ? pendingCopilotAssessment : null}
             assessmentTransferNotice={assessmentTransferNotice}
+            onAssessmentEditorFocusChange={setIsAssessmentEditorFocus}
             onAssessmentTransferResult={(nonce,success)=>{
               setPendingCopilotAssessment(previous=>previous?.nonce===nonce ? null : previous);
               setAssessmentTransferNotice(success
-                ? 'Bozza del Copilota aperta. Nulla è stato salvato.'
+                ? 'Proposta aperta. Nulla è stato salvato.'
                 : 'La proposta non è stata aperta: controlla la classe o la bozza già presente.');
             }}
             activeClassId={currentClass?.id ?? null}
@@ -3595,6 +3597,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
       {!studentMode.isOpen && (
         <>
+          {!isAssessmentEditorFocus && (
           <CopilotExperience
             settings={settings}
             copilotState={copilotState}
@@ -3612,6 +3615,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
             suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
           />
+          )}
           <LibraryCopilotComposer
               library={library}
               udas={udas}
