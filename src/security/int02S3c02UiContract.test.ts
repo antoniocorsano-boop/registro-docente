@@ -20,7 +20,9 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('Proposta di verifica');
     expect(panel).toContain('Non salvata');
     expect(panel).not.toContain('Verifica pronta');
-    expect(panel).not.toContain('reason.message');
+    expect(panel).toContain('openEditorErrorCopy[reason.message]');
+    expect(panel).toContain('Hai già una verifica con modifiche non salvate.');
+    expect(panel).toContain('La classe o il materiale sono cambiati.');
     expect(panel).toContain('Apri e modifica');
     expect(panel).toContain('Rivedi domande e risposte prima di salvare la verifica.');
     expect(panel).toContain('Che cosa vuoi verificare?');
@@ -56,6 +58,8 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(app).toContain('checkAssessmentEditorTransferContext');
     expect(app).toContain('canAcceptAssessmentEditorTransfer');
     expect(app).toContain('onAcceptAssessmentDraft=');
+    expect(app).toContain('Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.');
+    expect(app).toContain('La fonte o la classe non è più valida. Richiedi una nuova proposta.');
     expect(app).toContain('assessmentEditorTransfer=');
     expect(app).toContain("handleNavigateTab('verifiche-online')");
     expect(app).not.toContain('localStorage.setItem(\'assessmentEditorTransfer');
