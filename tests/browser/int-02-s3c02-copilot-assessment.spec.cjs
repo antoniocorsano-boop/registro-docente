@@ -111,6 +111,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await assessmentGoal.click();
   await expect(sourceSelect).toBeFocused();
   await sourceSelect.selectOption({label:SOURCE_TITLE});
+  await expect(sourceSelect).toBeFocused();
   await composer.getByTestId('int02-s3c02-start-assessment').click();
 
   const panel=composer.getByTestId('int02-s3c02-assessment-panel');
@@ -158,6 +159,18 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await questions.locator('summary').click();
   await expect(questions.getByText(DRAFT.questions[0].q)).toBeVisible();
   expect(calls).toBe(2);
+
+  // Revising the request returns to the pedagogical objective, with no
+  // reused external-consent authority. A third call needs new opt-in.
+  await panel.getByRole('button',{name:'Modifica la richiesta'}).click();
+  await expect(panel.getByTestId('int02-assessment-objective')).toBeFocused();
+  await expect(panel.getByTestId('int02-assessment-remote-consent')).not.toBeChecked();
+  await expect(generate).toBeDisabled();
+  await panel.getByTestId('int02-assessment-remote-consent').check();
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect(panel.getByTestId('int02-assessment-preview')).toBeVisible();
+  expect(calls).toBe(3);
   // An opt-in is for one remote attempt only; retaining a preview must
   // not silently authorize a third provider request.
   // The request form disappears once the proposal is ready. Its
@@ -178,7 +191,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(page.getByPlaceholder('Formula chiaramente la domanda...').first()).toHaveValue(DRAFT.questions[0].q);
   await expect(page.getByTestId('int02-s2b-confirm-origin')).toHaveCount(0);
   await expect(page.getByText('Collega a UDA Curricolare').locator('..').locator('select')).toHaveValue('');
-  expect(calls).toBe(2);
+  expect(calls).toBe(3);
 
   await page.getByRole('button',{name:'Condivisione Padlet'}).click();
   const editorExit=page.getByRole('dialog',{name:'Modifiche non salvate'});
