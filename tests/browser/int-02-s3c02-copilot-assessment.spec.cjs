@@ -121,8 +121,10 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   // An assessment is a single focused task, with no competing Continue CTA.
   await expect(composer.getByRole('button',{name:/Continua/})).toHaveCount(0);
   await expect(composer.getByRole('button',{name:'Cambia attività'})).toBeVisible();
-  await expect(panel).toContainText(CLASS_NAME);
-  await expect(panel).toContainText(SOURCE_TITLE);
+  await expect(composer).toContainText(CLASS_NAME);
+  await expect(composer).toContainText(SOURCE_TITLE);
+  await expect(panel).not.toContainText('Classe '+CLASS_NAME);
+  await expect(panel.getByRole('button',{name:'Chiudi',exact:true})).toHaveCount(0);
   const providerDetails=panel.getByTestId('int02-assessment-provider-details');
   await expect(providerDetails).not.toHaveAttribute('open','');
   await providerDetails.locator('summary').click();
@@ -148,7 +150,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await generate.click();
   await expect(panel.getByTestId('int02-assessment-preview')).toBeVisible();
   await expect(panel).toContainText(DRAFT_TITLE);
-  await expect(panel).toContainText('Correttezza da verificare');
+  await expect(panel).toContainText('Controlla le risposte prima di salvare.');
   await expect(panel.getByText('Verifica pronta',{exact:true})).toBeVisible();
   await expect(panel.getByText('Verifica pronta',{exact:true})).toBeFocused();
   const questions=panel.getByTestId('int02-assessment-questions-details');
