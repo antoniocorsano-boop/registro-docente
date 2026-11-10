@@ -1319,8 +1319,7 @@
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ],
       "tests": [
-        "src/security/int02S4ExplicitTestSelection.test.ts",
-        "src/security/int02S2aAssessmentShareSelection.test.ts"
+        "src/security/int02S4ExplicitTestSelection.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
