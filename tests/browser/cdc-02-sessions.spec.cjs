@@ -138,8 +138,14 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
   const history = panel.getByRole('combobox', { name: 'Seleziona versione fotografica' });
   await expect(history.locator('option')).toHaveCount(1);
   const archived = panel.locator('[aria-label="Fotografia archiviata"]');
-  const frozenVotes = archived.locator('[aria-label="Voti salvati nella fotografia"]');
-  const currentVotes = archived.locator('[aria-label="Voti salvati nel quadro corrente"]');
+  const frozenVotes = archived.locator('[aria-label="Alunni con voto di ingresso salvato nella fotografia"]');
+  const currentVotes = archived.locator('[aria-label="Alunni con voto di ingresso salvato nel quadro corrente"]');
+  await expect(frozenVotes).toContainText('Alunni con voto di ingresso salvato');
+  await expect(currentVotes).toContainText('Alunni con voto di ingresso salvato');
+  await expect(frozenVotes).toContainText(`Prove considerate fino al 10 ottobre ${start}`);
+  await expect(currentVotes).toContainText('Prove considerate fino al');
+  await expect(archived).toContainText('non il totale dei voti');
+  await expect(archived).toContainText('Non indica quando il voto di ingresso fu inserito');
   await expect(frozenVotes.getByText('0', { exact: true })).toBeVisible();
   await expect(currentVotes.getByText('0', { exact: true })).toBeVisible();
   await expect(archived.getByText('Acquisita il', { exact: false })).toBeVisible();
