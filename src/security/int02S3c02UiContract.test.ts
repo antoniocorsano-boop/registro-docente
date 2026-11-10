@@ -24,6 +24,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('int02-assessment-questions-details');
     expect(panel).toContain('role="alert" data-testid="int02-assessment-error"');
     expect(panel).toContain('objectiveRef.current?.focus()');
+    expect(panel).toContain('previewHeadingRef.current?.focus()');
     expect(panel).toContain('Confermo l\'invio del materiale e dell\'obiettivo');
     expect(panel).not.toContain('onSaveNewTest');
   });
