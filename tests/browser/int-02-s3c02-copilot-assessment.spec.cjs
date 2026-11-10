@@ -110,7 +110,8 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   const panel=composer.getByTestId('int02-s3c02-assessment-panel');
   await expect(panel).toBeVisible();
   // An assessment is a single focused task, with no competing Continue CTA.
-  await expect(composer.getByRole('button',{name:'Continua',exact:true})).toHaveCount(0);
+  await expect(composer.getByRole('button',{name:/Continua/})).toHaveCount(0);
+  await expect(composer.getByRole('button',{name:'Cambia attività'})).toBeVisible();
   await expect(panel).toContainText(CLASS_NAME);
   await expect(panel).toContainText(SOURCE_TITLE);
   const providerDetails=panel.getByTestId('int02-assessment-provider-details');
