@@ -2,6 +2,14 @@
 
 Queste istruzioni valgono per l'intero repository.
 
+## Qualità di prodotto — obbligatoria in ogni intervento
+
+Prima di progettare o modificare funzionalità, testi, schermate, navigazione o comportamento, leggi [PRODUCT-QUALITY-01](docs/ux/PRODUCT-QUALITY-01.md) e la baseline normativa [UX-GOV-01](docs/ux/UX-GOV-01-registro-docente-user-flow-baseline-v1.md). Parti dal compito reale del docente, non dal componente informatico. Verifica terminologia professionale, percorso breve, leggibilità, coerenza visuale e controllo delle decisioni da parte del docente.
+
+- Ogni PR dichiara impatto e criteri di qualità di prodotto, oppure motiva l'assenza di impatto sull'esperienza utente.
+- Modifiche visibili al docente: evidenza tecnica e revisione di prodotto sono due valutazioni diverse; mai chiamare PASS UX i soli gate automatici.
+- Non mostrare nomi di sistemi, codici di processo, hash, provider o dettagli di governance nella vista ordinaria. Le informazioni necessarie per privacy, consenso, provenienza e salvataggio restano invece chiare e disponibili.
+
 ## Prima di un ciclo significativo
 
 Prima di implementazioni, incidenti, failure non banali, cambi di architettura/processo o qualificazioni finali:
