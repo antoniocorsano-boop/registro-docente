@@ -45,7 +45,7 @@ describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografi
   });
 
   test('P5 REWORK: una sola etichetta per il conteggio, date sotto i valori e nessun dato perduto', () => {
-    expect(ui).toContain('Confronto compatto: alunni con voto di ingresso salvato');
+    expect(ui).toContain('Alunni con voto di ingresso salvato</h4>');
     expect(ui).toContain('Prove fino al');
     expect(ui).toContain('La fotografia non cambia; il quadro corrente può cambiare.');
     expect(ui).toContain('I limiti delle prove non attestano quando i voti furono registrati.');
