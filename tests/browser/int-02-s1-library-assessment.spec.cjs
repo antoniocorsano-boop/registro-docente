@@ -360,8 +360,17 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
 
   // Capture the actual Chromium A4 print, not only an on-screen screenshot.
   // Keep the student test selected and generate no personal data.
+  await page.setViewportSize({ width: 794, height: 1123 });
   await page.emulateMedia({ media: 'print' });
   await expect(page.getByTestId('assessment-print-footer')).toHaveCSS('flex-direction', 'row');
+  const [a4Instructions, a4Signature] = await Promise.all([
+    page.getByTestId('assessment-print-instructions').boundingBox(),
+    page.getByTestId('assessment-print-signature').boundingBox()
+  ]);
+  expect(a4Instructions).not.toBeNull();
+  expect(a4Signature).not.toBeNull();
+  expect(a4Instructions.x + a4Instructions.width).toBeLessThanOrEqual(a4Signature.x + 1);
+  await page.screenshot({ path: `${evidenceDir}/ux-print-01-stampa-beta-print-css-a4.png`, fullPage: true });
   const pdf = await page.pdf({
     path: `${evidenceDir}/ux-print-01-stampa-beta-a4.pdf`,
     format: 'A4',
