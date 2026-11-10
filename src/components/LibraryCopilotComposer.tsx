@@ -1633,10 +1633,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         {showMaterialControls && (
           <div className="space-y-3" data-testid="teacher-first-material-step">
             {isAssessmentOpen ? (
-              <button type="button" onClick={()=>setIsAssessmentOpen(false)}
-                className="min-h-[44px] text-sm font-semibold text-cyan-200 underline underline-offset-4">
-                Cambia attività
-              </button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-base font-semibold text-slate-100">Prepara una verifica</h3>
+                <button type="button" onClick={()=>setIsAssessmentOpen(false)}
+                  className="min-h-[44px] text-sm font-medium text-cyan-200 underline underline-offset-4">
+                  Altre attività
+                </button>
+              </div>
             ) : (
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Da quale materiale vuoi partire?</div>
             )}
@@ -1673,12 +1676,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <button type="button" data-testid="int02-s3c02-start-assessment"
                 onClick={() => setIsAssessmentOpen(true)}
                 className="min-h-[44px] w-full rounded-lg border border-cyan-700 px-3 text-sm font-semibold text-cyan-100">
-                Crea verifica da questa fonte
+                Prepara una verifica con questo materiale
               </button>
             )}
             {!isBoundMissionFlow && isAssessmentOpen && (!selectedSource || !currentClassId || !currentClassName) && (
               <p role="status" className="rounded-lg border border-amber-900 p-3 text-xs text-amber-200">
-                Seleziona una fonte professionale e una classe attiva nel Registro prima di creare la verifica.
+                Scegli un materiale della Biblioteca e apri la classe per cui vuoi preparare la verifica.
               </p>
             )}
             {!isBoundMissionFlow && isAssessmentOpen && selectedSource && currentClassId && currentClassName && (
