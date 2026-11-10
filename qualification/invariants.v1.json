@@ -1307,6 +1307,29 @@
         "tests/browser/cdc-02-sessions.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S4B-01-I01",
+      "owner": "INT-02/S4b-01",
+      "statement": "The shared online assessment catalog must not silently choose the first assessment for the teacher's Print or Item Analysis views. These separate views begin without an assessment selected, present a neutral explicit selector and only render the chosen assessment after the teacher's action or after an actual saved-test or catalog print action. A removed or changed catalog ID invalidates the pending view target. Existing sharing and simulation require explicit valid class+test, and import of online outcomes requires separately confirmed class, test, period and optional target UDA; none of these rights is inferred from Print/Analysis selection. No change to Vault, persisted tests or submissions, backup, student data or remote AI.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/VerificheOnlineView.tsx",
+        "src/security/int02S4ExplicitAssessmentViewContract.test.ts",
+        "tests/browser/int-02-s4-explicit-test-choice.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/int02S4ExplicitAssessmentViewContract.test.ts",
+        "src/security/int02S2aSelectionContract.test.ts",
+        "src/security/int02S3c02UiContract.test.ts",
+        "src/security/int02SubmissionImportIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s4-explicit-test-choice.spec.cjs",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+      ]
     }
   ]
 }
