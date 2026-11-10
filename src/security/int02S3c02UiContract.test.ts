@@ -18,7 +18,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('getLiveContext');
     expect(panel).toContain('Crea la proposta');
     expect(panel).toContain('Apri e modifica');
-    expect(panel).toContain('Correttezza da verificare');
+    expect(panel).toContain('Controlla le risposte prima di salvare.');
     expect(panel).toContain('Che cosa vuoi verificare?');
     expect(panel).toContain('Come funziona l\'invio');
     expect(panel).toContain('int02-assessment-questions-details');
