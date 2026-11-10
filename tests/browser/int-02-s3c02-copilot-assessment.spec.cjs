@@ -112,7 +112,9 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(sourceSelect).toBeFocused();
   await sourceSelect.selectOption({label:SOURCE_TITLE});
   await expect(sourceSelect).toBeFocused();
-  await composer.getByTestId('int02-s3c02-start-assessment').click();
+  // This teacher-first route is already in assessment mode: choosing the
+  // source opens the panel directly; there is no redundant second Start.
+  await expect(composer.getByTestId('int02-s3c02-start-assessment')).toHaveCount(0);
 
   const panel=composer.getByTestId('int02-s3c02-assessment-panel');
   await expect(panel).toBeVisible();
