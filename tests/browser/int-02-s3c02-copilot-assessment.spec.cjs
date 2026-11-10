@@ -1,5 +1,32 @@
 const {test,expect}=require('@playwright/test');
 const {navigationButton}=require('./header01-navigation.cjs');
+const fs=require('node:fs');
+const path=require('node:path');
+const evidenceDir=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence');
+const hprAssets=[
+  'int02-s3d-preview-context-390.png',
+  'int02-s3d-preview-questions-390.png',
+  'int02-s3d-preview-action-390.png',
+  'int02-s3d-editor-390.png',
+  'int02-s3d-back-390.png'
+];
+async function captureSyntheticHpr(page,name){
+  fs.mkdirSync(evidenceDir,{recursive:true});
+  await page.screenshot({path:path.join(evidenceDir,name),fullPage:true});
+}
+async function captureScrolledCopilotSection(page, target, name){
+  // The Copilot is a fixed full-height dialog with its OWN scroll container.
+  // Full-page screenshots alone would miss elements below that scroll pane.
+  await target.scrollIntoViewIfNeeded();
+  const scroll=page.getByTestId('library-copilot-scroll');
+  await expect.poll(async()=>{
+    const [pane,element]=await Promise.all([scroll.boundingBox(),target.boundingBox()]);
+    if(!pane||!element)return false;
+    return element.y >= pane.y-1
+      && element.y+element.height <= pane.y+pane.height+1;
+  }).toBe(true);
+  await captureSyntheticHpr(page,name);
+}
 
 const baseURL=process.env.BASE_URL||'http://127.0.0.1:4173';
 const CLASS_NAME='3C Sintetica S3c-02';
@@ -136,6 +163,16 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel.getByTestId('int02-assessment-remote-consent')).not.toBeChecked();
   await expect(generate).toBeDisabled();
   await expectNoOverflow(page);
+  // S3d-01: synthetic 320px overflow preflight and evidence at Android 390px.
+  await page.setViewportSize({width:320,height:700});
+  await expectNoOverflow(page);
+  await page.setViewportSize({width:390,height:844});
+  await expectNoOverflow(page);
+  await captureScrolledCopilotSection(page,panel.getByText(SOURCE_TITLE),hprAssets[0]);
+  await captureScrolledCopilotSection(page,panel.getByText(DRAFT.questions[0].q),hprAssets[1]);
+  await captureScrolledCopilotSection(
+    page,panel.getByTestId('int02-assessment-open-editor'),hprAssets[2]
+  );
 
   await panel.getByTestId('int02-assessment-open-editor').click();
   await expect(page).toHaveURL(/tab=verifiche-online/);
@@ -148,6 +185,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(page.getByTestId('int02-s2b-confirm-origin')).toHaveCount(0);
   await expect(page.getByText('Collega a UDA Curricolare').locator('..').locator('select')).toHaveValue('');
   expect(calls).toBe(2);
+  await captureSyntheticHpr(page,hprAssets[3]);
 
   await page.getByRole('button',{name:'Condivisione Padlet'}).click();
   const editorExit=page.getByRole('dialog',{name:'Modifiche non salvate'});
@@ -157,6 +195,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await page.goBack();
   const appExit=page.getByRole('dialog',{name:'Modifiche non salvate'});
   await expect(appExit).toBeVisible();
+  await captureSyntheticHpr(page,hprAssets[4]);
   await appExit.getByRole('button',{name:'Esci senza salvare'}).click();
   await expect(page.getByRole('heading',{name:'Biblioteca privata',exact:true})).toBeVisible();
 
@@ -165,4 +204,17 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(page.getByText(DRAFT_TITLE,{exact:true})).toHaveCount(0);
   await expectNoOverflow(page);
   expect(violations).toEqual([]);
+  fs.writeFileSync(path.join(evidenceDir,'int02-s3d-synthetic-review.json'),JSON.stringify({
+    program:'INT-02/S3d-01',
+    commitSha:process.env.CANDIDATE_SHA||'unknown',
+    syntheticProvider:true,
+    professionalSourceOnly:true,
+    realStudentData:false,
+    savedAssessment:false,
+    viewport:{width:390,height:844},
+    narrowOverflowChecked:{width:320,height:700},
+    images:hprAssets,
+    responseRequests:calls,
+    acceptanceStatus:'EVIDENCE_ONLY_NOT_HPR'
+  },null,2));
 });
