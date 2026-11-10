@@ -131,6 +131,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setImportTestId('');
     setImportPeriod('');
     setImportUdaChoice('');
+    setSelectedTestId('');
   }, [activeClassName]);
 
   // Never leave a removed/ambiguous class or deleted test selected in the mobile UI.
@@ -147,7 +148,15 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setShareSelectedTestId('');
   }, [shareSelectedTestId, tests]);
 
-  const [selectedTestId, setSelectedTestId] = useState<string>(Object.keys(tests)[0] || 'energia');
+  const [selectedTestId, setSelectedTestId] = useState<string>('');
+  // A removed or replaced catalog entry must never remain an implicit print/analysis target.
+  useEffect(() => {
+    if (!selectedTestId) return;
+    if (Object.prototype.hasOwnProperty.call(tests, selectedTestId)
+      && tests[selectedTestId]?.id === selectedTestId) return;
+    setSelectedTestId('');
+  }, [selectedTestId, tests]);
+
   const [isParsingFile, setIsParsingFile] = useState(false);
   const [isSavingTest, setIsSavingTest] = useState(false);
   const testSavePendingRef = useRef(false);
@@ -312,7 +321,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   // Print Mode State
   const [printDocenteMode, setPrintDocenteMode] = useState(false);
 
-  const currentSelectedTest = tests[selectedTestId] || Object.values(tests)[0];
+  const currentSelectedTest = selectedTestId
+    && Object.prototype.hasOwnProperty.call(tests, selectedTestId)
+    && tests[selectedTestId]?.id === selectedTestId
+      ? tests[selectedTestId]
+      : null;
   const shareResolution = resolveAssessmentShareTarget({
     className: selectedClass, testId: shareSelectedTestId, classes, tests
   });
@@ -1512,6 +1525,22 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       {/* ============================================================== */}
       {/* SUB-TAB 3: SCHEDA CARTACEA / STAMPA & PDF */}
       {/* ============================================================== */}
+      {activeSubTab === 'stampa' && !currentSelectedTest && (
+        <section className="neon-card p-4 space-y-3" aria-label="Scelta verifica per la stampa">
+          <h3 className="text-sm font-semibold text-white">Seleziona una verifica da stampare</h3>
+          <p className="text-xs text-slate-300">
+            La stampa non sceglie automaticamente la prima verifica del catalogo.
+          </p>
+          <select aria-label="Test da stampare" value={selectedTestId}
+            onChange={e => setSelectedTestId(e.target.value)}
+            className="w-full min-h-[44px] p-2 neon-input text-sm text-white bg-slate-900">
+            <option value="">-- Seleziona una verifica --</option>
+            {Object.keys(tests).map(k => (
+              <option key={k} value={k}>{tests[k].title}</option>
+            ))}
+          </select>
+        </section>
+      )}
       {activeSubTab === 'stampa' && currentSelectedTest && (
         <div className="space-y-4">
           {/* Controls Bar */}
@@ -1522,10 +1551,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   Test da Stampare
                 </label>
                 <select
+                  aria-label="Test da stampare"
                   value={selectedTestId}
                   onChange={e => setSelectedTestId(e.target.value)}
                   className="p-2 neon-input text-xs text-white bg-slate-900"
                 >
+                  <option value="">-- Seleziona una verifica --</option>
                   {Object.keys(tests).map(k => (
                     <option key={k} value={k}>
                       {tests[k].title}
@@ -1704,10 +1735,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               <div className="flex items-center gap-2">
                 <label className="text-xs text-slate-400">Analizza Test:</label>
                 <select
+                  aria-label="Test da analizzare"
                   value={selectedTestId}
                   onChange={e => setSelectedTestId(e.target.value)}
                   className="p-2 neon-input text-xs text-white bg-slate-900"
                 >
+                  <option value="">-- Seleziona una verifica --</option>
                   {Object.keys(tests).map(k => (
                     <option key={k} value={k}>
                       {tests[k].title}
@@ -1717,6 +1750,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </div>
             </div>
 
+            {!currentSelectedTest && (
+              <p role="status" className="text-xs text-amber-200">
+                Seleziona una verifica da analizzare. Non è stata scelta automaticamente alcuna verifica.
+              </p>
+            )}
             {/* Questions breakdown */}
             <div className="space-y-3">
               {itemAnalysis.map((item, idx) => {
