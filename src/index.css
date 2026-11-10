@@ -161,6 +161,13 @@ body {
 /* UX-PRINT-01: isolate only the explicitly selected assessment on paper.
    Do not change print layouts in other Registro sections. */
 @media print {
+  /* The document is printed on white paper even when the app declares a dark
+     color-scheme in its HTML metadata. Otherwise Chromium paints dark
+     unprintable margins in the actual PDF. */
+  html:has([data-testid="assessment-print-sheet"]) {
+    color-scheme: light !important;
+  }
+
   html:has([data-testid="assessment-print-sheet"]),
   body:has([data-testid="assessment-print-sheet"]),
   body:has([data-testid="assessment-print-sheet"]) #root {
