@@ -268,3 +268,52 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   expect(page.url()).not.toContain(SOURCE_TITLE);
   expect(page.url()).not.toContain(SOURCE_TEXT);
 });
+
+
+test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del catalogo', async ({ page }) => {
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('#vault-password').fill('synthetic-int02-s4b-only');
+  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  await openDrawerItem(page, 'Verifiche online');
+
+  await page.getByRole('button', { name: 'Scheda Cartacea / PDF' }).click();
+  await expect(page.getByText('Seleziona una verifica per visualizzare la scheda da stampare.')).toBeVisible();
+  const printSelect = page.getByLabel('Test da Stampare');
+  await expect(printSelect).toHaveValue('');
+  await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
+  const analysisSelect = page.getByLabel('Analizza Test:');
+  await expect(analysisSelect).toHaveValue('');
+  await expect(page.getByText('Seleziona una verifica per analizzare le domande.')).toBeVisible();
+
+  async function saveSyntheticTest(title, question) {
+    await page.getByRole('button', { name: 'Editor Verifiche & UDA' }).click();
+    const quick = page.locator('details').filter({ hasText: 'Oppure incolla rapidamente domande' });
+    await quick.locator('summary').click();
+    await quick.getByPlaceholder('Titolo della verifica (es. Disegno Tecnico e Assonometrie)').fill(title);
+    await quick.locator('textarea').fill(`1. ${question}\na) Prima risposta [CORRETTA]\nb) Seconda risposta`);
+    page.once('dialog', dialog => dialog.accept());
+    await quick.getByRole('button', { name: 'Genera Test da Testo' }).click();
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  }
+  await saveSyntheticTest('S4b sintetico Alfa', 'Qual è la grandezza A?');
+  await saveSyntheticTest('S4b sintetico Beta', 'Qual è la grandezza B?');
+
+  // Re-entering Verifiche is not choosing the first catalogue item.
+  await openDrawerItem(page, 'Oggi');
+  await openDrawerItem(page, 'Verifiche online');
+  await page.getByRole('button', { name: 'Scheda Cartacea / PDF' }).click();
+  await expect(page.getByLabel('Test da Stampare')).toHaveValue('');
+  await page.getByLabel('Test da Stampare').selectOption({ label: 'S4b sintetico Beta' });
+  await expect(page.getByText('Qual è la grandezza B?')).toBeVisible();
+  await expect(page.getByText('Qual è la grandezza A?')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
+  await page.getByLabel('Analizza Test:').selectOption({ label: 'S4b sintetico Alfa' });
+  await expect(page.getByText('Qual è la grandezza A?')).toBeVisible();
+  await expect(page.getByText('Qual è la grandezza B?')).toHaveCount(0);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+});
