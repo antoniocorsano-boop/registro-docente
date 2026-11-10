@@ -276,6 +276,8 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
           <p className="text-xs font-semibold text-amber-200">
             Correttezza da verificare nell'editor: controlla risposte e spiegazioni.
           </p>
+          {error&&<p role="alert" data-testid="int02-assessment-error"
+            className="text-sm text-amber-200">{error}</p>}
           <details data-testid="int02-assessment-questions-details"
             className="rounded-lg border border-slate-700 bg-slate-950/40">
             <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm font-semibold text-slate-200">
