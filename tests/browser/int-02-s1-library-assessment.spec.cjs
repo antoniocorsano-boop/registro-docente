@@ -362,6 +362,9 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   // Keep the student test selected and generate no personal data.
   await page.setViewportSize({ width: 794, height: 1123 });
   await page.emulateMedia({ media: 'print' });
+  // Print color scheme must be light: Chromium otherwise paints a full-page
+  // dark background beneath the white content, including the physical margins.
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   // Actual print media must contain only the assessment sheet, never the dark app shell.
   await expect(page.getByTestId('assessment-print-sheet')).toBeVisible();
   await expect(page.getByText('Verifiche sulle Lezioni & Flashcards Formative')).toBeHidden();
