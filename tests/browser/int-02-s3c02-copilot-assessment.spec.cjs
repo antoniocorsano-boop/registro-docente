@@ -197,7 +197,17 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await panel.getByTestId('int02-assessment-open-editor').click();
   await expect(page).toHaveURL(/tab=verifiche-online/);
   await expect(composer).toHaveCount(0);
-  await expect(page.getByRole('heading',{name:'Crea Nuova Verifica Formativa'})).toBeVisible();
+  // The Copilota handoff is a focused teacher review, not the expert Verifiche dashboard.
+  const focusedReview=page.getByTestId('int02-assessment-focused-review');
+  await expect(focusedReview).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Rivedi la verifica'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Crea Nuova Verifica Formativa'})).toHaveCount(0);
+  await expect(page.getByText('Verifiche sulle Lezioni & Flashcards Formative',{exact:true})).toHaveCount(0);
+  await expect(focusedReview.getByText('Domande (1)')).toBeVisible();
+  await expect(focusedReview.getByTestId('int02-assessment-extra-settings')).not.toHaveAttribute('open','');
+  await expect(focusedReview.getByRole('button',{name:'Salva la verifica',exact:true})).toBeVisible();
+  await expect(focusedReview.locator('button[type="submit"]')).toHaveCount(1);
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
   await expect(page.getByTestId('int02-assessment-transfer-notice')).toContainText('Nulla è stato salvato');
   const title=page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale');
   await expect(title).toHaveValue(DRAFT_TITLE);
