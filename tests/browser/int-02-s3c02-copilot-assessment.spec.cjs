@@ -137,6 +137,14 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   expect(calls).toBe(0);
   await panel.getByTestId('int02-assessment-remote-consent').check();
   await expect(generate).toBeEnabled();
+  // Product review needs the actual request stage, not only a completed proposal.
+  fs.mkdirSync(evidenceDir,{recursive:true});
+  await expectNoOverflow(page);
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-prepara-390.png'),fullPage:false});
+  await page.setViewportSize({width:320,height:700});
+  await expectNoOverflow(page);
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-prepara-320.png'),fullPage:false});
+  await page.setViewportSize({width:390,height:844});
   await generate.click();
   await expect(panel.getByTestId('int02-assessment-cancel')).toBeVisible();
   await expect.poll(()=>calls).toBe(1);
@@ -195,6 +203,13 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(title).toHaveValue(DRAFT_TITLE);
   await expect(page.getByPlaceholder('Formula chiaramente la domanda...').first()).toHaveValue(DRAFT.questions[0].q);
   await expect(page.getByTestId('int02-s2b-confirm-origin')).toHaveCount(0);
+  // The editor is a separate decision: capture and inspect it before any save.
+  await expectNoOverflow(page);
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-editor-390.png'),fullPage:false});
+  await page.setViewportSize({width:320,height:700});
+  await expectNoOverflow(page);
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-editor-320.png'),fullPage:false});
+  await page.setViewportSize({width:390,height:844});
   await expect(page.getByText('Collega a UDA Curricolare').locator('..').locator('select')).toHaveValue('');
   expect(calls).toBe(3);
 
