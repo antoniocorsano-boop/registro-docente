@@ -168,24 +168,34 @@ export const CouncilSnapshotSection: React.FC<CouncilSnapshotSectionProps> = ({
           <section aria-label="Confronto tra fotografia e quadro corrente" className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
               <div className="min-w-0 rounded-lg border border-cyan-800/60 bg-cyan-950/20 p-3"
-                aria-label="Voti salvati nella fotografia">
-                <p className="text-xs leading-snug text-slate-200">Voti salvati nella fotografia</p>
+                aria-label="Alunni con voto di ingresso salvato nella fotografia">
+                <p className="text-xs font-bold leading-snug text-white">Fotografia</p>
+                <p className="mt-1 text-xs leading-snug text-slate-200">Alunni con voto di ingresso salvato</p>
+                <p className="mt-1 text-xs leading-snug text-slate-300">
+                  Prove considerate fino al {formatCouncilDate(selectedSnapshot.requestedCutoff)}
+                </p>
                 <p className="mt-2 text-3xl font-bold tabular-nums text-white">
                   {selectedSnapshot.aggregates.withSavedTeacherProposal}
                 </p>
               </div>
               <div className="min-w-0 rounded-lg border border-[var(--border)] bg-slate-950/50 p-3"
-                aria-label="Voti salvati nel quadro corrente">
-                <p className="text-xs leading-snug text-slate-200">Voti salvati nel quadro corrente</p>
+                aria-label="Alunni con voto di ingresso salvato nel quadro corrente">
+                <p className="text-xs font-bold leading-snug text-white">Quadro corrente</p>
+                <p className="mt-1 text-xs leading-snug text-slate-200">Alunni con voto di ingresso salvato</p>
+                <p className="mt-1 text-xs leading-snug text-slate-300">
+                  Prove considerate fino al {currentOverview
+                    ? formatCouncilDate(currentOverview.effectiveCutoff)
+                    : 'data non disponibile'}
+                </p>
                 <p className="mt-2 text-3xl font-bold tabular-nums text-white">
                   {currentOverview?.withSavedTeacherProposal ?? '—'}
                 </p>
               </div>
             </div>
             <p className="text-xs leading-relaxed text-slate-300">
-              La fotografia resta invariata. Il quadro corrente usa le prove fino al
-              {' '}{currentOverview ? formatCouncilDate(currentOverview.effectiveCutoff) : 'limite non disponibile'}.
-              La data limite riguarda le prove, non certifica quando i voti furono inseriti.
+              La fotografia resta invariata. I numeri indicano gli alunni con un voto di ingresso
+              salvato, non il totale dei voti. La data riguarda soltanto le prove considerate.
+              Non indica quando il voto di ingresso fu inserito.
             </p>
           </section>
           <details className="rounded-lg border border-[var(--border)] p-2.5"
