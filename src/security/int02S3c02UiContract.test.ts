@@ -22,6 +22,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('Che cosa vuoi verificare?');
     expect(panel).toContain('Come funziona l\'invio');
     expect(panel).toContain('int02-assessment-questions-details');
+    expect(panel).toContain('role="alert" data-testid="int02-assessment-error"');
     expect(panel).toContain('Confermo l\'invio del materiale e dell\'obiettivo');
     expect(panel).not.toContain('onSaveNewTest');
   });
@@ -34,6 +35,9 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(composer).toContain('Creare una verifica');
     expect(composer).toContain('selectedSource');
     expect(composer).toContain('!isAssessmentOpen && (');
+    expect(composer).toContain('!isAssessmentOpen && !isBoundMissionFlow && teacherFirstResolution');
+    expect(composer).toContain('Cambia attività');
+    expect(composer).toContain('if(!isOpen)setIsAssessmentOpen(false)');
     expect(composer).toContain('isAssessmentOpen ? \'Materiale\' : \'Fonte della Biblioteca\'');
   });
   test('usa uno stato effimero in App e ricontrolla il contesto prima della navigazione',async()=>{
