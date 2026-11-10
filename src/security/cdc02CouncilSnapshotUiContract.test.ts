@@ -35,8 +35,8 @@ describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografi
     expect(ui).toContain('Confronto tra fotografia e quadro corrente');
     expect(ui).toContain('Alunni con voto di ingresso salvato nella fotografia');
     expect(ui).toContain('Alunni con voto di ingresso salvato nel quadro corrente');
-    expect(ui).toContain('Prove considerate fino al');
-    expect(ui).toContain('Non indica quando il voto di ingresso fu inserito');
+    expect(ui).toContain('Prove fino al');
+    expect(ui).toContain('I limiti delle prove non attestano quando i voti furono registrati.');
     expect(ui).toContain('Altri cinque indicatori della fotografia');
     expect(ui).toContain('Dettagli tecnici dell’acquisizione');
     expect(ui).toContain('formatCouncilSnapshotCaptureTime(');
@@ -55,7 +55,7 @@ describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografi
 
   test('storico e provenienza distinti dal quadro corrente', () => {
     expect(ui).toContain('Fotografie confermate');
-    expect(ui).toContain('Non indica quando il voto di ingresso fu inserito');
+    expect(ui).toContain('I limiti delle prove non attestano quando i voti furono registrati.');
     expect(ui).toContain('captureLocalDate');
     expect(ui).toContain('requestedCutoff');
     expect(ui).toContain('revision');
