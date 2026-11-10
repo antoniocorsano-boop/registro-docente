@@ -105,7 +105,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   const sourceSelect=composer.getByLabel('Materiale',{exact:true});
   await expect(sourceSelect).toBeVisible();
   await expect(sourceSelect).toBeFocused();
-  await composer.getByRole('button',{name:'Cambia attività'}).click();
+  await composer.getByRole('button',{name:'Altre attività'}).click();
   const assessmentGoal=composer.getByTestId('int02-s3c02-create-assessment');
   await expect(assessmentGoal).toBeFocused();
   await assessmentGoal.click();
@@ -120,7 +120,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel).toBeVisible();
   // An assessment is a single focused task, with no competing Continue CTA.
   await expect(composer.getByRole('button',{name:/Continua/})).toHaveCount(0);
-  await expect(composer.getByRole('button',{name:'Cambia attività'})).toBeVisible();
+  await expect(composer.getByRole('button',{name:'Altre attività'})).toBeVisible();
   await expect(composer).toContainText(CLASS_NAME);
   await expect(composer).toContainText(SOURCE_TITLE);
   await expect(panel).not.toContainText('Classe '+CLASS_NAME);
@@ -128,7 +128,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   const providerDetails=panel.getByTestId('int02-assessment-provider-details');
   await expect(providerDetails).not.toHaveAttribute('open','');
   await providerDetails.locator('summary').click();
-  await expect(panel.getByText(/Fornitore: Servizio simulato/)).toBeVisible();
+  await expect(panel.getByText(/Servizio utilizzato: Servizio simulato/)).toBeVisible();
   await providerDetails.locator('summary').click();
   const generate=panel.getByTestId('int02-assessment-generate');
   await expect(generate).toBeDisabled();
@@ -141,7 +141,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel.getByTestId('int02-assessment-cancel')).toBeVisible();
   await expect.poll(()=>calls).toBe(1);
   await panel.getByTestId('int02-assessment-cancel').click();
-  await expect(panel.getByTestId('int02-assessment-error')).toContainText('Richiesta annullata');
+  await expect(panel.getByTestId('int02-assessment-error')).toContainText('Preparazione annullata');
   await expect(generate).toBeDisabled();
   await expect(panel.getByTestId('int02-assessment-preview')).toHaveCount(0);
   releaseFirstRequest?.();
@@ -150,9 +150,9 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await generate.click();
   await expect(panel.getByTestId('int02-assessment-preview')).toBeVisible();
   await expect(panel).toContainText(DRAFT_TITLE);
-  await expect(panel).toContainText('Controlla le risposte prima di salvare.');
-  await expect(panel.getByText('Verifica pronta',{exact:true})).toBeVisible();
-  await expect(panel.getByText('Verifica pronta',{exact:true})).toBeFocused();
+  await expect(panel).toContainText('Rivedi domande e risposte prima di salvare la verifica.');
+  await expect(panel.getByText('Proposta di verifica',{exact:true})).toBeVisible();
+  await expect(panel.getByText('Proposta di verifica',{exact:true})).toBeFocused();
   const questions=panel.getByTestId('int02-assessment-questions-details');
   await expect(questions).not.toHaveAttribute('open','');
   fs.mkdirSync(evidenceDir,{recursive:true});
@@ -167,7 +167,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
 
   // Revising the request returns to the pedagogical objective, with no
   // reused external-consent authority. A third call needs new opt-in.
-  await panel.getByRole('button',{name:'Modifica la richiesta'}).click();
+  await panel.getByRole('button',{name:'Modifica l’obiettivo'}).click();
   await expect(panel.getByTestId('int02-assessment-objective')).toBeFocused();
   await expect(panel.getByTestId('int02-assessment-remote-consent')).not.toBeChecked();
   await expect(generate).toBeDisabled();
@@ -183,7 +183,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel.getByTestId('int02-assessment-remote-consent')).toHaveCount(0);
   await expect(generate).toHaveCount(0);
   await expect(panel.getByRole('button',{name:'Apri e modifica'})).toBeVisible();
-  await expect(panel.getByRole('button',{name:'Modifica la richiesta'})).toBeVisible();
+  await expect(panel.getByRole('button',{name:'Modifica l’obiettivo'})).toBeVisible();
   await expectNoOverflow(page);
 
   await panel.getByTestId('int02-assessment-open-editor').click();
