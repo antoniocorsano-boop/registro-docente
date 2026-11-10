@@ -1327,7 +1327,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </div>
               </div>
 
-              {/* Title stays visible; nonessential settings remain available on request. */}
+              {/* Isolated handoff review; the ordinary editor layout remains unchanged. */}
+              {focusedCopilotReview ? (
+                <>
               <div className="space-y-1">
                 <label className={focusedCopilotReview
                   ? 'block text-sm font-semibold text-slate-200'
@@ -1344,7 +1346,6 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     : 'w-full p-2.5 neon-input text-xs sm:text-sm text-white'}
                 />
               </div>
-              {focusedCopilotReview ? (
                 <details data-testid="int02-assessment-extra-settings"
                   className="rounded-lg border border-slate-700">
                   <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm text-slate-200">
@@ -1375,47 +1376,77 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     </label>
                   </div>
                 </details>
+                </>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="md:col-span-2"/>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                        Collega a UDA Curricolare
-                      </label>
-                      <select value={editorUdaId} onChange={e => setEditorUdaId(e.target.value)}
-                        className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900">
-                        <option value="">-- Nessuna UDA associata --</option>
-                        {eligibleUdas.map(u => (
-                          <option key={u.id} value={u.id}>{u.className} · {u.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                        Descrizione / Obiettivi Didattici (Opzionale)
-                      </label>
-                      <input type="text"
-                        placeholder="es. Prova per verificare l'acquisizione dei concetti di rendimento energetico e celle solari."
-                        value={editorDescription} onChange={e => setEditorDescription(e.target.value)}
-                        className="w-full p-2 neon-input text-xs text-white"/>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                        Tempo Stimato (Minuti)
-                      </label>
-                      <input type="number" min={5} max={120} value={editorDuration}
-                        onChange={e => setEditorDuration(Number(e.target.value))}
-                        className="w-full p-2 neon-input text-xs text-white font-mono"/>
-                    </div>
-                  </div>
+              {/* Test Meta Configuration */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Titolo Verifica / Argomento Lezione
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale"
+                    value={editorTitle}
+                    onChange={e => setEditorTitle(e.target.value)}
+                    className="w-full p-2.5 neon-input text-xs sm:text-sm text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Collega a UDA Curricolare
+                  </label>
+                  <select
+                    value={editorUdaId}
+                    onChange={e => setEditorUdaId(e.target.value)}
+                    className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
+                  >
+                    <option value="">-- Nessuna UDA associata --</option>
+                    {eligibleUdas.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.className} · {u.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Descrizione / Obiettivi Didattici (Opzionale)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="es. Prova per verificare l'acquisizione dei concetti di rendimento energetico e celle solari."
+                    value={editorDescription}
+                    onChange={e => setEditorDescription(e.target.value)}
+                    className="w-full p-2 neon-input text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Tempo Stimato (Minuti)
+                  </label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    value={editorDuration}
+                    onChange={e => setEditorDuration(Number(e.target.value))}
+                    className="w-full p-2 neon-input text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
                 </>
               )}
 
               {/* Questions List Header */}
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
+              <div className="pt-2 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
                 <h4 className="font-bold text-slate-200 text-sm flex items-center gap-2">
                   <HelpCircle className="w-4 h-4 text-cyan-400" />
                   {focusedCopilotReview ? 'Domande' : 'Quesiti del Test'} ({editorQuestions.length})
@@ -1425,14 +1456,18 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleAddQuestionToEditor('multiple_choice')}
-                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
+                    className={focusedCopilotReview
+                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
+                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
                   >
                     <Plus className="w-3.5 h-3.5 text-cyan-400" /> {focusedCopilotReview ? 'Aggiungi domanda' : '+ Domanda Scelta Multipla'}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleAddQuestionToEditor('true_false')}
-                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
+                    className={focusedCopilotReview
+                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
+                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
                   >
                     <Plus className="w-3.5 h-3.5 text-emerald-400" /> {focusedCopilotReview ? 'Aggiungi vero/falso' : '+ Vero / Falso'}
                   </button>
@@ -1470,7 +1505,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
                     {/* Question text */}
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      <label className={focusedCopilotReview
+                          ? 'block text-sm font-semibold text-slate-200 mb-1'
+                          : 'block text-[11px] font-semibold text-slate-400 mb-1'}>
                         {focusedCopilotReview ? 'Domanda' : 'Testo del Quesito'}
                       </label>
                       <textarea
@@ -1484,7 +1521,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
                     {/* Options with radio button for correct answer */}
                     <div className="space-y-2">
-                      <label className="block text-[11px] font-semibold text-slate-400">
+                      <label className={focusedCopilotReview
+                          ? 'block text-sm font-semibold text-slate-200'
+                          : 'block text-[11px] font-semibold text-slate-400'}>
                         {focusedCopilotReview ? 'Risposte (seleziona quella corretta)' : 'Opzioni di Risposta (seleziona il pallino della risposta corretta)'}
                       </label>
 
@@ -1544,7 +1583,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
                     {/* Formative Explanation (Rationale) */}
                     <div className="pt-2 border-t border-slate-800">
-                      <label className="block text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
+                      <label className={focusedCopilotReview
+                          ? 'block text-sm font-semibold text-amber-200 flex items-center gap-2 mb-1'
+                          : 'block text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1'}>
                         <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
                         {focusedCopilotReview ? 'Spiegazione (mostrata allo studente dopo la risposta)' : 'Spiegazione Didattica / Rationale Formativo (visualizzato dopo la risposta dell\'alunno)'}
                       </label>
@@ -1560,7 +1601,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 ))}
               </div>
 
-              <div className="flex gap-3 pt-3 border-t border-[var(--border)]">
+              <div className={focusedCopilotReview
+                ? "flex flex-wrap gap-3 pt-3 border-t border-[var(--border)]"
+                : "flex gap-3 pt-3 border-t border-[var(--border)]"}>
                 <button
                   type="submit"
                   disabled={isSavingTest}
