@@ -46,7 +46,7 @@ describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografi
 
   test('storico e provenienza distinti dal quadro corrente', () => {
     expect(ui).toContain('Fotografie confermate');
-    expect(ui).toContain('non certifica quando i voti furono inseriti');
+    expect(ui).toContain('Non indica quando il voto di ingresso fu inserito');
     expect(ui).toContain('captureLocalDate');
     expect(ui).toContain('requestedCutoff');
     expect(ui).toContain('revision');
