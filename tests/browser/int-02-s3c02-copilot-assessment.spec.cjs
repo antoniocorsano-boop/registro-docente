@@ -208,7 +208,16 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(focusedReview.getByRole('button',{name:'Salva la verifica',exact:true})).toBeVisible();
   await expect(focusedReview.locator('button[type="submit"]')).toHaveCount(1);
   await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
-  await expect(page.getByTestId('int02-assessment-transfer-notice')).toContainText('Nulla è stato salvato');
+  // The unsaved status is stated once in the heading, not duplicated above it.
+  await expect(page.getByTestId('int02-assessment-transfer-notice')).toHaveCount(0);
+  await expect(focusedReview).toContainText('La proposta non è ancora salvata.');
+  const firstQuestion=focusedReview.getByTestId('int02-assessment-editor-questions').locator('textarea').first();
+  const addQuestion=focusedReview.getByRole('button',{name:'Aggiungi domanda',exact:true});
+  const questionBounds=await firstQuestion.boundingBox();
+  const addBounds=await addQuestion.boundingBox();
+  expect(questionBounds).not.toBeNull();
+  expect(addBounds).not.toBeNull();
+  expect(questionBounds.y).toBeLessThan(addBounds.y);
   const title=page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale');
   await expect(title).toHaveValue(DRAFT_TITLE);
   await expect(page.getByPlaceholder('Formula chiaramente la domanda...').first()).toHaveValue(DRAFT.questions[0].q);
