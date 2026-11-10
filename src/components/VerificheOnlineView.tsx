@@ -1263,8 +1263,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             </div>
           ) : (
             /* Interactive Visual Question-by-Question Form */
-            <form data-testid={focusedCopilotReview ? 'int02-assessment-focused-review' : undefined}
-              onSubmit={handleSaveInteractiveTest}
+            <form onSubmit={handleSaveInteractiveTest}
+              data-testid={focusedCopilotReview ? 'int02-assessment-focused-review' : undefined}
               className={focusedCopilotReview
                 ? 'neon-card p-3 sm:p-4 space-y-3'
                 : 'neon-card neon-card-highlight p-5 space-y-5'}>
