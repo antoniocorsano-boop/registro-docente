@@ -23,6 +23,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('Come funziona l\'invio');
     expect(panel).toContain('int02-assessment-questions-details');
     expect(panel).toContain('role="alert" data-testid="int02-assessment-error"');
+    expect(panel).toContain('objectiveRef.current?.focus()');
     expect(panel).toContain('Confermo l\'invio del materiale e dell\'obiettivo');
     expect(panel).not.toContain('onSaveNewTest');
   });
@@ -39,6 +40,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(composer).toContain('Cambia attività');
     expect(composer).toContain('assessmentSourceSelectRef.current?.focus()');
     expect(composer).toContain('assessmentGoalButtonRef.current?.focus()');
+    expect(composer).not.toContain('setSelectedSourceId(event.target.value);\n              setIsAssessmentOpen(false);');
     expect(composer).toContain('showMaterialControls && !isAssessmentOpen');
     expect(composer).toContain('if(!isOpen)setIsAssessmentOpen(false)');
     expect(composer).toContain('isAssessmentOpen ? \'Materiale\' : \'Fonte della Biblioteca\'');
