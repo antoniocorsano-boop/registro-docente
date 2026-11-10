@@ -119,10 +119,11 @@ test('INT-02/S4c: Prepara, test salvato, consegna, Registra e Rivedi mantengono 
   await page.goto(BASE + '/?mode=student&test=' + encodeURIComponent(testId)
     + '&class=' + encodeURIComponent(CLASS_NAME), { waitUntil: 'domcontentloaded' });
   const unlock = page.getByRole('heading', { name: 'Sblocca Registro' });
-  if (await unlock.isVisible().catch(() => false)) {
-    await page.locator('#vault-password').fill(PASSWORD);
-    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-  }
+  // A full browser navigation re-locks the encrypted Vault. Its asynchronous
+  // bootstrap may still be CHECKING at DOMContentLoaded: wait, don't skip it.
+  await expect(unlock).toBeVisible();
+  await page.locator('#vault-password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sblocca Registro' }).click();
   await expect(page.getByRole('heading', { name: TEST_TITLE, exact: true })).toBeVisible();
   await page.getByPlaceholder('es. Rossi Maria').fill(STUDENT_NAME);
   await page.getByRole('button', { name: /Inizia Flashcard/ }).click();
