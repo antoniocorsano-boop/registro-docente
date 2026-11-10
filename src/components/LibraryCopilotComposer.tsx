@@ -1848,7 +1848,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </section>
         )}
 
-        {showMaterialControls && (
+        {showMaterialControls && !isAssessmentOpen && (
         <ProfessionalMemoryPanel
           state={professionalMemory}
           relevantMemory={professionalMemoryWorkingSet}
