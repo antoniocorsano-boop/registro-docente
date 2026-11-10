@@ -21,7 +21,7 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('Non salvata');
     expect(panel).not.toContain('Verifica pronta');
     expect(panel).toContain('openEditorErrorCopy[reason.message]');
-    expect(panel).toContain('Hai già una verifica con modifiche non salvate.');
+    expect(panel).toContain('Hai già modifiche non salvate.');
     expect(panel).toContain('La classe o il materiale sono cambiati.');
     expect(panel).toContain('Apri e modifica');
     expect(panel).toContain('Rivedi domande e risposte prima di salvare la verifica.');
