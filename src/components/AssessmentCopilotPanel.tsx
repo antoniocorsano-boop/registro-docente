@@ -47,6 +47,13 @@ const remoteErrorCopy: Record<string,string> = {
   PROVIDER_ERROR: 'Non è stato possibile preparare le domande. Riprova oppure modifica l’obiettivo.'
 };
 
+const openEditorErrorCopy: Record<string,string> = {
+  'Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.':
+    'Hai già una verifica con modifiche non salvate. Prima salva o chiudi quella verifica nella sezione Verifiche.',
+  'La fonte o la classe non è più valida. Richiedi una nuova proposta.':
+    'La classe o il materiale sono cambiati. Controlla la scelta e prepara nuovamente le domande.'
+};
+
 // The server provider deadline cannot protect a stalled browser-to-server
 // connection. A client-side deadline must release the UI without retrying.
 const CLIENT_GENERATION_TIMEOUT_MS = 45_000;
@@ -189,7 +196,9 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       await onAccept(preview.session,preview.draft);
       onClose();
     }catch(reason){
-      setError('Non è stato possibile aprire la proposta nelle Verifiche. Controlla la classe e il materiale.');
+      setError(reason instanceof Error
+        ? openEditorErrorCopy[reason.message]??'Non è stato possibile aprire la proposta nelle Verifiche. Riprova.'
+        : 'Non è stato possibile aprire la proposta nelle Verifiche. Riprova.');
     }finally{
       setAdopting(false);
     }
