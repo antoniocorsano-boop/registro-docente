@@ -61,12 +61,20 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(app).toContain('Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.');
     expect(app).toContain('La fonte o la classe non è più valida. Richiedi una nuova proposta.');
     expect(app).toContain('assessmentEditorTransfer=');
+    expect(app).toContain('onAssessmentEditorFocusChange={setIsAssessmentEditorFocus}');
+    expect(app).toContain('!isAssessmentEditorFocus && (');
     expect(app).toContain("handleNavigateTab('verifiche-online')");
     expect(app).not.toContain('localStorage.setItem(\'assessmentEditorTransfer');
   });
   test('precompila solo il nuovo editor, con UDA vuota, senza id, voto o salvataggio',async()=>{
     const view=await read('src/components/VerificheOnlineView.tsx');
     expect(view).toContain('assessmentEditorTransfer');
+    // UX-TEACHER-01: the Copilot handoff must enter a focused teacher review.
+    expect(view).toContain('isCopilotReview');
+    expect(view).toContain('int02-assessment-focused-review');
+    expect(view).toContain('Rivedi la verifica');
+    expect(view).toContain('Salva la verifica');
+    expect(view).toContain('onAssessmentEditorFocusChange');
     expect(view).toContain('canAcceptAssessmentEditorTransfer');
     expect(view).toContain("setEditorUdaId('')");
     expect(view).toContain('setConfirmSourceForAssessment(false)');
