@@ -33,8 +33,10 @@ describe('CDC-02/S2b-P3 — RED contratto interfaccia e conferma della fotografi
 
   test('P5 UX: confronto immediato, dettagli comprimibili e orario locale', () => {
     expect(ui).toContain('Confronto tra fotografia e quadro corrente');
-    expect(ui).toContain('Voti salvati nella fotografia');
-    expect(ui).toContain('Voti salvati nel quadro corrente');
+    expect(ui).toContain('Alunni con voto di ingresso salvato nella fotografia');
+    expect(ui).toContain('Alunni con voto di ingresso salvato nel quadro corrente');
+    expect(ui).toContain('Prove considerate fino al');
+    expect(ui).toContain('Non indica quando il voto di ingresso fu inserito');
     expect(ui).toContain('Altri cinque indicatori della fotografia');
     expect(ui).toContain('Dettagli tecnici dell’acquisizione');
     expect(ui).toContain('formatCouncilSnapshotCaptureTime(');
