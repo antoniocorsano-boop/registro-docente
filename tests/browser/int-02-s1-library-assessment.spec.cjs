@@ -276,6 +276,8 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   await openDrawerItem(page, 'Verifiche online');
+  // Condivisione remains a valid entry point for Copilota outside read-only tabs.
+  await expect(page.getByTestId('library-copilot-trigger')).toBeVisible();
 
   await page.getByRole('button', { name: 'Scheda Cartacea / PDF' }).click();
   await expect(page.getByText('Seleziona una verifica per visualizzare la scheda da stampare.')).toBeVisible();
@@ -333,6 +335,11 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   await expectNoHorizontalOverflow(page);
   await expectDrawerFullyOffscreen(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-03-stampa-beta-scelta-390.png`, fullPage: true });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${evidenceDir}/ux-print-01-stampa-beta-320.png`, fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
   await page.getByLabel('Analizza Test:').selectOption({ label: 'S4b sintetico Alfa' });
