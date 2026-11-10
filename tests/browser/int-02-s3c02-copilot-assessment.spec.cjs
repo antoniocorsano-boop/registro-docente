@@ -150,6 +150,7 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel).toContainText(DRAFT_TITLE);
   await expect(panel).toContainText('Correttezza da verificare');
   await expect(panel.getByText('Verifica pronta',{exact:true})).toBeVisible();
+  await expect(panel.getByText('Verifica pronta',{exact:true})).toBeFocused();
   const questions=panel.getByTestId('int02-assessment-questions-details');
   await expect(questions).not.toHaveAttribute('open','');
   fs.mkdirSync(evidenceDir,{recursive:true});
