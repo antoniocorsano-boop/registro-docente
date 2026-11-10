@@ -98,6 +98,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [importPeriod, setImportPeriod] = useState<'' | 'Q1' | 'Q2'>('');
   const [importUdaChoice, setImportUdaChoice] = useState<string>('');
   const previousActiveClassNameRef = useRef(activeClassName);
+  const previousEntryClassNameRef = useRef(initialClassName);
 
   useEffect(() => {
     if (!initialClassName) return;
@@ -105,7 +106,6 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     if (safeClass) {
       setSelectedClass(safeClass.name);
       setShareSelectedTestId('');
-      setSelectedTestId('');
       setActiveSubTab('analisi');
     }
   }, [classes, initialClassName]);
@@ -151,6 +151,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   // The shared catalog's order has no authority to choose a teacher's test.
   const [selectedTestId, setSelectedTestId] = useState<string>('');
+  useEffect(() => {
+    if (previousEntryClassNameRef.current === initialClassName) return;
+    previousEntryClassNameRef.current = initialClassName;
+    setSelectedTestId('');
+  }, [initialClassName]);
   useEffect(() => {
     if (!selectedTestId) return;
     if (Object.prototype.hasOwnProperty.call(tests, selectedTestId)
@@ -772,9 +777,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   };
 
   // Item analysis for selected test
-  const relevantSubmissions = submissions.filter(
-    s => s.testTitle === currentSelectedTest?.title || s.testId === currentSelectedTest?.id
-  );
+  const relevantSubmissions = currentSelectedTest ? submissions.filter(
+    s => s.testTitle === currentSelectedTest.title || s.testId === currentSelectedTest.id
+  ) : [];
 
   // Calculate success rate per question
   const itemAnalysis = (currentSelectedTest?.questions || []).map((q, qIndex) => {
