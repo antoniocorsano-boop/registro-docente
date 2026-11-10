@@ -49,7 +49,7 @@ const remoteErrorCopy: Record<string,string> = {
 
 const openEditorErrorCopy: Record<string,string> = {
   'Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.':
-    'Hai già una verifica con modifiche non salvate. Prima salva o chiudi quella verifica nella sezione Verifiche.',
+    'Hai già modifiche non salvate. Salva o chiudi il lavoro aperto prima di usare questa proposta.',
   'La fonte o la classe non è più valida. Richiedi una nuova proposta.':
     'La classe o il materiale sono cambiati. Controlla la scelta e prepara nuovamente le domande.'
 };
