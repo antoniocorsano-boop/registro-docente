@@ -1309,6 +1309,55 @@
       ]
     },
     {
+      "id": "CDC-02-S2B-P3-I01",
+      "owner": "CDC-02/S2b-P3",
+      "statement": "Council evidence snapshot UI is scoped to an explicitly opened saved session and teacher-chosen cutoff. Preparing a six-aggregate preview never saves; only a distinct explicit confirmation can queue a Vault appData/meta commit, always revalidating stored grades, class/year/session, revision, local capture date/offset and source fingerprint from execution-time committed refs. Pending confirmation blocks session and class changes, failed save never publishes a success or a new historical snapshot, opening sessions never snapshots automatically. Older confirmed revisions remain selectable, no student identities or personal grades are duplicated, retroactive capture does not claim historical provenance, no official minutes, remote transfer, merge or deployment.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/components/CouncilView.tsx",
+        "src/components/CouncilSnapshotSection.tsx",
+        "src/council/councilEvidenceSnapshots.ts",
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "tests/browser/cdc-02-sessions.spec.cjs"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/security/cdc02CouncilSnapshotsBackup.test.ts",
+        "src/security/durableMutationCoordinator.test.ts",
+        "src/security/cdc02CouncilSessions.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
+    },
+    {
+      "id": "CDC-02-S2B-P5-UX-I01",
+      "owner": "CDC-02/S2b-P5-UX",
+      "statement": "The teacher-approved P5 mobile usability rework must prominently compare saved proposal counts in a confirmed immutable council snapshot against the independently dated current class overview, while clearly distinguishing source cutoffs. Other historical and current aggregates remain accessible through disclosure controls, without mutation or silently hiding permanently stored values. The capture time is displayed using the recorded UTC timestamp and captured offset rather than the viewer's present timezone; underlying persisted UTC is unchanged. Prepare, cancel, explicit confirmation, immutable revisions and history remain governed by P3 and Vault invariants; no official minutes or automatic snapshot writes are introduced.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/council/councilSnapshotPresentation.ts",
+        "src/components/CouncilSnapshotSection.tsx",
+        "src/components/CouncilView.tsx",
+        "src/security/cdc02CouncilSnapshotPresentation.test.ts",
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "tests/browser/cdc-02-sessions.spec.cjs"
+      ],
+      "tests": [
+        "src/security/cdc02CouncilSnapshotPresentation.test.ts",
+        "src/security/cdc02CouncilSnapshotUiContract.test.ts",
+        "src/security/cdc02CouncilSnapshots.test.ts",
+        "src/security/cdc02CouncilSnapshotsBackup.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
+    },
+    {
       "id": "INT-02-S4B-I01",
       "owner": "INT-02/S4b",
       "statement": "Entering Stampa or Analisi does not silently choose the first saved assessment from the shared catalogue. Teacher explicitly selects a valid existing test for display, or a direct intentional editor/catalogue action provides the identity. A deleted or invalid selected ID fails closed without falling back to another test; switching professional class invalidates hidden choices. Rendering a sheet or item analysis is distinct from selecting a recipient class, sharing a link or authorizing grade import, and never writes a test, vote or UDA. Verify on two synthetic tests in both catalogue orders, mobile 320/390 px, and preserve legacy explicit editor choice.",
