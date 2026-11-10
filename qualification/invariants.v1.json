@@ -1377,13 +1377,14 @@
     {
       "id": "UX-PRINT-01-I01",
       "owner": "UX-PRINT-01",
-      "statement": "On a phone, the Copilota floating launcher must never obscure the printable assessment sheet or question item analysis: it yields on the active Stampa/Analisi read-only panels while remaining available on Editor/Condivisione and unaffected elsewhere. The teacher-chosen assessment title is shown on the paper sheet with a neutral subtitle, no unqualified statutory assertion and no software advertisement; instructions must not presume that every test format requires a single marked answer. The existing S4b explicit test selection, no implicit fallback, import/share authorities, grades, encrypted Vault and application persistence remain unchanged. Validate Chromium at 390px and 320px with synthetic tests and usable access to other Copilota surfaces.",
+      "statement": "On a phone, the Copilota floating launcher must never obscure the printable assessment sheet or question item analysis: it yields on the active Stampa/Analisi read-only panels while remaining available on Editor/Condivisione and unaffected elsewhere. The teacher-chosen assessment title is shown on the paper sheet with a neutral subtitle, no unqualified statutory assertion and no software advertisement; instructions must not presume that every test format requires a single marked answer. The existing S4b explicit test selection, no implicit fallback, import/share authorities, grades, encrypted Vault and application persistence remain unchanged. Validate Chromium at 390px and 320px with synthetic tests and usable access to other Copilota surfaces. On A4 output, the selected printable assessment is isolated from the application's dark navigation chrome and underlying background, retaining a white paper sheet; other sections' print styles must not be affected.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/components/VerificheOnlineView.tsx",
         "src/styles/lsm01cBMobilePrimaryActionDock.css",
         "src/security/uxPrint01MobileReadableAssessment.test.ts",
-        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "src/index.css"
       ],
       "tests": [
         "src/security/uxPrint01MobileReadableAssessment.test.ts",
