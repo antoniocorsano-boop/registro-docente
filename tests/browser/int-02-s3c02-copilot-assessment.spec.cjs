@@ -153,8 +153,12 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   expect(calls).toBe(2);
   // An opt-in is for one remote attempt only; retaining a preview must
   // not silently authorize a third provider request.
-  await expect(panel.getByTestId('int02-assessment-remote-consent')).not.toBeChecked();
-  await expect(generate).toBeDisabled();
+  // The request form disappears once the proposal is ready. Its
+  // single-use consent was reset and cannot authorize another request.
+  await expect(panel.getByTestId('int02-assessment-remote-consent')).toHaveCount(0);
+  await expect(generate).toHaveCount(0);
+  await expect(panel.getByRole('button',{name:'Apri e modifica'})).toBeVisible();
+  await expect(panel.getByRole('button',{name:'Modifica la richiesta'})).toBeVisible();
   await expectNoOverflow(page);
 
   await panel.getByTestId('int02-assessment-open-editor').click();
