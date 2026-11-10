@@ -62,10 +62,19 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   const [error,setError]=useState<string|null>(null);
   const [providerLabel,setProviderLabel]=useState('servizio remoto configurato');
   const [providerAvailable,setProviderAvailable]=useState<boolean|null>(null);
+  const objectiveRef=useRef<HTMLTextAreaElement|null>(null);
+  const focusObjectiveAfterPreviewRef=useRef(false);
   const abortRef=useRef<AbortController|null>(null);
   const deadlineRef=useRef<number|null>(null);
   const liveRef=useRef(getLiveContext);
   liveRef.current=getLiveContext;
+
+  useEffect(()=>{
+    if(!preview && focusObjectiveAfterPreviewRef.current){
+      focusObjectiveAfterPreviewRef.current=false;
+      objectiveRef.current?.focus();
+    }
+  },[preview]);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -223,7 +232,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       <label className="block text-sm font-semibold text-slate-200" htmlFor="s3c02-objective">
         Che cosa vuoi verificare?
       </label>
-      <textarea id="s3c02-objective" data-testid="int02-assessment-objective"
+      <textarea id="s3c02-objective" ref={objectiveRef} data-testid="int02-assessment-objective"
         value={objective} maxLength={400} rows={3}
         onChange={event=>{setObjective(event.target.value);invalidatePreview();}}
         disabled={generating||adopting}
@@ -305,7 +314,10 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
             className="min-h-[48px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50">
             {adopting?'Apertura in corso…':'Apri e modifica'}
           </button>
-          <button type="button" onClick={()=>setPreview(null)}
+          <button type="button" onClick={()=>{
+            focusObjectiveAfterPreviewRef.current=true;
+            setPreview(null);
+          }}
             disabled={adopting}
             className="min-h-[44px] w-full text-sm text-slate-300 underline underline-offset-4 disabled:opacity-50">
             Modifica la richiesta
