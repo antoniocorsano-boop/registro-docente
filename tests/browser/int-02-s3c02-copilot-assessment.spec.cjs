@@ -226,7 +226,8 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await extraSettings.locator('summary').click();
   expect(calls).toBe(3);
 
-  await page.getByRole('button',{name:'Condivisione Padlet'}).click();
+  // The focused editor has its own intentional exit, without the expert navigation.
+  await focusedReview.getByRole('button',{name:'Chiudi la revisione'}).click();
   const editorExit=page.getByRole('dialog',{name:'Modifiche non salvate'});
   await expect(editorExit).toBeVisible();
   await editorExit.getByRole('button',{name:"Rimani nell'editor"}).click();
