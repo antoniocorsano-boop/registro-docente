@@ -289,7 +289,10 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   async function saveSyntheticTest(title, question) {
     await page.getByRole('button', { name: 'Editor Verifiche & UDA' }).click();
     const quick = page.locator('details').filter({ hasText: 'Oppure incolla rapidamente domande' });
-    await quick.locator('summary').click();
+    if (!(await quick.evaluate(element => element.open))) {
+      await quick.locator('summary').click();
+    }
+    await expect(quick).toHaveAttribute('open', '');
     await quick.getByPlaceholder('Titolo della verifica (es. Disegno Tecnico e Assonometrie)').fill(title);
     await quick.locator('textarea').fill(`1. ${question}\na) Prima risposta [CORRETTA]\nb) Seconda risposta`);
     page.once('dialog', dialog => dialog.accept());
