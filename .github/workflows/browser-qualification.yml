@@ -307,6 +307,21 @@ jobs:
             --reporter=line \
             --output=../browser-evidence/int-02-s3c02-test-results
 
+      - name: Run INT-02/S4b explicit test selection Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            int-02-s4-explicit-test-choice.spec.cjs \
+            --workers=1 \
+            --max-failures=1 \
+            --reporter=line \
+            --output=../browser-evidence/int-02-s4-test-results
+
       - name: Run A4-R2B projection preview Chromium qualification
         shell: bash
         run: |
