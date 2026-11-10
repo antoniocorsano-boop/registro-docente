@@ -220,7 +220,10 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expectNoOverflow(page);
   await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-editor-320.png'),fullPage:false});
   await page.setViewportSize({width:390,height:844});
-  await expect(page.getByText('Collega a UDA Curricolare').locator('..').locator('select')).toHaveValue('');
+  const extraSettings=focusedReview.getByTestId('int02-assessment-extra-settings');
+  await extraSettings.locator('summary').click();
+  await expect(extraSettings.getByLabel('UDA',{exact:true})).toHaveValue('');
+  await extraSettings.locator('summary').click();
   expect(calls).toBe(3);
 
   await page.getByRole('button',{name:'Condivisione Padlet'}).click();
