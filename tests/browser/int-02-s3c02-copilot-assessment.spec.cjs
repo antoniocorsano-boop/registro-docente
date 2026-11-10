@@ -1,5 +1,8 @@
 const {test,expect}=require('@playwright/test');
 const {navigationButton}=require('./header01-navigation.cjs');
+const fs=require('node:fs');
+const path=require('node:path');
+const evidenceDir=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence');
 
 const baseURL=process.env.BASE_URL||'http://127.0.0.1:4173';
 const CLASS_NAME='3C Sintetica S3c-02';
@@ -99,16 +102,22 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await page.getByRole('button',{name:'Parla con il Copilota',exact:true}).click();
   const composer=page.getByTestId('library-copilot-composer');
   await composer.getByTestId('int02-s3c02-create-assessment').click();
-  const sourceSelect=composer.getByLabel('Fonte della Biblioteca');
+  const sourceSelect=composer.getByLabel('Materiale',{exact:true});
   await expect(sourceSelect).toBeVisible();
   await sourceSelect.selectOption({label:SOURCE_TITLE});
   await composer.getByTestId('int02-s3c02-start-assessment').click();
 
   const panel=composer.getByTestId('int02-s3c02-assessment-panel');
   await expect(panel).toBeVisible();
+  // An assessment is a single focused task, with no competing Continue CTA.
+  await expect(composer.getByRole('button',{name:'Continua',exact:true})).toHaveCount(0);
   await expect(panel).toContainText(CLASS_NAME);
   await expect(panel).toContainText(SOURCE_TITLE);
-  await expect(panel.getByText('Fornitore: Servizio simulato')).toBeVisible();
+  const providerDetails=panel.getByTestId('int02-assessment-provider-details');
+  await expect(providerDetails).not.toHaveAttribute('open','');
+  await providerDetails.locator('summary').click();
+  await expect(panel.getByText(/Fornitore: Servizio simulato/)).toBeVisible();
+  await providerDetails.locator('summary').click();
   const generate=panel.getByTestId('int02-assessment-generate');
   await expect(generate).toBeDisabled();
   await panel.getByTestId('int02-assessment-objective').fill('Riconoscere le trasformazioni energetiche.');
@@ -130,6 +139,17 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(panel.getByTestId('int02-assessment-preview')).toBeVisible();
   await expect(panel).toContainText(DRAFT_TITLE);
   await expect(panel).toContainText('Correttezza da verificare');
+  await expect(panel.getByText('Verifica pronta',{exact:true})).toBeVisible();
+  const questions=panel.getByTestId('int02-assessment-questions-details');
+  await expect(questions).not.toHaveAttribute('open','');
+  fs.mkdirSync(evidenceDir,{recursive:true});
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-proposta-390.png'),fullPage:true});
+  await page.setViewportSize({width:320,height:700});
+  await expectNoOverflow(page);
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-proposta-320.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await questions.locator('summary').click();
+  await expect(questions.getByText(DRAFT.questions[0].q)).toBeVisible();
   expect(calls).toBe(2);
   // An opt-in is for one remote attempt only; retaining a preview must
   // not silently authorize a third provider request.
