@@ -270,6 +270,22 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
 });
 
 
+async function expectFooterLayout(page, stacked) {
+  const instructions = await page.getByTestId('assessment-print-instructions').boundingBox();
+  const signature = await page.getByTestId('assessment-print-signature').boundingBox();
+  expect(instructions).not.toBeNull();
+  expect(signature).not.toBeNull();
+  const viewport = page.viewportSize();
+  expect(instructions.width).toBeGreaterThan(150);
+  expect(instructions.x).toBeGreaterThanOrEqual(-1);
+  expect(instructions.x + instructions.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(signature.x + signature.width).toBeLessThanOrEqual(viewport.width + 1);
+  if (stacked) {
+    // A full-width instructions row comes before a separate signature row.
+    expect(signature.y).toBeGreaterThanOrEqual(instructions.y + instructions.height - 1);
+  }
+}
+
 test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del catalogo', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await page.locator('#vault-password').fill('synthetic-int02-s4b-only');
@@ -332,13 +348,28 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   await expect(page.getByText('Generato con Registro Docente & Flashcards Pro Neon')).toHaveCount(0);
   await expect(page.getByText('Indicazioni: segui le istruzioni del docente per ciascun quesito.')).toBeVisible();
   await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+  await expectFooterLayout(page, true);
   await expectNoHorizontalOverflow(page);
   await expectDrawerFullyOffscreen(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-03-stampa-beta-scelta-390.png`, fullPage: true });
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+  await expectFooterLayout(page, true);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: `${evidenceDir}/ux-print-01-stampa-beta-320.png`, fullPage: true });
+
+  // Capture the actual Chromium A4 print, not only an on-screen screenshot.
+  // Keep the student test selected and generate no personal data.
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.getByTestId('assessment-print-footer')).toHaveCSS('flex-direction', 'row');
+  const pdf = await page.pdf({
+    path: `${evidenceDir}/ux-print-01-stampa-beta-a4.pdf`,
+    format: 'A4',
+    margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+    printBackground: true
+  });
+  expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  await page.emulateMedia({ media: 'screen' });
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
