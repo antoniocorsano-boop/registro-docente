@@ -81,6 +81,7 @@ jobs:
           cp tests/browser/int-01-didactic-continuity.spec.cjs .browser-tools/int-01-didactic-continuity.spec.cjs
           cp tests/browser/int-02-s1-library-assessment.spec.cjs .browser-tools/int-02-s1-library-assessment.spec.cjs
           cp tests/browser/int-02-s3c02-copilot-assessment.spec.cjs .browser-tools/int-02-s3c02-copilot-assessment.spec.cjs
+          cp tests/browser/int-02-s4-explicit-test-choice.spec.cjs .browser-tools/int-02-s4-explicit-test-choice.spec.cjs
           cp tests/browser/int-02-import-01.spec.cjs .browser-tools/int-02-import-01.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
