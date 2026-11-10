@@ -1533,9 +1533,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
       {activeSubTab === 'stampa' && (
         <div className="space-y-4">
           {/* Controls Bar */}
-          <div className="neon-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
-            <div className="flex items-center gap-3">
-              <div>
+          <div className="neon-card p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 no-print">
+            <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
+              <div className="min-w-0">
                 <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
                   Test da Stampare
                 </label>
@@ -1543,7 +1543,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   aria-label="Test da Stampare"
                   value={selectedTestId}
                   onChange={e => setSelectedTestId(e.target.value)}
-                  className="p-2 neon-input text-xs text-white bg-slate-900 max-w-full"
+                  className="w-full min-w-0 p-2 neon-input text-xs text-white bg-slate-900 md:w-auto"
                 >
                   <option value="">Seleziona una verifica</option>
                   {Object.keys(tests).map(k => (
@@ -1555,11 +1555,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </div>
 
               {/* Version toggle */}
-              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs mt-3.5">
+              <div className="flex w-full min-w-0 items-stretch gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs md:mt-3.5 md:w-auto">
                 <button
                   type="button"
                   onClick={() => setPrintDocenteMode(false)}
-                  className={`px-3 py-1.5 rounded transition-all font-semibold ${
+                  className={`min-w-0 flex-1 px-2 py-1.5 rounded text-center transition-all font-semibold md:flex-initial md:px-3 ${
                     !printDocenteMode ? 'bg-[var(--primary)] text-[var(--primary-text)] font-bold' : 'text-slate-400'
                   }`}
                 >
@@ -1568,7 +1568,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setPrintDocenteMode(true)}
-                  className={`px-3 py-1.5 rounded transition-all font-semibold ${
+                  className={`min-w-0 flex-1 px-2 py-1.5 rounded text-center transition-all font-semibold md:flex-initial md:px-3 ${
                     printDocenteMode ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400'
                   }`}
                 >
