@@ -82,6 +82,7 @@ jobs:
           cp tests/browser/int-02-s1-library-assessment.spec.cjs .browser-tools/int-02-s1-library-assessment.spec.cjs
           cp tests/browser/int-02-s3c02-copilot-assessment.spec.cjs .browser-tools/int-02-s3c02-copilot-assessment.spec.cjs
           cp tests/browser/int-02-import-01.spec.cjs .browser-tools/int-02-import-01.spec.cjs
+          cp tests/browser/int-02-s4-teacher-cycle.spec.cjs .browser-tools/int-02-s4-teacher-cycle.spec.cjs
           cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
           cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
           cp tests/browser/header01-navigation.cjs .browser-tools/header01-navigation.cjs
@@ -306,6 +307,21 @@ jobs:
             --max-failures=1 \
             --reporter=line \
             --output=../browser-evidence/int-02-s3c02-test-results
+
+      - name: Run INT-02/S4c integrated teacher cycle Chromium qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            int-02-s4-teacher-cycle.spec.cjs \
+            --workers=1 \
+            --max-failures=1 \
+            --reporter=line \
+            --output=../browser-evidence/int-02-s4c-test-results
 
       - name: Run A4-R2B projection preview Chromium qualification
         shell: bash
