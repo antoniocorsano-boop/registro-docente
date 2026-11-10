@@ -270,28 +270,51 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
 });
 
 
+async function expectFooterLayout(page, stacked) {
+  const instructions = await page.getByTestId('assessment-print-instructions').boundingBox();
+  const signature = await page.getByTestId('assessment-print-signature').boundingBox();
+  expect(instructions).not.toBeNull();
+  expect(signature).not.toBeNull();
+  const viewport = page.viewportSize();
+  expect(instructions.width).toBeGreaterThan(150);
+  expect(instructions.x).toBeGreaterThanOrEqual(-1);
+  expect(instructions.x + instructions.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(signature.x + signature.width).toBeLessThanOrEqual(viewport.width + 1);
+  if (stacked) {
+    // A full-width instructions row comes before a separate signature row.
+    expect(signature.y).toBeGreaterThanOrEqual(instructions.y + instructions.height - 1);
+  }
+}
+
 test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del catalogo', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await page.locator('#vault-password').fill('synthetic-int02-s4b-only');
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   await openDrawerItem(page, 'Verifiche online');
+  // Condivisione remains a valid entry point for Copilota outside read-only tabs.
+  await expect(page.getByTestId('library-copilot-trigger')).toBeVisible();
 
   await page.getByRole('button', { name: 'Scheda Cartacea / PDF' }).click();
   await expect(page.getByText('Seleziona una verifica per visualizzare la scheda da stampare.')).toBeVisible();
   const printSelect = page.getByLabel('Test da Stampare');
   await expect(printSelect).toHaveValue('');
+  // UX-PRINT-01: the floating Copilota must not cover print controls/content.
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
   await expectDrawerFullyOffscreen(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-01-stampa-da-selezionare-390.png`, fullPage: true });
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
   const analysisSelect = page.getByLabel('Analizza Test:');
   await expect(analysisSelect).toHaveValue('');
   await expect(page.getByText('Seleziona una verifica per analizzare le domande.')).toBeVisible();
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
   await expectDrawerFullyOffscreen(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-02-analisi-da-selezionare-390.png`, fullPage: true });
 
   async function saveSyntheticTest(title, question) {
     await page.getByRole('button', { name: 'Editor Verifiche & UDA' }).click();
+    // The Copilota remains available in the editing path.
+    await expect(page.getByTestId('library-copilot-trigger')).toBeVisible();
     const quick = page.locator('details').filter({ hasText: 'Oppure incolla rapidamente domande' });
     if (!(await quick.evaluate(element => element.open))) {
       await quick.locator('summary').click();
@@ -320,18 +343,65 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   await page.getByLabel('Test da Stampare').selectOption({ label: 'S4b sintetico Beta' });
   await expect(page.getByText('Qual è la grandezza B?')).toBeVisible();
   await expect(page.getByText('Qual è la grandezza A?')).toHaveCount(0);
+  await expect(page.getByText('Scheda di verifica')).toBeVisible();
+  await expect(page.getByText('Verifica Formativa delle Competenze (D.M. 221/2025)')).toHaveCount(0);
+  await expect(page.getByText('Generato con Registro Docente & Flashcards Pro Neon')).toHaveCount(0);
+  await expect(page.getByText('Indicazioni: segui le istruzioni del docente per ciascun quesito.')).toBeVisible();
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+  await expectFooterLayout(page, true);
   await expectNoHorizontalOverflow(page);
   await expectDrawerFullyOffscreen(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-03-stampa-beta-scelta-390.png`, fullPage: true });
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
+  await expectFooterLayout(page, true);
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${evidenceDir}/ux-print-01-stampa-beta-320.png`, fullPage: true });
+
+  // Capture the actual Chromium A4 print, not only an on-screen screenshot.
+  // Keep the student test selected and generate no personal data.
+  await page.setViewportSize({ width: 794, height: 1123 });
+  await page.emulateMedia({ media: 'print' });
+  // Print color scheme must be light: Chromium otherwise paints a full-page
+  // dark background beneath the white content, including the physical margins.
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
+  // Actual print media must contain only the assessment sheet, never the dark app shell.
+  await expect(page.getByTestId('assessment-print-sheet')).toBeVisible();
+  await expect(page.getByText('Verifiche sulle Lezioni & Flashcards Formative')).toBeHidden();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('#root')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.getByTestId('assessment-print-sheet')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.getByTestId('assessment-print-footer')).toHaveCSS('flex-direction', 'row');
+  const [a4Instructions, a4Signature] = await Promise.all([
+    page.getByTestId('assessment-print-instructions').boundingBox(),
+    page.getByTestId('assessment-print-signature').boundingBox()
+  ]);
+  expect(a4Instructions).not.toBeNull();
+  expect(a4Signature).not.toBeNull();
+  expect(a4Instructions.x + a4Instructions.width).toBeLessThanOrEqual(a4Signature.x + 1);
+  await page.screenshot({ path: `${evidenceDir}/ux-print-01-stampa-beta-print-css-a4.png`, fullPage: true });
+  const pdf = await page.pdf({
+    path: `${evidenceDir}/ux-print-01-stampa-beta-a4.pdf`,
+    format: 'A4',
+    margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+    printBackground: true
+  });
+  expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  await page.emulateMedia({ media: 'screen' });
+  // The paper-only light scheme must not leak into the dark application.
+  await expect(page.locator('html')).not.toHaveCSS('color-scheme', 'light');
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
   await page.getByLabel('Analizza Test:').selectOption({ label: 'S4b sintetico Alfa' });
   await expect(page.getByText('Qual è la grandezza A?')).toBeVisible();
   await expect(page.getByText('Qual è la grandezza B?')).toHaveCount(0);
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
   await expectNoHorizontalOverflow(page);
   await expectDrawerFullyOffscreen(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-04-analisi-alfa-scelta-390.png`, fullPage: true });
   await page.setViewportSize({ width: 320, height: 700 });
+  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: `${evidenceDir}/int-02-s4b-05-analisi-alfa-mobile-320.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

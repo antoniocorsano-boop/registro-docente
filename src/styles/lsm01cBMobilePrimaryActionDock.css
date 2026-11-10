@@ -30,3 +30,17 @@
     box-shadow: 0 -1rem 2.5rem 1rem rgba(2, 6, 23, 0.94);
   }
 }
+
+/* UX-PRINT-01: the mobile Copilota launcher must not cover printable
+   student fields or item-analysis content. Other Copilota entries remain. */
+@media (max-width: 767px) {
+  body:has([data-testid="assessment-read-panel"]) [data-testid="library-copilot-trigger"] {
+    display: none;
+  }
+}
+
+@media print {
+  [data-testid="library-copilot-trigger"] {
+    display: none !important;
+  }
+}
