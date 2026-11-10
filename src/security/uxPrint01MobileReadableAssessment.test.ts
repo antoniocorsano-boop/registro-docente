@@ -39,6 +39,8 @@ describe('UX-PRINT-01 — readable mobile Verifiche and neutral printable sheet'
     expect(printCss).toContain('visibility: hidden !important;');
     expect(printCss).toContain('visibility: visible !important;');
     expect(printCss).toContain('background: #ffffff !important;');
+    expect(printCss).toContain('color-scheme: light !important;');
+    expect(browser).toContain("await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');");
     expect(browser).toContain("Verifiche sulle Lezioni & Flashcards Formative");
     expect(browser).toContain("await expect(page.getByTestId('assessment-print-sheet')).toBeVisible();");
   });
