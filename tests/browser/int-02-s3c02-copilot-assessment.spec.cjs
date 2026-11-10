@@ -5,10 +5,10 @@ const path=require('node:path');
 const evidenceDir=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence');
 
 const baseURL=process.env.BASE_URL||'http://127.0.0.1:4173';
-const CLASS_NAME='3C Sintetica S3c-02';
-const SOURCE_TITLE='Fonte sintetica trasformazioni energetiche S3c-02';
+const CLASS_NAME='3C Dimostrativa';
+const SOURCE_TITLE='Le trasformazioni dell’energia';
 const SOURCE_TEXT='Una centrale elettrica trasforma energia primaria in energia elettrica.';
-const DRAFT_TITLE='Proposta sintetica energia S3c-02';
+const DRAFT_TITLE='Verifica su energia e potenza';
 const DRAFT={
   schemaVersion:1,kind:'assessment-draft',title:DRAFT_TITLE,
   description:'Bozza per revisione professionale',
