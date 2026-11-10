@@ -22,6 +22,15 @@ describe('UX-PRINT-01 — readable mobile Verifiche and neutral printable sheet'
     expect(view).not.toContain('Generato con Registro Docente & Flashcards Pro Neon');
     expect(view).not.toContain('Barrare una sola risposta per ogni quesito.');
     expect(view).toContain('Indicazioni: segui le istruzioni del docente per ciascun quesito.');
+    // Narrow screen preview: instructions keep full available width and signature moves below.
+    expect(view).toContain('data-testid="assessment-print-footer"');
+    expect(view).toContain('data-testid="assessment-print-instructions"');
+    expect(view).toContain('data-testid="assessment-print-signature"');
+    expect(view).toContain('flex flex-col gap-5');
+    expect(view).toContain('sm:flex-row');
+    expect(view).toContain('print:flex-row');
+    expect(browser).toContain('expectFooterLayout(page, true)');
+    expect(browser).toContain("ux-print-01-stampa-beta-a4.pdf");
   });
 
   test('existing explicit selection and fail-closed print gate remain unchanged', () => {
