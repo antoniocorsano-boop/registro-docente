@@ -1545,8 +1545,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         <div className="space-y-4">
           {/* Controls Bar */}
           <div className="neon-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
-            <div className="flex items-center gap-3">
-              <div>
+            <div className="flex min-w-0 w-full flex-col sm:flex-row sm:w-auto sm:items-center gap-3">
+              <div className="min-w-0 w-full sm:w-auto">
                 <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
                   Test da Stampare
                 </label>
@@ -1554,7 +1554,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   aria-label="Test da stampare"
                   value={selectedTestId}
                   onChange={e => setSelectedTestId(e.target.value)}
-                  className="p-2 neon-input text-xs text-white bg-slate-900"
+                  className="w-full min-w-0 max-w-full sm:max-w-64 p-2 neon-input text-xs text-white bg-slate-900"
                 >
                   <option value="">-- Seleziona una verifica --</option>
                   {Object.keys(tests).map(k => (
@@ -1566,11 +1566,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </div>
 
               {/* Version toggle */}
-              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs mt-3.5">
+              <div className="flex w-full min-w-0 flex-wrap gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs mt-1 sm:mt-3.5 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setPrintDocenteMode(false)}
-                  className={`px-3 py-1.5 rounded transition-all font-semibold ${
+                  className={`min-w-0 flex-1 px-2 py-1.5 rounded transition-all font-semibold whitespace-normal leading-snug ${
                     !printDocenteMode ? 'bg-[var(--primary)] text-[var(--primary-text)] font-bold' : 'text-slate-400'
                   }`}
                 >
@@ -1591,24 +1591,24 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-2 self-start sm:self-auto"
+              className="w-full sm:w-auto min-w-0 px-4 py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-2 self-start sm:self-auto"
             >
               <Printer className="w-4 h-4" /> Stampa Scheda / Salva in PDF
             </button>
           </div>
 
           {/* Printable Sheet Canvas */}
-          <div className="bg-white text-slate-950 p-8 sm:p-12 rounded-xl shadow-xl max-w-4xl mx-auto border border-slate-300 font-sans print:p-0 print:border-none print:shadow-none">
+          <div className="min-w-0 max-w-full bg-white text-slate-950 p-3 sm:p-12 rounded-xl shadow-xl max-w-4xl mx-auto border border-slate-300 font-sans print:p-0 print:border-none print:shadow-none">
             {/* School Header */}
             <div className="border-b-2 border-slate-900 pb-4 mb-6">
-              <div className="flex justify-between items-start text-xs text-slate-700 mb-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start print:flex-row print:justify-between text-xs text-slate-700 mb-2">
                 <div>
                   <div className="font-bold uppercase tracking-wider text-sm text-slate-900">
                     {settings?.school || "ISTITUTO D'ISTRUZIONE SECONDARIA"}
                   </div>
                   <div>Anno Scolastico: <b>{settings?.year || '2026/2027'}</b></div>
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right print:text-right">
                   <div>Disciplina: <b>{settings?.subject || 'Tecnologia / STEM'}</b></div>
                   <div>Docente: <b>{settings?.teacher || 'Professore'}</b></div>
                 </div>
@@ -1630,20 +1630,20 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               </div>
 
               {/* Student Metadata Fields */}
-              <div className="grid grid-cols-12 gap-3 mt-4 pt-3 border-t border-slate-300 text-xs">
-                <div className="col-span-6 sm:col-span-5">
+              <div className="grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-3 mt-4 pt-3 border-t border-slate-300 text-xs">
+                <div className="col-span-1 sm:col-span-5 print:col-span-5">
                   <span className="font-bold">Alunno/a: </span>
-                  <span className="border-b border-dotted border-slate-600 inline-block w-48 sm:w-56 h-4"></span>
+                  <span className="border-b border-dotted border-slate-600 inline-block max-w-full w-28 sm:w-56 print:w-56 h-4"></span>
                 </div>
-                <div className="col-span-3 sm:col-span-3">
+                <div className="col-span-1 sm:col-span-3 print:col-span-3">
                   <span className="font-bold">Classe: </span>
                   <span className="border-b border-dotted border-slate-600 inline-block w-16 h-4"></span>
                 </div>
-                <div className="col-span-3 sm:col-span-2">
+                <div className="col-span-1 sm:col-span-2 print:col-span-2">
                   <span className="font-bold">Data: </span>
                   <span className="border-b border-dotted border-slate-600 inline-block w-16 h-4"></span>
                 </div>
-                <div className="col-span-12 sm:col-span-2 text-right">
+                <div className="col-span-1 sm:col-span-2 print:col-span-2 text-left sm:text-right print:text-right">
                   <span className="font-bold">Voto: </span>
                   <span className="border border-slate-900 inline-block w-12 h-6 text-center leading-6 font-bold"></span>
                 </div>
@@ -1697,7 +1697,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             </div>
 
             {/* Bottom Evaluation Box */}
-            <div className="mt-10 pt-4 border-t-2 border-slate-900 flex justify-between items-end text-xs text-slate-700">
+            <div className="mt-10 pt-4 border-t-2 border-slate-900 flex flex-wrap gap-3 justify-between items-end text-xs text-slate-700">
               <div>
                 <p className="italic">Note per l'alunno: Barrare una sola risposta per ogni quesito.</p>
                 <p className="text-[10px] text-slate-500 mt-1">
@@ -1705,7 +1705,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </p>
               </div>
               <div className="text-right">
-                <div className="border-t border-slate-400 pt-1 w-48 text-center">
+                <div className="border-t border-slate-400 pt-1 w-32 sm:w-48 print:w-48 text-center">
                   Firma del Docente
                 </div>
               </div>
