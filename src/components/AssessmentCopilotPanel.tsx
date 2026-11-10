@@ -63,11 +63,16 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   const [providerLabel,setProviderLabel]=useState('servizio remoto configurato');
   const [providerAvailable,setProviderAvailable]=useState<boolean|null>(null);
   const objectiveRef=useRef<HTMLTextAreaElement|null>(null);
+  const previewHeadingRef=useRef<HTMLHeadingElement|null>(null);
   const focusObjectiveAfterPreviewRef=useRef(false);
   const abortRef=useRef<AbortController|null>(null);
   const deadlineRef=useRef<number|null>(null);
   const liveRef=useRef(getLiveContext);
   liveRef.current=getLiveContext;
+
+  useEffect(()=>{
+    if(preview)previewHeadingRef.current?.focus();
+  },[preview]);
 
   useEffect(()=>{
     if(!preview && focusObjectiveAfterPreviewRef.current){
@@ -276,7 +281,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       {preview&&(
         <div data-testid="int02-assessment-preview" className="space-y-3 border-t border-cyan-800 pt-3">
           <div>
-            <h4 className="font-semibold text-slate-100">Verifica pronta</h4>
+            <h4 ref={previewHeadingRef} tabIndex={-1} className="font-semibold text-slate-100">Verifica pronta</h4>
             <p className="mt-1 text-sm text-slate-200">{preview.draft.title}</p>
             <p className="mt-1 text-xs text-slate-400">
               {preview.draft.questions.length} {preview.draft.questions.length===1?'domanda proposta':'domande proposte'} · Non ancora salvata
