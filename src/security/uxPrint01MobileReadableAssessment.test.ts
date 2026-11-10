@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const view = readFileSync('src/components/VerificheOnlineView.tsx', 'utf8');
 const css = readFileSync('src/styles/lsm01cBMobilePrimaryActionDock.css', 'utf8');
+const printCss = readFileSync('src/index.css', 'utf8');
 const browser = readFileSync('tests/browser/int-02-s1-library-assessment.spec.cjs', 'utf8');
 
 describe('UX-PRINT-01 — readable mobile Verifiche and neutral printable sheet', () => {
@@ -31,6 +32,15 @@ describe('UX-PRINT-01 — readable mobile Verifiche and neutral printable sheet'
     expect(view).toContain('print:flex-row');
     expect(browser).toContain('expectFooterLayout(page, true)');
     expect(browser).toContain("ux-print-01-stampa-beta-a4.pdf");
+    // On paper only the selected assessment is visible against a white background.
+    expect(view).toContain('data-testid="assessment-print-sheet"');
+    expect(printCss).toContain('UX-PRINT-01: isolate only the explicitly selected assessment on paper');
+    expect(printCss).toContain('body:has([data-testid="assessment-print-sheet"]) #root *');
+    expect(printCss).toContain('visibility: hidden !important;');
+    expect(printCss).toContain('visibility: visible !important;');
+    expect(printCss).toContain('background: #ffffff !important;');
+    expect(browser).toContain("Verifiche sulle Lezioni & Flashcards Formative");
+    expect(browser).toContain("await expect(page.getByTestId('assessment-print-sheet')).toBeVisible();");
   });
 
   test('existing explicit selection and fail-closed print gate remain unchanged', () => {
