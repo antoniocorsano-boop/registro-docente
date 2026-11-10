@@ -281,10 +281,14 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   await expect(page.getByText('Seleziona una verifica per visualizzare la scheda da stampare.')).toBeVisible();
   const printSelect = page.getByLabel('Test da Stampare');
   await expect(printSelect).toHaveValue('');
+  await expectDrawerFullyOffscreen(page);
+  await page.screenshot({ path: `${evidenceDir}/int-02-s4b-01-stampa-da-selezionare-390.png`, fullPage: true });
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
   const analysisSelect = page.getByLabel('Analizza Test:');
   await expect(analysisSelect).toHaveValue('');
   await expect(page.getByText('Seleziona una verifica per analizzare le domande.')).toBeVisible();
+  await expectDrawerFullyOffscreen(page);
+  await page.screenshot({ path: `${evidenceDir}/int-02-s4b-02-analisi-da-selezionare-390.png`, fullPage: true });
 
   async function saveSyntheticTest(title, question) {
     await page.getByRole('button', { name: 'Editor Verifiche & UDA' }).click();
@@ -316,13 +320,20 @@ test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del cat
   await page.getByLabel('Test da Stampare').selectOption({ label: 'S4b sintetico Beta' });
   await expect(page.getByText('Qual è la grandezza B?')).toBeVisible();
   await expect(page.getByText('Qual è la grandezza A?')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+  await expectDrawerFullyOffscreen(page);
+  await page.screenshot({ path: `${evidenceDir}/int-02-s4b-03-stampa-beta-scelta-390.png`, fullPage: true });
 
   await page.getByRole('button', { name: 'Esiti & Item Analysis', exact: false }).click();
   await page.getByLabel('Analizza Test:').selectOption({ label: 'S4b sintetico Alfa' });
   await expect(page.getByText('Qual è la grandezza A?')).toBeVisible();
   await expect(page.getByText('Qual è la grandezza B?')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+  await expectDrawerFullyOffscreen(page);
+  await page.screenshot({ path: `${evidenceDir}/int-02-s4b-04-analisi-alfa-scelta-390.png`, fullPage: true });
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: `${evidenceDir}/int-02-s4b-05-analisi-alfa-mobile-320.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });
