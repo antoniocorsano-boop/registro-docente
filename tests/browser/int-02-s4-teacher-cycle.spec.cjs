@@ -100,10 +100,15 @@ test('INT-02/S4c: Prepara, test salvato, consegna, Registra e Rivedi mantengono 
   await expect(shareSelect).toHaveValue('');
   await classSelect.selectOption({ label: CLASS_NAME });
   await expect(page.getByRole('button', { name: 'Copia Link per Studenti' })).toBeDisabled();
-  await shareSelect.selectOption({ label: TEST_TITLE });
-  const testId = await shareSelect.inputValue();
+  // Option labels also include the number of questions. Resolve the
+  // one intended test by its displayed title, then select its actual ID.
+  const chosenOption = shareSelect.locator('option').filter({ hasText: TEST_TITLE });
+  await expect(chosenOption).toHaveCount(1);
+  const testId = await chosenOption.getAttribute('value');
   expect(testId).toBeTruthy();
   expect(testId).not.toBe('energia');
+  await shareSelect.selectOption(testId);
+  await expect(shareSelect).toHaveValue(testId);
   await expect(page.getByRole('button', { name: 'Prova come Alunno (Flashcard)' })).toBeEnabled();
   await checkMobileWidth(page, 320);
   await checkMobileWidth(page, 390);
