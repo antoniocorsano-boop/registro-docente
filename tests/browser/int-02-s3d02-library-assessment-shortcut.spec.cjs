@@ -91,7 +91,7 @@ test('S3d Android HPR rework: source action opens governed Copilota, not the man
   )).toBe(true);
   const panel=composer.getByTestId('int02-s3c02-assessment-panel');
   await expect(panel).toBeVisible();
-  await expect(composer).toContainText(CLASS_NAME);
+  await expect(page.getByTestId('library-copilot-composer')).toContainText(CLASS_NAME);
   await expect(composer.getByLabel('Materiale',{exact:true})).toHaveValue(/.+/);
   await expect(composer.getByLabel('Materiale',{exact:true})
     .locator('option:checked')).toHaveText(SOURCE_TITLE);
