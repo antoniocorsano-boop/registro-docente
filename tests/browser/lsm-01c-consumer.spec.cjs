@@ -434,7 +434,7 @@ test('LSM-01D mobile activation sync and reload remain explicit and zero-token',
   expect(appRequests).toHaveLength(appRequestCountBeforeReload);
   await openSettings(page);
   settings = page.getByTestId('semantic-memory-settings');
-  await expect(settings.getByText('Non connessa. La Biblioteca continua a usare la ricerca locale già disponibile.', { exact: true })).toBeVisible();
+  await expect(settings.getByText('Non attiva. Puoi continuare a cercare nella Biblioteca.', { exact: true })).toBeVisible();
   await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
   syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
   await expect(syncButton).toBeDisabled();
