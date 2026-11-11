@@ -1881,13 +1881,13 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-400">Analizza Test:</label>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <label className="shrink-0 text-xs text-slate-400">Analizza Test:</label>
                 <select
                   aria-label="Analizza Test:"
                   value={selectedTestId}
                   onChange={e => setSelectedTestId(e.target.value)}
-                  className="p-2 neon-input text-xs text-white bg-slate-900 max-w-full"
+                  className="p-2 neon-input text-xs text-white bg-slate-900 min-w-0 w-full sm:w-auto sm:max-w-full"
                 >
                   <option value="">Seleziona una verifica</option>
                   {Object.keys(tests).map(k => (
