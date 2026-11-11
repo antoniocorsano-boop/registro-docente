@@ -160,6 +160,11 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
+  const canPrepareAssisted = source.privacy === 'teacher-professional'
+    && source.status === 'ready'
+    && Boolean(currentClassName)
+    && ['text', 'note', 'concept', 'web', 'internal'].includes(source.kind)
+    && Boolean(excerpt?.trim());
   const professionalClassification = professionalClassificationLabel(source);
   const shouldShowProfessionalClassification = professionalClassification !== STATUS_LABELS[source.status];
 
@@ -548,6 +553,30 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             </button>
           </div>
 
+          {canPrepareAssisted && (
+            <button
+              type="button"
+              data-testid="int02-prepare-assisted-assessment"
+              onClick={() => {
+                setIsUseSurfaceOpen(false);
+                onOpenCopilot({
+                  surface: 'library',
+                  sourceId: source.id,
+                  className: currentClassName ?? undefined,
+                  intent: 'assessment'
+                });
+              }}
+              disabled={isPending}
+              className="min-h-[48px] w-full rounded-lg bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-50"
+            >
+              Prepara una verifica con il Copilota
+            </button>
+          )}
+          <details data-testid="library-source-other-actions" className="rounded-lg border border-slate-800 bg-slate-900/40" open={!canPrepareAssisted}>
+            <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm font-semibold text-cyan-100">
+              Altre possibilità: UDA, lezione o editor manuale
+            </summary>
+            <div className="space-y-3 border-t border-slate-800 p-3">
           <div className="rounded-lg border border-cyan-900/70 bg-slate-950/40 p-3 space-y-2">
             {contextSuggestion ? (
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -655,7 +684,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
                     disabled={isPending}
                     className="min-h-[44px] w-full rounded-lg border border-cyan-500 bg-cyan-950/40 px-3 text-sm font-semibold text-cyan-100 disabled:opacity-50"
                   >
-                    Prepara una verifica con questa fonte
+                    Apri editor manuale senza Copilota
                   </button>
                 )}
                 {LIBRARY_USE_ACTIONS.map(action => (
@@ -673,6 +702,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               </div>
             )}
           </div>
+            </div>
+          </details>
 
           <LibraryRelevancePanel
             source={source}
