@@ -409,7 +409,8 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   }, [teachingUdaCatalog, teacherFirstClassId, localTeacherFirstClassUdas]);
   const teacherFirstGoalKind: TeacherFirstGoalKind | null = teacherFirstResolution?.goalKind ?? null;
   const showTeachingContextControls = isBoundMissionFlow || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous);
-  const showMaterialControls = isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous && resolvedTeachingContext);
+  // Assessment uses the validated source and active class without requiring a UDA.
+  const showMaterialControls = isAssessmentOpen || isBoundMissionFlow || teacherFirstGoalKind === 'material' || Boolean(selectedSourceId && !hasBoundLaunchContext) || Boolean(teacherFirstClassId && !teacherFirstClassIsAmbiguous && resolvedTeachingContext);
 
   const teachingContextFingerprint = [
     resolvedTeachingContext?.udaId ?? '',
@@ -727,6 +728,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     setMissionLaunchSettledNonce(null);
     setReadyMissionReview(null);
     resetTeacherFirst();
+    // Reuse the existing governed assessment panel, not the manual test editor.
+    // A new launch always replaces the previous assessment task state.
+    setIsAssessmentOpen(directLaunchIntent === 'assessment');
     resolutionEpochRef.current += 1;
     setContextOverride('auto');
     onSurfaceModeChange('compose');
@@ -757,6 +761,13 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
         return;
       }
       setSelectedSourceId(requestedLaunchSourceId);
+    }
+
+    if (directLaunchIntent === 'assessment'
+        && (!currentClassId || currentClassName !== launchRequest.context.className)) {
+      setIsAssessmentOpen(false);
+      setErrorMessage('La classe è cambiata. Torna al materiale e riprova.');
+      return;
     }
 
     if (hasLaunchTeachingTarget && !explicitLaunchTeachingContext) {
