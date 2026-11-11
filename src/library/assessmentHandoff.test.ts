@@ -71,6 +71,42 @@ describe('INT-02/S1 safe library → assessment navigation descriptor', () => {
     }
   });
 
+  test('passes a teacher-written objective only through a validated, one-use guided handoff', () => {
+    const result = resolve({ request: {
+      sourceId: source.id, classId: 'class-a',
+      guided: true, nonce: 'once-123', objective: '  Riconoscere trasformazioni energetiche.  '
+    } });
+    expect(result).toEqual({
+      status: 'ready',
+      handoff: {
+        sourceId: source.id, classId: 'class-a', className: '3ª A',
+        sourceTitle: 'Energia e trasformazioni',
+        guided: true, nonce: 'once-123',
+        objective: 'Riconoscere trasformazioni energetiche.'
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain(source.payload.text!);
+    expect(JSON.stringify(result)).not.toContain('uda-of-OTHER-class');
+  });
+
+  test('blocks missing or oversized guided objectives and stale professional sources', () => {
+    for (const objective of ['', '   ', 'x'.repeat(401)]) {
+      expect(resolve({ request: {
+        sourceId: source.id, classId: 'class-a',
+        guided: true, nonce: 'unique', objective
+      } })).toEqual({ status: 'unavailable', reason: 'OBJECTIVE_INVALID' });
+    }
+    expect(resolve({ request: {
+      sourceId: source.id, classId: 'class-a', guided: true,
+      nonce: '', objective: 'Riconoscere la trasformazione.'
+    } })).toEqual({ status: 'unavailable', reason: 'OBJECTIVE_INVALID' });
+    expect(resolve({ request: {
+      sourceId: source.id, classId: 'class-a', guided: true,
+      nonce: 'unique', objective: 'Riconoscere la trasformazione.'
+    }, library: { schemaVersion: 1, sources: [{ ...source, privacy: 'student-personal' }] } }))
+      .toEqual({ status: 'unavailable', reason: 'SOURCE_NOT_PROFESSIONAL' });
+  });
+
   test('requires a nonempty source identifier and a nonempty registered class', () => {
     expect(resolve({ request: { sourceId: '', classId: 'class-a' } }))
       .toEqual({ status: 'unavailable', reason: 'CLASS_REQUIRED' });
