@@ -58,6 +58,7 @@ const openEditorErrorCopy: Record<string,string> = {
 // The server provider deadline cannot protect a stalled browser-to-server
 // connection. A client-side deadline must release the UI without retrying.
 const CLIENT_GENERATION_TIMEOUT_MS = 45_000;
+const PROVIDER_AVAILABILITY_TIMEOUT_MS = 3_000;
 
 export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   source, classId, className, classIsUnambiguous, aiBudgetProfile, getLiveContext, onAccept, onContinueManually, onClose
@@ -92,13 +93,22 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
 
   useEffect(()=>{
     const controller=new AbortController();
+    const deadline=window.setTimeout(()=>{
+      // Abort both the fetch and a potentially stalled response.json().
+      // A nonresponsive probe must fall back locally, without remote consent.
+      if(controller.signal.aborted)return;
+      controller.abort();
+      setProviderAvailable(false);
+    },PROVIDER_AVAILABILITY_TIMEOUT_MS);
     void fetch('/api/copilot/assessment-draft/provider',{signal:controller.signal})
       .then(async response=>{
+        if(controller.signal.aborted)return;
         if(!response.ok) {
           setProviderAvailable(false);
           return;
         }
         const data:unknown=await response.json();
+        if(controller.signal.aborted)return;
         if(!data || typeof data!=='object') {
           setProviderAvailable(false);
           return;
@@ -111,8 +121,9 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       }).catch(()=>{
         // An unreachable provider must not strand the teacher in a consent form.
         if(!controller.signal.aborted)setProviderAvailable(false);
-      });
+      }).finally(()=>window.clearTimeout(deadline));
     return ()=>{
+      window.clearTimeout(deadline);
       controller.abort();
       const pending=abortRef.current;
       abortRef.current=null;
@@ -275,7 +286,10 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         placeholder="Per esempio: riconoscere le trasformazioni energetiche"
         className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100"
       />
-      {providerAvailable!==false&&(
+      {providerAvailable===null&&(
+        <p role="status" className="text-sm text-slate-400">Verifico il servizio di preparazione…</p>
+      )}
+      {providerAvailable===true&&(
       <>
       <details data-testid="int02-assessment-provider-details"
         className="rounded-lg border border-slate-800 text-sm text-slate-300">
