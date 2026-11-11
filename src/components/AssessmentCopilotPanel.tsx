@@ -94,15 +94,24 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     const controller=new AbortController();
     void fetch('/api/copilot/assessment-draft/provider',{signal:controller.signal})
       .then(async response=>{
-        if(!response.ok)return;
+        if(!response.ok) {
+          setProviderAvailable(false);
+          return;
+        }
         const data:unknown=await response.json();
-        if(!data || typeof data!=='object')return;
+        if(!data || typeof data!=='object') {
+          setProviderAvailable(false);
+          return;
+        }
         const info=data as Record<string,unknown>;
-        if(typeof info.available==='boolean')setProviderAvailable(info.available);
+        setProviderAvailable(info.available===true);
         if(typeof info.provider==='string' && info.provider.trim()) {
           setProviderLabel(info.provider.trim());
         }
-      }).catch(()=>{/* Availability is verified by the explicit POST. */});
+      }).catch(()=>{
+        // An unreachable provider must not strand the teacher in a consent form.
+        if(!controller.signal.aborted)setProviderAvailable(false);
+      });
     return ()=>{
       controller.abort();
       const pending=abortRef.current;
@@ -266,6 +275,8 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         placeholder="Per esempio: riconoscere le trasformazioni energetiche"
         className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100"
       />
+      {providerAvailable!==false&&(
+      <>
       <details data-testid="int02-assessment-provider-details"
         className="rounded-lg border border-slate-800 text-sm text-slate-300">
         <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm">Informazioni sull'invio</summary>
@@ -289,22 +300,25 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-semibold text-white disabled:opacity-50">
         {generating?'Preparazione delle domande…':'Prepara le domande'}
       </button>
+      </>)}
       {providerAvailable===false&&(
-        <p role="status" className="text-sm text-amber-200">
-          Il generatore non è disponibile. Puoi continuare senza inviare il materiale a servizi esterni.
-        </p>
+        <>
+          <p role="status" className="text-sm text-amber-200">
+            Il generatore non è disponibile. Puoi continuare senza inviare il materiale a servizi esterni.
+          </p>
+          <button type="button"
+            data-testid="int02-assessment-continue-locally"
+            onClick={()=>void handleContinueManually()}
+            disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||generating||adopting||continuingManually}
+            className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">
+            {continuingManually?'Apertura dell’elaboratore…':'Continua senza generatore'}
+          </button>
+          <p className="text-xs text-slate-400" data-testid="int02-assessment-local-explanation">
+            Aprirai una verifica da completare tu, con materiale e obiettivo già indicati.
+            Nessuna domanda generata e nessun salvataggio automatico.
+          </p>
+        </>
       )}
-      <button type="button"
-        data-testid="int02-assessment-continue-locally"
-        onClick={()=>void handleContinueManually()}
-        disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||generating||adopting||continuingManually}
-        className="min-h-[44px] w-full rounded-lg border border-cyan-600 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-50">
-        {continuingManually?'Apertura dell’elaboratore…':'Continua senza generatore'}
-      </button>
-      <p className="text-xs text-slate-400" data-testid="int02-assessment-local-explanation">
-        Aprirai una verifica da completare tu, con materiale e obiettivo già indicati.
-        Nessuna domanda generata e nessun salvataggio automatico.
-      </p>
       {generating&&(
         <button type="button" onClick={handleCancelGeneration}
           data-testid="int02-assessment-cancel"
