@@ -9,7 +9,19 @@ const LIBRARY_USE_ACTION_LABELS = Object.freeze({
 const PROFESSIONAL_CLASSIFICATION_LABEL = 'Classifica come materiale professionale';
 const ORIGINAL_CONFIRM_SLOT = '__registroLibraryUseOriginalConfirm';
 
+async function ensureLibraryOtherActionsOpen(card) {
+  const disclosure = card.getByTestId('library-source-other-actions');
+  if (!(await disclosure.isVisible().catch(() => false))) return;
+  if (!(await disclosure.evaluate(element => element.open))) {
+    await disclosure.locator('summary').click();
+    await expect(disclosure).toHaveAttribute('open', '');
+  }
+}
+
 async function selectLibraryUseTarget(card, { udaTitle, lessonTopic = null }) {
+  // Source-first assessment is primary. Historical UDA/lesson actions remain
+  // under an explicit disclosure, including on subsequent Copilota returns.
+  await ensureLibraryOtherActionsOpen(card);
   const changeContext = card.getByRole('button', { name: 'Cambia', exact: true });
   if (await changeContext.isVisible().catch(() => false)) await changeContext.click();
 
@@ -62,6 +74,7 @@ function libraryUseAction(card, intent, { autoClassify = true } = {}) {
     get(target, property) {
       if (property === 'click') {
         return async (...args) => {
+          await ensureLibraryOtherActionsOpen(card);
           await target.click(...args);
           await completeProfessionalClassificationIfRequired(card);
         };
@@ -74,6 +87,7 @@ function libraryUseAction(card, intent, { autoClassify = true } = {}) {
 
 module.exports = {
   LIBRARY_USE_ACTION_LABELS,
+  ensureLibraryOtherActionsOpen,
   selectLibraryUseTarget,
   completeProfessionalClassificationIfRequired,
   libraryUseAction
