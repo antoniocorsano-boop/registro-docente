@@ -1393,6 +1393,26 @@
       "browserSmoke": [
         "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "UX-TEACHER-01-I01",
+      "owner": "UX-TEACHER-01",
+      "statement": "For a teacher opening the assessment Copilot, present the current class/material, one pedagogical objective, explicit per-attempt approval of external transmission, and one primary action per stage. Hide competing generic Continue/extra source creation controls while the assessment is open, collapse provider and item-level details by default, and preserve the sole explicit transition to an unsaved editable assessment. No persistent assessment, provenance, grade or UDA can be inferred or saved from preview; scope the privacy disclosure to the exact outbound request. Chromium at 390/320px must show no overlay/overflow.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/AssessmentCopilotPanel.tsx",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/security/int02S3c02UiContract.test.ts",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+      ],
+      "tests": [
+        "src/security/int02S3c02UiContract.test.ts",
+        "src/library/assessmentEditorTransfer.test.ts",
+        "src/security/int02S3bGenerationContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+      ]
     }
   ]
 }

@@ -33,18 +33,25 @@ interface GeneratedPreview {
 }
 
 const remoteErrorCopy: Record<string,string> = {
-  CONTEXT_CHANGED: 'La fonte o la classe è cambiata: ricomincia dalla scelta del materiale.',
-  REMOTE_POLICY_DENIED: 'Il materiale non è autorizzato per la generazione remota.',
-  REQUEST_INVALID: 'Controlla la classe, la fonte e l’obiettivo della verifica.',
-  AI_BUDGET_ESCALATION_REQUIRED: 'Il testo supera il limite previsto: scegli una fonte testuale più breve. Non verrà inviato senza una nuova autorizzazione.',
-  REQUEST_CONFLICT: 'È già in corso una richiesta equivalente.',
-  PROVIDER_NOT_CONFIGURED: 'Il servizio per le verifiche non è ancora configurato.',
-  PROVIDER_RATE_LIMITED: 'Il servizio ha raggiunto il limite di utilizzo. Riprova più tardi con un nuovo consenso.',
-  PROVIDER_TIMEOUT: 'Il servizio non ha risposto entro il tempo previsto.',
-  PROVIDER_BLOCKED: 'Il servizio non può elaborare questo materiale.',
-  PROVIDER_UNAVAILABLE: 'Il servizio è temporaneamente indisponibile.',
-  PROVIDER_OUTPUT_INVALID: 'La proposta restituita non è valida e non può essere utilizzata.',
-  PROVIDER_ERROR: 'La proposta non è stata generata.'
+  CONTEXT_CHANGED: 'La classe o il materiale è cambiato. Controlla la selezione prima di riprovare.',
+  REMOTE_POLICY_DENIED: 'Questo materiale non può essere inviato al servizio esterno. Scegline un altro.',
+  REQUEST_INVALID: 'Controlla la classe, il materiale e ciò che vuoi verificare.',
+  AI_BUDGET_ESCALATION_REQUIRED: 'Il materiale è troppo lungo. Scegli un testo più breve e autorizza nuovamente l’invio.',
+  REQUEST_CONFLICT: 'La preparazione delle domande è già in corso.',
+  PROVIDER_NOT_CONFIGURED: 'La preparazione assistita non è ancora disponibile.',
+  PROVIDER_RATE_LIMITED: 'Non è possibile preparare altre domande in questo momento. Potrai riprovare autorizzando un nuovo invio.',
+  PROVIDER_TIMEOUT: 'La preparazione delle domande non è riuscita in tempo. Puoi riprovare.',
+  PROVIDER_BLOCKED: 'Non è possibile preparare le domande da questo materiale. Prova con un altro testo.',
+  PROVIDER_UNAVAILABLE: 'La preparazione assistita non è disponibile in questo momento. Riprova più tardi.',
+  PROVIDER_OUTPUT_INVALID: 'Non è stato possibile ottenere domande utilizzabili. Modifica l’obiettivo e riprova.',
+  PROVIDER_ERROR: 'Non è stato possibile preparare le domande. Riprova oppure modifica l’obiettivo.'
+};
+
+const openEditorErrorCopy: Record<string,string> = {
+  'Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.':
+    'Hai già modifiche non salvate. Salva o chiudi il lavoro aperto prima di usare questa proposta.',
+  'La fonte o la classe non è più valida. Richiedi una nuova proposta.':
+    'La classe o il materiale sono cambiati. Controlla la scelta e prepara nuovamente le domande.'
 };
 
 // The server provider deadline cannot protect a stalled browser-to-server
@@ -62,10 +69,24 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   const [error,setError]=useState<string|null>(null);
   const [providerLabel,setProviderLabel]=useState('servizio remoto configurato');
   const [providerAvailable,setProviderAvailable]=useState<boolean|null>(null);
+  const objectiveRef=useRef<HTMLTextAreaElement|null>(null);
+  const previewHeadingRef=useRef<HTMLHeadingElement|null>(null);
+  const focusObjectiveAfterPreviewRef=useRef(false);
   const abortRef=useRef<AbortController|null>(null);
   const deadlineRef=useRef<number|null>(null);
   const liveRef=useRef(getLiveContext);
   liveRef.current=getLiveContext;
+
+  useEffect(()=>{
+    if(preview)previewHeadingRef.current?.focus();
+  },[preview]);
+
+  useEffect(()=>{
+    if(!preview && focusObjectiveAfterPreviewRef.current){
+      focusObjectiveAfterPreviewRef.current=false;
+      objectiveRef.current?.focus();
+    }
+  },[preview]);
 
   useEffect(()=>{
     const controller=new AbortController();
@@ -109,7 +130,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     setGenerating(false);
     setRemoteConsent(false);
     setPreview(null);
-    setError('Richiesta annullata. Per un nuovo invio è necessario un nuovo consenso.');
+    setError('Preparazione annullata. Per riprovare, autorizza nuovamente l’invio.');
   };
 
   const handleGenerate=async()=>{
@@ -128,7 +149,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       setGenerating(false);
       setRemoteConsent(false);
       setPreview(null);
-      setError('La richiesta ha superato il tempo massimo. Per un nuovo invio è necessario un nuovo consenso.');
+      setError('La preparazione richiede troppo tempo. Puoi riprovare autorizzando un nuovo invio.');
     },CLIENT_GENERATION_TIMEOUT_MS);
     deadlineRef.current=deadline;
     try{
@@ -150,7 +171,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       if(!controller.signal.aborted){
         setError(reason instanceof AssessmentGenerationError
           ? remoteErrorCopy[reason.code]??remoteErrorCopy.PROVIDER_ERROR
-          : reason instanceof Error ? reason.message : 'La richiesta non è stata completata.');
+          : 'Non è stato possibile preparare le domande. Riprova oppure modifica l’obiettivo.');
       }
     }finally{
       window.clearTimeout(deadline);
@@ -175,8 +196,9 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       await onAccept(preview.session,preview.draft);
       onClose();
     }catch(reason){
-      setError(reason instanceof Error ? reason.message
-        : 'Impossibile aprire la bozza. Controlla la fonte e la classe.');
+      setError(reason instanceof Error
+        ? openEditorErrorCopy[reason.message]??'Non è stato possibile aprire la proposta nelle Verifiche. Riprova.'
+        : 'Non è stato possibile aprire la proposta nelle Verifiche. Riprova.');
     }finally{
       setAdopting(false);
     }
@@ -190,64 +212,56 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
   return (
     <section data-testid="int02-s3c02-assessment-panel"
       aria-label="Proposta di verifica dal Copilota"
-      className="space-y-3 rounded-xl border border-cyan-700/60 bg-cyan-950/20 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-cyan-100">Crea una proposta di verifica</h3>
-          <p className="mt-1 text-xs text-slate-300">
-            Fonte: <strong>{source.title}</strong> · Classe: <strong>{className}</strong>
-          </p>
-        </div>
-        <button type="button" onClick={()=>{
-          if(generating)handleCancelGeneration();
-          onClose();
-        }}
-          disabled={adopting}
-          className="min-h-[44px] rounded-lg border border-slate-700 px-3 text-xs text-slate-200">
-          Chiudi
-        </button>
-      </div>
+      className="space-y-3">
       {!sourceAllowed && (
-        <p role="alert" className="text-xs text-amber-200">
-          Per creare una proposta scegli una fonte testuale pronta e professionale, senza dati degli alunni.
+        <p role="alert" className="text-sm text-amber-200">
+          Scegli un materiale testuale della Biblioteca, senza dati personali degli alunni.
         </p>
       )}
       {!classIsUnambiguous && (
         <p role="alert" data-testid="int02-assessment-class-ambiguous"
-          className="text-xs text-amber-200">
-          La classe corrente non è identificata in modo univoco. Riconcilia le classi omonime
-          prima di inviare una richiesta al servizio remoto.
+          className="text-sm text-amber-200">
+          Questa classe compare più volte nel Registro. Torna a Classi e scegli quella corretta.
         </p>
       )}
-      <label className="block text-xs font-semibold text-slate-200" htmlFor="s3c02-objective">
-        Obiettivo della verifica
+      {!preview&&(
+        <>
+      <label className="block text-sm font-semibold text-slate-200" htmlFor="s3c02-objective">
+        Che cosa vuoi verificare?
       </label>
-      <textarea id="s3c02-objective" data-testid="int02-assessment-objective"
+      <textarea id="s3c02-objective" ref={objectiveRef} data-testid="int02-assessment-objective"
         value={objective} maxLength={400} rows={3}
         onChange={event=>{setObjective(event.target.value);invalidatePreview();}}
         disabled={generating||adopting}
-        placeholder="Quali conoscenze o abilità vuoi verificare?"
+        placeholder="Per esempio: riconoscere le trasformazioni energetiche"
         className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100"
       />
-      <p className="text-xs text-slate-400">
-        Fornitore: {providerLabel}{providerAvailable===false?' · non configurato':''}.
-        Il testo della fonte e l'obiettivo saranno inviati a questo servizio solo con il tuo consenso.
-      </p>
-      <label className="flex items-start gap-2 text-xs leading-relaxed text-slate-200">
+      <details data-testid="int02-assessment-provider-details"
+        className="rounded-lg border border-slate-800 text-sm text-slate-300">
+        <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm">Informazioni sull'invio</summary>
+        <p className="border-t border-slate-800 px-3 py-3 leading-relaxed">
+          Il materiale e l'obiettivo saranno inviati a un servizio esterno solo con la tua autorizzazione.
+          Servizio utilizzato: {providerLabel}{providerAvailable===false?' · non disponibile':''}.
+          La proposta non viene salvata o pubblicata automaticamente.
+        </p>
+      </details>
+      <label className="flex items-start gap-3 text-sm leading-relaxed text-slate-200">
         <input type="checkbox" checked={remoteConsent}
           onChange={event=>{setRemoteConsent(event.target.checked);invalidatePreview();}}
           disabled={generating||adopting}
           data-testid="int02-assessment-remote-consent"
           className="mt-1 h-4 w-4"/>
-        <span>Autorizzo questo invio remoto. Ho verificato che il materiale non contiene dati personali di studenti.
-          Il consenso non salva né pubblica alcuna verifica.</span>
+        <span>Autorizzo l'invio del materiale e dell'obiettivo a un servizio esterno. Confermo che non contengono dati personali.</span>
       </label>
       <button type="button" onClick={()=>void handleGenerate()}
         data-testid="int02-assessment-generate"
         disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||!remoteConsent||generating||adopting||providerAvailable===false}
         className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-semibold text-white disabled:opacity-50">
-        {generating?'Generazione in corso…':'Crea una proposta'}
+        {generating?'Preparazione delle domande…':'Prepara le domande'}
       </button>
+      {providerAvailable===false&&(
+        <p role="status" className="text-sm text-amber-200">La preparazione assistita non è disponibile in questo momento.</p>
+      )}
       {generating&&(
         <button type="button" onClick={handleCancelGeneration}
           data-testid="int02-assessment-cancel"
@@ -256,38 +270,56 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         </button>
       )}
       {error&&<p role="alert" data-testid="int02-assessment-error" className="text-sm text-amber-200">{error}</p>}
+        </>
+      )}
       {preview&&(
         <div data-testid="int02-assessment-preview" className="space-y-3 border-t border-cyan-800 pt-3">
           <div>
-            <h4 className="font-semibold text-slate-100">{preview.draft.title}</h4>
-            <p className="mt-1 text-sm text-slate-300">{preview.draft.description}</p>
+            <h4 ref={previewHeadingRef} tabIndex={-1} className="font-semibold text-slate-100">Proposta di verifica</h4>
+            <p className="mt-1 text-sm text-slate-200">{preview.draft.title}</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {preview.draft.questions.length} {preview.draft.questions.length===1?'domanda':'domande'} · Da rivedere · Non salvata
+            </p>
           </div>
-          <p className="text-xs font-semibold text-amber-200">
-            Correttezza da verificare: controlla domande, risposte e spiegazioni prima di salvare.
+          <p className="text-sm font-semibold text-amber-200">
+            Rivedi domande e risposte prima di salvare la verifica.
           </p>
-          <ol className="space-y-3">
-            {preview.draft.questions.map((question,index)=>(
-              <li key={index} className="rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-xs text-slate-200">
-                <div className="font-semibold">{index+1}. {question.q}</div>
-                <ul className="mt-2 space-y-1">
-                  {question.options.map((answer,answerIndex)=>(
-                    <li key={answerIndex}>
-                      {answerIndex===question.correct?'✓ ':''}{answer}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-slate-300">Spiegazione proposta: {question.explanation}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="text-xs text-slate-300">
-            La proposta non è stata salvata. Puoi modificarla nell'editor e decidere successivamente se conservarla.
-          </p>
+          {error&&<p role="alert" data-testid="int02-assessment-error"
+            className="text-sm text-amber-200">{error}</p>}
+          <details data-testid="int02-assessment-questions-details"
+            className="rounded-lg border border-slate-700 bg-slate-950/40">
+            <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm font-semibold text-slate-200">
+              Vedi le domande ({preview.draft.questions.length})
+            </summary>
+            <ol className="space-y-3 border-t border-slate-700 p-3">
+              {preview.draft.questions.map((question,index)=>(
+                <li key={index} className="rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-200">
+                  <div className="font-semibold">{index+1}. {question.q}</div>
+                  <ul className="mt-2 space-y-1">
+                    {question.options.map((answer,answerIndex)=>(
+                      <li key={answerIndex}>
+                        {answerIndex===question.correct?'✓ ':''}{answer}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-slate-300">Spiegazione: {question.explanation}</p>
+                </li>
+              ))}
+            </ol>
+          </details>
           <button type="button" onClick={()=>void handleAdopt()}
             disabled={generating||adopting}
             data-testid="int02-assessment-open-editor"
-            className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50">
-            {adopting?'Apertura in corso…':'Apri come bozza in Verifiche'}
+            className="min-h-[48px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50">
+            {adopting?'Apertura in corso…':'Apri e modifica'}
+          </button>
+          <button type="button" onClick={()=>{
+            focusObjectiveAfterPreviewRef.current=true;
+            setPreview(null);
+          }}
+            disabled={adopting}
+            className="min-h-[44px] w-full text-sm text-slate-300 underline underline-offset-4 disabled:opacity-50">
+            Modifica l’obiettivo
           </button>
         </div>
       )}

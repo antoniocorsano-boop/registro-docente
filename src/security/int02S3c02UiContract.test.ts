@@ -16,9 +16,22 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(panel).toContain('CLIENT_GENERATION_TIMEOUT_MS');
     expect(panel).toContain('Annulla richiesta');
     expect(panel).toContain('getLiveContext');
-    expect(panel).toContain('Crea una proposta');
-    expect(panel).toContain('Apri come bozza in Verifiche');
-    expect(panel).toContain('Correttezza da verificare');
+    expect(panel).toContain('Prepara le domande');
+    expect(panel).toContain('Proposta di verifica');
+    expect(panel).toContain('Non salvata');
+    expect(panel).not.toContain('Verifica pronta');
+    expect(panel).toContain('openEditorErrorCopy[reason.message]');
+    expect(panel).toContain('Hai già modifiche non salvate.');
+    expect(panel).toContain('La classe o il materiale sono cambiati.');
+    expect(panel).toContain('Apri e modifica');
+    expect(panel).toContain('Rivedi domande e risposte prima di salvare la verifica.');
+    expect(panel).toContain('Che cosa vuoi verificare?');
+    expect(panel).toContain('Informazioni sull\'invio');
+    expect(panel).toContain('int02-assessment-questions-details');
+    expect(panel).toContain('role="alert" data-testid="int02-assessment-error"');
+    expect(panel).toContain('objectiveRef.current?.focus()');
+    expect(panel).toContain('previewHeadingRef.current?.focus()');
+    expect(panel).toContain('Autorizzo l\'invio del materiale e dell\'obiettivo');
     expect(panel).not.toContain('onSaveNewTest');
   });
   test('ricollega il pannello al Copilota esistente, senza sostituirne le altre azioni',async()=>{
@@ -29,6 +42,15 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(composer).toContain('currentClassId');
     expect(composer).toContain('Creare una verifica');
     expect(composer).toContain('selectedSource');
+    expect(composer).toContain('!isAssessmentOpen && (');
+    expect(composer).toContain('!isAssessmentOpen && !isBoundMissionFlow && teacherFirstResolution');
+    expect(composer).toContain('Altre attività');
+    expect(composer).toContain('assessmentSourceSelectRef.current?.focus()');
+    expect(composer).toContain('assessmentGoalButtonRef.current?.focus()');
+    expect(composer).not.toContain('setSelectedSourceId(event.target.value);\n              setIsAssessmentOpen(false);');
+    expect(composer).toContain('showMaterialControls && !isAssessmentOpen');
+    expect(composer).toContain('if(!isOpen)setIsAssessmentOpen(false)');
+    expect(composer).toContain('isAssessmentOpen ? \'Materiale\' : \'Fonte della Biblioteca\'');
   });
   test('usa uno stato effimero in App e ricontrolla il contesto prima della navigazione',async()=>{
     const app=await read('src/App.tsx');
@@ -36,13 +58,23 @@ describe('INT-02/S3c-02 — Copilota, anteprima e editor senza salvataggi automa
     expect(app).toContain('checkAssessmentEditorTransferContext');
     expect(app).toContain('canAcceptAssessmentEditorTransfer');
     expect(app).toContain('onAcceptAssessmentDraft=');
+    expect(app).toContain('Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.');
+    expect(app).toContain('La fonte o la classe non è più valida. Richiedi una nuova proposta.');
     expect(app).toContain('assessmentEditorTransfer=');
+    expect(app).toContain('onAssessmentEditorFocusChange={setIsAssessmentEditorFocus}');
+    expect(app).toContain('!isAssessmentEditorFocus && (');
     expect(app).toContain("handleNavigateTab('verifiche-online')");
     expect(app).not.toContain('localStorage.setItem(\'assessmentEditorTransfer');
   });
   test('precompila solo il nuovo editor, con UDA vuota, senza id, voto o salvataggio',async()=>{
     const view=await read('src/components/VerificheOnlineView.tsx');
     expect(view).toContain('assessmentEditorTransfer');
+    // UX-TEACHER-01: the Copilot handoff must enter a focused teacher review.
+    expect(view).toContain('isCopilotReview');
+    expect(view).toContain('int02-assessment-focused-review');
+    expect(view).toContain('Rivedi la verifica');
+    expect(view).toContain('Salva la verifica');
+    expect(view).toContain('onAssessmentEditorFocusChange');
     expect(view).toContain('canAcceptAssessmentEditorTransfer');
     expect(view).toContain("setEditorUdaId('')");
     expect(view).toContain('setConfirmSourceForAssessment(false)');

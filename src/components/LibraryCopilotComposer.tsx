@@ -227,6 +227,9 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const isOpen = surfaceMode === 'compose';
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [isAssessmentOpen, setIsAssessmentOpen] = useState(false);
+  useEffect(()=>{
+    if(!isOpen)setIsAssessmentOpen(false);
+  },[isOpen]);
   const assessmentLiveRef = useRef({library, classes, currentClassId, currentClassName, selectedSourceId});
   assessmentLiveRef.current = {library, classes, currentClassId, currentClassName, selectedSourceId};
   const [message, setMessage] = useState('');
@@ -261,6 +264,20 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   const directLaunchResolutionKeyRef = useRef<string | null>(null);
   const composerDialogRef = useRef<HTMLElement | null>(null);
   const composerCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const assessmentGoalButtonRef = useRef<HTMLButtonElement | null>(null);
+  const assessmentSourceSelectRef = useRef<HTMLSelectElement | null>(null);
+  const previousAssessmentOpenRef = useRef(isAssessmentOpen);
+
+  useEffect(() => {
+    const changed = previousAssessmentOpenRef.current !== isAssessmentOpen;
+    previousAssessmentOpenRef.current = isAssessmentOpen;
+    if (!isOpen || !changed) return;
+    if (isAssessmentOpen) {
+      assessmentSourceSelectRef.current?.focus();
+    } else {
+      assessmentGoalButtonRef.current?.focus();
+    }
+  }, [isOpen, isAssessmentOpen]);
   const composerPreviousFocusRef = useRef<HTMLElement | null>(null);
 
   const hasLaunchTeachingTarget = Boolean(
@@ -1416,7 +1433,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             <MessageCircle size={18} className="text-cyan-300" aria-hidden="true" />
             Copilota
           </div>
-          <p className="mt-0.5 truncate text-xs text-slate-400">{contextLabel}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-400">{isAssessmentOpen ? `Classe ${currentClassName ?? 'da scegliere'}` : contextLabel}</p>
         </div>
         <button
           ref={composerCloseButtonRef}
@@ -1447,7 +1464,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
       </div>
 
       <div data-testid="library-copilot-scroll" className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {!hasCompleteDirectLaunch && !isBoundMissionFlow && (
+        {!hasCompleteDirectLaunch && !isBoundMissionFlow && !isAssessmentOpen && (
           <section className="space-y-3" data-testid="teacher-first-copilot-entry">
             <div>
               <h3 className="text-sm font-bold text-slate-100">{isConductLaunch ? 'Supporto durante la lezione' : 'Cosa vuoi fare?'}</h3>
@@ -1467,7 +1484,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => chooseTeacherFirstGoal('prepare', 'Preparare un’attività')} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Preparare un’attività</button>
                 <button type="button" onClick={() => chooseTeacherFirstGoal('material', 'Lavorare su un materiale')} className="min-h-[44px] rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200">Lavorare su un materiale</button>
-                <button data-testid="int02-s3c02-create-assessment" type="button" onClick={() => {
+                <button ref={assessmentGoalButtonRef} data-testid="int02-s3c02-create-assessment" type="button" onClick={() => {
                   chooseTeacherFirstGoal('material', 'Creare una verifica da un materiale');
                   setIsAssessmentOpen(true);
                 }} className="min-h-[44px] rounded-lg border border-cyan-800 px-3 py-2 text-xs font-semibold text-cyan-100">Creare una verifica</button>
@@ -1615,18 +1632,30 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
         {showMaterialControls && (
           <div className="space-y-3" data-testid="teacher-first-material-step">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Da quale materiale vuoi partire?</div>
+            {isAssessmentOpen ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-base font-semibold text-slate-100">Prepara una verifica</h3>
+                <button type="button" onClick={()=>setIsAssessmentOpen(false)}
+                  className="min-h-[44px] text-sm font-medium text-cyan-200 underline underline-offset-4">
+                  Altre attività
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Da quale materiale vuoi partire?</div>
+            )}
             <div>
           <label htmlFor="copilot-source" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Fonte della Biblioteca
+            {isAssessmentOpen ? 'Materiale' : 'Fonte della Biblioteca'}
           </label>
           <select
             id="copilot-source"
+            ref={assessmentSourceSelectRef}
             value={selectedSourceId}
             onChange={event => {
               resolutionEpochRef.current += 1;
+              // Changing material keeps the teacher in the assessment task.
+              // The keyed panel remounts for the newly selected source.
               setSelectedSourceId(event.target.value);
-              setIsAssessmentOpen(false);
               setIsPrepareOpen(false);
               setResolution(null);
               setIsReviewUnavailableOpen(false);
@@ -1637,7 +1666,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
             }}
             className="min-h-[44px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
           >
-            <option value="">Scegli una fonte…</option>
+            <option value="">Scegli un materiale…</option>
             {library.sources.map(source => (
               <option key={source.id} value={source.id}>{source.title}</option>
             ))}
@@ -1647,12 +1676,14 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
               <button type="button" data-testid="int02-s3c02-start-assessment"
                 onClick={() => setIsAssessmentOpen(true)}
                 className="min-h-[44px] w-full rounded-lg border border-cyan-700 px-3 text-sm font-semibold text-cyan-100">
-                Crea verifica da questa fonte
+                Prepara una verifica con questo materiale
               </button>
             )}
             {!isBoundMissionFlow && isAssessmentOpen && (!selectedSource || !currentClassId || !currentClassName) && (
               <p role="status" className="rounded-lg border border-amber-900 p-3 text-xs text-amber-200">
-                Seleziona una fonte professionale e una classe attiva nel Registro prima di creare la verifica.
+                {!selectedSource
+                  ? 'Scegli un materiale della Biblioteca per preparare la verifica.'
+                  : 'Apri nel Registro la classe per cui vuoi preparare la verifica.'}
               </p>
             )}
             {!isBoundMissionFlow && isAssessmentOpen && selectedSource && currentClassId && currentClassName && (
@@ -1685,7 +1716,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                 onClose={() => setIsAssessmentOpen(false)}
               />
             )}
-            <details className="rounded-xl border border-slate-800 bg-slate-900/50">
+            <details className={isAssessmentOpen ? 'hidden' : 'rounded-xl border border-slate-800 bg-slate-900/50'}>
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-200">
             <FilePlus2 size={17} className="text-cyan-300" aria-hidden="true" />
             Aggiungi una nuova fonte
@@ -1826,7 +1857,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
 
 
 
-        {!isBoundMissionFlow && teacherFirstResolution && teacherFirstResolution.goalKind !== 'unknown' && selectedSource && (teacherFirstGoalKind === 'material' || resolvedTeachingContext) && (
+        {!isAssessmentOpen && !isBoundMissionFlow && teacherFirstResolution && teacherFirstResolution.goalKind !== 'unknown' && selectedSource && (teacherFirstGoalKind === 'material' || resolvedTeachingContext) && (
           <section data-testid="teacher-first-preview" className="space-y-3 rounded-xl border border-cyan-900/60 bg-slate-900/60 p-3">
             <div className="text-xs font-bold uppercase tracking-wide text-cyan-300">Prima di continuare</div>
             <div className="text-sm text-slate-100"><span className="font-semibold">Obiettivo:</span> {message.trim()}</div>
@@ -1838,7 +1869,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
           </section>
         )}
 
-        {showMaterialControls && (
+        {showMaterialControls && !isAssessmentOpen && (
         <ProfessionalMemoryPanel
           state={professionalMemory}
           relevantMemory={professionalMemoryWorkingSet}

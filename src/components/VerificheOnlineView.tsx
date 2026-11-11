@@ -58,6 +58,7 @@ interface VerificheOnlineViewProps {
   assessmentOriginStatuses?: Record<string, SavedAssessmentOrigin>;
   activeClassName?: string | null;
   onRegisterDraftGuard?: (guard: AssessmentDraftGuard | null) => void;
+  onAssessmentEditorFocusChange?: (focused: boolean) => void;
   onSaveNewTest: (test: OnlineTest) => Promise<void>;
   onDeleteTest?: (testId: string) => void;
   onDeleteSubmission: (submissionId: string) => Promise<void>;
@@ -82,6 +83,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   assessmentOriginStatuses = {},
   activeClassName = null,
   onRegisterDraftGuard,
+  onAssessmentEditorFocusChange,
   onSaveNewTest,
   onDeleteTest,
   onDeleteSubmission,
@@ -176,6 +178,17 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   // Interactive Question-by-Question Test Editor State
   const [isEditingTest, setIsEditingTest] = useState(false);
+  // Only a Copilota handoff opens the quiet review surface; normal Verifiche stay unchanged.
+  const [isCopilotReview, setIsCopilotReview] = useState(false);
+  const focusedReviewHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const focusedCopilotReview = isCopilotReview && isEditingTest && activeSubTab === 'editor';
+  useEffect(() => {
+    onAssessmentEditorFocusChange?.(focusedCopilotReview);
+    return () => onAssessmentEditorFocusChange?.(false);
+  }, [focusedCopilotReview, onAssessmentEditorFocusChange]);
+  useEffect(() => {
+    if (focusedCopilotReview) focusedReviewHeadingRef.current?.focus();
+  }, [focusedCopilotReview]);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [editorTitle, setEditorTitle] = useState('');
   const [editorDescription, setEditorDescription] = useState('');
@@ -218,6 +231,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         editorBaselineRef.current = null;
         editorDirtyRef.current = false;
         setIsEditingTest(false);
+        setIsCopilotReview(false);
         setEditingTestId(null);
         setEditorExitOpen(false);
         pendingEditorExitRef.current = null;
@@ -263,6 +277,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setSelectedClass(transfer.className);
     setShareSelectedTestId('');
     setIsEditingTest(true);
+    setIsCopilotReview(true);
     setActiveSubTab('editor');
     onAssessmentTransferResult(nonce,true);
   },[assessmentEditorTransfer,activeClassId,activeClassName,classes,onAssessmentTransferResult]);
@@ -359,6 +374,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setEditorDuration(15);
     setEditorQuestions([defaultQuestion]);
     setIsEditingTest(true);
+    setIsCopilotReview(false);
     setActiveSubTab('editor');
   };
 
@@ -377,6 +393,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setEditorUdaId(test.udaId || '');
     setEditorDuration(test.durationMinutes || 15);
     setEditorQuestions(JSON.parse(JSON.stringify(test.questions)));
+    setIsCopilotReview(false);
     setIsEditingTest(true);
     setActiveSubTab('editor');
   };
@@ -593,6 +610,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     editorBaselineRef.current = null;
     setSelectedTestId(savedTest.id);
     setIsEditingTest(false);
+    setIsCopilotReview(false);
     alert(`Test "${savedTest.title}" salvato con successo!`);
   };
 
@@ -808,6 +826,30 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     };
   });
 
+  // Additional questions are secondary during a Copilota review: show them after existing ones.
+  const addQuestionActions = (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAddQuestionToEditor('multiple_choice')}
+                    className={focusedCopilotReview
+                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
+                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
+                  >
+                    <Plus className="w-3.5 h-3.5 text-cyan-400" /> {focusedCopilotReview ? 'Aggiungi domanda' : '+ Domanda Scelta Multipla'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddQuestionToEditor('true_false')}
+                    className={focusedCopilotReview
+                      ? "min-h-[44px] px-3 py-2 rounded-md bg-slate-800 text-slate-100 text-sm font-semibold flex items-center gap-2 border border-slate-700"
+                      : "px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"}
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" /> {focusedCopilotReview ? 'Aggiungi vero/falso' : '+ Vero / Falso'}
+                  </button>
+                </div>
+  );
+
   // Print test handler
   const handlePrint = () => {
     if (!currentSelectedTest) return;
@@ -816,7 +858,9 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {assessmentTransferNotice && (
+      {assessmentTransferNotice
+        && (!focusedCopilotReview || assessmentTransferNotice !== 'Proposta aperta. Nulla è stato salvato.')
+        && (
         <p role="status" data-testid="int02-assessment-transfer-notice"
           className="rounded-lg border border-cyan-800 bg-cyan-950/30 p-3 text-sm text-cyan-100">
           {assessmentTransferNotice}
@@ -859,6 +903,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
         </section>
       )}
       {/* Sub-navigation Header Bar */}
+      {!focusedCopilotReview && (
       <div className="neon-card p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileQuestion className="w-5 h-5 text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]" />
@@ -922,6 +967,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* ============================================================== */}
       {/* SUB-TAB 1: BACHECA & CONDIVISIONE PADLET */}
@@ -1243,7 +1289,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
             </div>
           ) : (
             /* Interactive Visual Question-by-Question Form */
-            <form onSubmit={handleSaveInteractiveTest} className="neon-card neon-card-highlight p-5 space-y-5">
+            <form onSubmit={handleSaveInteractiveTest}
+              data-testid={focusedCopilotReview ? 'int02-assessment-focused-review' : undefined}
+              className={focusedCopilotReview
+                ? 'neon-card p-3 sm:p-4 space-y-3'
+                : 'neon-card neon-card-highlight p-5 space-y-5'}>
               <fieldset disabled={isSavingTest} className="space-y-5 border-0 p-0 m-0 min-w-0">
               {editingTestId ? (
                 <p data-testid="int02-s2b-origin-status" role="status" className="text-xs text-slate-300">
@@ -1270,16 +1320,21 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
               ) : null}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border)]">
                 <div>
-                  <h3 className="text-base font-bold text-[var(--primary)] flex items-center gap-2">
+                  <h3 ref={focusedReviewHeadingRef} tabIndex={focusedCopilotReview ? -1 : undefined}
+                    className="text-base font-bold text-[var(--primary)] flex items-center gap-2">
                     <Edit3 className="w-5 h-5 text-[var(--primary)]" />
-                    {editingTestId ? 'Modifica Verifica Formativa' : 'Crea Nuova Verifica Formativa'}
+                    {editingTestId ? 'Modifica Verifica Formativa'
+                      : focusedCopilotReview ? 'Rivedi la verifica' : 'Crea Nuova Verifica Formativa'}
                   </h3>
-                  <p className="text-xs text-slate-400">
-                    Definisci quesiti, opzioni di risposta, soluzioni corrette e spiegazioni didattiche per lo studente.
+                  <p className={focusedCopilotReview ? 'text-sm text-slate-300' : 'text-xs text-slate-400'}>
+                    {focusedCopilotReview
+                      ? 'Controlla le domande e le risposte. La proposta non è ancora salvata.'
+                      : 'Definisci quesiti, opzioni di risposta, soluzioni corrette e spiegazioni didattiche per lo studente.'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {!focusedCopilotReview && (
                   <button
                     type="submit"
                     disabled={isSavingTest}
@@ -1287,6 +1342,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   >
                     <Check className="w-4 h-4" /> {editingTestId ? 'Salva modifiche' : 'Salva Verifica'}
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => requestLocalEditorExit(() => setIsEditingTest(false))}
@@ -1297,6 +1353,58 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                 </div>
               </div>
 
+              {/* Isolated handoff review; the ordinary editor layout remains unchanged. */}
+              {focusedCopilotReview ? (
+                <>
+              <div className="space-y-1">
+                <label className={focusedCopilotReview
+                  ? 'block text-sm font-semibold text-slate-200'
+                  : 'block text-xs font-semibold text-slate-400 uppercase tracking-wider'}>
+                  {focusedCopilotReview ? 'Titolo' : 'Titolo Verifica / Argomento Lezione'}
+                </label>
+                <input
+                  type="text" required
+                  placeholder="es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale"
+                  value={editorTitle}
+                  onChange={e => setEditorTitle(e.target.value)}
+                  className={focusedCopilotReview
+                    ? 'w-full p-3 neon-input text-sm text-white'
+                    : 'w-full p-2.5 neon-input text-xs sm:text-sm text-white'}
+                />
+              </div>
+                <details data-testid="int02-assessment-extra-settings"
+                  className="rounded-lg border border-slate-700">
+                  <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm text-slate-200">
+                    Altre impostazioni (facoltative)
+                  </summary>
+                  <div className="space-y-3 p-3 pt-0">
+                    <label className="block text-sm text-slate-200">
+                      <span className="mb-1 block font-semibold">UDA</span>
+                      <select aria-label="UDA" value={editorUdaId} onChange={e => setEditorUdaId(e.target.value)}
+                        className="w-full min-h-[44px] neon-input bg-slate-900 text-sm text-white">
+                        <option value="">Nessuna UDA associata</option>
+                        {eligibleUdas.map(u => (
+                          <option key={u.id} value={u.id}>{u.className} · {u.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-sm text-slate-200">
+                      <span className="mb-1 block font-semibold">Obiettivi (facoltativo)</span>
+                      <input type="text" value={editorDescription}
+                        onChange={e => setEditorDescription(e.target.value)}
+                        className="w-full min-h-[44px] neon-input text-sm text-white"/>
+                    </label>
+                    <label className="block text-sm text-slate-200">
+                      <span className="mb-1 block font-semibold">Durata prevista (minuti)</span>
+                      <input type="number" min={5} max={120} value={editorDuration}
+                        onChange={e => setEditorDuration(Number(e.target.value))}
+                        className="w-full min-h-[44px] neon-input text-sm text-white"/>
+                    </label>
+                  </div>
+                </details>
+                </>
+              ) : (
+                <>
               {/* Test Meta Configuration */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
@@ -1360,38 +1468,28 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   />
                 </div>
               </div>
+                </>
+              )}
 
               {/* Questions List Header */}
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
+              <div className="pt-2 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
                 <h4 className="font-bold text-slate-200 text-sm flex items-center gap-2">
                   <HelpCircle className="w-4 h-4 text-cyan-400" />
-                  Quesiti del Test ({editorQuestions.length})
+                  {focusedCopilotReview ? 'Domande' : 'Quesiti del Test'} ({editorQuestions.length})
                 </h4>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestionToEditor('multiple_choice')}
-                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-cyan-400" /> + Domanda Scelta Multipla
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestionToEditor('true_false')}
-                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-emerald-400" /> + Vero / Falso
-                  </button>
-                </div>
+                {!focusedCopilotReview && addQuestionActions}
+
               </div>
 
               {/* Questions Editor Cards */}
-              <div className="space-y-4">
+              <div data-testid="int02-assessment-editor-questions" className="space-y-4">
                 {editorQuestions.map((q, qIndex) => (
                   <div
                     key={qIndex}
-                    className="p-4 rounded-xl bg-[var(--surface-variant)] border border-slate-700 space-y-3"
+                    className={focusedCopilotReview
+                      ? 'p-3 rounded-lg bg-[var(--surface-variant)] border border-slate-700 space-y-3'
+                      : 'p-4 rounded-xl bg-[var(--surface-variant)] border border-slate-700 space-y-3'}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2">
@@ -1415,8 +1513,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
                     {/* Question text */}
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                        Testo del Quesito
+                      <label className={focusedCopilotReview
+                          ? 'block text-sm font-semibold text-slate-200 mb-1'
+                          : 'block text-[11px] font-semibold text-slate-400 mb-1'}>
+                        {focusedCopilotReview ? 'Domanda' : 'Testo del Quesito'}
                       </label>
                       <textarea
                         rows={2}
@@ -1429,8 +1529,10 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
                     {/* Options with radio button for correct answer */}
                     <div className="space-y-2">
-                      <label className="block text-[11px] font-semibold text-slate-400">
-                        Opzioni di Risposta (seleziona il pallino della risposta corretta)
+                      <label className={focusedCopilotReview
+                          ? 'block text-sm font-semibold text-slate-200'
+                          : 'block text-[11px] font-semibold text-slate-400'}>
+                        {focusedCopilotReview ? 'Risposte (seleziona quella corretta)' : 'Opzioni di Risposta (seleziona il pallino della risposta corretta)'}
                       </label>
 
                       {q.options.map((opt, optIdx) => (
@@ -1489,9 +1591,11 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
 
                     {/* Formative Explanation (Rationale) */}
                     <div className="pt-2 border-t border-slate-800">
-                      <label className="block text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1">
+                      <label className={focusedCopilotReview
+                          ? 'block text-sm font-semibold text-amber-200 flex items-center gap-2 mb-1'
+                          : 'block text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1'}>
                         <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                        Spiegazione Didattica / Rationale Formativo (visualizzato dopo la risposta dell'alunno)
+                        {focusedCopilotReview ? 'Spiegazione (mostrata allo studente dopo la risposta)' : 'Spiegazione Didattica / Rationale Formativo (visualizzato dopo la risposta dell\'alunno)'}
                       </label>
                       <input
                         type="text"
@@ -1504,21 +1608,24 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   </div>
                 ))}
               </div>
+              {focusedCopilotReview && addQuestionActions}
 
-              <div className="flex gap-3 pt-3 border-t border-[var(--border)]">
+              <div className={focusedCopilotReview
+                ? "flex flex-wrap gap-3 pt-3 border-t border-[var(--border)]"
+                : "flex gap-3 pt-3 border-t border-[var(--border)]"}>
                 <button
                   type="submit"
                   disabled={isSavingTest}
                   className="flex-1 py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
                 >
-                  <Check className="w-4 h-4" /> {editingTestId ? 'Salva modifiche e chiudi' : 'Salva verifica e chiudi'}
+                  <Check className="w-4 h-4" /> {focusedCopilotReview ? 'Salva la verifica' : editingTestId ? 'Salva modifiche e chiudi' : 'Salva verifica e chiudi'}
                 </button>
                 <button
                   type="button"
                   onClick={() => requestLocalEditorExit(() => setIsEditingTest(false))}
                   className="px-5 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold"
                 >
-                  Annulla
+                  {focusedCopilotReview ? 'Chiudi la revisione' : 'Annulla'}
                 </button>
               </div>
               </fieldset>
