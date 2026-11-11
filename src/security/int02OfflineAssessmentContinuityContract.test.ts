@@ -48,7 +48,7 @@ describe('INT-02 — continuità locale della verifica senza generatore',()=>{
     expect(app).toContain('? {sourceId:previous.sourceId,classId:previous.classId}');
     const guidedConsume=app.slice(
       app.indexOf('onGuidedAssessmentHandoffConsumed={nonce =>'),
-      app.indexOf('activeClassId={currentClass?.id ?? null}',app.indexOf('onGuidedAssessmentHandoffConsumed={nonce =>'))
+      app.indexOf('assessmentEditorTransfer=',app.indexOf('onGuidedAssessmentHandoffConsumed={nonce =>'))
     );
     expect(guidedConsume).not.toContain('previous?.nonce===nonce ? null : previous');
     expect(handoff).toContain("'OBJECTIVE_INVALID'");
