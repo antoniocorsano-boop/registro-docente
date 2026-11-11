@@ -282,7 +282,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm">Informazioni sull'invio</summary>
         <p className="border-t border-slate-800 px-3 py-3 leading-relaxed">
           Il materiale e l'obiettivo saranno inviati a un servizio esterno solo con la tua autorizzazione.
-          Servizio utilizzato: {providerLabel}{providerAvailable===false?' · non disponibile':''}.
+          Servizio utilizzato: {providerLabel}.
           La proposta non viene salvata o pubblicata automaticamente.
         </p>
       </details>
@@ -296,7 +296,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       </label>
       <button type="button" onClick={()=>void handleGenerate()}
         data-testid="int02-assessment-generate"
-        disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||!remoteConsent||generating||adopting||providerAvailable===false}
+        disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||!remoteConsent||generating||adopting}
         className="min-h-[44px] w-full rounded-lg bg-cyan-600 px-4 text-sm font-semibold text-white disabled:opacity-50">
         {generating?'Preparazione delle domande…':'Prepara le domande'}
       </button>
