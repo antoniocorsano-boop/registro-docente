@@ -158,6 +158,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const useButtonRef = useRef<HTMLButtonElement | null>(null);
   const useActionButtonRefs = useRef<Partial<Record<LibraryLaunchIntent, HTMLButtonElement | null>>>({});
   const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
+  const transferFocusToCopilotRef = useRef(false);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
   const canPrepareAssisted = source.privacy === 'teacher-professional'
@@ -200,6 +201,13 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
     useSurfaceCloseButtonRef.current?.focus();
 
     return () => {
+      // Opening the Copilota is a modal-to-modal handoff, not an ordinary
+      // dismissal. Never restore focus behind its dialog after the next frame.
+      if (transferFocusToCopilotRef.current) {
+        transferFocusToCopilotRef.current = false;
+        useSurfacePreviousFocusRef.current = null;
+        return;
+      }
       const previous = useSurfacePreviousFocusRef.current ?? useButtonRef.current;
       useSurfacePreviousFocusRef.current = null;
       requestAnimationFrame(() => {
@@ -558,6 +566,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               type="button"
               data-testid="int02-prepare-assisted-assessment"
               onClick={() => {
+                transferFocusToCopilotRef.current = true;
                 setIsUseSurfaceOpen(false);
                 onOpenCopilot({
                   surface: 'library',
