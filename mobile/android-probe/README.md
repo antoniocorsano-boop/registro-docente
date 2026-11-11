@@ -6,6 +6,7 @@
 - `capacitor.config.json`: WebView con `webDir=../../dist`, nessun URL di distribuzione.
 - `.github/workflows/mobile-01-android-probe.yml`: costruzione debug senza chiavi segrete, verifiche, archivio SHA-256 del commit e del pacchetto.
 - La firma debug è temporanea: **non consente di promettere aggiornamenti senza perdita dati** tra esecutori.
+- **HPR Android 11/11 REWORK:** l'APK precedente si avvia su telefono, ma lo screenshot rivela la barra di stato sovrapposta all'intestazione e «Gestisci» accostato ai titoli lunghi. Il nuovo candidato usa gli inset CSS nativi di Capacitor 8 per l'intestazione e il menu e distingue il nome di classe dalla sua descrizione, senza modificare i dati. **La correzione deve ancora essere verificata su APK ricostruito, e non rappresenta un PASS umano.** Tracciamento: issue #216.
 - **M1 riconciliata:** PDF `html2pdf.js@0.10.1` e avvisi licenza inclusi in `assets/public/vendor` senza dipendenza CDN; nessun caricamento Google Fonts. Il workflow controlla **il contenuto effettivo dell'APK byte per byte**. Questo prova l'inclusione della libreria, non il salvataggio del PDF in Android.
 - Il browser Android e il WebView Capacitor hanno archivi IndexedDB con origini differenti; passaggio dati solo tramite esportazione/ripristino cifrato, ancora da verificare sul dispositivo.
 - Tutte le API Express/Gemini restano non incluse e devono degradare in modo sicuro quando offline.
