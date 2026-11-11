@@ -45,6 +45,8 @@ describe('INT-02 — continuità locale della verifica senza generatore',()=>{
     expect(composer).toContain('await onContinueAssessmentManually(sourceId,classId,objective)');
     expect(composer).toContain("onSurfaceModeChange('closed')");
     expect(app).toContain('onGuidedAssessmentHandoffConsumed={nonce =>');
+    expect(app).toContain('? {sourceId:previous.sourceId,classId:previous.classId}');
+    expect(app).not.toContain('previous?.nonce===nonce ? null : previous');
     expect(handoff).toContain("'OBJECTIVE_INVALID'");
     expect(handoff).toContain("source.privacy !== 'teacher-professional'");
     expect(handoff).toContain("source.status !== 'ready'");
