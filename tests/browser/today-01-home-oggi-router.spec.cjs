@@ -125,7 +125,7 @@ test.describe('TODAY-01 mobile qualification', () => {
 test('MOBILE-01 Android cards: long class names never collide with Gestisci at 390/320', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await configureVault(page, 'mobile01-android-cards-synthetic');
-  const className = '3ª A - Secondaria I Grado';
+  const className = '3ª Z - Secondaria I Grado';
   page.once('dialog', dialog => dialog.accept(className));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
   await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
@@ -138,7 +138,7 @@ test('MOBILE-01 Android cards: long class names never collide with Gestisci at 3
       has: page.getByRole('button', { name: `Apri classe ${className}`, exact: true }),
     });
     await expect(card).toBeVisible();
-    await expect(card.getByTestId('class-card-short-name')).toHaveText('3ª A');
+    await expect(card.getByTestId('class-card-short-name')).toHaveText('3ª Z');
     await expect(card.getByTestId('class-card-descriptor')).toHaveText('Secondaria I Grado');
 
     const open = card.getByRole('button', { name: `Apri classe ${className}`, exact: true });
