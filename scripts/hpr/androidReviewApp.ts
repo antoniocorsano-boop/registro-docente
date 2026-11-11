@@ -11,6 +11,8 @@ import {handleAssessmentGenerationRequest} from '../../src/server/assessmentGene
  * any Gemini provider. It must NOT be used for normal Registro Docente traffic.
  */
 export const REVIEW_CLASS = '3C Dimostrativa';
+export const REVIEW_ADDITIONAL_CLASS = '3ª A - Secondaria I Grado';
+const APPROVED_FICTITIOUS_CLASSES = new Set([REVIEW_CLASS, REVIEW_ADDITIONAL_CLASS]);
 export const REVIEW_SOURCE_TITLE = 'Le trasformazioni dell’energia';
 export const REVIEW_SOURCE_TEXT = 'Una centrale elettrica trasforma energia primaria in energia elettrica.';
 export const REVIEW_OBJECTIVE = 'Riconoscere le trasformazioni energetiche.';
@@ -66,7 +68,9 @@ export function isApprovedSyntheticRequest(input: unknown): boolean {
     && input.source.privacy === 'teacher-professional'
     && input.source.title === REVIEW_SOURCE_TITLE
     && input.source.text === REVIEW_SOURCE_TEXT
-    && input.context.className === REVIEW_CLASS
+    // Both labels are explicitly confirmed fictitious for this local HPR.
+    // Keep the fixed source and objective; the provider never makes external calls.
+    && APPROVED_FICTITIOUS_CLASSES.has(input.context.className as string)
     && input.context.objective === REVIEW_OBJECTIVE;
 }
 
