@@ -11,7 +11,10 @@ describe('INT-02 — continuità locale della verifica senza generatore',()=>{
     expect(panel).toContain('Nessuna domanda generata e nessun salvataggio automatico.');
     // No parallel "Continua" button when the remote provider is healthy.
     expect(panel).toContain('providerAvailable===false&&(');
-    expect(panel).toContain('providerAvailable!==false&&(');
+    expect(panel).toContain('providerAvailable===true&&(');
+    expect(panel).toContain('PROVIDER_AVAILABILITY_TIMEOUT_MS = 3_000');
+    expect(panel).toContain('controller.abort();\n      setProviderAvailable(false);');
+    expect(panel).toContain('if(controller.signal.aborted)return;');
     expect(handler).toContain('live.source.status');
     expect(handler).toContain('live.source.privacy');
     expect(handler).toContain('live.activeClassId!==classId');
