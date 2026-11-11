@@ -55,7 +55,7 @@ describe('INT-02 — continuità locale della verifica senza generatore',()=>{
     expect(body).toContain('setIsManuallyGuided(true)');
     expect(body).toContain('onGuidedAssessmentHandoffConsumed?.(handoff.nonce)');
     expect(view).toContain("setEditorUdaId('')");
-    expect(view).toContain('Nessuna domanda generata');
+    expect(view).toContain('il generatore non è stato utilizzato');
     expect(view).toContain("isManuallyGuided ? 'Prepara la verifica' : 'Rivedi la verifica'");
     expect(view).toContain('editorBaselineRef.current=null');
     expect(view).toContain('Modifiche non salvate');
