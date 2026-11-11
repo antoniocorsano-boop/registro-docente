@@ -1543,6 +1543,28 @@
         "tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs",
         "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-01-ANDROID-HPR-I01",
+      "owner": "MOBILE-01/UX-QA-03",
+      "statement": "The real Android status bar must not cover the teacher's Oggi title or privacy/lock actions. The Capacitor 8 SystemBars CSS inset and safe-area fallback protect the mobile header and navigation drawer, while class cards show the full school identity accessibly without long names colliding with Gestisci. Browser tests of synthetic insets at 320/390 are only regression checks: actual Android HPR remains REWORK until observed on a rebuilt APK.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/index.css",
+        "src/components/HomeView.tsx",
+        "src/security/mobile01AndroidVisualContract.test.ts",
+        "tests/browser/header-01-navbar-integration.spec.cjs",
+        "tests/browser/today-01-home-oggi-router.spec.cjs",
+        ".github/workflows/mobile-01-android-probe.yml"
+      ],
+      "tests": [
+        "src/security/mobile01AndroidVisualContract.test.ts",
+        "src/security/mobile01AndroidProbeContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/header-01-navbar-integration.spec.cjs",
+        "tests/browser/today-01-home-oggi-router.spec.cjs"
+      ]
     }
   ]
 }
