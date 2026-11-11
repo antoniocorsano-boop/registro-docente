@@ -121,3 +121,42 @@ test.describe('TODAY-01 mobile qualification', () => {
     await expect(pending).toBeHidden();
   });
 });
+
+test('MOBILE-01 Android cards: long class names never collide with Gestisci at 390/320', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await configureVault(page, 'mobile01-android-cards-synthetic');
+  const className = '3ª A - Secondaria I Grado';
+  page.once('dialog', dialog => dialog.accept(className));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` })).toBeVisible();
+  await closePersistenceConfirmation(page);
+  await openOggiFromDrawer(page);
+
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const card = page.locator('[data-uxqa-class-card]').filter({
+      has: page.getByRole('button', { name: `Apri classe ${className}`, exact: true }),
+    });
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId('class-card-short-name')).toHaveText('3ª A');
+    await expect(card.getByTestId('class-card-descriptor')).toHaveText('Secondaria I Grado');
+
+    const open = card.getByRole('button', { name: `Apri classe ${className}`, exact: true });
+    const manage = card.getByRole('button', { name: `Gestisci classe ${className}`, exact: true });
+    const openBounds = await open.boundingBox();
+    const manageBounds = await manage.boundingBox();
+    expect(openBounds).not.toBeNull();
+    expect(manageBounds).not.toBeNull();
+    // Separate action rows: no overlap even on small Android screens.
+    expect(openBounds.y + openBounds.height).toBeLessThanOrEqual(manageBounds.y + 1);
+    expect(manageBounds.height).toBeGreaterThanOrEqual(44);
+    await assertNoHorizontalOverflow(page);
+    await page.screenshot({
+      path: evidencePath(`mobile01-android-class-cards-${width}.png`), fullPage: true,
+    });
+
+    await manage.click();
+    await expect(card.getByRole('button', { name: `Elimina classe ${className}` })).toBeVisible();
+    await manage.click();
+  }
+});
