@@ -35,6 +35,9 @@ describe('INT-02 — continuità locale della verifica senza generatore',()=>{
     expect(handler).not.toContain('setTests(');
     expect(handler).not.toContain('Gemini');
     expect(app).toContain('onContinueAssessmentManually={handleContinueAssessmentManually}');
+    const composer=await Bun.file('src/components/LibraryCopilotComposer.tsx').text();
+    expect(composer).toContain('await onContinueAssessmentManually(sourceId,classId,objective)');
+    expect(composer).toContain("onSurfaceModeChange('closed')");
     expect(app).toContain('onGuidedAssessmentHandoffConsumed={nonce =>');
     expect(handoff).toContain("'OBJECTIVE_INVALID'");
     expect(handoff).toContain("source.privacy !== 'teacher-professional'");
