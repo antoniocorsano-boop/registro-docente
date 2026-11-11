@@ -331,6 +331,27 @@
       ]
     },
     {
+      "id": "MOBILE-01-M1-I01",
+      "owner": "MOBILE-01/M1",
+      "statement": "PDF generation is fully local at runtime with the exact previously used html2pdf.js 0.10.1 bundle and license notices pinned to their upstream Git blob identities, with index.html depending only on same-origin script and device fonts and Chromium demonstrating real PDF bytes without outside network access. This does not qualify Android file export, encrypted backup or version updates.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "public/vendor/html2pdf.bundle.min.js",
+        "public/vendor/html2pdf.bundle.min.js.LICENSE.txt",
+        "index.html",
+        "src/index.css",
+        "src/security/mobile01M1OfflineAssetsContract.test.ts",
+        "tests/browser/mobile01-m1-offline-pdf.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/mobile01M1OfflineAssetsContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile01-m1-offline-pdf.spec.cjs"
+      ]
+    },
+    {
       "id": "LSM-02-I01",
       "owner": "LSM-02",
       "statement": "The optional local semantic-memory settings remain teacher-first: advanced endpoint details are disclosed only on request, explicit activation and synchronization preserve the ephemeral local session boundary, and failed or missing semantic runtime never removes the Library's ordinary textual search.",
