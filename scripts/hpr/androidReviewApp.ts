@@ -99,8 +99,9 @@ function assertReviewOptions(input: AndroidReviewOptions): number {
     throw new Error('HPR: deployed commit does not match the qualified commit');
   }
   const expiry = Date.parse(input.expiresAt);
-  if (!Number.isFinite(expiry) || expiry <= (input.now?.() ?? Date.now())) {
-    throw new Error('HPR: review expiry missing or elapsed');
+  const currentTime = input.now?.() ?? Date.now();
+  if (!Number.isFinite(expiry) || expiry <= currentTime || expiry > currentTime + 7 * 24 * 60 * 60 * 1000) {
+    throw new Error('HPR: review expiry must be within seven days');
   }
   return expiry;
 }
@@ -183,9 +184,13 @@ export function createAndroidReviewApp(options: AndroidReviewOptions) {
   app.get(['/sw.js', '/service-worker.js', '/manifest.webmanifest'], (_req, res) =>
     res.sendStatus(404)
   );
+  // /index.html must pass through the same sanitization as the SPA fallback.
+  app.get(['/','/index.html'], serveReviewHtml);
   app.use(express.static(staticRoot, {index: false, etag: false, maxAge: 0}));
 
-  app.get('*', (_req: Request, res: Response) => {
+  app.get('*', serveReviewHtml);
+
+  function serveReviewHtml(_req: Request, res: Response) {
     const indexPath = path.join(staticRoot, 'index.html');
     if (!existsSync(indexPath)) return res.status(503).send('Compilazione di prova non disponibile.');
     // The normal HTML references third-party fonts and a PDF script.
@@ -195,6 +200,6 @@ export function createAndroidReviewApp(options: AndroidReviewOptions) {
       .replace(/<script\b[^>]*src=["']https?:\/\/[^"']+["'][^>]*><\/script>/gi, '')
       .replace(/<title>[^<]*<\/title>/i, '<title>Registro Docente — SOLO PROVA</title>');
     return res.type('html').send(html);
-  });
+  }
   return app;
 }
