@@ -205,8 +205,11 @@ test('INT-02/S4c: Prepara, test salvato, consegna, Registra e Rivedi mantengono 
   const successfulImportsBeforeRetry = dialogLog.filter(d => d.type === 'alert'
     && d.text.includes('Importazione completata con successo!')).length;
   await retryImport.click();
+  // A zero-import result is idempotent only when the submission is already
+  // present and unchanged. A blocked/conflicting grade uses the same headline.
   await expect.poll(() => dialogLog.some(d => d.type === 'alert'
-    && d.text.includes('Nessuna nuova valutazione importabile'))).toBe(true);
+    && d.text.includes('Nessuna nuova valutazione importabile.')
+    && d.text.includes('Già presenti: 1; da verificare: 0.'))).toBe(true);
   expect(dialogLog.filter(d => d.type === 'alert'
     && d.text.includes('Importazione completata con successo!')).length)
     .toBe(successfulImportsBeforeRetry);
