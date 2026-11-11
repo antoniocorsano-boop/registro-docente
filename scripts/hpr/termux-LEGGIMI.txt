@@ -34,7 +34,8 @@ APERTURA
 7. Apri quell'indirizzo nel browser dello STESSO telefono.
    Utente: docente-prova
    Password: quella visualizzata in Termux, senza copiarla in chat.
-8. Crea SOLO una classe "3C Dimostrativa" e una fonte
+8. Crea SOLO una classe fittizia ("3C Dimostrativa" oppure
+   "3ª A - Secondaria I Grado", entrambe autorizzate) e una fonte
    professionale fittizia di tipo "concept" ("Concetto"):
    titolo "Le trasformazioni dell’energia"
    testo "Una centrale elettrica trasforma energia primaria in energia elettrica."
