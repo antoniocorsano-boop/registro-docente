@@ -47,9 +47,9 @@ function sessionCopy(session: SemanticMemorySessionView): string {
     case 'rebuild-required':
       return 'L’indice locale deve essere ricostruito prima di sincronizzare o cercare.';
     case 'error':
-      return 'Connessione locale non disponibile. Controlla Termux e riprova.';
+      return 'La ricerca per significato non è disponibile su questo dispositivo. Puoi continuare a cercare nella Biblioteca.';
     default:
-      return 'Non connessa. La Biblioteca continua a usare la ricerca locale già disponibile.';
+      return 'Non attiva. Puoi continuare a cercare nella Biblioteca.';
   }
 }
 
@@ -99,18 +99,45 @@ export const SemanticMemorySettings: React.FC<SemanticMemorySettingsProps> = ({
         <div>
           <p className="text-sm font-semibold text-slate-100">Memoria semantica locale</p>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Collegamento facoltativo a Termux. L’attivazione crea una credenziale locale effimera valida solo per questa sessione.
+            La ricerca per significato è facoltativa. I materiali della Biblioteca restano consultabili anche senza attivarla.
           </p>
         </div>
         <span className="rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-300">
-          {session.status === 'ready' ? 'Pronta' : session.status === 'degraded' ? 'Ridotta' : session.status === 'rebuild-required' ? 'Da ricostruire' : 'Locale'}
+          {session.status === 'ready' ? 'Pronta' : session.status === 'degraded' ? 'Ridotta' : session.status === 'rebuild-required' ? 'Da ricostruire' : 'Non attiva'}
         </span>
       </div>
 
       <p className="mt-2 text-xs text-slate-400" aria-live="polite">{sessionCopy(session)}</p>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <label className="text-xs text-slate-400">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {connected ? (
+          <button
+            type="button"
+            onClick={onDisconnect}
+            className="min-h-12 rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-400"
+          >
+            Disattiva
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={!endpoint.trim() || isConnecting}
+            className="min-h-12 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isConnecting ? 'Attivazione…' : 'Attiva memoria locale'}
+          </button>
+        )}
+      </div>
+
+      <details className="mt-3 rounded-lg border border-slate-700/70 px-3 py-2" data-testid="semantic-memory-advanced">
+        <summary className="cursor-pointer text-sm font-medium text-slate-300">
+          Configurazione avanzata
+        </summary>
+        <p className="mt-2 text-xs text-slate-400">
+          L'attivazione usa una credenziale locale effimera, valida solo per questa sessione.
+        </p>
+        <label className="mt-2 block text-xs text-slate-400">
           Endpoint locale
           <input
             value={endpoint}
@@ -121,27 +148,7 @@ export const SemanticMemorySettings: React.FC<SemanticMemorySettingsProps> = ({
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500 disabled:opacity-60"
           />
         </label>
-        <div className="flex items-end gap-2">
-          {connected ? (
-            <button
-              type="button"
-              onClick={onDisconnect}
-              className="min-h-11 rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 hover:border-slate-400"
-            >
-              Disconnetti
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void handleConnect()}
-              disabled={!endpoint.trim() || isConnecting}
-              className="min-h-11 rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isConnecting ? 'Attivazione…' : 'Attiva memoria locale'}
-            </button>
-          )}
-        </div>
-      </div>
+      </details>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button

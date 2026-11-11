@@ -133,7 +133,13 @@ test('LSM-01C connection remains explicit and fails safely without device loopba
   await openSettings(page);
   const settings = page.getByTestId('semantic-memory-settings');
   await expect(settings).toBeVisible();
+  const advancedSettings = settings.getByTestId('semantic-memory-advanced');
+  await expect(advancedSettings).not.toHaveAttribute('open', '');
+  await expect(settings.getByLabel('Endpoint locale')).toBeHidden();
+  await advancedSettings.locator('summary').click();
   await expect(settings.getByLabel('Endpoint locale')).toHaveValue('http://127.0.0.1:8765');
+  await advancedSettings.locator('summary').click();
+  await expect(settings.getByLabel('Endpoint locale')).toBeHidden();
   await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
   await expect(settings.locator('input[type="password"]')).toHaveCount(0);
   expect(loopbackRequests).toHaveLength(0);
@@ -142,7 +148,7 @@ test('LSM-01C connection remains explicit and fails safely without device loopba
   await expect(syncButton).toBeDisabled();
   await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
 
-  await expect(settings.getByText('Connessione locale non disponibile. Controlla Termux e riprova.', { exact: true })).toBeVisible();
+  await expect(settings.getByText('La ricerca per significato non è disponibile su questo dispositivo. Puoi continuare a cercare nella Biblioteca.', { exact: true })).toBeVisible();
   expect(loopbackRequests).toHaveLength(1);
   expect(loopbackRequests[0].method).toBe('POST');
   expect(new URL(loopbackRequests[0].url).pathname).toBe('/v1/session');
@@ -235,7 +241,7 @@ test('LSM-01D activation obtains one ephemeral capability without persistence or
   await settings.getByRole('button', { name: 'Attiva memoria locale', exact: true }).click();
   await expect(settings.getByText('Memoria locale connessa e pronta.', { exact: true })).toBeVisible();
   await expect(syncButton).toBeEnabled();
-  await expect(settings.getByRole('button', { name: 'Disconnetti', exact: true })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Disattiva', exact: true })).toBeVisible();
 
   expect(loopbackRequests).toHaveLength(1);
   expect(loopbackRequests[0].method).toBe('POST');
@@ -428,7 +434,7 @@ test('LSM-01D mobile activation sync and reload remain explicit and zero-token',
   expect(appRequests).toHaveLength(appRequestCountBeforeReload);
   await openSettings(page);
   settings = page.getByTestId('semantic-memory-settings');
-  await expect(settings.getByText('Non connessa. La Biblioteca continua a usare la ricerca locale già disponibile.', { exact: true })).toBeVisible();
+  await expect(settings.getByText('Non attiva. Puoi continuare a cercare nella Biblioteca.', { exact: true })).toBeVisible();
   await expect(settings.getByLabel('Token di sessione')).toHaveCount(0);
   syncButton = settings.getByRole('button', { name: 'Sincronizza', exact: true });
   await expect(syncButton).toBeDisabled();
