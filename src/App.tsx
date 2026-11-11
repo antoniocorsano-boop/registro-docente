@@ -3464,7 +3464,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             settings={settings}
             assessmentHandoff={activeAssessmentHandoff}
             onGuidedAssessmentHandoffConsumed={nonce => {
-              setAssessmentHandoffRequest(previous => previous?.nonce===nonce ? null : previous);
+              setAssessmentHandoffRequest(previous => previous?.nonce===nonce
+                // Consume the one-use guided launch but keep the validated
+                // professional source/class reference for an optional, explicit
+                // provenance checkbox in the unsaved editor.
+                ? {sourceId:previous.sourceId,classId:previous.classId}
+                : previous);
             }}
             assessmentEditorTransfer={pendingCopilotAssessmentValid ? pendingCopilotAssessment : null}
             assessmentTransferNotice={assessmentTransferNotice}
