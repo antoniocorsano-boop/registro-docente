@@ -82,6 +82,13 @@ test('S3d Android HPR rework: source action opens governed Copilota, not the man
   await expect(page.getByTestId('library-source-use-surface')).toHaveCount(0);
   const composer=page.getByTestId('library-copilot-scroll');
   await expect(composer).toBeVisible();
+  // A source dialog closes while the Copilota opens. The prior modal must not
+  // steal focus back behind the new dialog on the following animation frame.
+  await page.evaluate(() => new Promise(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect.poll(async () => page.evaluate(() =>
+    Boolean(document.activeElement?.closest('[data-testid="library-copilot-composer"]'))
+  )).toBe(true);
   const panel=composer.getByTestId('int02-s3c02-assessment-panel');
   await expect(panel).toBeVisible();
   await expect(composer).toContainText(CLASS_NAME);
