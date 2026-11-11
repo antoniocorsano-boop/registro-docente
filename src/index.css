@@ -147,6 +147,18 @@ body {
   box-shadow: var(--neon-glow);
 }
 
+/* MOBILE-01 / UX-QA-03 — Android 16 enforces edge-to-edge WebView.
+   Capacitor 8 SystemBars provides --safe-area-inset-* even when older
+   Android WebViews report env(safe-area-inset-*) as zero. The fallbacks
+   keep ordinary browsers and mobile web unaffected. */
+[data-testid="header01-topbar"] {
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+}
+#registro-navigation-drawer {
+  padding-top: calc(1.25rem + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  padding-bottom: calc(1.25rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+}
+
 /* Print styles for official report */
 @media print {
   body {
