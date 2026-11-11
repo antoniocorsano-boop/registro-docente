@@ -159,6 +159,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const useActionButtonRefs = useRef<Partial<Record<LibraryLaunchIntent, HTMLButtonElement | null>>>({});
   const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
   const transferFocusToCopilotRef = useRef(false);
+  const restorePrimaryAssessmentFocusRef = useRef(false);
   const wasCopilotOpenRef = useRef(isCopilotOpen);
   const otherActionsSummaryRef = useRef<HTMLElement | null>(null);
   const excerpt = source.extractedText || source.payload.text;
@@ -221,15 +222,25 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   useLayoutEffect(() => {
     const wasOpen = wasCopilotOpenRef.current;
     wasCopilotOpenRef.current = isCopilotOpen;
-    if (!wasOpen || isCopilotOpen || !isSelected || !isUseSurfaceOpen || !isMobileDialog) return;
-    // After closing Copilota, the formerly activated secondary action can be
-    // hidden by the professional-source disclosure. Restore focus inside the
-    // reactivated source dialog instead of targeting an invisible button.
-    otherActionsSummaryRef.current?.focus();
+    if (!wasOpen || isCopilotOpen || !isSelected || !isMobileDialog) return;
+    if (!isUseSurfaceOpen && restorePrimaryAssessmentFocusRef.current) {
+      // The primary action unmounted the source dialog. The stable «Usa»
+      // button is its return destination when Copilota is dismissed.
+      restorePrimaryAssessmentFocusRef.current = false;
+      const returnButton = useButtonRef.current;
+      requestAnimationFrame(() => {
+        if (returnButton?.isConnected && !returnButton.disabled) returnButton.focus();
+      });
+      return;
+    }
+    // Secondary actions preserve the source dialog: focus its visible summary
+    // instead of a button in a collapsed details element.
+    if (isUseSurfaceOpen) otherActionsSummaryRef.current?.focus();
   }, [isCopilotOpen, isSelected, isUseSurfaceOpen, isMobileDialog]);
 
   useLayoutEffect(() => {
     if (!isSelected) {
+      restorePrimaryAssessmentFocusRef.current = false;
       initializedSourceIdRef.current = null;
       setContextSuggestion(null);
       setContextChooserOpen(false);
@@ -578,6 +589,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
               type="button"
               data-testid="int02-prepare-assisted-assessment"
               onClick={() => {
+                restorePrimaryAssessmentFocusRef.current = true;
                 transferFocusToCopilotRef.current = true;
                 setIsUseSurfaceOpen(false);
                 onOpenCopilot({
