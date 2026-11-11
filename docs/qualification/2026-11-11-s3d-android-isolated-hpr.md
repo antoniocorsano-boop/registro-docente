@@ -20,7 +20,7 @@ L'ambiente funziona soltanto quando:
 Sono bloccate API diverse da POST /api/copilot/assessment-draft e GET /api/copilot/assessment-draft/provider; il servizio non salva in rete verifiche, UDA o voti. Le fonti di caratteri e script esterni presenti nell'HTML ordinario vengono escluse dalla vista di prova, con politica dei contenuti limitata allo stesso dominio. Anche il service worker è disabilitato per evitare copie persistenti dell'ambiente di collaudo.
 
 Il servizio simulato accetta **soltanto** la combinazione:
-- Classe: **3C Dimostrativa**
+- Classi ammesse, entrambe fittizie e confermate: **3C Dimostrativa** oppure **3ª A - Secondaria I Grado**.
 - Materiale della Biblioteca, di tipo «Testo o idea» e categoria «Concetto»: **Le trasformazioni dell’energia**
 - Testo: **Una centrale elettrica trasforma energia primaria in energia elettrica.**
 - Obiettivo: **Riconoscere le trasformazioni energetiche.**
@@ -46,7 +46,7 @@ Lo stato di «ambiente accessibile da Android» è confermabile **solo dopo** ac
 
 Con browser dedicato e senza usare dati del proprio Registro:
 
-1. Configurare un archivio protetto **nuovo e fittizio**, creare «3C Dimostrativa» e un materiale con i valori esatti riportati sopra; classificare la fonte come professionale.
+1. Configurare un archivio protetto **nuovo e fittizio**, utilizzare una delle classi fittizie ammesse («3C Dimostrativa» oppure «3ª A - Secondaria I Grado») e un materiale con i valori esatti riportati sopra; classificare la fonte come professionale.
 2. Dal Copilota scegliere «Creare una verifica» e la fonte; controllare classe e contesto.
 3. Inserire l'obiettivo fittizio; verificare consenso per il singolo tentativo, disponibilità «Servizio simulato (nessun invio esterno)», proposta e leggibilità delle domande.
 4. Usare «Apri e modifica», verificare UDA non preselezionata, modificare il titolo **senza salvare**.
