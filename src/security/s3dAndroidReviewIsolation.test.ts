@@ -12,7 +12,7 @@ import {buildAiBudgetAssessmentKey} from '../library/assessmentGeneration.ts';
 
 const SECRET = 'safe-test-secret-is-not-a-real-password-0000000000000';
 const SHA = '1'.repeat(40);
-const EXPIRY = '2099-01-01T00:00:00Z';
+const EXPIRY = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
 const AUTH = 'Basic ' + Buffer.from('docente-prova:' + SECRET).toString('base64');
 const fixture = {
   schemaVersion: 1,
@@ -121,13 +121,15 @@ describe('S3d Android HPR — fail-closed environment independent of normal app'
         + '<script src="https://cdnjs.cloudflare.com/example.js"></script>'
         + '</head><body><div id="root"></div></body>');
       await withServer(async base => {
-        const response = await fetch(base + '/', {headers: {Authorization: AUTH}});
-        const html = await response.text();
-        expect(response.status).toBe(200);
-        expect(html).toContain('SOLO PROVA');
-        expect(html).not.toContain('fonts.googleapis');
-        expect(html).not.toContain('cdnjs.cloudflare');
-        expect(response.headers.get('content-security-policy')).toContain("connect-src 'self'");
+        for (const resource of ['/', '/index.html']) {
+          const response = await fetch(base + resource, {headers: {Authorization: AUTH}});
+          const html = await response.text();
+          expect(response.status).toBe(200);
+          expect(html).toContain('SOLO PROVA');
+          expect(html).not.toContain('fonts.googleapis');
+          expect(html).not.toContain('cdnjs.cloudflare');
+          expect(response.headers.get('content-security-policy')).toContain("connect-src 'self'");
+        }
       }, temp);
     } finally {
       rmSync(temp, {recursive: true, force: true});
