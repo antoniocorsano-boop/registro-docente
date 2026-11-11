@@ -52,6 +52,8 @@ jobs:
           test -f dist/index.html
           test -s dist/vendor/html2pdf.bundle.min.js
           test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          grep -lF -- '--safe-area-inset-top' dist/assets/*.css
+          grep -lF -- 'class-card-manage' dist/assets/*.js
           grep -F '/vendor/html2pdf.bundle.min.js' dist/index.html
           if grep -E 'fonts.googleapis.com|fonts.gstatic.com|cdnjs.cloudflare.com' dist/index.html; then
             echo 'ERROR: Required PDF/fonts still load from a remote site'
@@ -107,6 +109,8 @@ jobs:
           unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          unzip -p "$APK" 'assets/public/assets/*.css' | grep -qF -- '--safe-area-inset-top'
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -qF -- 'class-card-manage'
           sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
           {
             printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
@@ -120,6 +124,7 @@ jobs:
             printf 'pdf_offline_bundle_present=true\n'
             printf 'remote_fonts_required=false\n'
             printf 'android_pdf_file_save_qualified=false\n'
+            printf 'android_hpr_qualified=false\n'
             printf 'vault_android_qualified=false\n'
           } > "$PROBE_DIR/probe-manifest.txt"
           {
