@@ -16,6 +16,20 @@
   ],
   "invariants": [
     {
+      "id": "MOBILE-01-S0-I01",
+      "owner": "MOBILE-01/S0",
+      "statement": "Android packaging experiments remain isolated from the canonical app and distribution: a distinct test appId, static Vite webDir, no runtime server URL or production secrets, read-only exact-SHA GitHub pull-request build, debug-only APK with checksum and no release/deployment event.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        ".github/workflows/mobile-01-android-probe.yml",
+        "mobile/android-probe/",
+        "src/security/mobile01AndroidProbeContract.test.ts"
+      ],
+      "tests": [
+        "src/security/mobile01AndroidProbeContract.test.ts"
+      ]
+    },
+    {
       "id": "A4-R2A-I01",
       "owner": "A4-R2A",
       "statement": "Equivalent lower-secondary class labels resolve to the unique real Registro ClassData.id, while duplicate semantic identities fail closed.",
