@@ -244,6 +244,8 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await page.goBack();
   const appExit=page.getByRole('dialog',{name:'Modifiche non salvate'});
   await expect(appExit).toBeVisible();
+  // S3d evidence on the approved UX-TEACHER-01 surface, before leaving unsaved work.
+  await page.screenshot({path:path.join(evidenceDir,'ux-teacher-01-guard-390.png'),fullPage:false});
   await appExit.getByRole('button',{name:'Esci senza salvare'}).click();
   await expect(page.getByRole('heading',{name:'Biblioteca privata',exact:true})).toBeVisible();
 
@@ -251,5 +253,22 @@ test('INT-02/S3c-02: consenso remoto, anteprima e editor sporco senza autosalvat
   await expect(page.getByRole('heading',{name:'Crea Nuova Verifica Formativa'})).toHaveCount(0);
   await expect(page.getByText(DRAFT_TITLE,{exact:true})).toHaveCount(0);
   await expectNoOverflow(page);
+  // The existing six UX-TEACHER-01 images document request, preview and editor
+  // at 390/320; this extra image documents the unsaved-exit guard.
+  fs.writeFileSync(path.join(evidenceDir,'ux-teacher-01-synthetic-review.json'),JSON.stringify({
+    commitSha:process.env.CANDIDATE_SHA||'local',
+    syntheticProvider:true,
+    professionalSourceOnly:true,
+    realStudentData:false,
+    savedAssessment:false,
+    requestsIntercepted:calls,
+    acceptanceStatus:'EVIDENCE_ONLY_NOT_HPR',
+    images:[
+      'ux-teacher-01-prepara-390.png','ux-teacher-01-prepara-320.png',
+      'ux-teacher-01-proposta-390.png','ux-teacher-01-proposta-320.png',
+      'ux-teacher-01-editor-390.png','ux-teacher-01-editor-320.png',
+      'ux-teacher-01-guard-390.png'
+    ]
+  },null,2));
   expect(violations).toEqual([]);
 });
