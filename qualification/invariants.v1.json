@@ -1413,6 +1413,24 @@
       "browserSmoke": [
         "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S4C-I01",
+      "owner": "INT-02/S4c",
+      "statement": "A synthetic teacher cycle through Prepara, explicit test creation and sharing, student submission, scoped Registra import with cancel-before-confirm, and Rivedi must preserve class/test identities and teacher authority. No implicit UDA, grade or provider, and reimport cannot overwrite an unchanged grade. Existing S3c Copilota mocked-provider unsaved draft evidence stays independently required; this adds tests only.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        ".github/workflows/browser-qualification.yml",
+        "tests/browser/int-02-s4-teacher-cycle.spec.cjs",
+        "src/security/int02S4TeacherCycleContinuity.test.ts"
+      ],
+      "tests": [
+        "src/security/int02S4TeacherCycleContinuity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s4-teacher-cycle.spec.cjs",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+      ]
     }
   ]
 }
