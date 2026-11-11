@@ -331,6 +331,20 @@
       ]
     },
     {
+      "id": "MOBILE-01-S0-I01",
+      "owner": "MOBILE-01/S0",
+      "statement": "Android packaging experiments remain isolated from the canonical app and distribution: a distinct test appId, static Vite webDir, no runtime server URL or production secrets, read-only exact-SHA GitHub pull-request build, debug-only APK with checksum and no release/deployment event.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        ".github/workflows/mobile-01-android-probe.yml",
+        "mobile/android-probe/",
+        "src/security/mobile01AndroidProbeContract.test.ts"
+      ],
+      "tests": [
+        "src/security/mobile01AndroidProbeContract.test.ts"
+      ]
+    },
+    {
       "id": "LSM-02-I01",
       "owner": "LSM-02",
       "statement": "The optional local semantic-memory settings remain teacher-first: advanced endpoint details are disclosed only on request, explicit activation and synchronization preserve the ephemeral local session boundary, and failed or missing semantic runtime never removes the Library's ordinary textual search.",
