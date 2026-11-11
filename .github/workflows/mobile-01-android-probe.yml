@@ -109,8 +109,8 @@ jobs:
           unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
-          unzip -p "$APK" 'assets/public/assets/*.css' | grep -qF -- '--safe-area-inset-top'
-          unzip -p "$APK" 'assets/public/assets/*.js' | grep -qF -- 'class-card-manage'
+          unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
           sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
           {
             printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
