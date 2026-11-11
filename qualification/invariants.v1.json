@@ -1448,7 +1448,8 @@
         "src/security/flow02AppIntegrationContract.test.ts",
         "src/security/librarySingleCopilotSurfaceContract.test.ts",
         "src/security/a4R1TeacherFirstComposerContract.test.ts",
-        "tests/browser/library-use-surface-helpers.cjs"
+        "tests/browser/library-use-surface-helpers.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ],
       "tests": [
         "src/security/int02S3d02LibraryShortcutContract.test.ts",
@@ -1456,7 +1457,8 @@
       ],
       "browserSmoke": [
         "tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs",
-        "tests/browser/int-02-s1-library-assessment.spec.cjs"
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
     }
   ]
