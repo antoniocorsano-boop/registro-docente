@@ -90,6 +90,7 @@ interface LibraryCopilotComposerProps {
   currentClassId?: string | null;
   currentClassName?: string | null;
   onAcceptAssessmentDraft: (session:AssessmentGenerationSessionV1,draft:AssessmentDraftV1)=>Promise<void>;
+  onContinueAssessmentManually: (sourceId:string,classId:string,objective:string)=>Promise<void>;
   classes?: ClassData[];
   launchRequest?: LibraryCopilotLaunchRequest | null;
   openRequestNonce?: number;
@@ -203,6 +204,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   currentClassId = null,
   currentClassName = null,
   onAcceptAssessmentDraft,
+  onContinueAssessmentManually,
   classes = [],
   launchRequest = null,
   openRequestNonce = 0,
@@ -1718,6 +1720,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                     activeClassId:classesUnambiguous?live.currentClassId:null
                   };
                 }}
+                onContinueManually={onContinueAssessmentManually}
                 onAccept={async (session,draft) => {
                   await onAcceptAssessmentDraft(session,draft);
                   // Close the entire Copilot surface, not just the inner
