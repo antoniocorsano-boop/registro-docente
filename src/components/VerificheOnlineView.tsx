@@ -1371,6 +1371,12 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                         : 'Controlla le domande e le risposte. La proposta non è ancora salvata.')
                       : 'Definisci quesiti, opzioni di risposta, soluzioni corrette e spiegazioni didattiche per lo studente.'}
                   </p>
+                  {focusedCopilotReview && isManuallyGuided && (
+                    <p role="status" data-testid="int02-assessment-manual-objective"
+                      className="rounded-lg border border-cyan-800 bg-cyan-950/20 p-3 text-sm text-cyan-100">
+                      Obiettivo: {editorDescription.replace(/^Obiettivo didattico:\s*/, '')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
