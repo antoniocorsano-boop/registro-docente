@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   createAndroidReviewApp, isApprovedSyntheticRequest, validReviewAuthorization,
-  REVIEW_CLASS, REVIEW_SOURCE_TITLE, REVIEW_SOURCE_TEXT, REVIEW_OBJECTIVE
+  REVIEW_CLASS, REVIEW_ADDITIONAL_CLASS, REVIEW_SOURCE_TITLE, REVIEW_SOURCE_TEXT, REVIEW_OBJECTIVE
 } from '../../scripts/hpr/androidReviewApp.ts';
 import {buildAiBudgetAssessmentKey} from '../library/assessmentGeneration.ts';
 
@@ -68,6 +68,12 @@ describe('S3d Android HPR — fail-closed environment independent of normal app'
 
   test('only the exact fixed synthetic source, class, and objective are accepted', () => {
     expect(isApprovedSyntheticRequest(fixture)).toBe(true);
+    // Teacher-confirmed fictitious 3A from the Android session is legitimate.
+    expect(isApprovedSyntheticRequest({
+      ...fixture,
+      context: {...fixture.context, className: REVIEW_ADDITIONAL_CLASS},
+      budget: {...fixture.budget,activityKey:buildAiBudgetAssessmentKey(REVIEW_ADDITIONAL_CLASS)}
+    })).toBe(true);
     expect(isApprovedSyntheticRequest({...fixture, context: {...fixture.context, className: '2C Reale'}})).toBe(false);
     expect(isApprovedSyntheticRequest({...fixture, source: {...fixture.source, text: 'Dati reali'}})).toBe(false);
     expect(isApprovedSyntheticRequest({...fixture, explicitTeacherOptIn: false})).toBe(false);
