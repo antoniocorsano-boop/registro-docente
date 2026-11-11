@@ -28,7 +28,7 @@ describe('FLOW-02 App integration contract', () => {
     const app = await source('src/App.tsx');
     const launch = await source('src/library/copilotLaunchContext.ts');
 
-    expect(launch).toContain("export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link';");
+    expect(launch).toContain("export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link' | 'assessment';");
     expect(app).toContain('const handleOpenConductCopilot = useCallback(() => {');
 
     const handler = sectionBetween(
