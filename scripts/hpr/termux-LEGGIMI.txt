@@ -1,0 +1,65 @@
+REGISTRO DOCENTE — PROVA ANDROID LOCALE CON TERMUX
+===================================================
+
+Questa è una COPIA DI PROVA, non il Registro Docente ordinario.
+Funziona SOLO sul dispositivo Android, con servizio simulato e dati fittizi.
+Non usa Render, Vercel, Gemini, né account o registri scolastici.
+Il pacchetto è valido per tre giorni dal primo avvio.
+
+INSTALLAZIONE UNA SOLA VOLTA
+1. Installa Termux dalla fonte ufficiale F-Droid (f-droid.org/packages/com.termux/).
+2. Apri Termux e digita:
+   pkg update
+   pkg install nodejs-lts unzip
+3. Scarica l'archivio ZIP "registro-docente-termux-S3d-..."
+   dalle evidenze della verifica GitHub della PR #200, sul telefono.
+4. Per aprire la cartella Scaricati da Termux, una sola volta:
+   termux-setup-storage
+   Accetta il permesso richiesto da Android.
+
+PREPARAZIONE DELLA COPIA ISOLATA
+5. In Termux:
+   mkdir -p ~/registro-prova
+   cd ~/registro-prova
+   unzip ~/storage/downloads/registro-docente-termux-S3d-*.zip
+   sh avvia.sh
+
+   ATTENZIONE: se nella cartella Scaricati sono presenti più archivi ZIP
+   di prova, specifica il nome esatto dell'archivio qualificato; non mescolare
+   versioni. Se l'archivio ZIP è stato rinominato, usa il suo nuovo nome.
+
+APERTURA
+6. Il terminale mostra l'indirizzo http://127.0.0.1:48721
+   e le credenziali generate SUL TELEFONO.
+7. Apri quell'indirizzo nel browser dello STESSO telefono.
+   Utente: docente-prova
+   Password: quella visualizzata in Termux, senza copiarla in chat.
+8. Crea SOLO una classe "3C Dimostrativa" e una fonte
+   professionale fittizia di tipo "concept" ("Concetto"):
+   titolo "Le trasformazioni dell’energia"
+   testo "Una centrale elettrica trasforma energia primaria in energia elettrica."
+   obiettivo "Riconoscere le trasformazioni energetiche."
+
+   Usa Copilota -> Proposta di verifica -> Apri e modifica.
+   Modifica la bozza senza salvare, poi verifica il gesto Indietro e
+   la richiesta di conferma. Non importare alunni, voti o file reali.
+
+TERMINE
+9. Torna in Termux e premi Ctrl+C per spegnere il server locale.
+10. Dopo il collaudo, elimina soltanto la cartella ~/registro-prova.
+    Nel browser elimina i dati del sito 127.0.0.1:48721 se presenti.
+    Non cancellare dati o archivi della versione ordinaria.
+
+NOTE DI SICUREZZA
+- Nessun server pubblico: ascolto limitato a 127.0.0.1.
+- Nessuna generazione remota: soltanto risposte fisse e fittizie.
+- Nessuna richiesta diretta a Google, OpenAI o altri fornitori.
+- Le API non previste rispondono con rifiuto.
+- Ogni file è verificato con SHA-256 prima dell'avvio.
+- La password è locale alla cartella privata di Termux.
+- Dopo tre giorni dal primo avvio, questa copia non parte più.
+- Se il browser non carica, lascia Termux aperto e verifica che
+  il server non sia stato arrestato da Android.
+- Se la data del dispositivo è errata, correggila prima del collaudo.
+- L'esito Android è da decidere solo dopo una prova reale, non sulla
+  base del successo dei controlli automatici.
