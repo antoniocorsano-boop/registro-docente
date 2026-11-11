@@ -2,7 +2,8 @@
 
 **Data:** 11 novembre 2026
 **Stato:** design approvato per prova isolata, non APK di rilascio
-**Baseline:** `main@88325d023886fda4efcf16976b2ab4ff0f929b04`
+**Baseline originale S0:** `main@88325d023886fda4efcf16976b2ab4ff0f929b04`  
+**Baseline combinata S0+M1:** `main@94595ae7fd531c1eb4d01c0405449a52ae76ad6f` (M1 integrata, PR #213).
 **Autorità:** [roadmap #104](https://github.com/antoniocorsano-boop/registro-docente/issues/104), [Beta 1 #204](https://github.com/antoniocorsano-boop/registro-docente/issues/204), [MOBILE-01 #207](https://github.com/antoniocorsano-boop/registro-docente/issues/207)
 
 ## Domanda da risolvere
@@ -23,7 +24,7 @@ Questa prova produce **solo un APK debug di laboratorio**, senza dati scolastici
 ## Confini di sicurezza
 
 - **No credenziali reali**: `GEMINI_API_KEY` appartiene a `server.ts`, che NON viene incluso né eseguito nel contenitore. API `/api/...` da considerare indisponibili e da separare/gestire in modo fail-safe nei successivi incrementi.
-- **No false attestazioni offline**: Google Fonts e `html2pdf.bundle.min.js` su CDN nell'`index.html` rappresentano dipendenze note da eliminare prima della Beta 1. Questo primo artefatto prova il confezionamento, NON il funzionamento offline delle funzioni di PDF.
+- **Risorse PDF M1 ora locali**: dopo PR #213, `html2pdf.js@0.10.1`, relativi avvisi di licenza e font di sistema sono disponibili senza CDN. Il nuovo workflow deve verificarne la presenza **negli asset dell'APK** e l'identità dei byte rispetto a `dist`. Un file incluso non dimostra però il suo salvataggio o la condivisione nel WebView Android.
 - **No false attestazioni di archivio**: Secure Local Vault usa IndexedDB e Web Crypto; l'involucro potrebbe disporne ma deve essere provato in un vero WebView Android. La memoria del browser non transita automaticamente a quella dell'APK.
 - **No falsi aggiornamenti:** firma debug dell'esecutore temporanea, non la futura chiave stabile; non usare l'APK con dati reali.
 - **No equivalenza con HPR:** un APK compilato non prova usabilità, stabilità dati o conformità privacy.
