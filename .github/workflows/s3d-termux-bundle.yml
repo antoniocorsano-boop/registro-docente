@@ -1,0 +1,143 @@
+name: S3d Termux Local Review Bundle
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/s3d-termux-bundle.yml'
+      - 'scripts/hpr/**'
+      - 'src/security/s3dAndroidReviewIsolation.test.ts'
+      - 'src/server/assessmentGenerationRoute.ts'
+      - 'src/library/assessmentGeneration.ts'
+      - 'src/library/assessmentDraft.ts'
+      - 'package.json'
+      - 'bun.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  build-synthetic-termux-bundle:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Verify candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Setup build toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned Bun
+        run: |
+          npm install -g --no-audit --no-fund bun@1.4.4
+          test "$(bun --version)" = '1.4.4'
+
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run synthetic-only security contract tests
+        run: bun test src/security/s3dAndroidReviewIsolation.test.ts
+
+      - name: Compile ordinary frontend, not the ordinary backend
+        run: bun run build
+
+      - name: Bundle only isolated Express runtime for Android Node
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p termux-review/dist
+          cp -R dist/. termux-review/dist/
+          cp scripts/hpr/termux-avvia.sh termux-review/avvia.sh
+          ./node_modules/.bin/esbuild scripts/hpr/termuxReviewServer.ts \
+            --bundle --platform=node --target=node22 --format=cjs \
+            --define:__HPR_QUALIFIED_SHA__="\"${CANDIDATE_SHA}\"" \
+            --outfile=termux-review/server.cjs
+          node --check termux-review/server.cjs
+          node -e '
+            const fs = require("node:fs");
+            fs.writeFileSync("termux-review/hpr-manifest.json",
+              JSON.stringify({schemaVersion:1, commitSha:process.env.CANDIDATE_SHA,
+                provider:"synthetic-only",scope:"android-local-hpr"},null,2)+"\n");
+          '
+          cp scripts/hpr/termux-LEGGIMI.txt termux-review/LEGGIMI.txt
+
+      - name: Run executable local-only smoke with simulated provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .hpr-termux-smoke
+          cp -R termux-review/. .hpr-termux-smoke/
+          trap 'test ! -f .hpr-termux-smoke/server.pid || kill "$(cat .hpr-termux-smoke/server.pid)" 2>/dev/null || true; rm -rf .hpr-termux-smoke' EXIT
+          (
+            cd .hpr-termux-smoke
+            HPR_TERMUX_MODE=synthetic-only node server.cjs >server.log 2>&1 &
+            echo $! > server.pid
+          )
+          for i in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:48721/__hpr/status; then break; fi
+            sleep 1
+          done
+          unauth="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:48721/__hpr/status)"
+          test "${unauth}" = '401'
+          pw="$(node -p 'require("./.hpr-termux-smoke/.hpr-local-state.json").accessSecret')"
+          auth="docente-prova:${pw}"
+          status="$(curl -sf --user "${auth}" http://127.0.0.1:48721/__hpr/status)"
+          printf '%s' "${status}" | node -e '
+            let s="";process.stdin.on("data",x=>s+=x);
+            process.stdin.on("end",()=>{
+              const v=JSON.parse(s);
+              if(v.remoteCalls!==false||v.syntheticDataOnly!==true||v.commitSha!==process.env.CANDIDATE_SHA) process.exit(1);
+            });
+          '
+          blocked="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --user "${auth}" http://127.0.0.1:48721/api/copilot/intent/provider)"
+          test "${blocked}" = '403'
+          document="$(curl -sf --user "${auth}" http://127.0.0.1:48721/)"
+          case "${document}" in *'SOLO PROVA'*) ;; *) exit 1 ;; esac
+          case "${document}" in *'fonts.googleapis.com'*) exit 1 ;; esac
+          # Both successful simulated POST and rejected non-synthetic POST
+          # are covered by the focused Bun security contract above.
+          kill "$(cat .hpr-termux-smoke/server.pid)"
+          rm -f .hpr-termux-smoke/server.pid
+          echo 'Local loopback smoke PASS: auth, SHA, simulation, API denial and HTML'
+
+      - name: Seal portable archive with SHA-256 file integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd termux-review
+            {
+              sha256sum avvia.sh server.cjs hpr-manifest.json LEGGIMI.txt
+              find dist -type f -print0 | sort -z | xargs -0 sha256sum
+            } > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          test ! -e termux-review/.hpr-local-state.json
+          test ! -e termux-review/server.log
+
+      - name: Publish one portable Termux ZIP (not an application deploy)
+        uses: actions/upload-artifact@v4
+        with:
+          name: registro-docente-termux-S3d-${{ env.CANDIDATE_SHA }}
+          path: termux-review/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 6

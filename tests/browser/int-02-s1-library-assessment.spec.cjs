@@ -74,6 +74,9 @@ test('INT-02/S1: class-scoped professional source reaches unsaved test editor wi
   await expect(page.getByText('Professionale', { exact: true }).first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Usa', exact: true }).click();
+  // Manual S1 source-to-editor path remains available, but is secondary to
+  // the teacher-first assisted assessment action and intentionally disclosed.
+  await page.getByTestId('library-source-other-actions').locator('summary').click();
   const prepare = page.getByTestId('int02-prepare-assessment');
   await expect(prepare).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -213,6 +216,7 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   await page.getByRole('button', { name: 'Classifica come materiale professionale' }).click();
   await expect(page.getByText('Professionale', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Usa', exact: true }).click();
+  await page.getByTestId('library-source-other-actions').locator('summary').click();
   await page.getByTestId('int02-prepare-assessment').click();
   await page.getByTestId('int02-open-assessment-editor').click();
 
