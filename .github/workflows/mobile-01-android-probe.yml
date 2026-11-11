@@ -1,0 +1,127 @@
+name: MOBILE-01 Android Packaging Probe
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/android-probe/**'
+      - '.github/workflows/mobile-01-android-probe.yml'
+      - 'docs/superpowers/specs/2026-11-11-mobile-01-android-apk-probe-design.md'
+      - 'docs/superpowers/plans/2026-11-11-mobile-01-android-apk-probe.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PROBE_DIR: mobile/android-probe
+    steps:
+      - name: Checkout the exact source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          printf 'Source SHA: %s\n' "$SOURCE_SHA"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build existing web frontend without altering lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run build
+          test -f dist/index.html
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK 36
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+
+      - name: Install isolated, pinned Capacitor dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$PROBE_DIR" --no-audit --no-fund --package-lock=false
+          node -e "const p=require('./mobile/android-probe/node_modules/@capacitor/cli/package.json'); if (p.version !== '8.6.0') process.exit(2)"
+          node -e "const p=require('./mobile/android-probe/node_modules/@capacitor/android/package.json'); if (p.version !== '8.6.0') process.exit(2)"
+
+      - name: Generate local-only Android project
+        shell: bash
+        working-directory: mobile/android-probe
+        run: |
+          set -euo pipefail
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          test -f android/gradlew
+          test -f android/app/src/main/AndroidManifest.xml
+
+      - name: Build debug APK (laboratory use only)
+        shell: bash
+        working-directory: mobile/android-probe/android
+        run: |
+          set -euo pipefail
+          bash ./gradlew --no-daemon assembleDebug
+
+      - name: Verify APK, debug signature and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$PROBE_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -tq "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
+          sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
+          {
+            printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente.prova\n'
+            printf 'capacitor_version=8.6.0\n'
+            printf 'apk_sha256='
+            sha256sum "$APK" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'offline_end_to_end_qualified=false\n'
+            printf 'vault_android_qualified=false\n'
+          } > "$PROBE_DIR/probe-manifest.txt"
+          {
+            printf 'Known external runtime dependencies present before MOBILE-01/M2:\n'
+            grep -Eo 'https://(fonts.googleapis.com|fonts.gstatic.com|cdnjs.cloudflare.com)[^" ]*' dist/index.html || true
+            printf 'Node/Express API not bundled in this APK; remote Copilota optional.\n'
+            printf 'Android backup/PDF, lifecycle and storage NOT qualified.\n'
+          } > "$PROBE_DIR/offline-gaps.txt"
+
+      - name: Upload private debug artifact — not a release
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-debug-probe-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/debug/app-debug.apk
+            mobile/android-probe/app-debug.sha256
+            mobile/android-probe/probe-manifest.txt
+            mobile/android-probe/offline-gaps.txt
+          if-no-files-found: error
+          retention-days: 7
