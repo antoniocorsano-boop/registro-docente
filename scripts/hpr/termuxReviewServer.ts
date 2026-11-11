@@ -1,4 +1,4 @@
-import {createHash, randomBytes} from 'node:crypto';
+import {randomBytes} from 'node:crypto';
 import {
   closeSync, existsSync, lstatSync, openSync, readFileSync, writeFileSync
 } from 'node:fs';
