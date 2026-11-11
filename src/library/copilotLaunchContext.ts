@@ -8,7 +8,7 @@ import {
 } from './teachingContext';
 
 export type CopilotLaunchSurface = CopilotLocalSurface;
-export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link';
+export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link' | 'assessment';
 
 export interface CopilotLaunchContext {
   surface: CopilotLaunchSurface;
