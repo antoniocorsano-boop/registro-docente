@@ -1460,6 +1460,32 @@
         "tests/browser/int-02-s1-library-assessment.spec.cjs",
         "tests/browser/lsm-01c-consumer.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S4D-LOCAL-ASSESSMENT-I01",
+      "owner": "INT-02/S4d",
+      "statement": "When the generative provider is absent, the contextual Copilota offers a teacher-initiated local continuation requiring an explicit, nonempty objective and the current unambiguous class and ready professional source. It sends no generation POST and does not require remote consent. A one-use memory-only descriptor carries only a source reference, class reference, teacher-written objective, and nonce into a focused, unsaved editor with an unfilled question template. It may not select an UDA, infer questions, write a test, alter the Vault automatically, or replace an existing unsaved draft. The Android back/unsaved-change guard and the previously qualified remote provider path remain unchanged; the absence of the provider never masquerades as on-device generative AI.",
+      "impactPaths": [
+        "src/library/assessmentHandoff.ts",
+        "src/components/AssessmentCopilotPanel.tsx",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/App.tsx",
+        "src/components/VerificheOnlineView.tsx",
+        "src/library/assessmentHandoff.test.ts",
+        "src/security/int02OfflineAssessmentContinuityContract.test.ts",
+        "tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/library/assessmentHandoff.test.ts",
+        "src/security/int02OfflineAssessmentContinuityContract.test.ts",
+        "src/security/int02S3c02UiContract.test.ts",
+        "src/security/int02AssessmentHandoffContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs",
+        "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
+      ]
     }
   ]
 }
