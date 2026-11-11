@@ -24,6 +24,7 @@ interface AssessmentCopilotPanelProps {
     activeClassId: string | null;
   };
   onAccept: (session: AssessmentGenerationSessionV1, draft: AssessmentDraftV1) => Promise<void>;
+  onContinueManually: (sourceId: string, classId: string, objective: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -59,12 +60,13 @@ const openEditorErrorCopy: Record<string,string> = {
 const CLIENT_GENERATION_TIMEOUT_MS = 45_000;
 
 export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
-  source, classId, className, classIsUnambiguous, aiBudgetProfile, getLiveContext, onAccept, onClose
+  source, classId, className, classIsUnambiguous, aiBudgetProfile, getLiveContext, onAccept, onContinueManually, onClose
 }) => {
   const [objective,setObjective]=useState('');
   const [remoteConsent,setRemoteConsent]=useState(false);
   const [generating,setGenerating]=useState(false);
   const [adopting,setAdopting]=useState(false);
+  const [continuingManually,setContinuingManually]=useState(false);
   const [preview,setPreview]=useState<GeneratedPreview|null>(null);
   const [error,setError]=useState<string|null>(null);
   const [providerLabel,setProviderLabel]=useState('servizio remoto configurato');
@@ -209,6 +211,34 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
     && ['text','note','concept','web','internal'].includes(source.kind)
     && Boolean(source.extractedText?.trim()||source.payload.text?.trim());
 
+  const handleContinueManually=async()=>{
+    const cleanObjective=objective.trim();
+    if(!sourceAllowed||!classIsUnambiguous||!classId||!cleanObjective
+      ||continuingManually||adopting||generating||preview)return;
+    const live=liveRef.current();
+    if(!live.source||live.source.id!==source.id
+      ||live.source.status!=='ready'||live.source.privacy!=='teacher-professional'
+      ||live.confirmedSourceId!==source.id
+      ||live.activeClassId!==classId||live.activeClassName!==className){
+      setError('La classe o il materiale è cambiato. Controlla la scelta prima di proseguire.');
+      return;
+    }
+    setContinuingManually(true);
+    setError(null);
+    try{
+      // Explicitly teacher-authored: no provider POST, no fabricated questions,
+      // no consent consumption and no canonical write.
+      await onContinueManually(source.id,classId,cleanObjective);
+      onClose();
+    }catch(reason){
+      setError(reason instanceof Error
+        ? openEditorErrorCopy[reason.message]??'Non è stato possibile aprire l’elaboratore. Riprova.'
+        : 'Non è stato possibile aprire l’elaboratore. Riprova.');
+    }finally{
+      setContinuingManually(false);
+    }
+  };
+
   return (
     <section data-testid="int02-s3c02-assessment-panel"
       aria-label="Proposta di verifica dal Copilota"
@@ -232,7 +262,7 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
       <textarea id="s3c02-objective" ref={objectiveRef} data-testid="int02-assessment-objective"
         value={objective} maxLength={400} rows={3}
         onChange={event=>{setObjective(event.target.value);invalidatePreview();}}
-        disabled={generating||adopting}
+        disabled={generating||adopting||continuingManually}
         placeholder="Per esempio: riconoscere le trasformazioni energetiche"
         className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100"
       />
@@ -260,8 +290,21 @@ export const AssessmentCopilotPanel: React.FC<AssessmentCopilotPanelProps> = ({
         {generating?'Preparazione delle domande…':'Prepara le domande'}
       </button>
       {providerAvailable===false&&(
-        <p role="status" className="text-sm text-amber-200">La preparazione assistita non è disponibile in questo momento.</p>
+        <p role="status" className="text-sm text-amber-200">
+          Il generatore non è disponibile. Puoi continuare senza inviare il materiale a servizi esterni.
+        </p>
       )}
+      <button type="button"
+        data-testid="int02-assessment-continue-locally"
+        onClick={()=>void handleContinueManually()}
+        disabled={!sourceAllowed||!classIsUnambiguous||!classId||!objective.trim()||generating||adopting||continuingManually}
+        className="min-h-[44px] w-full rounded-lg border border-cyan-600 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-50">
+        {continuingManually?'Apertura dell’elaboratore…':'Continua senza generatore'}
+      </button>
+      <p className="text-xs text-slate-400" data-testid="int02-assessment-local-explanation">
+        Aprirai una verifica da completare tu, con materiale e obiettivo già indicati.
+        Nessuna domanda generata e nessun salvataggio automatico.
+      </p>
       {generating&&(
         <button type="button" onClick={handleCancelGeneration}
           data-testid="int02-assessment-cancel"
