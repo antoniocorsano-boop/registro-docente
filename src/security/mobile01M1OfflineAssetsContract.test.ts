@@ -42,5 +42,10 @@ describe('MOBILE-01/M1 offline PDF and typography assets', () => {
     expect(analytics).toContain('handleExportPDF');
     const packageJson = JSON.parse(await load('package.json'));
     expect(packageJson.dependencies?.['html2pdf.js']).toBeUndefined();
+    // Device fonts vary: the teacher's 320 px analysis selector must wrap rather
+    // than overflowing a fixed row after external web fonts are removed.
+    const assessments = await load('src/components/VerificheOnlineView.tsx');
+    expect(assessments).toContain('className="flex min-w-0 flex-wrap items-center gap-2"');
+    expect(assessments).toContain('className="p-2 neon-input text-xs text-white bg-slate-900 min-w-0 w-full sm:w-auto sm:max-w-full"');
   });
 });
