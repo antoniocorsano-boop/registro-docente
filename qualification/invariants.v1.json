@@ -342,13 +342,15 @@
         "src/index.css",
         "src/security/mobile01M1OfflineAssetsContract.test.ts",
         "tests/browser/mobile01-m1-offline-pdf.spec.cjs",
-        ".github/workflows/browser-qualification.yml"
+        ".github/workflows/browser-qualification.yml",
+        "src/components/VerificheOnlineView.tsx"
       ],
       "tests": [
         "src/security/mobile01M1OfflineAssetsContract.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/mobile01-m1-offline-pdf.spec.cjs"
+        "tests/browser/mobile01-m1-offline-pdf.spec.cjs",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs"
       ]
     },
     {
