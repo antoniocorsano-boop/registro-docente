@@ -600,7 +600,12 @@ test('LSM-01C-B mobile Library action handoff enters PREPARE without a second Co
   await expect(useSurface).not.toHaveAttribute('aria-hidden', 'true');
   await expect(useSurface).not.toHaveAttribute('inert', '');
   await expect(page.locator('[aria-modal="true"]')).toHaveCount(1);
-  await expect(card.getByRole('button', { name: 'Prepara un’attività', exact: true })).toBeFocused();
+  // A professional source now collapses advanced actions when returning from
+  // Copilota. Focus must remain on the visible secondary-actions disclosure,
+  // rather than a no-longer-exposed PREPARE button.
+  const otherActions = card.getByTestId('library-source-other-actions');
+  await expect(otherActions.locator('summary')).toBeFocused();
+  expect(await useSurface.evaluate(element => element.contains(document.activeElement))).toBe(true);
   await expect(useSurface).toBeVisible();
   await expect(useSurface).toHaveCSS('position', 'fixed');
   const useSurfaceBox = await useSurface.boundingBox();

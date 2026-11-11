@@ -1431,6 +1431,35 @@
         "tests/browser/int-02-s4-teacher-cycle.spec.cjs",
         "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S3D02-LIBRARY-SHORTCUT-I01",
+      "owner": "INT-02/S3d-02",
+      "statement": "The teacher's primary source action opens the existing Copilota assessment proposal flow with the currently selected professional source and class, without requiring a UDA and without navigating directly to the manual editor. Manual S1 source-to-editor handoff remains accessible as an explicit disclosed alternative. The single-attempt provider consent, live source/class guard, unsaved editor and Android Back guard remain authoritative; no automatic saving or real-provider activation is introduced. The modal handoff must not restore keyboard focus to the source card behind the active Copilota, and inherited library tests must explicitly expand the secondary-actions disclosure. On primary Copilota dismissal before editor navigation, restore keyboard focus to the stable, still-visible source «Usa» button; no focus may remain on detached elements.",
+      "impactPaths": [
+        "src/components/LibrarySourceCard.tsx",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/library/copilotLaunchContext.ts",
+        "tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "src/security/int02S3d02LibraryShortcutContract.test.ts",
+        ".github/workflows/browser-qualification.yml",
+        "qualification/invariants.v1.json",
+        "src/security/flow02AppIntegrationContract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/a4R1TeacherFirstComposerContract.test.ts",
+        "tests/browser/library-use-surface-helpers.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ],
+      "tests": [
+        "src/security/int02S3d02LibraryShortcutContract.test.ts",
+        "src/security/int02AssessmentHandoffContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs",
+        "tests/browser/int-02-s1-library-assessment.spec.cjs",
+        "tests/browser/lsm-01c-consumer.spec.cjs"
+      ]
     }
   ]
 }

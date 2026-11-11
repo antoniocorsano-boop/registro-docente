@@ -176,7 +176,7 @@ describe('A4-R1 teacher-first Composer contract', () => {
     expect(source).not.toContain('UDA corrente');
     expect(source).not.toContain('Lezione corrente');
 
-    expect(launch).toContain("export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link';");
+    expect(launch).toContain("export type LibraryLaunchIntent = 'prepare' | 'conduct' | 'review' | 'link' | 'assessment';");
     expect(launch).toContain('intent?: LibraryLaunchIntent;');
     expect(source).toContain("intent: 'prepare'");
     expect(source).toContain("intent: 'review'");
