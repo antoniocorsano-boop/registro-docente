@@ -1720,7 +1720,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                     activeClassId:classesUnambiguous?live.currentClassId:null
                   };
                 }}
-                onContinueManually={onContinueAssessmentManually}
+                onContinueManually={async (sourceId,classId,objective) => {
+                  await onContinueAssessmentManually(sourceId,classId,objective);
+                  // Success navigates to the focused local editor: close the
+                  // entire dialog so no Copilota overlay obscures the editor.
+                  onSurfaceModeChange('closed');
+                }}
                 onAccept={async (session,draft) => {
                   await onAcceptAssessmentDraft(session,draft);
                   // Close the entire Copilot surface, not just the inner
