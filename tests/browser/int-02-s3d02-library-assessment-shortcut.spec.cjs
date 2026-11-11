@@ -206,6 +206,10 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
     'Obiettivo didattico: Riconoscere le trasformazioni energetiche.'
   );
   await expect(extra.getByRole('combobox',{name:'UDA'})).toHaveValue('');
+  // The one-use objective is consumed, while the confirmed source reference
+  // stays available for optional provenance. Never opt in automatically.
+  await expect(page.getByTestId('int02-assessment-handoff')).toContainText(SOURCE_TITLE);
+  await expect(page.getByTestId('int02-s2b-confirm-origin')).not.toBeChecked();
   expect(providerPosts).toBe(0);
   const horizontalOverflow=await page.evaluate(()=>
     document.documentElement.scrollWidth-document.documentElement.clientWidth);
