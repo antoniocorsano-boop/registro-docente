@@ -9,6 +9,9 @@ describe('INT-02 — continuità locale della verifica senza generatore',()=>{
     expect(panel).toContain('Continua senza generatore');
     expect(panel).toContain('Il generatore non è disponibile.');
     expect(panel).toContain('Nessuna domanda generata e nessun salvataggio automatico.');
+    // No parallel "Continua" button when the remote provider is healthy.
+    expect(panel).toContain('providerAvailable===false&&(');
+    expect(panel).toContain('providerAvailable!==false&&(');
     expect(handler).toContain('live.source.status');
     expect(handler).toContain('live.source.privacy');
     expect(handler).toContain('live.activeClassId!==classId');
