@@ -1041,6 +1041,38 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     handleNavigateTab('verifiche-online');
   }, [handleNavigateTab]);
 
+  /** INT-02: teacher-authored continuation without a generative provider. */
+  const handleContinueAssessmentManually = useCallback(async (
+    sourceId:string, classId:string, objective:string
+  ):Promise<void> => {
+    if(hasUnsavedActiveDraft()
+      || !canAcceptAssessmentEditorTransfer({
+        hasUnsavedChanges:Boolean(assessmentDraftGuardRef.current?.hasUnsavedChanges()),
+        isSaving:Boolean(assessmentDraftGuardRef.current?.isSaving())
+      })) {
+      throw new Error('Conserva o chiudi prima la bozza già aperta. Non è stata sostituita.');
+    }
+    const trimmedObjective=objective.trim();
+    const liveClassId=currentClassIdRef.current;
+    if(!trimmedObjective||trimmedObjective.length>400||liveClassId!==classId) {
+      throw new Error('La fonte o la classe non è più valida. Richiedi una nuova proposta.');
+    }
+    const request:AssessmentHandoffRequest={
+      sourceId,classId,objective:trimmedObjective,guided:true,nonce:crypto.randomUUID()
+    };
+    const result=resolveAssessmentHandoff({
+      request,library:libraryRef.current,
+      classes:appDataRef.current.classes,activeClassId:liveClassId
+    });
+    if(result.status!=='ready'){
+      throw new Error('La fonte o la classe non è più valida. Richiedi una nuova proposta.');
+    }
+    setPendingCopilotAssessment(null);
+    setAssessmentTransferNotice(null);
+    setAssessmentHandoffRequest(request);
+    handleNavigateTab('verifiche-online');
+  },[handleNavigateTab,hasUnsavedActiveDraft]);
+
   /** Open one student's report as a REAL browser-history route, not only a React tab. */
   const handleOpenStudentReport = useCallback((
     studentId: string,
@@ -3431,6 +3463,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             udas={udas}
             settings={settings}
             assessmentHandoff={activeAssessmentHandoff}
+            onGuidedAssessmentHandoffConsumed={nonce => {
+              setAssessmentHandoffRequest(previous => previous?.nonce===nonce
+                // Consume the one-use guided launch but keep the validated
+                // professional source/class reference for an optional, explicit
+                // provenance checkbox in the unsaved editor.
+                ? {sourceId:previous.sourceId,classId:previous.classId}
+                : previous);
+            }}
             assessmentEditorTransfer={pendingCopilotAssessmentValid ? pendingCopilotAssessment : null}
             assessmentTransferNotice={assessmentTransferNotice}
             onAssessmentEditorFocusChange={setIsAssessmentEditorFocus}
@@ -3627,6 +3667,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               currentClassId={currentClass?.id ?? null}
               currentClassName={currentClass?.name ?? null}
               onAcceptAssessmentDraft={handleAcceptAssessmentDraft}
+              onContinueAssessmentManually={handleContinueAssessmentManually}
               classes={appData.classes}
               launchRequest={launchRequest}
               openRequestNonce={copilotOpenRequestNonce}

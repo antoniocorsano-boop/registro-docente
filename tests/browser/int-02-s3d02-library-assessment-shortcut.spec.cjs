@@ -138,3 +138,90 @@ test('S3d Android HPR rework: source action opens governed Copilota, not the man
   expect(calls).toBe(1);
   expect(errors).toEqual([]);
 });
+
+
+test('INT-02: without a generator the teacher continues in a focused unsaved editor',async({page})=>{
+  let providerPosts=0;
+  const pageErrors=[];
+  page.on('pageerror',error=>pageErrors.push(error.message));
+  await page.route('**/api/copilot/assessment-draft/provider',route=>route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({available:false,provider:'Non configurato',model:'none'})
+  }));
+  await page.route('**/api/copilot/assessment-draft',route=>{
+    providerPosts++;
+    return route.abort();
+  });
+
+  await page.goto(baseURL,{waitUntil:'domcontentloaded'});
+  await page.locator('#vault-password').fill('synthetic-offline-continuity-vault');
+  await page.getByRole('button',{name:'Configura archivio protetto'}).click();
+  await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
+  page.once('dialog',dialog=>dialog.accept(CLASS_NAME));
+  await page.getByRole('button',{name:/Nuova Classe/}).click();
+  const notice=page.getByRole('heading',{name:'Dati Salvati in Locale con Successo!'});
+  if(await notice.isVisible().catch(()=>false)){
+    await page.getByRole('button',{name:'Chiudi',exact:true}).click();
+  }
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.getByRole('complementary',{name:'Navigazione del Registro'})
+    .getByRole('button',{name:'Biblioteca privata',exact:true}).click();
+  await page.getByRole('button',{name:'Aggiungi fonte',exact:true}).click();
+  await page.getByRole('button',{name:'Testo o idea',exact:true}).click();
+  await page.getByLabel('Tipo').selectOption('concept');
+  await page.getByLabel('Titolo').fill(SOURCE_TITLE);
+  await page.getByLabel('Contenuto').fill(SOURCE_TEXT);
+  await page.getByRole('button',{name:'Salva in biblioteca',exact:true}).click();
+  await page.getByText('Gestisci',{exact:true}).click();
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Classifica come materiale professionale'}).click();
+  await expect(page.getByText('Professionale',{exact:true}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Usa',exact:true}).click();
+  await page.getByTestId('int02-prepare-assisted-assessment').click();
+
+  const panel=page.getByTestId('int02-s3c02-assessment-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('Il generatore non è disponibile.');
+  await panel.getByTestId('int02-assessment-objective')
+    .fill('Riconoscere le trasformazioni energetiche.');
+  // Unavailable generator: no competing remote consent or disabled CTA.
+  await expect(panel.getByTestId('int02-assessment-generate')).toHaveCount(0);
+  await expect(panel.getByTestId('int02-assessment-remote-consent')).toHaveCount(0);
+  const local=panel.getByTestId('int02-assessment-continue-locally');
+  await expect(local).toBeEnabled();
+  await local.click();
+
+  await expect(panel).toHaveCount(0);
+  const editor=page.getByTestId('int02-assessment-focused-review');
+  await expect(editor).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Prepara la verifica',exact:true})).toBeVisible();
+  await expect(editor).toContainText('Scrivi tu le domande');
+  await expect(page.getByTestId('int02-assessment-manual-objective'))
+    .toContainText('Riconoscere le trasformazioni energetiche.');
+  await expect(page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale'))
+    .toHaveValue('Verifica: '+SOURCE_TITLE);
+  const extra=page.getByTestId('int02-assessment-extra-settings');
+  await extra.locator('summary').click();
+  await expect(extra.getByRole('textbox')).toHaveValue(
+    'Obiettivo didattico: Riconoscere le trasformazioni energetiche.'
+  );
+  await expect(extra.getByRole('combobox',{name:'UDA'})).toHaveValue('');
+  // The one-use objective is consumed, while the confirmed source reference
+  // stays available for optional provenance. Never opt in automatically.
+  await expect(page.getByTestId('int02-assessment-handoff')).toContainText(SOURCE_TITLE);
+  await expect(page.getByTestId('int02-s2b-confirm-origin')).not.toBeChecked();
+  expect(providerPosts).toBe(0);
+  const horizontalOverflow=await page.evaluate(()=>
+    document.documentElement.scrollWidth-document.documentElement.clientWidth);
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  fs.mkdirSync(evidenceDir,{recursive:true});
+  await page.screenshot({path:path.join(evidenceDir,'int02-copilot-offline-editor-390.png')});
+
+  await page.goBack();
+  const guard=page.getByRole('dialog',{name:'Modifiche non salvate'});
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button',{name:'Esci senza salvare'}).click();
+  await expect(page.getByRole('heading',{name:'Biblioteca privata',exact:true})).toBeVisible();
+  expect(providerPosts).toBe(0);
+  expect(pageErrors).toEqual([]);
+});

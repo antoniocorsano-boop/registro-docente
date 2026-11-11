@@ -90,6 +90,7 @@ interface LibraryCopilotComposerProps {
   currentClassId?: string | null;
   currentClassName?: string | null;
   onAcceptAssessmentDraft: (session:AssessmentGenerationSessionV1,draft:AssessmentDraftV1)=>Promise<void>;
+  onContinueAssessmentManually: (sourceId:string,classId:string,objective:string)=>Promise<void>;
   classes?: ClassData[];
   launchRequest?: LibraryCopilotLaunchRequest | null;
   openRequestNonce?: number;
@@ -203,6 +204,7 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
   currentClassId = null,
   currentClassName = null,
   onAcceptAssessmentDraft,
+  onContinueAssessmentManually,
   classes = [],
   launchRequest = null,
   openRequestNonce = 0,
@@ -1717,6 +1719,12 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
                     activeClassName:classesUnambiguous?live.currentClassName??'':'',
                     activeClassId:classesUnambiguous?live.currentClassId:null
                   };
+                }}
+                onContinueManually={async (sourceId,classId,objective) => {
+                  await onContinueAssessmentManually(sourceId,classId,objective);
+                  // Success navigates to the focused local editor: close the
+                  // entire dialog so no Copilota overlay obscures the editor.
+                  onSurfaceModeChange('closed');
                 }}
                 onAccept={async (session,draft) => {
                   await onAcceptAssessmentDraft(session,draft);

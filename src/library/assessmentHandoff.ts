@@ -3,6 +3,10 @@ import type { LibraryStateV1 } from './types';
 export interface AssessmentHandoffRequest {
   sourceId: string;
   classId: string;
+  /** Session-only teacher-written objective. Never source payload or generated questions. */
+  objective?: string;
+  guided?: true;
+  nonce?: string;
 }
 
 export interface AssessmentHandoffInput {
@@ -17,6 +21,9 @@ export interface ResolvedAssessmentHandoff {
   classId: string;
   className: string;
   sourceTitle: string;
+  objective?: string;
+  guided?: true;
+  nonce?: string;
 }
 
 export type AssessmentHandoffResolution =
@@ -24,7 +31,7 @@ export type AssessmentHandoffResolution =
   | {
       status: 'unavailable';
       reason: 'CLASS_REQUIRED' | 'CLASS_CHANGED' | 'SOURCE_UNAVAILABLE'
-        | 'SOURCE_NOT_PROFESSIONAL' | 'SOURCE_NOT_READY';
+        | 'SOURCE_NOT_PROFESSIONAL' | 'SOURCE_NOT_READY' | 'OBJECTIVE_INVALID';
     };
 
 /**
@@ -68,13 +75,28 @@ export function resolveAssessmentHandoff({
     return { status: 'unavailable', reason: 'SOURCE_NOT_READY' };
   }
 
+  // The guided offline route needs a meaningful teacher-written objective and
+  // a one-use token. Old S1 handoffs remain untouched and do not prefill.
+  if (request.guided === true && (
+    !request.nonce?.trim()
+    || !request.objective?.trim()
+    || request.objective.trim().length > 400
+    || !['text', 'note', 'concept', 'web', 'internal'].includes(source.kind)
+    || !(source.extractedText?.trim() || source.payload.text?.trim())
+  )) {
+    return { status: 'unavailable', reason: 'OBJECTIVE_INVALID' };
+  }
+
   return {
     status: 'ready',
     handoff: {
       sourceId: source.id,
       classId: matches[0].id,
       className: matches[0].name,
-      sourceTitle: source.title
+      sourceTitle: source.title,
+      ...(request.guided === true
+        ? { guided: true as const, nonce: request.nonce, objective: request.objective?.trim() }
+        : {})
     }
   };
 }

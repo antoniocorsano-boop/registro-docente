@@ -51,6 +51,7 @@ interface VerificheOnlineViewProps {
   isPrivacyShieldActive?: boolean;
   initialClassName?: string;
   assessmentHandoff?: ResolvedAssessmentHandoff | null;
+  onGuidedAssessmentHandoffConsumed?: (nonce:string)=>void;
   assessmentEditorTransfer?: {nonce:string;transfer:AssessmentEditorTransferV1}|null;
   assessmentTransferNotice?: string|null;
   onAssessmentTransferResult?: (nonce:string,success:boolean)=>void;
@@ -76,6 +77,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   isPrivacyShieldActive = true,
   initialClassName,
   assessmentHandoff = null,
+  onGuidedAssessmentHandoffConsumed,
   assessmentEditorTransfer = null,
   assessmentTransferNotice = null,
   onAssessmentTransferResult,
@@ -180,6 +182,8 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
   const [isEditingTest, setIsEditingTest] = useState(false);
   // Only a Copilota handoff opens the quiet review surface; normal Verifiche stay unchanged.
   const [isCopilotReview, setIsCopilotReview] = useState(false);
+  const [isManuallyGuided, setIsManuallyGuided] = useState(false);
+  const lastGuidedHandoffNonceRef=useRef<string|null>(null);
   const focusedReviewHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const focusedCopilotReview = isCopilotReview && isEditingTest && activeSubTab === 'editor';
   useEffect(() => {
@@ -278,6 +282,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setShareSelectedTestId('');
     setIsEditingTest(true);
     setIsCopilotReview(true);
+    setIsManuallyGuided(false);
     setActiveSubTab('editor');
     onAssessmentTransferResult(nonce,true);
   },[assessmentEditorTransfer,activeClassId,activeClassName,classes,onAssessmentTransferResult]);
@@ -375,8 +380,40 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setEditorQuestions([defaultQuestion]);
     setIsEditingTest(true);
     setIsCopilotReview(false);
+    setIsManuallyGuided(false);
     setActiveSubTab('editor');
   };
+
+  // One-shot, guarded handoff from the local Copilota path: prefill only
+  // teacher-authored metadata and an empty question template. No provider,
+  // persisted source text, implicit UDA selection or save can occur here.
+  useEffect(()=>{
+    const handoff=assessmentHandoff;
+    if(!handoff?.guided||!handoff.nonce||!handoff.objective
+      ||lastGuidedHandoffNonceRef.current===handoff.nonce)return;
+    lastGuidedHandoffNonceRef.current=handoff.nonce;
+    const classMatches=Boolean(activeClassId)
+      && handoff.classId===activeClassId
+      && handoff.className===activeClassName
+      && classes.filter(item=>item.id===activeClassId&&item.name===activeClassName).length===1
+      && classes.filter(item=>item.name===activeClassName).length===1;
+    if(!classMatches||editorDirtyRef.current||editorSavingRef.current){
+      onGuidedAssessmentHandoffConsumed?.(handoff.nonce);
+      return;
+    }
+    handleStartNewInteractiveTest();
+    editorBaselineRef.current=null;
+    editorDirtyRef.current=true;
+    setEditorTitle(`Verifica: ${handoff.sourceTitle}`);
+    setEditorDescription(`Obiettivo didattico: ${handoff.objective}`);
+    setSelectedClass(handoff.className);
+    setShareSelectedTestId('');
+    setIsCopilotReview(true);
+    setIsManuallyGuided(true);
+    onGuidedAssessmentHandoffConsumed?.(handoff.nonce);
+  },[assessmentHandoff?.nonce,assessmentHandoff?.guided,
+     assessmentHandoff?.classId,activeClassId,activeClassName,classes,
+     onGuidedAssessmentHandoffConsumed]);
 
   // Open interactive editor for existing test
   const handleEditExistingTest = (test: OnlineTest) => {
@@ -394,6 +431,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
     setEditorDuration(test.durationMinutes || 15);
     setEditorQuestions(JSON.parse(JSON.stringify(test.questions)));
     setIsCopilotReview(false);
+    setIsManuallyGuided(false);
     setIsEditingTest(true);
     setActiveSubTab('editor');
   };
@@ -1324,13 +1362,21 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                     className="text-base font-bold text-[var(--primary)] flex items-center gap-2">
                     <Edit3 className="w-5 h-5 text-[var(--primary)]" />
                     {editingTestId ? 'Modifica Verifica Formativa'
-                      : focusedCopilotReview ? 'Rivedi la verifica' : 'Crea Nuova Verifica Formativa'}
+                      : focusedCopilotReview ? (isManuallyGuided ? 'Prepara la verifica' : 'Rivedi la verifica') : 'Crea Nuova Verifica Formativa'}
                   </h3>
                   <p className={focusedCopilotReview ? 'text-sm text-slate-300' : 'text-xs text-slate-400'}>
                     {focusedCopilotReview
-                      ? 'Controlla le domande e le risposte. La proposta non è ancora salvata.'
+                      ? (isManuallyGuided
+                        ? 'Il materiale e l’obiettivo sono pronti. Scrivi tu le domande: il generatore non è stato utilizzato. Nulla è salvato.'
+                        : 'Controlla le domande e le risposte. La proposta non è ancora salvata.')
                       : 'Definisci quesiti, opzioni di risposta, soluzioni corrette e spiegazioni didattiche per lo studente.'}
                   </p>
+                  {focusedCopilotReview && isManuallyGuided && (
+                    <p role="status" data-testid="int02-assessment-manual-objective"
+                      className="rounded-lg border border-cyan-800 bg-cyan-950/20 p-3 text-sm text-cyan-100">
+                      Obiettivo: {editorDescription.replace(/^Obiettivo didattico:\s*/, '')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1625,7 +1671,7 @@ export const VerificheOnlineView: React.FC<VerificheOnlineViewProps> = ({
                   onClick={() => requestLocalEditorExit(() => setIsEditingTest(false))}
                   className="px-5 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold"
                 >
-                  {focusedCopilotReview ? 'Chiudi la revisione' : 'Annulla'}
+                  {focusedCopilotReview ? (isManuallyGuided ? 'Chiudi la preparazione' : 'Chiudi la revisione') : 'Annulla'}
                 </button>
               </div>
               </fieldset>
