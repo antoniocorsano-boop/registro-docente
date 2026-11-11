@@ -184,8 +184,9 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
   await expect(panel).toContainText('Il generatore non è disponibile.');
   await panel.getByTestId('int02-assessment-objective')
     .fill('Riconoscere le trasformazioni energetiche.');
-  await expect(panel.getByTestId('int02-assessment-generate')).toBeDisabled();
-  await expect(panel.getByTestId('int02-assessment-remote-consent')).not.toBeChecked();
+  // Unavailable generator: no competing remote consent or disabled CTA.
+  await expect(panel.getByTestId('int02-assessment-generate')).toHaveCount(0);
+  await expect(panel.getByTestId('int02-assessment-remote-consent')).toHaveCount(0);
   const local=panel.getByTestId('int02-assessment-continue-locally');
   await expect(local).toBeEnabled();
   await local.click();
