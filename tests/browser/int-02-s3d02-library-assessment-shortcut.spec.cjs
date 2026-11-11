@@ -100,6 +100,19 @@ test('S3d Android HPR rework: source action opens governed Copilota, not the man
   await expect(panel.getByTestId('int02-assessment-provider-details')).not.toHaveAttribute('open','');
   await expect(panel.getByTestId('int02-assessment-generate')).toBeDisabled();
 
+  // Cancelling the primary Copilota route must return keyboard focus to the
+  // stable «Usa» button, never to an unmounted source action or page body.
+  await page.getByTestId('library-copilot-composer')
+    .getByRole('button',{name:'Chiudi Copilota',exact:true}).click();
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  await page.evaluate(() => new Promise(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const useButton=page.getByRole('button',{name:'Usa',exact:true});
+  await expect(useButton).toBeFocused();
+  await useButton.click();
+  await page.getByTestId('int02-prepare-assisted-assessment').click();
+  await expect(panel).toBeVisible();
+
   const expectedWidth=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
   expect(expectedWidth).toBeLessThanOrEqual(1);
   fs.mkdirSync(evidenceDir,{recursive:true});
