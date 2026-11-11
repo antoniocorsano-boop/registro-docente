@@ -17,6 +17,8 @@ describe('S3d-02 — percorso diretto fonte → Copilota verifica',()=>{
     expect(card).toContain("source.status === 'ready'");
     expect(card).toContain('Boolean(excerpt?.trim())');
     expect(card).toContain('data-testid="library-source-other-actions"');
+    expect(card).toContain('transferFocusToCopilotRef.current = true');
+    expect(card).toContain('if (transferFocusToCopilotRef.current)');
     expect(card).toContain('Altre possibilità: UDA, lezione o editor manuale');
     expect(card).toContain('data-testid="int02-prepare-assessment"');
     expect(card).toContain('Apri editor manuale senza Copilota');
