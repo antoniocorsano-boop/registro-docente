@@ -39,6 +39,7 @@ describe('MOBILE-01/UX-QA-03 Android visual review guard', () => {
     const manifestWorkflow = await load('.github/workflows/mobile-01-android-probe.yml');
     expect(manifestWorkflow).toContain('offline_end_to_end_qualified=false');
     expect(manifestWorkflow).toContain('vault_android_qualified=false');
+    expect(manifestWorkflow).toContain('android_hpr_qualified=false');
     expect(manifestWorkflow).not.toContain('android_hpr_qualified=true');
   });
 });
