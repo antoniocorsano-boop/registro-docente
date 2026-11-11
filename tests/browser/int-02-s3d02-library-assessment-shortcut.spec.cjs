@@ -4,7 +4,7 @@ const path=require('node:path');
 
 const baseURL=process.env.BASE_URL||'http://127.0.0.1:4173';
 const evidenceDir=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence');
-const CLASS_NAME='3ª A - Secondaria I Grado';
+const CLASS_NAME='3ª A Fittizia HPR';
 const SOURCE_TITLE='Le trasformazioni dell’energia';
 const SOURCE_TEXT='Una centrale elettrica trasforma energia primaria in energia elettrica.';
 const DRAFT_TITLE='Verifica fittizia sulle trasformazioni';
