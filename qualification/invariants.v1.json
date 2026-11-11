@@ -1431,6 +1431,22 @@
         "tests/browser/int-02-s4-teacher-cycle.spec.cjs",
         "tests/browser/int-02-s3c02-copilot-assessment.spec.cjs"
       ]
+    },
+    {
+      "id": "INT-02-S3D-ANDROID-HPR-I01",
+      "owner": "INT-02/S3d-02",
+      "statement": "Android HPR is served only by a separate synthetic-only Express entrypoint, with no application product modifications. It requires explicit mode, strong Basic authentication, pinned exact deployed SHA and bounded expiry. Only a predetermined fictional assessment may be processed through the existing policy/consent validation with an in-process fake provider; all other APIs, access without credentials and external assets are blocked. Never enable a real provider or reuse a live Registro Docente deployment.",
+      "impactPaths": [
+        "scripts/hpr/androidReviewApp.ts",
+        "scripts/hpr/androidReviewServer.ts",
+        "src/security/s3dAndroidReviewIsolation.test.ts",
+        "docs/qualification/2026-11-11-s3d-android-isolated-hpr.md",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/s3dAndroidReviewIsolation.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
