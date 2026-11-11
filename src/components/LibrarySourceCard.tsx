@@ -159,6 +159,8 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
   const useActionButtonRefs = useRef<Partial<Record<LibraryLaunchIntent, HTMLButtonElement | null>>>({});
   const useSurfacePreviousFocusRef = useRef<HTMLElement | null>(null);
   const transferFocusToCopilotRef = useRef(false);
+  const wasCopilotOpenRef = useRef(isCopilotOpen);
+  const otherActionsSummaryRef = useRef<HTMLElement | null>(null);
   const excerpt = source.extractedText || source.payload.text;
   const webNeedsContent = source.kind === 'web' && !excerpt;
   const canPrepareAssisted = source.privacy === 'teacher-professional'
@@ -215,6 +217,16 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
       });
     };
   }, [isSelected, isUseSurfaceOpen, isMobileDialog]);
+
+  useLayoutEffect(() => {
+    const wasOpen = wasCopilotOpenRef.current;
+    wasCopilotOpenRef.current = isCopilotOpen;
+    if (!wasOpen || isCopilotOpen || !isSelected || !isUseSurfaceOpen || !isMobileDialog) return;
+    // After closing Copilota, the formerly activated secondary action can be
+    // hidden by the professional-source disclosure. Restore focus inside the
+    // reactivated source dialog instead of targeting an invisible button.
+    otherActionsSummaryRef.current?.focus();
+  }, [isCopilotOpen, isSelected, isUseSurfaceOpen, isMobileDialog]);
 
   useLayoutEffect(() => {
     if (!isSelected) {
@@ -582,7 +594,7 @@ export const LibrarySourceCard: React.FC<LibrarySourceCardProps> = ({
             </button>
           )}
           <details data-testid="library-source-other-actions" className="rounded-lg border border-slate-800 bg-slate-900/40" open={!canPrepareAssisted}>
-            <summary className="min-h-[44px] cursor-pointer px-3 py-3 text-sm font-semibold text-cyan-100">
+            <summary ref={otherActionsSummaryRef} tabIndex={0} className="min-h-[44px] cursor-pointer px-3 py-3 text-sm font-semibold text-cyan-100">
               Altre possibilità: UDA, lezione o editor manuale
             </summary>
             <div className="space-y-3 border-t border-slate-800 p-3">
