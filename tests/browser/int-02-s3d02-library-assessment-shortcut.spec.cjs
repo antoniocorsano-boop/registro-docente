@@ -195,6 +195,8 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
   await expect(editor).toBeVisible();
   await expect(page.getByRole('heading',{name:'Prepara la verifica',exact:true})).toBeVisible();
   await expect(editor).toContainText('Scrivi tu le domande');
+  await expect(page.getByTestId('int02-assessment-manual-objective'))
+    .toContainText('Riconoscere le trasformazioni energetiche.');
   await expect(page.getByPlaceholder('es. Verifica Formativa: Energie Rinnovabili e Impatto Ambientale'))
     .toHaveValue('Verifica: '+SOURCE_TITLE);
   const extra=page.getByTestId('int02-assessment-extra-settings');
