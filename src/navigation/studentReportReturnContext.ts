@@ -29,6 +29,7 @@ export type StudentReportReturnContext =
         studentSearch: string;
         studentSort: 'register' | 'name' | 'average';
         studentDetailOpen: boolean;
+        expandedAnalyticsStudentId?: string | null;
       };
     });
 
@@ -48,6 +49,10 @@ export function resolveStudentReportReturnContext(
 
   if (context.originTab === 'tabellone' && context.ui.expandedStudentId
     && !selectedClass.students.some(s => s.id === context.ui.expandedStudentId)) {
+    return null;
+  }
+  if (context.originTab === 'analytics' && context.ui.expandedAnalyticsStudentId
+    && !selectedClass.students.some(s => s.id === context.ui.expandedAnalyticsStudentId)) {
     return null;
   }
   return context;

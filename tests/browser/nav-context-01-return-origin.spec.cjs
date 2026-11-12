@@ -67,12 +67,17 @@ test('NAV-CONTEXT-01 / Android 390 — Analisi reopens student details and retai
   const section = page.getByTestId('mobile-analytics-student-detail');
   await section.locator('summary').click();
   await expect(section).toHaveAttribute('open', '');
+  const toggle = section.getByTestId('analytics-compact-toggle').first();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await section.locator('article button').first().click();
   await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Analisi');
   await expect(section).toHaveAttribute('open', '');
   await expect(section.locator('article button').first()).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(section.locator('[data-testid="analytics-compact-detail"]:visible')).toHaveCount(1);
 
   // Going back a second time must restore the real prior dashboard.
   await page.goBack();

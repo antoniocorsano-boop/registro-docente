@@ -826,7 +826,7 @@
     {
       "id": "MOBILE-DENSITY-01-I01",
       "owner": "MOBILE-DENSITY-01",
-      "statement": "The mobile Tabellone displays one compact accessible row per student and only one expanded detail at a time, with the student report action separate. It preserves per-period and per-type grade calculations, proposed-indicator settings, privacy masking and accessible labels, while the desktop table and all professional persistence remain unchanged. Expansion state is scoped to the current class and no real student data is used in qualification.",
+      "statement": "The mobile Tabellone displays one compact accessible row per student and only one expanded detail at a time, with the student report action separate. It preserves per-period and per-type grade calculations, proposed-indicator settings, privacy masking and accessible labels, while the desktop table and all professional persistence remain unchanged. Expansion state is scoped to the current class and no real student data is used in qualification. Mobile Analisi uses compact annual summaries, direct report access and one class-scoped optional period detail; no change to desktop table, PDF or calculations.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/components/MatrixView.tsx",
@@ -835,16 +835,22 @@
         "tests/browser/fixtures/mobile-density-01-tabellone.html",
         "tests/browser/fixtures/mobile-density-01-tabellone-fixture.tsx",
         "tests/browser/mobile-density-01-tabellone.spec.cjs",
-        "src/security/mobileUxIntegrity.test.ts"
+        "src/security/mobileUxIntegrity.test.ts",
+        "src/components/AnalyticsView.tsx",
+        "src/navigation/studentReportReturnContext.ts",
+        "src/security/navContext01ReturnState.test.ts",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
       ],
       "tests": [
         "src/security/mobileDensity01TabelloneContract.test.ts",
         "src/security/header01ProductionWiringContract.test.ts",
         "src/security/mobileActions01Contract.test.ts",
-        "src/security/mobileUxIntegrity.test.ts"
+        "src/security/mobileUxIntegrity.test.ts",
+        "src/security/navContext01ReturnState.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/mobile-density-01-tabellone.spec.cjs"
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
       ]
     },
     {

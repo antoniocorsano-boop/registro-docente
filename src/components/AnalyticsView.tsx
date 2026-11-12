@@ -33,7 +33,8 @@ import {
   Sliders,
   TrendingUp,
   TrendingDown,
-  Info
+  Info,
+  ChevronDown
 } from 'lucide-react';
 
 type AnalyticsReturnContext = Extract<StudentReportReturnContext, { originTab: 'analytics' }>;
@@ -76,6 +77,17 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>(
     () => restored?.ui.studentSort ?? 'register'
   );
+  const [expandedAnalyticsStudent, setExpandedAnalyticsStudent] = useState<{ classId: string; studentId: string } | null>(
+    () => restored?.ui.expandedAnalyticsStudentId
+      && currentClass.students.some(s => s.id === restored.ui.expandedAnalyticsStudentId)
+      ? { classId: currentClass.id, studentId: restored.ui.expandedAnalyticsStudentId }
+      : null
+  );
+  const previousAnalyticsClassRef = useRef(currentClass.id);
+  useEffect(() => {
+    if (previousAnalyticsClassRef.current !== currentClass.id) setExpandedAnalyticsStudent(null);
+    previousAnalyticsClassRef.current = currentClass.id;
+  }, [currentClass.id]);
   const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
   // Native <details> is the sole authority for toggles. On each mount,
   // only a validated report Back can reopen it; ordinary navigation starts closed.
@@ -553,7 +565,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </label>
             </div>
 
-            <div className="space-y-2 min-w-0">
+            <div data-testid="analytics-compact-list" className="min-w-0 divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] overflow-hidden">
               {mobileStudentMetrics.length === 0 ? (
                 <div className="p-4 rounded-lg border border-[var(--border)] bg-slate-900/40 text-center text-xs text-slate-500">
                   {studentMetrics.length === 0 ? 'Nessun alunno presente.' : 'Nessun alunno corrisponde alla ricerca.'}
@@ -564,54 +576,79 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   const displayQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
                   const displayTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
 
+                  const expanded = expandedAnalyticsStudent?.classId === currentClass.id
+                    && expandedAnalyticsStudent.studentId === m.student.id;
+                  const panelId = `analytics-compact-details-${m.student.id}`;
+                  const displayName = formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive);
+
                   return (
-                    <article key={m.student.id} className="min-w-0 rounded-lg border border-[var(--border)] bg-slate-900/45 p-3 space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => onOpenStudentReport(m.student.id, {
-                          classId: currentClass.id,
-                          studentId: m.student.id,
-                          originTab: 'analytics',
-                          scrollY: captureReturnScrollY(),
-                          ui: {
-                            periodFilter,
-                            useWeighted,
-                            studentSearch: isPrivacyShieldActive ? '' : studentSearch,
-                            studentSort,
-                            studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false
-                          }
-                        })}
-                        className="min-h-[44px] w-full min-w-0 text-left flex items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-slate-100 hover:text-[var(--primary)] hover:bg-slate-800/70"
-                      >
-                        <span className="min-w-0 truncate">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</span>
-                        <span className="text-[10px] uppercase tracking-wider text-[var(--primary)] shrink-0">Scheda</span>
-                      </button>
-
-                      <div className="grid grid-cols-3 gap-2 text-center min-w-0">
-                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                          <span className="block text-[10px] uppercase text-slate-500">Q1</span>
-                          <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
-                        </div>
-                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                          <span className="block text-[10px] uppercase text-slate-500">Q2</span>
-                          <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
-                        </div>
-                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                          <span className="block text-[10px] uppercase text-slate-500">Anno</span>
-                          <b className="font-mono text-sm text-white">{formatGrade(displayTotal)}</b>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
-                        <span className="text-slate-400 min-w-0">
-                          Fascia analitica: <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
-                        </span>
-                        {displayTotal === null ? (
-                          <span className="px-2 py-1 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">Non disponibile</span>
-                        ) : (
-                          <span className={`px-2 py-1 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
-                            {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
+                    <article key={m.student.id} data-testid="analytics-compact-row" className="min-w-0">
+                      <div className="flex min-w-0 items-stretch gap-1">
+                        <button
+                          type="button"
+                          data-testid="analytics-compact-report"
+                          aria-label={`Apri scheda di ${displayName}. Media anno: ${formatGrade(displayTotal)}`}
+                          onClick={() => onOpenStudentReport(m.student.id, {
+                            classId: currentClass.id,
+                            studentId: m.student.id,
+                            originTab: 'analytics',
+                            scrollY: captureReturnScrollY(),
+                            ui: {
+                              periodFilter,
+                              useWeighted,
+                              studentSearch: isPrivacyShieldActive ? '' : studentSearch,
+                              studentSort,
+                              studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false,
+                              expandedAnalyticsStudentId: expandedAnalyticsStudent?.classId === currentClass.id
+                                ? expandedAnalyticsStudent.studentId : null
+                            }
+                          })}
+                          className="flex min-h-[60px] flex-1 min-w-0 items-center justify-between gap-2 px-2 py-2 text-left hover:bg-slate-800/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-cyan-300"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">{displayName}</span>
+                          <span className="shrink-0 text-right">
+                            <span className="block text-xs text-slate-400">Anno</span>
+                            <span data-testid="analytics-compact-average" className="block text-base font-bold tabular-nums text-slate-100">{formatGrade(displayTotal)}</span>
                           </span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="analytics-compact-toggle"
+                          aria-expanded={expanded}
+                          aria-controls={panelId}
+                          aria-label={`${expanded ? 'Nascondi' : 'Mostra'} dettagli di ${displayName}`}
+                          onClick={() => setExpandedAnalyticsStudent(expanded ? null : { classId: currentClass.id, studentId: m.student.id })}
+                          className="flex min-h-[60px] min-w-[48px] shrink-0 items-center justify-center text-slate-300 hover:bg-slate-800/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-cyan-300"
+                        >
+                          <ChevronDown aria-hidden="true" className={`h-5 w-5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                      <div id={panelId} data-testid="analytics-compact-detail" hidden={!expanded}>
+                        {expanded && (
+                          <div className="space-y-2 border-t border-[var(--border)] bg-slate-900/40 p-3">
+                            <div className="grid grid-cols-2 gap-2 text-center min-w-0">
+                              <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
+                                <span className="block text-xs text-slate-400">Q1</span>
+                                <b data-testid="analytics-compact-q1" className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
+                              </div>
+                              <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
+                                <span className="block text-xs text-slate-400">Q2</span>
+                                <b data-testid="analytics-compact-q2" className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+                              <span className="text-slate-400 min-w-0">
+                                Fascia analitica ({periodFilter === 'ALL' ? 'anno' : periodFilter}): <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
+                              </span>
+                              {m.activeAvg === null ? (
+                                <span className="px-2 py-1 rounded text-xs font-semibold text-slate-400 bg-slate-800/70">Non disponibile</span>
+                              ) : (
+                                <span className={`px-2 py-1 rounded text-xs font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
+                                  {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </article>

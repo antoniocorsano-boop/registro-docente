@@ -35,6 +35,7 @@ const analyticsContext: StudentReportReturnContext = {
     studentSearch: '',
     studentSort: 'average',
     studentDetailOpen: true,
+    expandedAnalyticsStudentId: 'studente-a1',
   },
 };
 
@@ -62,6 +63,10 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(resolveStudentReportReturnContext(
       { ...tabelloneContext, ui: { ...tabelloneContext.ui, expandedStudentId: 'studente-b1' } },
       'classe-a', 'tabellone', classes
+    )).toBeNull();
+    expect(resolveStudentReportReturnContext(
+      { ...analyticsContext, ui: { ...analyticsContext.ui, expandedAnalyticsStudentId: 'studente-b1' } },
+      'classe-a', 'analytics', classes
     )).toBeNull();
     expect(resolveStudentReportReturnContext(
       analyticsContext, 'classe-a', 'analytics',
