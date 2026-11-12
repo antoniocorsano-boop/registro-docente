@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
 const url = (process.env.NAV_CONTEXT_BASE_URL || 'http://127.0.0.1:4173')
   + '/tests/browser/fixtures/nav-back-01-app.html';
@@ -211,3 +213,68 @@ test('NAV-CONTEXT-01 — a backup action leaves the report and discards the prev
   await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
   await context.close();
 });
+
+
+// Actual App, not an isolated component: evidence for the mobile HPR.
+for (const width of [320, 390]) {
+  for (const count of [8, 25]) {
+    test(`MOBILE-DENSITY-02 visual App / ${width}px / ${count} synthetic students`, async ({ browser }) => {
+      const height = width === 320 ? 700 : 844;
+      const context = await browser.newContext({ viewport: { width, height }, isMobile: true, hasTouch: true });
+      const evidence = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence', 'analytics-visual');
+      await fs.mkdir(evidence, { recursive: true });
+      const prefix = path.join(evidence, `app-${width}-${count}`);
+      const page = await context.newPage();
+      const capture = async (name) => {
+        await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0); });
+        await page.screenshot({ path: `${prefix}-${name}.png`, animations: 'disabled' });
+      };
+      try {
+        await page.goto(url + '?visualRoster=' + count, { waitUntil: 'domcontentloaded' });
+        await page.getByRole('button', { name: /Apri classe 3ª A.*Prova sintetica/i }).click();
+        await navigateTo(page, 'Analisi');
+        const privacy = page.getByTestId('header01-privacy');
+        if (await privacy.getAttribute('data-privacy-state') === 'protected') await privacy.click();
+        await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
+        await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+        await capture('sintesi');
+        await page.getByTestId('analytics-view-students').click();
+        const section = page.getByTestId('mobile-analytics-student-detail');
+        const rows = section.getByTestId('analytics-compact-row');
+        await expect(rows).toHaveCount(count);
+        await capture('alunni');
+        const geometry = await section.evaluate((el) => {
+          const all = Array.from(el.querySelectorAll('[data-testid="analytics-compact-row"]'));
+          const first = all[0].getBoundingClientRect();
+          const name = all[0].querySelector('[data-testid="analytics-compact-name"]').getBoundingClientRect();
+          return { viewport: { width: innerWidth, height: innerHeight }, firstRow: { y: first.y, width: first.width, height: first.height }, nameWidth: name.width,
+            visibleRows: all.filter(row => { const r = row.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }).length,
+            horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+        });
+        await fs.writeFile(prefix + '-geometry.json', JSON.stringify(geometry, null, 2));
+        expect(geometry.horizontalOverflow).toBeLessThanOrEqual(1);
+        const toggle = rows.first().getByTestId('analytics-compact-toggle');
+        await toggle.click();
+        await expect(rows.first().getByTestId('analytics-compact-detail')).toBeVisible();
+        await capture('dettaglio');
+        await page.getByTestId('analytics-view-details').click();
+        await expect(page.getByTestId('analytics-advanced-surface')).toBeVisible();
+        await capture('approfondimenti');
+        await page.getByTestId('analytics-view-students').click();
+        await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+        await expect(rows.first()).toBeVisible();
+        if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+        await capture('testo-200');
+        await expect(rows.first().getByTestId('analytics-compact-detail')).toBeVisible();
+        await rows.first().screenshot({ path: prefix + '-dettaglio-200.png', animations: 'disabled' });
+        await fs.writeFile(prefix + '-commit.txt', (process.env.CANDIDATE_SHA || 'local') + '\n');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        await privacy.click();
+        await expect(privacy).toHaveAttribute('data-privacy-state', 'protected');
+        await expect(section.getByText('Persona Fittizia Uno', { exact: true })).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
