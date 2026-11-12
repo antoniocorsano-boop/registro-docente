@@ -1,52 +1,128 @@
 /**
- * Render only the existing report template, never the surrounding application.
- * The detached copy is necessary because the print template is display:none on screen.
- * Explicit sRGB colors keep the legacy html2canvas renderer compatible with Tailwind 4.
+ * Compose the existing privacy-aware report as selectable PDF text, not a
+ * screenshot of the hidden Tailwind template. html2pdf 0.10.1 already bundles
+ * jsPDF; initialize its documented canvas worker using an empty 1px canvas,
+ * discard the bootstrap page, and use the resulting local PDF document.
+ * This avoids html2canvas's unsupported modern CSS colors and hidden layout.
  */
-export function cloneWorkPdfTemplate(element: HTMLElement): HTMLElement {
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.removeAttribute('id');
-  clone.classList.remove('hidden', 'print:block');
-  clone.style.display = 'block';
-  clone.style.backgroundColor = '#ffffff';
-  clone.style.color = '#111827';
-  clone.style.colorScheme = 'light';
-  const colors: Record<string, string> = {
-    'text-black': '#000000', 'text-slate-900': '#0f172a', 'text-slate-800': '#1e293b',
-    'text-slate-700': '#334155', 'text-slate-600': '#475569', 'text-slate-500': '#64748b',
-  };
-  for (const node of [clone, ...Array.from(clone.querySelectorAll<HTMLElement>('*'))]) {
-    node.style.color = Object.entries(colors).find(([name]) => node.classList.contains(name))?.[1] || '#111827';
-    node.style.borderColor = node.classList.contains('border-slate-900') ? '#0f172a' : '#cbd5e1';
-    node.style.backgroundColor = node === clone || node.classList.contains('bg-white') ? '#ffffff'
-      : node.classList.contains('bg-slate-100') ? '#f1f5f9'
-      : node.classList.contains('even:bg-slate-50') && (Array.from(node.parentElement?.children || []).indexOf(node) + 1) % 2 === 0 ? '#f8fafc'
-      : 'transparent';
-  }
-  return clone;
+const WIDTHS = [8, 42, 20, 20, 25, 22, 25, 28];
+const LEFT = 10;
+const RIGHT = 200;
+const BOTTOM = 278;
+const LINE = 3.7;
+
+function textOf(node: Element | null | undefined): string {
+  return (node?.textContent || '').trim().replace(/\s+/g, ' ')
+    .replace(/≥/g, '>=').replace(/≤/g, '<=');
 }
 
 export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> {
   if (typeof html2pdf === 'undefined') throw new Error('Generatore PDF locale non disponibile.');
-  const clone = cloneWorkPdfTemplate(element);
-  const worker = (html2pdf() as any).set({
-    margin: 10, image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, backgroundColor: '#ffffff' },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-  }).from(clone).toCanvas();
-  // Fail on an empty raster instead of recording a blank file as a useful report.
-  const canvas: HTMLCanvasElement = await worker.get('canvas');
-  if (!canvas.width || !canvas.height) throw new Error('Prospetto vuoto.');
-  const sample = document.createElement('canvas');
-  sample.width = 96; sample.height = 96;
-  const context = sample.getContext('2d');
-  if (!context) throw new Error('Prospetto non verificabile.');
-  context.drawImage(canvas, 0, 0, 96, 96);
-  const pixels = context.getImageData(0, 0, 96, 96).data;
-  let ink = 0;
-  for (let i = 0; i < pixels.length; i += 4) {
-    if (pixels[i + 3] > 0 && Math.min(pixels[i], pixels[i + 1], pixels[i + 2]) < 210) ink++;
+  // Read only the already rendered report (including its current privacy mask).
+  const table = element.querySelector('table');
+  const columns = Array.from(table?.querySelectorAll('thead th') || [], textOf);
+  const rows = Array.from(table?.querySelectorAll('tbody tr') || [], row =>
+    Array.from(row.querySelectorAll('td'), textOf));
+  const header = element.firstElementChild;
+  const heading = textOf(header?.querySelector('h1'));
+  const title = textOf(header?.querySelector('h2'));
+  const context = textOf(header?.querySelector('p'));
+  const metadata = Array.from(header?.children[1]?.children || [], textOf).filter(Boolean);
+  const footnote = textOf(element.lastElementChild);
+  if (!heading || !title || !context || columns.length !== WIDTHS.length ||
+      rows.some(row => row.length !== WIDTHS.length) || !footnote) {
+    throw new Error('Prospetto non completo.');
   }
-  if (ink < 10) throw new Error('Prospetto senza contenuto visibile.');
-  return worker.toPdf().outputPdf('arraybuffer');
+
+  const seed = document.createElement('canvas');
+  seed.width = 1;
+  seed.height = 1;
+  const seedContext = seed.getContext('2d');
+  if (!seedContext) throw new Error('Generatore PDF non disponibile.');
+  seedContext.fillStyle = '#ffffff';
+  seedContext.fillRect(0, 0, 1, 1);
+  const worker = (html2pdf() as any).set({
+    margin: 10, enableLinks: false, image: { type: 'png' },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: false },
+  }).from(seed, 'canvas').toPdf();
+  const pdf = await worker.get('pdf');
+  // Never return the bootstrap raster; every retained page is the real report.
+  pdf.addPage();
+  pdf.deletePage(1);
+  pdf.setPage(1);
+  let y = 10;
+  let emittedRows = 0;
+
+  function paragraph(value: string, size: number, bold = false) {
+    if (!value) return;
+    pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+    pdf.setFontSize(size);
+    pdf.setTextColor(15, 23, 42);
+    const lines: string[] = pdf.splitTextToSize(value, RIGHT - LEFT);
+    const height = lines.length * (size * 0.36 * 1.2) + 2;
+    if (y + height > BOTTOM) throw new Error('Intestazione del prospetto troppo lunga.');
+    pdf.text(lines, LEFT, y + size * 0.36, { lineHeightFactor: 1.2 });
+    y += height;
+  }
+  function pageHeader(first: boolean) {
+    y = 10;
+    if (first) paragraph(heading, 12, true);
+    paragraph(title, 11, true);
+    paragraph(context, 9);
+    if (first) for (const line of metadata) paragraph(line, 8);
+    y += 2;
+  }
+  function measure(cells: string[], headingRow: boolean) {
+    pdf.setFont('helvetica', headingRow ? 'bold' : 'normal');
+    pdf.setFontSize(8);
+    const lines = cells.map((cell, i) => pdf.splitTextToSize(cell || '–', WIDTHS[i] - 3) as string[]);
+    return { lines, height: Math.max(7, ...lines.map(line => line.length * LINE + 3)) };
+  }
+  function drawRow(cells: string[], headingRow: boolean, shade = false) {
+    const { lines, height } = measure(cells, headingRow);
+    if (y + height > BOTTOM) throw new Error('Riga del prospetto troppo lunga.');
+    let x = LEFT;
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.2);
+    pdf.setTextColor(15, 23, 42);
+    for (let i = 0; i < WIDTHS.length; i++) {
+      pdf.setFillColor(...(headingRow ? [226, 232, 240] : shade ? [248, 250, 252] : [255, 255, 255]));
+      pdf.rect(x, y, WIDTHS[i], height, 'FD');
+      pdf.text(lines[i], x + 1.5, y + 4, { lineHeightFactor: 1.15 });
+      x += WIDTHS[i];
+    }
+    y += height;
+  }
+
+  pageHeader(true);
+  drawRow(columns, true);
+  rows.forEach((row, index) => {
+    if (y + measure(row, false).height > BOTTOM) {
+      pdf.addPage();
+      pageHeader(false);
+      drawRow(columns, true);
+    }
+    drawRow(row, false, index % 2 === 1);
+    emittedRows++;
+  });
+  if (y + 18 > BOTTOM) {
+    pdf.addPage();
+    pageHeader(false);
+  }
+  y += 4;
+  paragraph(footnote, 8);
+  const pages = pdf.internal.getNumberOfPages();
+  for (let page = 1; page <= pages; page++) {
+    pdf.setPage(page);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(71, 85, 105);
+    pdf.text(`Pagina ${page} di ${pages}`, RIGHT, 288, { align: 'right' });
+  }
+  if (emittedRows !== rows.length || pages < 1) throw new Error('Prospetto incompleto.');
+  const buffer: ArrayBuffer = pdf.output('arraybuffer');
+  if (buffer.byteLength < 1000 || new TextDecoder().decode(buffer.slice(0, 5)) !== '%PDF-') {
+    throw new Error('Prospetto PDF non valido.');
+  }
+  return buffer;
 }
