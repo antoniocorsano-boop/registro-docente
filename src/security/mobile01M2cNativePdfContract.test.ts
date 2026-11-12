@@ -32,6 +32,17 @@ describe('MOBILE-01/M2c native PDF contract', () => {
     expect(render).toContain("emittedRows !== rows.length");
     expect(render).toContain("pdf.output('arraybuffer')");
     expect(render).not.toContain(".toCanvas()");
+    expect(render).toContain("dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url");
+    expect(render).toContain("pdf.addFileToVFS");
+    expect(render).toContain("pdf.addFont");
+    expect(render).toContain("font.characterToGlyph(code)");
+    expect(render).toContain("local.origin !== window.location.origin");
+    const testSource = await load('tests/browser/mobile01-m2c-native-pdf.spec.cjs');
+    expect(testSource).toContain("execFileSync('pdftotext'");
+    expect(testSource).toContain("Łukasz Nowak");
+    expect(testSource).toContain("Иван Петров");
+    const pkg = JSON.parse(await load('package.json'));
+    expect(pkg.dependencies['dejavu-fonts-ttf']).toBe('2.37.3');
     const workflow = await load('.github/workflows/mobile-01-android-probe.yml');
     expect(workflow).toContain('android_pdf_native_implemented=true');
     expect(workflow).toContain('android_pdf_file_save_qualified=false');
