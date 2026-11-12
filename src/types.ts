@@ -196,6 +196,8 @@ export interface LocalEmbeddingConfig {
 }
 
 export interface AppSettings {
+  /** Explicit new archive mode; absent on historical archives. */
+  archiveMode?: 'professional' | 'demo';
   school: string;
   year: string;
   teacher: string;
