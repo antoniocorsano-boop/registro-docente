@@ -8,7 +8,7 @@ const save=page=>page.getByRole('button',{name:'Salva Registro Comportamenti',ex
 const payload=async page=>JSON.parse(await page.getByTestId('fixture-saved').textContent());
 async function open(page){await page.goto(url);await expect(page.getByRole('heading',{name:'Valutazione Rapida Comportamenti'})).toBeVisible();}
 for(const width of [320,390]){
- test('baseline '+width+' — 8/25 synthetic rows and geometry',async({page})=>{
+ test('compact '+width+' — 8/25 synthetic rows, 44px targets and no nested scroll',async({page})=>{
   await page.setViewportSize({width,height:width===320?700:844});
   await open(page);
   const out=process.env.BEHAVIOR_EVIDENCE_DIR||'../browser-evidence';
@@ -16,9 +16,26 @@ for(const width of [320,390]){
   for(const count of [8,25]){
    if(count===25)await page.getByTestId('fixture-count').click();
    await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toHaveCount(count);
-   const geom=await page.evaluate(()=>({viewport:innerWidth,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,buttons:[...document.querySelectorAll('button')].filter(b=>b.textContent.trim()==='Ottimale 🌟').length}));
-   fs.writeFileSync(path.join(out,'baseline-'+width+'-'+count+'.json'),JSON.stringify(geom,null,2));
-   await page.screenshot({path:path.join(out,'baseline-'+width+'-'+count+'.png')});
+   const geom=await page.evaluate(()=>{
+    const list=document.querySelector('[data-testid="behavior-student-list"]');
+    const rows=[...document.querySelectorAll('[data-testid="behavior-student-row"]')];
+    return {viewport:innerWidth,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
+     nestedScroll:list.scrollHeight>list.clientHeight+1,
+     buttons:rows.flatMap(row=>[...row.querySelectorAll('button')]).length,
+     minTouch:Math.min(...rows.flatMap(row=>[...row.querySelectorAll('button')].map(b=>Math.min(b.getBoundingClientRect().width,b.getBoundingClientRect().height)))),
+     aligned:rows.every(row=>{
+      const name=row.querySelector('[data-testid="behavior-student-name"]').getBoundingClientRect();
+      const buttons=[...row.querySelectorAll('button')].map(b=>b.getBoundingClientRect());
+      return name.width>=70 && name.right<=buttons[0].left+1 && buttons.every(b=>Math.abs(b.top-buttons[0].top)<1);
+     })};
+   });
+   expect(geom.overflow).toBeLessThanOrEqual(1);
+   expect(geom.nestedScroll).toBe(false);
+   expect(geom.buttons).toBe(count*4);
+   expect(geom.minTouch).toBeGreaterThanOrEqual(44);
+   expect(geom.aligned).toBe(true);
+   fs.writeFileSync(path.join(out,'compact-'+width+'-'+count+'.json'),JSON.stringify(geom,null,2));
+   await page.screenshot({path:path.join(out,'compact-'+width+'-'+count+'.png')});
   }
  });
 }
