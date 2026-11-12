@@ -24,3 +24,8 @@ Preparazione del candidato completo, profilo validato, scelta nel record setting
 - Le impostazioni ordinarie non possono modificare la modalità. I backup completi trasportano il record settings; resta da verificare in modo dedicato il ripristino dei formati storici e il reset end-to-end.
 - 50 scenari browser esistenti aggiornati esclusivamente nella configurazione dimostrativa; aggiunta prova mirata professional/offline/reopen allo smoke canonico. Nessun test storico rimosso. Il blocco della rete esterna e il lavoro offline in Chromium non qualificano la riapertura offline Android.
 - La slice 1 ha dato PASS sui sei test funzionali; la qualifica iniziale era FAIL per percorso non registrato tra gli invarianti. Aggiunto BETA-1-ARCHIVE-I01; esiti del candidato complessivo ancora da verificare.
+
+## Slice 3 — verifica ripristino e reset
+- Candidato precedente fc7e7e2440: 5/5 workflow PASS, 71/71 regressioni storiche, Codex senza rilievi maggiori.
+- Un backup storico non classificato conserva la modalità esplicita dell'archivio di destinazione; un backup con modalità esplicita conserva quella della fonte. Nessuna rimozione dei record importati; modalità non valida rifiutata.
+- Test aggiunti per v2–v6, JSON precedente, modalità invalida, reset dei dieci record e nuova identità, più prova browser con importazione JSON precedente, riapertura, annullamento e conferma reset. Qualificazione del nuovo candidato da accertare.

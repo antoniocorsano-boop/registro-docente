@@ -336,3 +336,22 @@ describe('BETA-1 archive mode preservation', () => {
     expect(applySettingsPatch(historical, { archiveMode: 'demo' })).toEqual(historical);
   });
 });
+
+test('BETA-1 factory reset deletes all ten records and permits a clean new professional identity', async () => {
+  const store = new MemoryVaultStore();
+  const vault = new SecureVault(store);
+  await initializeNewArchive(vault, 'old-password', { mode: 'demo' });
+  expect((await store.listRecordKeys()).length).toBe(10);
+  await vault.clearAll();
+  expect(await store.getMetadata()).toBeNull();
+  expect(await store.listRecordKeys()).toEqual([]);
+  expect(decideVaultBootstrap(bootstrap({ metadataState: null }))).toBe('SETUP_REQUIRED');
+  const setup: NewArchiveSetup = {
+    mode: 'professional', profile: { school: 'New synthetic school', year: '2026/27', teacher: 'New synthetic teacher', subject: 'Storia' }
+  };
+  await initializeNewArchive(vault, 'new-password', setup);
+  vault.lock();
+  await expect(vault.unlock('old-password')).rejects.toThrow();
+  await vault.unlock('new-password');
+  expect(await new SecureAppStorage(vault).loadSnapshot()).toEqual(createInitialArchiveSnapshot(setup));
+});

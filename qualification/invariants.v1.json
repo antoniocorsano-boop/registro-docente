@@ -1667,7 +1667,7 @@
     {
       "id": "BETA-1-ARCHIVE-I01",
       "owner": "BETA-1",
-      "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced.",
+      "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced. Historical backups without an archive mode retain the explicit destination mode; confirmed reset permits a fresh empty archive.",
       "impactPaths": [
         "src/security/initialArchiveSetup.ts",
         "src/security/secureAppStorage.test.ts",
@@ -1727,11 +1727,14 @@
         "tests/browser/ux-qa-02-progressive-disclosure.spec.cjs",
         "tests/browser/ux-trust-01-full-regression.spec.cjs",
         "tests/browser/ux-trust-01-qualification.spec.cjs",
-        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs",
+        "src/security/backupPayload.ts",
+        "src/security/backupPayload.test.ts"
       ],
       "tests": [
         "src/security/secureAppStorage.test.ts",
-        "src/security/vaultGate.test.ts"
+        "src/security/vaultGate.test.ts",
+        "src/security/backupPayload.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
