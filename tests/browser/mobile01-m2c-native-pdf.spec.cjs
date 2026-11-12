@@ -93,13 +93,14 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   expect(result.write).toBe(2);
   expect(result.valid).toBe(true);
   expect(result.bytes).toBeGreaterThan(1000);
-  expect(result.reportText).toBe(true);
-  expect(result.tableText).toBe(true);
-  expect(result.maskedRows).toBe(true);
-  expect(result.pageCount).toBe(true);
   expect(result.filename).toMatch(/^Prospetto_Lavoro_\d{4}-\d{2}-\d{2}\.pdf$/);
   expect(messages.some(m => m.includes('PDF di lavoro salvato e verificato'))).toBe(true);
   const maskedPdf = execFileSync('pdftotext', ['-layout', '-', '-'], { input: Buffer.from(result.lastBase64, 'base64'), encoding: 'utf8' });
+  expect(maskedPdf).toContain('Prospetto di lavoro docente');
+  expect(maskedPdf).toContain('Cognome e Nome');
+  expect(maskedPdf).toContain('Indicatore');
+  expect(maskedPdf).toContain('••••');
+  expect(maskedPdf).toContain('Pagina 1 di ');
   for (const name of unicodeNames) expect(maskedPdf).not.toContain(name);
   await privacy.click();
   for (const name of unicodeNames) expect(await template.textContent()).toContain(name);
