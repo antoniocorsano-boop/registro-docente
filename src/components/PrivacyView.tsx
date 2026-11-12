@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { isAndroidBackupRuntime, saveEncryptedBackupOnAndroid } from '../security/androidBackupExport';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
@@ -49,6 +50,11 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const backupOperationPendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Total students & evaluations protected
   let totalStudents = 0;
@@ -77,27 +83,49 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     backupOperationPendingRef.current = true;
     setIsEncrypting(true);
     let downloadInitiated = false;
+    const androidNative = isAndroidBackupRuntime();
     try {
       const checkpoint = await onPrepareEncryptedBackup();
       const payload = createBackupPayload(checkpoint.snapshot);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
 
-      const blob = new Blob([encryptedString], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Backup_Cifrato_GDPR_${today()}.enc.json`;
-      document.body.appendChild(a);
-      a.click();
-      downloadInitiated = true;
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `Backup_Cifrato_GDPR_${today()}.enc.json`;
+      if (androidNative) {
+        const result = await saveEncryptedBackupOnAndroid(
+          encryptedString, filename, () => mountedRef.current
+        );
+        if (result === 'cancelled' || !mountedRef.current) return;
+        // A native receipt requires verified bytes, not just an opened picker.
+        downloadInitiated = true;
+      } else {
+        const blob = new Blob([encryptedString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        try {
+          a.click();
+          downloadInitiated = true;
+        } finally {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      }
 
       await onRecordBackupExport(checkpoint);
       setEncryptPassword('');
       setConfirmPassword('');
-      alert('Backup protetto con crittografia AES-256-GCM esportato con successo!');
+      alert(androidNative
+        ? 'Copia di sicurezza salvata e verificata nella cartella scelta.'
+        : 'Backup protetto con crittografia AES-256-GCM esportato con successo!');
     } catch (err) {
+      if (androidNative) {
+        if (mountedRef.current) alert(downloadInitiated
+          ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le modifiche restano da salvare.'
+          : 'Copia di sicurezza non verificata. Scegli una cartella locale (Download o Documenti) e riprova.');
+        return;
+      }
       console.error(err);
       if (downloadInitiated) {
         alert('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
