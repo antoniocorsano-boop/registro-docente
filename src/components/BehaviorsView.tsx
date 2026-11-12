@@ -94,119 +94,122 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
   };
 
   return (
-    <div className="neon-card neon-card-highlight p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-[var(--border)]">
-        <div>
-          <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
+    <section className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border)]">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-200">
             Valutazione Rapida Comportamenti
           </h3>
-          <p className="text-xs text-slate-400">
-            Registra le note disciplinari e l'attitudine partecipativa per la classe <b>{currentClass.name}</b>.
-          </p>
+          <p className="text-sm text-slate-400">{currentClass.name}</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-400 font-semibold uppercase">Data:</label>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          Data
           <input
             type="date"
             value={selectedDate}
             onChange={e => handleDateChange(e.target.value)}
             disabled={isSaving}
-            className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 px-2.5 neon-input text-xs text-white`}
+            className={`${MOBILE_TOUCH_TARGET_CLASS} max-w-full p-1.5 neon-input text-xs text-white`}
           />
-        </div>
+        </label>
       </div>
 
       <fieldset disabled={isSaving || !isObservationDate(selectedDate)} className="border-0 p-0 m-0 min-w-0">
-      {/* Bulk action buttons */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-          Assegna a tutti:
-        </span>
-        <button
-          type="button"
-          onClick={() => setAll('Ottimale 🌟')}
-          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-ok hover:brightness-110 transition-all font-semibold`}
-        >
-          🌟 Tutti Ottimale
-        </button>
-        <button
-          type="button"
-          onClick={() => setAll('Costruttivo 👍')}
-          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-info hover:brightness-110 transition-all font-semibold`}
-        >
-          👍 Tutti Costruttivo
-        </button>
-        <button
-          type="button"
-          onClick={() => setAll('Distratto ⚠️')}
-          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-warn hover:brightness-110 transition-all font-semibold`}
-        >
-          ⚠️ Tutti Distratto
-        </button>
-      </div>
+        <div className="flex items-center gap-1 flex-wrap py-2 border-b border-[var(--border)]">
+          <span className="text-xs font-medium text-slate-400 w-full sm:w-auto sm:mr-2">
+            Assegna a tutti:
+          </span>
+          <button
+            type="button"
+            onClick={() => setAll('Ottimale 🌟')}
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-2 rounded text-xs badge-ok font-medium`}
+          >
+            🌟 Tutti Ottimale
+          </button>
+          <button
+            type="button"
+            onClick={() => setAll('Costruttivo 👍')}
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-2 rounded text-xs badge-info font-medium`}
+          >
+            👍 Tutti Costruttivo
+          </button>
+          <button
+            type="button"
+            onClick={() => setAll('Distratto ⚠️')}
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-2 rounded text-xs badge-warn font-medium`}
+          >
+            ⚠️ Tutti Distratto
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1 py-2 text-xs text-slate-400 lg:flex lg:flex-wrap lg:gap-3" aria-label="Legenda delle osservazioni">
+          {BEHAVIOR_OPTIONS.map(opt => <span key={opt.label}>{opt.label}</span>)}
+        </div>
 
-      {/* Student rows */}
-      <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[55vh] overflow-y-auto mb-4">
-        {currentClass.students.length === 0 ? (
-          <p className="p-4 text-xs text-slate-400 text-center">
-            Nessun alunno presente in questa classe.
-          </p>
-        ) : (
-          currentClass.students.map((student, idx) => {
-            const currentStatus = draft.get(student.id) ?? existing.get(student.id)?.status;
-            const isChanged = draft.has(student.id) && draft.get(student.id) !== existing.get(student.id)?.status;
+        <div data-testid="behavior-student-list" className="min-w-0 divide-y divide-[var(--border)] border-y border-[var(--border)]">
+          {currentClass.students.length === 0 ? (
+            <p className="py-4 text-xs text-slate-400 text-center">
+              Nessun alunno presente in questa classe.
+            </p>
+          ) : (
+            currentClass.students.map(student => {
+              const currentStatus = draft.get(student.id) ?? existing.get(student.id)?.status;
+              const isChanged = draft.has(student.id) && draft.get(student.id) !== existing.get(student.id)?.status;
+              const studentName = formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive);
 
-            return (
-              <div
-                key={student.id}
-                className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-800/40 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
-                  <span className="font-semibold text-slate-200 text-xs sm:text-sm">
-                    {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
-                  </span>
-                  <span className="text-xs text-slate-400" data-testid="behavior-observation-state">{isChanged ? 'Da salvare' : currentStatus ? 'Registrato' : 'Non registrato'}</span>
+              return (
+                <div
+                  key={student.id}
+                  data-testid="behavior-student-row"
+                  className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-1.5"
+                >
+                  <div className="min-w-[72px] flex-1">
+                    <span data-testid="behavior-student-name" className="block break-words font-medium text-slate-200 text-sm">
+                      {studentName}
+                    </span>
+                    <span className="block text-[11px] text-slate-400" data-testid="behavior-observation-state">{isChanged ? 'Da salvare' : currentStatus ? 'Registrato' : 'Non registrato'}</span>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Osservazione: ${studentName}`}>
+                    {BEHAVIOR_OPTIONS.map(opt => {
+                      const isSelected = currentStatus === opt.label;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          aria-label={opt.label}
+                          title={opt.label}
+                          aria-pressed={isSelected}
+                          onClick={() => handleSelectStatus(student.id, opt.label)}
+                          className={`h-11 w-11 shrink-0 lg:w-auto lg:px-2 rounded-md text-sm font-medium border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                            isSelected
+                              ? `${opt.colorClass} border-[var(--primary)] ring-2 ring-inset ring-[var(--primary)]`
+                              : 'bg-transparent text-slate-400 border-slate-700 hover:text-slate-200'
+                          }`}
+                        >
+                          <span aria-hidden="true" className="lg:hidden">{opt.label.slice(opt.text.length).trim()}</span>
+                          <span aria-hidden="true" className="hidden lg:inline">{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                  {BEHAVIOR_OPTIONS.map(opt => {
-                    const isSelected = currentStatus === opt.label;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => handleSelectStatus(student.id, opt.label)}
-                        className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs font-semibold transition-all border ${
-                          isSelected
-                            ? `${opt.colorClass} border-[var(--primary)] ring-2 ring-[var(--primary)]/30 shadow-[0_0_8px_var(--primary)] scale-105`
-                            : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
+              );
+            })
+          )}
+        </div>
       </fieldset>
 
+      <div className="pt-3 pb-2">
       <p role="status" className="mb-2 text-xs text-slate-400">{changeCount} osservazioni da salvare</p>
       <button
         onClick={handleSave}
         disabled={isSaving || changeCount === 0 || !isObservationDate(selectedDate)}
-        className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
+        className="w-full py-3 min-h-11 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2"
       >
         <Save className="w-4 h-4" />
         <span>Salva Registro Comportamenti</span>
       </button>
-    </div>
+      </div>
+    </section>
   );
 };
