@@ -33,7 +33,8 @@ import {
   Sliders,
   TrendingUp,
   TrendingDown,
-  Info
+  Info,
+  ChevronDown
 } from 'lucide-react';
 
 type AnalyticsReturnContext = Extract<StudentReportReturnContext, { originTab: 'analytics' }>;
@@ -61,6 +62,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     () => restored?.ui.useWeighted ?? (settings.useWeightedAverage ?? false)
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [mobileExportOpen, setMobileExportOpen] = useState(false);
+  const mobileLevelLabel = (label: string) => label.replace('Fascia base analitica', 'Fascia base').replace('Sotto soglia analitica', 'Sotto soglia').replace(/(\d)\.(\d)/g, '$1,$2');
   const exportInProgress = useRef(false);
   const exportMounted = useRef(true);
   const exportContext = useRef({ classId: currentClass.id, privacy: isPrivacyShieldActive });
@@ -76,14 +79,37 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const [studentSort, setStudentSort] = useState<'register' | 'name' | 'average'>(
     () => restored?.ui.studentSort ?? 'register'
   );
-  const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
-  // Native <details> is the sole authority for toggles. On each mount,
-  // only a validated report Back can reopen it; ordinary navigation starts closed.
-  // Avoid mirroring the browser's asynchronous toggle event in React state.
+  const [expandedAnalyticsStudent, setExpandedAnalyticsStudent] = useState<{ classId: string; studentId: string } | null>(
+    () => restored?.ui.expandedAnalyticsStudentId
+      && currentClass.students.some(s => s.id === restored.ui.expandedAnalyticsStudentId)
+      ? { classId: currentClass.id, studentId: restored.ui.expandedAnalyticsStudentId }
+      : null
+  );
+  // Mobile owns a single flat surface; desktop keeps its native disclosures.
+  const [mobileView, setMobileView] = useState<'summary' | 'students' | 'details'>(
+    () => restored?.ui.studentDetailOpen === true ? 'students' : 'summary'
+  );
+  const advancedRef = useRef<HTMLDetailsElement>(null);
+  const previousAnalyticsClassRef = useRef(currentClass.id);
+  useEffect(() => {
+    if (previousAnalyticsClassRef.current !== currentClass.id) {
+      setExpandedAnalyticsStudent(null);
+      setMobileView('summary');
+      setStudentSearch('');
+    }
+    previousAnalyticsClassRef.current = currentClass.id;
+  }, [currentClass.id]);
+  // On mobile the selected view reveals the same charts; on desktop the
+  // disclosure remains native, independently operable and initially closed.
   useLayoutEffect(() => {
-    const details = mobileStudentDetailsRef.current;
-    if (details) details.open = restored?.ui.studentDetailOpen === true;
-  }, [currentClass.id, restored?.ui.studentDetailOpen]);
+    const media = window.matchMedia('(min-width: 768px)');
+    const sync = () => {
+      if (advancedRef.current) advancedRef.current.open = !media.matches && mobileView === 'details';
+    };
+    if (!media.matches) sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, [mobileView]);
   useEffect(() => {
     // A protected view must never retain a previously typed visible name.
     if (isPrivacyShieldActive) setStudentSearch('');
@@ -250,9 +276,65 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Analytics Header Card */}
-      <div className="neon-card neon-card-highlight p-5">
+    <div className="analytics-workspace min-w-0 space-y-3 md:space-y-4">
+      {/* Flat mobile workspace: one active content surface, shared controls. */}
+      <div className="md:hidden print:hidden min-w-0">
+        <div role="group" aria-label="Viste Analisi" data-testid="analytics-mobile-views"
+          className="analytics-view-controls grid grid-cols-[minmax(0,.85fr)_minmax(0,.85fr)_minmax(0,1.7fr)] border-b border-[var(--border)]">
+          {([
+            ['summary', 'Sintesi'],
+            ['students', 'Alunni'],
+            ['details', 'Approfondimenti'],
+          ] as const).map(([value, label]) => (
+            <button key={value} type="button" aria-pressed={mobileView === value}
+              data-testid={`analytics-view-${value}`}
+              onClick={() => setMobileView(value)}
+              className={`min-h-[48px] min-w-0 px-1 py-2 text-sm font-semibold border-b-2 focus-visible:outline focus-visible:outline-cyan-300 ${mobileView === value ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="analytics-filter-controls mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
+          <select aria-label="Periodo di analisi" value={periodFilter}
+            onChange={e => setPeriodFilter(e.target.value as 'ALL' | 'Q1' | 'Q2')}
+            className="min-h-[48px] min-w-0 w-full rounded-md bg-slate-900 border border-slate-700 px-1.5 text-sm text-slate-100">
+            <option value="ALL">Anno</option><option value="Q1">1° periodo</option><option value="Q2">2° periodo</option>
+          </select>
+          <select aria-label="Criterio di calcolo" value={useWeighted ? 'weighted' : 'simple'}
+            onChange={e => setUseWeighted(e.target.value === 'weighted')}
+            className="min-h-[48px] min-w-0 w-full rounded-md bg-slate-900 border border-slate-700 px-1.5 text-sm text-slate-100">
+            <option value="simple">Aritmetica</option><option value="weighted">Ponderata</option>
+          </select>
+          <button type="button" onClick={() => setMobileExportOpen(open => !open)}
+            aria-label="Esportazione e stampa" aria-expanded={mobileExportOpen} aria-controls="analytics-mobile-export-actions"
+            className="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center gap-0.5 text-xs font-semibold text-cyan-300">
+            <Download className="w-4 h-4" aria-hidden="true" />{isExporting ? '…' : 'PDF'}
+          </button>
+          {mobileExportOpen && (
+            <div id="analytics-mobile-export-actions" className="col-span-full flex flex-wrap gap-2 border-t border-[var(--border)] py-2">
+              <button type="button" onClick={() => { setMobileExportOpen(false); void handleExportPDF(); }} disabled={isExporting}
+                className="min-h-[48px] flex-1 px-2 text-sm text-cyan-300 disabled:opacity-50">Esporta PDF di lavoro</button>
+              <button type="button" onClick={() => { setMobileExportOpen(false); window.print(); }}
+                className="min-h-[48px] flex-1 px-2 text-sm text-slate-300">Stampa prospetto</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <section data-testid="analytics-mobile-summary"
+        className={`md:hidden print:hidden min-w-0 ${mobileView === 'summary' ? 'block' : 'hidden'}`}>
+        <div className="grid grid-cols-2 divide-x divide-[var(--border)] border-b border-[var(--border)] py-3">
+          <div className="min-w-0 px-2"><span className="text-xs text-slate-400">Media classe</span><b className="block text-3xl tabular-nums text-white">{formatGrade(classAvg)}</b></div>
+          <div className="min-w-0 px-3"><span className="text-xs text-slate-400">Sufficienze</span><b className="block text-3xl tabular-nums text-white">{suffRate === null ? '—' : `${suffRate}%`}</b><span className="text-xs text-slate-400">{validAvgs.filter(v => v >= 6).length}/{validAvgs.length} con media</span></div>
+        </div>
+        <dl className="divide-y divide-[var(--border)]">
+          <div className="flex items-center justify-between gap-2 py-3"><dt className="text-sm text-slate-300">Fascia alta (≥ 8,5)</dt><dd className="font-semibold tabular-nums text-slate-100">{validAvgs.length ? levelCounts.AV : '—'}</dd></div>
+          <div className="flex items-center justify-between gap-2 py-3"><dt className="text-sm text-slate-300">Sotto soglia (&lt; 6)</dt><dd className="font-semibold tabular-nums text-slate-100">{validAvgs.length ? levelCounts.PA : '—'}</dd></div>
+        </dl>
+        <p className="text-xs text-slate-400 py-2">Indicatori matematici di supporto, non voti deliberati.</p>
+      </section>
+
+      {/* Desktop: existing analytical layout and controls. */}
+      <div className="hidden md:block neon-card neon-card-highlight p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
           <div>
             <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)] flex items-center gap-2">
@@ -391,8 +473,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
       </div>
 
-      <details className="group neon-card overflow-hidden">
-        <summary className="min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+      <details ref={advancedRef} data-testid="analytics-advanced-surface"
+        className={`group neon-card analytics-mobile-advanced min-w-0 overflow-hidden md:block ${mobileView === 'details' ? 'block' : 'hidden'}`}>
+        <summary className="hidden md:flex min-h-[56px] cursor-pointer list-none p-4 items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-[var(--primary)]" /> Approfondimenti analitici
@@ -401,13 +484,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
           <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
         </summary>
-        <div className="space-y-4 border-t border-[var(--border)] p-4">
+        <div className="space-y-4 md:border-t md:border-[var(--border)] md:p-4">
+        <div className="md:hidden border-b border-[var(--border)] pb-3 text-sm text-slate-300 space-y-1">
+          <h3 className="font-semibold text-slate-100">Criterio di calcolo</h3>
+          <p>{useWeighted ? 'Media ponderata: pesi configurati nelle impostazioni.' : 'Media aritmetica: ogni valutazione ha lo stesso peso.'}</p>
+          {useWeighted && <p className="text-xs text-slate-400">Pesi: scritto {weights.verifica}%, orale {weights.orale}%, pratico {weights.disegno}%, test {weights.test}%, osservazioni {weights.osserv}%.</p>}
+        </div>
         {/* Competence Levels Chart / Progress Distribution */}
-        <div className="mt-4 pt-4 border-t border-[var(--border)]">
-          <h4 className="text-xs uppercase tracking-wider font-bold text-slate-300 mb-3 flex items-center justify-between">
-            <span>Fasce analitiche della media</span>
-            <span className="text-slate-500 font-normal">
-              Calcolati su {useWeighted ? 'Media Ponderata' : 'Media Aritmetica'}
+        <div className="md:mt-4 md:pt-4 md:border-t md:border-[var(--border)]">
+          <h4 className="text-sm md:text-xs md:uppercase md:tracking-wider font-bold text-slate-300 mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="md:hidden">Fasce di rendimento</span>
+            <span className="hidden md:inline">Fasce analitiche della media</span>
+            <span className="hidden md:inline text-slate-500 font-normal">
+              Calcolate su {useWeighted ? 'Media Ponderata' : 'Media Aritmetica'}
             </span>
           </h4>
 
@@ -423,16 +512,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
                 return (
                   <div key={lvl.id} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
+                    <div className="analytics-band-row flex flex-wrap justify-between items-center gap-1 text-xs">
                       <span className="font-semibold text-slate-200 flex items-center gap-2">
                         <span
                           className="w-2.5 h-2.5 rounded-full inline-block"
                           style={{ backgroundColor: lvl.color }}
                         />
-                        {lvl.label}
+                        <span className="md:hidden">{mobileLevelLabel(lvl.label)}</span><span className="hidden md:inline">{lvl.label}</span>
                       </span>
                       <span className="text-slate-400 font-mono">
-                        <b>{count}</b> alunni ({pct}%)
+                        <b>{count}</b> {count === 1 ? 'alunno' : 'alunni'} ({pct}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700/60 flex">
@@ -472,7 +561,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Official Export Card */}
 
 
-      <div className="neon-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="hidden md:flex neon-card p-4 flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <FileText className="w-4 h-4 text-[var(--primary)]" /> Prospetto di lavoro docente
@@ -501,34 +590,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
       </div>
 
-      {/* Internal analytical table with weighted and arithmetic averages */}
-      <div className="neon-card p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-400" />
-            <span>Indicatori di media: ponderata & confronto aritmetico</span>
-          </h3>
-          <span className="text-xs text-slate-400">
-            {useWeighted ? '⭐ Modalità Ponderata Attiva' : 'Modalità Aritmetica'}
-          </span>
-        </div>
-
-        {/* Mobile student detail: secondary to the class summary */}
-        <details
-          ref={mobileStudentDetailsRef}
-          data-testid="mobile-analytics-student-detail"
-          className="md:hidden group rounded-lg border border-[var(--border)] bg-slate-900/30 overflow-hidden min-w-0"
-        >
-          <summary className="min-h-[56px] cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-100">Dettaglio alunni</span>
-              <span className="block text-[11px] text-slate-400">Cerca, ordina e apri la scheda individuale.</span>
-            </div>
-            <span aria-hidden="true" className="shrink-0 text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
-          </summary>
-
-          <div className="border-t border-[var(--border)] p-3 space-y-3 min-w-0">
-            <div className="grid grid-cols-1 gap-2 min-w-0">
+      {/* Mobile student surface: no enclosing cards or repeated titles. */}
+      <section data-testid="mobile-analytics-student-detail" aria-label="Alunni"
+        className={`md:hidden min-w-0 print:hidden ${mobileView === 'students' ? 'block' : 'hidden'}`}>
+          <div className="space-y-2 min-w-0">
+            <div className="analytics-search-controls grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-2 min-w-0">
               <label className="min-w-0">
                 <span className="sr-only">Cerca alunno</span>
                 <input
@@ -536,7 +602,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   value={studentSearch}
                   onChange={e => setStudentSearch(e.target.value)}
                   placeholder="Cerca alunno"
-                  className="w-full min-h-[44px] p-2.5 neon-input text-sm text-white bg-slate-900"
+                  className="w-full min-h-[48px] px-2 neon-input text-sm text-white bg-slate-900"
                 />
               </label>
               <label className="min-w-0">
@@ -544,7 +610,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <select
                   value={studentSort}
                   onChange={e => setStudentSort(e.target.value as 'register' | 'name' | 'average')}
-                  className="w-full min-h-[44px] p-2.5 neon-input text-sm text-white bg-slate-900"
+                  className="w-full min-h-[48px] px-2 neon-input text-sm text-white bg-slate-900"
                 >
                   <option value="register">Ordine registro</option>
                   <option value="name">Nome</option>
@@ -553,7 +619,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </label>
             </div>
 
-            <div className="space-y-2 min-w-0">
+            <div className="flex items-center justify-between gap-2 px-1 pt-1 pb-1 border-b border-[var(--border)] text-xs text-slate-400">
+              <span>Alunno</span><span className="mr-[48px]">Media anno</span>
+            </div>
+            <div data-testid="analytics-compact-list" className="min-w-0 divide-y divide-[var(--border)]">
               {mobileStudentMetrics.length === 0 ? (
                 <div className="p-4 rounded-lg border border-[var(--border)] bg-slate-900/40 text-center text-xs text-slate-500">
                   {studentMetrics.length === 0 ? 'Nessun alunno presente.' : 'Nessun alunno corrisponde alla ricerca.'}
@@ -564,54 +633,76 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   const displayQ2 = useWeighted ? m.q2WeightedAvg : m.q2SimpleAvg;
                   const displayTotal = useWeighted ? m.totalWeightedAvg : m.totalSimpleAvg;
 
+                  const expanded = expandedAnalyticsStudent?.classId === currentClass.id
+                    && expandedAnalyticsStudent.studentId === m.student.id;
+                  const panelId = `analytics-compact-details-${m.student.id}`;
+                  const displayName = formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive);
+
                   return (
-                    <article key={m.student.id} className="min-w-0 rounded-lg border border-[var(--border)] bg-slate-900/45 p-3 space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => onOpenStudentReport(m.student.id, {
-                          classId: currentClass.id,
-                          studentId: m.student.id,
-                          originTab: 'analytics',
-                          scrollY: captureReturnScrollY(),
-                          ui: {
-                            periodFilter,
-                            useWeighted,
-                            studentSearch: isPrivacyShieldActive ? '' : studentSearch,
-                            studentSort,
-                            studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false
-                          }
-                        })}
-                        className="min-h-[44px] w-full min-w-0 text-left flex items-center justify-between gap-3 rounded-md px-2 text-sm font-semibold text-slate-100 hover:text-[var(--primary)] hover:bg-slate-800/70"
-                      >
-                        <span className="min-w-0 truncate">{formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)}</span>
-                        <span className="text-[10px] uppercase tracking-wider text-[var(--primary)] shrink-0">Scheda</span>
-                      </button>
-
-                      <div className="grid grid-cols-3 gap-2 text-center min-w-0">
-                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                          <span className="block text-[10px] uppercase text-slate-500">Q1</span>
-                          <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
-                        </div>
-                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                          <span className="block text-[10px] uppercase text-slate-500">Q2</span>
-                          <b className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
-                        </div>
-                        <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                          <span className="block text-[10px] uppercase text-slate-500">Anno</span>
-                          <b className="font-mono text-sm text-white">{formatGrade(displayTotal)}</b>
-                        </div>
+                    <article key={m.student.id} data-testid="analytics-compact-row" className="min-w-0">
+                      <div className="flex min-w-0 items-stretch gap-1">
+                        <button
+                          type="button"
+                          data-testid="analytics-compact-report"
+                          aria-label={`Apri scheda di ${displayName}. Media anno: ${formatGrade(displayTotal)}`}
+                          onClick={() => onOpenStudentReport(m.student.id, {
+                            classId: currentClass.id,
+                            studentId: m.student.id,
+                            originTab: 'analytics',
+                            scrollY: captureReturnScrollY(),
+                            ui: {
+                              periodFilter,
+                              useWeighted,
+                              studentSearch: isPrivacyShieldActive ? '' : studentSearch,
+                              studentSort,
+                              studentDetailOpen: mobileView === 'students',
+                              expandedAnalyticsStudentId: expandedAnalyticsStudent?.classId === currentClass.id
+                                ? expandedAnalyticsStudent.studentId : null
+                            }
+                          })}
+                          className="flex min-h-[60px] flex-1 min-w-0 items-center justify-between gap-2 px-2 py-2 text-left hover:bg-slate-800/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-cyan-300"
+                        >
+                          <span data-testid="analytics-compact-name" className="min-w-0 flex-1 break-words text-sm font-semibold text-slate-100">{displayName}</span>
+                          <span data-testid="analytics-compact-average" className="shrink-0 text-base font-bold tabular-nums text-slate-100">{formatGrade(displayTotal)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="analytics-compact-toggle"
+                          aria-expanded={expanded}
+                          aria-controls={panelId}
+                          aria-label={`${expanded ? 'Nascondi' : 'Mostra'} dettagli di ${displayName}`}
+                          onClick={() => setExpandedAnalyticsStudent(expanded ? null : { classId: currentClass.id, studentId: m.student.id })}
+                          className="flex min-h-[60px] min-w-[48px] shrink-0 items-center justify-center text-slate-300 hover:bg-slate-800/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-cyan-300"
+                        >
+                          <ChevronDown aria-hidden="true" className={`h-5 w-5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        </button>
                       </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
-                        <span className="text-slate-400 min-w-0">
-                          Fascia analitica: <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
-                        </span>
-                        {displayTotal === null ? (
-                          <span className="px-2 py-1 rounded text-[10px] font-semibold text-slate-500 bg-slate-800/70">Non disponibile</span>
-                        ) : (
-                          <span className={`px-2 py-1 rounded text-[10px] font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
-                            {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
-                          </span>
+                      <div id={panelId} data-testid="analytics-compact-detail" hidden={!expanded}>
+                        {expanded && (
+                          <div className="space-y-2 border-t border-[var(--border)] px-2 py-3">
+                            <dl className="analytics-period-detail grid grid-cols-2 gap-2 min-w-0">
+                              <div className="min-w-0 flex flex-wrap items-baseline justify-between gap-1">
+                                <dt className="text-xs text-slate-400">1° periodo</dt>
+                                <dd data-testid="analytics-compact-q1" className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</dd>
+                              </div>
+                              <div className="min-w-0 flex flex-wrap items-baseline justify-between gap-1">
+                                <dt className="text-xs text-slate-400">2° periodo</dt>
+                                <dd data-testid="analytics-compact-q2" className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</dd>
+                              </div>
+                            </dl>
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+                              <span className="text-slate-400 min-w-0">
+                                Fascia ({periodFilter === 'ALL' ? 'anno' : periodFilter === 'Q1' ? '1° periodo' : '2° periodo'}): <b className="text-slate-200">{m.level ? mobileLevelLabel(m.level.label) : '–'}</b>
+                              </span>
+                              {m.activeAvg === null ? (
+                                <span className="text-xs font-semibold text-slate-400">Non disponibile</span>
+                              ) : (
+                                <span className={`text-xs font-semibold ${m.isAtRisk ? 'text-rose-400' : 'text-slate-300'}`}>
+                                  {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </article>
@@ -620,7 +711,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               )}
             </div>
           </div>
-        </details>
+      </section>
+
+      {/* Internal analytical table with weighted and arithmetic averages */}
+      <div className="hidden md:block neon-card p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400" />
+            <span>Indicatori di media: ponderata & confronto aritmetico</span>
+          </h3>
+          <span className="text-xs text-slate-400">
+            {useWeighted ? '⭐ Modalità Ponderata Attiva' : 'Modalità Aritmetica'}
+          </span>
+        </div>
 
         <div className="hidden md:block overflow-x-auto border border-[var(--border)] rounded-lg">
           <table className="w-full text-xs text-center border-collapse">

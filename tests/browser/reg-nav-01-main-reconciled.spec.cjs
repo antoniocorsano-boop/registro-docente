@@ -133,7 +133,8 @@ test('REG-NAV-01 / Android 390 — rapid navigation after cancel uses latest des
   await page.getByRole('button', { name: 'Annulla Modifica' }).click();
   await page.locator('nav').getByRole('button', { name: 'Analisi', exact: true }).click();
   await expectRoute(page, 'analytics');
-  await expect(page.getByRole('heading', { name: /Analisi medie/ })).toBeVisible();
+  await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+  await expect(page.getByTestId('analytics-mobile-views')).toBeVisible();
   await page.waitForTimeout(350);
   await expectRoute(page, 'analytics');
 });

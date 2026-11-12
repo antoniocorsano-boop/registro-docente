@@ -119,3 +119,88 @@ test('MOBILE-DENSITY-01 — 200% text at 320px keeps touch target and detail acc
   await expect(page.getByRole('button', { name: 'Apri scheda alunno' })).toBeVisible();
   await context.close();
 });
+
+for (const width of [320, 390]) {
+  test(`MOBILE-DENSITY-02 / ${width}px — Analisi compact rows, single expansion and direct report`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    try {
+      const page = await context.newPage();
+      await page.goto(URL + '?view=analytics', { waitUntil: 'domcontentloaded' });
+      const section = page.getByTestId('mobile-analytics-student-detail');
+      await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+      await expect(section).toBeHidden();
+      await page.getByTestId('analytics-view-students').click();
+      await expect(page.getByTestId('analytics-mobile-summary')).toBeHidden();
+      await expect(page.getByTestId('analytics-advanced-surface')).toBeHidden();
+      const rows = section.getByTestId('analytics-compact-row');
+      const toggles = section.getByTestId('analytics-compact-toggle');
+      const reports = section.getByTestId('analytics-compact-report');
+      const details = section.locator('[data-testid="analytics-compact-detail"]:visible');
+      await expect(rows).toHaveCount(8);
+      await expect(details).toHaveCount(0);
+      const box = await reports.first().boundingBox();
+      const toggle = await toggles.first().boundingBox();
+      expect(box.height).toBeGreaterThanOrEqual(60);
+      expect(box.height).toBeLessThanOrEqual(90);
+      expect(toggle.width).toBeGreaterThanOrEqual(48);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+      await toggles.first().click();
+      await expect(details).toHaveCount(1);
+      await expect(rows.first().getByTestId('analytics-compact-q1')).toContainText('6');
+      await expect(rows.first().getByTestId('analytics-compact-q2')).toContainText('5');
+      await toggles.nth(1).click();
+      await expect(toggles.first()).toHaveAttribute('aria-expanded', 'false');
+      await expect(details).toHaveCount(1);
+      await reports.nth(1).click();
+      await expect(page.getByTestId('fixture-report')).toContainText('classe-test-a-student-2');
+      await page.getByTestId('fixture-25').click();
+      await expect(rows).toHaveCount(25);
+      await page.getByTestId('fixture-change-class').click();
+      await expect(section).toBeHidden();
+      await expect(details).toHaveCount(0);
+      await page.getByTestId('analytics-view-students').click();
+      await expect(rows).toHaveCount(25);
+      await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
+      await toggles.nth(1).click();
+      await expect(details).toHaveCount(1);
+      await page.getByTestId('fixture-change-class').click();
+      await expect(section).toBeHidden();
+      await expect(details).toHaveCount(0);
+      await page.getByTestId('analytics-view-students').click();
+      await expect(rows).toHaveCount(25);
+      await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
+      await page.getByTestId('fixture-toggle-privacy').click();
+      await section.getByPlaceholder('Cerca alunno').fill('Persona Fittizia 01');
+      await expect(rows).toHaveCount(1);
+      await toggles.first().click();
+      await page.getByTestId('fixture-toggle-privacy').click();
+      await expect(section.getByPlaceholder('Cerca alunno')).toHaveValue('');
+      await expect(rows).toHaveCount(25);
+      await expect(section.getByText('Persona Fittizia 01', { exact: true })).toHaveCount(0);
+      expect(await reports.first().getAttribute('aria-label')).not.toContain('Persona Fittizia 01');
+      expect(await toggles.first().getAttribute('aria-label')).not.toContain('Persona Fittizia 01');
+      await section.getByRole('combobox').selectOption('average');
+      await expect(rows).toHaveCount(25);
+      await page.getByTestId('analytics-view-details').click();
+      await expect(section).toBeHidden();
+      await expect(page.getByTestId('analytics-advanced-surface')).toHaveAttribute('open', '');
+      await expect(page.getByTestId('analytics-advanced-surface')).toBeVisible();
+      await page.getByTestId('analytics-view-summary').click();
+      await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+      await expect(page.getByTestId('analytics-advanced-surface')).toBeHidden();
+      await page.getByTestId('analytics-view-students').click();
+      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      await expect(rows.first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('MOBILE-DENSITY-02 — Analisi desktop keeps the existing full table', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(URL + '?view=analytics', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('mobile-analytics-student-detail')).toBeHidden();
+  await expect(page.locator('table').filter({ hasText: 'MEDIA ANNO' })).toBeVisible();
+});

@@ -211,3 +211,42 @@ body {
     color: #020617 !important;
   }
 }
+
+/* MOBILE-DENSITY-02: flatten chart surfaces inside the mobile analysis view only. */
+@media (max-width: 767px) {
+  .analytics-mobile-advanced.neon-card,
+  .analytics-mobile-advanced .neon-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+  .analytics-mobile-advanced .neon-card {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+}
+
+/* Mobile analysis reflows according to the actual content width in rems, not
+   device pixels alone: enlarged root text must not split navigation words. */
+@media (max-width: 767px) {
+  .analytics-workspace { container: analytics-controls / inline-size; }
+  .analytics-view-controls button { overflow-wrap: normal; word-break: normal; }
+  .analytics-workspace [data-testid="analytics-compact-row"] { scroll-margin-bottom: 9rem; }
+  .analytics-workspace select { min-height: 48px; padding-block: .4em; }
+  @container analytics-controls (max-width: 18rem) {
+    .analytics-view-controls, .analytics-filter-controls, .analytics-search-controls,
+    .analytics-period-detail { grid-template-columns: minmax(0, 1fr); }
+    .analytics-view-controls button { text-align: left; padding-inline: .5em; }
+    .analytics-filter-controls > button { flex-direction: row; gap: .5em; justify-content: flex-start; padding-inline: .5em; }
+    .analytics-band-row { align-items: flex-start; flex-direction: column; }
+    .analytics-workspace [data-testid="analytics-compact-name"] { overflow-wrap: anywhere; }
+  }
+}
+
+/* A non-floating launcher uses an ordinary toolbar slot. Desktop retains
+   its existing fixed action. */
+@media (max-width: 767px) {
+  .analytics-workspace [data-testid="analytics-compact-row"] { scroll-margin-top: 6rem; }
+}

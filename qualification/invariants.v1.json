@@ -1739,6 +1739,72 @@
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-DENSITY-02-I01",
+      "owner": "MOBILE-DENSITY-02",
+      "statement": "Mobile Analisi presents compact annual summaries with direct student report access and at most one class-scoped optional period detail; privacy, filters, sorting, arithmetic and weighted calculations, desktop table and PDF are preserved. Missing selected-period data is not classified as sufficient. A legitimate report return may restore the validated in-memory disclosure, without persisting identity, grades or view state; ordinary class changes clear it. Only synthetic data is used for qualification.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/AnalyticsView.tsx",
+        "src/navigation/studentReportReturnContext.ts",
+        "src/security/navContext01ReturnState.test.ts",
+        "tests/browser/fixtures/mobile-density-01-tabellone-fixture.tsx",
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        ".github/workflows/mobile-density-02-qualification.yml"
+      ],
+      "tests": [
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/mobileUxIntegrity.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "src/security/valuationSemanticIntegrity.test.ts",
+        "src/security/androidPdfExport.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/nav-back-01-student-report.spec.cjs"
+      ]
+    },
+    {
+      "id": "MOBILE-DENSITY-02-I02",
+      "owner": "MOBILE-DENSITY-02",
+      "statement": "Mobile Analisi exposes one flat surface at a time through direct Summary, Students and Details controls, with a shared period/method and secondary PDF action. No nested cards surround the student list or period detail. Class changes reset to summary; legitimate report return restores the students surface and validated disclosure. Desktop layout and native desktop disclosure, calculations, printable template, export privacy and archive remain unchanged.",
+      "impactPaths": [
+        "src/components/AnalyticsView.tsx",
+        "src/index.css",
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/mobileUxIntegrity.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "tests/browser/ux-trust-01-qualification.spec.cjs",
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs",
+        "qualification/invariants.v1.json",
+        "src/components/StudentGradesTimelineChart.tsx",
+        "src/components/ClassComparisonBarChart.tsx",
+        "src/components/CopilotDeck.tsx",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+      ],
+      "tests": [
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/mobileUxIntegrity.test.ts",
+        "src/security/uxTrust01Integrity.test.ts",
+        "src/security/p2DensityProgressiveDisclosureIntegrity.test.ts",
+        "src/security/valuationSemanticIntegrity.test.ts",
+        "src/security/androidPdfExport.test.ts",
+        "src/security/header01CopilotDrawerOcclusion.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile-density-01-tabellone.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/ux-trust-01-qualification.spec.cjs",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+      ]
     }
   ]
 }

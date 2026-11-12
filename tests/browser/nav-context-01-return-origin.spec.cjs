@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
 const url = (process.env.NAV_CONTEXT_BASE_URL || 'http://127.0.0.1:4173')
   + '/tests/browser/fixtures/nav-back-01-app.html';
@@ -33,10 +35,16 @@ test('NAV-CONTEXT-01 / Android 390 — Tabellone restores the selected student r
 
   const reportState = await page.evaluate(() => window.history.state);
   expect(reportState).toEqual({
-    classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01'
+    classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01',
+    __tramaHistoryEntryId: expect.any(String),
+    __tramaHistoryEpoch: expect.any(String),
+    __tramaHistoryPosition: expect.any(Number)
   });
   expect(page.url()).not.toContain('fittizio-studente-01');
   expect(JSON.stringify(reportState)).not.toContain('expandedStudentId');
+  expect(JSON.stringify(reportState)).not.toContain('expandedAnalyticsStudentId');
+  expect(JSON.stringify(reportState)).not.toContain('studentSearch');
+  expect(reportState.__tramaHistoryPosition).toBeGreaterThanOrEqual(0);
 
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
@@ -65,14 +73,23 @@ test('NAV-CONTEXT-01 / Android 390 — Analisi reopens student details and retai
   await navigateTo(page, 'Analisi');
 
   const section = page.getByTestId('mobile-analytics-student-detail');
-  await section.locator('summary').click();
-  await expect(section).toHaveAttribute('open', '');
+  await page.getByTestId('analytics-view-students').click();
+  await expect(section).toBeVisible();
+  const firstRow = section.getByTestId('analytics-compact-row').first();
+  const firstBox = await firstRow.boundingBox();
+  expect(firstBox.y + firstBox.height).toBeLessThanOrEqual(844);
+  expect(firstBox.width).toBeGreaterThanOrEqual(340);
+  const toggle = section.getByTestId('analytics-compact-toggle').first();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await section.locator('article button').first().click();
   await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Analisi');
-  await expect(section).toHaveAttribute('open', '');
+  await expect(section).toBeVisible();
   await expect(section.locator('article button').first()).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(section.locator('[data-testid="analytics-compact-detail"]:visible')).toHaveCount(1);
 
   // Going back a second time must restore the real prior dashboard.
   await page.goBack();
@@ -92,27 +109,27 @@ test('NAV-CONTEXT-01 — an explicit Analisi → Tabellone → Analisi route res
       let section = page.getByTestId('mobile-analytics-student-detail');
 
       // Ordinary navigation must discard manually expanded UI state.
-      await section.locator('summary').click();
-      await expect(section).toHaveAttribute('open', '');
+      await page.getByTestId('analytics-view-students').click();
+      await expect(section).toBeVisible();
       await navigateTo(page, 'Tabellone');
       await navigateTo(page, 'Analisi');
       section = page.getByTestId('mobile-analytics-student-detail');
-      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section).toBeHidden();
       await expect(section.getByPlaceholder('Cerca alunno')).toBeHidden();
 
       // Legitimate report Back still restores an open detail, but only once.
-      await section.locator('summary').click();
+      await page.getByTestId('analytics-view-students').click();
       await section.locator('article button').first().click();
       await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
       await page.goBack();
       await expect(page.getByTestId('header01-context')).toContainText('Analisi');
       section = page.getByTestId('mobile-analytics-student-detail');
-      await expect(section).toHaveAttribute('open', '');
+      await expect(section).toBeVisible();
 
       await navigateTo(page, 'Tabellone');
       await navigateTo(page, 'Analisi');
       section = page.getByTestId('mobile-analytics-student-detail');
-      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section).toBeHidden();
       await expect(section.getByPlaceholder('Cerca alunno')).toBeHidden();
     } finally {
       await context.close();
@@ -153,7 +170,7 @@ test('NAV-CONTEXT-01 — a privacy toggle while in report scrubs the saved visib
   await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
 
   const section = page.getByTestId('mobile-analytics-student-detail');
-  await section.locator('summary').click();
+  await page.getByTestId('analytics-view-students').click();
   const search = section.getByPlaceholder('Cerca alunno');
   await search.fill('Persona Fittizia');
   await section.locator('article button').first().click();
@@ -166,7 +183,7 @@ test('NAV-CONTEXT-01 — a privacy toggle while in report scrubs the saved visib
 
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Analisi');
-  await expect(section).toHaveAttribute('open', '');
+  await expect(section).toBeVisible();
   await expect(search).toHaveValue('');
   await page.goForward();
   await page.goBack();
@@ -196,3 +213,90 @@ test('NAV-CONTEXT-01 — a backup action leaves the report and discards the prev
   await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
   await context.close();
 });
+
+
+// Actual App, not an isolated component: evidence for the mobile HPR.
+for (const width of [320, 390]) {
+  for (const count of [8, 25]) {
+    test(`MOBILE-DENSITY-02 visual App / ${width}px / ${count} synthetic students`, async ({ browser }) => {
+      const height = width === 320 ? 700 : 844;
+      const context = await browser.newContext({ viewport: { width, height }, isMobile: true, hasTouch: true });
+      const evidence = path.resolve(process.env.EVIDENCE_DIR || '../browser-evidence', 'analytics-visual');
+      await fs.mkdir(evidence, { recursive: true });
+      const prefix = path.join(evidence, `app-${width}-${count}`);
+      const page = await context.newPage();
+      const capture = async (name) => {
+        await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0); });
+        await page.screenshot({ path: `${prefix}-${name}.png`, animations: 'disabled' });
+      };
+      try {
+        await page.goto(url + '?visualRoster=' + count, { waitUntil: 'domcontentloaded' });
+        await page.getByRole('button', { name: /Apri classe 3ª A.*Prova sintetica/i }).click();
+        await navigateTo(page, 'Analisi');
+        const privacy = page.getByTestId('header01-privacy');
+        if (await privacy.getAttribute('data-privacy-state') === 'protected') await privacy.click();
+        await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
+        await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+        const copilot = page.getByTestId('library-copilot-trigger');
+        await expect(copilot).toBeVisible();
+        expect(await copilot.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed');
+        await capture('sintesi');
+        const exportMenu = page.getByRole('button', { name: 'Esportazione e stampa' });
+        await exportMenu.click();
+        await expect(page.getByRole('button', { name: 'Esporta PDF di lavoro', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Stampa prospetto', exact: true })).toBeVisible();
+        await exportMenu.click();
+        await expect(page.getByRole('button', { name: 'Stampa prospetto', exact: true })).toHaveCount(0);
+        await page.getByTestId('analytics-view-students').click();
+        const section = page.getByTestId('mobile-analytics-student-detail');
+        const rows = section.getByTestId('analytics-compact-row');
+        await expect(rows).toHaveCount(count);
+        await capture('alunni');
+        const geometry = await section.evaluate((el) => {
+          const all = Array.from(el.querySelectorAll('[data-testid="analytics-compact-row"]'));
+          const first = all[0].getBoundingClientRect();
+          const name = all[0].querySelector('[data-testid="analytics-compact-name"]').getBoundingClientRect();
+          return { viewport: { width: innerWidth, height: innerHeight }, firstRow: { y: first.y, width: first.width, height: first.height }, nameWidth: name.width,
+            visibleRows: all.filter(row => { const r = row.getBoundingClientRect(); const nav = document.querySelector('nav.md\\:hidden'); return r.top >= 0 && r.bottom <= (nav?.getBoundingClientRect().top ?? innerHeight); }).length,
+            horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+        });
+        await fs.writeFile(prefix + '-geometry.json', JSON.stringify(geometry, null, 2));
+        expect(geometry.horizontalOverflow).toBeLessThanOrEqual(1);
+        const toggle = rows.first().getByTestId('analytics-compact-toggle');
+        await toggle.click();
+        await expect(rows.first().getByTestId('analytics-compact-detail')).toBeVisible();
+        await capture('dettaglio');
+        await page.getByTestId('analytics-view-details').click();
+        await expect(page.getByTestId('analytics-advanced-surface')).toBeVisible();
+        await capture('approfondimenti');
+        await page.getByTestId('analytics-view-students').click();
+        await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+        const views = page.getByTestId('analytics-mobile-views');
+        await expect(views).toBeVisible();
+        const summaryBox = await page.getByTestId('analytics-view-summary').boundingBox();
+        const studentsBox = await page.getByTestId('analytics-view-students').boundingBox();
+        const detailsBox = await page.getByTestId('analytics-view-details').boundingBox();
+        expect(studentsBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height - 1);
+        expect(detailsBox.y).toBeGreaterThanOrEqual(studentsBox.y + studentsBox.height - 1);
+        await expect(rows.first()).toBeVisible();
+        if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+        await capture('testo-200');
+        await expect(rows.first().getByTestId('analytics-compact-detail')).toBeVisible();
+        await rows.first().getByTestId('analytics-compact-detail').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: prefix + '-dettaglio-200.png', animations: 'disabled' });
+        await fs.writeFile(prefix + '-commit.txt', (process.env.CANDIDATE_SHA || 'local') + '\n');
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const footer = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Analisi', exact: true }) });
+        const lastBox = await rows.last().boundingBox();
+        const footerBox = await footer.boundingBox();
+        expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(footerBox.y + 1);
+        await privacy.click();
+        await expect(privacy).toHaveAttribute('data-privacy-state', 'protected');
+        await expect(section.getByText('Persona Fittizia Uno', { exact: true })).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}

@@ -35,6 +35,7 @@ const analyticsContext: StudentReportReturnContext = {
     studentSearch: '',
     studentSort: 'average',
     studentDetailOpen: true,
+    expandedAnalyticsStudentId: 'studente-a1',
   },
 };
 
@@ -62,6 +63,10 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(resolveStudentReportReturnContext(
       { ...tabelloneContext, ui: { ...tabelloneContext.ui, expandedStudentId: 'studente-b1' } },
       'classe-a', 'tabellone', classes
+    )).toBeNull();
+    expect(resolveStudentReportReturnContext(
+      { ...analyticsContext, ui: { ...analyticsContext.ui, expandedAnalyticsStudentId: 'studente-b1' } },
+      'classe-a', 'analytics', classes
     )).toBeNull();
     expect(resolveStudentReportReturnContext(
       analyticsContext, 'classe-a', 'analytics',
@@ -106,11 +111,11 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
   test('Analisi reopens the mobile detail, but never restores a name search under privacy', () => {
     const analytics = readFileSync('src/components/AnalyticsView.tsx', 'utf8');
     expect(analytics).toContain('useLayoutEffect(() => {');
-    expect(analytics).toContain('if (details) details.open = restored?.ui.studentDetailOpen === true');
+    expect(analytics).toContain("() => restored?.ui.studentDetailOpen === true ? 'students' : 'summary'");
     expect(analytics).not.toContain('open={mobileStudentDetailsOpen}');
     expect(analytics).not.toContain('onToggle={event => setMobileStudentDetailsOpen');
     expect(analytics).toContain("originTab: 'analytics'");
-    expect(analytics).toContain('studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false');
+    expect(analytics).toContain("studentDetailOpen: mobileView === 'students'");
     expect(analytics).toContain("studentSearch: isPrivacyShieldActive ? '' : studentSearch");
     expect(analytics).toContain("if (isPrivacyShieldActive) setStudentSearch('')");
     expect(analytics).toContain("() => !isPrivacyShieldActive ? (restored?.ui.studentSearch ?? '') : ''");

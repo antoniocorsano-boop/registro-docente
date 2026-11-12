@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MatrixView } from '../../../src/components/MatrixView';
+import { AnalyticsView } from '../../../src/components/AnalyticsView';
+import { DEFAULT_SETTINGS } from '../../../src/utils';
 import type { ClassData, Grade, Student } from '../../../src/types';
 import '../../../src/index.css';
 
@@ -52,11 +54,14 @@ function Fixture() {
         <button type="button" data-testid="fixture-change-class" onClick={() => setClassId(id => id.endsWith('-a') ? 'classe-test-b' : 'classe-test-a')}>Cambia classe</button>
       </div>
       <p data-testid="fixture-report" className="text-xs text-slate-400">Scheda aperta: {openedReport}</p>
-      <MatrixView
+      {new URLSearchParams(window.location.search).get('view') === 'analytics' ? (
+        <AnalyticsView currentClass={currentClass} settings={DEFAULT_SETTINGS}
+          onOpenStudentReport={setOpenedReport} isPrivacyShieldActive={privateNames} />
+      ) : <MatrixView
         currentClass={currentClass}
         onOpenStudentReport={setOpenedReport}
         isPrivacyShieldActive={privateNames}
-      />
+      />}
     </div>
   );
 }

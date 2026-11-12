@@ -135,7 +135,9 @@ for (const viewport of [
     await checkpoint(page, visited.items, 'Tabellone', page.getByRole('heading', { name: `Tabellone Classe: ${className}` }));
 
     await primaryWorkflowButton(page, 'Analisi').click();
-    await checkpoint(page, visited.items, 'Analisi', page.getByRole('heading', { name: 'Analisi medie & fasce analitiche' }));
+    await checkpoint(page, visited.items, 'Analisi', viewport.width < 768
+      ? page.getByTestId('analytics-mobile-views')
+      : page.getByRole('heading', { name: 'Analisi medie & fasce analitiche' }));
 
     await openDrawerDestination(page, 'Storico prove');
     await checkpoint(page, visited.items, 'Storico', page.getByRole('heading', { name: `Storico Prove Registrate: ${className}` }));

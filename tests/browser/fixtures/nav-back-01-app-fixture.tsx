@@ -13,6 +13,14 @@ const students: Student[] = [
   { id: 'fittizio-studente-02', name: 'Persona Fittizia Due' },
 ];
 
+// Opt-in synthetic roster for visual evidence; ordinary navigation fixtures remain unchanged.
+const visualRoster = new URLSearchParams(window.location.search).get('visualRoster');
+const rosterSize = visualRoster === '25' ? 25 : visualRoster === '8' ? 8 : 2;
+for (let i = students.length; i < rosterSize; i++) {
+  const n = String(i + 1).padStart(2, '0');
+  students.push({ id: `fittizio-studente-${n}`, name: `Persona Fittizia ${n}` });
+}
+
 const grades: Grade[] = students.map((student, i) => ({
   id: `fittizio-voto-${i + 1}`,
   batchId: 'fittizio-lotto',
@@ -23,6 +31,12 @@ const grades: Grade[] = students.map((student, i) => ({
   type: 'test' as const,
   value: i === 0 ? '8' : '7'
 }));
+if (rosterSize > 2) {
+  students.forEach((student, i) => grades.push({
+    id: `fittizio-voto-q2-${i + 1}`, batchId: 'fittizio-lotto-q2', studentId: student.id,
+    date: '2026-11-10', period: 'Q2', title: 'Esercizio sintetico Q2', type: 'test', value: i % 2 ? '6' : '9'
+  }));
+}
 
 const syntheticClass: ClassData = {
   id: 'classe-fittizia-a',

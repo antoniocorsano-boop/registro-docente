@@ -63,8 +63,24 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   const template = page.locator('#official-pdf-report');
   await expect(template).toBeAttached();
   expect(await template.textContent()).toContain('••••');
+  const exportMenu = page.getByRole('button', { name: 'Esportazione e stampa', exact: true });
   const button = page.getByRole('button', { name: 'Esporta PDF di lavoro', exact: true });
-  await expect(button).toBeVisible();
+  await expect(exportMenu).toBeVisible();
+  await expect(exportMenu).toHaveAttribute('aria-expanded', 'false');
+  await expect(button).toBeHidden();
+  async function openExport() {
+    await expect(exportMenu).toHaveText('PDF');
+    await exportMenu.click();
+    await expect(exportMenu).toHaveAttribute('aria-expanded', 'true');
+    await expect(button).toBeVisible();
+    await expect(button).toBeEnabled();
+  }
+  async function expectExportSettled() {
+    await expect(exportMenu).toHaveAttribute('aria-expanded', 'false');
+    await expect(button).toBeHidden();
+    await expect(exportMenu).toHaveText('PDF', { timeout: 30000 });
+  }
+  await openExport();
 
   // Dismissing the explicit confidentiality warning must not start the picker.
   const declined = page.waitForEvent('dialog');
@@ -73,22 +89,26 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   expect(warning.message()).toContain('non cifrato');
   await warning.dismiss();
   await declineClick;
+  await expectExportSettled();
   expect(await page.evaluate(() => window.__pdf.choose)).toBe(0);
 
   const messages = [];
   const handler = async d => { messages.push(d.message()); await d.accept(); };
   page.on('dialog', handler);
   await page.evaluate(() => { window.__pdf.cancel = true; });
+  await openExport();
   await button.click();
-  await expect(button).toBeEnabled();
+  await expectExportSettled();
   expect(await page.evaluate(() => window.__pdf.write)).toBe(0);
   await page.evaluate(() => { window.__pdf.cancel = false; window.__pdf.wrongReceipt = true; });
+  await openExport();
   await button.click();
-  await expect(button).toBeEnabled();
+  await expectExportSettled();
   expect(messages.some(m => m.includes('PDF non salvato o non verificato'))).toBe(true);
   await page.evaluate(() => { window.__pdf.wrongReceipt = false; });
+  await openExport();
   await button.click();
-  await expect(button).toBeEnabled();
+  await expectExportSettled();
   const result = await page.evaluate(() => window.__pdf);
   expect(result.choose).toBe(3);
   expect(result.write).toBe(2);
@@ -105,8 +125,9 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   for (const name of unicodeNames) expect(maskedPdf).not.toContain(name);
   await privacy.click();
   for (const name of unicodeNames) expect(await template.textContent()).toContain(name);
+  await openExport();
   await button.click();
-  await expect(button).toBeEnabled();
+  await expectExportSettled();
   const unicodeResult = await page.evaluate(() => window.__pdf);
   expect(unicodeResult.choose).toBe(4);
   expect(unicodeResult.write).toBe(3);

@@ -144,10 +144,10 @@ export const StudentGradesTimelineChart: React.FC<StudentGradesTimelineChartProp
         <div>
           <h4 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
             <ChartIcon className="w-4 h-4 text-[var(--primary)]" />
-            <span>Andamento Voti nel Tempo per Studente (Segmentato per Tipologia)</span>
+            <span className="md:hidden">Andamento individuale</span><span className="hidden md:inline">Andamento Voti nel Tempo per Studente (Segmentato per Tipologia)</span>
           </h4>
           <p className="text-xs text-slate-400">
-            Evoluzione cronologica dei risultati con serie distinte per verifiche scritte, orali, prove pratiche e test.
+            <span className="md:hidden">Risultati nel tempo, per tipo di prova.</span><span className="hidden md:inline">Evoluzione cronologica dei risultati con serie distinte per verifiche scritte, orali, prove pratiche e test.</span>
           </p>
         </div>
 

@@ -1,0 +1,91 @@
+# Isolated, no-secrets Chromium qualification for compact student rows.
+# Never deploys or publishes.
+name: MOBILE-DENSITY-02 Isolated Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/AnalyticsView.tsx'
+      - 'src/components/MatrixView.tsx'
+      - 'src/components/CompactStudentDisclosureRow.tsx'
+      - 'src/navigation/studentReportReturnContext.ts'
+      - 'tests/browser/mobile-density-01-tabellone.spec.cjs'
+      - 'tests/browser/fixtures/mobile-density-01-tabellone*'
+      - 'tests/browser/nav-context-01-return-origin.spec.cjs'
+      - '.github/workflows/mobile-density-02-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  chromium:
+    name: Synthetic Chromium Android 390 / 320
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify SHA
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked application dependencies
+        run: bun install --frozen-lockfile
+      - name: Install isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .nav-context-browser-tools browser-evidence
+          echo '{"name":"nav-context-01-browser-tools","private":true}' > .nav-context-browser-tools/package.json
+          npm --prefix .nav-context-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.nav-context-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/mobile-density-01-tabellone.spec.cjs .nav-context-browser-tools/
+      - name: Start synthetic Vite app fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html' > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Run real Chromium navigation regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .nav-context-browser-tools
+          NAV_CONTEXT_BASE_URL='http://127.0.0.1:4173' \
+          NAV_BACK_BASE_URL='http://127.0.0.1:4173' \
+          DENSITY01_BASE_URL='http://127.0.0.1:4173' \
+            ./node_modules/.bin/playwright test \
+            nav-context-01-return-origin.spec.cjs \
+            nav-back-01-student-report.spec.cjs \
+            mobile-density-01-tabellone.spec.cjs \
+            --workers=1 --reporter=line \
+            --output=../browser-evidence/results
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-density-02-synthetic-chromium-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14

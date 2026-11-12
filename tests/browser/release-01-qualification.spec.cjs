@@ -175,7 +175,7 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
 
   await primaryWorkflowButton(page, 'Analisi').click();
   await expect(page.getByRole('heading', { name: 'Analisi medie & fasce analitiche' })).toBeVisible();
-  const analyticsDesktop = desktopStudentRegion(page);
+  const analyticsDesktop = page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: /MEDIA ANNO/ }) });
   await expect(analyticsDesktop).toHaveCount(1);
   await expect(analyticsDesktop).toBeVisible();
   const analyticsStudentRow = analyticsDesktop.locator('tbody tr').filter({
