@@ -33,10 +33,16 @@ test('NAV-CONTEXT-01 / Android 390 — Tabellone restores the selected student r
 
   const reportState = await page.evaluate(() => window.history.state);
   expect(reportState).toEqual({
-    classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01'
+    classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01',
+    __tramaHistoryEntryId: expect.any(String),
+    __tramaHistoryEpoch: expect.any(String),
+    __tramaHistoryPosition: expect.any(Number)
   });
   expect(page.url()).not.toContain('fittizio-studente-01');
   expect(JSON.stringify(reportState)).not.toContain('expandedStudentId');
+  expect(JSON.stringify(reportState)).not.toContain('expandedAnalyticsStudentId');
+  expect(JSON.stringify(reportState)).not.toContain('studentSearch');
+  expect(reportState.__tramaHistoryPosition).toBeGreaterThanOrEqual(0);
 
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Tabellone');

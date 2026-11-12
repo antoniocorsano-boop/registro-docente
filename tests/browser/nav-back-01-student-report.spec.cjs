@@ -38,8 +38,12 @@ for (const origin of ['Tabellone', 'Analisi']) {
     expect(route.history).toEqual({
       classId: 'classe-fittizia-a',
       tab: 'report',
-      studentId: selectedStudentId
+      studentId: selectedStudentId,
+      __tramaHistoryEntryId: expect.any(String),
+      __tramaHistoryEpoch: expect.any(String),
+      __tramaHistoryPosition: expect.any(Number)
     });
+    expect(route.history.__tramaHistoryPosition).toBeGreaterThanOrEqual(0);
     expect(route.address).not.toContain(selectedStudentId);
     expect(route.address).toContain('tab=report');
 
