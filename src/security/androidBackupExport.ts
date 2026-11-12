@@ -8,6 +8,8 @@ export const ANDROID_BACKUP_MAX_BYTES = 32 * 1024 * 1024;
 type NativeBackupPlugin = {
   chooseBackupDestination(options: { filename: string }): Promise<unknown>;
   writeEncryptedBackup(options: { token: string; encryptedText: string }): Promise<unknown>;
+  chooseBackupSource?: (options: Record<string, never>) => Promise<unknown>;
+  readEncryptedBackup?: (options: { token: string }) => Promise<unknown>;
 };
 
 export type AndroidBackupRuntime = {
@@ -64,4 +66,35 @@ export async function saveEncryptedBackupOnAndroid(
     throw new Error('La copia Android non ha superato la verifica di rilettura.');
   }
   return isActive() ? 'verified' : 'cancelled';
+}
+
+/** Only a local encrypted document is returned. Authentication stays in cryptoUtils. */
+export async function readEncryptedBackupOnAndroid(
+  isActive: () => boolean = () => true,
+  runtime = currentRuntime(),
+): Promise<string | null> {
+  if (!isAndroidBackupRuntime(runtime)) throw new Error('Lettura Android non disponibile.');
+  const plugin = runtime.Capacitor?.Plugins?.RegistroBackupFiles;
+  if (typeof plugin?.chooseBackupSource !== 'function' || typeof plugin?.readEncryptedBackup !== 'function') {
+    throw new Error('Il recupero protetto non è disponibile in questa versione Android.');
+  }
+  if (!isActive()) return null;
+  const selection = record(await plugin.chooseBackupSource({}));
+  if (selection.status === 'cancelled' || !isActive()) return null;
+  if (selection.status !== 'selected' || typeof selection.token !== 'string' || !selection.token) {
+    throw new Error('File di backup non selezionato.');
+  }
+  const result = record(await plugin.readEncryptedBackup({ token: selection.token }));
+  if (!isActive()) return null;
+  if (result.status !== 'read' || typeof result.encryptedText !== 'string') {
+    throw new Error('Lettura del backup non verificata.');
+  }
+  const bytes = new TextEncoder().encode(result.encryptedText);
+  if (!bytes.length || bytes.length > ANDROID_BACKUP_MAX_BYTES || result.bytes !== bytes.length) {
+    throw new Error('Dimensione del backup non valida.');
+  }
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  const sha = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2, '0')).join('');
+  if (result.sha256 !== sha) throw new Error('Integrità della lettura non verificata.');
+  return isActive() ? result.encryptedText : null;
 }
