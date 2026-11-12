@@ -88,6 +88,10 @@ jobs:
           npx --no-install cap sync android
           test -f android/gradlew
           test -f android/app/src/main/AndroidManifest.xml
+          NATIVE_DIR=android/app/src/main/java/it/trama/registrodocente/prova
+          test -f "$NATIVE_DIR/MainActivity.java"
+          cp native/MainActivity.java native/RegistroBackupFilesPlugin.java "$NATIVE_DIR/"
+          grep -F 'registerPlugin(RegistroBackupFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
 
       - name: Build debug APK (laboratory use only)
         shell: bash
@@ -124,13 +128,18 @@ jobs:
             printf 'pdf_offline_bundle_present=true\n'
             printf 'remote_fonts_required=false\n'
             printf 'android_pdf_file_save_qualified=false\n'
+            printf 'android_backup_native_implemented=true\n'
+            printf 'android_restore_native_implemented=true\n'
+            printf 'android_backup_device_qualified=false\n'
+            printf 'android_restore_device_qualified=false\n'
             printf 'android_hpr_qualified=false\n'
             printf 'vault_android_qualified=false\n'
           } > "$PROBE_DIR/probe-manifest.txt"
           {
             printf 'M1 PDF library and license are included byte-for-byte in the APK.\n'
             printf 'No mandatory Google Fonts or CDN PDF script in index.html.\n'
-            printf 'Android PDF file save, sharing and backup are NOT qualified.\n'
+            printf 'Native encrypted backup writer and reader included; device round trip NOT qualified.\n'
+            printf 'Android PDF file save, sharing and backup restore are NOT qualified.\n'
             printf 'Node/Express API and real remote Copilota NOT bundled; offline fallback only.\n'
             printf 'Vault, lifecycle, Android device use and upgrades NOT qualified.\n'
           } > "$PROBE_DIR/offline-gaps.txt"

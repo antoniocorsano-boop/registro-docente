@@ -12,3 +12,11 @@
 - Tutte le API Express/Gemini restano non incluse e devono degradare in modo sicuro quando offline.
 
 **Per Beta 1:** asset e PDF locali, autenticazione locale, backup file Android, navigazione/Indietro, stabilità su aggiornamento e firma di rilascio sono attività future obbligatorie; vedasi issue #207 e #204.
+
+## M2a — Prova di esportazione del backup Android
+
+Il candidato introduce un selettore di documenti Android locale e un plugin che scrive soltanto il backup già cifrato, poi lo rilegge e restituisce una ricevuta di lunghezza/SHA-256. La vista Privacy aggiorna lo stato del backup solo dopo la ricevuta verificata. Annullamento, errore, bridge assente e interruzione non attivano il download Blob nativo e non attestano successo. Logging Capacitor disattivato. Destinazioni inizialmente limitate a Download e memoria locale Android, dimensione massima 32 MiB. La compilazione non attesta il salvataggio su un telefono, il ripristino o la persistenza del Vault: occorrono prove reali con dati sintetici prima della Beta 1. Tracciamento #215.
+
+## M2b — Recupero di un documento cifrato
+
+Il selettore Android apre soltanto documenti locali autorizzati. Il lettore nativo verifica dimensione (32 MiB), codifica e struttura dell'involucro cifrato, e restituisce il testo e l'impronta; il frontend confronta la ricevuta, autentica con il motore AES-GCM esistente e richiede conferma prima del ripristino transazionale già previsto. Nessuna password passa al codice Java. Le copie cifrate storiche senza versione sono ammesse dal lettore, mentre l'importazione dei JSON non cifrati rimane disponibile soltanto nel percorso browser esistente. La prova Chromium con ponte simulato deve verificare salvataggio, password errata, annullamento e ripristino di una classe sintetica. **Non equivale a una prova Android reale.**

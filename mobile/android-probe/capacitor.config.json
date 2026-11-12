@@ -1,5 +1,6 @@
 {
   "appId": "it.trama.registrodocente.prova",
   "appName": "Registro Docente - Prova",
-  "webDir": "../../dist"
+  "webDir": "../../dist",
+  "loggingBehavior": "none"
 }

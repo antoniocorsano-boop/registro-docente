@@ -1565,6 +1565,54 @@
         "tests/browser/header-01-navbar-integration.spec.cjs",
         "tests/browser/today-01-home-oggi-router.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-01-M2A-NATIVE-BACKUP-I01",
+      "owner": "MOBILE-01/M2a",
+      "statement": "Native Android must choose a local document and write only the already-encrypted AES-GCM v2 envelope. A one-use destination token, closed output followed by independent readback, exact byte count and SHA-256 checked by both native writer and frontend are required before the existing encrypted backup checkpoint can be recorded. Cancellation, errors, invalid or missing bridge, interrupted view or mismatched digest never fall back to a native Blob download or acknowledge a backup. The browser path and vault schema remain unchanged. APK build and synthetic tests do not prove Android save/restore or persistence on a device.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidBackupExport.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts",
+        "src/components/PrivacyView.tsx",
+        "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        "mobile/android-probe/capacitor.config.json",
+        ".github/workflows/mobile-01-android-probe.yml"
+      ],
+      "tests": [
+        "src/security/androidBackupExport.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "MOBILE-01-M2B-NATIVE-RESTORE-I01",
+      "owner": "MOBILE-01/M2b",
+      "statement": "Android recovery reads only a user-selected local encrypted envelope, with a one-use source token, bounded strict UTF-8 reading, format guard and verified byte count and SHA-256. The existing local AES-GCM password authentication and explicit replacement confirmation precede the established transactional normalize/restoreSnapshotVerified path. Cancellation, missing bridge, wrong password, corrupt data or a stale view before confirmation never commits restore. Browser legacy import is unchanged; native recovery accepts encrypted historical envelopes, not plaintext. Mock bridge browser evidence is not Android device qualification.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidBackupRestore.test.ts",
+        "src/security/mobile01M2bNativeRestoreContract.test.ts",
+        "src/components/PrivacyView.tsx",
+        "src/App.tsx",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        ".github/workflows/mobile-01-android-probe.yml",
+        ".github/workflows/browser-qualification.yml",
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+      ],
+      "tests": [
+        "src/security/androidBackupRestore.test.ts",
+        "src/security/mobile01M2bNativeRestoreContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+      ]
     }
   ]
 }
