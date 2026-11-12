@@ -25,9 +25,13 @@ describe('MOBILE-01/M2c native PDF contract', () => {
     expect(flow).toContain("result === 'verified' && isActive()");
     expect(view).toContain('formatStudentNameWithPrivacy(m.student.name, isPrivacyShieldActive)');
     const render = await load('src/security/workPdfRendering.ts');
-    expect(render).toContain("clone.classList.remove('hidden', 'print:block')");
-    expect(render).toContain("outputPdf('arraybuffer')");
-    expect(render).toContain('ink < 10');
+    expect(render).toContain("table?.querySelectorAll('thead th')");
+    expect(render).toContain("table?.querySelectorAll('tbody tr')");
+    expect(render).toContain("pdf.deletePage(1)");
+    expect(render).toContain("drawRow(columns, true)");
+    expect(render).toContain("emittedRows !== rows.length");
+    expect(render).toContain("pdf.output('arraybuffer')");
+    expect(render).not.toContain(".toCanvas()");
     const workflow = await load('.github/workflows/mobile-01-android-probe.yml');
     expect(workflow).toContain('android_pdf_native_implemented=true');
     expect(workflow).toContain('android_pdf_file_save_qualified=false');
