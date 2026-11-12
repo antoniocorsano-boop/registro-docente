@@ -1663,6 +1663,28 @@
       "browserSmoke": [
         "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
       ]
+    },
+    {
+      "id": "BETA-1-ARCHIVE-I01",
+      "owner": "BETA-1",
+      "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced.",
+      "impactPaths": [
+        "src/security/initialArchiveSetup.ts",
+        "src/security/secureAppStorage.test.ts",
+        "src/components/VaultGate.tsx",
+        "src/components/SecureRegistroRoot.tsx",
+        "src/security/vaultGate.test.ts",
+        "src/App.tsx",
+        "src/types.ts",
+        "src/persistence/settingsMutation.ts"
+      ],
+      "tests": [
+        "src/security/secureAppStorage.test.ts",
+        "src/security/vaultGate.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
     }
   ]
 }
