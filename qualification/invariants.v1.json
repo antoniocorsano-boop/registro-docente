@@ -1820,11 +1820,17 @@
         "tests/browser/fixtures/behavior-integrity.html",
         "tests/browser/fixtures/behavior-integrity-fixture.tsx",
         ".github/workflows/behavior-integrity-qualification.yml",
-        "tests/browser/flow-03-registra.spec.cjs"
+        "tests/browser/flow-03-registra.spec.cjs",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hPendingFormFreezeIntegrity.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts"
       ],
       "tests": [
         "src/security/flow03BehaviourExplicitContract.test.ts",
-        "src/security/persist01hTeacherUiContract.test.ts"
+        "src/security/persist01hTeacherUiContract.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hPendingFormFreezeIntegrity.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/behavior-integrity.spec.cjs",

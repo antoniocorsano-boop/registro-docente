@@ -2057,7 +2057,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       })
     : null;
   const activeRecordMission =
-    recordSession?.status === 'editing'
+    (recordSession?.status === 'editing' || (recordSession?.status === 'saved' && recordSession.evidenceKind === 'behaviour'))
     && recordSession.context.classId === currentClass?.id
     && recordSession.evidenceKind
     && routeForRecordEvidence(recordSession.evidenceKind).tab === activeTab
@@ -2414,8 +2414,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
 
     publishRecordSession(markRecordSessionSaved(session));
-    setActiveTab('dashboard');
     setTodayAction('record');
+    // A committed observation must complete its session even when a departure
+    // decision is open. Only the automatic navigation is deferred.
+    if (kind === 'behaviour' && (pendingExitRef.current || historyRestorePendingRef.current || historyFallbackRef.current)) return true;
+    setActiveTab('dashboard');
     return true;
   }, [publishRecordSession, setActiveTab]);
 
@@ -2460,7 +2463,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleReturnToRecord = useCallback(() => {
     const session = recordSessionRef.current;
-    if (!session || session.status !== 'editing' || session.context.classId !== currentClassIdRef.current) return;
+    if (!session || (session.status !== 'editing' && !(session.status === 'saved' && session.evidenceKind === 'behaviour')) || session.context.classId !== currentClassIdRef.current) return;
     recordSpecialistNavigationVersionRef.current = null;
     setTodayAction('record');
     setActiveTab('dashboard');
@@ -2774,8 +2777,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           // a draft. Never navigate through a pending departure decision.
           originGuard?.markCommitted();
           behaviorSavePendingRef.current = false;
-          if (pendingExitRef.current || historyRestorePendingRef.current || historyFallbackRef.current) return;
           const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId);
+          if (pendingExitRef.current || historyRestorePendingRef.current || historyFallbackRef.current) return;
           if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
             setActiveTab('dashboard');
           }
