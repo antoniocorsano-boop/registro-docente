@@ -14,7 +14,11 @@ describe('HEADER-01 / Copilota e Drawer senza sovrapposizioni', () => {
 
   test('il trigger Copilota rimane indipendente e rispetta la soppressione senza cambiare il desktop', () => {
     expect(copilot).toContain('data-testid="library-copilot-trigger"');
-    expect(copilot).toContain('hiddenOnMobile || suppressMobileTrigger');
+    // Suppression is unconditional (drawer/write views); adaptive scrolling
+    // hides only floating launchers, never the in-flow launcher.
+    expect(copilot).toContain('suppressMobileTrigger || (!inlineMobileTrigger && hiddenOnMobile)');
+    expect(copilot).toContain("inlineMobileTrigger ? 'relative self-end");
+    expect(copilot).toContain('md:fixed');
     expect(copilot).toContain("'max-md:hidden' : ''");
     expect(navbar).toContain('id="registro-navigation-drawer"');
     expect(navbar).toContain('isDrawerOpen ?');

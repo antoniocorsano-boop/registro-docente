@@ -1782,7 +1782,12 @@
         "tests/browser/nav-context-01-return-origin.spec.cjs",
         "tests/browser/nav-back-01-student-report.spec.cjs",
         "tests/browser/ux-trust-01-full-regression.spec.cjs",
-        "qualification/invariants.v1.json"
+        "qualification/invariants.v1.json",
+        "src/components/StudentGradesTimelineChart.tsx",
+        "src/components/ClassComparisonBarChart.tsx",
+        "src/components/CopilotDeck.tsx",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
       ],
       "tests": [
         "src/security/navContext01ReturnState.test.ts",
@@ -1790,7 +1795,8 @@
         "src/security/uxTrust01Integrity.test.ts",
         "src/security/p2DensityProgressiveDisclosureIntegrity.test.ts",
         "src/security/valuationSemanticIntegrity.test.ts",
-        "src/security/androidPdfExport.test.ts"
+        "src/security/androidPdfExport.test.ts",
+        "src/security/header01CopilotDrawerOcclusion.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile-density-01-tabellone.spec.cjs",

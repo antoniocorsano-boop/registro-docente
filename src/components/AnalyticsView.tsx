@@ -280,7 +280,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Flat mobile workspace: one active content surface, shared controls. */}
       <div className="md:hidden print:hidden min-w-0">
         <div role="group" aria-label="Viste Analisi" data-testid="analytics-mobile-views"
-          className="analytics-view-controls grid grid-cols-[1fr_1fr_1.4fr] border-b border-[var(--border)]">
+          className="analytics-view-controls grid grid-cols-[minmax(0,.85fr)_minmax(0,.85fr)_minmax(0,1.7fr)] border-b border-[var(--border)]">
           {([
             ['summary', 'Sintesi'],
             ['students', 'Alunni'],
