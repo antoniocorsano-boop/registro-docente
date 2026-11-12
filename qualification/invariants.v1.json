@@ -1613,6 +1613,32 @@
       "browserSmoke": [
         "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-01-M2C-NATIVE-PDF-I01",
+      "owner": "MOBILE-01/M2c",
+      "statement": "Android Analisi work PDF renders the existing privacy-aware report template with visible content, using bundled local assets. Explicit confirmation of the unencrypted document precedes export; the neutral filename contains no class/student name. A separate native PDF writer uses only user-selected local SAF destination and one-use token, verifies byte count and SHA-256 after read-back, and the frontend verifies the receipt. Cancel, invalid bridge, stale class/privacy context or failed receipt never claim success or fall back to native browser print. Backup and Vault format remain unchanged. Simulated bridge and APK build do not qualify actual Android PDF save/open.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/AnalyticsView.tsx",
+        "src/security/androidPdfExport.ts",
+        "src/security/androidPdfExport.test.ts",
+        "src/security/workPdfRendering.ts",
+        "src/security/mobile01M2cNativePdfContract.test.ts",
+        "mobile/android-probe/native/RegistroPdfFilesPlugin.java",
+        "mobile/android-probe/native/MainActivity.java",
+        ".github/workflows/mobile-01-android-probe.yml",
+        ".github/workflows/browser-qualification.yml",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+      ],
+      "tests": [
+        "src/security/androidPdfExport.test.ts",
+        "src/security/mobile01M2cNativePdfContract.test.ts",
+        "src/security/mobile01M1OfflineAssetsContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+      ]
     }
   ]
 }
