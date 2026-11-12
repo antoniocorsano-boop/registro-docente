@@ -40,7 +40,10 @@ describe('UX-TRUST-01 Option B integrity', () => {
 
     expect(evaluations).toContain('MOBILE_TOUCH_TARGET_CLASS} px-2 py-0.5');
     expect(evaluations).toContain('MOBILE_TOUCH_TARGET_CLASS} p-1.5');
-    expect(behaviors).toContain('MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1');
+    expect(behaviors).toContain('MOBILE_TOUCH_TARGET_CLASS} px-2 rounded');
+    expect(behaviors).toContain('MOBILE_TOUCH_TARGET_CLASS} max-w-full');
+    expect(behaviors).toContain('h-11 w-11 shrink-0');
+    expect(behaviors).toContain('aria-pressed={isSelected}');
     expect(history).toContain('MOBILE_TOUCH_TARGET_CLASS} p-2');
   });
 
