@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { isAndroidBackupRuntime, saveEncryptedBackupOnAndroid } from '../security/androidBackupExport';
+import { isAndroidBackupRuntime, saveEncryptedBackupOnAndroid, readEncryptedBackupOnAndroid } from '../security/androidBackupExport';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
@@ -50,6 +50,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const backupOperationPendingRef = useRef(false);
+  const nativeBackupRuntime = isAndroidBackupRuntime();
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -140,6 +141,32 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
   const handleImportEncrypted = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (nativeBackupRuntime) {
+      if (backupOperationPendingRef.current) return;
+      if (!decryptPassword) {
+        alert('Inserisci la password della copia cifrata.');
+        return;
+      }
+      backupOperationPendingRef.current = true;
+      setIsDecrypting(true);
+      try {
+        const encryptedText = await readEncryptedBackupOnAndroid(() => mountedRef.current);
+        if (encryptedText === null || !mountedRef.current) return;
+        const decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
+        if (!mountedRef.current) return;
+        if (!window.confirm('Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?')) return;
+        if (!mountedRef.current) return;
+        await onImportEncryptedBackup(decryptedData);
+        setDecryptPassword('');
+        alert('Backup cifrato verificato e ripristinato con successo!');
+      } catch {
+        if (mountedRef.current) alert('Ripristino non completato. Controlla il file e la password.');
+      } finally {
+        backupOperationPendingRef.current = false;
+        if (mountedRef.current) setIsDecrypting(false);
+      }
+      return;
+    }
     if (!selectedEncryptedFile) {
       alert('Seleziona un file di backup (.enc.json oppure .json precedente).');
       return;
@@ -356,10 +383,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           {/* Import Encrypted Form */}
           <form onSubmit={handleImportEncrypted} className="p-4 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
             <h4 className="text-xs uppercase tracking-wider font-bold text-slate-200 flex items-center gap-1.5">
-              <Upload className="w-3.5 h-3.5 text-cyan-400" /> Ripristina Backup Cifrato o Precedente
+              <Upload className="w-3.5 h-3.5 text-cyan-400" /> {nativeBackupRuntime ? 'Ripristina backup cifrato' : 'Ripristina Backup Cifrato o Precedente'}
             </h4>
 
-            <div>
+            {!nativeBackupRuntime && <div>
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                 Seleziona file di backup (.enc.json oppure .json precedente)
               </label>
@@ -370,7 +397,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
                 className="w-full p-1.5 neon-input text-xs text-white file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-slate-800 file:text-slate-200"
                 required
               />
-            </div>
+            </div>}
 
             <div>
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
@@ -386,8 +413,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             </div>
 
             <p className="text-xs text-slate-400">
-              I backup precedenti non cifrati vengono letti esclusivamente in locale,
-              previa conferma. Il nuovo backup esportato sarà sempre cifrato.
+              {nativeBackupRuntime
+                ? 'Inserisci la password, scegli il file cifrato da Download o Documenti e conferma il ripristino.'
+                : 'I backup precedenti non cifrati vengono letti esclusivamente in locale, previa conferma. Il nuovo backup esportato sarà sempre cifrato.'}
             </p>
 
             <button
@@ -396,7 +424,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
               className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 flex items-center justify-center gap-1.5 mt-2 transition-colors"
             >
               <Lock className="w-3.5 h-3.5" />
-              <span>{isDecrypting ? 'Decifratura in corso...' : 'Decifra e Ripristina Registro'}</span>
+              <span>{isDecrypting ? 'Decifratura in corso...' : nativeBackupRuntime ? 'Scegli file e ripristina' : 'Decifra e Ripristina Registro'}</span>
             </button>
           </form>
         </div>
