@@ -13,6 +13,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -37,6 +38,8 @@ public class RegistroBackupFilesPlugin extends Plugin {
     private boolean writing = false;
     private Uri destination;
     private String destinationToken;
+    private Uri source;
+    private String sourceToken;
 
     // No storage-wide permission, path supplied by JS, persisted URI grant or remote endpoint.
     @PluginMethod
@@ -52,6 +55,8 @@ public class RegistroBackupFilesPlugin extends Plugin {
         }
         destination = null;
         destinationToken = null;
+        source = null;
+        sourceToken = null;
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/json");
@@ -155,6 +160,127 @@ public class RegistroBackupFilesPlugin extends Plugin {
         } finally {
             synchronized (this) { writing = false; }
         }
+    }
+
+    @PluginMethod
+    public synchronized void chooseBackupSource(PluginCall call) {
+        if (pickerOpen || writing) {
+            call.reject("Un'operazione sui documenti è già in corso.", "BUSY");
+            return;
+        }
+        destination = null;
+        destinationToken = null;
+        source = null;
+        sourceToken = null;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        pickerOpen = true;
+        try {
+            startActivityForResult(call, intent, "sourceChosen");
+        } catch (RuntimeException exception) {
+            pickerOpen = false;
+            call.reject("Impossibile aprire i documenti Android.", "PICKER_FAILED");
+        }
+    }
+
+    @ActivityCallback
+    private synchronized void sourceChosen(PluginCall call, ActivityResult result) {
+        boolean wasOpen = pickerOpen;
+        pickerOpen = false;
+        if (call == null) return;
+        if (!wasOpen) {
+            call.reject("Lettura interrotta. Riprova.", "INTERRUPTED");
+            return;
+        }
+        if (result.getResultCode() == Activity.RESULT_CANCELED) {
+            JSObject reply = new JSObject();
+            reply.put("status", "cancelled");
+            call.resolve(reply);
+            return;
+        }
+        Intent data = result.getData();
+        Uri uri = data == null ? null : data.getData();
+        if (result.getResultCode() != Activity.RESULT_OK || uri == null
+                || !"content".equals(uri.getScheme()) || !LOCAL_PROVIDERS.contains(uri.getAuthority())) {
+            call.reject("Scegli il backup cifrato da una cartella locale.", "LOCAL_SOURCE_REQUIRED");
+            return;
+        }
+        source = uri;
+        sourceToken = UUID.randomUUID().toString();
+        JSObject reply = new JSObject();
+        reply.put("status", "selected");
+        reply.put("token", sourceToken);
+        call.resolve(reply);
+    }
+
+    @PluginMethod
+    public void readEncryptedBackup(PluginCall call) {
+        final Uri uri;
+        synchronized (this) {
+            String token = call.getString("token");
+            if (writing || pickerOpen || source == null || sourceToken == null
+                    || !sourceToken.equals(token)) {
+                call.reject("File non selezionato o selezione scaduta.", "INVALID_SOURCE");
+                return;
+            }
+            uri = source;
+            source = null;
+            sourceToken = null;
+            writing = true;
+        }
+        try {
+            byte[] bytes;
+            try (InputStream in = getContext().getContentResolver().openInputStream(uri);
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                if (in == null) throw new IllegalStateException("No input stream");
+                byte[] buffer = new byte[16384];
+                int n;
+                while ((n = in.read(buffer)) != -1) {
+                    if (n > MAX_BYTES - out.size()) throw new IllegalArgumentException("Invalid size");
+                    out.write(buffer, 0, n);
+                }
+                bytes = out.toByteArray();
+            }
+            String encrypted = new String(bytes, StandardCharsets.UTF_8);
+            if (!Arrays.equals(bytes, encrypted.getBytes(StandardCharsets.UTF_8))) {
+                throw new IllegalArgumentException("Invalid UTF-8");
+            }
+            validateEnvelopeForRead(encrypted);
+            JSObject reply = new JSObject();
+            reply.put("status", "read");
+            reply.put("encryptedText", encrypted);
+            reply.put("bytes", bytes.length);
+            reply.put("sha256", hex(MessageDigest.getInstance("SHA-256").digest(bytes)));
+            call.resolve(reply);
+        } catch (Exception exception) {
+            call.reject("File non leggibile o non riconosciuto come backup cifrato.", "READ_NOT_VERIFIED");
+        } finally {
+            synchronized (this) { writing = false; }
+        }
+    }
+
+    private static void validateEnvelopeForRead(String encrypted) throws Exception {
+        JSONObject json = new JSONObject(encrypted);
+        if (json.has("version")) {
+            validateEnvelope(encrypted);
+            return;
+        }
+        // Historical password-protected envelopes only. Never return legacy plaintext.
+        Set<String> allowed = new HashSet<>(Arrays.asList("privacy_protocol", "timestamp", "salt", "iv", "ciphertext"));
+        Iterator<String> keys = json.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (!allowed.contains(key) || !(json.get(key) instanceof String))
+                throw new IllegalArgumentException("Invalid legacy envelope");
+        }
+        if (json.optString("privacy_protocol").length() > 128 || json.optString("timestamp").length() > 64
+                || Base64.decode(json.getString("salt"), Base64.DEFAULT).length != 16
+                || Base64.decode(json.getString("iv"), Base64.DEFAULT).length != 12
+                || Base64.decode(json.getString("ciphertext"), Base64.DEFAULT).length < 16)
+            throw new IllegalArgumentException("Invalid legacy envelope");
     }
 
     private static byte[] validateEnvelope(String encrypted) throws Exception {
