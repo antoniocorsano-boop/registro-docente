@@ -165,3 +165,79 @@ jobs:
             mobile/android-probe/offline-gaps.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Prepare separate unsigned Beta identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$PROBE_DIR/prepare-beta.mjs"
+          bash -n "$PROBE_DIR/sign-beta-locally.sh"
+
+      - name: Build non-debuggable unsigned Beta candidate
+        shell: bash
+        working-directory: mobile/android-probe/android
+        run: |
+          set -euo pipefail
+          bash ./gradlew --no-daemon assembleRelease
+
+      - name: Verify unsigned Beta package and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk="$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$apk"
+          unzip -tq "$apk" >/dev/null
+          if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Unexpected signature on unsigned candidate"
+            exit 1
+          fi
+          version_code="$(node -p "require('./mobile/android-probe/beta-identity.json').versionCode")"
+          version_name="$(node -p "require('./mobile/android-probe/beta-identity.json').versionName")"
+          "$tools/aapt" dump badging "$apk" > "$PROBE_DIR/beta-badging.txt"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$version_code' versionName='$version_name'" "$PROBE_DIR/beta-badging.txt"
+          grep -Fx "application-label:'Registro Docente'" "$PROBE_DIR/beta-badging.txt"
+          if grep -q '^application-debuggable' "$PROBE_DIR/beta-badging.txt"; then
+            echo "Beta candidate is debuggable"
+            exit 1
+          fi
+          "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
+          unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for font in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
+          done
+          sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
+          {
+            printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente\n'
+            printf 'version_code=%s\n' "$version_code"
+            printf 'version_name=%s\n' "$version_name"
+            printf 'apk_sha256='
+            sha256sum "$apk" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'stable_owner_certificate_qualified=false\n'
+            printf 'upgrade_device_qualified=false\n'
+            printf 'migration_device_qualified=false\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'real_data_authorized=false\n'
+          } > "$PROBE_DIR/beta-unsigned-manifest.txt"
+
+      - name: Upload unsigned Beta candidate only — no private key or release
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
+            mobile/android-probe/beta-unsigned.sha256
+            mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/beta-identity.json
+            mobile/android-probe/sign-beta-locally.sh
+          if-no-files-found: error
+          retention-days: 7
