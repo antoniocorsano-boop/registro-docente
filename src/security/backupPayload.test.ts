@@ -303,7 +303,9 @@ describe('BETA-1 restore archive identity', () => {
     const { archiveMode, ...settings } = current.settings;
     const historical = { ...current, settings: { ...settings, school: 'IC Historical' } };
     const v6 = createBackupPayload(historical);
-    const { copilotState, ...v5 } = v6.snapshot;
+    const { copilotState, ...v5Base } = v6.snapshot;
+    // Versions 3–5 predate Planning V2; construct an actual historical record.
+    const v5 = { ...v5Base, planning: historicalPlanningFrom(historical) };
     const { professionalMemory, ...v4 } = v5;
     const { library, ...v3 } = v4;
     const { planning, ...v2 } = v3;
@@ -315,6 +317,7 @@ describe('BETA-1 restore archive identity', () => {
       expect(restored.udas).toEqual([]);
       expect(restored.customTests).toEqual({});
       expect(restored.submissions).toEqual([]);
+      expect(restored.planning).toEqual(current.planning);
     }
   });
 
