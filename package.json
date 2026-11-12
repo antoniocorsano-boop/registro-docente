@@ -21,6 +21,7 @@
     "@trama/contextual-copilot-intent-embedding": "file:vendor/contextual-copilot-intent-embedding",
     "@vitejs/plugin-react": "^6.1.1",
     "canvas-confetti": "^1.9.4",
+    "dejavu-fonts-ttf": "2.37.3",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "jszip": "^3.10.1",
