@@ -43,6 +43,11 @@ describe('MOBILE-01/M2c native PDF contract', () => {
     expect(testSource).toContain("Иван Петров");
     const pkg = JSON.parse(await load('package.json'));
     expect(pkg.dependencies['dejavu-fonts-ttf']).toBe('2.37.3');
+    const config = await load('vite.config.ts');
+    expect(config).toContain("node_modules/dejavu-fonts-ttf/LICENSE");
+    expect(config).toContain("fileName: 'assets/DejaVu-LICENSE.txt'");
+    const lock = await load('bun.lock');
+    expect(lock).toContain('"dejavu-fonts-ttf": ["dejavu-fonts-ttf@2.37.3"');
     const workflow = await load('.github/workflows/mobile-01-android-probe.yml');
     expect(workflow).toContain('android_pdf_native_implemented=true');
     expect(workflow).toContain('android_pdf_file_save_qualified=false');
