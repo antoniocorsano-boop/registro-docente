@@ -52,6 +52,9 @@ jobs:
           test -f dist/index.html
           test -s dist/vendor/html2pdf.bundle.min.js
           test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          test -s dist/assets/DejaVu-LICENSE.txt
+          test -n "$(find dist/assets -name 'DejaVuSans-*.ttf' -print -quit)"
+          test -n "$(find dist/assets -name 'DejaVuSans-Bold-*.ttf' -print -quit)"
           grep -lF -- '--safe-area-inset-top' dist/assets/*.css
           grep -lF -- 'class-card-manage' dist/assets/*.js
           grep -F '/vendor/html2pdf.bundle.min.js' dist/index.html
@@ -112,6 +115,10 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
+          unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for FONT in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$APK" "assets/public/assets/$(basename "$FONT")" | cmp - "$FONT"
+          done
           unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
