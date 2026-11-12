@@ -20,3 +20,7 @@ Il candidato introduce un selettore di documenti Android locale e un plugin che 
 ## M2b — Recupero di un documento cifrato
 
 Il selettore Android apre soltanto documenti locali autorizzati. Il lettore nativo verifica dimensione (32 MiB), codifica e struttura dell'involucro cifrato, e restituisce il testo e l'impronta; il frontend confronta la ricevuta, autentica con il motore AES-GCM esistente e richiede conferma prima del ripristino transazionale già previsto. Nessuna password passa al codice Java. Le copie cifrate storiche senza versione sono ammesse dal lettore, mentre l'importazione dei JSON non cifrati rimane disponibile soltanto nel percorso browser esistente. La prova Chromium con ponte simulato deve verificare salvataggio, password errata, annullamento e ripristino di una classe sintetica. **Non equivale a una prova Android reale.**
+
+## M2c — Prospetto PDF di lavoro (Analisi)
+
+Il PDF viene generato localmente dal prospetto esistente, mantenendo i nominativi oscurati quando Privacy è attiva. Prima della scelta della cartella viene richiesto il consenso esplicito al salvataggio di un documento **non cifrato**. Nome neutro, provider locali, token monouso, limite 32 MiB, scrittura e rilettura SHA-256/lunghezza. Il lettore/writer backup resta distinto e invariato. Le verifiche automatiche simulano il ponte Android, ma non dimostrano l'apertura del file sul dispositivo. La qualifica riguarda solo il prospetto Analisi; le altre funzioni di stampa/condivisione restano fuori da questo incremento. Nessun rilascio o firma stabile.
