@@ -44,8 +44,9 @@ test('S3d Android HPR rework: source action opens governed Copilota, not the man
   });
 
   await page.goto(baseURL,{waitUntil:'domcontentloaded'});
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('only-synthetic-android-rework');
-  await page.getByRole('button',{name:'Configura archivio protetto'}).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
   page.once('dialog',dialog=>dialog.accept(CLASS_NAME));
   await page.getByRole('button',{name:/Nuova Classe/}).click();
@@ -154,8 +155,9 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
   });
 
   await page.goto(baseURL,{waitUntil:'domcontentloaded'});
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('synthetic-offline-continuity-vault');
-  await page.getByRole('button',{name:'Configura archivio protetto'}).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
   page.once('dialog',dialog=>dialog.accept(CLASS_NAME));
   await page.getByRole('button',{name:/Nuova Classe/}).click();

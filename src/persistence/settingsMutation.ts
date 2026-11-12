@@ -21,8 +21,6 @@ export function diffSettings(base: AppSettings, candidate: AppSettings): Partial
 }
 
 export function applySettingsPatch(current: AppSettings, patch: Partial<AppSettings>): AppSettings {
-  return {
-    ...current,
-    ...patch
-  };
+  const { archiveMode: _ignoredMode, ...editablePatch } = patch;
+  return { ...current, ...editablePatch };
 }

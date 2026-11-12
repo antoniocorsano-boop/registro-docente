@@ -245,6 +245,9 @@ export interface AppProps {
 }
 
 export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity }: AppProps) {
+  // Explicitly initialized archives are authoritative, including empty collections.
+  const explicitArchive = initialSnapshot.settings?.archiveMode === 'professional'
+    || initialSnapshot.settings?.archiveMode === 'demo';
   // 1. Settings & Theme
   const [settings, setSettings] = useState<AppSettings>(() => {
     const persisted = initialSnapshot.settings;
@@ -281,7 +284,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }
     return {
-      classes: INITIAL_CLASSES.map(c => ({
+      classes: (explicitArchive ? [] : INITIAL_CLASSES).map(c => ({
         ...c,
         students: sortStudents(c.students),
         grades: c.grades,
@@ -293,9 +296,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // 3. Online Tests & Flashcards
   const [tests, setTests] = useState<Record<string, OnlineTest>>(() =>
-    initialSnapshot.customTests
-      ? { ...INITIAL_TESTS, ...initialSnapshot.customTests }
-      : INITIAL_TESTS
+    explicitArchive
+      ? initialSnapshot.customTests ?? {}
+      : initialSnapshot.customTests
+        ? { ...INITIAL_TESTS, ...initialSnapshot.customTests }
+        : INITIAL_TESTS
   );
 
   // 4. Online Submissions
@@ -305,7 +310,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // 5. UDA Records
   const [udas, setUdas] = useState<UdaRecord[]>(() =>
-    initialSnapshot.udas || INITIAL_UDAS
+    initialSnapshot.udas ?? (explicitArchive ? [] : INITIAL_UDAS)
   );
 
   // 5b. Annual planning domain (separate from legacy UDA/Gantt until migration is qualified)

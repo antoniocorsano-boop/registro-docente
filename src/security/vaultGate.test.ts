@@ -30,7 +30,12 @@ describe('SEC-1 VaultGate', () => {
   });
 
   test('shows explicit secure actions for setup, migration and unlock states', () => {
-    expect(render('SETUP_REQUIRED')).toContain('Configura archivio protetto');
+    const setup = render('SETUP_REQUIRED');
+    expect(setup).toContain('Configura archivio protetto');
+    expect(setup).toContain('Archivio professionale');
+    expect(setup).toContain('Ambiente dimostrativo');
+    expect(setup).not.toContain('id="vault-password"');
+    expect(render('LOCKED')).not.toContain('Ambiente dimostrativo');
     expect(render('MIGRATION_REQUIRED')).toContain('Proteggi i dati esistenti');
     expect(render('LOCKED')).toContain('Sblocca Registro');
     expect(render('ERROR')).toContain('Sicurezza non disponibile');

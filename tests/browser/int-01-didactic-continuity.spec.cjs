@@ -16,8 +16,23 @@ function evidencePath(name) {
 async function configureVault(page, password, url = baseURL) {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill(password);
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
+  await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
+  // Explicitly establish the historical display alias, independently of the demo defaults.
+  await fromDrawer(page, 'Impostazioni');
+  const discipline = page.getByPlaceholder('es. Tecnologia & Disegno', { exact: true });
+  await expect(discipline).toBeVisible();
+  await discipline.fill('Tecnologia & Disegno Tecnico');
+  const receipt = page.waitForEvent('dialog');
+  const save = page.getByRole('button', { name: 'Salva profilo e preferenze', exact: true }).click();
+  const dialog = await receipt;
+  expect(dialog.message()).toContain('Impostazioni e preferenze salvate con successo!');
+  await dialog.accept();
+  await save;
+  await expect(discipline).toHaveValue('Tecnologia & Disegno Tecnico');
+  await fromDrawer(page, 'Oggi');
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 }
 

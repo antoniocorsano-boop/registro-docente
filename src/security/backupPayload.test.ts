@@ -1,3 +1,4 @@
+import { createInitialArchiveSnapshot } from './initialArchiveSetup';
 import { describe, expect, test } from 'bun:test';
 import { createEmptyCopilotState } from '../copilot/emptyCopilotState';
 import { createEmptyProfessionalMemoryState } from '../memory/emptyProfessionalMemoryState';
@@ -283,5 +284,60 @@ describe('SEC-1 backup application payload', () => {
       expect(() => normalizeBackupPayload(payload, current)).toThrow();
     }
     expect(current.customTests).toEqual({});
+  });
+});
+
+describe('BETA-1 restore archive identity', () => {
+  const professional = () => createInitialArchiveSnapshot({
+    mode: 'professional', profile: { school: 'IC Synthetic', year: '2026/27', teacher: 'Synthetic', subject: 'Tecnologia' }
+  });
+  test('preserves explicit modern mode and empty datasets when replacing demo data', () => {
+    const source = professional();
+    const current = createInitialArchiveSnapshot({ mode: 'demo' });
+    expect(normalizeBackupPayload(createBackupPayload(source), current)).toEqual(source);
+    expect(normalizeBackupPayload(createBackupPayload(current), source)).toEqual(current);
+  });
+
+  test('retains destination mode for unclassified historical v2–v6 backups without injecting demo records', () => {
+    const current = professional();
+    const { archiveMode, ...settings } = current.settings;
+    const historical = { ...current, settings: { ...settings, school: 'IC Historical' } };
+    const v6 = createBackupPayload(historical);
+    const { copilotState, ...v5Base } = v6.snapshot;
+    // Versions 3–5 predate Planning V2; construct an actual historical record.
+    const v5 = { ...v5Base, planning: historicalPlanningFrom(historical) };
+    const { professionalMemory, ...v4 } = v5;
+    const { library, ...v3 } = v4;
+    const { planning, ...v2 } = v3;
+    for (const [version, snapshot] of [[2, v2], [3, v3], [4, v4], [5, v5], [6, v6.snapshot]] as const) {
+      const restored = normalizeBackupPayload({ app: 'registro-docente', backupDataVersion: version, snapshot }, current);
+      expect(restored.settings.archiveMode).toBe('professional');
+      expect(restored.settings.school).toBe('IC Historical');
+      expect(restored.appData.classes).toEqual([]);
+      expect(restored.udas).toEqual([]);
+      expect(restored.customTests).toEqual({});
+      expect(restored.submissions).toEqual([]);
+      expect(restored.planning).toEqual(current.planning);
+    }
+  });
+
+  test('legacy JSON preserves explicit destination mode and historical records, with no implicit demo data', () => {
+    const current = professional();
+    const { archiveMode, ...settings } = current.settings;
+    const legacy = { app: 'registro-docente', classes: [], settings: { ...settings, school: 'IC Historical' }, customTests: {}, udas: [], submissions: [] };
+    const restored = normalizeBackupPayload(legacy, current);
+    expect(restored.settings).toEqual({ ...legacy.settings, archiveMode: 'professional' });
+    expect(restored.appData.classes).toEqual([]);
+    expect(restored.customTests).toEqual({});
+    expect(restored.udas).toEqual([]);
+    expect(normalizeBackupPayload(legacy, { ...current, settings }).settings.archiveMode).toBeUndefined();
+  });
+
+  test('rejects invalid explicit modes in modern and historical JSON without modifying destination', () => {
+    const current = professional();
+    const invalid = { ...current, settings: { ...current.settings, archiveMode: 'unknown' } };
+    expect(() => normalizeBackupPayload({ ...createBackupPayload(current), snapshot: invalid }, current)).toThrow(/Modalità archivio/);
+    expect(() => normalizeBackupPayload({ classes: [], settings: invalid.settings }, current)).toThrow(/Modalità archivio/);
+    expect(current.settings.archiveMode).toBe('professional');
   });
 });

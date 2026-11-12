@@ -412,7 +412,7 @@ export function createBackupPayload(
   };
 }
 
-export function normalizeBackupPayload(
+function normalizeBackupPayloadInternal(
   payload: unknown,
   current: CompleteSecureAppSnapshot
 ): CompleteSecureAppSnapshot & {
@@ -530,6 +530,26 @@ export function normalizeBackupPayload(
     copilotState: createEmptyCopilotState(),
     meta: isRecord(payload.meta) ? payload.meta as unknown as SecureMeta : current.meta
   };
+}
+
+/**
+ * Historical backups did not carry an archive mode. Retain the destination's
+ * explicitly chosen mode only when the source does not specify one.
+ * A complete modern backup keeps its own explicit mode and data.
+ */
+export function normalizeBackupPayload(
+  payload: unknown,
+  current: CompleteSecureAppSnapshot
+): ReturnType<typeof normalizeBackupPayloadInternal> {
+  const restored = normalizeBackupPayloadInternal(payload, current);
+  const mode = restored.settings.archiveMode;
+  if (mode !== undefined && mode !== 'professional' && mode !== 'demo') {
+    throw new Error('Modalità archivio non valida nel backup.');
+  }
+  if (mode === undefined && (current.settings.archiveMode === 'professional' || current.settings.archiveMode === 'demo')) {
+    return { ...restored, settings: { ...restored.settings, archiveMode: current.settings.archiveMode } };
+  }
+  return restored;
 }
 
 /**

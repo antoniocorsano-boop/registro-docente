@@ -16,8 +16,9 @@ async function navigate(page, name) {
 test('CDC-01: teacher explicitly chooses class and saves an independent entrance grade', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('cdc-01-synthetic');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
@@ -75,8 +76,9 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
     return dialog.accept();
   });
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('cdc-01-import-synthetic');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
 
   const legacy = {
     app: 'registro-docente', version: 2,
@@ -144,8 +146,9 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
 test('CDC-01: on a narrow smartphone the student stays visible while council columns scroll', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 });
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('cdc-01-mobile-synthetic');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept('2M Mobile sintetica'));

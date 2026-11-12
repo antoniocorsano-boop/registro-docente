@@ -51,8 +51,9 @@ test('INT-02/S4c: Prepara, test salvato, consegna, Registra e Rivedi mantengono 
   // Every actor and source in this browser test is synthetic. No remote provider.
   await page.goto(BASE, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));

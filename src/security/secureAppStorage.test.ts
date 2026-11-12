@@ -1,3 +1,5 @@
+import { applySettingsPatch } from '../persistence/settingsMutation';
+import { createInitialArchiveSnapshot, initializeNewArchive, type NewArchiveSetup } from './initialArchiveSetup';
 import { describe, expect, test } from 'bun:test';
 import {
   SecureAppStorage,
@@ -245,4 +247,111 @@ describe('SEC-1 secure application storage', () => {
 
     expect((await storage.loadSnapshot()).settings?.embeddingConfig?.apiKey).toBeUndefined();
   });
+});
+
+
+describe('BETA-1 initial archive domain', () => {
+  const professional: NewArchiveSetup = {
+    mode: 'professional',
+    profile: { school: ' Istituto di prova ', year: '2026/2027', teacher: 'Docente di prova', subject: 'Tecnologia' }
+  };
+
+  test('professional archive contains no demo entities or preconfigured identity', () => {
+    const snapshot = createInitialArchiveSnapshot(professional);
+    expect(snapshot.appData).toEqual({ classes: [], currentClassId: null });
+    expect(snapshot.udas).toEqual([]);
+    expect(snapshot.customTests).toEqual({});
+    expect(snapshot.submissions).toEqual([]);
+    expect(snapshot.library.sources).toEqual([]);
+    expect(snapshot.settings.school).toBe('Istituto di prova');
+    expect(snapshot.settings.teacher).toBe('Docente di prova');
+    expect(snapshot.settings.archiveMode).toBe('professional');
+    expect(snapshot.meta).toEqual({ changes: 0, lastBackup: null });
+  });
+
+  test('demo data is opt-in and independent of professional data', () => {
+    const demo = createInitialArchiveSnapshot({ mode: 'demo' });
+    expect(demo.appData.classes.length).toBeGreaterThan(0);
+    expect(demo.settings.archiveMode).toBe('demo');
+    expect(demo.settings.teacher).toBe('Docente dimostrativo');
+    demo.appData.classes.length = 0;
+    expect(createInitialArchiveSnapshot({ mode: 'demo' }).appData.classes.length).toBeGreaterThan(0);
+    expect(createInitialArchiveSnapshot(professional).appData.classes).toEqual([]);
+  });
+
+  test('validates profile before creating a vault', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await expect(initializeNewArchive(vault, 'test-password', {
+      mode: 'professional', profile: { school: ' ', year: '2026/2027', teacher: 'Docente', subject: 'Tecnologia' }
+    })).rejects.toThrow();
+    expect(await store.getMetadata()).toBeNull();
+  });
+
+  test('professional choice and empty records survive lock, unlock and restore', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await initializeNewArchive(vault, 'test-password', professional);
+    expect((await store.getMetadata())?.state).toBe('ACTIVE');
+    vault.lock();
+    await vault.unlock('test-password');
+    const storage = new SecureAppStorage(vault);
+    const snapshot = await storage.loadSnapshot();
+    expect(snapshot.settings?.archiveMode).toBe('professional');
+    expect(snapshot.appData?.classes).toEqual([]);
+    expect(snapshot.udas).toEqual([]);
+    expect(snapshot.customTests).toEqual({});
+    await storage.restoreSnapshotVerified(createInitialArchiveSnapshot(professional));
+    expect((await storage.loadSnapshot()).settings?.archiveMode).toBe('professional');
+  });
+
+  test('existing active vault is not replaced by a new archive request', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    await initializeNewArchive(vault, 'test-password', { mode: 'demo' });
+    const storage = new SecureAppStorage(vault);
+    const before = await storage.loadSnapshot();
+    await expect(initializeNewArchive(vault, 'other-password', professional)).rejects.toThrow();
+    expect(await storage.loadSnapshot()).toEqual(before);
+  });
+
+  test('failed batch leaves no active archive and allows retry', async () => {
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    store.rejectNextBatch = true;
+    await expect(initializeNewArchive(vault, 'test-password', professional)).rejects.toThrow();
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+    await initializeNewArchive(vault, 'test-password', professional);
+    expect((await store.getMetadata())?.state).toBe('ACTIVE');
+  });
+});
+
+describe('BETA-1 archive mode preservation', () => {
+  test('ordinary settings cannot change or introduce an archive mode', () => {
+    const settings = createInitialArchiveSnapshot({ mode: 'demo' }).settings;
+    expect(applySettingsPatch(settings, { archiveMode: 'professional', subject: 'Storia' }))
+      .toEqual({ ...settings, subject: 'Storia' });
+    const { archiveMode, ...historical } = settings;
+    expect(applySettingsPatch(historical, { archiveMode: 'demo' })).toEqual(historical);
+  });
+});
+
+test('BETA-1 factory reset deletes all ten records and permits a clean new professional identity', async () => {
+  const store = new MemoryVaultStore();
+  const vault = new SecureVault(store);
+  await initializeNewArchive(vault, 'old-password', { mode: 'demo' });
+  expect((await store.listRecordKeys()).length).toBe(10);
+  await vault.clearAll();
+  expect(await store.getMetadata()).toBeNull();
+  expect(await store.listRecordKeys()).toEqual([]);
+  expect(decideVaultBootstrap(bootstrap({ metadataState: null }))).toBe('SETUP_REQUIRED');
+  const setup: NewArchiveSetup = {
+    mode: 'professional', profile: { school: 'New synthetic school', year: '2026/27', teacher: 'New synthetic teacher', subject: 'Storia' }
+  };
+  await initializeNewArchive(vault, 'new-password', setup);
+  vault.lock();
+  await expect(vault.unlock('old-password')).rejects.toThrow();
+  await vault.unlock('new-password');
+  expect(await new SecureAppStorage(vault).loadSnapshot()).toEqual(createInitialArchiveSnapshot(setup));
 });

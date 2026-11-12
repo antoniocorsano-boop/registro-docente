@@ -15,6 +15,7 @@ import {
   type SecureAppSnapshot,
   type VaultGateState
 } from '../security/secureAppStorage';
+import { initializeNewArchive, type NewArchiveSetup } from '../security/initialArchiveSetup';
 import { SecureVault } from '../security/secureVault';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
@@ -87,7 +88,7 @@ export const SecureRegistroRoot: React.FC = () => {
       });
 
       if (nextState === 'ERROR' && metadata?.state === 'STAGING') {
-        setErrorMessage('È stata rilevata una migrazione interrotta. Riprova per ripartire dai dati legacy rimasti intatti.');
+        setErrorMessage('È stata rilevata una configurazione o migrazione interrotta. Riprova: gli archivi già attivi non verranno cancellati.');
       }
       setGateState(nextState);
     } catch (error) {
@@ -144,10 +145,19 @@ export const SecureRegistroRoot: React.FC = () => {
     setGateState('READY');
   }, [getRuntime]);
 
-  const handleSetup = useCallback(async (password: string) => {
-    const { vault } = getRuntime();
-    await vault.initializeActive(password);
-    await loadReadySnapshot();
+  const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
+    const { vault, store } = getRuntime();
+    if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
+      throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+    }
+    await initializeNewArchive(vault, password, setup);
+    try {
+      await loadReadySnapshot();
+    } catch (error) {
+      vault.lock();
+      setGateState('LOCKED');
+      throw error;
+    }
   }, [getRuntime, loadReadySnapshot]);
 
   const handleUnlock = useCallback(async (password: string) => {

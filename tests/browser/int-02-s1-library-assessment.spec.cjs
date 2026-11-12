@@ -38,8 +38,9 @@ async function expectDrawerFullyOffscreen(page) {
 test('INT-02/S1: class-scoped professional source reaches unsaved test editor without UDA or URL payload', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('synthetic-int02-s1-vault');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
@@ -190,8 +191,9 @@ test('INT-02/S2b: mobile synthetic consent and origin-status visual evidence', a
   const testTitle = 'Verifica sintetica con origine INT-02/S2b';
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('synthetic-int02-s2b-only');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept(CLASS_NAME));
@@ -292,8 +294,9 @@ async function expectFooterLayout(page, stacked) {
 
 test('INT-02/S4b: Stampa e Analisi non scelgono il primo test per ordine del catalogo', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('synthetic-int02-s4b-only');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   await openDrawerItem(page, 'Verifiche online');
   // Condivisione remains a valid entry point for Copilota outside read-only tabs.
