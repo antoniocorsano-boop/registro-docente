@@ -211,3 +211,19 @@ body {
     color: #020617 !important;
   }
 }
+
+/* MOBILE-DENSITY-02: flatten chart surfaces inside the mobile analysis view only. */
+@media (max-width: 767px) {
+  .analytics-mobile-advanced.neon-card,
+  .analytics-mobile-advanced .neon-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+  .analytics-mobile-advanced .neon-card {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+}

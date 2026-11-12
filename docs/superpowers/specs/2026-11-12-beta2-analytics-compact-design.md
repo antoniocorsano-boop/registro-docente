@@ -5,3 +5,6 @@ Base 71d87b940cfd489bf7dea7b2b1adcd6c864e51a6, #125 / #210. RC3 installata resta
 - Contesto consultivo temporaneo: classe, ricerca, ordinamento, periodo, metodo e riga aperta al ritorno legittimo dalla scheda. Nessun dato in URL, history o Vault; cambio classe chiude la riga. Nessuna nuova voce di navigazione per il dettaglio inline.
 - Desktop, PDF, riepilogo e pannelli esistenti invariati. Tocchi >=48px, riga iniziale >=60px. Dati esclusivamente sintetici.
 - Prove 320/390, 8/25 alunni, privacy, ricerca, ordinamento, cambio classe, ritorno dalla scheda, desktop; riusare suite storiche. Misurazione effettiva e revisione indipendente necessarie. Non dichiarare qualificata Android dalla sola prova Chromium.
+
+## HPR REWORK — 12/11/2026
+User rejects nested cards. Mobile-only flat workspace: direct Sintesi / Alunni / Approfondimenti; shared controls, secondary PDF action, no nested cards or repeated annual label, linear detail. Desktop remains native. App actual geometry and new visual evidence required before merge. Existing candidate PASS does not certify new SHA. RC3 untouched.

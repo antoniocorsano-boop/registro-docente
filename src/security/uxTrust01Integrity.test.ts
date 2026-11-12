@@ -198,9 +198,10 @@ describe('UX-TRUST-01 Option B integrity', () => {
     expect(analytics).toContain("() => !isPrivacyShieldActive ? (restored?.ui.studentSearch ?? '') : ''");
     expect(analytics).toContain("() => restored?.ui.studentSort ?? 'register'");
     expect(analytics).toContain("if (isPrivacyShieldActive) setStudentSearch('')");
-    expect(analytics).toContain('if (details) details.open = restored?.ui.studentDetailOpen === true');
+    expect(analytics).toContain("() => restored?.ui.studentDetailOpen === true ? 'students' : 'summary'");
     expect(analytics).toContain('data-testid="mobile-analytics-student-detail"');
-    expect(analytics).toContain('Dettaglio alunni');
+    expect(analytics).toContain('data-testid="analytics-mobile-views"');
+    expect(analytics).toContain("mobileView === 'students' ? 'block' : 'hidden'");
     expect(analytics).toContain('Cerca alunno');
     expect(analytics).toContain('Ordine registro');
     expect(analytics).toContain('hidden md:block overflow-x-auto');

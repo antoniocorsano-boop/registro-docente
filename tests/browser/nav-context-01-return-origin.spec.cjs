@@ -71,8 +71,12 @@ test('NAV-CONTEXT-01 / Android 390 — Analisi reopens student details and retai
   await navigateTo(page, 'Analisi');
 
   const section = page.getByTestId('mobile-analytics-student-detail');
-  await section.locator('summary').click();
-  await expect(section).toHaveAttribute('open', '');
+  await page.getByTestId('analytics-view-students').click();
+  await expect(section).toBeVisible();
+  const firstRow = section.getByTestId('analytics-compact-row').first();
+  const firstBox = await firstRow.boundingBox();
+  expect(firstBox.y + firstBox.height).toBeLessThanOrEqual(844);
+  expect(firstBox.width).toBeGreaterThanOrEqual(340);
   const toggle = section.getByTestId('analytics-compact-toggle').first();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -80,7 +84,7 @@ test('NAV-CONTEXT-01 / Android 390 — Analisi reopens student details and retai
   await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Analisi');
-  await expect(section).toHaveAttribute('open', '');
+  await expect(section).toBeVisible();
   await expect(section.locator('article button').first()).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(section.locator('[data-testid="analytics-compact-detail"]:visible')).toHaveCount(1);
@@ -103,27 +107,27 @@ test('NAV-CONTEXT-01 — an explicit Analisi → Tabellone → Analisi route res
       let section = page.getByTestId('mobile-analytics-student-detail');
 
       // Ordinary navigation must discard manually expanded UI state.
-      await section.locator('summary').click();
-      await expect(section).toHaveAttribute('open', '');
+      await page.getByTestId('analytics-view-students').click();
+      await expect(section).toBeVisible();
       await navigateTo(page, 'Tabellone');
       await navigateTo(page, 'Analisi');
       section = page.getByTestId('mobile-analytics-student-detail');
-      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section).toBeHidden();
       await expect(section.getByPlaceholder('Cerca alunno')).toBeHidden();
 
       // Legitimate report Back still restores an open detail, but only once.
-      await section.locator('summary').click();
+      await page.getByTestId('analytics-view-students').click();
       await section.locator('article button').first().click();
       await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
       await page.goBack();
       await expect(page.getByTestId('header01-context')).toContainText('Analisi');
       section = page.getByTestId('mobile-analytics-student-detail');
-      await expect(section).toHaveAttribute('open', '');
+      await expect(section).toBeVisible();
 
       await navigateTo(page, 'Tabellone');
       await navigateTo(page, 'Analisi');
       section = page.getByTestId('mobile-analytics-student-detail');
-      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section).toBeHidden();
       await expect(section.getByPlaceholder('Cerca alunno')).toBeHidden();
     } finally {
       await context.close();
@@ -164,7 +168,7 @@ test('NAV-CONTEXT-01 — a privacy toggle while in report scrubs the saved visib
   await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
 
   const section = page.getByTestId('mobile-analytics-student-detail');
-  await section.locator('summary').click();
+  await page.getByTestId('analytics-view-students').click();
   const search = section.getByPlaceholder('Cerca alunno');
   await search.fill('Persona Fittizia');
   await section.locator('article button').first().click();
@@ -177,7 +181,7 @@ test('NAV-CONTEXT-01 — a privacy toggle while in report scrubs the saved visib
 
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Analisi');
-  await expect(section).toHaveAttribute('open', '');
+  await expect(section).toBeVisible();
   await expect(search).toHaveValue('');
   await page.goForward();
   await page.goBack();

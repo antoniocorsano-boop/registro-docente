@@ -31,10 +31,11 @@ describe('UX-MOBILE-01 responsive core contracts', () => {
     const analytics = await source('src/components/AnalyticsView.tsx');
 
     expect(analytics).toContain('data-testid="mobile-analytics-student-detail"');
-    expect(analytics).toContain('className="md:hidden group rounded-lg');
+    expect(analytics).toContain('data-testid="analytics-mobile-views"');
+    expect(analytics).toContain("mobileView === 'students' ? 'block' : 'hidden'");
     expect(analytics).toContain('className="hidden md:block overflow-x-auto');
     expect(analytics).toContain('onOpenStudentReport(m.student.id, {');
-    expect(analytics).toContain('studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false');
+    expect(analytics).toContain("studentDetailOpen: mobileView === 'students'");
   });
 
   test('student report selector and radar mode controls meet mobile touch sizing', async () => {

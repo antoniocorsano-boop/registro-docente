@@ -83,19 +83,31 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       ? { classId: currentClass.id, studentId: restored.ui.expandedAnalyticsStudentId }
       : null
   );
+  // Mobile owns a single flat surface; desktop keeps its native disclosures.
+  const [mobileView, setMobileView] = useState<'summary' | 'students' | 'details'>(
+    () => restored?.ui.studentDetailOpen === true ? 'students' : 'summary'
+  );
+  const advancedRef = useRef<HTMLDetailsElement>(null);
   const previousAnalyticsClassRef = useRef(currentClass.id);
   useEffect(() => {
-    if (previousAnalyticsClassRef.current !== currentClass.id) setExpandedAnalyticsStudent(null);
+    if (previousAnalyticsClassRef.current !== currentClass.id) {
+      setExpandedAnalyticsStudent(null);
+      setMobileView('summary');
+      setStudentSearch('');
+    }
     previousAnalyticsClassRef.current = currentClass.id;
   }, [currentClass.id]);
-  const mobileStudentDetailsRef = useRef<HTMLDetailsElement>(null);
-  // Native <details> is the sole authority for toggles. On each mount,
-  // only a validated report Back can reopen it; ordinary navigation starts closed.
-  // Avoid mirroring the browser's asynchronous toggle event in React state.
+  // On mobile the selected view reveals the same charts; on desktop the
+  // disclosure remains native, independently operable and initially closed.
   useLayoutEffect(() => {
-    const details = mobileStudentDetailsRef.current;
-    if (details) details.open = restored?.ui.studentDetailOpen === true;
-  }, [currentClass.id, restored?.ui.studentDetailOpen]);
+    const media = window.matchMedia('(min-width: 768px)');
+    const sync = () => {
+      if (advancedRef.current) advancedRef.current.open = !media.matches && mobileView === 'details';
+    };
+    if (!media.matches) sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, [mobileView]);
   useEffect(() => {
     // A protected view must never retain a previously typed visible name.
     if (isPrivacyShieldActive) setStudentSearch('');
@@ -262,9 +274,58 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Analytics Header Card */}
-      <div className="neon-card neon-card-highlight p-5">
+    <div className="min-w-0 space-y-3 md:space-y-4">
+      {/* Flat mobile workspace: one active content surface, shared controls. */}
+      <div className="md:hidden print:hidden min-w-0">
+        <div role="group" aria-label="Viste Analisi" data-testid="analytics-mobile-views"
+          className="grid grid-cols-[1fr_1fr_1.4fr] border-b border-[var(--border)]">
+          {([
+            ['summary', 'Sintesi'],
+            ['students', 'Alunni'],
+            ['details', 'Approfondimenti'],
+          ] as const).map(([value, label]) => (
+            <button key={value} type="button" aria-pressed={mobileView === value}
+              data-testid={`analytics-view-${value}`}
+              onClick={() => setMobileView(value)}
+              className={`min-h-[48px] min-w-0 px-1 py-2 text-sm font-semibold border-b-2 break-words focus-visible:outline focus-visible:outline-cyan-300 ${mobileView === value ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
+          <select aria-label="Periodo di analisi" value={periodFilter}
+            onChange={e => setPeriodFilter(e.target.value as 'ALL' | 'Q1' | 'Q2')}
+            className="min-h-[48px] min-w-0 w-full rounded-md bg-slate-900 border border-slate-700 px-1.5 text-sm text-slate-100">
+            <option value="ALL">Anno</option><option value="Q1">1° periodo</option><option value="Q2">2° periodo</option>
+          </select>
+          <select aria-label="Criterio di calcolo" value={useWeighted ? 'weighted' : 'simple'}
+            onChange={e => setUseWeighted(e.target.value === 'weighted')}
+            className="min-h-[48px] min-w-0 w-full rounded-md bg-slate-900 border border-slate-700 px-1.5 text-sm text-slate-100">
+            <option value="simple">Aritmetica</option><option value="weighted">Ponderata</option>
+          </select>
+          <button type="button" onClick={handleExportPDF} disabled={isExporting}
+            aria-label="Esporta PDF di lavoro" title="Esporta PDF di lavoro"
+            className="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center gap-0.5 text-xs font-semibold text-cyan-300 disabled:opacity-50">
+            <Download className="w-4 h-4" aria-hidden="true" />{isExporting ? '…' : 'PDF'}
+          </button>
+        </div>
+      </div>
+      <section data-testid="analytics-mobile-summary"
+        className={`md:hidden print:hidden min-w-0 ${mobileView === 'summary' ? 'block' : 'hidden'}`}>
+        <div className="grid grid-cols-2 divide-x divide-[var(--border)] border-b border-[var(--border)] py-3">
+          <div className="min-w-0 px-2"><span className="text-xs text-slate-400">Media classe</span><b className="block text-3xl tabular-nums text-white">{formatGrade(classAvg)}</b></div>
+          <div className="min-w-0 px-3"><span className="text-xs text-slate-400">Sufficienze</span><b className="block text-3xl tabular-nums text-white">{suffRate === null ? '—' : `${suffRate}%`}</b><span className="text-xs text-slate-400">{validAvgs.filter(v => v >= 6).length}/{validAvgs.length} con media</span></div>
+        </div>
+        <dl className="divide-y divide-[var(--border)]">
+          <div className="flex items-center justify-between gap-2 py-3"><dt className="text-sm text-slate-300">Fascia alta (≥ 8,5)</dt><dd className="font-semibold tabular-nums text-slate-100">{validAvgs.length ? levelCounts.AV : '—'}</dd></div>
+          <div className="flex items-center justify-between gap-2 py-3"><dt className="text-sm text-slate-300">Sotto soglia (&lt; 6)</dt><dd className="font-semibold tabular-nums text-slate-100">{validAvgs.length ? levelCounts.PA : '—'}</dd></div>
+        </dl>
+        <p className="text-xs text-slate-400 py-2">Indicatori matematici di supporto, non voti deliberati.</p>
+        <button type="button" onClick={() => window.print()} className="min-h-[48px] px-2 text-sm text-slate-300 inline-flex items-center gap-2"><Printer className="w-4 h-4" /> Stampa prospetto</button>
+      </section>
+
+      {/* Desktop: existing analytical layout and controls. */}
+      <div className="hidden md:block neon-card neon-card-highlight p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
           <div>
             <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)] flex items-center gap-2">
@@ -403,8 +464,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
       </div>
 
-      <details className="group neon-card overflow-hidden">
-        <summary className="min-h-[56px] cursor-pointer list-none p-4 flex items-center justify-between gap-3">
+      <details ref={advancedRef} data-testid="analytics-advanced-surface"
+        className={`group neon-card analytics-mobile-advanced min-w-0 overflow-hidden md:block ${mobileView === 'details' ? 'block' : 'hidden'}`}>
+        <summary className="hidden md:flex min-h-[56px] cursor-pointer list-none p-4 items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-[var(--primary)]" /> Approfondimenti analitici
@@ -413,9 +475,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
           <span aria-hidden="true" className="text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
         </summary>
-        <div className="space-y-4 border-t border-[var(--border)] p-4">
+        <div className="space-y-4 md:border-t md:border-[var(--border)] md:p-4">
+        <div className="md:hidden border-b border-[var(--border)] pb-3 text-sm text-slate-300 space-y-1">
+          <h3 className="font-semibold text-slate-100">Criterio di calcolo</h3>
+          <p>{useWeighted ? 'Media ponderata: pesi configurati nelle impostazioni.' : 'Media aritmetica: ogni valutazione ha lo stesso peso.'}</p>
+          <p className="text-xs text-slate-400">Pesi configurati: scritto {weights.verifica}%, orale {weights.orale}%, pratico {weights.disegno}%, test {weights.test}%, osservazioni {weights.osserv}%.</p>
+        </div>
         {/* Competence Levels Chart / Progress Distribution */}
-        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+        <div className="md:mt-4 md:pt-4 md:border-t md:border-[var(--border)]">
           <h4 className="text-xs uppercase tracking-wider font-bold text-slate-300 mb-3 flex items-center justify-between">
             <span>Fasce analitiche della media</span>
             <span className="text-slate-500 font-normal">
@@ -484,7 +551,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Official Export Card */}
 
 
-      <div className="neon-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="hidden md:flex neon-card p-4 flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <FileText className="w-4 h-4 text-[var(--primary)]" /> Prospetto di lavoro docente
@@ -513,34 +580,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
       </div>
 
-      {/* Internal analytical table with weighted and arithmetic averages */}
-      <div className="neon-card p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-400" />
-            <span>Indicatori di media: ponderata & confronto aritmetico</span>
-          </h3>
-          <span className="text-xs text-slate-400">
-            {useWeighted ? '⭐ Modalità Ponderata Attiva' : 'Modalità Aritmetica'}
-          </span>
-        </div>
-
-        {/* Mobile student detail: secondary to the class summary */}
-        <details
-          ref={mobileStudentDetailsRef}
-          data-testid="mobile-analytics-student-detail"
-          className="md:hidden group rounded-lg border border-[var(--border)] bg-slate-900/30 overflow-hidden min-w-0"
-        >
-          <summary className="min-h-[56px] cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-100">Dettaglio alunni</span>
-              <span className="block text-[11px] text-slate-400">Cerca, ordina e apri la scheda individuale.</span>
-            </div>
-            <span aria-hidden="true" className="shrink-0 text-slate-400 text-lg transition-transform group-open:rotate-180">⌄</span>
-          </summary>
-
-          <div className="border-t border-[var(--border)] p-3 space-y-3 min-w-0">
-            <div className="grid grid-cols-1 gap-2 min-w-0">
+      {/* Mobile student surface: no enclosing cards or repeated titles. */}
+      <section data-testid="mobile-analytics-student-detail" aria-label="Alunni"
+        className={`md:hidden min-w-0 print:hidden ${mobileView === 'students' ? 'block' : 'hidden'}`}>
+          <div className="space-y-2 min-w-0">
+            <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-2 min-w-0">
               <label className="min-w-0">
                 <span className="sr-only">Cerca alunno</span>
                 <input
@@ -548,7 +592,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   value={studentSearch}
                   onChange={e => setStudentSearch(e.target.value)}
                   placeholder="Cerca alunno"
-                  className="w-full min-h-[44px] p-2.5 neon-input text-sm text-white bg-slate-900"
+                  className="w-full min-h-[48px] px-2 neon-input text-sm text-white bg-slate-900"
                 />
               </label>
               <label className="min-w-0">
@@ -556,7 +600,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <select
                   value={studentSort}
                   onChange={e => setStudentSort(e.target.value as 'register' | 'name' | 'average')}
-                  className="w-full min-h-[44px] p-2.5 neon-input text-sm text-white bg-slate-900"
+                  className="w-full min-h-[48px] px-2 neon-input text-sm text-white bg-slate-900"
                 >
                   <option value="register">Ordine registro</option>
                   <option value="name">Nome</option>
@@ -565,7 +609,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </label>
             </div>
 
-            <div data-testid="analytics-compact-list" className="min-w-0 divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] overflow-hidden">
+            <div className="flex items-center justify-between gap-2 px-1 pt-1 pb-1 border-b border-[var(--border)] text-xs text-slate-400">
+              <span>Alunno</span><span className="mr-[48px]">Media anno</span>
+            </div>
+            <div data-testid="analytics-compact-list" className="min-w-0 divide-y divide-[var(--border)]">
               {mobileStudentMetrics.length === 0 ? (
                 <div className="p-4 rounded-lg border border-[var(--border)] bg-slate-900/40 text-center text-xs text-slate-500">
                   {studentMetrics.length === 0 ? 'Nessun alunno presente.' : 'Nessun alunno corrisponde alla ricerca.'}
@@ -598,18 +645,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                               useWeighted,
                               studentSearch: isPrivacyShieldActive ? '' : studentSearch,
                               studentSort,
-                              studentDetailOpen: mobileStudentDetailsRef.current?.open ?? false,
+                              studentDetailOpen: mobileView === 'students',
                               expandedAnalyticsStudentId: expandedAnalyticsStudent?.classId === currentClass.id
                                 ? expandedAnalyticsStudent.studentId : null
                             }
                           })}
                           className="flex min-h-[60px] flex-1 min-w-0 items-center justify-between gap-2 px-2 py-2 text-left hover:bg-slate-800/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-cyan-300"
                         >
-                          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">{displayName}</span>
-                          <span className="shrink-0 text-right">
-                            <span className="block text-xs text-slate-400">Anno</span>
-                            <span data-testid="analytics-compact-average" className="block text-base font-bold tabular-nums text-slate-100">{formatGrade(displayTotal)}</span>
-                          </span>
+                          <span data-testid="analytics-compact-name" className="min-w-0 flex-1 break-words text-sm font-semibold text-slate-100">{displayName}</span>
+                          <span data-testid="analytics-compact-average" className="shrink-0 text-base font-bold tabular-nums text-slate-100">{formatGrade(displayTotal)}</span>
                         </button>
                         <button
                           type="button"
@@ -625,25 +669,25 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       </div>
                       <div id={panelId} data-testid="analytics-compact-detail" hidden={!expanded}>
                         {expanded && (
-                          <div className="space-y-2 border-t border-[var(--border)] bg-slate-900/40 p-3">
-                            <div className="grid grid-cols-2 gap-2 text-center min-w-0">
-                              <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                                <span className="block text-xs text-slate-400">Q1</span>
-                                <b data-testid="analytics-compact-q1" className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</b>
+                          <div className="space-y-2 border-t border-[var(--border)] px-2 py-3">
+                            <dl className="grid grid-cols-2 gap-2 min-w-0">
+                              <div className="min-w-0 flex flex-wrap items-baseline justify-between gap-1">
+                                <dt className="text-xs text-slate-400">1° periodo</dt>
+                                <dd data-testid="analytics-compact-q1" className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</dd>
                               </div>
-                              <div className="min-w-0 rounded-md bg-slate-950/70 p-2">
-                                <span className="block text-xs text-slate-400">Q2</span>
-                                <b data-testid="analytics-compact-q2" className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</b>
+                              <div className="min-w-0 flex flex-wrap items-baseline justify-between gap-1">
+                                <dt className="text-xs text-slate-400">2° periodo</dt>
+                                <dd data-testid="analytics-compact-q2" className="font-mono text-sm text-slate-200">{formatGrade(displayQ2)}</dd>
                               </div>
-                            </div>
+                            </dl>
                             <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
                               <span className="text-slate-400 min-w-0">
                                 Fascia analitica ({periodFilter === 'ALL' ? 'anno' : periodFilter}): <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
                               </span>
                               {m.activeAvg === null ? (
-                                <span className="px-2 py-1 rounded text-xs font-semibold text-slate-400 bg-slate-800/70">Non disponibile</span>
+                                <span className="text-xs font-semibold text-slate-400">Non disponibile</span>
                               ) : (
-                                <span className={`px-2 py-1 rounded text-xs font-semibold ${m.isAtRisk ? 'badge-bad' : 'badge-ok'}`}>
+                                <span className={`text-xs font-semibold ${m.isAtRisk ? 'text-rose-400' : 'text-slate-300'}`}>
                                   {m.isAtRisk ? 'Media < 6' : 'Media ≥ 6'}
                                 </span>
                               )}
@@ -657,7 +701,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               )}
             </div>
           </div>
-        </details>
+      </section>
+
+      {/* Internal analytical table with weighted and arithmetic averages */}
+      <div className="hidden md:block neon-card p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400" />
+            <span>Indicatori di media: ponderata & confronto aritmetico</span>
+          </h3>
+          <span className="text-xs text-slate-400">
+            {useWeighted ? '⭐ Modalità Ponderata Attiva' : 'Modalità Aritmetica'}
+          </span>
+        </div>
 
         <div className="hidden md:block overflow-x-auto border border-[var(--border)] rounded-lg">
           <table className="w-full text-xs text-center border-collapse">

@@ -127,7 +127,11 @@ for (const width of [320, 390]) {
       const page = await context.newPage();
       await page.goto(URL + '?view=analytics', { waitUntil: 'domcontentloaded' });
       const section = page.getByTestId('mobile-analytics-student-detail');
-      await section.locator('summary').click();
+      await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+      await expect(section).toBeHidden();
+      await page.getByTestId('analytics-view-students').click();
+      await expect(page.getByTestId('analytics-mobile-summary')).toBeHidden();
+      await expect(page.getByTestId('analytics-advanced-surface')).toBeHidden();
       const rows = section.getByTestId('analytics-compact-row');
       const toggles = section.getByTestId('analytics-compact-toggle');
       const reports = section.getByTestId('analytics-compact-report');
@@ -152,17 +156,17 @@ for (const width of [320, 390]) {
       await page.getByTestId('fixture-25').click();
       await expect(rows).toHaveCount(25);
       await page.getByTestId('fixture-change-class').click();
-      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section).toBeHidden();
       await expect(details).toHaveCount(0);
-      await section.locator('summary').click();
+      await page.getByTestId('analytics-view-students').click();
       await expect(rows).toHaveCount(25);
       await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
       await toggles.nth(1).click();
       await expect(details).toHaveCount(1);
       await page.getByTestId('fixture-change-class').click();
-      await expect(section).not.toHaveAttribute('open', '');
+      await expect(section).toBeHidden();
       await expect(details).toHaveCount(0);
-      await section.locator('summary').click();
+      await page.getByTestId('analytics-view-students').click();
       await expect(rows).toHaveCount(25);
       await expect(toggles.nth(1)).toHaveAttribute('aria-expanded', 'false');
       await page.getByTestId('fixture-toggle-privacy').click();
@@ -177,6 +181,17 @@ for (const width of [320, 390]) {
       expect(await toggles.first().getAttribute('aria-label')).not.toContain('Persona Fittizia 01');
       await section.getByRole('combobox').selectOption('average');
       await expect(rows).toHaveCount(25);
+      await page.getByTestId('analytics-view-details').click();
+      await expect(section).toBeHidden();
+      await expect(page.getByTestId('analytics-advanced-surface')).toHaveAttribute('open', '');
+      await expect(page.getByTestId('analytics-advanced-surface')).toBeVisible();
+      await page.getByTestId('analytics-view-summary').click();
+      await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+      await expect(page.getByTestId('analytics-advanced-surface')).toBeHidden();
+      await page.getByTestId('analytics-view-students').click();
+      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      await expect(rows.first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     } finally {
       await context.close();
     }

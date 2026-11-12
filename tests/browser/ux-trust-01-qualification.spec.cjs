@@ -313,13 +313,15 @@ test('UXT-E mobile analytics keeps class summary first and student detail disclo
   await closePersistenceConfirmation(page);
   await page.getByRole('button', { name: 'Riepilogo', exact: true }).click();
   await page.getByRole('main').getByRole('button', { name: 'Analisi', exact: true }).click();
-  await expect(page.getByText('Analisi medie & fasce analitiche', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('analytics-mobile-views')).toBeVisible();
 
   const studentDetail = page.getByTestId('mobile-analytics-student-detail');
-  await expect(studentDetail).toBeVisible();
-  await expect(studentDetail.locator('summary')).toContainText('Dettaglio alunni');
+  await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+  await expect(studentDetail).toBeHidden();
   await expect(studentDetail.getByPlaceholder('Cerca alunno')).toBeHidden();
-  await studentDetail.locator('summary').click();
+  await page.getByTestId('analytics-view-students').click();
+  await expect(page.getByTestId('analytics-mobile-summary')).toBeHidden();
+  await expect(studentDetail).toBeVisible();
   await expect(studentDetail.getByPlaceholder('Cerca alunno')).toBeVisible();
   await expect(studentDetail.getByRole('combobox')).toBeVisible();
 

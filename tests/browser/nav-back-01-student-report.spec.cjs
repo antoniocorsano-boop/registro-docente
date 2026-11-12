@@ -15,7 +15,7 @@ async function openStudentFromOrigin(page, origin) {
     await page.getByRole('button', { name: 'Apri scheda alunno' }).click();
   } else {
     const details = page.getByTestId('mobile-analytics-student-detail');
-    await details.locator('summary').click();
+    await page.getByTestId('analytics-view-students').click();
     await details.locator('article button').first().click();
   }
   await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
@@ -52,7 +52,7 @@ for (const origin of ['Tabellone', 'Analisi']) {
     await expect(page.getByTestId('header01-context')).toContainText(origin);
     await expect(page.getByTestId('header01-context')).toContainText('3ª A');
     if (origin === 'Tabellone') await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
-    else await expect(page.getByText('Analisi medie & fasce analitiche')).toBeVisible();
+    else await expect(page.getByTestId('analytics-mobile-views')).toBeVisible();
 
     await page.goForward();
     await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
