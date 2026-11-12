@@ -17,6 +17,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.UUID;
@@ -24,13 +26,13 @@ import java.util.UUID;
 @CapacitorPlugin(name = "RegistroBackupFiles")
 public class RegistroBackupFilesPlugin extends Plugin {
     private static final int MAX_BYTES = 32 * 1024 * 1024;
-    private static final Set<String> LOCAL_PROVIDERS = Set.of(
+    private static final Set<String> LOCAL_PROVIDERS = new HashSet<>(Arrays.asList(
         "com.android.externalstorage.documents",
         "com.android.providers.downloads.documents"
-    );
-    private static final Set<String> ENVELOPE_KEYS = Set.of(
+    ));
+    private static final Set<String> ENVELOPE_KEYS = new HashSet<>(Arrays.asList(
         "privacy_protocol", "version", "timestamp", "kdf", "salt", "iv", "ciphertext"
-    );
+    ));
     private boolean pickerOpen = false;
     private boolean writing = false;
     private Uri destination;
