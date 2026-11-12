@@ -14,8 +14,9 @@ async function navigate(page, name) {
 
 test('CDC-02/S1: on smartphone two sessions can be saved and reopened after returning to Consigli', async ({ page }) => {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('cdc-02-synthetic');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   const className = '2Z CDC-02 sintetica';
@@ -99,8 +100,9 @@ test('CDC-02/S2b-P3: anteprima, annullamento, versioni e ritorno su mobile sinte
       syntheticDataOnly: true });
   }
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('cdc-02-p3-synthetic');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   const className = '2P Fotografie sintetiche';
