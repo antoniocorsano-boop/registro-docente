@@ -82,6 +82,29 @@ async function setupFreshVault(page, targetURL = baseURL) {
   await page.getByRole('button', { name: 'Avvia la prova' }).click();
 }
 
+async function readSubmissionEvidence(page) {
+  return page.evaluate(() => ({
+    attempts: globalThis.__online01Injection.attempts,
+    ids: [...globalThis.__online01Injection.submissionIds],
+    payloadSizes: [...globalThis.__online01Injection.payloadSizes]
+  }));
+}
+
+// The new archive writes an encrypted empty submissions record before READY.
+// Prove that write is empty, then start the delivery counter at the boundary.
+async function assertEmptyArchiveInitialization(page) {
+  const initialization = await readSubmissionEvidence(page);
+  expect(initialization).toEqual({ attempts: 1, ids: [null], payloadSizes: [0] });
+  await page.evaluate(() => {
+    const state = globalThis.__online01Injection;
+    if (state.mode !== 'pass' || state.release !== null) throw Error('Submission injection is not idle');
+    state.attempts = 0;
+    state.submissionIds.length = 0;
+    state.payloadSizes.length = 0;
+  });
+  return initialization;
+}
+
 async function unlockVault(page) {
   await expect(page.getByRole('heading', { name: 'Sblocca Registro' })).toBeVisible();
   await page.locator('#vault-password').fill(vaultPassword);
@@ -143,9 +166,11 @@ test('ONLINE-01 pending submit is truthful and non-reentrant — mobile 390x844'
 
   await setupFreshVault(page, studentPortalURL());
   await expect(page.getByRole('heading', { name: "A cosa serve l'energia" })).toBeVisible();
+  const initialization = await assertEmptyArchiveInitialization(page);
   await startQuiz(page, 'Studente Sintetico Mobile');
   await answerThroughFinalQuestion(page);
 
+  expect(await readSubmissionEvidence(page)).toEqual({ attempts: 0, ids: [], payloadSizes: [] });
   await page.evaluate(() => { globalThis.__online01Injection.mode = 'delay'; });
   const submit = page.getByRole('button', { name: /Completa e Consegna/ });
   await submit.dblclick();
@@ -159,6 +184,8 @@ test('ONLINE-01 pending submit is truthful and non-reentrant — mobile 390x844'
     payloadSizes: [...globalThis.__online01Injection.payloadSizes]
   }));
   expect(pendingEvidence.attempts).toBe(1);
+  expect(pendingEvidence.ids[0]).toBeTruthy();
+  expect(pendingEvidence.payloadSizes).toEqual([1]);
 
   await page.screenshot({
     path: path.join(evidenceDir, 'online-01-mobile-390x844-pending.png'),
@@ -175,6 +202,7 @@ test('ONLINE-01 pending submit is truthful and non-reentrant — mobile 390x844'
   }));
   expect(finalInjection.attempts).toBe(1);
   expect(finalInjection.payloadSizes).toEqual([1]);
+  expect(finalInjection.ids).toEqual(pendingEvidence.ids);
 
   await page.getByRole('button', { name: 'Torna al Registro', exact: true }).click();
   await openTeacherDestination(page, 'Verifiche online');
@@ -198,6 +226,7 @@ test('ONLINE-01 pending submit is truthful and non-reentrant — mobile 390x844'
       candidateSha,
       result: 'PASS',
       viewport: { width: 390, height: 844 },
+      initialization,
       pendingEvidence,
       finalInjection,
       overflow,
@@ -222,6 +251,7 @@ test('ONLINE-01 failure preserves retry identity and classes are register-derive
 
   await setupFreshVault(page, baseURL);
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  const initialization = await assertEmptyArchiveInitialization(page);
 
   page.once('dialog', dialog => dialog.accept('Classe Sintetica ONLINE-01'));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();
@@ -241,6 +271,7 @@ test('ONLINE-01 failure preserves retry identity and classes are register-derive
   await startQuiz(page, 'Studente Sintetico Desktop');
   await answerThroughFinalQuestion(page);
 
+  expect(await readSubmissionEvidence(page)).toEqual({ attempts: 0, ids: [], payloadSizes: [] });
   await page.evaluate(() => { globalThis.__online01Injection.mode = 'fail-once'; });
   await page.getByRole('button', { name: /Completa e Consegna/ }).click();
   await expect(page.getByRole('alert')).toContainText('Consegna non salvata. Riprova o avvisa il docente.');
@@ -299,6 +330,7 @@ test('ONLINE-01 failure preserves retry identity and classes are register-derive
       candidateSha,
       result: 'PASS',
       viewport: { width: 1280, height: 800 },
+      initialization,
       registerDerivedClasses: options,
       afterFailure,
       afterRetry,
