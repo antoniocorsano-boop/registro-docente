@@ -33,9 +33,8 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
     margin: 10, image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, backgroundColor: '#ffffff' },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-  }).from(clone);
+  }).from(clone).toCanvas();
   // Fail on an empty raster instead of recording a blank file as a useful report.
-  await worker.toCanvas();
   const canvas: HTMLCanvasElement = await worker.get('canvas');
   if (!canvas.width || !canvas.height) throw new Error('Prospetto vuoto.');
   const sample = document.createElement('canvas');
