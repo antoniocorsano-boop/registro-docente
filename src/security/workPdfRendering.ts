@@ -1,3 +1,6 @@
+import regularFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url';
+import boldFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf?url';
+
 /**
  * Compose the existing privacy-aware report as selectable PDF text, not a
  * screenshot of the hidden Tailwind template. html2pdf 0.10.1 already bundles
@@ -10,6 +13,19 @@ const LEFT = 10;
 const RIGHT = 200;
 const BOTTOM = 278;
 const LINE = 3.7;
+// Standard PDF Helvetica supports WinAnsi, not arbitrary Unicode.
+const WIN_ANSI = /^[\x20-\x7e\xa0-\xff€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]*$/u;
+
+async function fontBase64(url: string): Promise<string> {
+  const local = new URL(url, window.location.href);
+  if (local.origin !== window.location.origin) throw new Error('Carattere PDF locale non disponibile.');
+  const response = await fetch(local.href);
+  if (!response.ok) throw new Error('Carattere PDF locale non disponibile.');
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 16384) binary += String.fromCharCode(...bytes.subarray(i, i + 16384));
+  return btoa(binary);
+}
 
 function textOf(node: Element | null | undefined): string {
   return (node?.textContent || '').trim().replace(/\s+/g, ' ')
@@ -46,6 +62,29 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: false },
   }).from(seed, 'canvas').toPdf();
   const pdf = await worker.get('pdf');
+  const allText = [heading, title, context, ...metadata, ...columns, ...rows.flat(), footnote];
+  const unicode = allText.some(value => !WIN_ANSI.test(value));
+  const family = unicode ? 'RegistroUnicode' : 'helvetica';
+  if (unicode) {
+    const [regular, bold] = await Promise.all([fontBase64(regularFontUrl), fontBase64(boldFontUrl)]);
+    pdf.addFileToVFS('RegistroUnicode-Regular.ttf', regular);
+    pdf.addFileToVFS('RegistroUnicode-Bold.ttf', bold);
+    pdf.addFont('RegistroUnicode-Regular.ttf', family, 'normal');
+    pdf.addFont('RegistroUnicode-Bold.ttf', family, 'bold');
+    // The bundled jsPDF encoder is BMP-based; fail closed rather than silently
+    // emitting a missing glyph, truncating a name or corrupting a surrogate.
+    for (const style of ['normal', 'bold']) {
+      pdf.setFont(family, style);
+      const font = pdf.getFont().metadata;
+      if (typeof font?.characterToGlyph !== 'function') throw new Error('Carattere PDF non verificabile.');
+      for (const value of allText) for (const char of value) {
+        const code = char.codePointAt(0)!;
+        if (code > 0xffff || !font.characterToGlyph(code)) {
+          throw new Error('Il prospetto contiene caratteri non supportati dal PDF locale.');
+        }
+      }
+    }
+  }
   // Never return the bootstrap raster; every retained page is the real report.
   pdf.addPage();
   pdf.deletePage(1);
@@ -55,7 +94,7 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
 
   function paragraph(value: string, size: number, bold = false) {
     if (!value) return;
-    pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+    pdf.setFont(family, bold ? 'bold' : 'normal');
     pdf.setFontSize(size);
     pdf.setTextColor(15, 23, 42);
     const lines: string[] = pdf.splitTextToSize(value, RIGHT - LEFT);
@@ -73,7 +112,7 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
     y += 2;
   }
   function measure(cells: string[], headingRow: boolean) {
-    pdf.setFont('helvetica', headingRow ? 'bold' : 'normal');
+    pdf.setFont(family, headingRow ? 'bold' : 'normal');
     pdf.setFontSize(8);
     const lines = cells.map((cell, i) => pdf.splitTextToSize(cell || '–', WIDTHS[i] - 3) as string[]);
     return { lines, height: Math.max(7, ...lines.map(line => line.length * LINE + 3)) };
@@ -114,7 +153,7 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
   const pages = pdf.internal.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     pdf.setPage(page);
-    pdf.setFont('helvetica', 'normal');
+    pdf.setFont(family, 'normal');
     pdf.setFontSize(8);
     pdf.setTextColor(71, 85, 105);
     pdf.text(`Pagina ${page} di ${pages}`, RIGHT, 288, { align: 'right' });
