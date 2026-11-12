@@ -30,6 +30,9 @@ fi
 cert() {
   "$signer" verify --print-certs "$1" | awk -F': ' '/^Signer #1 certificate SHA-256 digest:/{print $2}'
 }
+if [[ "$version" -gt 10001 && -z "$previous" ]]; then
+  echo 'Previous signed Beta required for subsequent updates' >&2; exit 1
+fi
 if [[ -n "$previous" ]]; then
   "$signer" verify "$previous"
   read -r old_app old_version old_name < <(identity "$previous")
