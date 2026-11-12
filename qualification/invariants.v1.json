@@ -1805,6 +1805,30 @@
         "tests/browser/ux-trust-01-qualification.spec.cjs",
         "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-DENSITY-03-I01",
+      "owner": "MOBILE-DENSITY-03",
+      "statement": "Behavior observations require an explicit selection in all routes, use the selected class and date, never default unobserved students to an assessment, and preserve unchanged records and existing notes. Save is explicit and durable; failure retains the draft.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/BehaviorsView.tsx",
+        "src/App.tsx",
+        "src/behavior/",
+        "src/security/flow03BehaviourExplicitContract.test.ts",
+        "tests/browser/behavior-integrity.spec.cjs",
+        "tests/browser/fixtures/behavior-integrity.html",
+        "tests/browser/fixtures/behavior-integrity-fixture.tsx",
+        ".github/workflows/behavior-integrity-qualification.yml"
+      ],
+      "tests": [
+        "src/security/flow03BehaviourExplicitContract.test.ts",
+        "src/security/persist01hTeacherUiContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/behavior-integrity.spec.cjs",
+        "tests/browser/flow-03-registra.spec.cjs"
+      ]
     }
   ]
 }
