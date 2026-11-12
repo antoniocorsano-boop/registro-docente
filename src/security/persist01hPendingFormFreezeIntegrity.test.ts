@@ -27,10 +27,18 @@ describe('PERSIST-01H pending form freeze integrity', () => {
 
   test('behavior status controls freeze while durable save is pending', async () => {
     const text = await source('src/components/BehaviorsView.tsx');
-    const statusControls = sectionBetween(text, '<fieldset disabled={isSaving}', '<button\n        onClick={handleSave}');
+    const statusControls = sectionBetween(text, '<fieldset disabled={isSaving || !isObservationDate(selectedDate)}', '</fieldset>');
 
-    expect(statusControls).toContain('{/* Bulk action buttons */}');
+    for (const label of ['Ottimale 🌟', 'Costruttivo 👍', 'Distratto ⚠️']) {
+      expect(statusControls).toContain("onClick={() => setAll('" + label + "')}");
+    }
     expect(statusControls).toContain('BEHAVIOR_OPTIONS.map');
+    expect(statusControls).toContain('onClick={() => handleSelectStatus(student.id, opt.label)}');
+    expect(statusControls).toContain('aria-pressed={isSelected}');
+    const dateControl = sectionBetween(text, 'type="date"', '</label>');
+    expect(dateControl).toContain('disabled={isSaving}');
+    const saveControl = sectionBetween(text, 'onClick={handleSave}', '</button>');
+    expect(saveControl).toContain('disabled={isSaving || changeCount === 0 || !isObservationDate(selectedDate)}');
   });
 
   test('manual test form freezes title UDA and raw text while durable save is pending', async () => {

@@ -3,6 +3,7 @@ import {
   ActiveTab,
   AppData,
   AppSettings,
+  BehaviorRecord,
   ClassData,
   EvaluationType,
   Grade,
@@ -195,7 +196,8 @@ import { DashboardView } from './components/DashboardView';
 import { RecordMissionBanner } from './components/RecordMissionBanner';
 import { ReviewMissionBanner } from './components/ReviewMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
-import { BehaviorsView } from './components/BehaviorsView';
+import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
+import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
 import { MatrixView } from './components/MatrixView';
 import { CouncilView } from './components/CouncilView';
@@ -399,6 +401,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const registerCouncilDraftGuard = useCallback((guard: PlanningDraftGuard | null) => {
     councilGuardRef.current = guard;
   }, []);
+  const behaviorDraftGuardRef = useRef<BehaviorDraftGuard | null>(null);
+  const [behaviorSavePending, setBehaviorSavePending] = useState(false);
+  const behaviorSavePendingRef = useRef(false);
+  const registerBehaviorDraftGuard = useCallback((guard: BehaviorDraftGuard | null) => {
+    behaviorDraftGuardRef.current = guard;
+  }, []);
   const assessmentDraftGuardRef = useRef<AssessmentDraftGuard | null>(null);
   const registerAssessmentDraftGuard = useCallback((guard: AssessmentDraftGuard | null) => {
     assessmentDraftGuardRef.current = guard;
@@ -410,7 +418,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       && (Boolean(assessmentDraftGuardRef.current?.hasUnsavedChanges())
         || Boolean(assessmentDraftGuardRef.current?.isSaving())))
     || (activeTabRef.current === 'consigli'
-      && Boolean(councilGuardRef.current?.hasUnsavedChanges())), []);
+      && Boolean(councilGuardRef.current?.hasUnsavedChanges()))
+    || (activeTabRef.current === 'comportamenti'
+      && (behaviorSavePendingRef.current || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges()))), []);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
   // Positions have meaning only inside the same, continuous app-owned epoch.
@@ -556,13 +566,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const performPlanningExit = (discardUnsavedDraft = false) => {
     // A confirmation must never execute a stale UDA callback while history.go
     // is still traversing to the verified Programmazione origin.
-    if (historyRestorePendingRef.current !== null) return;
+    if (historyRestorePendingRef.current !== null || behaviorSavePendingRef.current) return;
     // A Back to an older history entry may show the *same* Programmazione
     // component, so unmounting is not sufficient to discard its dirty draft.
     if (discardUnsavedDraft) {
       if (activeTabRef.current === 'programmazione') planningGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'verifiche-online') assessmentDraftGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'consigli') councilGuardRef.current?.discardChanges();
+      if (activeTabRef.current === 'comportamenti') behaviorDraftGuardRef.current?.discardChanges();
     }
     traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
     planningExitRestoreFocusRef.current = false;
@@ -2046,7 +2057,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       })
     : null;
   const activeRecordMission =
-    recordSession?.status === 'editing'
+    (recordSession?.status === 'editing' || (recordSession?.status === 'saved' && recordSession.evidenceKind === 'behaviour'))
     && recordSession.context.classId === currentClass?.id
     && recordSession.evidenceKind
     && routeForRecordEvidence(recordSession.evidenceKind).tab === activeTab
@@ -2403,8 +2414,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
 
     publishRecordSession(markRecordSessionSaved(session));
-    setActiveTab('dashboard');
     setTodayAction('record');
+    // A committed observation must complete its session even when a departure
+    // decision is open. Only the automatic navigation is deferred.
+    if (kind === 'behaviour' && (pendingExitRef.current || historyRestorePendingRef.current || historyFallbackRef.current)) return true;
+    setActiveTab('dashboard');
     return true;
   }, [publishRecordSession, setActiveTab]);
 
@@ -2449,7 +2463,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const handleReturnToRecord = useCallback(() => {
     const session = recordSessionRef.current;
-    if (!session || session.status !== 'editing' || session.context.classId !== currentClassIdRef.current) return;
+    if (!session || (session.status !== 'editing' && !(session.status === 'saved' && session.evidenceKind === 'behaviour')) || session.context.classId !== currentClassIdRef.current) return;
     recordSpecialistNavigationVersionRef.current = null;
     setTodayAction('record');
     setActiveTab('dashboard');
@@ -2739,37 +2753,41 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   // Save behavior notes
-  const handleSaveBehaviors = (newRecords: any[]): Promise<void> => {
+  const handleSaveBehaviors = async (newRecords: BehaviorRecord[]): Promise<void> => {
     const classId = currentClass?.id;
-    if (!classId) return Promise.resolve();
+    if (!classId || currentClassIdRef.current !== classId || activeTabRef.current !== 'comportamenti'
+      || behaviorSavePendingRef.current || !newRecords.length) throw new Error('Contesto osservazioni non disponibile.');
     const navigationVersionAtSave = navigationVersionRef.current;
     const recordSessionAtSave = recordSessionRef.current;
-    const submittedBehaviorKeys = new Set(
-      newRecords.map(record => `${record.date}::${record.studentId}`)
-    );
-
-    return commitAppDataMutation(current => {
-      const targetClass = current.classes.find(c => c.id === classId);
-      if (!targetClass) throw new Error('Classe non più disponibile.');
-      const remaining = (targetClass.behaviors || []).filter(
-        record => !submittedBehaviorKeys.has(`${record.date}::${record.studentId}`)
-      );
-      const updatedClass: ClassData = {
-        ...targetClass,
-        behaviors: [...remaining, ...newRecords]
-      };
-      return {
-        ...current,
-        classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
-      };
-    }, {
-      afterCommit: () => {
-        const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId);
-        if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
-          setActiveTab('dashboard');
+    const originGuard = behaviorDraftGuardRef.current;
+    behaviorSavePendingRef.current = true;
+    setBehaviorSavePending(true);
+    try {
+      await commitAppDataMutation(current => {
+        const targetClass = current.classes.find(c => c.id === classId);
+        if (!targetClass) throw new Error('Classe non più disponibile.');
+        const updatedClass = applyObservationChanges(targetClass, newRecords);
+        return {
+          ...current,
+          classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
+        };
+      }, {
+        afterCommit: () => {
+          // The successful durable commit is the only authority for clearing
+          // a draft. Never navigate through a pending departure decision.
+          originGuard?.markCommitted();
+          behaviorSavePendingRef.current = false;
+          const recordCompleted = completeRecordFlow('behaviour', navigationVersionAtSave, recordSessionAtSave, classId);
+          if (pendingExitRef.current || historyRestorePendingRef.current || historyFallbackRef.current) return;
+          if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
+            setActiveTab('dashboard');
+          }
         }
-      }
-    }).then(() => undefined);
+      });
+    } finally {
+      behaviorSavePendingRef.current = false;
+      setBehaviorSavePending(false);
+    }
   };
 
   // Edit batch: create a navigable history entry associated with the authorized class.
@@ -3397,9 +3415,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             currentClass={currentClass}
             onSaveBehaviors={handleSaveBehaviors}
             isPrivacyShieldActive={isPrivacyShieldActive}
-            requireExplicitSelection={recordSession?.status === 'editing'
-              && recordSession.evidenceKind === 'behaviour'
-              && recordSession.context.classId === currentClass.id}
+            onRegisterDraftGuard={registerBehaviorDraftGuard}
           />
         )}
 
@@ -3731,7 +3747,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                 ? 'La verifica contiene modifiche non salvate. Scegli se rimanere nell’editor o uscire senza salvare.'
                 : activeTab === 'consigli'
                   ? 'Ci sono valutazioni di ingresso non salvate. Puoi salvarle, scartarle o rimanere qui.'
-                  : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
+                  : activeTab === 'comportamenti'
+                    ? behaviorSavePending ? 'Salvataggio delle osservazioni in corso.' : behaviorDraftGuardRef.current?.hasUnsavedChanges()
+                      ? 'Ci sono osservazioni non salvate. Puoi rimanere qui o uscire senza salvarle.'
+                      : 'Le osservazioni sono state salvate. Puoi proseguire o rimanere qui.'
+                    : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
             </p>
             {planningExitFromBrowser && (
               <p role="note" className="text-sm font-semibold text-amber-200">
@@ -3756,7 +3776,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                   ? 'Ripristino della verifica in corso. Le scelte saranno disponibili dopo la verifica del percorso.'
                   : activeTab === 'consigli'
                     ? 'Ripristino della schermata Consigli in corso. Le scelte saranno disponibili dopo la verifica del percorso.'
-                    : 'Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.'}
+                    : activeTab === 'comportamenti'
+                      ? 'Ripristino della schermata Comportamento in corso.'
+                      : 'Ripristino della Programmazione in corso. Le scelte saranno disponibili dopo la verifica del percorso.'}
               </p>
             )}
             {historyFallbackWarning && (
@@ -3766,7 +3788,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                   ? 'Se scegli «Rimani», sarà ripristinato l’editor della verifica e la cronologia in avanti potrebbe essere sostituita.'
                   : activeTab === 'consigli'
                     ? 'Se scegli «Rimani», sarà riaperta la sezione Consigli e la cronologia in avanti potrebbe essere sostituita.'
-                    : 'Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.'}
+                    : activeTab === 'comportamenti'
+                      ? 'Se scegli «Rimani», sarà riaperta la schermata Comportamento; la cronologia in avanti potrebbe essere sostituita.'
+                      : 'Se scegli «Rimani», sarà riaperta la Programmazione e la cronologia in avanti potrebbe essere sostituita.'}
               </p>
             )}
             {planningExitError && <p role="alert" className="text-sm text-amber-200">{planningExitError}</p>}
@@ -3777,13 +3801,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                   {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
                 </button>
               )}
-              <button type="button" onClick={() => performPlanningExit(true)} disabled={planningExitSaving || historyRestoringOrigin}
+              <button type="button" onClick={() => performPlanningExit(activeTab !== 'comportamenti' || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges()))} disabled={planningExitSaving || historyRestoringOrigin || behaviorSavePending}
                 className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
-                {activeTab === 'verifiche-online' ? 'Esci senza salvare' : 'Continua senza salvare'}
+                {activeTab === 'verifiche-online' ? 'Esci senza salvare' : activeTab === 'comportamenti' && !behaviorDraftGuardRef.current?.hasUnsavedChanges() ? 'Continua' : 'Continua senza salvare'}
               </button>
               <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : 'Rimani nella Programmazione'}
+                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : activeTab === 'comportamenti' ? 'Rimani nelle osservazioni' : 'Rimani nella Programmazione'}
               </button>
             </div>
           </div>

@@ -52,10 +52,21 @@ describe('FLOW-03 independent review repairs', () => {
     const app = await source('src/App.tsx');
     const behaviours = sectionBetween(app, 'const handleSaveBehaviors', '// Edit batch');
 
-    expect(behaviours).toContain('const submittedBehaviorKeys = new Set(');
-    expect(behaviours).toContain('`${record.date}::${record.studentId}`');
-    expect(behaviours).toContain('!submittedBehaviorKeys.has(`${record.date}::${record.studentId}`)');
-    expect(behaviours).not.toContain('filter(b => b.date !== dateStr)');
+    expect(behaviours).toContain('applyObservationChanges(targetClass, newRecords)');
+    expect(behaviours).toContain('classes: current.classes.map(c => (c.id === classId ? updatedClass : c))');
+    const merge = await source('src/behavior/observationChanges.ts');
+    expect(merge).toContain('records[i].date === date && records[i].studentId === change.studentId');
+    expect(merge).toContain('records[index] = { ...previous, status: change.status }');
+    expect(merge).not.toContain('filter(b => b.date !== dateStr)');
+  });
+
+  test('behaviour completion precedes deferred navigation and a saved session can return to Registra', async () => {
+    const app = await source('src/App.tsx');
+    const completion = sectionBetween(app, 'const completeRecordFlow', 'const handleChooseRecordEvidence');
+    expect(completion.indexOf('publishRecordSession(markRecordSessionSaved(session))')).toBeLessThan(completion.indexOf("if (kind === 'behaviour' && (pendingExitRef.current"));
+    const save = sectionBetween(app, 'const handleSaveBehaviors', '// Edit batch');
+    expect(save.indexOf("completeRecordFlow('behaviour'")).toBeLessThan(save.indexOf('if (pendingExitRef.current || historyRestorePendingRef.current'));
+    expect(app).toContain("session.status === 'saved' && session.evidenceKind === 'behaviour'");
   });
 
   test('submission reconciliation reports imports by canonical class id', async () => {

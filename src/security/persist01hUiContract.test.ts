@@ -75,8 +75,11 @@ describe('PERSIST-01H App mutation boundary contract', () => {
     expect(evaluations).not.toContain('void commitAppDataMutation');
 
     const behaviors = sectionBetween('// Save behavior notes', '// Edit batch');
-    expect(behaviors).toContain('const handleSaveBehaviors = (newRecords: any[]): Promise<void> =>');
-    expect(behaviors).toContain('return commitAppDataMutation');
+    expect(behaviors).toContain('const handleSaveBehaviors = async (newRecords: BehaviorRecord[]): Promise<void> =>');
+    expect(behaviors).toContain('await commitAppDataMutation');
+    expect(behaviors).not.toContain('void commitAppDataMutation');
+    expect(behaviors).toContain('finally {');
+    expect(behaviors).not.toContain('catch {');
 
     const students = sectionBetween('// Add single student', '// Save new test');
     expect(students).toContain('const handleAddStudent = (name: string): Promise<void> =>');
