@@ -1,0 +1,74 @@
+name: Beta2 223 Visual Evidence
+on:
+  push:
+    branches: [evidence/beta2-223-analytics-visual]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 31a12a616e7aaf0e5ec1341ea242cc1033a57b6e
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "31a12a616e7aaf0e5ec1341ea242cc1033a57b6e"
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - name: Prepare browser
+        run: |
+          mkdir -p .visual-tools visual-evidence
+          echo '{"name":"visual-tools","private":true}' > .visual-tools/package.json
+          npm --prefix .visual-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.visual-tools/node_modules/.bin/playwright install --with-deps chromium
+      - name: Start exact candidate
+        run: |
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > visual-evidence/vite.log 2>&1 &
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Capture synthetic views
+        run: |
+          cat > .visual-tools/capture.cjs <<'EOF'
+          const {chromium}=require('@playwright/test');
+          const fs=require('fs');
+          (async()=>{
+          const browser=await chromium.launch();const results=[];
+          for(const width of [320,390]){
+           const ctx=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
+           const p=await ctx.newPage();const base='http://127.0.0.1:4173/tests/browser/fixtures/';
+           await p.goto(base+'nav-back-01-app.html');
+           await p.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+           await p.locator('nav').getByRole('button',{name:'Analisi'}).click();
+           const s=p.getByTestId('mobile-analytics-student-detail');
+           await s.locator('summary').click();
+           await s.scrollIntoViewIfNeeded();
+           await p.screenshot({path:'visual-evidence/app-'+width+'-compact.png'});
+           await s.getByTestId('analytics-compact-toggle').first().click();
+           await s.getByTestId('analytics-compact-detail').first().scrollIntoViewIfNeeded();
+           await p.screenshot({path:'visual-evidence/app-'+width+'-expanded.png'});
+           await p.goto(base+'mobile-density-01-tabellone.html?view=analytics');
+           await p.getByTestId('fixture-25').click();
+           const d=p.getByTestId('mobile-analytics-student-detail');await d.locator('summary').click();
+           const rows=d.getByTestId('analytics-compact-row');await rows.nth(24).waitFor();
+           await rows.first().scrollIntoViewIfNeeded();await p.screenshot({path:'visual-evidence/fixture-'+width+'-25.png'});
+           results.push(await p.evaluate(()=>{const l=document.querySelector('[data-testid="analytics-compact-list"]');const rs=l.querySelectorAll('[data-testid="analytics-compact-row"]');return {width:innerWidth,rows:rs.length,rowHeight:rs[0].getBoundingClientRect().height,listHeight:l.getBoundingClientRect().height,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};}));
+           await ctx.close();
+          }
+          fs.writeFileSync('visual-evidence/geometry.json',JSON.stringify(results,null,2));await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          EOF
+          node .visual-tools/capture.cjs
+          git rev-parse HEAD > visual-evidence/commit.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta2-223-visual-31a12a616e7aaf0e5ec1341ea242cc1033a57b6e
+          path: visual-evidence/
+          retention-days: 14
