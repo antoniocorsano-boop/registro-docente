@@ -13,7 +13,7 @@ test('M2c actual Analisi report renders offline and requires verified native rec
     return route.abort();
   });
   await page.addInitScript(() => {
-    window.__pdf = { choose: 0, write: 0, cancel: false, wrongReceipt: false, valid: false, bytes: 0, filename: '' };
+    window.__pdf = { choose: 0, write: 0, cancel: false, wrongReceipt: false, valid: false, bytes: 0, filename: '', reportText: false, tableText: false, maskedRows: false, pageCount: false };
     window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroPdfFiles: {
       choosePdfDestination: async options => {
         window.__pdf.choose++;
@@ -27,6 +27,11 @@ test('M2c actual Analisi report renders offline and requires verified native rec
         const bytes = Uint8Array.from(atob(options.pdfBase64), c => c.charCodeAt(0));
         window.__pdf.bytes = bytes.length;
         window.__pdf.valid = new TextDecoder().decode(bytes.slice(0,5)) === '%PDF-';
+        const pdfText = new TextDecoder('windows-1252').decode(bytes);
+        window.__pdf.reportText = pdfText.includes('Prospetto di lavoro docente');
+        window.__pdf.tableText = pdfText.includes('Cognome e Nome') && pdfText.includes('Indicatore');
+        window.__pdf.maskedRows = pdfText.includes('••••');
+        window.__pdf.pageCount = pdfText.includes('Pagina 1 di ');
         const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), x => x.toString(16).padStart(2,'0')).join('');
         return { status: 'verified', bytes: bytes.length, sha256: window.__pdf.wrongReceipt ? 'bad' : sha256 };
       }
@@ -73,6 +78,10 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   expect(result.write).toBe(2);
   expect(result.valid).toBe(true);
   expect(result.bytes).toBeGreaterThan(1000);
+  expect(result.reportText).toBe(true);
+  expect(result.tableText).toBe(true);
+  expect(result.maskedRows).toBe(true);
+  expect(result.pageCount).toBe(true);
   expect(result.filename).toMatch(/^Prospetto_Lavoro_\d{4}-\d{2}-\d{2}\.pdf$/);
   expect(messages.some(m => m.includes('PDF di lavoro salvato e verificato'))).toBe(true);
   expect(external).toEqual([]);
