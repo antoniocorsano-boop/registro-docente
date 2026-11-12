@@ -237,7 +237,16 @@ for (const width of [320, 390]) {
         if (await privacy.getAttribute('data-privacy-state') === 'protected') await privacy.click();
         await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
         await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
+        const copilot = page.getByTestId('library-copilot-trigger');
+        await expect(copilot).toBeVisible();
+        expect(await copilot.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed');
         await capture('sintesi');
+        const exportMenu = page.getByRole('button', { name: 'Esportazione e stampa' });
+        await exportMenu.click();
+        await expect(page.getByRole('button', { name: 'Esporta PDF di lavoro', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Stampa prospetto', exact: true })).toBeVisible();
+        await exportMenu.click();
+        await expect(page.getByRole('button', { name: 'Stampa prospetto', exact: true })).toHaveCount(0);
         await page.getByTestId('analytics-view-students').click();
         const section = page.getByTestId('mobile-analytics-student-detail');
         const rows = section.getByTestId('analytics-compact-row');
@@ -248,7 +257,7 @@ for (const width of [320, 390]) {
           const first = all[0].getBoundingClientRect();
           const name = all[0].querySelector('[data-testid="analytics-compact-name"]').getBoundingClientRect();
           return { viewport: { width: innerWidth, height: innerHeight }, firstRow: { y: first.y, width: first.width, height: first.height }, nameWidth: name.width,
-            visibleRows: all.filter(row => { const r = row.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }).length,
+            visibleRows: all.filter(row => { const r = row.getBoundingClientRect(); const nav = document.querySelector('nav.md\\:hidden'); return r.top >= 0 && r.bottom <= (nav?.getBoundingClientRect().top ?? innerHeight); }).length,
             horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
         });
         await fs.writeFile(prefix + '-geometry.json', JSON.stringify(geometry, null, 2));
@@ -262,13 +271,26 @@ for (const width of [320, 390]) {
         await capture('approfondimenti');
         await page.getByTestId('analytics-view-students').click();
         await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+        const views = page.getByTestId('analytics-mobile-views');
+        await expect(views).toBeVisible();
+        const summaryBox = await page.getByTestId('analytics-view-summary').boundingBox();
+        const studentsBox = await page.getByTestId('analytics-view-students').boundingBox();
+        const detailsBox = await page.getByTestId('analytics-view-details').boundingBox();
+        expect(studentsBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height - 1);
+        expect(detailsBox.y).toBeGreaterThanOrEqual(studentsBox.y + studentsBox.height - 1);
         await expect(rows.first()).toBeVisible();
         if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
         await capture('testo-200');
         await expect(rows.first().getByTestId('analytics-compact-detail')).toBeVisible();
-        await rows.first().screenshot({ path: prefix + '-dettaglio-200.png', animations: 'disabled' });
+        await rows.first().getByTestId('analytics-compact-detail').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: prefix + '-dettaglio-200.png', animations: 'disabled' });
         await fs.writeFile(prefix + '-commit.txt', (process.env.CANDIDATE_SHA || 'local') + '\n');
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const footer = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Analisi', exact: true }) });
+        const lastBox = await rows.last().boundingBox();
+        const footerBox = await footer.boundingBox();
+        expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(footerBox.y + 1);
         await privacy.click();
         await expect(privacy).toHaveAttribute('data-privacy-state', 'protected');
         await expect(section.getByText('Persona Fittizia Uno', { exact: true })).toHaveCount(0);

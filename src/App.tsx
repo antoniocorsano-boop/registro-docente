@@ -3282,6 +3282,31 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         </details>
       )}
 
+      {!studentMode.isOpen && (
+        <>
+          {!isAssessmentEditorFocus && (
+          <CopilotExperience
+            settings={settings}
+            copilotState={copilotState}
+            library={library}
+            udas={udas}
+            planning={planning}
+            ambientContext={ambientCopilotContext}
+            onPutAside={handlePutAsideCopilotOpportunity}
+            onIgnore={handleIgnoreCopilotOpportunity}
+            onResume={handleResumeCopilotMission}
+            onStart={handleStartCopilotMission}
+            onOpenConversation={reopenLibraryCopilot}
+            surfaceMode={copilotSurfaceMode}
+            onSurfaceModeChange={setCopilotSurfaceMode}
+            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
+            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
+            inlineMobileTrigger={['analytics', 'programmazione', 'verifiche-online'].includes(activeTab)}
+          />
+          )}
+        </>
+      )}
+
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-5">
         {/* TAB 1: Cruscotto Istituto */}
@@ -3642,25 +3667,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
       {!studentMode.isOpen && (
         <>
-          {!isAssessmentEditorFocus && (
-          <CopilotExperience
-            settings={settings}
-            copilotState={copilotState}
-            library={library}
-            udas={udas}
-            planning={planning}
-            ambientContext={ambientCopilotContext}
-            onPutAside={handlePutAsideCopilotOpportunity}
-            onIgnore={handleIgnoreCopilotOpportunity}
-            onResume={handleResumeCopilotMission}
-            onStart={handleStartCopilotMission}
-            onOpenConversation={reopenLibraryCopilot}
-            surfaceMode={copilotSurfaceMode}
-            onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
-            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
-          />
-          )}
           <LibraryCopilotComposer
               library={library}
               udas={udas}

@@ -62,6 +62,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     () => restored?.ui.useWeighted ?? (settings.useWeightedAverage ?? false)
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [mobileExportOpen, setMobileExportOpen] = useState(false);
+  const mobileLevelLabel = (label: string) => label.replace('Fascia base analitica', 'Fascia base').replace('Sotto soglia analitica', 'Sotto soglia').replace(/(\d)\.(\d)/g, '$1,$2');
   const exportInProgress = useRef(false);
   const exportMounted = useRef(true);
   const exportContext = useRef({ classId: currentClass.id, privacy: isPrivacyShieldActive });
@@ -274,11 +276,11 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   };
 
   return (
-    <div className="min-w-0 space-y-3 md:space-y-4">
+    <div className="analytics-workspace min-w-0 space-y-3 md:space-y-4">
       {/* Flat mobile workspace: one active content surface, shared controls. */}
       <div className="md:hidden print:hidden min-w-0">
         <div role="group" aria-label="Viste Analisi" data-testid="analytics-mobile-views"
-          className="grid grid-cols-[1fr_1fr_1.4fr] border-b border-[var(--border)]">
+          className="analytics-view-controls grid grid-cols-[1fr_1fr_1.4fr] border-b border-[var(--border)]">
           {([
             ['summary', 'Sintesi'],
             ['students', 'Alunni'],
@@ -287,12 +289,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <button key={value} type="button" aria-pressed={mobileView === value}
               data-testid={`analytics-view-${value}`}
               onClick={() => setMobileView(value)}
-              className={`min-h-[48px] min-w-0 px-1 py-2 text-sm font-semibold border-b-2 break-words focus-visible:outline focus-visible:outline-cyan-300 ${mobileView === value ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400'}`}>
+              className={`min-h-[48px] min-w-0 px-1 py-2 text-sm font-semibold border-b-2 focus-visible:outline focus-visible:outline-cyan-300 ${mobileView === value ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400'}`}>
               {label}
             </button>
           ))}
         </div>
-        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
+        <div className="analytics-filter-controls mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
           <select aria-label="Periodo di analisi" value={periodFilter}
             onChange={e => setPeriodFilter(e.target.value as 'ALL' | 'Q1' | 'Q2')}
             className="min-h-[48px] min-w-0 w-full rounded-md bg-slate-900 border border-slate-700 px-1.5 text-sm text-slate-100">
@@ -303,11 +305,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             className="min-h-[48px] min-w-0 w-full rounded-md bg-slate-900 border border-slate-700 px-1.5 text-sm text-slate-100">
             <option value="simple">Aritmetica</option><option value="weighted">Ponderata</option>
           </select>
-          <button type="button" onClick={handleExportPDF} disabled={isExporting}
-            aria-label="Esporta PDF di lavoro" title="Esporta PDF di lavoro"
-            className="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center gap-0.5 text-xs font-semibold text-cyan-300 disabled:opacity-50">
+          <button type="button" onClick={() => setMobileExportOpen(open => !open)}
+            aria-label="Esportazione e stampa" aria-expanded={mobileExportOpen} aria-controls="analytics-mobile-export-actions"
+            className="min-h-[48px] min-w-[48px] flex flex-col items-center justify-center gap-0.5 text-xs font-semibold text-cyan-300">
             <Download className="w-4 h-4" aria-hidden="true" />{isExporting ? '…' : 'PDF'}
           </button>
+          {mobileExportOpen && (
+            <div id="analytics-mobile-export-actions" className="col-span-full flex flex-wrap gap-2 border-t border-[var(--border)] py-2">
+              <button type="button" onClick={() => { setMobileExportOpen(false); void handleExportPDF(); }} disabled={isExporting}
+                className="min-h-[48px] flex-1 px-2 text-sm text-cyan-300 disabled:opacity-50">Esporta PDF di lavoro</button>
+              <button type="button" onClick={() => { setMobileExportOpen(false); window.print(); }}
+                className="min-h-[48px] flex-1 px-2 text-sm text-slate-300">Stampa prospetto</button>
+            </div>
+          )}
         </div>
       </div>
       <section data-testid="analytics-mobile-summary"
@@ -321,7 +331,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <div className="flex items-center justify-between gap-2 py-3"><dt className="text-sm text-slate-300">Sotto soglia (&lt; 6)</dt><dd className="font-semibold tabular-nums text-slate-100">{validAvgs.length ? levelCounts.PA : '—'}</dd></div>
         </dl>
         <p className="text-xs text-slate-400 py-2">Indicatori matematici di supporto, non voti deliberati.</p>
-        <button type="button" onClick={() => window.print()} className="min-h-[48px] px-2 text-sm text-slate-300 inline-flex items-center gap-2"><Printer className="w-4 h-4" /> Stampa prospetto</button>
       </section>
 
       {/* Desktop: existing analytical layout and controls. */}
@@ -479,14 +488,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         <div className="md:hidden border-b border-[var(--border)] pb-3 text-sm text-slate-300 space-y-1">
           <h3 className="font-semibold text-slate-100">Criterio di calcolo</h3>
           <p>{useWeighted ? 'Media ponderata: pesi configurati nelle impostazioni.' : 'Media aritmetica: ogni valutazione ha lo stesso peso.'}</p>
-          <p className="text-xs text-slate-400">Pesi configurati: scritto {weights.verifica}%, orale {weights.orale}%, pratico {weights.disegno}%, test {weights.test}%, osservazioni {weights.osserv}%.</p>
+          {useWeighted && <p className="text-xs text-slate-400">Pesi: scritto {weights.verifica}%, orale {weights.orale}%, pratico {weights.disegno}%, test {weights.test}%, osservazioni {weights.osserv}%.</p>}
         </div>
         {/* Competence Levels Chart / Progress Distribution */}
         <div className="md:mt-4 md:pt-4 md:border-t md:border-[var(--border)]">
-          <h4 className="text-xs uppercase tracking-wider font-bold text-slate-300 mb-3 flex items-center justify-between">
-            <span>Fasce analitiche della media</span>
-            <span className="text-slate-500 font-normal">
-              Calcolati su {useWeighted ? 'Media Ponderata' : 'Media Aritmetica'}
+          <h4 className="text-sm md:text-xs md:uppercase md:tracking-wider font-bold text-slate-300 mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="md:hidden">Fasce di rendimento</span>
+            <span className="hidden md:inline">Fasce analitiche della media</span>
+            <span className="hidden md:inline text-slate-500 font-normal">
+              Calcolate su {useWeighted ? 'Media Ponderata' : 'Media Aritmetica'}
             </span>
           </h4>
 
@@ -502,16 +512,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
                 return (
                   <div key={lvl.id} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
+                    <div className="analytics-band-row flex flex-wrap justify-between items-center gap-1 text-xs">
                       <span className="font-semibold text-slate-200 flex items-center gap-2">
                         <span
                           className="w-2.5 h-2.5 rounded-full inline-block"
                           style={{ backgroundColor: lvl.color }}
                         />
-                        {lvl.label}
+                        <span className="md:hidden">{mobileLevelLabel(lvl.label)}</span><span className="hidden md:inline">{lvl.label}</span>
                       </span>
                       <span className="text-slate-400 font-mono">
-                        <b>{count}</b> alunni ({pct}%)
+                        <b>{count}</b> {count === 1 ? 'alunno' : 'alunni'} ({pct}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700/60 flex">
@@ -584,7 +594,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       <section data-testid="mobile-analytics-student-detail" aria-label="Alunni"
         className={`md:hidden min-w-0 print:hidden ${mobileView === 'students' ? 'block' : 'hidden'}`}>
           <div className="space-y-2 min-w-0">
-            <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-2 min-w-0">
+            <div className="analytics-search-controls grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-2 min-w-0">
               <label className="min-w-0">
                 <span className="sr-only">Cerca alunno</span>
                 <input
@@ -670,7 +680,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       <div id={panelId} data-testid="analytics-compact-detail" hidden={!expanded}>
                         {expanded && (
                           <div className="space-y-2 border-t border-[var(--border)] px-2 py-3">
-                            <dl className="grid grid-cols-2 gap-2 min-w-0">
+                            <dl className="analytics-period-detail grid grid-cols-2 gap-2 min-w-0">
                               <div className="min-w-0 flex flex-wrap items-baseline justify-between gap-1">
                                 <dt className="text-xs text-slate-400">1° periodo</dt>
                                 <dd data-testid="analytics-compact-q1" className="font-mono text-sm text-slate-200">{formatGrade(displayQ1)}</dd>
@@ -682,7 +692,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                             </dl>
                             <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
                               <span className="text-slate-400 min-w-0">
-                                Fascia analitica ({periodFilter === 'ALL' ? 'anno' : periodFilter}): <b className="text-slate-200">{m.level ? m.level.label : '–'}</b>
+                                Fascia ({periodFilter === 'ALL' ? 'anno' : periodFilter === 'Q1' ? '1° periodo' : '2° periodo'}): <b className="text-slate-200">{m.level ? mobileLevelLabel(m.level.label) : '–'}</b>
                               </span>
                               {m.activeAvg === null ? (
                                 <span className="text-xs font-semibold text-slate-400">Non disponibile</span>
