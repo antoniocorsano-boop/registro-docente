@@ -262,6 +262,7 @@ async function openBehaviourFromRecord(page, record) {
   const defaultStatus = page.getByRole('button', { name: 'Ottimale 🌟', exact: true }).first();
   await expect(defaultStatus).toBeVisible();
   await expect(defaultStatus).not.toHaveClass(/ring-2/);
+  await expect(page.getByRole('button', { name: 'Salva Registro Comportamenti', exact: true })).toBeDisabled();
   await assertSelectedClassStillVisible(page);
   await assertNoAutomaticMutation(page);
   return assertRecordMission(page, 'Comportamento');

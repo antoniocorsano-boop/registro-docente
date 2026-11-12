@@ -84,3 +84,28 @@ test('failed save retains selected draft and blocks mutation controls while pend
  await expect(save(page)).toBeEnabled();
  expect(await payload(page)).toEqual([]);
 });
+
+test('dirty date change asks before discarding, and cancel preserves draft',async({page})=>{
+ await open(page);
+ const date=page.locator('input[type=date]');
+ const initial=await date.inputValue();
+ await status(page,'Distratto ⚠️',1).click();
+ page.once('dialog',d=>d.dismiss());
+ await date.fill('2025-01-15');
+ await expect(date).toHaveValue(initial);
+ await expect(status(page,'Distratto ⚠️',1)).toHaveClass(/ring-2/);
+ page.once('dialog',d=>d.accept());
+ await date.fill('2025-01-15');
+ await expect(status(page,'Distratto ⚠️',0)).toHaveClass(/ring-2/);
+ await expect(status(page,'Distratto ⚠️',1)).not.toHaveClass(/ring-2/);
+ await expect(save(page)).toBeDisabled();
+ await expect(page.getByTestId('fixture-calls')).toHaveText('0');
+});
+test('restoring original status is a no-op and leaves no changes to save',async({page})=>{
+ await open(page);
+ await status(page,'Distratto ⚠️',0).click();
+ await expect(save(page)).toBeEnabled();
+ await status(page,'Costruttivo 👍',0).click();
+ await expect(save(page)).toBeDisabled();
+ await expect(page.getByTestId('fixture-calls')).toHaveText('0');
+});

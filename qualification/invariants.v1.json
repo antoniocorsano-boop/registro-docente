@@ -1819,7 +1819,8 @@
         "tests/browser/behavior-integrity.spec.cjs",
         "tests/browser/fixtures/behavior-integrity.html",
         "tests/browser/fixtures/behavior-integrity-fixture.tsx",
-        ".github/workflows/behavior-integrity-qualification.yml"
+        ".github/workflows/behavior-integrity-qualification.yml",
+        "tests/browser/flow-03-registra.spec.cjs"
       ],
       "tests": [
         "src/security/flow03BehaviourExplicitContract.test.ts",
