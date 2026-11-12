@@ -582,6 +582,13 @@ test('FLOW-03 behaviour: durable save completes session even when departure is p
   await createSyntheticClassWithStudent(page);
   const record = await openRecordFromOggi(page);
   const mission = await openBehaviourFromRecord(page, record);
+  const saveActions = page.getByTestId('behavior-save-actions');
+  const mobileNav = page.locator('nav[class*="fixed bottom-0"]');
+  await expect(saveActions).toBeInViewport();
+  await expect(mobileNav).toBeVisible();
+  const actionsBox = await saveActions.boundingBox();
+  const navBox = await mobileNav.boundingBox();
+  expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(navBox.y + 1);
   await page.getByRole('button', { name: 'Costruttivo 👍', exact: true }).click();
   // Hold only the next synthetic encryption operation, before its durable commit.
   await page.evaluate(() => {
