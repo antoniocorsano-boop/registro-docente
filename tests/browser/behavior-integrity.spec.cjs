@@ -34,6 +34,14 @@ for(const width of [320,390]){
    expect(geom.buttons).toBe(count*4);
    expect(geom.minTouch).toBeGreaterThanOrEqual(44);
    expect(geom.aligned).toBe(true);
+   await expect(save(page)).toBeInViewport();
+   const footer=page.getByTestId('behavior-save-actions');
+   const footerBox=await footer.boundingBox();
+   expect(footerBox.y+footerBox.height).toBeLessThanOrEqual((width===320?700:844)-79);
+   await page.getByTestId('behavior-student-row').last().scrollIntoViewIfNeeded();
+   await expect(save(page)).toBeInViewport();
+   await expect(page.getByTestId('behavior-student-row').last().getByRole('button',{name:'Ottimale 🌟',exact:true})).toBeInViewport();
+   await page.evaluate(()=>window.scrollTo(0,0));
    fs.writeFileSync(path.join(out,'compact-'+width+'-'+count+'.json'),JSON.stringify(geom,null,2));
    await page.screenshot({path:path.join(out,'compact-'+width+'-'+count+'.png')});
   }
