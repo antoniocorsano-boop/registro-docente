@@ -199,7 +199,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
         </div>
       </fieldset>
 
-      <div className="pt-3 pb-2">
+      <div data-testid="behavior-save-actions" className="sticky bottom-20 md:bottom-0 z-20 bg-[var(--surface)] border-t border-[var(--border)] px-2 pt-2 pb-2 mt-2">
       <p role="status" className="mb-2 text-xs text-slate-400">{changeCount} osservazioni da salvare</p>
       <button
         onClick={handleSave}
