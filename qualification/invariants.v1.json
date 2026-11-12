@@ -1726,7 +1726,8 @@
         "tests/browser/ux-qa-01-review-regressions.spec.cjs",
         "tests/browser/ux-qa-02-progressive-disclosure.spec.cjs",
         "tests/browser/ux-trust-01-full-regression.spec.cjs",
-        "tests/browser/ux-trust-01-qualification.spec.cjs"
+        "tests/browser/ux-trust-01-qualification.spec.cjs",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
       ],
       "tests": [
         "src/security/secureAppStorage.test.ts",

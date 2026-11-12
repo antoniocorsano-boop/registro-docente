@@ -41,8 +41,9 @@ test('M2c actual Analisi report renders offline and requires verified native rec
     window.print = () => { throw Error('native export must not fall back to browser print'); };
   });
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill('synthetic-m2c-only');
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   const unicodeNames = ['Łukasz Nowak', 'Иван Петров'];
   page.once('dialog', d => d.accept('Classe sintetica PDF Unicode'));
