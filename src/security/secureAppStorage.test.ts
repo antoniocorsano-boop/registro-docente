@@ -1,3 +1,4 @@
+import { applySettingsPatch } from '../persistence/settingsMutation';
 import { createInitialArchiveSnapshot, initializeNewArchive, type NewArchiveSetup } from './initialArchiveSetup';
 import { describe, expect, test } from 'bun:test';
 import {
@@ -323,5 +324,15 @@ describe('BETA-1 initial archive domain', () => {
     expect(await store.listRecordKeys()).toEqual([]);
     await initializeNewArchive(vault, 'test-password', professional);
     expect((await store.getMetadata())?.state).toBe('ACTIVE');
+  });
+});
+
+describe('BETA-1 archive mode preservation', () => {
+  test('ordinary settings cannot change or introduce an archive mode', () => {
+    const settings = createInitialArchiveSnapshot({ mode: 'demo' }).settings;
+    expect(applySettingsPatch(settings, { archiveMode: 'professional', subject: 'Storia' }))
+      .toEqual({ ...settings, subject: 'Storia' });
+    const { archiveMode, ...historical } = settings;
+    expect(applySettingsPatch(historical, { archiveMode: 'demo' })).toEqual(historical);
   });
 });

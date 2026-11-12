@@ -67,3 +67,36 @@ test('QUAL-INVARIANT smoke preserves an exact descriptive local class binding th
   await expect(udaOption).toHaveCount(1);
   expect(await udaOption.first().getAttribute('value')).toBeTruthy();
 });
+
+test('BETA-1 creates an empty professional archive offline and preserves it after reopening', async ({ page, context }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/*', route => {
+    const url = new URL(route.request().url());
+    return url.origin === new URL(baseURL).origin ? route.continue() : route.abort();
+  });
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await expect(page.locator('#vault-password')).toHaveCount(0);
+  await page.locator('input[name="archive-mode"][value="professional"]').check();
+  await page.getByLabel('Istituto', { exact: true }).fill('Istituto sintetico');
+  await page.getByLabel('Anno scolastico', { exact: true }).fill('2026/2027');
+  await page.getByLabel('Docente', { exact: true }).fill('Docente sintetico');
+  await page.getByLabel('Disciplina', { exact: true }).fill('Tecnologia');
+  await page.locator('#vault-password').fill(vaultPassword);
+  await page.getByRole('button', { name: 'Crea il mio registro' }).click();
+  await expect(page.getByText('Nessuna classe presente nel registro.', { exact: true })).toBeVisible();
+  await context.setOffline(true);
+  // Offline operation within the installed shell is exercised here; reloading
+  // a dev-server page offline is not equivalent to Android's packaged assets.
+  page.once('dialog', dialog => dialog.accept('Classe sintetica offline'));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: Classe sintetica offline' })).toBeVisible();
+  await context.setOffline(false);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Sblocca Registro' })).toBeVisible();
+  await expect(page.locator('input[name="archive-mode"]')).toHaveCount(0);
+  await page.locator('#vault-password').fill(vaultPassword);
+  await page.getByRole('button', { name: 'Sblocca Registro' }).click();
+  await expect(page.getByRole('button', { name: 'Apri classe Classe sintetica offline', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Classi disponibili' }).getByText('1 sezioni', { exact: true })).toBeVisible();
+});

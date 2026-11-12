@@ -18,3 +18,9 @@ Preparazione del candidato completo, profilo validato, scelta nel record setting
 - Aggiornare le fixture browser affinché la scelta dimostrativa sia esplicita, aggiungere scenari professional first-run, errore/interruzione, riapertura, backup/restore, factory reset, archivi legacy parziali/vuoti, UI mobile e offline. Non indebolire le prove storiche.
 - 6 controlli CI, revisione indipendente exact-SHA e prova Android mirata prima dell'integrazione, secondo governance. Nessun dato reale, pubblicazione, firma o modifica a main.
 - La slice 1 isolata NON modifica il comportamento dell'APK e NON chiude G3/G4.
+
+## Slice 2 — implementazione in corso
+- Scelta esplicita in VaultGate e inizializzazione via SecureRegistroRoot; profilo obbligatorio per il percorso professionale; nessuna scelta predefinita. I record espliciti sono autoritativi, anche se vuoti; il comportamento degli archivi storici non classificati rimane invariato.
+- Le impostazioni ordinarie non possono modificare la modalità. I backup completi trasportano il record settings; resta da verificare in modo dedicato il ripristino dei formati storici e il reset end-to-end.
+- 50 scenari browser esistenti aggiornati esclusivamente nella configurazione dimostrativa; aggiunta prova mirata professional/offline/reopen allo smoke canonico. Nessun test storico rimosso. Il blocco della rete esterna e il lavoro offline in Chromium non qualificano la riapertura offline Android.
+- La slice 1 ha dato PASS sui sei test funzionali; la qualifica iniziale era FAIL per percorso non registrato tra gli invarianti. Aggiunto BETA-1-ARCHIVE-I01; esiti del candidato complessivo ancora da verificare.
