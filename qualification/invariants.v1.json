@@ -1617,7 +1617,7 @@
     {
       "id": "MOBILE-01-M2C-NATIVE-PDF-I01",
       "owner": "MOBILE-01/M2c",
-      "statement": "Android Analisi work PDF renders the existing privacy-aware report template with visible content, using bundled local assets. Explicit confirmation of the unencrypted document precedes export; the neutral filename contains no class/student name. A separate native PDF writer uses only user-selected local SAF destination and one-use token, verifies byte count and SHA-256 after read-back, and the frontend verifies the receipt. Cancel, invalid bridge, stale class/privacy context or failed receipt never claim success or fall back to native browser print. Backup and Vault format remain unchanged. Simulated bridge and APK build do not qualify actual Android PDF save/open.",
+      "statement": "Android Analisi work PDF renders the existing privacy-aware report template with visible content, using bundled local assets. Explicit confirmation of the unencrypted document precedes export; the neutral filename contains no class/student name. A separate native PDF writer uses only user-selected local SAF destination and one-use token, verifies byte count and SHA-256 after read-back, and the frontend verifies the receipt. Cancel, invalid bridge, stale class/privacy context or failed receipt never claim success or fall back to native browser print. Backup and Vault format remain unchanged. Simulated bridge and APK build do not qualify actual Android PDF save/open. Local Unicode font packaging and license are explicitly guarded; missing glyphs fail closed and actual extracted text tests verify masked and unmasked synthetic Unicode names.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/components/AnalyticsView.tsx",
@@ -1629,7 +1629,10 @@
         "mobile/android-probe/native/MainActivity.java",
         ".github/workflows/mobile-01-android-probe.yml",
         ".github/workflows/browser-qualification.yml",
-        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs",
+        "vite.config.ts",
+        "package.json",
+        "bun.lock"
       ],
       "tests": [
         "src/security/androidPdfExport.test.ts",
