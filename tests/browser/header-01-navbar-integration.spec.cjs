@@ -203,3 +203,34 @@ test('HEADER-01 real Navbar: keyboard remains usable and lock reachable with foc
   await expect(page.getByTestId('header01-lock')).toBeVisible();
   });
 });
+
+test('MOBILE-01 Android status bar: real mobile header and drawer respect SystemBars inset', async ({ browser }) => {
+  await withEvidence(browser, { width: 390, height: 844 }, 'mobile01-android-safe-inset-390', async (page) => {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => document.documentElement.style.setProperty('--safe-area-inset-top', '32px'));
+
+    const brand = page.getByTestId('header01-brand-navigation');
+    const privacy = page.getByTestId('header01-privacy');
+    const lock = page.getByTestId('header01-lock');
+    for (const control of [brand, privacy, lock]) {
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box.y).toBeGreaterThanOrEqual(32);
+    }
+
+    await brand.click();
+    const drawer = page.locator('#registro-navigation-drawer');
+    await expect(drawer).toBeVisible();
+    const titleTop = await drawer.locator(':scope > div').first().evaluate(node => node.getBoundingClientRect().top);
+    expect(titleTop).toBeGreaterThanOrEqual(32);
+    const home = page.getByTestId('header01-go-home');
+    await expect(home).toBeVisible();
+
+    const dimensions = await page.evaluate(() => ({
+      pageWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+    }));
+    expect(dimensions.pageWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+  });
+});

@@ -1,0 +1,14 @@
+{
+  "name": "registro-docente-mobile01-android-probe",
+  "private": true,
+  "version": "0.0.0-probe",
+  "description": "MOBILE-01/S0: Capacitor-only isolated GitHub Actions Android debug APK probe; not a product release.",
+  "type": "module",
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/core": "8.6.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0"
+  }
+}
