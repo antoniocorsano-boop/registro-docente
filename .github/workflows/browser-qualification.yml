@@ -200,6 +200,15 @@ jobs:
             --reporter=line \
             --output=../browser-evidence/mobile01-m2-roundtrip-results
 
+      - name: Ensure PDF text extraction tool is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+          command -v pdftotext
+
       - name: Run MOBILE-01/M2c actual report PDF with simulated native bridge
         shell: bash
         run: |
