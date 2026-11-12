@@ -77,8 +77,9 @@ async function installSubmissionInjection(context) {
 async function setupFreshVault(page, targetURL = baseURL) {
   await page.goto(targetURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill(vaultPassword);
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
 }
 
 async function unlockVault(page) {

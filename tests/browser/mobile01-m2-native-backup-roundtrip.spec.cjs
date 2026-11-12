@@ -36,8 +36,9 @@ test('M2 synthetic native bridge: verified export, wrong password, cancelled res
   });
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill(vaultPassword);
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 
   async function nav(label) {

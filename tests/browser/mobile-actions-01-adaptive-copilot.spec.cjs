@@ -7,8 +7,9 @@ const password = 'mobile-actions-01-synthetic-only';
 async function prepare(page) {
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
   await page.locator('#vault-password').fill(password);
-  await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   page.once('dialog', dialog => dialog.accept('Classe sintetica Mobile Actions'));
   await page.getByRole('button', { name: /Nuova Classe/ }).click();

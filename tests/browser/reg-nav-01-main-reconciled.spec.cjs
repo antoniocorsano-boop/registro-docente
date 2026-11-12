@@ -35,8 +35,9 @@ async function prepareSyntheticHistory(page) {
   await test.step('Initialize fresh isolated local Vault and fictional class', async () => {
     await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+    await page.locator('input[name="archive-mode"][value="demo"]').check();
     await page.locator('#vault-password').fill('reg-nav-01-synthetic-only');
-    await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
+    await page.getByRole('button', { name: 'Avvia la prova' }).click();
     await expect(page.getByRole('heading', { name: 'Oggi', exact: true })).toBeVisible();
 
     page.once('dialog', dialog => dialog.accept(CLASS_NAME));
