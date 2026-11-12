@@ -77,6 +77,7 @@ jobs:
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/mobile01-m1-offline-pdf.spec.cjs .browser-tools/mobile01-m1-offline-pdf.spec.cjs
           cp tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs .browser-tools/mobile01-m2-native-backup-roundtrip.spec.cjs
+          cp tests/browser/mobile01-m2c-native-pdf.spec.cjs .browser-tools/mobile01-m2c-native-pdf.spec.cjs
           cp tests/browser/cdc-01-consigli.spec.cjs .browser-tools/cdc-01-consigli.spec.cjs
           cp tests/browser/cdc-02-sessions.spec.cjs .browser-tools/cdc-02-sessions.spec.cjs
           cp tests/browser/today-01-home-oggi-router.spec.cjs .browser-tools/today-01-home-oggi-router.spec.cjs
@@ -198,6 +199,29 @@ jobs:
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/mobile01-m2-roundtrip-results
+
+      - name: Ensure PDF text extraction tool is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+          command -v pdftotext
+
+      - name: Run MOBILE-01/M2c actual report PDF with simulated native bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            mobile01-m2c-native-pdf.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/mobile01-m2c-native-pdf-results
 
       - name: Run CDC-01 Chromium qualification
         shell: bash

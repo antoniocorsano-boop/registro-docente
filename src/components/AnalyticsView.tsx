@@ -11,6 +11,9 @@ import {
   TYPES_LABEL
 } from '../utils';
 import { Sparkline } from './Sparkline';
+import { isAndroidBackupRuntime } from '../security/androidBackupExport';
+import { saveWorkPdfOnAndroid } from '../security/androidPdfExport';
+import { renderWorkPdf } from '../security/workPdfRendering';
 import { captureReturnScrollY, type StudentReportReturnContext } from '../navigation/studentReportReturnContext';
 import { useRestoreStudentReturnScroll } from '../navigation/useRestoreStudentReturnScroll';
 import { StudentGradesTimelineChart } from './StudentGradesTimelineChart';
@@ -58,6 +61,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     () => restored?.ui.useWeighted ?? (settings.useWeightedAverage ?? false)
   );
   const [isExporting, setIsExporting] = useState(false);
+  const exportInProgress = useRef(false);
+  const exportMounted = useRef(true);
+  const exportContext = useRef({ classId: currentClass.id, privacy: isPrivacyShieldActive });
+  exportContext.current = { classId: currentClass.id, privacy: isPrivacyShieldActive };
+  useEffect(() => {
+    exportMounted.current = true;
+    return () => { exportMounted.current = false; };
+  }, []);
   // Search can contain a name. Never re-display its text when privacy is enabled.
   const [studentSearch, setStudentSearch] = useState(
     () => !isPrivacyShieldActive ? (restored?.ui.studentSearch ?? '') : ''
@@ -186,15 +197,33 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
   // Official PDF export using html2pdf
   const handleExportPDF = async () => {
-    setIsExporting(true);
+    if (exportInProgress.current) return;
+    const android = isAndroidBackupRuntime();
     const element = document.getElementById('official-pdf-report');
-    if (!element) {
-      window.print();
-      setIsExporting(false);
+    if (android && !window.confirm('Il PDF è un documento di lavoro non cifrato. Salvalo in una cartella locale protetta e non condividerlo con persone non autorizzate. Continuare?')) return;
+    if (android && !element) {
+      alert('Prospetto non disponibile.');
       return;
     }
-
+    exportInProgress.current = true;
+    setIsExporting(true);
+    const isActive = () => exportMounted.current
+      && exportContext.current.classId === currentClass.id
+      && exportContext.current.privacy === isPrivacyShieldActive;
     try {
+      if (android && element) {
+        const bytes = await renderWorkPdf(element);
+        if (!isActive()) return;
+        const result = await saveWorkPdfOnAndroid(
+          bytes, `Prospetto_Lavoro_${new Date().toISOString().slice(0, 10)}.pdf`, isActive
+        );
+        if (result === 'verified' && isActive()) alert('PDF di lavoro salvato e verificato nella cartella scelta.');
+        return;
+      }
+      if (!element) {
+        window.print();
+        return;
+      }
       if (typeof html2pdf !== 'undefined') {
         const opt = {
           margin: 10,
@@ -208,10 +237,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         window.print();
       }
     } catch (e) {
-      console.error('PDF generation error', e);
-      window.print();
+      if (android) {
+        if (isActive()) alert('PDF non salvato o non verificato. Controlla la cartella e riprova.');
+      } else {
+        console.error('PDF generation error', e);
+        window.print();
+      }
     } finally {
-      setIsExporting(false);
+      exportInProgress.current = false;
+      if (exportMounted.current) setIsExporting(false);
     }
   };
 

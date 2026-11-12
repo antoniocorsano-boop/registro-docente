@@ -7,6 +7,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(RegistroBackupFilesPlugin.class);
+        registerPlugin(RegistroPdfFilesPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
