@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { execFileSync } = require('node:child_process');
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 
 test.setTimeout(120000);
@@ -26,6 +27,7 @@ test('M2c actual Analisi report renders offline and requires verified native rec
         if (options.token !== 'pdf-token') throw Error('invalid token');
         const bytes = Uint8Array.from(atob(options.pdfBase64), c => c.charCodeAt(0));
         window.__pdf.bytes = bytes.length;
+        window.__pdf.lastBase64 = options.pdfBase64;
         window.__pdf.valid = new TextDecoder().decode(bytes.slice(0,5)) === '%PDF-';
         const pdfText = new TextDecoder('windows-1252').decode(bytes);
         window.__pdf.reportText = pdfText.includes('Prospetto di lavoro docente');
@@ -42,7 +44,20 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   await page.locator('#vault-password').fill('synthetic-m2c-only');
   await page.getByRole('button', { name: 'Configura archivio protetto' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
-  await page.getByRole('button', { name: 'Apri classe 3ª A - Secondaria I Grado', exact: true }).click();
+  const unicodeNames = ['Łukasz Nowak', 'Иван Петров'];
+  page.once('dialog', d => d.accept('Classe sintetica PDF Unicode'));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: Classe sintetica PDF Unicode' })).toBeVisible();
+  const privacy = page.getByTestId('header01-privacy');
+  await privacy.click();
+  for (const name of unicodeNames) {
+    await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(name);
+    await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+    const confirmation = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+    if (await confirmation.isVisible().catch(() => false)) await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+  }
+  await privacy.click();
   await page.getByRole('button', { name: 'Analisi', exact: true }).filter({ visible: true }).first().click();
   const template = page.locator('#official-pdf-report');
   await expect(template).toBeAttached();
@@ -84,6 +99,18 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   expect(result.pageCount).toBe(true);
   expect(result.filename).toMatch(/^Prospetto_Lavoro_\d{4}-\d{2}-\d{2}\.pdf$/);
   expect(messages.some(m => m.includes('PDF di lavoro salvato e verificato'))).toBe(true);
+  const maskedPdf = execFileSync('pdftotext', ['-layout', '-', '-'], { input: Buffer.from(result.lastBase64, 'base64'), encoding: 'utf8' });
+  for (const name of unicodeNames) expect(maskedPdf).not.toContain(name);
+  await privacy.click();
+  for (const name of unicodeNames) expect(await template.textContent()).toContain(name);
+  await button.click();
+  await expect(button).toBeEnabled();
+  const unicodeResult = await page.evaluate(() => window.__pdf);
+  expect(unicodeResult.choose).toBe(4);
+  expect(unicodeResult.write).toBe(3);
+  const unicodePdf = execFileSync('pdftotext', ['-layout', '-', '-'], { input: Buffer.from(unicodeResult.lastBase64, 'base64'), encoding: 'utf8' });
+  for (const name of unicodeNames) expect(unicodePdf).toContain(name);
+  expect(unicodePdf).toContain('Prospetto di lavoro docente');
   expect(external).toEqual([]);
   page.off('dialog', handler);
 });
