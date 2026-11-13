@@ -30,6 +30,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const bulkToggleRef = useRef<HTMLButtonElement>(null);
   const closeSelectors = () => { setExpandedStudent(null); setBulkOpen(false); };
   const savingRef = useRef(false);
   const [draft, setDraft] = useState<Map<string, ObservationStatus>>(() => new Map());
@@ -77,6 +78,8 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
       if (existing.get(s.id)?.status !== status) next.set(s.id, status);
     });
     replaceDraft(next);
+    // Keep keyboard focus on the visible mobile disclosure when its options close.
+    if (window.matchMedia('(max-width: 767px)').matches) bulkToggleRef.current?.focus();
     closeSelectors();
   };
 
@@ -125,7 +128,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
 
       <fieldset disabled={isSaving || !isObservationDate(selectedDate)} className="border-0 p-0 m-0 min-w-0">
       {/* Bulk action buttons */}
-      <button type="button" data-testid="behavior-bulk-toggle"
+      <button ref={bulkToggleRef} type="button" data-testid="behavior-bulk-toggle"
         aria-expanded={bulkOpen} aria-controls="behavior-bulk-actions"
         onClick={() => { setBulkOpen(open => !open); setExpandedStudent(null); }}
         className="md:hidden min-h-[48px] w-full flex items-center justify-between gap-2 border-b border-[var(--border)] text-sm font-semibold text-cyan-300 focus-visible:outline focus-visible:outline-cyan-300">

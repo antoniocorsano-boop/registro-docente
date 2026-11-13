@@ -191,3 +191,20 @@ test('mobile privacy and disclosure state remain separate from the observation d
  await expect(page.getByTestId('fixture-calls')).toHaveText('0');
  await expect(save(page)).toBeDisabled();
 });
+
+test('mobile bulk keyboard choice restores focus and sticky bar is opaque',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await open(page);
+ const toggle=page.getByTestId('behavior-bulk-toggle');
+ await toggle.focus();
+ await page.keyboard.press('Enter');
+ const choice=page.getByRole('button',{name:'👍 Tutti Costruttivo',exact:true});
+ await choice.focus();
+ await page.keyboard.press('Enter');
+ await expect(toggle).toBeFocused();
+ await expect(toggle).toHaveAttribute('aria-expanded','false');
+ await expect(choice).toBeHidden();
+ await expect(page.getByTestId('fixture-calls')).toHaveText('0');
+ await expect(save(page)).toBeEnabled();
+ await expect(page.getByTestId('behavior-save-bar')).toHaveCSS('background-color','rgb(3, 7, 18)');
+});
