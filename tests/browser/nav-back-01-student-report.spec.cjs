@@ -173,3 +173,83 @@ for (const width of [320, 390]) {
     await page.screenshot({ path: out + '/student-report-' + width + '-grades-200.png' });
   });
 }
+
+for (const width of [320,390,1280]) {
+  test('MOBILE-DENSITY-04/S2 — ' + width + ' protected restitution, validation and recipient reset', async ({page}) => {
+    await page.setViewportSize({width:width===1280?390:width,height:844});
+    await page.goto(url+'?visualRoster=8');
+    await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+    await openStudentFromOrigin(page,'Tabellone');
+    if(width===1280) await page.setViewportSize({width,height:900});
+    const root=page.getByTestId('student-report-workspace');
+    const select=root.getByRole('combobox',{name:'Seleziona alunno'});
+    await select.selectOption('fittizio-studente-01');
+    const privacy=page.getByTestId('header01-privacy');
+    if (width < 768 && await privacy.getAttribute('data-privacy-state') !== 'protected') await privacy.click();
+    await root.getByRole('button',{name:'Restituzione',exact:true}).click();
+    const restitution=page.getByTestId('student-report-restitution');
+    // The synthetic fixture starts with protected names.
+    await expect(restitution).toBeVisible();
+    const assertModeLabels = async () => {
+      const mode = root.getByRole('group', {name:'Viste scheda alunno'});
+      for (const label of ['Essenziale','Dossier','Restituzione']) {
+        const button=mode.getByRole('button',{name:label,exact:true});
+        expect(await button.evaluate(el=>{
+          const range=document.createRange();
+          range.selectNodeContents(el);
+          return new Set(Array.from(range.getClientRects()).map(r=>Math.round(r.top))).size;
+        })).toBe(1);
+        expect(await button.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+        expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(48);
+      }
+    };
+    if(width<768) await assertModeLabels();
+    await expect(restitution.getByTestId('restitution-row')).toHaveCount(2);
+    await expect(restitution.getByTestId('restitution-mean')).toHaveText('8,5');
+    await expect(root.getByTestId('student-report-dossier')).toHaveCount(0);
+    await restitution.getByLabel('Periodo',{exact:true}).selectOption('Q1');
+    await expect(restitution.getByTestId('restitution-row')).toHaveCount(1);
+    await restitution.getByLabel('Periodo',{exact:true}).selectOption('all');
+    await restitution.getByLabel('Punti di forza',{exact:true}).fill('Evidenza sintetica del docente');
+    await restitution.getByLabel('Primo obiettivo di miglioramento',{exact:true}).fill('Obiettivo sintetico');
+    await restitution.getByRole('button',{name:'Controlla anteprima'}).click();
+    const preview=restitution.getByTestId('restitution-preview');
+    await expect(preview).toContainText('Evidenza sintetica del docente');
+    await expect(preview).toContainText('Obiettivo sintetico');
+    await expect(preview).not.toContainText('Persona Fittizia');
+    await expect(preview.getByTestId('restitution-row')).toHaveCount(2);
+    const validate=restitution.getByRole('button',{name:'Valida anteprima'});
+    await expect(validate).toBeDisabled();
+    await restitution.getByRole('checkbox').check();
+    await validate.click();
+    await expect(restitution.getByRole('status')).toContainText('Validazione locale completata');
+    const out=process.env.REPORT_EVIDENCE_DIR||'../browser-evidence';
+    require('node:fs').mkdirSync(out,{recursive:true});
+    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.screenshot({path:out+'/restitution-'+width+'-viewport.png'});
+    await page.screenshot({path:out+'/restitution-'+width+'-preview.png',fullPage:true});
+    await restitution.getByRole('button',{name:'Modifica',exact:true}).click();
+    await expect(restitution.getByLabel('Punti di forza',{exact:true})).toHaveValue('Evidenza sintetica del docente');
+    await restitution.getByRole('button',{name:'Controlla anteprima'}).click();
+    await expect(restitution.getByRole('button',{name:'Valida anteprima'})).toBeDisabled();
+    if(width<768){
+      await privacy.click();
+      await expect(restitution).toHaveCount(0);
+      await expect(root.getByRole('alert')).toContainText('Attiva la protezione');
+      await privacy.click();
+      await expect(restitution.getByLabel('Punti di forza',{exact:true})).toHaveValue('');
+      await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+      expect(await restitution.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+      await assertModeLabels();
+      await page.evaluate(()=>window.scrollTo(0,0));
+      await page.screenshot({path:out+'/restitution-'+width+'-200-viewport.png'});
+      await page.screenshot({path:out+'/restitution-'+width+'-200.png',fullPage:true});
+    }
+    await select.selectOption('fittizio-studente-02');
+    await expect(restitution).toHaveCount(0);
+    await root.getByRole('button',{name:'Restituzione',exact:true}).click();
+    await expect(restitution.getByLabel('Punti di forza',{exact:true})).toHaveValue('');
+    await expect(restitution.getByTestId('restitution-mean')).toHaveText('6,5');
+    await expect(restitution).not.toContainText('Evidenza sintetica del docente');
+  });
+}

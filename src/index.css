@@ -326,3 +326,15 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
   }
 }
+
+/* S2: three mobile destinations; wrap whole controls rather than words. */
+@media (max-width: 767px) {
+  .student-report-mode {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .student-report-mode > button {
+    flex: 1 1 7rem;
+    min-width: 0;
+  }
+}
