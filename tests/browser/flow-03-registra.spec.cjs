@@ -262,6 +262,7 @@ async function openBehaviourFromRecord(page, record) {
   const defaultStatus = page.getByRole('button', { name: 'Ottimale 🌟', exact: true }).first();
   await expect(defaultStatus).toBeVisible();
   await expect(defaultStatus).not.toHaveClass(/ring-2/);
+  await expect(page.getByRole('button', { name: 'Salva Registro Comportamenti', exact: true })).toBeDisabled();
   await assertSelectedClassStillVisible(page);
   await assertNoAutomaticMutation(page);
   return assertRecordMission(page, 'Comportamento');
@@ -574,4 +575,36 @@ test.describe('FLOW-03 mobile qualification', () => {
   await page.screenshot({ path: evidencePath('flow-03-mobile-final.png'), fullPage: true });
   expect(pageErrors).toEqual([]);
 });
+});
+test('FLOW-03 behaviour: durable save completes session even when departure is pending', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await configureVault(page, 'flow-03-behaviour-pending');
+  await createSyntheticClassWithStudent(page);
+  const record = await openRecordFromOggi(page);
+  const mission = await openBehaviourFromRecord(page, record);
+  await page.getByRole('button', { name: 'Costruttivo 👍', exact: true }).click();
+  // Hold only the next synthetic encryption operation, before its durable commit.
+  await page.evaluate(() => {
+    const original = crypto.subtle.encrypt.bind(crypto.subtle);
+    let first = true;
+    crypto.subtle.encrypt = async (...args) => {
+      if (first) {
+        first = false;
+        await new Promise(resolve => { window.__releaseObservationSave = resolve; });
+      }
+      return original(...args);
+    };
+  });
+  await page.getByRole('button', { name: 'Salva Registro Comportamenti', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => typeof window.__releaseObservationSave)).toBe('function');
+  await mission.getByRole('button', { name: 'Torna a Registra', exact: true }).click();
+  const decision = page.getByRole('dialog', { name: 'Modifiche non salvate' });
+  await expect(decision).toBeVisible();
+  await expect(decision.getByRole('button', { name: 'Continua senza salvare' })).toBeDisabled();
+  await page.evaluate(() => window.__releaseObservationSave());
+  await expect(decision.getByRole('button', { name: 'Continua', exact: true })).toBeEnabled();
+  await decision.getByRole('button', { name: 'Continua', exact: true }).click();
+  await closePersistenceConfirmationIfPresent(page);
+  await expect(page.getByText('Registrazione completata', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rivedi', exact: true }).last()).toBeVisible();
 });
