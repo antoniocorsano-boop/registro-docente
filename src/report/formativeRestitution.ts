@@ -76,7 +76,7 @@ export function buildFormativeRestitution(
       const linked = g.udaId ? udas.filter(u => u.id === g.udaId && u.className === cls.name) : [];
       const value = g.value.trim().toUpperCase();
       return {
-        date: g.date, period: g.period, type: TYPES_LABEL[g.type] || 'Tipologia non riconosciuta',
+        date: /^\d{4}-\d{2}-\d{2}$/.test(g.date) ? g.date : '', period: g.period, type: TYPES_LABEL[g.type] || 'Tipologia non riconosciuta',
         title: protectedText(g.title?.trim() || 'Attività senza titolo', names),
         uda: linked.length === 1 ? protectedText(linked[0].title, names) : g.udaId ? 'Collegamento UDA non verificato' : null,
         value: numeric(g) ? protectedText(g.value, names) : specialLabels[value] || 'Registrazione non numerica',

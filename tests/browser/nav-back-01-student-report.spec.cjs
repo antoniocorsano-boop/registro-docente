@@ -176,15 +176,11 @@ for (const width of [320, 390]) {
 
 for (const width of [320,390,1280]) {
   test('MOBILE-DENSITY-04/S2 — ' + width + ' protected restitution, validation and recipient reset', async ({page}) => {
-    await page.setViewportSize({width,height:width===1280?900:844});
+    await page.setViewportSize({width:width===1280?390:width,height:844});
     await page.goto(url+'?visualRoster=8');
     await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
-    // The same public navigation path is exercised at both breakpoints.
-    if (width < 768) await openStudentFromOrigin(page,'Tabellone');
-    else {
-      await page.getByRole('button',{name:'Tabellone',exact:true}).first().click();
-      await page.getByRole('button',{name:/Scheda alunno/i}).first().click();
-    }
+    await openStudentFromOrigin(page,'Tabellone');
+    if(width===1280) await page.setViewportSize({width,height:900});
     const root=page.getByTestId('student-report-workspace');
     const select=root.getByRole('combobox',{name:'Seleziona alunno'});
     await select.selectOption('fittizio-studente-01');

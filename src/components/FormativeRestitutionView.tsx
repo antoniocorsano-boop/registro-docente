@@ -168,7 +168,7 @@ export const FormativeRestitutionView: React.FC<Props> = ({currentClass, student
           <option value="Q2">2° periodo</option>
         </select>
       </label>
-      <DraftEditor key={JSON.stringify(model)} model={model} names={currentClass.students.map(s=>s.name)}/>
+      <DraftEditor key={JSON.stringify([model,currentClass.students.map(s=>s.name)])} model={model} names={currentClass.students.map(s=>s.name)}/>
     </section>
   );
 };

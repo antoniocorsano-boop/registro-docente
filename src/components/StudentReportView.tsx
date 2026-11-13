@@ -269,7 +269,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   isPrivacyShieldActive = true
 }) => {
   const [radarMode, setRadarMode] = useState<'competencies' | 'udas'>('competencies');
-  const [mobileMode, setMobileMode] = useState<{ studentId: string; view: 'essential' | 'dossier' | 'restitution' } | null>(null);
+  const [mobileMode, setMobileMode] = useState<{ classId: string; studentId: string; view: 'essential' | 'dossier' | 'restitution' } | null>(null);
   const dossierRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
@@ -296,7 +296,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   }
 
   const displayStudentName = formatStudentNameWithPrivacy(currentStudent.name, isPrivacyShieldActive);
-  const mobileView = mobileMode?.studentId === currentStudent.id ? mobileMode.view : 'essential';
+  const mobileView = mobileMode?.classId === currentClass.id && mobileMode.studentId === currentStudent.id ? mobileMode.view : 'essential';
   const closeMobileDisclosures = () => {
     if (!window.matchMedia('(min-width: 768px)').matches) {
       dossierRef.current?.querySelectorAll<HTMLDetailsElement>(':scope > details[open]').forEach(el => { el.open = false; });
@@ -475,7 +475,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
 
         <div className="hidden md:flex justify-end mb-3">
-          <button type="button" className="min-h-[48px] px-3 py-2 rounded-lg border border-[var(--border)] text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300" aria-pressed={mobileView === 'restitution'} onClick={() => setMobileMode({ studentId: currentStudent.id, view: mobileView === 'restitution' ? 'essential' : 'restitution' })}>{mobileView === 'restitution' ? 'Torna alla scheda interna' : 'Restituzione'}</button>
+          <button type="button" className="min-h-[48px] px-3 py-2 rounded-lg border border-[var(--border)] text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300" aria-pressed={mobileView === 'restitution'} onClick={() => setMobileMode({ classId: currentClass.id, studentId: currentStudent.id, view: mobileView === 'restitution' ? 'essential' : 'restitution' })}>{mobileView === 'restitution' ? 'Torna alla scheda interna' : 'Restituzione'}</button>
         </div>
         {mobileView !== 'restitution' && <>
         {/* Student KPIs */}
@@ -542,7 +542,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           <button key={view} type="button" aria-pressed={mobileView === view}
             onClick={() => {
               closeMobileDisclosures();
-              setMobileMode({ studentId: currentStudent.id, view });
+              setMobileMode({ classId: currentClass.id, studentId: currentStudent.id, view });
             }}
             className={`min-w-0 break-words min-h-[48px] py-2 px-1 border-b-2 text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300 ${mobileView === view ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400'}`}>
             {label}
