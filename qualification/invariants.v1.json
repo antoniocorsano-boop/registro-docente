@@ -1840,7 +1840,7 @@
     {
       "id": "MOBILE-DENSITY-03-I02",
       "owner": "MOBILE-DENSITY-03",
-      "statement": "On mobile, Behavior is a flat list with one accessible row disclosure at a time, explicit collective selection, clear saved/draft/unrecorded state, and reachable save control. Existing observation integrity and desktop controls remain unchanged.",
+      "statement": "On mobile, Behavior is a flat list with four directly selectable observation symbols beside each name, no per-student disclosure, explicit collective selection, clear saved/draft/unrecorded state, and reachable save control. Existing observation integrity and desktop controls remain unchanged.",
       "impactPaths": [
         "src/components/BehaviorsView.tsx",
         "src/index.css",

@@ -15,22 +15,23 @@ for(const width of [320,390]){
   fs.mkdirSync(out,{recursive:true});
   for(const count of [8,25]){
    if(count===25)await page.getByTestId('fixture-count').click();
-   await expect(page.getByTestId('behavior-row-toggle')).toHaveCount(count);
-   await expect(page.getByTestId('behavior-row-toggle').first()).toBeVisible();
-   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toHaveCount(0);
-   const geom=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row-toggle"]')];const r=rows[0].getBoundingClientRect();const n=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();return {viewport:innerWidth,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:r.height,rowWidth:r.width,nameWidth:n.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(innerHeight,save.top)}).length,saveBottom:save.bottom};});
+   await expect(page.getByTestId('behavior-row')).toHaveCount(count);
+   await expect(page.getByTestId('behavior-row').first()).toBeVisible();
+   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toHaveCount(count);
+   const geom=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row"]')];const r=rows[0].getBoundingClientRect();const n=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();return {viewport:innerWidth,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:r.height,rowWidth:r.width,nameWidth:n.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(innerHeight,save.top)}).length,saveBottom:save.bottom};});
    expect(geom.overflow).toBeLessThanOrEqual(1);
    expect(geom.rowHeight).toBeGreaterThanOrEqual(48);
    expect(geom.rowsInView).toBeGreaterThanOrEqual(3);
    expect(geom.saveBottom).toBeLessThanOrEqual(width===320?700:844);
    fs.writeFileSync(path.join(out,'compact-'+width+'-'+count+'.json'),JSON.stringify(geom,null,2));
    await page.screenshot({path:path.join(out,'compact-'+width+'-'+count+'.png')});
-   const row=page.getByTestId('behavior-row-toggle').first();
-   await row.click();
-   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(1);
-   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toBeVisible();
-   await page.screenshot({path:path.join(out,'compact-'+width+'-'+count+'-expanded.png')});
-   await row.click();
+   const row=page.getByTestId('behavior-row').first();
+   await expect(row.getByRole('button')).toHaveCount(4);
+   for(const button of await row.getByRole('button').all()){
+    const box=await button.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(48);
+    expect(box.height).toBeGreaterThanOrEqual(48);
+   }
   }
  });
 }
@@ -123,7 +124,7 @@ test('restoring original status is a no-op and leaves no changes to save',async(
 });
 
 for(const width of [320,390]){
- test('actual App '+width+' — flat rows, one disclosure, accessible controls and 200% visual evidence',async({page})=>{
+ test('actual App '+width+' — flat rows, direct four-symbol selection, accessible controls and 200% visual evidence',async({page})=>{
   await page.setViewportSize({width,height:width===320?700:844});
   const out=process.env.BEHAVIOR_EVIDENCE_DIR||'../browser-evidence';
   fs.mkdirSync(out,{recursive:true});
@@ -131,37 +132,33 @@ for(const width of [320,390]){
    await page.goto(base+'/tests/browser/fixtures/nav-back-01-app.html?visualRoster='+count);
    await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
    await page.locator('nav').getByRole('button',{name:'Comportamento',exact:true}).click();
-   const rows=page.getByTestId('behavior-row-toggle');
+   const rows=page.getByTestId('behavior-row');
    await expect(rows).toHaveCount(count);
    await expect(rows.first()).toContainText('Non registrato');
    await expect(save(page)).toBeDisabled();
-   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(0);
-   const geometry=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row-toggle"]')];const r=rows[0].getBoundingClientRect();const name=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();const nav=document.querySelector('nav').getBoundingClientRect();return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowWidth:r.width,rowHeight:r.height,nameWidth:name.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(save.top,nav.top)}).length,saveBottom:save.bottom,navTop:nav.top};});
+   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(count);
+   const geometry=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row"]')];const r=rows[0].getBoundingClientRect();const name=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();const nav=document.querySelector('nav').getBoundingClientRect();return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowWidth:r.width,rowHeight:r.height,nameWidth:name.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(save.top,nav.top)}).length,saveBottom:save.bottom,navTop:nav.top};});
    expect(geometry.overflow).toBeLessThanOrEqual(1);
    expect(geometry.rowHeight).toBeGreaterThanOrEqual(48);
    expect(geometry.rowsInView).toBeGreaterThanOrEqual(3);
    expect(geometry.saveBottom).toBeLessThanOrEqual(geometry.navTop+1);
    fs.writeFileSync(path.join(out,'app-'+width+'-'+count+'.json'),JSON.stringify({sha:process.env.CANDIDATE_SHA,...geometry},null,2));
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-list.png')});
-   await rows.first().click();
-   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(1);
-   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-expanded.png')});
-   await rows.nth(1).click();
-   await expect(rows.first()).toHaveAttribute('aria-expanded','false');
-   await expect(rows.nth(1)).toHaveAttribute('aria-expanded','true');
-   const choice=page.getByRole('button',{name:'Costruttivo 👍',exact:true});
+   const choice=rows.nth(1).getByRole('button',{name:'Costruttivo 👍',exact:true});
    expect((await choice.boundingBox()).height).toBeGreaterThanOrEqual(48);
+   expect((await choice.boundingBox()).width).toBeGreaterThanOrEqual(48);
    await choice.click();
-   await expect(rows.nth(1)).toHaveAttribute('aria-expanded','false');
+   await expect(choice).toHaveAttribute('aria-pressed','true');
    await expect(rows.nth(1)).toContainText('Da salvare');
+   await expect(rows.first().getByRole('button',{name:'Costruttivo 👍',exact:true})).toHaveAttribute('aria-pressed','false');
+   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-selected.png')});
    await expect(save(page)).toBeEnabled();
    await page.getByTestId('behavior-bulk-toggle').click();
    await expect(page.getByRole('button',{name:'👍 Tutti Costruttivo',exact:true})).toBeVisible();
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-bulk.png')});
    await page.getByTestId('behavior-bulk-toggle').click();
    await page.evaluate(()=>document.documentElement.style.fontSize='200%');
-   await rows.first().click();
-   const enlargedChoice=page.getByRole('button',{name:'Ottimale 🌟',exact:true});
+   const enlargedChoice=rows.first().getByRole('button',{name:'Ottimale 🌟',exact:true});
    await expect(enlargedChoice).toBeVisible();
    await expect(page.getByTestId('behavior-save-bar')).toHaveCSS('position','static');
    await enlargedChoice.scrollIntoViewIfNeeded();
@@ -177,17 +174,16 @@ for(const width of [320,390]){
  });
 }
 
-test('mobile privacy and disclosure state remain separate from the observation draft',async({page})=>{
+test('mobile privacy and direct selection remain separate from the observation draft',async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await open(page);
- const row=page.getByTestId('behavior-row-toggle').first();
+ const row=page.getByTestId('behavior-row').first();
  await expect(row).not.toContainText('Persona Fittizia');
- await row.click();
  await page.getByTestId('fixture-privacy').click();
  await expect(row).toContainText('Persona Fittizia 1');
  await page.getByTestId('fixture-privacy').click();
  await expect(row).not.toContainText('Persona Fittizia');
- await expect(page.getByRole('button',{name:/Persona Fittizia/})).toHaveCount(0);
+ await expect(page.getByRole('group',{name:/Persona Fittizia/})).toHaveCount(0);
  await expect(page.getByTestId('fixture-calls')).toHaveText('0');
  await expect(save(page)).toBeDisabled();
 });
@@ -207,4 +203,19 @@ test('mobile bulk keyboard choice restores focus and sticky bar is opaque',async
  await expect(page.getByTestId('fixture-calls')).toHaveText('0');
  await expect(save(page)).toBeEnabled();
  await expect(page.getByTestId('behavior-save-bar')).toHaveCSS('background-color','rgb(3, 7, 18)');
+});
+
+test('direct mobile choice requires one tap and remains keyboard focused',async({page})=>{
+ await page.setViewportSize({width:320,height:700});
+ await open(page);
+ const row=page.getByTestId('behavior-row').nth(1);
+ const choice=row.getByRole('button',{name:'Distratto ⚠️',exact:true});
+ await expect(choice).toBeVisible();
+ await choice.focus();
+ await page.keyboard.press('Enter');
+ await expect(choice).toBeFocused();
+ await expect(choice).toHaveAttribute('aria-pressed','true');
+ await expect(row).toContainText('Da salvare');
+ await expect(page.getByTestId('fixture-calls')).toHaveText('0');
+ await expect(save(page)).toBeEnabled();
 });

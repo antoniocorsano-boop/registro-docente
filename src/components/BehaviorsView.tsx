@@ -28,10 +28,9 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(today());
   const [isSaving, setIsSaving] = useState(false);
-  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const bulkToggleRef = useRef<HTMLButtonElement>(null);
-  const closeSelectors = () => { setExpandedStudent(null); setBulkOpen(false); };
+  const closeSelectors = () => setBulkOpen(false);
   const savingRef = useRef(false);
   const [draft, setDraft] = useState<Map<string, ObservationStatus>>(() => new Map());
   const draftRef = useRef(draft);
@@ -69,7 +68,6 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
     if (existing.get(studentId)?.status === status) next.delete(studentId);
     else next.set(studentId, status);
     replaceDraft(next);
-    setExpandedStudent(null);
   };
   const setAll = (status: ObservationStatus) => {
     if (savingRef.current || !isObservationDate(selectedDate)) return;
@@ -130,7 +128,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
       {/* Bulk action buttons */}
       <button ref={bulkToggleRef} type="button" data-testid="behavior-bulk-toggle"
         aria-expanded={bulkOpen} aria-controls="behavior-bulk-actions"
-        onClick={() => { setBulkOpen(open => !open); setExpandedStudent(null); }}
+        onClick={() => setBulkOpen(open => !open)}
         className="md:hidden min-h-[48px] w-full flex items-center justify-between gap-2 border-b border-[var(--border)] text-sm font-semibold text-cyan-300 focus-visible:outline focus-visible:outline-cyan-300">
         Assegna a tutti <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 ${bulkOpen ? 'rotate-180' : ''}`}/>
       </button>
@@ -164,7 +162,9 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
 
       {/* Student rows */}
       <div data-testid="behavior-list" className="min-w-0 divide-y divide-[var(--border)] md:border md:border-[var(--border)] md:rounded-lg md:overflow-hidden md:bg-slate-900/60 md:max-h-[55vh] md:overflow-y-auto mb-3 md:mb-4">
-        <div className="md:hidden flex justify-between gap-2 py-2 text-xs text-slate-400" aria-hidden="true"><span>Alunno</span><span>Osservazione</span></div>
+        <div className="md:hidden behavior-legend flex flex-wrap gap-x-3 gap-y-1 py-2 text-xs text-slate-400" aria-label="Legenda delle osservazioni">
+          {BEHAVIOR_OPTIONS.map(opt => <span key={opt.label}>{opt.label}</span>)}
+        </div>
         {currentClass.students.length === 0 ? (
           <p className="p-4 text-xs text-slate-400 text-center">
             Nessun alunno presente in questa classe.
@@ -173,28 +173,19 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
           currentClass.students.map((student, idx) => {
             const currentStatus = draft.get(student.id) ?? existing.get(student.id)?.status;
             const isChanged = draft.has(student.id) && draft.get(student.id) !== existing.get(student.id)?.status;
-            const expanded = expandedStudent === student.id;
             const displayName = formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive);
-            const option = BEHAVIOR_OPTIONS.find(opt => opt.label === currentStatus);
             const stateLabel = isChanged ? 'Da salvare' : currentStatus ? 'Registrato' : 'Non registrato';
 
             return (
               <div
                 key={student.id}
                 data-testid="behavior-row"
-                className="min-w-0 md:p-3 md:flex md:flex-row md:items-center md:justify-between md:gap-2.5 md:hover:bg-slate-800/40"
+                className="behavior-direct-row min-w-0 md:p-3 md:flex md:flex-row md:items-center md:justify-between md:gap-2.5 md:hover:bg-slate-800/40"
               >
-                <button type="button" data-testid="behavior-row-toggle" aria-expanded={expanded}
-                  aria-controls={`behavior-options-${idx}`}
-                  onClick={() => { setExpandedStudent(expanded ? null : student.id); setBulkOpen(false); }}
-                  className="behavior-row-toggle md:hidden w-full min-w-0 min-h-[56px] flex items-center gap-2 text-left py-2 focus-visible:outline focus-visible:outline-cyan-300">
-                  <span className="min-w-0 flex-1 break-words text-sm font-semibold text-slate-100" data-testid="behavior-name">{displayName}</span>
-                  <span className="behavior-row-status min-w-0 shrink-0 text-right">
-                    {option && <span data-testid="behavior-current-status" className={`block text-sm font-semibold ${option.colorClass}`}>{option.label}</span>}
-                    <span data-testid="behavior-mobile-state" className={`block text-xs ${isChanged ? 'text-amber-300' : 'text-slate-400'}`}>{stateLabel}</span>
-                  </span>
-                  <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 text-slate-400 ${expanded ? 'rotate-180' : ''}`}/>
-                </button>
+                <div className="behavior-name-cell md:hidden min-w-0 py-1">
+                  <span className="block min-w-0 text-sm font-semibold text-slate-100" data-testid="behavior-name">{displayName}</span>
+                  <span data-testid="behavior-mobile-state" className={`block text-xs ${isChanged ? 'text-amber-300' : 'text-slate-400'}`}>{stateLabel}</span>
+                </div>
                 <div className="hidden md:flex items-center gap-2">
                   <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
                   <span className="font-semibold text-slate-200 text-xs sm:text-sm">
@@ -203,8 +194,9 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
                   <span className="text-xs text-slate-400" data-testid="behavior-observation-state">{stateLabel}</span>
                 </div>
 
-                <div id={`behavior-options-${idx}`} data-testid="behavior-options"
-                  className={`${expanded ? 'grid grid-cols-2' : 'hidden'} md:flex items-center gap-2 md:gap-1.5 md:flex-wrap md:justify-end pb-2 md:pb-0`}>
+                <div id={`behavior-options-${idx}`} data-testid="behavior-options" role="group"
+                  aria-label={`${displayName} — ${stateLabel}`}
+                  className="behavior-direct-options grid md:flex items-center md:gap-1.5 md:flex-wrap md:justify-end">
                   {BEHAVIOR_OPTIONS.map(opt => {
                     const isSelected = currentStatus === opt.label;
                     return (
@@ -212,17 +204,15 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
                         key={opt.label}
                         type="button"
                         aria-pressed={isSelected}
-                        onClick={event => {
-                          if (window.matchMedia('(max-width: 767px)').matches) event.currentTarget.closest('[data-testid="behavior-row"]')?.querySelector<HTMLButtonElement>('[data-testid="behavior-row-toggle"]')?.focus();
-                          handleSelectStatus(student.id, opt.label);
-                        }}
-                        className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 min-w-0 px-2.5 py-1 rounded text-sm md:text-xs font-semibold transition-all border ${
+                        onClick={() => handleSelectStatus(student.id, opt.label)}
+                        className={`behavior-direct-choice ${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 min-w-0 md:px-2.5 md:py-1 rounded text-sm md:text-xs font-semibold transition-all md:border ${
                           isSelected
                             ? `${opt.colorClass} border-[var(--primary)] ring-2 ring-[var(--primary)]/30 md:shadow-[0_0_8px_var(--primary)] md:scale-105`
                             : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
                         }`}
                       >
-                        {opt.label}
+                        <span aria-hidden="true" className="md:hidden text-xl leading-none">{opt.label.split(' ').at(-1)}</span>
+                        <span className="sr-only md:not-sr-only">{opt.label}</span>
                       </button>
                     );
                   })}

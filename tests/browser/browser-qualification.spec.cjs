@@ -216,10 +216,8 @@ test('UXT-A compact Vault and operational controls are touch-safe — mobile 390
 
   await mobileNav.getByRole('button', { name: 'Comportamento', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' })).toBeVisible();
-  const behaviorRow = page.getByTestId('behavior-row-toggle').first();
-  await assertAtLeast44(behaviorRow, 'behavior row control');
-  await behaviorRow.click();
-  const behaviorStatus = page.getByRole('button', { name: 'Ottimale 🌟', exact: true }).filter({ visible: true }).first();
+  const behaviorRow = page.getByTestId('behavior-row').first();
+  const behaviorStatus = behaviorRow.getByRole('button', { name: 'Ottimale 🌟', exact: true });
   await assertAtLeast44(behaviorStatus, 'behavior status control');
 
   await page.screenshot({ path: path.join(evidenceDir, 'ux-trust-01-uxt-a-mobile.png'), fullPage: false });
