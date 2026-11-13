@@ -93,3 +93,46 @@ test('NAV-BACK-01 — forged or deleted student in history does not open a repor
   await expect(page.getByTestId('header01-context')).toContainText('3ª A');
   await expect(page.getByText('Scheda Alunno & Profilo delle Competenze')).toHaveCount(0);
 });
+
+for (const width of [320, 390]) {
+  test('MOBILE-DENSITY-04 — ' + width + ' essential/dossier, selection, privacy and readable evidence', async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 844 });
+    await page.goto(url + '?visualRoster=8');
+    await page.getByRole('button', { name: /Apri classe 3ª A.*Prova sintetica/i }).click();
+    await openStudentFromOrigin(page, 'Tabellone');
+    const root = page.getByTestId('student-report-workspace');
+    const essential = page.getByTestId('student-report-essential');
+    const dossier = page.getByTestId('student-report-dossier');
+    const select = root.getByRole('combobox', { name: 'Seleziona alunno' });
+    await expect(essential).toBeVisible();
+    await expect(dossier).toBeHidden();
+    await expect(essential.getByTestId('student-report-average')).toHaveText('8,5');
+    await expect(essential.getByTestId('student-report-grade-count')).toHaveText('2');
+    await expect(root.getByRole('button', { name: 'Essenziale', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const out = process.env.REPORT_EVIDENCE_DIR || '../browser-evidence';
+    require('node:fs').mkdirSync(out, { recursive: true });
+    await page.screenshot({ path: out + '/student-report-' + width + '-essential.png' });
+    await root.getByRole('button', { name: 'Dossier', exact: true }).click();
+    await expect(essential).toBeHidden();
+    await expect(dossier).toBeVisible();
+    await expect(dossier.locator('details[open]')).toHaveCount(0);
+    await dossier.getByText('Elenco valutazioni', { exact: true }).click();
+    await expect(dossier.locator('details[open]')).toHaveCount(1);
+    await expect(dossier.locator('details[open]')).toContainText('Esercizio sintetico Q2');
+    await page.screenshot({ path: out + '/student-report-' + width + '-grades.png' });
+    await dossier.getByText('Comportamenti e partecipazione', { exact: true }).click();
+    await expect(dossier.locator('details[open]')).toHaveCount(1);
+    await expect(dossier.locator('details[open]')).toContainText('Nessuna nota comportamentale');
+    await select.selectOption('fittizio-studente-02');
+    await expect(essential).toBeVisible();
+    await expect(essential.getByTestId('student-report-average')).toHaveText('6,5');
+    await expect(dossier).toBeHidden();
+    const privacy = page.getByTestId('header01-privacy');
+    if (await privacy.getAttribute('data-privacy-state') !== 'protected') await privacy.click();
+    await expect(select).not.toContainText('Persona Fittizia Due');
+    await page.evaluate(() => document.documentElement.style.fontSize = '200%');
+    await expect(essential).toBeVisible();
+    expect(await essential.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: out + '/student-report-' + width + '-200.png' });
+  });
+}

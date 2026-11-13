@@ -5,6 +5,8 @@ name: MOBILE-DENSITY-02 Isolated Qualification
 on:
   pull_request:
     paths:
+      - 'src/components/StudentReportView.tsx'
+      - 'tests/browser/nav-back-01-student-report.spec.cjs'
       - 'src/components/AnalyticsView.tsx'
       - 'src/components/MatrixView.tsx'
       - 'src/components/CompactStudentDisclosureRow.tsx'
