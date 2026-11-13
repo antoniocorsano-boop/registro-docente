@@ -144,9 +144,16 @@ for (const viewport of [
 
     await openDrawerDestination(page, 'Scheda alunno');
     await checkpoint(page, visited.items, 'Scheda alunno', page.getByTestId('student-report-workspace'));
-    await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
-    await expect(page.getByTestId('student-report-essential')).toBeVisible();
-    await expect(page.getByTestId('student-report-dossier')).toBeHidden();
+    if (viewport.width < 768) {
+      await expect(page.getByTestId('header01-context')).toBeVisible();
+      await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
+      await expect(page.getByTestId('student-report-essential')).toBeVisible();
+      await expect(page.getByTestId('student-report-dossier')).toBeHidden();
+    } else {
+      await expect(page.getByRole('heading', { name: 'Scheda Alunno & Profilo delle Competenze' })).toBeVisible();
+      await expect(page.getByTestId('student-report-essential')).toBeHidden();
+      await expect(page.getByTestId('student-report-dossier')).toBeVisible();
+    }
     await expect(page.getByRole('combobox', { name: 'Seleziona alunno' })).toBeVisible();
 
     await openDrawerDestination(page, 'Gestione alunni');
