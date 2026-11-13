@@ -364,12 +364,13 @@ for(const width of [320,390]){
       await page.getByRole('button',{name:'Inserisci valutazione'}).click();const editor=page.getByTestId('matrix-evaluation-editor');const rows=editor.getByTestId('matrix-evaluation-row');await expect(rows).toHaveCount(25);
       await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Proprietà dei materiali');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('7');await editor.getByRole('textbox',{name:'Voto alunno 3',exact:true}).fill('NC');
       await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-contesto.png`),animations:'disabled'});
-      await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-elenco.png`),animations:'disabled'});
+      await editor.getByRole('button',{name:'Vai ai voti'}).click();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(evidence,`editor-${width}-elenco.png`),animations:'disabled'});await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
       const geometry=await rows.evaluateAll(all=>all.map(r=>({height:r.getBoundingClientRect().height,inputHeight:r.querySelector('input').getBoundingClientRect().height})));expect(geometry.every(r=>r.height>=48&&r.inputHeight>=48)).toBe(true);
       await editor.getByRole('button',{name:'Salva valutazioni'}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-salva.png`),animations:'disabled'});
-      await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-200-contesto.png`),animations:'disabled'});
+      await editor.getByRole('button',{name:'Modifica dati'}).click();await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-200-contesto.png`),animations:'disabled'});await editor.getByRole('button',{name:'Vai ai voti'}).click();
       await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-200-elenco.png`),animations:'disabled'});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);await fs.writeFile(path.join(evidence,`editor-${width}-geometry.json`),JSON.stringify({geometry,overflow},null,2));
+      expect(overflow).toBeLessThanOrEqual(1);const names=await rows.evaluateAll(all=>all.map(r=>({w:r.querySelector('.matrix-evaluation-name').getBoundingClientRect().width,h:r.getBoundingClientRect().height})));expect(names.every(n=>n.w>=100&&n.h<220)).toBe(true);
       expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
     }finally{await context.close();}
   });
