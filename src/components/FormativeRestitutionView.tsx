@@ -103,7 +103,7 @@ function DraftEditor({ model, names }: {model: FormativeRestitution; names: read
             {RESTITUTION_FIELDS.map(([field,label]) => (
               <label key={field} className="block space-y-1">
                 <span className="text-sm font-medium">{label}</span>
-                <textarea className="neon-input w-full min-h-[76px] p-2 text-sm resize-y"
+                <textarea aria-label={label} className="neon-input w-full min-h-[76px] p-2 text-sm resize-y"
                   maxLength={1200} rows={2} value={draft[field]}
                   onChange={e => {setDraft(old=>({...old,[field]:e.target.value}));setError('');}}/>
               </label>
