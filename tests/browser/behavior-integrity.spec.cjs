@@ -149,6 +149,9 @@ for(const width of [320,390]){
    expect((await choice.boundingBox()).width).toBeGreaterThanOrEqual(48);
    await choice.click();
    await expect(choice).toHaveAttribute('aria-pressed','true');
+   await expect(choice).toHaveCSS('background-color','rgb(22, 78, 99)');
+   await expect(choice).toHaveCSS('border-top-color','rgb(103, 232, 249)');
+   await expect(choice).toHaveCSS('opacity','1');
    await expect(rows.nth(1)).toContainText('Da salvare');
    await expect(rows.first().getByRole('button',{name:'Costruttivo 👍',exact:true})).toHaveAttribute('aria-pressed','false');
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-selected.png')});
