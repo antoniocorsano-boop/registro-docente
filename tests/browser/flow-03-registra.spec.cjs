@@ -259,7 +259,9 @@ async function openEvaluationFromRecord(page, record) {
 async function openBehaviourFromRecord(page, record) {
   await record.getByRole('button', { name: 'Comportamento', exact: true }).click();
   await expect(page.getByText('Valutazione Rapida Comportamenti', { exact: true })).toBeVisible();
-  const defaultStatus = page.getByRole('button', { name: 'Ottimale 🌟', exact: true }).first();
+  const row = page.getByTestId('behavior-row').first();
+  await expect(row).toContainText('Non registrato');
+  const defaultStatus = row.getByRole('button', { name: 'Ottimale 🌟', exact: true });
   await expect(defaultStatus).toBeVisible();
   await expect(defaultStatus).not.toHaveClass(/ring-2/);
   await expect(page.getByRole('button', { name: 'Salva Registro Comportamenti', exact: true })).toBeDisabled();
@@ -582,7 +584,7 @@ test('FLOW-03 behaviour: durable save completes session even when departure is p
   await createSyntheticClassWithStudent(page);
   const record = await openRecordFromOggi(page);
   const mission = await openBehaviourFromRecord(page, record);
-  await page.getByRole('button', { name: 'Costruttivo 👍', exact: true }).click();
+  await page.getByRole('button', { name: 'Costruttivo 👍', exact: true }).filter({ visible: true }).click();
   // Hold only the next synthetic encryption operation, before its durable commit.
   await page.evaluate(() => {
     const original = crypto.subtle.encrypt.bind(crypto.subtle);

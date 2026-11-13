@@ -64,7 +64,7 @@ export const Header01TopBar: React.FC<Header01TopBarProps> = ({
       data-testid="header01-topbar"
       className="sticky top-0 z-40 w-full min-w-0 border-b border-[var(--border)] bg-[var(--surface)]/95 text-slate-100 shadow-sm backdrop-blur-md"
     >
-      <div className="flex w-full min-w-0 items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
+      <div className="flex w-full min-w-0 items-center gap-2 px-3 py-2 max-[360px]:gap-1 max-[360px]:px-2 sm:gap-3 sm:px-4">
         {/* Single brand-navigation control: no separate hamburger and no home side effect. */}
         <button
           type="button"
@@ -84,11 +84,11 @@ export const Header01TopBar: React.FC<Header01TopBarProps> = ({
         </button>
 
         <div data-testid="header01-context" className="min-w-0 flex-1">
-          <div className="min-w-0 truncate text-sm font-semibold leading-5 text-slate-100 sm:text-base" title={visualContext.title}>
+          <div data-testid="header01-context-title" className="min-w-0 break-words text-sm font-semibold leading-5 text-slate-100 sm:text-base" title={visualContext.title}>
             {visualContext.title}
           </div>
           {visualContext.subtitle && (
-            <div className="min-w-0 truncate text-[11px] leading-4 text-slate-400 sm:text-xs" title={visualContext.subtitle}>
+            <div data-testid="header01-context-subtitle" className="min-w-0 break-words text-[11px] leading-4 text-slate-400 sm:text-xs" title={visualContext.subtitle}>
               {visualContext.subtitle}
             </div>
           )}

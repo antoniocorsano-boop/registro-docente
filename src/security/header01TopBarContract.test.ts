@@ -65,7 +65,9 @@ describe('HEADER-01 / UX REWORK — logo come unico accesso alla navigazione', (
     expect(source).toContain('min-h-[48px] min-w-[48px]');
     expect(source).toContain('className={\`${iconButton}');
     expect(source).toContain('min-w-0 flex-1');
-    expect(source).toContain('truncate');
+    expect(source).toContain('truncate'); // save announcement
+    expect(source).toContain('data-testid="header01-context-title" className="min-w-0 break-words');
+    expect(source).toContain('data-testid="header01-context-subtitle" className="min-w-0 break-words');
     expect(source).toContain('focus-visible:outline');
   });
 

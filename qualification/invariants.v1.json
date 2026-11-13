@@ -1836,6 +1836,33 @@
         "tests/browser/behavior-integrity.spec.cjs",
         "tests/browser/flow-03-registra.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-DENSITY-03-I02",
+      "owner": "MOBILE-DENSITY-03",
+      "statement": "On mobile, Behavior is a flat list with four directly selectable observation symbols beside each name, no per-student disclosure, explicit collective selection, clear saved/draft/unrecorded state, and reachable save control. Existing observation integrity and desktop controls remain unchanged.",
+      "impactPaths": [
+        "src/components/BehaviorsView.tsx",
+        "src/index.css",
+        "tests/browser/behavior-integrity.spec.cjs",
+        "tests/browser/flow-03-registra.spec.cjs",
+        "tests/browser/browser-qualification.spec.cjs",
+        "qualification/invariants.v1.json",
+        "tests/browser/fixtures/nav-back-01-app-fixture.tsx",
+        ".github/workflows/behavior-integrity-qualification.yml",
+        "src/security/uxTrust01Integrity.test.ts"
+      ],
+      "tests": [
+        "src/security/flow03BehaviourExplicitContract.test.ts",
+        "src/security/persist01hPendingFormFreezeIntegrity.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts",
+        "src/security/uxTrust01Integrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/behavior-integrity.spec.cjs",
+        "tests/browser/flow-03-registra.spec.cjs",
+        "tests/browser/browser-qualification.spec.cjs"
+      ]
     }
   ]
 }

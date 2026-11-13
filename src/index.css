@@ -250,3 +250,30 @@ body {
 @media (max-width: 767px) {
   .analytics-workspace [data-testid="analytics-compact-row"] { scroll-margin-top: 6rem; }
 }
+
+/* MOBILE-DENSITY-03: one flat professional surface, no nested scrolling. */
+@media (max-width: 767px) {
+  .behavior-workspace.neon-card { container: behavior-controls / inline-size; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; backdrop-filter: none; }
+  .behavior-direct-row { display: grid; grid-template-columns: minmax(0, 1fr) 192px; align-items: center; min-height: 56px; }
+  .behavior-name-cell { overflow-wrap: anywhere; padding-right: 4px; }
+  .behavior-direct-options { grid-template-columns: repeat(4, minmax(48px, 1fr)); }
+  .behavior-direct-choice { display: flex; align-items: center; justify-content: center; height: 48px; border: 2px solid transparent; background: transparent; box-shadow: none; transition: none; }
+  .behavior-direct-choice[aria-pressed="false"] { opacity: 1; color: #94a3b8; }
+  .behavior-direct-choice[aria-pressed="true"] { opacity: 1; color: #e0f2fe; border-color: #67e8f9; background: #164e63; box-shadow: inset 0 0 0 1px #67e8f9; }
+  .behavior-choice-icon { flex-shrink: 0; }
+  .behavior-legend svg { color: #94a3b8; }
+  .behavior-direct-choice:focus-visible { outline: 2px solid #67e8f9; outline-offset: -3px; }
+  .behavior-direct-row { scroll-margin-top: 7rem; scroll-margin-bottom: 10rem; }
+  .behavior-save-bar { bottom: calc(3.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); background: #030712; }
+  .behavior-workspace button { scroll-margin-bottom: 10rem; }
+  .behavior-save-bar button:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+  @container behavior-controls (max-width: 18rem) {
+    .behavior-direct-row { grid-template-columns: minmax(0, 1fr); padding-block: 4px; }
+    .behavior-direct-options { grid-template-columns: repeat(4, minmax(48px, 1fr)); }
+    .behavior-direct-choice { height: max(48px, 2.5rem); }
+    /* At enlarged text the toolbar may occupy most of the viewport. Keep it
+       in document flow so all observation choices can be reached and read. */
+    .behavior-save-bar { position: static; }
+    .behavior-workspace button { scroll-margin-bottom: 5rem; }
+  }
+}
