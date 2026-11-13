@@ -926,9 +926,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ) => {
     traceHpr('click-navigazione', tab);
+    // Selecting the active navigation item is not a request to replace the
+    // compact editor. Only an explicit specialist target may change its mode.
+    if (tab==='voti' && activeTabRef.current==='voti' && matrixEvaluationModeRef.current
+      && options.returnTab===undefined && options.evaluationBatchId===undefined && !options.preserveRecordSession) return;
+    const changesEvaluationMode=tab==='voti' && activeTabRef.current==='voti'
+      && matrixEvaluationModeRef.current!==(options.returnTab==='tabellone');
     // Browser-history writes must be delayed with the actual tab change.
     // Never let a dirty planning draft remain behind a new route.
-    if (!planningExitBypassRef.current && tab !== activeTabRef.current && hasUnsavedActiveDraft()) {
+    if (!planningExitBypassRef.current && (tab !== activeTabRef.current || changesEvaluationMode) && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => handleNavigateTab(tab, options), tab);
       return;
     }
@@ -2817,6 +2823,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Edit batch: create a navigable history entry associated with the authorized class.
   const handleEditBatch = (batchId: string) => {
+    if(matrixEvaluationModeRef.current && !planningExitBypassRef.current && hasUnsavedActiveDraft()){
+      requestPlanningDeparture(()=>handleEditBatch(batchId),'voti');return;
+    }
     if (pendingEvaluationCancelRef.current) {
       // Defer BOTH the selected batch and the history transition. Merely
       // queuing handleNavigateTab would let popstate reset editingBatchId.

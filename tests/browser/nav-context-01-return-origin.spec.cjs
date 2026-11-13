@@ -338,3 +338,16 @@ test('VAL-01/S4a — guarded browser Back preserves draft and committed pending 
   await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(page.getByTestId('matrix-evaluation-committed')).toBeVisible();await expect(page.getByRole('button',{name:'Salva valutazioni'})).toHaveCount(0);
   await page.getByRole('button',{name:'Torna al Tabellone'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);await context.close();
 });
+
+
+test('VAL-01/S4a — selecting active Valutazioni navigation preserves the compact draft',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const page=await context.newPage();await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+  await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
+  const editor=page.getByTestId('matrix-evaluation-editor');await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova stessa scheda');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('7');
+  const before=await page.evaluate(()=>({url:location.href,length:history.length}));
+  await page.locator('nav').getByRole('button',{name:'Valutazioni',exact:true}).click();
+  await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('7');await expect(editor.getByRole('textbox',{name:'Titolo / Argomento prova'})).toHaveValue('Prova stessa scheda');
+  expect(await page.evaluate(()=>({url:location.href,length:history.length}))).toEqual(before);
+  expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);await context.close();
+});
