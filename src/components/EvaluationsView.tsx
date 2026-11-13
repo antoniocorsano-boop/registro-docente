@@ -64,6 +64,13 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const [committed,setCommitted]=useState(false);
   const [validationMessage,setValidationMessage]=useState('');
   const [showProofDetails,setShowProofDetails]=useState(true);
+  const saveButtonRef=useRef<HTMLButtonElement>(null);
+  const proofRef=useRef<HTMLDivElement>(null);
+  const revealProofError=(message:string)=>{
+    setShowProofDetails(true);setValidationMessage(message);
+    requestAnimationFrame(()=>proofRef.current?.scrollIntoView({block:'center'}));
+  };
+  const jumpToSave=()=>{saveButtonRef.current?.focus({preventScroll:true});saveButtonRef.current?.scrollIntoView({block:'center'});};
   React.useLayoutEffect(()=>{
     if(!compact||!onRegisterDraftGuard)return;
     const guard:EvaluationDraftGuard={hasUnsavedChanges:()=>dirtyRef.current,markCommitted:()=>{dirtyRef.current=false;committedRef.current=true;setCommitted(true);},discardChanges:()=>{dirtyRef.current=false;setGradesMap({});setTitle('');setUdaId('');setValidationMessage('');}};
@@ -145,8 +152,8 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     if (isSaving) return;
     if (submittingRef.current || (compact&&committedRef.current)) return;
     if(compact){
-      if(!isIsoDate(date)||!title.trim()){setShowProofDetails(true);setValidationMessage('Indica data e argomento della prova.');return;}
-      if(udaId && (udas.filter(u=>u.id===udaId).length!==1||!udas.some(u=>u.id===udaId&&u.className===currentClass.name))){setValidationMessage('L’unità di apprendimento non è più disponibile.');return;}
+      if(!isIsoDate(date)||!title.trim()){revealProofError('Indica data e argomento della prova.');return;}
+      if(udaId && (udas.filter(u=>u.id===udaId).length!==1||!udas.some(u=>u.id===udaId&&u.className===currentClass.name))){revealProofError('L’unità di apprendimento non è più disponibile.');return;}
       if(currentClass.students.some(s=>gradesMap[s.id]?.value.trim()&&!normalizeGrade(gradesMap[s.id].value))){setValidationMessage('Controlla i voti non validi: nessuna valutazione è stata salvata.');return;}
     }
 
@@ -219,7 +226,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
       <form onSubmit={handleSubmit} onChangeCapture={()=>{if(compact)dirtyRef.current=true;}} className="space-y-4">
         <fieldset disabled={isSaving} className="space-y-4 border-0 p-0 m-0 min-w-0">
         {compact && !showProofDetails && <div className="matrix-evaluation-proof-summary"><div className="min-w-0"><strong className="block break-words">{title||"Prova"}</strong><p className="text-xs text-slate-400 break-words">{TYPES_LABEL[type]} · {date} · {period==="Q1"?"Primo periodo":"Secondo periodo"}</p>{udaId && <p className="text-xs text-slate-400 break-words">{udas.find(u=>u.id===udaId)?.title||"UDA da verificare"}</p>}</div><button type="button" onClick={()=>setShowProofDetails(true)} className="min-h-[48px] px-2 rounded border border-[var(--border)] text-sm">Modifica dati</button></div>}
-        <div hidden={compact&&!showProofDetails} className={compact?"matrix-evaluation-proof space-y-3":"space-y-4"}>
+        <div ref={proofRef} hidden={compact&&!showProofDetails} className={compact?"matrix-evaluation-proof space-y-3":"space-y-4"}>
         <div className={compact?"matrix-evaluation-fields gap-2 min-w-0":"grid grid-cols-1 sm:grid-cols-3 gap-3"}>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
@@ -304,7 +311,8 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </div>
         </div>
 
-        {compact && <button type="button" onClick={()=>{if(!title.trim()||!isIsoDate(date)){setValidationMessage("Indica data e argomento della prova.");return;}setValidationMessage("");setShowProofDetails(false);}} className="w-full min-h-[48px] rounded-lg border border-[var(--border)] text-sm font-semibold">Vai ai voti</button>}
+        {compact && showProofDetails && validationMessage && (!title.trim()||!isIsoDate(date)) && <p className="text-sm text-amber-200">{validationMessage}</p>}
+        {compact && <button type="button" onClick={()=>{if(!title.trim()||!isIsoDate(date)){revealProofError("Indica data e argomento della prova.");return;}setValidationMessage("");setShowProofDetails(false);}} className="w-full min-h-[48px] rounded-lg border border-[var(--border)] text-sm font-semibold">Vai ai voti</button>}
         </div>
         {!compact && <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
@@ -329,7 +337,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </button>
         </div>}
 
-        {compact && <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><strong>Alunni</strong><span>{currentClass.students.filter(s=>gradesMap[s.id]?.value.trim()).length} / {currentClass.students.length} inseriti</span></div>}
+        {compact && <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><strong>Alunni</strong><span>{currentClass.students.filter(s=>gradesMap[s.id]?.value.trim()).length} / {currentClass.students.length} inseriti</span><button type="button" onClick={jumpToSave} className="matrix-evaluation-save-jump min-h-[48px] rounded-lg border border-[var(--border)] px-3 text-sm">Vai al salvataggio</button></div>}
         <div className={compact?"divide-y divide-[var(--border)] border-y border-[var(--border)]":"border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto"}>
           {currentClass.students.length === 0 ? (
             <p className="p-4 text-xs text-slate-400 text-center">
@@ -386,8 +394,10 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
         </div>
 
         {compact && <p className="text-xs text-slate-400 break-words">A: assente · NC: non classificato · G: giustificato · <Clock className="inline w-[16px] h-[16px]"/> recupero</p>}
-        {validationMessage && <p role="alert" className="text-sm text-amber-200">{validationMessage}</p>}
+        <div data-testid={compact?"matrix-evaluation-save-bar":undefined} className={compact?"matrix-evaluation-save-bar":"contents"}>
+        {validationMessage && <p role="alert" className="mb-2 text-sm text-amber-200 break-words">{validationMessage}</p>}
         <button
+          ref={saveButtonRef}
           type="submit"
           disabled={isSaving}
           className={`${compact?"min-h-[48px] ":""}w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg`}
@@ -395,6 +405,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           <Save className="w-4 h-4" />
           <span>{isSaving?'Salvataggio…':compact?'Salva valutazioni':editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
         </button>
+        </div>
         </fieldset>
       </form>
     </div>
