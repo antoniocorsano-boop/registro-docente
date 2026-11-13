@@ -187,6 +187,8 @@ test.describe('FLOW-04 Oggi → Rivedi desktop qualification', () => {
     await assertTouchSafe(banner.getByRole('button', { name: 'Chiudi', exact: true }));
     await page.screenshot({ path: evidencePath('flow-04-desktop-tabellone.png'), fullPage: true });
 
+    // A review entry is a consultation, not an implicit new daily recording.
+    await expect(page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true})).toHaveAttribute('aria-pressed','true');
     // specialist-to-specialist keeps review mission even when the specialist view calls setActiveTab directly.
     await page.getByRole('cell', { name: STUDENT_NAME, exact: true }).click();
     banner = await reviewMission(page);

@@ -69,6 +69,6 @@ describe('NAV-BACK-01 — cronologia professionale Scheda alunno', () => {
     expect(app).toContain('navigationVersionRef.current += 1;');
     expect(app).toContain('publishRecordSession(null);');
     expect(app).toContain('publishReviewSession(null);');
-    expect(app).toContain('setActiveTab(effectiveTab, { preserveStudentReturnContext: true });');
+    expect(app).toContain('setActiveTab(effectiveTab, { preserveStudentReturnContext: true, matrixMode:restoreMatrixMode });');
   });
 });

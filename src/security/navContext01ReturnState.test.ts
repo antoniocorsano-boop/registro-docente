@@ -89,7 +89,7 @@ describe('NAV-CONTEXT-01 — return to the exact mobile consulting state', () =>
     expect(app).toContain("ui: { ...current.ui, studentSearch: '' }");
     expect(app).toContain("ui: { ...previous.ui, studentSearch: '' }");
     const navCode = app.slice(app.indexOf('const handleNavigateTab ='), app.indexOf('const handleOpenStudentReport ='));
-    expect(navCode).toContain('setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext })');
+    expect(navCode).toContain('setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext, matrixMode:options.matrixMode })');
     expect(navCode).not.toContain('scrollY');
     expect(navCode).not.toContain('studentSearch');
     expect(navCode).not.toContain("params.set('student'");

@@ -197,6 +197,8 @@ import { RecordMissionBanner } from './components/RecordMissionBanner';
 import { ReviewMissionBanner } from './components/ReviewMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
 import { MatrixEvaluationEntry, type EvaluationDraftGuard } from './components/MatrixEvaluationEntry';
+import { DailyMatrixWorkspace } from './components/DailyMatrixWorkspace';
+import { applyDailyGrade, applyDailyObservation, type DailyGradeWrite, type DailyObservationWrite } from './persistence/dailyMatrixWorkspace';
 import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellMutation';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
@@ -410,6 +412,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     behaviorDraftGuardRef.current = guard;
   }, []);
   const evaluationDraftGuardRef=useRef<EvaluationDraftGuard|null>(null);
+  const [dailyMatrixMode,setDailyMatrixMode]=useState(false);
+  const dailyMatrixModeRef=useRef(false);
+  // Session-only view preference for browser returns; no student or proof data in history.
+  const matrixModeByClassRef=useRef(new Map<string,boolean>());
+  const acceptDailyMatrixMode=useCallback((value:boolean)=>{dailyMatrixModeRef.current=value;setDailyMatrixMode(value);if(activeTabRef.current==='tabellone'&&currentClassIdRef.current)matrixModeByClassRef.current.set(currentClassIdRef.current,value);},[]);
   const evaluationSavePendingRef=useRef(false);
   const [evaluationSavePending,setEvaluationSavePending]=useState(false);
   const registerEvaluationDraftGuard=useCallback((guard:EvaluationDraftGuard|null)=>{evaluationDraftGuardRef.current=guard;},[]);
@@ -427,7 +434,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       && Boolean(councilGuardRef.current?.hasUnsavedChanges()))
     || (activeTabRef.current === 'comportamenti'
       && (behaviorSavePendingRef.current || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges())))
-    || (activeTabRef.current === 'voti' && (evaluationSavePendingRef.current || Boolean(evaluationDraftGuardRef.current?.hasUnsavedChanges()))), []);
+    || ((activeTabRef.current === 'voti' || (activeTabRef.current==='tabellone'&&dailyMatrixModeRef.current)) && (evaluationSavePendingRef.current || Boolean(evaluationDraftGuardRef.current?.hasUnsavedChanges()))), []);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
   // Positions have meaning only inside the same, continuous app-owned epoch.
@@ -581,7 +588,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (activeTabRef.current === 'verifiche-online') assessmentDraftGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'consigli') councilGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'comportamenti') behaviorDraftGuardRef.current?.discardChanges();
-      if (activeTabRef.current === 'voti') evaluationDraftGuardRef.current?.discardChanges();
+      if (activeTabRef.current === 'voti' || (activeTabRef.current==='tabellone'&&dailyMatrixModeRef.current)) evaluationDraftGuardRef.current?.discardChanges();
     }
     traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
     planningExitRestoreFocusRef.current = false;
@@ -737,7 +744,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const setActiveTab = useCallback((
     tab: ActiveTab,
-    options: { preserveStudentReturnContext?: boolean } = {}
+    options: { preserveStudentReturnContext?: boolean; matrixMode?: 'daily'|'historical' } = {}
   ) => {
     if (!planningExitBypassRef.current && tab !== activeTabRef.current && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => setActiveTab(tab, options), tab);
@@ -749,6 +756,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setAppData(previous => ({ ...previous, currentClassId: null }));
     }
     if(tab!=='voti')acceptMatrixEvaluationMode(false);
+    const enteringMatrix=tab==='tabellone'&&activeTabRef.current!=='tabellone';
+    const nextMatrixMode=tab==='tabellone'?(options.matrixMode!==undefined?options.matrixMode==='daily':enteringMatrix?true:dailyMatrixModeRef.current):false;
     traceHpr('scheda-attivata', tab);
     if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
     if (tab !== 'verifiche-online') setPendingCopilotAssessment(null);
@@ -760,6 +769,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
     navigationVersionRef.current += 1;
     activeTabRef.current = tab;
+    acceptDailyMatrixMode(nextMatrixMode);
     setActiveTabState(tab);
     setTeachingFocus(previous =>
       transitionTeachingFocusForTab(previous, currentClassIdRef.current, tab, teachingUdaCatalogRef.current)
@@ -777,7 +787,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr, acceptMatrixEvaluationMode]);
+  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr, acceptMatrixEvaluationMode, acceptDailyMatrixMode]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -925,6 +935,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       evaluationBatchId?: string | null;
       returnTab?: ActiveTab;
       navigationMode?: 'push' | 'replace';
+      matrixMode?: 'daily' | 'historical';
     } = {}
   ) => {
     traceHpr('click-navigazione', tab);
@@ -932,6 +943,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     // compact editor. Only an explicit specialist target may change its mode.
     if (tab==='voti' && activeTabRef.current==='voti' && matrixEvaluationModeRef.current
       && options.returnTab===undefined && options.evaluationBatchId===undefined && !options.preserveRecordSession) return;
+    if(tab==='tabellone'&&activeTabRef.current==='tabellone'&&dailyMatrixModeRef.current&&options.matrixMode===undefined)return;
     const changesEvaluationMode=tab==='voti' && activeTabRef.current==='voti'
       && matrixEvaluationModeRef.current!==(options.returnTab==='tabellone');
     // Browser-history writes must be delayed with the actual tab change.
@@ -967,7 +979,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
     const hadReviewSession = reviewSessionRef.current !== null;
     acceptMatrixEvaluationMode(tab==='voti'&&options.returnTab==='tabellone');
-    setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
+    setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext, matrixMode:options.matrixMode });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
@@ -2240,7 +2252,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         studentReportReturnContextRef.current = null;
       }
       setReturningToStudentOrigin(returningContext);
-      setActiveTab(effectiveTab, { preserveStudentReturnContext: true });
+      const restoreMatrixMode=effectiveTab==='tabellone'&&nextCurrentClassId
+        ? ((returningContext?.originTab==='tabellone'||isMobileMatrixDisclosureState(e.state,nextCurrentClassId)||matrixModeByClassRef.current.get(nextCurrentClassId)===false)?'historical':'daily')
+        : undefined;
+      setActiveTab(effectiveTab, { preserveStudentReturnContext: true, matrixMode:restoreMatrixMode });
       // Execute only after restoring the legitimate underlying history entry.
       // A class mismatch discards the queued destination rather than guessing.
       queuedEvaluationDestination?.();
@@ -2562,7 +2577,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!session || !isReviewSurface(tab)) return;
     publishReviewSession(enterReviewSurface(session, tab));
     setTodayAction('review');
-    handleNavigateTab(tab);
+    handleNavigateTab(tab, tab==='tabellone'?{matrixMode:'historical'}:{});
   }, [handleNavigateTab, publishReviewSession]);
 
   const handleReturnToReview = useCallback(() => {
@@ -2775,6 +2790,38 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   // VAL-01/S4a: one explicit cell confirmation, no export or navigation.
+  const requestDailyContextChange=(action:()=>void)=>{
+    if(evaluationSavePendingRef.current)return;
+    if(hasUnsavedActiveDraft()&&!planningExitBypassRef.current){requestPlanningDeparture(action,'tabellone');return;}
+    action();
+  };
+  const switchDailyMatrixMode=(daily:boolean)=>{
+    if(daily===dailyMatrixModeRef.current)return;
+    requestDailyContextChange(()=>{
+      if(daily&&queueMobileMatrixExit(()=>acceptDailyMatrixMode(true)))return;
+      acceptDailyMatrixMode(daily);
+    });
+  };
+  const handleDailyGrade=async(request:DailyGradeWrite):Promise<Grade>=>{
+    const classId=currentClassIdRef.current;
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||evaluationSavePendingRef.current)throw Error('Contesto giornata non disponibile.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>applyDailyGrade(current,classId,request,udasRef.current,crypto.randomUUID()),{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const grade=result.classes.find(c=>c.id===classId)?.grades.find(g=>g.batchId===request.proof.batchId&&g.studentId===request.studentId);
+      if(!grade)throw Error('Ricevuta non disponibile.');return grade;
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+  const handleDailyObservation=async(request:DailyObservationWrite):Promise<BehaviorRecord>=>{
+    const classId=currentClassIdRef.current;
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||evaluationSavePendingRef.current)throw Error('Contesto giornata non disponibile.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>applyDailyObservation(current,classId,request,crypto.randomUUID()),{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const record=result.classes.find(c=>c.id===classId)?.behaviors.filter(b=>b.date===request.date&&b.studentId===request.studentId).at(-1);
+      if(!record)throw Error('Ricevuta non disponibile.');return record;
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
   const handleSaveMatrixCell = async (request:MatrixCellWrite):Promise<Grade> => {
     const classId=currentClassIdRef.current;
     if(!classId||!matrixEvaluationModeRef.current||activeTabRef.current!=='voti'||evaluationSavePendingRef.current)throw Error('Contesto valutazione non disponibile.');
@@ -2852,7 +2899,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Annulla Modifica: never write, and never leave an orphaned new-evaluation editor.
   const handleCancelEvaluationEdit = () => {
     const classId = currentClassIdRef.current;
-    if(matrixEvaluationModeRef.current){handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null});return;}
+    if(matrixEvaluationModeRef.current){handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null,matrixMode:'historical'});return;}
     const entry = window.history.state;
     forgetSpecialistTarget(
       evaluationTargetMemoryRef.current,
@@ -3356,8 +3403,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report'}
-            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
+            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report' && !(activeTab==='tabellone'&&dailyMatrixMode)}
+            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab) || (activeTab==='tabellone'&&dailyMatrixMode)}
             inlineMobileTrigger={['analytics', 'programmazione', 'verifiche-online'].includes(activeTab)}
           />
           )}
@@ -3475,7 +3522,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
         {/* TAB 6: Tabellone Classe */}
         {activeTab === 'tabellone' && currentClass && (
-          <MatrixView
+          <div className="space-y-3">
+            <div role="group" aria-label="Vista Tabellone" className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={dailyMatrixMode} onClick={()=>switchDailyMatrixMode(true)} className={'min-h-[48px] rounded-lg border '+(dailyMatrixMode?'neon-btn-primary':'border-[var(--border)]')}>Oggi</button><button type="button" aria-pressed={!dailyMatrixMode} onClick={()=>switchDailyMatrixMode(false)} className={'min-h-[48px] rounded-lg border '+(!dailyMatrixMode?'neon-btn-primary':'border-[var(--border)]')}>Storico</button></div>
+            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation}/> : <MatrixView
             onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
             currentClass={currentClass}
@@ -3486,7 +3535,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             returnContext={returningToStudentOrigin?.originTab === 'tabellone'
               && returningToStudentOrigin.classId === currentClass.id
                 ? returningToStudentOrigin : undefined}
-          />
+          />}
+          </div>
         )}
 
         {/* CDC-01: destination generale, classe scelta esplicitamente in questa sezione. */}
@@ -3792,7 +3842,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                     ? behaviorSavePending ? 'Salvataggio delle osservazioni in corso.' : behaviorDraftGuardRef.current?.hasUnsavedChanges()
                       ? 'Ci sono osservazioni non salvate. Puoi rimanere qui o uscire senza salvarle.'
                       : 'Le osservazioni sono state salvate. Puoi proseguire o rimanere qui.'
-                    : activeTab==='voti' ? evaluationSavePending?'Salvataggio delle valutazioni in corso.': 'Ci sono voti non confermati. I voti già registrati restano salvati.'
+                    : (activeTab==='voti'||activeTab==='tabellone') ? evaluationSavePending?'Salvataggio delle valutazioni in corso.': 'Ci sono voti non confermati. I voti già registrati restano salvati.'
                     : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
             </p>
             {planningExitFromBrowser && (
@@ -3849,7 +3899,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               </button>
               <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : activeTab === 'comportamenti' ? 'Rimani nelle osservazioni' : activeTab==='voti'?'Rimani nelle valutazioni':'Rimani nella Programmazione'}
+                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : activeTab === 'comportamenti' ? 'Rimani nelle osservazioni' : activeTab==='tabellone'?'Rimani nel Tabellone':activeTab==='voti'?'Rimani nelle valutazioni':'Rimani nella Programmazione'}
               </button>
             </div>
           </div>

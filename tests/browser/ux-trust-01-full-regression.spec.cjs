@@ -132,6 +132,7 @@ for (const viewport of [
     await checkpoint(page, visited.items, 'Comportamento', page.getByRole('heading', { name: 'Valutazione Rapida Comportamenti' }));
 
     await primaryWorkflowButton(page, 'Tabellone').click();
+    await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
     await checkpoint(page, visited.items, 'Tabellone', page.getByRole('heading', { name: `Tabellone Classe: ${className}` }));
 
     await primaryWorkflowButton(page, 'Analisi').click();

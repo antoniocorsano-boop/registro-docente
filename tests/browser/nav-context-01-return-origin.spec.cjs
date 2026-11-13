@@ -11,9 +11,10 @@ async function openClass(page) {
   await expect(page.getByTestId('header01-context')).toContainText('Riepilogo');
 }
 
-async function navigateTo(page, tab) {
+async function navigateTo(page, tab, matrixMode='historical') {
   await page.locator('nav').getByRole('button', { name: tab }).click();
   await expect(page.getByTestId('header01-context')).toContainText(tab);
+  if(tab==='Tabellone'&&matrixMode==='historical')await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
 }
 
 test('NAV-CONTEXT-01 / Android 390 — Tabellone restores the selected student row and mode after Back', async ({ browser }) => {
@@ -348,3 +349,63 @@ for(const width of [320,390]){
   }finally{await context.close();}
  });
 }
+
+
+test('VAL-01/S4b2 — daily mode combines independent cells, resumes proof and preserves historic',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const page=await context.newPage();
+ try{
+  await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone','daily');await expect(page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Oggi',exact:true})).toHaveAttribute('aria-pressed','true');
+  const day=page.getByTestId('daily-matrix');const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});const second=day.getByRole('textbox',{name:'Voto alunno 2',exact:true});
+  await day.getByRole('button',{name:/Comportamento alunno 1:/}).click();await day.getByRole('button',{name:'Costruttivo',exact:true}).click();await expect(day.getByRole('button',{name:/Comportamento alunno 1: Costruttivo/})).toBeVisible();expect(await page.evaluate(()=>window.__matrixSaved.classes[0].behaviors.length)).toBe(1);
+  await first.fill('8');await first.press('Enter');await expect(day.getByTestId('daily-proof-panel')).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
+  await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Disegno sintetico');await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByRole('combobox',{name:'Prova della giornata'})).toBeVisible();await expect(day.getByRole('combobox',{name:'Prova della giornata'}).locator('option:checked')).toContainText('Disegno sintetico');
+  await second.fill('7');await second.press('Enter');await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Disegno sintetico').length)).toBe(2);
+  const saved=await page.evaluate(()=>window.__matrixSaved.classes[0]);expect(saved.behaviors.length).toBe(1);const grades=saved.grades.filter(g=>g.title==='Disegno sintetico');expect(grades.every(g=>g.type==='disegno'&&g.batchId===grades[0].batchId)).toBe(true);
+  await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();await page.getByRole('button',{name:'Oggi',exact:true}).click();await expect(first).toHaveValue('8');await expect(second).toHaveValue('7');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
+  await first.fill('9');await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('voti non confermati');await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();await expect(first).toHaveValue('9');
+  await first.press('Enter');await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.find(g=>g.title==='Disegno sintetico'&&g.value==='9')?.id)).toBe(grades[0].id);await expect(page.getByRole('dialog')).toHaveCount(0);
+ }finally{await context.close();}
+});
+
+
+test('VAL-01/S4b2 — first proof metadata stays protected after clearing the grade',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:320,height:700},isMobile:true,hasTouch:true});const page=await context.newPage();
+ try{await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone','daily');await expect(page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Oggi',exact:true})).toHaveAttribute('aria-pressed','true');
+ const day=page.getByTestId('daily-matrix');const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});
+ await first.fill('8');await first.press('Enter');await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('orale');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Prova da conservare');await first.fill('');
+ await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByRole('alert')).toContainText('Inserisci un voto valido');
+ await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();await expect(day.getByRole('textbox',{name:'Argomento prova'})).toHaveValue('Prova da conservare');
+ await page.getByRole('button',{name:'Storico',exact:true}).click();await page.getByRole('button',{name:'Continua senza salvare'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();await page.getByRole('button',{name:'Oggi',exact:true}).click();await expect(day.getByTestId('daily-proof-panel')).toHaveCount(0);expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+ }finally{await context.close();}
+});
+for(const width of [320,390]){
+ test(`VAL-01/S4b2 — daily visual ${width}px / 25 synthetic students`,async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true});const page=await context.newPage();const evidence=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence','daily-visual');await fs.mkdir(evidence,{recursive:true});
+  try{await page.goto(url+'?matrixWrite=1&visualRoster=25');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone','daily');await expect(page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Oggi',exact:true})).toHaveAttribute('aria-pressed','true');const day=page.getByTestId('daily-matrix');const rows=day.getByTestId('daily-row');await expect(rows).toHaveCount(25);
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+  await expect(day.getByTestId('daily-student-name').first()).toContainText('1.');await expect(day.getByTestId('daily-student-name').nth(1)).toContainText('2.');await expect(day).not.toContainText('Persona Fittizia Uno');
+  await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`giorno-${width}-inizio.png`),animations:'disabled'});
+  await day.getByRole('button',{name:/Comportamento alunno 1:/}).click();await page.screenshot({path:path.join(evidence,`giorno-${width}-scelta.png`),animations:'disabled'});await day.getByRole('button',{name:'Costruttivo',exact:true}).click();await expect(day.getByRole('button',{name:/Comportamento alunno 1: Costruttivo/})).toBeVisible();
+  const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});await first.fill('8');await first.press('Enter');await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Disegno sintetico');await page.screenshot({path:path.join(evidence,`giorno-${width}-prima-prova.png`),animations:'disabled'});await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByRole('status',{name:'Registrato',exact:true})).toHaveCount(1);
+  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(evidence,`giorno-${width}-registrato.png`),animations:'disabled'});
+  expect(await rows.evaluateAll(all=>all.every(row=>row.querySelector('input').getBoundingClientRect().height>=48&&row.querySelector('button').getBoundingClientRect().height>=48))).toBe(true);
+  await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`giorno-${width}-200.png`),animations:'disabled'});
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);await fs.writeFile(path.join(evidence,`giorno-${width}-geometry.json`),JSON.stringify({overflow},null,2));expect(overflow).toBeLessThanOrEqual(1);expect(await page.getByTestId('header01-context-title').evaluate(el=>el.clientWidth)).toBeGreaterThanOrEqual(width-64);expect(await day.getByRole('combobox',{name:'Prova della giornata'}).evaluate(el=>el.clientWidth)).toBeGreaterThanOrEqual(width-64);const bounds=await page.locator('nav[data-evaluation-navigation="true"]').getByRole('button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {left:r.left,right:r.right,viewport:innerWidth};}));expect(bounds).toHaveLength(5);expect(bounds.every(b=>b.left>=0&&b.right<=b.viewport+1)).toBe(true);
+  await rows.last().scrollIntoViewIfNeeded();await expect(rows.last()).toBeVisible();
+  }finally{await context.close();}
+ });
+}
+
+
+test('VAL-01/S4b2 — Oggi default, active tab preserves draft, Back restores historic consultation',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const page=await context.newPage();
+ try{
+  await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone','daily');
+  const day=page.getByTestId('daily-matrix');await expect(day).toBeVisible();const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});await first.fill('8');
+  const position=await page.evaluate(()=>history.length);await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();await expect(first).toHaveValue('8');expect(await page.evaluate(()=>history.length)).toBe(position);
+  await page.goBack();await expect(page.getByRole('dialog')).toContainText('voti non confermati');await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();await expect(first).toHaveValue('8');
+  await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();await page.getByRole('button',{name:'Continua senza salvare'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
+  await navigateTo(page,'Analisi');await page.goBack();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
+  await navigateTo(page,'Analisi');await navigateTo(page,'Tabellone','daily');await expect(day).toBeVisible();await expect(first).toHaveValue('');expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+ }finally{await context.close();}
+});

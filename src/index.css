@@ -378,3 +378,25 @@ body {
   nav[data-evaluation-navigation="true"] > button > svg { width:18px; height:18px; flex-shrink:0; }
   nav[data-evaluation-navigation="true"] > button > span { max-width:100%; overflow-wrap:anywhere; }
 }
+
+/* Daily workspace: one roster with two independent cell controls. */
+.daily-matrix { container: daily-matrix / inline-size; }
+.daily-matrix-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(48px,auto) minmax(76px,90px); gap:8px; align-items:center; }
+.daily-row-detail { grid-column:1/-1; }
+.daily-proof-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,8.5rem),1fr)); }
+.daily-proof-fields label,.daily-proof-fields input,.daily-proof-fields select { min-width:0; max-width:100%; }
+@container daily-matrix (max-width:18rem){.daily-matrix-row{grid-template-columns:minmax(0,1fr) 60px 84px;gap:4px}.daily-matrix-row>span{overflow-wrap:anywhere}.daily-matrix-row>button{min-width:0}}
+@container daily-matrix (max-width:12rem){.daily-matrix-row{grid-template-columns:1fr 1fr}.daily-matrix-row>span:first-child{grid-column:1/-1}}
+
+.daily-date-label { display:flex; align-items:center; flex-wrap:wrap; gap:4px; min-width:0; max-width:100%; }
+.daily-date-label input { min-width:0; margin-left:0; max-width:100%; }
+.daily-matrix-row>span { overflow-wrap:anywhere; }
+.daily-row-detail button { min-width:0; flex-wrap:wrap; overflow-wrap:anywhere; }
+
+.daily-student-name { display:flex; align-items:baseline; gap:6px; }
+.daily-student-name > span:last-child { overflow-wrap:anywhere; }
+.daily-proof-selector { align-items:end; }
+.daily-proof-select { flex:1 1 12rem; }
+.daily-proof-selector > button { max-width:100%; }
+@container daily-matrix (max-width:19rem){.daily-proof-selector{display:grid;grid-template-columns:minmax(0,1fr)}.daily-proof-select{width:100%}.daily-proof-selector>button{justify-self:start}}
+@container daily-matrix (max-width:12rem){.daily-matrix-row {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.daily-student-name{grid-column:1/-1}}

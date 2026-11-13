@@ -11,6 +11,7 @@ async function openStudentFromOrigin(page, origin) {
   await page.locator('nav').getByRole('button', { name: origin }).click();
   await expect(page.getByTestId('header01-context')).toContainText(origin);
   if (origin === 'Tabellone') {
+    await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
     await page.locator('[data-testid="matrix-compact-toggle"][aria-controls="matrix-compact-details-fittizio-studente-01"]').click();
     await page.getByRole('button', { name: 'Apri scheda alunno' }).click();
   } else {

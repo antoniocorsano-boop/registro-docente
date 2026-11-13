@@ -160,6 +160,8 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   checkpoints.push('behavior-committed');
 
   await primaryWorkflowButton(page, 'Tabellone').click();
+
+  await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
   await expect(page.getByRole('heading', { name: `Tabellone Classe: ${CLASS_NAME}` })).toBeVisible();
   const tabelloneDesktop = desktopStudentRegion(page);
   await expect(tabelloneDesktop).toHaveCount(1);
@@ -245,6 +247,8 @@ test('RELEASE-01 integrated teacher journey survives reload and lock-unlock — 
   await expect(page.getByText(STUDENT_NAME, { exact: true })).toBeVisible();
 
   await primaryWorkflowButton(page, 'Tabellone').click();
+
+  await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
   await expect(page.getByRole('heading', { name: `Tabellone Classe: ${CLASS_NAME}` })).toBeVisible();
   const terminalTabelloneDesktop = desktopStudentRegion(page);
   await expect(terminalTabelloneDesktop).toHaveCount(1);
