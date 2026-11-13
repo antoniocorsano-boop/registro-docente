@@ -270,6 +270,18 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   const [radarMode, setRadarMode] = useState<'competencies' | 'udas'>('competencies');
   const [mobileMode, setMobileMode] = useState<{ studentId: string; view: 'essential' | 'dossier' } | null>(null);
   const dossierRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const reconcile = () => {
+      if (media.matches) return;
+      const opened = dossierRef.current?.querySelectorAll<HTMLDetailsElement>(':scope > details[open]');
+      opened?.forEach((el, index) => { if (index > 0) el.open = false; });
+    };
+    reconcile();
+    media.addEventListener('change', reconcile);
+    return () => media.removeEventListener('change', reconcile);
+  }, []);
+
 
   const students = currentClass.students || [];
   const currentStudent = students.find(s => s.id === selectedStudentId) || students[0];

@@ -1863,6 +1863,28 @@
         "tests/browser/flow-03-registra.spec.cjs",
         "tests/browser/browser-qualification.spec.cjs"
       ]
+    },
+    {
+      "id": "MOBILE-DENSITY-04-I01",
+      "owner": "MOBILE-DENSITY-04",
+      "statement": "The mobile individual report uses an essential summary and one complete dossier, with exclusive top-level disclosures even after breakpoint transitions and reset on student selection; grade rows are readable without horizontal table scrolling. Existing authoritative calculations, privacy, student identity and desktop disclosures remain intact. No family export or mutation is introduced by this increment; tests use synthetic data.",
+      "impactPaths": [
+        "src/components/StudentReportView.tsx",
+        "src/index.css",
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        ".github/workflows/mobile-density-02-qualification.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/p2DensityProgressiveDisclosureIntegrity.test.ts",
+        "src/security/valuationSemanticIntegrity.test.ts",
+        "src/security/navBack01StudentReportHistory.test.ts",
+        "src/security/navContext01ReturnState.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
     }
   ]
 }

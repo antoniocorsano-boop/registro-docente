@@ -123,6 +123,13 @@ for (const width of [320, 390]) {
     await dossier.getByText('Comportamenti e partecipazione', { exact: true }).click();
     await expect(dossier.locator('details[open]')).toHaveCount(1);
     await expect(dossier.locator('details[open]')).toContainText('Nessuna nota comportamentale');
+    // Landscape/desktop permits independent disclosures; mobile reconciles on return.
+    await page.setViewportSize({ width: 900, height: 700 });
+    await dossier.getByText('Elenco valutazioni', { exact: true }).click();
+    await expect(dossier.locator(':scope > details[open]')).toHaveCount(2);
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 844 });
+    await expect(dossier.locator(':scope > details[open]')).toHaveCount(1);
+
     await select.selectOption('fittizio-studente-02');
     await expect(essential).toBeVisible();
     await expect(essential.getByTestId('student-report-average')).toHaveText('6,5');
