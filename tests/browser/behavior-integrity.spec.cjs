@@ -135,6 +135,9 @@ for(const width of [320,390]){
    const rows=page.getByTestId('behavior-row');
    await expect(rows).toHaveCount(count);
    await expect(rows.first()).toContainText('Non registrato');
+   await expect(rows.first().getByTestId('behavior-line-icon')).toHaveCount(4);
+   await expect(rows.first().getByTestId('behavior-line-icon').first()).toBeVisible();
+   await expect(rows.first().getByRole('button',{name:'Ottimale 🌟',exact:true})).toHaveCSS('color','rgb(148, 163, 184)');
    await expect(save(page)).toBeDisabled();
    await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(count);
    const geometry=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row"]')];const r=rows[0].getBoundingClientRect();const name=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();const nav=document.querySelector('nav').getBoundingClientRect();return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowWidth:r.width,rowHeight:r.height,nameWidth:name.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(save.top,nav.top)}).length,saveBottom:save.bottom,navTop:nav.top};});
@@ -152,6 +155,7 @@ for(const width of [320,390]){
    await expect(choice).toHaveCSS('background-color','rgb(22, 78, 99)');
    await expect(choice).toHaveCSS('border-top-color','rgb(103, 232, 249)');
    await expect(choice).toHaveCSS('opacity','1');
+   await expect(choice).toHaveCSS('color','rgb(224, 242, 254)');
    await expect(rows.nth(1)).toContainText('Da salvare');
    await expect(rows.first().getByRole('button',{name:'Costruttivo 👍',exact:true})).toHaveAttribute('aria-pressed','false');
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-selected.png')});
@@ -221,4 +225,24 @@ test('direct mobile choice requires one tap and remains keyboard focused',async(
  await expect(row).toContainText('Da salvare');
  await expect(page.getByTestId('fixture-calls')).toHaveText('0');
  await expect(save(page)).toBeEnabled();
+});
+
+test('mobile observation pictograms share a line icon family without changing canonical selection',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await open(page);
+ const row=page.getByTestId('behavior-row').nth(1);
+ const icons=row.getByTestId('behavior-line-icon');
+ await expect(icons).toHaveCount(4);
+ for(const svg of await icons.all()){
+  await expect(svg).toBeVisible();
+  await expect(svg).toHaveAttribute('aria-hidden','true');
+  await expect(svg).toHaveAttribute('stroke-width','1.8');
+ }
+ const choice=row.getByRole('button',{name:'Disattento ❌',exact:true});
+ await choice.click();
+ await expect(choice).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByTestId('fixture-calls')).toHaveText('0');
+ await save(page).click();
+ await expect(page.getByTestId('fixture-pending')).toHaveText('false');
+ expect(await payload(page)).toEqual([expect.objectContaining({studentId:'synthetic-2',status:'Disattento ❌'})]);
 });

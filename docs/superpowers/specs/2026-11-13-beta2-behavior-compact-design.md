@@ -3,3 +3,6 @@ Baseline main 1b5bc70bc23d8925b6576db194c2fd00dc8581ae, integrità #224 già int
 
 ## HPR REWORK — 13/11
 Il docente preferisce una lista di nominativi con simboli direttamente toccabili, in forma minimale, non un selettore individuale da aprire. Sostituisce il precedente requisito di disclosure, ancora non integrato (I02 proposto, I01 invariato). Quattro simboli in una riga, target 48px, nome che va a capo senza tagli; stato testuale e legenda unica, selezione evidenziata, salvataggio esplicito. A testo 200% soltanto, layout su due righe quando lo spazio non basta. Misurare larghezza nome e righe reali, non presumere miglioramento. Conservare accessibilità, focus e bulk, invarianti, no merge fino a HPR.
+
+## HPR REWORK — 13/11, iconografia
+Richiesta docente: icone semplici e di qualità, non emoji colorate. In mobile sostituire l'emoji visiva con SVG Lucide Star, ThumbsUp, TriangleAlert, CircleX, tratto 1.8, dimensione 24px, legenda e comando collettivo coerenti. Icone non selezionate grigio neutro, selezione contrastata ciano, nessun cambiamento a categorie, valori persistiti, nomi accessibili, desktop, geometria o comportamento. Verificare quattro SVG distinti e scelta canonica, geometrie, screenshot dimensione ordinaria. HPR e qualifica exact SHA prima di integrare.

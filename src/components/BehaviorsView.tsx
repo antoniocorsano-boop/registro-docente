@@ -1,9 +1,22 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { BehaviorRecord, ClassData } from '../types';
 import { BEHAVIOR_OPTIONS, today, formatStudentNameWithPrivacy } from '../utils';
-import { Save, ChevronDown } from 'lucide-react';
+import { Save, ChevronDown, Star, ThumbsUp, TriangleAlert, CircleX } from 'lucide-react';
 import { buildObservationChanges, isObservationDate, recordedObservations, type ObservationStatus } from '../behavior/observationChanges';
 import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
+
+// Presentational mapping only: stored status values and accessible names remain unchanged.
+const observationIcons = {
+  'Ottimale 🌟': Star,
+  'Costruttivo 👍': ThumbsUp,
+  'Distratto ⚠️': TriangleAlert,
+  'Disattento ❌': CircleX
+} satisfies Record<ObservationStatus, typeof Star>;
+
+function ObservationIcon({ status, className = '' }: { status: ObservationStatus; className?: string }) {
+  const Icon = observationIcons[status];
+  return <Icon aria-hidden="true" focusable="false" data-testid="behavior-line-icon" strokeWidth={1.8} className={className} />;
+}
 
 export interface BehaviorDraftGuard {
   hasUnsavedChanges: () => boolean;
@@ -142,28 +155,31 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
           onClick={() => setAll('Ottimale 🌟')}
           className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 px-2.5 py-1 rounded text-xs badge-ok hover:brightness-110 transition-all font-semibold`}
         >
-          🌟 Tutti Ottimale
+          <span aria-hidden="true" className="md:hidden inline-flex items-center justify-center gap-2"><ObservationIcon status="Ottimale 🌟" className="w-4 h-4 shrink-0"/>Tutti Ottimale</span>
+          <span className="sr-only md:not-sr-only">🌟 Tutti Ottimale</span>
         </button>
         <button
           type="button"
           onClick={() => setAll('Costruttivo 👍')}
           className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 px-2.5 py-1 rounded text-xs badge-info hover:brightness-110 transition-all font-semibold`}
         >
-          👍 Tutti Costruttivo
+          <span aria-hidden="true" className="md:hidden inline-flex items-center justify-center gap-2"><ObservationIcon status="Costruttivo 👍" className="w-4 h-4 shrink-0"/>Tutti Costruttivo</span>
+          <span className="sr-only md:not-sr-only">👍 Tutti Costruttivo</span>
         </button>
         <button
           type="button"
           onClick={() => setAll('Distratto ⚠️')}
           className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 px-2.5 py-1 rounded text-xs badge-warn hover:brightness-110 transition-all font-semibold`}
         >
-          ⚠️ Tutti Distratto
+          <span aria-hidden="true" className="md:hidden inline-flex items-center justify-center gap-2"><ObservationIcon status="Distratto ⚠️" className="w-4 h-4 shrink-0"/>Tutti Distratto</span>
+          <span className="sr-only md:not-sr-only">⚠️ Tutti Distratto</span>
         </button>
       </div>
 
       {/* Student rows */}
       <div data-testid="behavior-list" className="min-w-0 divide-y divide-[var(--border)] md:border md:border-[var(--border)] md:rounded-lg md:overflow-hidden md:bg-slate-900/60 md:max-h-[55vh] md:overflow-y-auto mb-3 md:mb-4">
         <div className="md:hidden behavior-legend flex flex-wrap gap-x-3 gap-y-1 py-2 text-xs text-slate-400" aria-label="Legenda delle osservazioni">
-          {BEHAVIOR_OPTIONS.map(opt => <span key={opt.label}>{opt.label}</span>)}
+          {BEHAVIOR_OPTIONS.map(opt => <span key={opt.label} className="inline-flex items-center gap-1"><ObservationIcon status={opt.label} className="w-4 h-4 shrink-0"/>{opt.label.split(' ').slice(0,-1).join(' ')}</span>)}
         </div>
         {currentClass.students.length === 0 ? (
           <p className="p-4 text-xs text-slate-400 text-center">
@@ -211,7 +227,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
                             : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
                         }`}
                       >
-                        <span aria-hidden="true" className="md:hidden text-xl leading-none">{opt.label.split(' ').at(-1)}</span>
+                        <ObservationIcon status={opt.label} className="behavior-choice-icon md:hidden w-6 h-6 shrink-0"/>
                         <span className="sr-only md:not-sr-only">{opt.label}</span>
                       </button>
                     );
