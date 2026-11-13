@@ -4,15 +4,7 @@ import { normalizeGrade, today, TYPES_LABEL, uid, formatStudentNameWithPrivacy }
 import { Save, X, Calendar, BookOpen, Layers, Check, Clock } from 'lucide-react';
 import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
 
-export interface EvaluationDraftGuard {
-  hasUnsavedChanges:()=>boolean;
-  discardChanges:()=>void;
-  markCommitted:()=>void;
-}
-
 interface EvaluationsViewProps {
-  compact?: boolean;
-  onRegisterDraftGuard?: (guard: EvaluationDraftGuard | null)=>void;
   currentClass: ClassData;
   editingBatchId: string | null;
   udas?: UdaRecord[];
@@ -39,8 +31,6 @@ const isIsoDate = (value?: string): value is string => {
 
 export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   currentClass,
-  compact = false,
-  onRegisterDraftGuard,
   editingBatchId,
   udas = [],
   initialUdaId,
@@ -58,25 +48,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const [gradesMap, setGradesMap] = useState<Record<string, { value: string; delayed: boolean }>>({});
   const [isSaving, setIsSaving] = useState(false);
   const evaluationInitializationSignatureRef = useRef<string | null>(null);
-  const dirtyRef=useRef(false);
-  const submittingRef=useRef(false);
-  const committedRef=useRef(false);
-  const [committed,setCommitted]=useState(false);
-  const [validationMessage,setValidationMessage]=useState('');
-  const [showProofDetails,setShowProofDetails]=useState(true);
-  const saveButtonRef=useRef<HTMLButtonElement>(null);
-  const proofRef=useRef<HTMLDivElement>(null);
-  const revealProofError=(message:string)=>{
-    setShowProofDetails(true);setValidationMessage(message);
-    requestAnimationFrame(()=>proofRef.current?.scrollIntoView({block:'center'}));
-  };
-  const jumpToSave=()=>{saveButtonRef.current?.focus({preventScroll:true});saveButtonRef.current?.scrollIntoView({block:'center'});};
-  React.useLayoutEffect(()=>{
-    if(!compact||!onRegisterDraftGuard)return;
-    const guard:EvaluationDraftGuard={hasUnsavedChanges:()=>dirtyRef.current,markCommitted:()=>{dirtyRef.current=false;committedRef.current=true;setCommitted(true);},discardChanges:()=>{dirtyRef.current=false;setGradesMap({});setTitle('');setUdaId('');setValidationMessage('');}};
-    onRegisterDraftGuard(guard);
-    return ()=>onRegisterDraftGuard(null);
-  },[compact,onRegisterDraftGuard,currentClass.id]);
 
   useEffect(() => {
     const safeInitialUdaId = udas.some(u => u.id === initialUdaId && u.className === currentClass.name) ? initialUdaId || '' : '';
@@ -116,8 +87,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   }, [editingBatchId, currentClass, udas, initialUdaId, initialDate]);
 
   const handleInputChange = (studentId: string, rawVal: string) => {
-    if(compact)dirtyRef.current=true;
-    setValidationMessage('');
     const isDelayed = rawVal.toUpperCase().includes('R') || rawVal.toUpperCase().includes('RIT');
     setGradesMap(prev => ({
       ...prev,
@@ -129,7 +98,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   };
 
   const toggleDelayed = (studentId: string) => {
-    if(compact)dirtyRef.current=true;
     setGradesMap(prev => ({
       ...prev,
       [studentId]: {
@@ -150,12 +118,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
-    if (submittingRef.current || (compact&&committedRef.current)) return;
-    if(compact){
-      if(!isIsoDate(date)||!title.trim()){revealProofError('Indica data e argomento della prova.');return;}
-      if(udaId && (udas.filter(u=>u.id===udaId).length!==1||!udas.some(u=>u.id===udaId&&u.className===currentClass.name))){revealProofError('L’unità di apprendimento non è più disponibile.');return;}
-      if(currentClass.students.some(s=>gradesMap[s.id]?.value.trim()&&!normalizeGrade(gradesMap[s.id].value))){setValidationMessage('Controlla i voti non validi: nessuna valutazione è stata salvata.');return;}
-    }
 
     const staged: { studentId: string; value: string; delayed: boolean }[] = [];
     currentClass.students.forEach(s => {
@@ -178,7 +140,6 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     }
 
     const batchId = editingBatchId || uid();
-    submittingRef.current=true;
     setIsSaving(true);
     try {
       await onSaveEvaluations({
@@ -193,77 +154,71 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     } catch {
       return;
     } finally {
-      submittingRef.current=false;
       setIsSaving(false);
     }
   };
 
-  if(compact&&committed)return <div data-testid="matrix-evaluation-committed" className="space-y-3"><p role="status">Valutazioni salvate.</p><button type="button" onClick={onCancelEdit} className="min-h-[48px] w-full rounded-lg neon-btn-primary font-semibold">Torna al Tabellone</button></div>;
   return (
-    <div data-testid={compact?"matrix-evaluation-editor":undefined} className={compact?"matrix-evaluation-workspace min-w-0 space-y-3":"neon-card neon-card-highlight p-5"}>
-      <div className={compact?"matrix-evaluation-heading mb-3 pb-2 border-b border-[var(--border)]":"flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]"}>
+    <div className="neon-card neon-card-highlight p-5">
+      <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
         <div>
           <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
-            {compact ? 'Inserisci valutazione' : editingBatchId ? 'Modifica Valutazione Esistente' : 'Nuova Valutazione di Classe'}
+            {editingBatchId ? 'Modifica Valutazione Esistente' : 'Nuova Valutazione di Classe'}
           </h3>
-          {!compact && <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400">
             Inserisci i voti numerici (1-10, +, -, ½) o codici speciali (A = Assente, NC = Non Classificato, G = Giustificato).
-          </p>}
+          </p>
         </div>
 
-        {(editingBatchId || compact) && (
+        {editingBatchId && (
           <button
             type="button"
             onClick={onCancelEdit}
             disabled={isSaving}
-            className={`${MOBILE_TOUCH_TARGET_CLASS} ${compact?"matrix-evaluation-cancel":""} px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1.5`}
+            className={`${MOBILE_TOUCH_TARGET_CLASS} px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1.5`}
           >
-            <X className="w-3.5 h-3.5" /> {compact?'Annulla':'Annulla Modifica'}
+            <X className="w-3.5 h-3.5" /> Annulla Modifica
           </button>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} onChangeCapture={()=>{if(compact)dirtyRef.current=true;}} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <fieldset disabled={isSaving} className="space-y-4 border-0 p-0 m-0 min-w-0">
-        {compact && !showProofDetails && <div className="matrix-evaluation-proof-summary"><div className="min-w-0"><strong className="block break-words">{title||"Prova"}</strong><p className="text-xs text-slate-400 break-words">{TYPES_LABEL[type]} · {date} · {period==="Q1"?"Primo periodo":"Secondo periodo"}</p>{udaId && <p className="text-xs text-slate-400 break-words">{udas.find(u=>u.id===udaId)?.title||"UDA da verificare"}</p>}</div><button type="button" onClick={()=>setShowProofDetails(true)} className="min-h-[48px] px-2 rounded border border-[var(--border)] text-sm">Modifica dati</button></div>}
-        <div ref={proofRef} hidden={compact&&!showProofDetails} className={compact?"matrix-evaluation-proof space-y-3":"space-y-4"}>
-        <div className={compact?"matrix-evaluation-fields gap-2 min-w-0":"grid grid-cols-1 sm:grid-cols-3 gap-3"}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              {compact?"Periodo":"Periodo Didattico"}
+              Periodo Didattico
             </label>
             <select
-              aria-label="Periodo didattico"
               value={period}
               onChange={e => setPeriod(e.target.value as 'Q1' | 'Q2')}
               className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
             >
-              <option value="Q1">{compact?"Primo periodo":"1° Quadrimestre (Soglia Intermedia)"}</option>
-              <option value="Q2">{compact?"Secondo periodo":"2° Quadrimestre (Soglia Finale)"}</option>
+              <option value="Q1">1° Quadrimestre (Soglia Intermedia)</option>
+              <option value="Q2">2° Quadrimestre (Soglia Finale)</option>
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              {compact?"Tipologia":"Tipologia Prova"}
+              Tipologia Prova
             </label>
             <select
-              aria-label="Tipologia prova"
               value={type}
               onChange={e => setType(e.target.value as EvaluationType)}
               className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
             >
-              <option value="test">{compact?"Test / Quiz":"Test / Quiz Formativo"}</option>
-              <option value="verifica">{compact?"Verifica scritta":"Verifica Scritta Sommativa"}</option>
-              <option value="orale">{compact?"Orale":"Colloquio Orale"}</option>
-              <option value="disegno">{compact?"Disegno":"Disegno Tecnico / Grafica"}</option>
-              <option value="osserv">{compact?"Osservazione":"Osservazione Sistematica"}</option>
+              <option value="test">Test / Quiz Formativo</option>
+              <option value="verifica">Verifica Scritta Sommativa</option>
+              <option value="orale">Colloquio Orale</option>
+              <option value="disegno">Disegno Tecnico / Grafica</option>
+              <option value="osserv">Osservazione Sistematica</option>
             </select>
           </div>
 
-          <div className={compact?"matrix-evaluation-uda min-w-0":undefined}>
+          <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              {compact?"UDA (facoltativa)":"Collega a UDA Curricolare"}
+              Collega a UDA Curricolare
             </label>
             <select
               aria-label="Collega a UDA Curricolare"
@@ -281,13 +236,12 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </div>
         </div>
 
-        <div className={compact?"matrix-evaluation-fields gap-2":"grid grid-cols-1 sm:grid-cols-2 gap-3"}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              {compact?"Data":"Data Svolgimento"}
+              Data Svolgimento
             </label>
             <input
-              aria-label="Data svolgimento"
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
@@ -298,10 +252,9 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              {compact?"Argomento":"Titolo / Argomento Prova"}
+              Titolo / Argomento Prova
             </label>
             <input
-              aria-label="Titolo / Argomento prova"
               type="text"
               placeholder="es. Verifica su Fonti Rinnovabili"
               value={title}
@@ -311,10 +264,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </div>
         </div>
 
-        {compact && showProofDetails && validationMessage && (!title.trim()||!isIsoDate(date)) && <p className="text-sm text-amber-200">{validationMessage}</p>}
-        {compact && <button type="button" onClick={()=>{if(!title.trim()||!isIsoDate(date)){revealProofError("Indica data e argomento della prova.");return;}setValidationMessage("");setShowProofDetails(false);}} className="w-full min-h-[48px] rounded-lg border border-[var(--border)] text-sm font-semibold">Vai ai voti</button>}
-        </div>
-        {!compact && <div className="flex items-center gap-2 flex-wrap pt-1">
+        <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
             Compilazione rapida:
           </span>
@@ -335,10 +285,9 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           >
             Svuota
           </button>
-        </div>}
+        </div>
 
-        {compact && <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><strong>Alunni</strong><span>{currentClass.students.filter(s=>gradesMap[s.id]?.value.trim()).length} / {currentClass.students.length} inseriti</span><button type="button" onClick={jumpToSave} className="matrix-evaluation-save-jump min-h-[48px] rounded-lg border border-[var(--border)] px-3 text-sm">Vai al salvataggio</button></div>}
-        <div className={compact?"divide-y divide-[var(--border)] border-y border-[var(--border)]":"border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto"}>
+        <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto">
           {currentClass.students.length === 0 ? (
             <p className="p-4 text-xs text-slate-400 text-center">
               Nessun alunno presente in questa classe. Aggiungili dalla sezione "Gestione Alunni".
@@ -351,40 +300,36 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               return (
                 <div
                   key={student.id}
-                  data-testid={compact?"matrix-evaluation-row":undefined}
-                  className={compact?"matrix-evaluation-row min-h-[48px] py-1 gap-2 min-w-0":"p-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"}
+                  className="p-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
                 >
-                  <div className={compact?"matrix-evaluation-name":"flex items-center gap-2 overflow-hidden"}>
-                    <span className={compact?"text-slate-400 text-xs shrink-0":"text-slate-500 font-mono text-xs w-5 text-right"}>{idx + 1}.</span>
-                    <span className={compact?"font-medium text-slate-200 text-sm min-w-0":"font-semibold text-slate-200 text-xs sm:text-sm truncate"}>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
+                    <span className="font-semibold text-slate-200 text-xs sm:text-sm truncate">
                       {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
                     </span>
                   </div>
 
-                  <div className={compact?"matrix-evaluation-actions":"flex items-center gap-2 shrink-0"}>
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => toggleDelayed(student.id)}
-                      className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 ${compact?"matrix-evaluation-recovery":""} rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
+                      className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
                         isDelayed
                           ? 'bg-amber-950/60 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                           : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
                       }`}
-                      aria-label={compact?"Recupero alunno "+(idx+1):undefined}
-                      aria-pressed={isDelayed}
                       title="Contrassegna come prova di recupero / svolta in ritardo"
                     >
-                      <Clock className={compact?'w-[18px] h-[18px] shrink-0':'w-3 h-3'} />
-                      {!compact && <span>{isDelayed ? 'Ritardo (R)' : 'R'}</span>}
+                      <Clock className="w-3 h-3" />
+                      <span>{isDelayed ? 'Ritardo (R)' : 'R'}</span>
                     </button>
 
                     <input
                       type="text"
-                      aria-label={compact?"Voto alunno "+(idx+1):undefined}
                       value={currentRecord.value}
                       onChange={e => handleInputChange(student.id, e.target.value)}
-                      placeholder={compact?"—":"es. 7.5"}
-                      className={compact?"matrix-evaluation-vote min-h-[48px] p-1 text-center font-semibold text-base neon-input text-white uppercase":"w-20 sm:w-24 p-1.5 text-center font-bold text-xs sm:text-sm neon-input text-white uppercase placeholder-slate-600"}
+                      placeholder="es. 7.5"
+                      className="w-20 sm:w-24 p-1.5 text-center font-bold text-xs sm:text-sm neon-input text-white uppercase placeholder-slate-600"
                     />
                   </div>
                 </div>
@@ -393,19 +338,14 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           )}
         </div>
 
-        {compact && <p className="text-xs text-slate-400 break-words">A: assente · NC: non classificato · G: giustificato · <Clock className="inline w-[16px] h-[16px]"/> recupero</p>}
-        <div data-testid={compact?"matrix-evaluation-save-bar":undefined} className={compact?"matrix-evaluation-save-bar":"contents"}>
-        {validationMessage && <p role="alert" className="mb-2 text-sm text-amber-200 break-words">{validationMessage}</p>}
         <button
-          ref={saveButtonRef}
           type="submit"
           disabled={isSaving}
-          className={`${compact?"min-h-[48px] ":""}w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg`}
+          className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
         >
           <Save className="w-4 h-4" />
-          <span>{isSaving?'Salvataggio…':compact?'Salva valutazioni':editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
+          <span>{editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
         </button>
-        </div>
         </fieldset>
       </form>
     </div>

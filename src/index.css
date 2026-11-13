@@ -364,22 +364,9 @@ body {
   .matrix-evaluation-vote { width: min(100%, 104px); }
 }
 
-/* VAL-01/S4a — one reachable save command; never overlay a cramped viewport. */
-.matrix-evaluation-save-bar { position: sticky; bottom: calc(3.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); z-index: 30; padding-block: 8px; background: #030712; border-top: 1px solid var(--border); }
-.matrix-evaluation-save-bar > button { min-height: 48px; }
-.matrix-evaluation-save-jump { display: none; }
-.matrix-evaluation-row { scroll-margin-bottom: 10rem; }
-.matrix-evaluation-row input { scroll-margin-block: 6rem 10rem; }
-@media (min-width: 768px) { .matrix-evaluation-save-bar { position: static; background: transparent; } }
-@media (max-width: 767px) {
-  [data-testid="header01-topbar"][data-evaluation-context="true"] { container: report-header / inline-size; }
-}
-@container matrix-editor (max-width: 15rem) {
-  .matrix-evaluation-save-bar { position: static; }
-  .matrix-evaluation-save-jump { display: inline-flex; align-items: center; justify-content: center; }
-  .matrix-evaluation-row,.matrix-evaluation-row input { scroll-margin-bottom: 5rem; }
-}
-@media (max-height: 480px) {
-  .matrix-evaluation-save-bar { position: static; }
-  .matrix-evaluation-save-jump { display: inline-flex; align-items: center; justify-content: center; }
-}
+
+/* Cell confirmation replaces the collective save bar. */
+.matrix-cell-status { display:flex; width:18px; min-width:18px; align-items:center; justify-content:center; }
+.matrix-cell-error { grid-column:1/-1; }
+@media (max-width:767px){ [data-testid="header01-topbar"][data-evaluation-context="true"] { container: report-header / inline-size; } }
+@container matrix-editor (max-width:18rem){ .matrix-evaluation-row {grid-template-columns:minmax(0,1fr);gap:4px;} }

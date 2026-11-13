@@ -195,7 +195,9 @@ import { HomeView } from './components/HomeView';
 import { DashboardView } from './components/DashboardView';
 import { RecordMissionBanner } from './components/RecordMissionBanner';
 import { ReviewMissionBanner } from './components/ReviewMissionBanner';
-import { EvaluationsView, type EvaluationDraftGuard } from './components/EvaluationsView';
+import { EvaluationsView } from './components/EvaluationsView';
+import { MatrixEvaluationEntry, type EvaluationDraftGuard } from './components/MatrixEvaluationEntry';
+import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellMutation';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -1176,12 +1178,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     options: {
       showBackupModal?: boolean;
       successMessage?: string;
+      inlineFailure?: boolean;
       afterCommit?: () => void;
     } = {}
   ): Promise<AppData> => {
     const {
       showBackupModal,
       successMessage = 'Salvato nel vault locale',
+      inlineFailure = false,
       afterCommit
     } = options;
 
@@ -1220,8 +1224,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
-      console.error('Secure vault save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      if(!inlineFailure){console.error('Secure vault save failed', error);alert(DURABLE_SAVE_FAILURE_MESSAGE);}
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
@@ -2732,12 +2735,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
     const recordSessionAtSave = recordSessionRef.current;
-    const matrixEntry=matrixEvaluationModeRef.current;
-    const originGuard=evaluationDraftGuardRef.current;
-    if(matrixEntry){
-      if(evaluationSavePendingRef.current||currentClassIdRef.current!==classId||activeTabRef.current!=='voti')return Promise.reject(new Error('Contesto valutazione non disponibile.'));
-      evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
-    }
 
     const newGrades: Grade[] = batchData.grades.map(st => ({
       id: uid(),
@@ -2755,7 +2752,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
-      if(matrixEntry && (new Set(batchData.grades.map(g=>g.studentId)).size!==batchData.grades.length || batchData.grades.some(g=>targetClass.students.filter(st=>st.id===g.studentId).length!==1) || (batchData.udaId && (udasRef.current.filter(u=>u.id===batchData.udaId).length!==1||!udasRef.current.some(u=>u.id===batchData.udaId&&u.className===targetClass.name))) || current.classes.some(c=>c.grades.some(g=>g.batchId===batchData.batchId)))) throw new Error('Contesto della nuova valutazione non più valido.');
       const remainingGrades = (targetClass.grades || []).filter(g => g.batchId !== batchData.batchId);
       const updatedClass: ClassData = {
         ...targetClass,
@@ -2767,11 +2763,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       };
     }, {
       afterCommit: () => {
-        if(matrixEntry){
-          originGuard?.markCommitted();evaluationSavePendingRef.current=false;setEvaluationSavePending(false);
-          if(!pendingExitRef.current&&!historyRestorePendingRef.current&&!historyFallbackRef.current&&navigationVersionRef.current===navigationVersionAtSave&&currentClassIdRef.current===classId)handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null});
-          return;
-        }
         const recordCompleted = completeRecordFlow('evaluation', navigationVersionAtSave, recordSessionAtSave, classId);
         setEditingBatchId(null);
         if (!recordCompleted && navigationVersionRef.current === navigationVersionAtSave) {
@@ -2780,7 +2771,20 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           }
         }
       }
-    }).then(() => undefined).finally(()=>{if(matrixEntry){evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}});
+    }).then(() => undefined);
+  };
+
+  // VAL-01/S4a: one explicit cell confirmation, no export or navigation.
+  const handleSaveMatrixCell = async (request:MatrixCellWrite):Promise<Grade> => {
+    const classId=currentClassIdRef.current;
+    if(!classId||!matrixEvaluationModeRef.current||activeTabRef.current!=='voti'||evaluationSavePendingRef.current)throw Error('Contesto valutazione non disponibile.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>applyMatrixCell(current,classId,request,udasRef.current,crypto.randomUUID()),{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const grade=result.classes.find(c=>c.id===classId)?.grades.find(g=>g.batchId===request.proof.batchId&&g.studentId===request.studentId);
+      if(!grade)throw Error('Ricevuta della valutazione non disponibile.');
+      return grade;
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
   };
 
   // Save behavior notes
@@ -3430,10 +3434,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
         {/* TAB 3: Inserisci Valutazioni */}
         {activeTab === 'voti' && currentClass && (
-          <EvaluationsView
-            key={currentClass.id+':'+(matrixEvaluationMode?'matrix':'ordinary')}
-            compact={matrixEvaluationMode}
-            onRegisterDraftGuard={registerEvaluationDraftGuard}
+          matrixEvaluationMode ? <MatrixEvaluationEntry key={currentClass.id} currentClass={currentClass} udas={udas} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} onSaveCell={handleSaveMatrixCell} onClose={handleCancelEvaluationEdit}/> : <EvaluationsView
+            key={currentClass.id+':ordinary'}
             currentClass={currentClass}
             editingBatchId={editingBatchId}
             udas={udas}
@@ -3790,7 +3792,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                     ? behaviorSavePending ? 'Salvataggio delle osservazioni in corso.' : behaviorDraftGuardRef.current?.hasUnsavedChanges()
                       ? 'Ci sono osservazioni non salvate. Puoi rimanere qui o uscire senza salvarle.'
                       : 'Le osservazioni sono state salvate. Puoi proseguire o rimanere qui.'
-                    : activeTab==='voti' ? evaluationSavePending?'Salvataggio delle valutazioni in corso.': 'Ci sono valutazioni non salvate. Puoi rimanere qui o uscire senza salvarle.'
+                    : activeTab==='voti' ? evaluationSavePending?'Salvataggio delle valutazioni in corso.': 'Ci sono voti non confermati. I voti già registrati restano salvati.'
                     : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
             </p>
             {planningExitFromBrowser && (

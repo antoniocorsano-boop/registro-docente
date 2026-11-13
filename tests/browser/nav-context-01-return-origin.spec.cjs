@@ -302,80 +302,47 @@ for (const width of [320, 390]) {
 }
 
 
-test('VAL-01/S4a — compact matrix entry, explicit save, protected roster and blank rows',async({browser})=>{
-  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
-  const page=await context.newPage();
-  await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+async function openCellEditor(page,count=2){
+  await page.goto(url+'?matrixWrite=1&visualRoster='+count);
+  await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
   await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
-  const editor=page.getByTestId('matrix-evaluation-editor');await expect(editor).toBeVisible();
-  await expect(editor.getByTestId('matrix-evaluation-row')).toHaveCount(2);
-  await expect(editor).not.toContainText('Persona Fittizia Uno');
+  const editor=page.getByTestId('matrix-evaluation-editor');
   await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova sintetica nuova');
-  await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');
-  await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('xyz');
-  await editor.getByRole('button',{name:'Salva valutazioni'}).click();await expect(editor.getByRole('alert')).toContainText('Controlla i voti');
-  expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
-  await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('');
-  await editor.getByRole('button',{name:'Annulla',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('valutazioni non salvate');
-  await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
-  await editor.getByRole('button',{name:'Salva valutazioni'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
-  const saved=await page.evaluate(()=>window.__matrixSaved);expect(saved.classes[0].grades).toHaveLength(3);expect(saved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova')).toHaveLength(1);expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
-  await page.getByRole('button',{name:'Inserisci valutazione'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('');
-  await context.close();
+  await editor.getByRole('button',{name:'Vai ai voti'}).click();return editor;
+}
+test('VAL-01/S4a — Enter saves only one cell, same proof, edit stable ID, no backup interruption',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const page=await context.newPage();
+  const editor=await openCellEditor(page,25);const first=editor.getByRole('textbox',{name:'Voto alunno 1',exact:true});const second=editor.getByRole('textbox',{name:'Voto alunno 2',exact:true});
+  await expect(editor).not.toContainText('Persona Fittizia Uno');await first.fill('8');await second.fill('xyz');await second.press('Enter');await expect(editor.getByRole('alert')).toContainText('Voto non valido');expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+  await first.press('Enter');await expect(editor.getByRole('status').filter({hasText:'1 / 25 registrati'})).toBeVisible();await expect(second).toBeFocused();
+  let grades=await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova'));expect(grades).toHaveLength(1);const original=grades[0];
+  await second.fill('7,5');await second.press('Enter');await expect(editor.getByText('2 / 25 registrati')).toBeVisible();
+  await first.fill('9');await first.press('Enter');await expect(editor.getByTestId('matrix-cell-status').first()).toHaveAttribute('aria-label','Registrato');
+  grades=await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova'));expect(grades).toHaveLength(2);expect(grades[0].id).toBe(original.id);expect(grades[0].value).toBe('9');expect(grades[1].batchId).toBe(original.batchId);expect(grades[1].value).toBe('7.5');
+  await first.press('Enter');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
+  await first.fill('');await first.press('Enter');await expect(editor.getByRole('alert')).toContainText('campo vuoto');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
+  await page.getByRole('button',{name:'Torna al Tabellone'}).click();await expect(page.getByRole('dialog')).toContainText('voti già registrati restano salvati');await page.getByRole('button',{name:'Continua senza salvare'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
+  expect(await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova').length)).toBe(2);await context.close();
 });
-
-
-test('VAL-01/S4a — guarded browser Back preserves draft and committed pending save cannot be resubmitted',async({browser})=>{
-  const context=await browser.newContext({viewport:{width:320,height:700},isMobile:true,hasTouch:true});
-  const page=await context.newPage();await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
-  await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
-  const editor=page.getByTestId('matrix-evaluation-editor');await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova sintetica Back');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');
-  await page.goBack();await expect(page.getByRole('dialog')).toContainText('valutazioni non salvate');
-  await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
-  await page.evaluate(()=>window.__matrixHold=true);await editor.getByRole('button',{name:'Salva valutazioni'}).click();await expect.poll(()=>page.evaluate(()=>Boolean(window.__finishMatrixWrite))).toBe(true);
+test('VAL-01/S4a — failed and pending cell, guarded Back and same-tab, no duplicate',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:320,height:700},isMobile:true,hasTouch:true});const page=await context.newPage();const editor=await openCellEditor(page);const first=editor.getByRole('textbox',{name:'Voto alunno 1',exact:true});
+  await first.fill('8');await page.locator('nav').getByRole('button',{name:'Valutazioni',exact:true}).click();await expect(first).toHaveValue('8');
+  await page.goBack();await expect(page.getByRole('dialog')).toContainText('voti non confermati');await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(first).toHaveValue('8');
+  await page.evaluate(()=>window.__matrixFail=true);await first.press('Enter');await expect(editor.getByRole('alert')).toContainText('Voto non salvato');await expect(first).toHaveValue('8');await expect(editor.getByText('0 / 2 registrati')).toBeVisible();
+  await page.evaluate(()=>{window.__matrixFail=false;window.__matrixHold=true;});await first.press('Enter');await expect.poll(()=>page.evaluate(()=>Boolean(window.__finishMatrixWrite))).toBe(true);
   await page.locator('nav').getByRole('button',{name:'Tabellone'}).click();await expect(page.getByRole('dialog')).toContainText('Salvataggio delle valutazioni in corso');await expect(page.getByRole('button',{name:'Continua senza salvare'})).toBeDisabled();
-  await page.evaluate(()=>window.__finishMatrixWrite());await expect(page.getByTestId('matrix-evaluation-committed')).toBeAttached();
-  await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(page.getByTestId('matrix-evaluation-committed')).toBeVisible();await expect(page.getByRole('button',{name:'Salva valutazioni'})).toHaveCount(0);
-  await page.getByRole('button',{name:'Torna al Tabellone'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);await context.close();
+  await page.evaluate(()=>window.__finishMatrixWrite());await expect(editor.getByText('1 / 2 registrati')).toBeAttached();await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(first).toHaveValue('8');await first.press('Enter');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(2);await context.close();
 });
-
-
-test('VAL-01/S4a — selecting active Valutazioni navigation preserves the compact draft',async({browser})=>{
-  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
-  const page=await context.newPage();await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
-  await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
-  const editor=page.getByTestId('matrix-evaluation-editor');await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova stessa scheda');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('7');
-  const before=await page.evaluate(()=>({url:location.href,length:history.length}));
-  await page.locator('nav').getByRole('button',{name:'Valutazioni',exact:true}).click();
-  await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('7');await expect(editor.getByRole('textbox',{name:'Titolo / Argomento prova'})).toHaveValue('Prova stessa scheda');
-  expect(await page.evaluate(()=>({url:location.href,length:history.length}))).toEqual(before);
-  expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);await context.close();
-});
-
-
-// Visual evidence for the new editor itself, not just the read-only matrix.
 for(const width of [320,390]){
-  test(`VAL-01/S4a — visual compact editor / ${width}px / 25 synthetic students`,async({browser})=>{
-    const context=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true});
-    const evidence=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence','val01-visual');await fs.mkdir(evidence,{recursive:true});
-    const page=await context.newPage();
-    try{
-      await page.goto(url+'?visualRoster=25&matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone');
-      await page.getByRole('button',{name:'Inserisci valutazione'}).click();const editor=page.getByTestId('matrix-evaluation-editor');const rows=editor.getByTestId('matrix-evaluation-row');await expect(rows).toHaveCount(25);
-      await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Proprietà dei materiali');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('7');await editor.getByRole('textbox',{name:'Voto alunno 3',exact:true}).fill('NC');
-      await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-contesto.png`),animations:'disabled'});
-      await editor.getByRole('button',{name:'Vai ai voti'}).click();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(evidence,`editor-${width}-elenco.png`),animations:'disabled'});await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
-      const geometry=await rows.evaluateAll(all=>all.map(r=>({height:r.getBoundingClientRect().height,inputHeight:r.querySelector('input').getBoundingClientRect().height})));expect(geometry.every(r=>r.height>=48&&r.inputHeight>=48)).toBe(true);
-      const save=editor.getByRole('button',{name:'Salva valutazioni'});const bar=editor.getByTestId('matrix-evaluation-save-bar');const nav=page.locator('nav').filter({has:page.getByRole('button',{name:'Tabellone',exact:true})});
-      const checkSave=async()=>{const b=await bar.boundingBox(),n=await nav.boundingBox();expect(b.y).toBeGreaterThan(0);expect(b.y+b.height).toBeLessThanOrEqual(n.y+1);expect(b.height).toBeGreaterThanOrEqual(48);};
-      await checkSave();await rows.nth(12).scrollIntoViewIfNeeded();await checkSave();await page.screenshot({path:path.join(evidence,`editor-${width}-metà.png`),animations:'disabled'});
-      await save.scrollIntoViewIfNeeded();await checkSave();await page.screenshot({path:path.join(evidence,`editor-${width}-salva.png`),animations:'disabled'});
-      await page.setViewportSize({width,height:420});await expect(bar).toHaveCSS('position','static');await expect(editor.getByRole('button',{name:'Vai al salvataggio'})).toBeVisible();await page.setViewportSize({width,height:width===320?700:844});
-      await editor.getByRole('button',{name:'Modifica dati'}).click();await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-200-contesto.png`),animations:'disabled'});await editor.getByRole('button',{name:'Vai ai voti'}).click();
-      await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-200-elenco.png`),animations:'disabled'});
-      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);await fs.writeFile(path.join(evidence,`editor-${width}-geometry.json`),JSON.stringify({geometry,overflow},null,2));
-      expect(overflow).toBeLessThanOrEqual(1);const contextTitle=page.getByTestId('header01-context-title');expect(await contextTitle.evaluate(el=>el.clientWidth)).toBeGreaterThanOrEqual(width-64);await expect(bar).toHaveCSS('position','static');await editor.getByRole('button',{name:'Vai al salvataggio'}).click();await expect(save).toBeFocused();await checkSave();const names=await rows.evaluateAll(all=>all.map(r=>({w:r.querySelector('.matrix-evaluation-name').getBoundingClientRect().width,h:r.getBoundingClientRect().height})));expect(names.every(n=>n.w>=100&&n.h<220)).toBe(true);
-      expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
-    }finally{await context.close();}
-  });
+ test(`VAL-01/S4a — cell editor visual ${width}px 25 students, normal and enlarged`,async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true});const page=await context.newPage();const evidence=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence','val01-visual');await fs.mkdir(evidence,{recursive:true});
+  try{const editor=await openCellEditor(page,25);const rows=editor.getByTestId('matrix-evaluation-row');await expect(rows).toHaveCount(25);
+    await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).press('Enter');await expect(editor.getByText('1 / 25 registrati')).toBeVisible();
+    await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`celle-${width}-elenco.png`),animations:'disabled'});
+    const geometry=await rows.evaluateAll(all=>all.map(r=>({h:r.getBoundingClientRect().height,input:r.querySelector('input').getBoundingClientRect().height})));expect(geometry.every(r=>r.h>=48&&r.input>=48)).toBe(true);
+    await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`celle-${width}-200.png`),animations:'disabled'});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);expect(await page.getByTestId('header01-context-title').evaluate(el=>el.clientWidth)).toBeGreaterThanOrEqual(width-64);
+    await rows.last().scrollIntoViewIfNeeded();await expect(rows.last()).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
+  }finally{await context.close();}
+ });
 }
