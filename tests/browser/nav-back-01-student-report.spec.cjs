@@ -290,6 +290,11 @@ test('MOBILE-DENSITY-04/S3 — actual protected PDF, all pages, native receipt a
     await root.getByRole('button',{name:'Restituzione',exact:true}).click();
     const view=page.getByTestId('student-report-restitution');
     await view.getByLabel('Punti di forza',{exact:true}).fill(student.endsWith('01')?'SINTESI-UNO · capacità di analisi':'SINTESI-DUE');
+    await view.getByLabel('Apprendimenti e competenze',{exact:true}).fill('Riconosce le principali proprietà dei materiali e sa spiegare le fasi di un procedimento con esempi concreti.');
+    await view.getByLabel('Partecipazione e metodo di lavoro',{exact:true}).fill('Partecipa alle attività e organizza gli strumenti di lavoro. Con una guida, controlla la completezza degli elaborati.');
+    await view.getByLabel('Primo obiettivo di miglioramento',{exact:true}).fill('Prima di consegnare un disegno, controllare misure, quote e ordine delle linee.');
+    await view.getByLabel('Come sostenere il percorso',{exact:true}).fill('A casa: invitare a spiegare con parole proprie le scelte fatte e a verificare il lavoro con la scheda di controllo.');
+    await view.getByLabel('Domanda di autovalutazione per l’alunno',{exact:true}).fill('Quale passaggio riesco a svolgere in autonomia? Su quale ho ancora bisogno di aiuto?');
     await view.getByRole('button',{name:'Controlla anteprima'}).click();
     await expect(view.getByRole('button',{name:'Salva PDF'})).toHaveCount(0);
     await view.getByRole('checkbox').check();
@@ -315,7 +320,11 @@ test('MOBILE-DENSITY-04/S3 — actual protected PDF, all pages, native receipt a
   const text=execFileSync('pdftotext',['-layout','-','-'],{input:buffer,encoding:'utf8'});
   const info=execFileSync('pdfinfo',['-'],{input:buffer,encoding:'utf8'});
   for(let i=1;i<=45;i++)expect(text).toContain('RIGA-'+String(i).padStart(3,'0'));
-  expect(text).toContain('SINTESI-UNO');expect(text).toContain('Non classificato (NC)');expect(text).toContain('Alunno 01');
+  expect(text).toContain('SINTESI-UNO');
+  // In layout extraction, the status may wrap alongside the period in the preceding column.
+  expect(text).toMatch(/RIGA-003[^\n]*Non classificato[^\n]*\n[^\n]*\(NC\)[^\n]*\n[^\n]*Fuori media/);
+  expect(text).toContain('Alunno 01');
+  expect(text).toContain('Non è il voto finale di scrutinio.');
   expect(text).not.toContain('MARCATORE-ALTRO-ALUNNO');expect(text).not.toContain('Persona Fittizia');expect(info).not.toContain('Persona Fittizia');
   expect(Number(info.match(/Pages:\s+(\d+)/)?.[1])).toBeGreaterThanOrEqual(3);
   expect(Number(info.match(/Pages:\s+(\d+)/)?.[1])).toBeLessThanOrEqual(5);expect(info).toMatch(/Page size:\s+595/);
@@ -336,5 +345,7 @@ test('MOBILE-DENSITY-04/S3 — actual protected PDF, all pages, native receipt a
   const peerText=execFileSync('pdftotext',['-layout','-','-'],{input:Buffer.from(peer.last,'base64'),encoding:'utf8'});
   expect(peerText).toContain('Alunno 02');expect(peerText).toContain('SINTESI-DUE');expect(peerText).toContain('MARCATORE-ALTRO-ALUNNO');
   expect(peerText).not.toContain('SINTESI-UNO');expect(peerText).not.toContain('RIGA-001');expect(peer.write).toBe(3);
+  fs.writeFileSync(out+'/bilancio-formativo-esempio-breve.pdf',Buffer.from(peer.last,'base64'));
+  execFileSync('pdftoppm',['-png','-r','96',out+'/bilancio-formativo-esempio-breve.pdf',out+'/bilancio-breve']);
   expect(external).toEqual([]);
 });

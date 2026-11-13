@@ -29,8 +29,9 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   const header=[model.subject+' · '+model.schoolYear,model.classLabel+' · '+periodLabel(model.period),model.recipientLabel];
   const narrative=RESTITUTION_FIELDS.filter(([field])=>draft[field].trim()).map(([field,label])=>[label,normalize(draft[field])]);
   const metric='Media '+(model.weighted?'ponderata':'aritmetica')+': '+formatGrade(model.summary.mean);
-  const counts=model.summary.count+' registrazioni; '+model.summary.numericCount+' valutazioni numeriche; '+(model.summary.count-model.summary.numericCount)+' senza voto numerico; '+model.summary.includedCount+' voti nella media.';
-  const caution='La media è un indicatore di andamento, non un voto di scrutinio.';
+  const counts=model.summary.count+' attività registrate: '+model.summary.numericCount+' con voto numerico e '+(model.summary.count-model.summary.numericCount)+' senza voto numerico. '+model.summary.includedCount+' voti utilizzati per calcolare la media.';
+  const method=model.weighted?'La media ponderata tiene conto del peso assegnato ai diversi tipi di prova.':'La media aritmetica è la media dei voti numerici: ogni voto incluso ha lo stesso peso.';
+  const caution='La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.';
   const noMean=model.summary.mean===null?'Media non disponibile: non equivale a un giudizio negativo.':'';
   const types=model.byType.map(t=>t.label+': '+formatGrade(t.mean)+' · '+t.count+' registrazioni · '+t.includedCount+' nella media'+(t.weight!==null?' · Peso '+t.weight+'%':''));
   const rows=model.rows.map((r,i)=>[
@@ -39,12 +40,12 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
     r.type,
     r.value+(!r.included?'\nFuori media':'')
   ]);
-  const columns=['Data / periodo','Attività','Tipologia','Esito'];
+  const columns=['Data / periodo','Attività','Tipo di prova','Voto / esito'];
   const widths=[36,78,32,34];
-  const foot='L’elenco comprende tutte le registrazioni disponibili per il destinatario e il periodo. Attività non registrate non sono desunte dall’assenza di un voto.';
+  const foot='L’elenco comprende tutte le attività registrate per questo alunno nel periodo scelto. Un’attività senza voto numerico non è automaticamente un’insufficienza. Le voci fuori media non entrano nel calcolo.';
   const empty='Nessuna registrazione disponibile per il periodo selezionato.';
   const labels=[TITLE,'A. Sintesi formativa','B. Rendiconto delle valutazioni','Riepilogo per tipologia','Attività registrate nel periodo','Pagina 1 di 1','Nessuna sintesi inserita dal docente.'];
-  const allText=[...labels,...header,...narrative.flat(),metric,counts,caution,noMean,...types,...columns,...rows.flat(),foot,empty];
+  const allText=[...labels,...header,...narrative.flat(),metric,counts,method,caution,noMean,...types,...columns,...rows.flat(),foot,empty];
   const seed=document.createElement('canvas');seed.width=1;seed.height=1;
   const ctx=seed.getContext('2d');if(!ctx)throw new Error('Generatore PDF locale non disponibile.');
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,1,1);
@@ -98,7 +99,7 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   if(!narrative.length)paragraph('Nessuna sintesi inserita dal docente.');
   for(const [label,body] of narrative){ensure(15);paragraph(label,11,true);paragraph(body,11);y+=2;}
   section='B. Rendiconto delle valutazioni';newPage();
-  paragraph(metric,14,true);paragraph(counts);paragraph(caution);paragraph(noMean);
+  paragraph(metric,14,true);paragraph(counts);paragraph(method);paragraph(caution);paragraph(noMean);
   if(types.length){ensure(14);paragraph('Riepilogo per tipologia',11,true);for(const line of types)paragraph(line);}
   ensure(18);paragraph('Attività registrate nel periodo',11,true);
   if(!rows.length)paragraph(empty);

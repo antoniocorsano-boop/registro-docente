@@ -37,9 +37,10 @@ function Evidence({ model }: {model: FormativeRestitution}) {
         </div>
       </div>
       <p className="text-sm text-slate-300">
-        {model.summary.numericCount} valutazioni numeriche; {model.summary.count-model.summary.numericCount} registrazioni senza voto numerico.
-        {' '}{model.summary.includedCount} voti concorrono alla media.
-        {' '}La media è un indicatore di andamento, non un voto di scrutinio.
+        {model.summary.count} attività registrate: {model.summary.numericCount} con voto numerico e {model.summary.count-model.summary.numericCount} senza voto numerico.
+        {' '}{model.summary.includedCount} voti utilizzati per calcolare la media.
+        {' '}{model.weighted ? 'La media ponderata tiene conto del peso assegnato ai diversi tipi di prova.' : 'La media aritmetica è la media dei voti numerici: ogni voto incluso ha lo stesso peso.'}
+        {' '}La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.
       </p>
       {model.summary.mean === null && <p className="text-sm text-slate-300">Media non disponibile: non equivale a un giudizio negativo.</p>}
       {model.byType.length > 0 && (
@@ -75,7 +76,7 @@ function Evidence({ model }: {model: FormativeRestitution}) {
           ))}
         </div>
       }
-      <p className="text-xs text-slate-400">L’elenco comprende tutte le registrazioni disponibili per il destinatario e il periodo. Attività non registrate non sono desunte dall’assenza di un voto.</p>
+      <p className="text-xs text-slate-400">L’elenco comprende tutte le attività registrate per questo alunno nel periodo scelto. Un’attività senza voto numerico non è automaticamente un’insufficienza. Le voci fuori media non entrano nel calcolo.</p>
     </section>
   );
 }
