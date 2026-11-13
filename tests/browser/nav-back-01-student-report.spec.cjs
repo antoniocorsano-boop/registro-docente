@@ -317,7 +317,8 @@ test('MOBILE-DENSITY-04/S3 — actual protected PDF, all pages, native receipt a
   for(let i=1;i<=45;i++)expect(text).toContain('RIGA-'+String(i).padStart(3,'0'));
   expect(text).toContain('SINTESI-UNO');expect(text).toContain('Non classificato (NC)');expect(text).toContain('Alunno 01');
   expect(text).not.toContain('MARCATORE-ALTRO-ALUNNO');expect(text).not.toContain('Persona Fittizia');expect(info).not.toContain('Persona Fittizia');
-  expect(info).toMatch(/Pages:\s+[3-9]\d*/);expect(info).toMatch(/Page size:\s+595/);
+  expect(Number(info.match(/Pages:\s+(\d+)/)?.[1])).toBeGreaterThanOrEqual(3);
+  expect(Number(info.match(/Pages:\s+(\d+)/)?.[1])).toBeLessThanOrEqual(5);expect(info).toMatch(/Page size:\s+595/);
   const out=process.env.REPORT_EVIDENCE_DIR||'../browser-evidence';fs.mkdirSync(out,{recursive:true});
   fs.writeFileSync(out+'/bilancio-formativo-sintetico.pdf',buffer);
   execFileSync('pdftoppm',['-png','-r','96',out+'/bilancio-formativo-sintetico.pdf',out+'/bilancio-formativo']);

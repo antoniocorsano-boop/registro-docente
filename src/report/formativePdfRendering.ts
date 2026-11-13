@@ -34,14 +34,17 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   const noMean=model.summary.mean===null?'Media non disponibile: non equivale a un giudizio negativo.':'';
   const types=model.byType.map(t=>t.label+': '+formatGrade(t.mean)+' · '+t.count+' registrazioni · '+t.includedCount+' nella media'+(t.weight!==null?' · Peso '+t.weight+'%':''));
   const rows=model.rows.map((r,i)=>[
-    (i+1)+'. '+dateLabel(r.date)+' · '+periodLabel(r.period)+' · '+r.type,
-    normalize(r.title), ...(r.uda?[normalize(r.uda)]:[]),
-    'Esito: '+r.value+(!r.included?' · Fuori media':'')+(r.delayed?' · Ritardo / recupero registrato':'')
+    (i+1)+'. '+dateLabel(r.date)+'\n'+periodLabel(r.period),
+    normalize(r.title)+(r.uda?'\n'+normalize(r.uda):'')+(r.delayed?'\nRitardo / recupero registrato':''),
+    r.type,
+    r.value+(!r.included?'\nFuori media':'')
   ]);
+  const columns=['Data / periodo','Attività','Tipologia','Esito'];
+  const widths=[36,78,32,34];
   const foot='L’elenco comprende tutte le registrazioni disponibili per il destinatario e il periodo. Attività non registrate non sono desunte dall’assenza di un voto.';
   const empty='Nessuna registrazione disponibile per il periodo selezionato.';
   const labels=[TITLE,'A. Sintesi formativa','B. Rendiconto delle valutazioni','Riepilogo per tipologia','Attività registrate nel periodo','Pagina 1 di 1','Nessuna sintesi inserita dal docente.'];
-  const allText=[...labels,...header,...narrative.flat(),metric,counts,caution,noMean,...types,...rows.flat(),foot,empty];
+  const allText=[...labels,...header,...narrative.flat(),metric,counts,caution,noMean,...types,...columns,...rows.flat(),foot,empty];
   const seed=document.createElement('canvas');seed.width=1;seed.height=1;
   const ctx=seed.getContext('2d');if(!ctx)throw new Error('Generatore PDF locale non disponibile.');
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,1,1);
@@ -99,13 +102,50 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   if(types.length){ensure(14);paragraph('Riepilogo per tipologia',11,true);for(const line of types)paragraph(line);}
   ensure(18);paragraph('Attività registrate nel periodo',11,true);
   if(!rows.length)paragraph(empty);
-  for(const row of rows){
-    // A complete ordinary record stays together; unusually long records may continue on the next page.
-    const height=row.reduce((sum,line,index)=>sum+rawLines(line,index===0?10:11,index===0||index===row.length-1).length*(index===0?4.86:5.346)+2,0)+4;
-    if(height<150)ensure(height);else ensure(12);
-    paragraph(row[0],10,true);
-    row.slice(1).forEach((line,index)=>paragraph(line,11,index===row.length-2));
-    y+=2;emitted++;
+  // Compact ledger: each record is measured before rendering, with no truncation.
+  // Very long records continue across pages; repeated column headings preserve context.
+  const rowStep=4.3;
+  function cellLines(value:string,width:number,bold=false):string[]{
+    style(9,bold);
+    return normalize(value).split('\n').flatMap(line=>line?pdf.splitTextToSize(line,width-4):['']);
+  }
+  function drawTableHeader(){
+    style(9,true);
+    let x=LEFT;
+    for(let i=0;i<columns.length;i++){
+      pdf.setFillColor(226,232,240);pdf.rect(x,y,widths[i],8,'F');
+      pdf.text(columns[i],x+2,y+5.2);x+=widths[i];
+    }
+    y+=8;
+  }
+  function nextTablePage(){newPage();drawTableHeader();}
+  if(rows.length){
+    ensure(24);drawTableHeader();
+    for(const row of rows){
+      const lines=row.map((cell,i)=>cellLines(cell,widths[i],i===3));
+      const lineCount=Math.max(...lines.map(l=>l.length));
+      const height=lineCount*rowStep+4;
+      if(height<=200&&y+height>BOTTOM)nextTablePage();
+      let offset=0;
+      while(offset<lineCount){
+        let capacity=Math.floor((BOTTOM-y-4)/rowStep);
+        if(capacity<1){nextTablePage();capacity=Math.floor((BOTTOM-y-4)/rowStep);}
+        const take=Math.min(capacity,lineCount-offset);
+        const h=take*rowStep+4;
+        let x=LEFT;
+        for(let i=0;i<lines.length;i++){
+          pdf.setFillColor(...(emitted%2?[248,250,252]:[255,255,255]));
+          pdf.rect(x,y,widths[i],h,'F');style(9,i===3);
+          lines[i].slice(offset,offset+take).forEach((line,j)=>pdf.text(line,x+2,y+4+j*rowStep));
+          x+=widths[i];
+        }
+        y+=h;pdf.setDrawColor(203,213,225);pdf.line(LEFT,y,RIGHT,y);
+        offset+=take;
+        if(offset<lineCount)nextTablePage();
+      }
+      emitted++;
+    }
+    y+=4;
   }
   paragraph(foot,9);
   const pages=pdf.internal.getNumberOfPages();
