@@ -134,6 +134,10 @@ for(const width of [320,390]){
    await page.locator('nav').getByRole('button',{name:'Comportamento',exact:true}).click();
    const rows=page.getByTestId('behavior-row');
    await expect(rows).toHaveCount(count);
+   const headerTitle=page.getByTestId('header01-context-title');
+   await expect(headerTitle).toHaveText('Comportamento');
+   expect(await headerTitle.evaluate(el=>({fits:el.scrollWidth<=el.clientWidth+1,overflow:getComputedStyle(el).textOverflow}))).toEqual({fits:true,overflow:'clip'});
+   await expect(page.getByTestId('behavior-change-count')).toHaveText('0 osservazioni da salvare');
    await expect(rows.first()).toContainText('Non registrato');
    await expect(rows.first().getByTestId('behavior-line-icon')).toHaveCount(4);
    await expect(rows.first().getByTestId('behavior-line-icon').first()).toBeVisible();
@@ -157,6 +161,7 @@ for(const width of [320,390]){
    await expect(choice).toHaveCSS('opacity','1');
    await expect(choice).toHaveCSS('color','rgb(224, 242, 254)');
    await expect(rows.nth(1)).toContainText('Da salvare');
+   await expect(page.getByTestId('behavior-change-count')).toHaveText('1 osservazione da salvare');
    await expect(rows.first().getByRole('button',{name:'Costruttivo 👍',exact:true})).toHaveAttribute('aria-pressed','false');
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-selected.png')});
    await expect(save(page)).toBeEnabled();
@@ -174,6 +179,7 @@ for(const width of [320,390]){
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-200-expanded.png')});
    await enlargedChoice.click();
    await expect(rows.first()).toContainText('Da salvare');
+   await expect(page.getByTestId('behavior-change-count')).toHaveText('2 osservazioni da salvare');
    await save(page).scrollIntoViewIfNeeded();
    await expect(save(page)).toBeEnabled();
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-200-save.png')});

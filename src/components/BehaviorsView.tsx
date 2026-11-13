@@ -242,7 +242,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
       </fieldset>
 
       <div data-testid="behavior-save-bar" className="behavior-save-bar sticky md:static z-30 md:z-auto bg-[#030712] md:bg-transparent border-t md:border-0 border-[var(--border)] py-2 md:py-0">
-      <p role="status" className="mb-2 text-xs text-slate-300">{changeCount} osservazioni da salvare</p>
+      <p data-testid="behavior-change-count" role="status" className="mb-2 text-xs text-slate-300">{changeCount} {changeCount === 1 ? 'osservazione' : 'osservazioni'} da salvare</p>
       <button
         onClick={handleSave}
         disabled={isSaving || changeCount === 0 || !isObservationDate(selectedDate)}
