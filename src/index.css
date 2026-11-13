@@ -326,3 +326,10 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
   }
 }
+
+/* S2: three mobile destinations; wrap intact labels at enlarged text. */
+@media (max-width: 767px) {
+  .student-report-mode {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  }
+}

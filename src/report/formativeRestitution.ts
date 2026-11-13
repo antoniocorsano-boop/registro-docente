@@ -79,7 +79,7 @@ export function buildFormativeRestitution(
         date: g.date, period: g.period, type: TYPES_LABEL[g.type] || 'Tipologia non riconosciuta',
         title: protectedText(g.title?.trim() || 'Attività senza titolo', names),
         uda: linked.length === 1 ? protectedText(linked[0].title, names) : g.udaId ? 'Collegamento UDA non verificato' : null,
-        value: numeric(g) ? g.value : specialLabels[value] || 'Registrazione non numerica',
+        value: numeric(g) ? protectedText(g.value, names) : specialLabels[value] || 'Registrazione non numerica',
         numeric: numeric(g), included: included(g), delayed: Boolean(g.delayed)
       };
     })

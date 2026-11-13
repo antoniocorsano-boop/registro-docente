@@ -11,6 +11,7 @@ import {
   TYPES_LABEL
 } from '../utils';
 import { Sparkline } from './Sparkline';
+import { FormativeRestitutionView } from './FormativeRestitutionView';
 import {
   UserCheck,
   Award,
@@ -268,7 +269,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   isPrivacyShieldActive = true
 }) => {
   const [radarMode, setRadarMode] = useState<'competencies' | 'udas'>('competencies');
-  const [mobileMode, setMobileMode] = useState<{ studentId: string; view: 'essential' | 'dossier' } | null>(null);
+  const [mobileMode, setMobileMode] = useState<{ studentId: string; view: 'essential' | 'dossier' | 'restitution' } | null>(null);
   const dossierRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
@@ -466,13 +467,17 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             >
               {students.map(s => (
                 <option key={s.id} value={s.id}>
-                  {formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive)}
+                  {formatStudentNameWithPrivacy(s.name, isPrivacyShieldActive || mobileView === 'restitution')}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
+        <div className="hidden md:flex justify-end mb-3">
+          <button type="button" className="min-h-[48px] px-3 py-2 rounded-lg border border-[var(--border)] text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300" aria-pressed={mobileView === 'restitution'} onClick={() => setMobileMode({ studentId: currentStudent.id, view: mobileView === 'restitution' ? 'essential' : 'restitution' })}>{mobileView === 'restitution' ? 'Torna alla scheda interna' : 'Restituzione'}</button>
+        </div>
+        {mobileView !== 'restitution' && <>
         {/* Student KPIs */}
         <div className="hidden md:grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="p-3.5 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] text-center">
@@ -529,10 +534,11 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           <span className="text-xs text-slate-300 font-semibold">Andamento cronologico voti:</span>
           <Sparkline grades={grades} width={120} height={24} />
         </div>
+        </>}
       </div>
 
       <div role="group" aria-label="Viste scheda alunno" className="md:hidden grid grid-cols-2 border-b border-[var(--border)] student-report-mode">
-        {([['essential', 'Essenziale'], ['dossier', 'Dossier']] as const).map(([view, label]) => (
+        {([['essential', 'Essenziale'], ['dossier', 'Dossier'], ['restitution', 'Restituzione']] as const).map(([view, label]) => (
           <button key={view} type="button" aria-pressed={mobileView === view}
             onClick={() => {
               closeMobileDisclosures();
@@ -570,6 +576,10 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
           <b className="text-slate-100">{studentBehaviors.length}</b> {studentBehaviors.length === 1 ? 'osservazione' : 'osservazioni'} di partecipazione e comportamento
         </div>
       </section>
+      {mobileView === 'restitution' ? (
+        isPrivacyShieldActive ? <FormativeRestitutionView key={currentClass.id + ':' + currentStudent.id} currentClass={currentClass} studentId={currentStudent.id} settings={settings} udas={udas}/> :
+          <section role="alert" className="space-y-2"><h2 className="text-base font-semibold">Attiva la protezione dei nominativi</h2><p className="text-sm text-slate-300">La restituzione è disponibile soltanto con la protezione attiva. Usa il comando di riservatezza nell’intestazione.</p></section>
+      ) : (
       <div ref={dossierRef} data-testid="student-report-dossier"
         className={`min-w-0 space-y-3 md:space-y-4 md:block ${mobileView === 'dossier' ? 'block' : 'hidden'}`}>
       <details className="group" onToggle={onMobileDisclosureToggle}>
@@ -1215,7 +1225,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
       </details>
       </div>
-
+      )}
     </div>
   );
 };
