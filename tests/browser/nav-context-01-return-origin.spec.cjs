@@ -351,3 +351,26 @@ test('VAL-01/S4a — selecting active Valutazioni navigation preserves the compa
   expect(await page.evaluate(()=>({url:location.href,length:history.length}))).toEqual(before);
   expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);await context.close();
 });
+
+
+// Visual evidence for the new editor itself, not just the read-only matrix.
+for(const width of [320,390]){
+  test(`VAL-01/S4a — visual compact editor / ${width}px / 25 synthetic students`,async({browser})=>{
+    const context=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true});
+    const evidence=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence','val01-visual');await fs.mkdir(evidence,{recursive:true});
+    const page=await context.newPage();
+    try{
+      await page.goto(url+'?visualRoster=25&matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone');
+      await page.getByRole('button',{name:'Inserisci valutazione'}).click();const editor=page.getByTestId('matrix-evaluation-editor');const rows=editor.getByTestId('matrix-evaluation-row');await expect(rows).toHaveCount(25);
+      await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Proprietà dei materiali');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('7');await editor.getByRole('textbox',{name:'Voto alunno 3',exact:true}).fill('NC');
+      await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-contesto.png`),animations:'disabled'});
+      await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-elenco.png`),animations:'disabled'});
+      const geometry=await rows.evaluateAll(all=>all.map(r=>({height:r.getBoundingClientRect().height,inputHeight:r.querySelector('input').getBoundingClientRect().height})));expect(geometry.every(r=>r.height>=48&&r.inputHeight>=48)).toBe(true);
+      await editor.getByRole('button',{name:'Salva valutazioni'}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-salva.png`),animations:'disabled'});
+      await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`editor-${width}-200-contesto.png`),animations:'disabled'});
+      await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`editor-${width}-200-elenco.png`),animations:'disabled'});
+      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);await fs.writeFile(path.join(evidence,`editor-${width}-geometry.json`),JSON.stringify({geometry,overflow},null,2));
+      expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+    }finally{await context.close();}
+  });
+}
