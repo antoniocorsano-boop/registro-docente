@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createBackupReceiptAuthority } from '../persistence/backupCheckpoint';
+import { createBackupReceiptAuthority, incrementBackupChanges, prepareBackupCheckpoint, verifiedBackupDate, withoutLocalBackupVerification } from '../persistence/backupCheckpoint';
 import type { PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 import { createDurableMutationCoordinator } from '../persistence/durableMutationCoordinator';
@@ -14,7 +14,7 @@ describe('BACKUP-02/B1b one-use archive-scoped receipt authority', () => {
   test('subtracts only included changes, rejects replay after later work', () => {
     const authority = createBackupReceiptAuthority();
     const receipt = authority.issue(grant());
-    expect(authority.consume(meta(5), receipt)).toEqual({ changes: 2, lastBackup: at });
+    expect(authority.consume(meta(5), receipt)).toEqual({ changes: 2, lastBackup: at, verifiedBackupAt: at });
     expect(() => authority.consume(meta(7), receipt)).toThrow();
   });
   test('rejects copied or foreign grants, even with identical timestamp and count', () => {
@@ -74,5 +74,32 @@ describe('BACKUP-02/B1b one-use archive-scoped receipt authority', () => {
     expect(restore.indexOf('backupReceiptAuthority.invalidate();')).toBeLessThan(restore.indexOf('await secureStorage.restoreSnapshotVerified'));
     expect(reset).toContain('await mutationCoordinator.enqueueTask(async () => {');
     expect(reset.indexOf('backupReceiptAuthority.invalidate();')).toBeLessThan(reset.indexOf('await onFactoryReset();'));
+  });
+});
+
+describe('BACKUP-02/B1c historical copy evidence', () => {
+  test('historical timestamps are not evidence, and invalid or mismatched markers fail closed', () => {
+    expect(verifiedBackupDate({ changes: 0, lastBackup: at })).toBeNull();
+    expect(verifiedBackupDate({ changes: 0, lastBackup: at, verifiedBackupAt: 'invalid' })).toBeNull();
+    expect(verifiedBackupDate({ changes: 0, lastBackup: 'invalid', verifiedBackupAt: 'invalid' })).toBeNull();
+    expect(verifiedBackupDate({ changes: 0, lastBackup: at, verifiedBackupAt: '2026-11-12T12:00:00.000Z' })).toBeNull();
+  });
+  test('only current authority sets local verification and later mutations preserve it', () => {
+    const authority = createBackupReceiptAuthority();
+    const verified = authority.consume(meta(5), authority.issue(grant()));
+    expect(verifiedBackupDate(verified)).toBe(at);
+    expect(verifiedBackupDate(incrementBackupChanges(verified))).toBe(at);
+    expect(incrementBackupChanges(verified).changes).toBe(3);
+    expect(withoutLocalBackupVerification(verified)).toEqual({ changes: 2, lastBackup: at });
+    const prepared = prepareBackupCheckpoint({ meta: verified } as CompleteSecureAppSnapshot, at);
+    expect(verifiedBackupDate(prepared.snapshot.meta)).toBeNull();
+  });
+  test('Home treats old timestamps and later mutations as not fully protected', async () => {
+    const app = await Bun.file('src/App.tsx').text();
+    const home = await Bun.file('src/components/HomeView.tsx').text();
+    expect(app).toContain('verifiedBackupDate={verifiedBackupDate(meta)}');
+    expect(home).toContain('!verifiedDate || unsavedChangesCount > 0');
+    expect(home).toContain('Verifica non attestata');
+    expect(home).not.toContain('modifiche da salvare');
   });
 });

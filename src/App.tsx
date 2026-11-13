@@ -166,6 +166,7 @@ import {
   createBackupReceiptAuthority,
   incrementBackupChanges,
   prepareBackupCheckpoint,
+  verifiedBackupDate,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
@@ -3431,6 +3432,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteClass={handleDeleteClass}
             onExportBackup={handleExportBackup}
             lastBackupDate={meta.lastBackup}
+            verifiedBackupDate={verifiedBackupDate(meta)}
             unsavedChangesCount={meta.changes || 0}
             onStartTodayAction={handleStartTodayAction}
             pendingTodayAction={todayAction}

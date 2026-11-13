@@ -40,6 +40,8 @@ export interface VaultBootstrapInput {
 export interface SecureMeta {
   changes: number;
   lastBackup: string | null;
+  /** Local-only attestation issued after verified copy and durable metadata commit. */
+  verifiedBackupAt?: string;
 }
 
 export interface SecureAppSnapshot {

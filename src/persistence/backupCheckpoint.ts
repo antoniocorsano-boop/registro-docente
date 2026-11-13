@@ -84,7 +84,19 @@ export function createBackupReceiptAuthority() {
           !Number.isFinite(Date.parse(checkpoint.checkpointAt))) {
         throw new Error('La ricevuta non corrisponde allo stato della copia.');
       }
-      return applyBackupReceipt(current, checkpoint);
+      return { ...applyBackupReceipt(current, checkpoint), verifiedBackupAt: checkpoint.checkpointAt };
     }
   };
+}
+
+// Historical timestamps alone do not attest verified bytes. A restored archive
+// must establish its own local evidence instead of inheriting another device's.
+export function verifiedBackupDate(meta: SecureMeta): string | null {
+  const at = meta.verifiedBackupAt;
+  return typeof at === 'string' && at === meta.lastBackup && Number.isFinite(Date.parse(at)) ? at : null;
+}
+
+export function withoutLocalBackupVerification(meta: SecureMeta): SecureMeta {
+  const { verifiedBackupAt: _localOnly, ...portable } = meta;
+  return portable;
 }

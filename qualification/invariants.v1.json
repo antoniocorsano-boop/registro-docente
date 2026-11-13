@@ -2025,7 +2025,7 @@
     {
       "id": "BACKUP-02-B1-I01",
       "owner": "BACKUP-02/B1",
-      "statement": "A browser download is not a verified backup receipt and must not reduce the outstanding change counter or claim successful verified storage. Android retains its checked native readback boundary and durable metadata commit. No automated transfers or device recovery qualification. Receipt grants are exact-operation, one-use, archive-session-scoped; stale, foreign, tampered, reset/restore-invalidated or replayed grants fail closed; failed metadata writes do not publish or permit replay.",
+      "statement": "A browser download is not a verified backup receipt and must not reduce the outstanding change counter or claim successful verified storage. Android retains its checked native readback boundary and durable metadata commit. No automated transfers or device recovery qualification. Receipt grants are exact-operation, one-use, archive-session-scoped; stale, foreign, tampered, reset/restore-invalidated or replayed grants fail closed; failed metadata writes do not publish or permit replay. Historical timestamps without local verification markers never assert verified storage; local markers are excluded from portable payloads and stripped on restore. Any outstanding changes prevent a current-copy indication.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/components/PrivacyView.tsx",
@@ -2035,14 +2035,19 @@
         "tests/browser/lib01-private-library-qualification.spec.cjs",
         "src/App.tsx",
         "src/persistence/backupCheckpoint.ts",
-        "src/security/backup02ReceiptAuthority.test.ts"
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/backupPayload.ts",
+        "src/components/HomeView.tsx",
+        "src/security/backupPayload.test.ts"
       ],
       "tests": [
         "src/security/backup02VerifiedCopyBoundary.test.ts",
         "src/security/persist01hUiContract.test.ts",
         "src/security/persist01hBackupRestoreContract.test.ts",
         "src/security/mobile01M2aNativeBackupContract.test.ts",
-        "src/security/backup02ReceiptAuthority.test.ts"
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/lib01-private-library-qualification.spec.cjs"

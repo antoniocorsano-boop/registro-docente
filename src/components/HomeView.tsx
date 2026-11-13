@@ -21,6 +21,7 @@ interface HomeViewProps {
   onDeleteClass: (classId: string) => Promise<void>;
   onExportBackup: () => void;
   lastBackupDate: string | null;
+  verifiedBackupDate?: string | null;
   unsavedChangesCount: number;
   onStartTodayAction: (action: TodayAction) => void;
   pendingTodayAction: TodayAction | null;
@@ -53,6 +54,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onDeleteClass,
   onExportBackup,
   lastBackupDate,
+  verifiedBackupDate,
   unsavedChangesCount,
   onStartTodayAction,
   pendingTodayAction,
@@ -120,7 +122,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const instituteSufficiency = allAverages.length > 0
     ? Math.round((allAverages.filter(value => value >= 6).length / allAverages.length) * 100)
     : null;
-  const isBackupStale = !lastBackupDate || unsavedChangesCount >= 10;
+  const historicalBackupDate = typeof lastBackupDate === 'string' && Number.isFinite(Date.parse(lastBackupDate)) ? lastBackupDate : null;
+  const verifiedDate = typeof verifiedBackupDate === 'string' && verifiedBackupDate === historicalBackupDate ? verifiedBackupDate : null;
+  const isBackupStale = !verifiedDate || unsavedChangesCount > 0;
 
   const modeClass = (mode: HomeViewMode) =>
     `min-h-[44px] px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
@@ -353,8 +357,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <AlertTriangle className={`w-4 h-4 shrink-0 ${isBackupStale ? 'text-amber-400' : 'text-emerald-400'}`} />
               <span>
                 Ultimo backup cifrato:{' '}
-                <b>{lastBackupDate ? new Date(lastBackupDate).toLocaleDateString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Mai effettuato'}</b>
-                {unsavedChangesCount > 0 && ` · (${unsavedChangesCount} modifiche da salvare)`}
+                <b>{historicalBackupDate ? new Date(historicalBackupDate).toLocaleDateString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Nessuna copia verificata'}</b>
+                {historicalBackupDate && (verifiedDate ? ' · Verificato' : ' · Verifica non attestata')}
+                {verifiedDate && unsavedChangesCount > 0 && ` · ${unsavedChangesCount} modifiche da includere nella copia`}
               </span>
             </div>
             <button
