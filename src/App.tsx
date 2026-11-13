@@ -196,6 +196,8 @@ import { DashboardView } from './components/DashboardView';
 import { RecordMissionBanner } from './components/RecordMissionBanner';
 import { ReviewMissionBanner } from './components/ReviewMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
+import { MatrixEvaluationEntry, type EvaluationDraftGuard } from './components/MatrixEvaluationEntry';
+import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellMutation';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -407,6 +409,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const registerBehaviorDraftGuard = useCallback((guard: BehaviorDraftGuard | null) => {
     behaviorDraftGuardRef.current = guard;
   }, []);
+  const evaluationDraftGuardRef=useRef<EvaluationDraftGuard|null>(null);
+  const evaluationSavePendingRef=useRef(false);
+  const [evaluationSavePending,setEvaluationSavePending]=useState(false);
+  const registerEvaluationDraftGuard=useCallback((guard:EvaluationDraftGuard|null)=>{evaluationDraftGuardRef.current=guard;},[]);
   const assessmentDraftGuardRef = useRef<AssessmentDraftGuard | null>(null);
   const registerAssessmentDraftGuard = useCallback((guard: AssessmentDraftGuard | null) => {
     assessmentDraftGuardRef.current = guard;
@@ -420,7 +426,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     || (activeTabRef.current === 'consigli'
       && Boolean(councilGuardRef.current?.hasUnsavedChanges()))
     || (activeTabRef.current === 'comportamenti'
-      && (behaviorSavePendingRef.current || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges()))), []);
+      && (behaviorSavePendingRef.current || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges())))
+    || (activeTabRef.current === 'voti' && (evaluationSavePendingRef.current || Boolean(evaluationDraftGuardRef.current?.hasUnsavedChanges()))), []);
   const planningExitBypassRef = useRef(false);
   const historyPositionRef = useRef<number | null>(null);
   // Positions have meaning only inside the same, continuous app-owned epoch.
@@ -566,7 +573,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const performPlanningExit = (discardUnsavedDraft = false) => {
     // A confirmation must never execute a stale UDA callback while history.go
     // is still traversing to the verified Programmazione origin.
-    if (historyRestorePendingRef.current !== null || behaviorSavePendingRef.current) return;
+    if (historyRestorePendingRef.current !== null || behaviorSavePendingRef.current || evaluationSavePendingRef.current) return;
     // A Back to an older history entry may show the *same* Programmazione
     // component, so unmounting is not sufficient to discard its dirty draft.
     if (discardUnsavedDraft) {
@@ -574,6 +581,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if (activeTabRef.current === 'verifiche-online') assessmentDraftGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'consigli') councilGuardRef.current?.discardChanges();
       if (activeTabRef.current === 'comportamenti') behaviorDraftGuardRef.current?.discardChanges();
+      if (activeTabRef.current === 'voti') evaluationDraftGuardRef.current?.discardChanges();
     }
     traceHpr(discardUnsavedDraft ? 'conferma-scarto' : 'conferma-salvataggio', planningExitDestination);
     planningExitRestoreFocusRef.current = false;
@@ -652,6 +660,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const navigationVersionRef = useRef(0);
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // Accepted application route, never a transient browser entry during guarded Back.
+  const [matrixEvaluationMode,setMatrixEvaluationMode]=useState(false);
+  const matrixEvaluationModeRef=useRef(false);
+  const acceptMatrixEvaluationMode=useCallback((value:boolean)=>{matrixEvaluationModeRef.current=value;setMatrixEvaluationMode(value);},[]);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
   // Batch IDs never enter the browser history; only per-unlocked-session opaque tokens do.
   const evaluationTargetMemoryRef = useRef<SpecialistTargetMemory>(new Map());
@@ -736,6 +748,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentClassIdRef.current = null;
       setAppData(previous => ({ ...previous, currentClassId: null }));
     }
+    if(tab!=='voti')acceptMatrixEvaluationMode(false);
     traceHpr('scheda-attivata', tab);
     if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
     if (tab !== 'verifiche-online') setPendingCopilotAssessment(null);
@@ -764,7 +777,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr]);
+  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr, acceptMatrixEvaluationMode]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -915,9 +928,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ) => {
     traceHpr('click-navigazione', tab);
+    // Selecting the active navigation item is not a request to replace the
+    // compact editor. Only an explicit specialist target may change its mode.
+    if (tab==='voti' && activeTabRef.current==='voti' && matrixEvaluationModeRef.current
+      && options.returnTab===undefined && options.evaluationBatchId===undefined && !options.preserveRecordSession) return;
+    const changesEvaluationMode=tab==='voti' && activeTabRef.current==='voti'
+      && matrixEvaluationModeRef.current!==(options.returnTab==='tabellone');
     // Browser-history writes must be delayed with the actual tab change.
     // Never let a dirty planning draft remain behind a new route.
-    if (!planningExitBypassRef.current && tab !== activeTabRef.current && hasUnsavedActiveDraft()) {
+    if (!planningExitBypassRef.current && (tab !== activeTabRef.current || changesEvaluationMode) && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => handleNavigateTab(tab, options), tab);
       return;
     }
@@ -947,6 +966,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       }
     }
     const hadReviewSession = reviewSessionRef.current !== null;
+    acceptMatrixEvaluationMode(tab==='voti'&&options.returnTab==='tabellone');
     setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
@@ -1003,7 +1023,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } catch {
       // History API failures never authorize a professional write.
     }
-  }, [editingBatchId, hasUnsavedActiveDraft, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
+  }, [editingBatchId, hasUnsavedActiveDraft, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery, acceptMatrixEvaluationMode]);
 
   /** INT-02/S3c-02: explicit teacher adoption opens only a transient editor draft. */
   const handleAcceptAssessmentDraft = useCallback(async (
@@ -1158,12 +1178,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     options: {
       showBackupModal?: boolean;
       successMessage?: string;
+      inlineFailure?: boolean;
       afterCommit?: () => void;
     } = {}
   ): Promise<AppData> => {
     const {
       showBackupModal,
       successMessage = 'Salvato nel vault locale',
+      inlineFailure = false,
       afterCommit
     } = options;
 
@@ -1202,8 +1224,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
-      console.error('Secure vault save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      if(!inlineFailure){console.error('Secure vault save failed', error);alert(DURABLE_SAVE_FAILURE_MESSAGE);}
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
@@ -2195,6 +2216,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           nextCurrentClassId, nextTab
         );
       }
+      acceptMatrixEvaluationMode(nextTab==='voti'&&e.state?.returnTab==='tabellone'&&e.state?.classId===nextCurrentClassId&&!restoredBatch);
       setEditingBatchId(nextTab === 'voti' ? restoredBatch : null);
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
@@ -2752,6 +2774,19 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }).then(() => undefined);
   };
 
+  // VAL-01/S4a: one explicit cell confirmation, no export or navigation.
+  const handleSaveMatrixCell = async (request:MatrixCellWrite):Promise<Grade> => {
+    const classId=currentClassIdRef.current;
+    if(!classId||!matrixEvaluationModeRef.current||activeTabRef.current!=='voti'||evaluationSavePendingRef.current)throw Error('Contesto valutazione non disponibile.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>applyMatrixCell(current,classId,request,udasRef.current,crypto.randomUUID()),{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const grade=result.classes.find(c=>c.id===classId)?.grades.find(g=>g.batchId===request.proof.batchId&&g.studentId===request.studentId);
+      if(!grade)throw Error('Ricevuta della valutazione non disponibile.');
+      return grade;
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+
   // Save behavior notes
   const handleSaveBehaviors = async (newRecords: BehaviorRecord[]): Promise<void> => {
     const classId = currentClass?.id;
@@ -2792,6 +2827,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Edit batch: create a navigable history entry associated with the authorized class.
   const handleEditBatch = (batchId: string) => {
+    if(matrixEvaluationModeRef.current && !planningExitBypassRef.current && hasUnsavedActiveDraft()){
+      requestPlanningDeparture(()=>handleEditBatch(batchId),'voti');return;
+    }
     if (pendingEvaluationCancelRef.current) {
       // Defer BOTH the selected batch and the history transition. Merely
       // queuing handleNavigateTab would let popstate reset editingBatchId.
@@ -2814,6 +2852,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Annulla Modifica: never write, and never leave an orphaned new-evaluation editor.
   const handleCancelEvaluationEdit = () => {
     const classId = currentClassIdRef.current;
+    if(matrixEvaluationModeRef.current){handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null});return;}
     const entry = window.history.state;
     forgetSpecialistTarget(
       evaluationTargetMemoryRef.current,
@@ -3395,7 +3434,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
         {/* TAB 3: Inserisci Valutazioni */}
         {activeTab === 'voti' && currentClass && (
-          <EvaluationsView
+          matrixEvaluationMode ? <MatrixEvaluationEntry key={currentClass.id} currentClass={currentClass} udas={udas} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} onSaveCell={handleSaveMatrixCell} onClose={handleCancelEvaluationEdit}/> : <EvaluationsView
+            key={currentClass.id+':ordinary'}
             currentClass={currentClass}
             editingBatchId={editingBatchId}
             udas={udas}
@@ -3436,6 +3476,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {/* TAB 6: Tabellone Classe */}
         {activeTab === 'tabellone' && currentClass && (
           <MatrixView
+            onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
             currentClass={currentClass}
             onOpenStudentReport={handleOpenStudentReport}
@@ -3751,6 +3792,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                     ? behaviorSavePending ? 'Salvataggio delle osservazioni in corso.' : behaviorDraftGuardRef.current?.hasUnsavedChanges()
                       ? 'Ci sono osservazioni non salvate. Puoi rimanere qui o uscire senza salvarle.'
                       : 'Le osservazioni sono state salvate. Puoi proseguire o rimanere qui.'
+                    : activeTab==='voti' ? evaluationSavePending?'Salvataggio delle valutazioni in corso.': 'Ci sono voti non confermati. I voti già registrati restano salvati.'
                     : 'Hai modificato la Programmazione. Scegli come procedere prima di cambiare schermata.'}
             </p>
             {planningExitFromBrowser && (
@@ -3801,13 +3843,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
                   {planningExitSaving ? 'Salvataggio…' : 'Salva e continua'}
                 </button>
               )}
-              <button type="button" onClick={() => performPlanningExit(activeTab !== 'comportamenti' || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges()))} disabled={planningExitSaving || historyRestoringOrigin || behaviorSavePending}
+              <button type="button" onClick={() => performPlanningExit(activeTab !== 'comportamenti' || Boolean(behaviorDraftGuardRef.current?.hasUnsavedChanges()))} disabled={planningExitSaving || historyRestoringOrigin || behaviorSavePending || evaluationSavePending}
                 className="min-h-[44px] rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-200 disabled:opacity-60">
                 {activeTab === 'verifiche-online' ? 'Esci senza salvare' : activeTab === 'comportamenti' && !behaviorDraftGuardRef.current?.hasUnsavedChanges() ? 'Continua' : 'Continua senza salvare'}
               </button>
               <button type="button" onClick={cancelPlanningExit} autoFocus data-int01-stay disabled={planningExitSaving || historyRestoringOrigin}
                 className="min-h-[44px] rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : activeTab === 'comportamenti' ? 'Rimani nelle osservazioni' : 'Rimani nella Programmazione'}
+                {activeTab === 'verifiche-online' ? 'Rimani nell’editor' : activeTab === 'consigli' ? 'Rimani nei Consigli' : activeTab === 'comportamenti' ? 'Rimani nelle osservazioni' : activeTab==='voti'?'Rimani nelle valutazioni':'Rimani nella Programmazione'}
               </button>
             </div>
           </div>

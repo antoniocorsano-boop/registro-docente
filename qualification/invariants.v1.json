@@ -1943,6 +1943,30 @@
         "tests/browser/nav-back-01-student-report.spec.cjs",
         "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S4A-I01",
+      "owner": "VAL-01/S4a",
+      "statement": "Tabellone entry confirms one cell at a time by explicit Enter; one canonical durable mutation, stable batch/grade identity, other rows preserved, no backup modal, inline failure, no silent blank deletion, dirty/pending navigation guard, accessible status only after persistence. No new schema. Synthetic qualification.",
+      "impactPaths": [
+        "src/components/EvaluationsView.tsx",
+        "src/components/MatrixView.tsx",
+        "src/App.tsx",
+        "tests/browser/fixtures/nav-back-01-app-fixture.tsx",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "qualification/invariants.v1.json",
+        "src/components/MatrixEvaluationEntry.tsx",
+        "src/persistence/matrixCellMutation.ts",
+        "src/security/matrixCellMutation.test.ts"
+      ],
+      "tests": [
+        "src/security/valuationSemanticIntegrity.test.ts",
+        "src/security/flow03IndependentReviewRepairs.test.ts",
+        "src/security/matrixCellMutation.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
     }
   ]
 }

@@ -338,3 +338,43 @@ body {
     min-width: 0;
   }
 }
+
+/* VAL-01/S4a: responsive compact editor, including 200% text. */
+.matrix-evaluation-workspace { container: matrix-editor / inline-size; }
+.matrix-evaluation-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; }
+.matrix-evaluation-heading > div { min-width:0; flex:1 1 8rem; overflow-wrap:anywhere; }
+.matrix-evaluation-cancel { min-height:48px; flex:0 0 auto; justify-content:center; max-width:100%; }
+.matrix-evaluation-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,8.5rem),1fr)); }
+.matrix-evaluation-fields > div { min-width:0; }
+.matrix-evaluation-fields label { overflow-wrap:anywhere; letter-spacing:normal; }
+.matrix-evaluation-fields select,.matrix-evaluation-fields input { min-width:0; max-width:100%; min-height:48px; }
+.matrix-evaluation-uda { grid-column:1/-1; }
+.matrix-evaluation-proof-summary { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; justify-content:space-between; }
+.matrix-evaluation-proof-summary > div { flex:1 1 8rem; }
+.matrix-evaluation-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; scroll-margin-block:5rem 7rem; }
+.matrix-evaluation-name { display:flex; align-items:baseline; min-width:0; gap:6px; overflow-wrap:anywhere; }
+.matrix-evaluation-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.matrix-evaluation-recovery { width:48px; min-width:48px; min-height:48px; justify-content:center; }
+.matrix-evaluation-vote { width:72px; min-width:0; max-width:100%; }
+@container matrix-editor (max-width: 15rem) {
+  .matrix-evaluation-heading { align-items:flex-start; }
+  .matrix-evaluation-row { grid-template-columns:minmax(0,1fr); gap:4px; }
+  .matrix-evaluation-name { align-items:baseline; }
+  .matrix-evaluation-actions { justify-content:flex-end; }
+  .matrix-evaluation-vote { width: min(100%, 104px); }
+}
+
+
+/* Cell confirmation replaces the collective save bar. */
+.matrix-cell-status { display:flex; width:18px; min-width:18px; align-items:center; justify-content:center; }
+.matrix-cell-error { grid-column:1/-1; }
+@media (max-width:767px){ [data-testid="header01-topbar"][data-evaluation-context="true"] { container: report-header / inline-size; } }
+@container matrix-editor (max-width:18rem){ .matrix-evaluation-row {grid-template-columns:minmax(0,1fr);gap:4px;} }
+
+/* Keep every bottom-navigation destination inside the viewport at enlarged text. */
+@media(max-width:767px){
+  nav[data-evaluation-navigation="true"] { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); }
+  nav[data-evaluation-navigation="true"] > button { min-width:0; padding-inline:2px; }
+  nav[data-evaluation-navigation="true"] > button > svg { width:18px; height:18px; flex-shrink:0; }
+  nav[data-evaluation-navigation="true"] > button > span { max-width:100%; overflow-wrap:anywhere; }
+}

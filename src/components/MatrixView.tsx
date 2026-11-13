@@ -21,6 +21,7 @@ type MatrixReturnContext = Extract<StudentReportReturnContext, { originTab: 'tab
 
 interface MatrixViewProps {
   currentClass: ClassData;
+  onInsertEvaluation?:()=>void;
   onOpenStudentReport: (studentId: string, originContext?: StudentReportReturnContext) => void;
   onRequestMobileDisclosureCollapse?: () => void;
   isPrivacyShieldActive?: boolean;
@@ -30,6 +31,7 @@ interface MatrixViewProps {
 
 export const MatrixView: React.FC<MatrixViewProps> = ({
   currentClass,
+  onInsertEvaluation,
   onOpenStudentReport,
   onRequestMobileDisclosureCollapse,
   isPrivacyShieldActive = true,
@@ -217,6 +219,7 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
         </div>
       </div>
 
+      {onInsertEvaluation && <button type="button" onClick={onInsertEvaluation} className="min-h-[48px] w-full sm:w-auto px-4 mb-3 rounded-lg neon-btn-primary font-semibold text-sm">Inserisci valutazione</button>}
       {/* View Mode Toggle Buttons & Proposed Grade Switch */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pb-2 mb-4">
         <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">

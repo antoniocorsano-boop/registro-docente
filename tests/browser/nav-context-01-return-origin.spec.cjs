@@ -300,3 +300,51 @@ for (const width of [320, 390]) {
     });
   }
 }
+
+
+async function openCellEditor(page,count=2){
+  await page.goto(url+'?matrixWrite=1&visualRoster='+count);
+  await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+  await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
+  const editor=page.getByTestId('matrix-evaluation-editor');
+  await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova sintetica nuova');
+  await editor.getByRole('button',{name:'Vai ai voti'}).click();return editor;
+}
+test('VAL-01/S4a — Enter saves only one cell, same proof, edit stable ID, no backup interruption',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const page=await context.newPage();
+  const editor=await openCellEditor(page,25);const first=editor.getByRole('textbox',{name:'Voto alunno 1',exact:true});const second=editor.getByRole('textbox',{name:'Voto alunno 2',exact:true});
+  await expect(editor).not.toContainText('Persona Fittizia Uno');await first.fill('8');await second.fill('xyz');await second.press('Enter');await expect(editor.getByRole('alert')).toContainText('Voto non valido');expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+  await first.press('Enter');await expect(editor.getByRole('status').filter({hasText:'1 / 25 registrati'})).toBeVisible();await expect(second).toBeFocused();
+  expect(await page.evaluate(()=>window.__matrixMeta.changes)).toBe(10);await expect(page.getByRole('dialog')).toHaveCount(0);
+  let grades=await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova'));expect(grades).toHaveLength(1);const original=grades[0];
+  await second.fill('7,5');await second.press('Enter');await expect(editor.getByText('2 / 25 registrati')).toBeVisible();
+  await first.fill('9');await first.press('Enter');await expect(editor.getByTestId('matrix-cell-status').first()).toHaveAttribute('aria-label','Registrato');
+  grades=await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova'));expect(grades).toHaveLength(2);expect(grades[0].id).toBe(original.id);expect(grades[0].value).toBe('9');expect(grades[1].batchId).toBe(original.batchId);expect(grades[1].value).toBe('7.5');
+  await first.press('Enter');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
+  await first.fill('');await first.press('Enter');await expect(editor.getByRole('alert')).toContainText('campo vuoto');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
+  await page.getByRole('button',{name:'Torna al Tabellone'}).click();await expect(page.getByRole('dialog')).toContainText('voti già registrati restano salvati');await page.getByRole('button',{name:'Continua senza salvare'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
+  expect(await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova').length)).toBe(2);await context.close();
+});
+test('VAL-01/S4a — failed and pending cell, guarded Back and same-tab, no duplicate',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:320,height:700},isMobile:true,hasTouch:true});const page=await context.newPage();const editor=await openCellEditor(page);const first=editor.getByRole('textbox',{name:'Voto alunno 1',exact:true});
+  await first.fill('8');await page.locator('nav').getByRole('button',{name:'Valutazioni',exact:true}).click();await expect(first).toHaveValue('8');
+  await page.goBack();await expect(page.getByRole('dialog')).toContainText('voti non confermati');await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(first).toHaveValue('8');
+  await page.evaluate(()=>window.__matrixFail=true);await first.press('Enter');await expect(editor.getByRole('alert')).toContainText('Voto non salvato');await expect(first).toHaveValue('8');await expect(editor.getByText('0 / 2 registrati')).toBeVisible();
+  await page.evaluate(()=>{window.__matrixFail=false;window.__matrixHold=true;});await first.press('Enter');await expect.poll(()=>page.evaluate(()=>Boolean(window.__finishMatrixWrite))).toBe(true);
+  await page.locator('nav').getByRole('button',{name:'Tabellone'}).click();await expect(page.getByRole('dialog')).toContainText('Salvataggio delle valutazioni in corso');await expect(page.getByRole('button',{name:'Continua senza salvare'})).toBeDisabled();
+  await page.evaluate(()=>window.__finishMatrixWrite());await expect(editor.getByText('1 / 2 registrati')).toBeAttached();await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(first).toHaveValue('8');await first.press('Enter');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(2);await context.close();
+});
+for(const width of [320,390]){
+ test(`VAL-01/S4a — cell editor visual ${width}px 25 students, normal and enlarged`,async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true});const page=await context.newPage();const evidence=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence','val01-visual');await fs.mkdir(evidence,{recursive:true});
+  try{const editor=await openCellEditor(page,25);const rows=editor.getByTestId('matrix-evaluation-row');await expect(rows).toHaveCount(25);
+    await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).press('Enter');await expect(editor.getByText('1 / 25 registrati')).toBeVisible();
+    await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`celle-${width}-elenco.png`),animations:'disabled'});
+    const geometry=await rows.evaluateAll(all=>all.map(r=>({h:r.getBoundingClientRect().height,input:r.querySelector('input').getBoundingClientRect().height})));expect(geometry.every(r=>r.h>=48&&r.input>=48)).toBe(true);
+    await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`celle-${width}-200.png`),animations:'disabled'});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);expect(await page.getByTestId('header01-context-title').evaluate(el=>el.clientWidth)).toBeGreaterThanOrEqual(width-64);
+    const nav=page.locator('nav[data-evaluation-navigation="true"]');const bounds=await nav.getByRole('button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {left:r.left,right:r.right,height:r.height,viewport:innerWidth};}));expect(bounds).toHaveLength(5);expect(bounds.every(b=>b.left>=0&&b.right<=b.viewport+1&&b.height>=44)).toBe(true);
+    await rows.last().scrollIntoViewIfNeeded();await expect(rows.last()).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
+  }finally{await context.close();}
+ });
+}
