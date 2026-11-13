@@ -62,6 +62,7 @@ export function buildFormativeRestitution(
   });
   return {
     version: 1 as const,
+    recipientLabel: 'Destinatario protetto · Alunno ' + String(cls.students.findIndex(s => s.id === studentId) + 1).padStart(2, '0'),
     subject: protectedText(settings?.subject?.trim() || 'Disciplina non impostata', names),
     schoolYear: protectedText(settings?.year?.trim() || 'Anno scolastico non impostato', names),
     classLabel: protectedText(cls.name, names),

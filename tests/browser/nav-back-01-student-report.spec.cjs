@@ -253,3 +253,87 @@ for (const width of [320,390,1280]) {
     await expect(restitution).not.toContainText('Evidenza sintetica del docente');
   });
 }
+
+test('MOBILE-DENSITY-04/S3 — actual protected PDF, all pages, native receipt and stale recipient', async({page})=>{
+  test.setTimeout(120000);
+  const {execFileSync}=require('node:child_process'),fs=require('node:fs');
+  await page.setViewportSize({width:390,height:844});
+  const external=[];
+  await page.route('**/*',async route=>{
+    const u=route.request().url();
+    if(u.startsWith('data:')||u.startsWith('blob:')||new URL(u).origin===new URL(url).origin)return route.continue();
+    external.push(u);return route.abort();
+  });
+  await page.addInitScript(()=>{
+    window.__pdf={choose:0,write:0,cancel:false,bad:false,hold:false,filename:'',last:''};
+    window.Capacitor={getPlatform:()=> 'android',Plugins:{RegistroPdfFiles:{
+      choosePdfDestination:async o=>{
+        window.__pdf.choose++;window.__pdf.filename=o.filename;
+        if(Object.keys(o).join(',')!=='filename')throw Error('Unexpected picker arguments');
+        if(window.__pdf.hold)return new Promise(resolve=>{window.__finishPicker=()=>resolve({status:'selected',token:'test'});});
+        return window.__pdf.cancel?{status:'cancelled'}:{status:'selected',token:'test'};
+      },
+      writePdf:async o=>{
+        window.__pdf.write++;window.__pdf.last=o.pdfBase64;
+        const bytes=Uint8Array.from(atob(o.pdfBase64),c=>c.charCodeAt(0));
+        const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
+        return {status:'verified',bytes:bytes.length,sha256:window.__pdf.bad?'wrong':sha256};
+      }
+    }}};
+  });
+  await page.goto(url+'?pdfRoster=1');
+  await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+  await openStudentFromOrigin(page,'Tabellone');
+  const root=page.getByTestId('student-report-workspace'),select=root.getByRole('combobox',{name:'Seleziona alunno'});
+  const open=async(student)=>{
+    await select.selectOption(student);
+    await root.getByRole('button',{name:'Restituzione',exact:true}).click();
+    const view=page.getByTestId('student-report-restitution');
+    await view.getByLabel('Punti di forza',{exact:true}).fill(student.endsWith('01')?'SINTESI-UNO · capacità di analisi':'SINTESI-DUE');
+    await view.getByRole('button',{name:'Controlla anteprima'}).click();
+    await expect(view.getByRole('button',{name:'Salva PDF'})).toHaveCount(0);
+    await view.getByRole('checkbox').check();
+    await view.getByRole('button',{name:'Valida anteprima'}).click();
+    return view;
+  };
+  let view=await open('fittizio-studente-01');
+  let save=view.getByRole('button',{name:'Salva PDF'});
+  const dialog=page.waitForEvent('dialog');const click=save.click();const warning=await dialog;
+  expect(warning.message()).toContain('non è cifrato');await warning.dismiss();await click;
+  expect(await page.evaluate(()=>window.__pdf.choose)).toBe(0);
+  page.on('dialog',d=>d.accept());
+  await page.evaluate(()=>window.__pdf.cancel=true);
+  await save.click();await expect(view.getByTestId('restitution-export-status')).toContainText('annullato',{timeout:30000});
+  expect(await page.evaluate(()=>window.__pdf.write)).toBe(0);
+  await page.evaluate(()=>{window.__pdf.cancel=false;window.__pdf.bad=true;});
+  await save.click();await expect(view.getByTestId('restitution-export-status')).toContainText('non salvato o non verificato',{timeout:30000});
+  await page.evaluate(()=>window.__pdf.bad=false);
+  await save.click();await expect(view.getByTestId('restitution-export-status')).toContainText('salvato e verificato',{timeout:30000});
+  const result=await page.evaluate(()=>window.__pdf);
+  expect(result.filename).toMatch(/^Bilancio_Formativo_\d{4}-\d{2}-\d{2}\.pdf$/);
+  const buffer=Buffer.from(result.last,'base64');
+  const text=execFileSync('pdftotext',['-layout','-','-'],{input:buffer,encoding:'utf8'});
+  const info=execFileSync('pdfinfo',['-'],{input:buffer,encoding:'utf8'});
+  for(let i=1;i<=45;i++)expect(text).toContain('RIGA-'+String(i).padStart(3,'0'));
+  expect(text).toContain('SINTESI-UNO');expect(text).toContain('Non classificato (NC)');expect(text).toContain('Alunno 01');
+  expect(text).not.toContain('MARCATORE-ALTRO-ALUNNO');expect(text).not.toContain('Persona Fittizia');expect(info).not.toContain('Persona Fittizia');
+  expect(info).toMatch(/Pages:\s+[3-9]\d*/);expect(info).toMatch(/Page size:\s+595/);
+  const out=process.env.REPORT_EVIDENCE_DIR||'../browser-evidence';fs.mkdirSync(out,{recursive:true});
+  fs.writeFileSync(out+'/bilancio-formativo-sintetico.pdf',buffer);
+  execFileSync('pdftoppm',['-png','-r','96',out+'/bilancio-formativo-sintetico.pdf',out+'/bilancio-formativo']);
+  await page.evaluate(()=>window.__pdf.hold=true);
+  await save.click();await expect.poll(()=>page.evaluate(()=>Boolean(window.__finishPicker))).toBe(true);
+  await select.selectOption('fittizio-studente-02');
+  await page.evaluate(()=>{window.__finishPicker();window.__pdf.hold=false;});
+  await expect(view).toHaveCount(0);
+  // Wait for the aborted operation to settle before checking the native write count.
+  await expect.poll(()=>page.evaluate(()=>window.__pdf.write)).toBe(2);
+  view=await open('fittizio-studente-02');
+  await view.getByRole('button',{name:'Salva PDF'}).click();
+  await expect(view.getByTestId('restitution-export-status')).toContainText('salvato e verificato',{timeout:30000});
+  const peer=await page.evaluate(()=>window.__pdf);
+  const peerText=execFileSync('pdftotext',['-layout','-','-'],{input:Buffer.from(peer.last,'base64'),encoding:'utf8'});
+  expect(peerText).toContain('Alunno 02');expect(peerText).toContain('SINTESI-DUE');expect(peerText).toContain('MARCATORE-ALTRO-ALUNNO');
+  expect(peerText).not.toContain('SINTESI-UNO');expect(peerText).not.toContain('RIGA-001');expect(peer.write).toBe(3);
+  expect(external).toEqual([]);
+});

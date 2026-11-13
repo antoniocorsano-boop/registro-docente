@@ -28,7 +28,7 @@ export async function saveWorkPdfOnAndroid(
   const bytes = new Uint8Array(buffer);
   if (bytes.length < 5 || bytes.length > ANDROID_PDF_MAX_BYTES
     || new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw new Error('Documento PDF non valido.');
-  if (!/^Prospetto_Lavoro_[0-9]{4}-[0-9]{2}-[0-9]{2}\.pdf$/.test(filename)) throw new Error('Nome PDF non valido.');
+  if (!/^(?:Prospetto_Lavoro|Bilancio_Formativo)_[0-9]{4}-[0-9]{2}-[0-9]{2}\.pdf$/.test(filename)) throw new Error('Nome PDF non valido.');
   const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer)), v => v.toString(16).padStart(2, '0')).join('');
   if (!isActive()) return 'cancelled';
   // The picker never receives PDF content; activity recreation cannot resume a write.

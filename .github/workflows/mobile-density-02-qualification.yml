@@ -6,6 +6,10 @@ on:
   pull_request:
     paths:
       - 'src/components/StudentReportView.tsx'
+      - 'src/components/FormativeRestitutionView.tsx'
+      - 'src/report/formative*.ts'
+      - 'src/security/androidPdfExport.ts'
+      - 'tests/browser/fixtures/nav-back-01-app*'
       - 'tests/browser/nav-back-01-student-report.spec.cjs'
       - 'src/components/AnalyticsView.tsx'
       - 'src/components/MatrixView.tsx'
@@ -69,6 +73,8 @@ jobs:
           done
           cat browser-evidence/vite.log
           exit 1
+      - name: Ensure PDF inspection tools
+        run: command -v pdftotext && command -v pdfinfo && command -v pdftoppm
       - name: Run real Chromium navigation regressions
         shell: bash
         run: |
