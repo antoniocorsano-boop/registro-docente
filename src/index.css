@@ -392,3 +392,11 @@ body {
 .daily-date-label input { min-width:0; margin-left:0; max-width:100%; }
 .daily-matrix-row>span { overflow-wrap:anywhere; }
 .daily-row-detail button { min-width:0; flex-wrap:wrap; overflow-wrap:anywhere; }
+
+.daily-student-name { display:flex; align-items:baseline; gap:6px; }
+.daily-student-name > span:last-child { overflow-wrap:anywhere; }
+.daily-proof-selector { align-items:end; }
+.daily-proof-select { flex:1 1 12rem; }
+.daily-proof-selector > button { max-width:100%; }
+@container daily-matrix (max-width:19rem){.daily-proof-selector{display:grid;grid-template-columns:minmax(0,1fr)}.daily-proof-select{width:100%}.daily-proof-selector>button{justify-self:start}}
+@container daily-matrix (max-width:12rem){.daily-matrix-row {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.daily-student-name{grid-column:1/-1}}

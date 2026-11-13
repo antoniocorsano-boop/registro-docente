@@ -63,7 +63,7 @@ export const Header01TopBar: React.FC<Header01TopBarProps> = ({
     <header
       data-testid="header01-topbar"
       data-report-context={context.title === 'Scheda alunno' ? 'true' : undefined}
-      data-evaluation-context={context.title === 'Valutazioni' ? 'true' : undefined}
+      data-evaluation-context={context.title === 'Valutazioni' || context.title === 'Tabellone' ? 'true' : undefined}
       className="sticky top-0 z-40 w-full min-w-0 border-b border-[var(--border)] bg-[var(--surface)]/95 text-slate-100 shadow-sm backdrop-blur-md"
     >
       <div className="flex w-full min-w-0 items-center gap-2 px-3 py-2 max-[360px]:gap-1 max-[360px]:px-2 sm:gap-3 sm:px-4 header01-row">
