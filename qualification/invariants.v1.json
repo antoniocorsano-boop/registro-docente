@@ -1873,7 +1873,8 @@
         "src/index.css",
         "tests/browser/nav-back-01-student-report.spec.cjs",
         ".github/workflows/mobile-density-02-qualification.yml",
-        "qualification/invariants.v1.json"
+        "qualification/invariants.v1.json",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs"
       ],
       "tests": [
         "src/security/p2DensityProgressiveDisclosureIntegrity.test.ts",
@@ -1883,7 +1884,8 @@
       ],
       "browserSmoke": [
         "tests/browser/nav-back-01-student-report.spec.cjs",
-        "tests/browser/nav-context-01-return-origin.spec.cjs"
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs"
       ]
     }
   ]

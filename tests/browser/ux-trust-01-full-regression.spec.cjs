@@ -143,7 +143,11 @@ for (const viewport of [
     await checkpoint(page, visited.items, 'Storico', page.getByRole('heading', { name: `Storico Prove Registrate: ${className}` }));
 
     await openDrawerDestination(page, 'Scheda alunno');
-    await checkpoint(page, visited.items, 'Scheda alunno', page.getByRole('heading', { name: 'Scheda Alunno & Profilo delle Competenze' }));
+    await checkpoint(page, visited.items, 'Scheda alunno', page.getByTestId('student-report-workspace'));
+    await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
+    await expect(page.getByTestId('student-report-essential')).toBeVisible();
+    await expect(page.getByTestId('student-report-dossier')).toBeHidden();
+    await expect(page.getByRole('combobox', { name: 'Seleziona alunno' })).toBeVisible();
 
     await openDrawerDestination(page, 'Gestione alunni');
     await checkpoint(page, visited.items, 'Gestione alunni (drawer)', page.getByRole('heading', { name: `Gestione Elenco Alunni: ${className}` }));
