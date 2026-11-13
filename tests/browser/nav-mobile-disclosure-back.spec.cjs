@@ -142,7 +142,7 @@ test('NAV-MOBILE-BACK / 390 — Rivedi mission survives an inline Back and an ex
     const review = page.getByRole('region', { name: /Rivedi la classe 3ª A.*Prova sintetica/ });
     await expect(review).toBeVisible();
     await review.getByRole('button', { name: /^Tabellone/ }).click();
-    await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
+    await expect(page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true})).toHaveAttribute('aria-pressed','true');
     const mission = page.getByRole('complementary', { name: /Sessione Rivedi per la classe 3ª A.*Prova sintetica/ });
     await expect(mission).toBeVisible();
 

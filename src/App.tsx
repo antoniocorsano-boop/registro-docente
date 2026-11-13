@@ -2577,7 +2577,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!session || !isReviewSurface(tab)) return;
     publishReviewSession(enterReviewSurface(session, tab));
     setTodayAction('review');
-    handleNavigateTab(tab);
+    handleNavigateTab(tab, tab==='tabellone'?{matrixMode:'historical'}:{});
   }, [handleNavigateTab, publishReviewSession]);
 
   const handleReturnToReview = useCallback(() => {
