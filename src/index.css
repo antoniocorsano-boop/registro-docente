@@ -256,11 +256,17 @@ body {
   .behavior-workspace.neon-card { container: behavior-controls / inline-size; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; backdrop-filter: none; }
   .behavior-row-toggle { scroll-margin-top: 7rem; scroll-margin-bottom: 10rem; }
   .behavior-row-status { max-width: 47%; overflow-wrap: anywhere; }
-  .behavior-save-bar { bottom: calc(3.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+  .behavior-save-bar { bottom: calc(3.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); background: #030712; }
+  .behavior-workspace button { scroll-margin-bottom: 10rem; }
+  .behavior-save-bar button:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
   @container behavior-controls (max-width: 18rem) {
     .behavior-row-toggle { flex-wrap: wrap; }
     .behavior-row-toggle [data-testid="behavior-name"] { flex: 1 1 70%; overflow-wrap: anywhere; }
     .behavior-row-status { max-width: 100%; text-align: left; }
     [data-testid="behavior-options"] { grid-template-columns: minmax(0, 1fr); }
+    /* At enlarged text the toolbar may occupy most of the viewport. Keep it
+       in document flow so all observation choices can be reached and read. */
+    .behavior-save-bar { position: static; }
+    .behavior-workspace button { scroll-margin-bottom: 5rem; }
   }
 }

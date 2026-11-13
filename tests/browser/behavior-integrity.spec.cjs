@@ -161,9 +161,33 @@ for(const width of [320,390]){
    await page.getByTestId('behavior-bulk-toggle').click();
    await page.evaluate(()=>document.documentElement.style.fontSize='200%');
    await rows.first().click();
-   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toBeVisible();
+   const enlargedChoice=page.getByRole('button',{name:'Ottimale 🌟',exact:true});
+   await expect(enlargedChoice).toBeVisible();
+   await expect(page.getByTestId('behavior-save-bar')).toHaveCSS('position','static');
+   await enlargedChoice.scrollIntoViewIfNeeded();
+   expect(await enlargedChoice.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);
    expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
    await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-200-expanded.png')});
+   await enlargedChoice.click();
+   await expect(rows.first()).toContainText('Da salvare');
+   await save(page).scrollIntoViewIfNeeded();
+   await expect(save(page)).toBeEnabled();
+   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-200-save.png')});
   }
  });
 }
+
+test('mobile privacy and disclosure state remain separate from the observation draft',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await open(page);
+ const row=page.getByTestId('behavior-row-toggle').first();
+ await expect(row).not.toContainText('Persona Fittizia');
+ await row.click();
+ await page.getByTestId('fixture-privacy').click();
+ await expect(row).toContainText('Persona Fittizia 1');
+ await page.getByTestId('fixture-privacy').click();
+ await expect(row).not.toContainText('Persona Fittizia');
+ await expect(page.getByRole('button',{name:/Persona Fittizia/})).toHaveCount(0);
+ await expect(page.getByTestId('fixture-calls')).toHaveText('0');
+ await expect(save(page)).toBeDisabled();
+});
