@@ -370,3 +370,11 @@ body {
 .matrix-cell-error { grid-column:1/-1; }
 @media (max-width:767px){ [data-testid="header01-topbar"][data-evaluation-context="true"] { container: report-header / inline-size; } }
 @container matrix-editor (max-width:18rem){ .matrix-evaluation-row {grid-template-columns:minmax(0,1fr);gap:4px;} }
+
+/* Keep every bottom-navigation destination inside the viewport at enlarged text. */
+@media(max-width:767px){
+  nav[data-evaluation-navigation="true"] { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); }
+  nav[data-evaluation-navigation="true"] > button { min-width:0; padding-inline:2px; }
+  nav[data-evaluation-navigation="true"] > button > svg { width:18px; height:18px; flex-shrink:0; }
+  nav[data-evaluation-navigation="true"] > button > span { max-width:100%; overflow-wrap:anywhere; }
+}

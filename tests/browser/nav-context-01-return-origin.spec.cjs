@@ -315,6 +315,7 @@ test('VAL-01/S4a — Enter saves only one cell, same proof, edit stable ID, no b
   const editor=await openCellEditor(page,25);const first=editor.getByRole('textbox',{name:'Voto alunno 1',exact:true});const second=editor.getByRole('textbox',{name:'Voto alunno 2',exact:true});
   await expect(editor).not.toContainText('Persona Fittizia Uno');await first.fill('8');await second.fill('xyz');await second.press('Enter');await expect(editor.getByRole('alert')).toContainText('Voto non valido');expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
   await first.press('Enter');await expect(editor.getByRole('status').filter({hasText:'1 / 25 registrati'})).toBeVisible();await expect(second).toBeFocused();
+  expect(await page.evaluate(()=>window.__matrixMeta.changes)).toBe(10);await expect(page.getByRole('dialog')).toHaveCount(0);
   let grades=await page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova'));expect(grades).toHaveLength(1);const original=grades[0];
   await second.fill('7,5');await second.press('Enter');await expect(editor.getByText('2 / 25 registrati')).toBeVisible();
   await first.fill('9');await first.press('Enter');await expect(editor.getByTestId('matrix-cell-status').first()).toHaveAttribute('aria-label','Registrato');
@@ -342,6 +343,7 @@ for(const width of [320,390]){
     const geometry=await rows.evaluateAll(all=>all.map(r=>({h:r.getBoundingClientRect().height,input:r.querySelector('input').getBoundingClientRect().height})));expect(geometry.every(r=>r.h>=48&&r.input>=48)).toBe(true);
     await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`celle-${width}-200.png`),animations:'disabled'});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);expect(await page.getByTestId('header01-context-title').evaluate(el=>el.clientWidth)).toBeGreaterThanOrEqual(width-64);
+    const nav=page.locator('nav[data-evaluation-navigation="true"]');const bounds=await nav.getByRole('button').evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect();return {left:r.left,right:r.right,height:r.height,viewport:innerWidth};}));expect(bounds).toHaveLength(5);expect(bounds.every(b=>b.left>=0&&b.right<=b.viewport+1&&b.height>=44)).toBe(true);
     await rows.last().scrollIntoViewIfNeeded();await expect(rows.last()).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
   }finally{await context.close();}
  });

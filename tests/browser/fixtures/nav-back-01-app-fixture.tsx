@@ -54,12 +54,12 @@ const initialSnapshot = {
   udas: [],
   customTests: {},
   submissions: [],
-  meta: { changes: 0, lastBackup: null }
+  meta: { changes: new URLSearchParams(window.location.search).get('matrixWrite')==='1'?9:0, lastBackup: null }
 } as unknown as SecureAppSnapshot;
 
 // Safe for read-only UI journeys; no password, accounts, external services or writes.
 const inertStorage = (new URLSearchParams(window.location.search).get('matrixWrite')==='1'?{
-  saveAppDataAndMeta:async(data:unknown)=>{(window as any).__matrixWrites=((window as any).__matrixWrites||0)+1;if((window as any).__matrixFail)throw Error('Synthetic write failure');if((window as any).__matrixHold)await new Promise<void>(resolve=>{(window as any).__finishMatrixWrite=resolve;});(window as any).__matrixSaved=structuredClone(data);}
+  saveAppDataAndMeta:async(data:unknown,meta:unknown)=>{(window as any).__matrixWrites=((window as any).__matrixWrites||0)+1;if((window as any).__matrixFail)throw Error('Synthetic write failure');if((window as any).__matrixHold)await new Promise<void>(resolve=>{(window as any).__finishMatrixWrite=resolve;});(window as any).__matrixSaved=structuredClone(data);(window as any).__matrixMeta=structuredClone(meta);}
 }:{}) as unknown as SecureAppStorage;
 
 window.history.replaceState({ tab: 'home', classId: null }, '', window.location.pathname);
