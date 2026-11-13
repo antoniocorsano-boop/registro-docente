@@ -174,7 +174,7 @@ describe('PERSIST-01H pending intent boundaries', () => {
 describe('PERSIST-01H truthful backup and restore integration', () => {
   test('backup preparation is serialized and snapshots committed refs only when the task begins', () => {
     expect(appSource).toContain("from './persistence/backupCheckpoint'");
-    expect(appSource).toContain('applyBackupReceipt');
+    expect(appSource).toContain('createBackupReceiptAuthority');
     expect(appSource).toContain('incrementBackupChanges');
     expect(appSource).toContain('prepareBackupCheckpoint');
     expect(appSource).toContain('type PreparedBackupCheckpoint');
@@ -189,7 +189,7 @@ describe('PERSIST-01H truthful backup and restore integration', () => {
     expect(backup).toContain('meta: metaRef.current');
     expect(backup).toContain('prepareBackupCheckpoint');
     expect(backup).toContain('const recordEncryptedBackupExport');
-    expect(backup).toContain('applyBackupReceipt(current, checkpoint)');
+    expect(backup).toContain('backupReceiptAuthority.consume(current, checkpoint)');
   });
 
   test('PrivacyView exports only the prepared checkpoint and awaits its receipt before success cleanup', () => {

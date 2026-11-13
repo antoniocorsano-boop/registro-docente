@@ -53,3 +53,38 @@ export function applyBackupReceipt(
     lastBackup: checkpoint.checkpointAt
   };
 }
+
+/** In-memory, archive-session-scoped authority. Never serialize grants into backups.
+ * A newer preparation supersedes an older one, even if wall-clock times coincide.
+ * Consume before persistence: an uncertain write requires a fresh export, not replay.
+ */
+export function createBackupReceiptAuthority() {
+  type Receipt = Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>;
+  let pending: { identity: Receipt; value: Receipt } | null = null;
+  return {
+    issue(checkpoint: PreparedBackupCheckpoint): PreparedBackupCheckpoint {
+      pending = {
+        identity: checkpoint,
+        value: { includedChanges: checkpoint.includedChanges, checkpointAt: checkpoint.checkpointAt }
+      };
+      return checkpoint;
+    },
+    invalidate(): void {
+      pending = null;
+    },
+    consume(current: SecureMeta, receipt: Receipt): SecureMeta {
+      if (!pending || pending.identity !== receipt) {
+        throw new Error('Ricevuta della copia non valida o non più attuale.');
+      }
+      const checkpoint = pending.value;
+      pending = null;
+      if (receipt.includedChanges !== checkpoint.includedChanges || receipt.checkpointAt !== checkpoint.checkpointAt ||
+          !Number.isSafeInteger(checkpoint.includedChanges) || checkpoint.includedChanges < 0 ||
+          !Number.isSafeInteger(current.changes) || current.changes < checkpoint.includedChanges ||
+          !Number.isFinite(Date.parse(checkpoint.checkpointAt))) {
+        throw new Error('La ricevuta non corrisponde allo stato della copia.');
+      }
+      return applyBackupReceipt(current, checkpoint);
+    }
+  };
+}

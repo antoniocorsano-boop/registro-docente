@@ -163,7 +163,7 @@ import {
   type TeachingProposalOutcomeMutationInput
 } from './persistence/teachingProposalOutcomeMutation';
 import {
-  applyBackupReceipt,
+  createBackupReceiptAuthority,
   incrementBackupChanges,
   prepareBackupCheckpoint,
   type PreparedBackupCheckpoint
@@ -730,6 +730,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const appDataRef = useRef(appData);
   const currentClassIdRef = useRef(appData.currentClassId);
   const metaRef = useRef(meta);
+  const backupReceiptAuthorityRef = useRef<ReturnType<typeof createBackupReceiptAuthority> | null>(null);
+  const backupReceiptAuthority = backupReceiptAuthorityRef.current ?? (
+    backupReceiptAuthorityRef.current = createBackupReceiptAuthority()
+  );
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
@@ -3190,7 +3194,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> => {
     return mutationCoordinator.enqueueTask(() =>
-      prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString())
+      backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
     );
   };
 
@@ -3199,7 +3203,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ): Promise<void> => {
     return mutationCoordinator.enqueue<SecureMeta>({
       getCommitted: () => metaRef.current,
-      derive: current => applyBackupReceipt(current, checkpoint),
+      derive: current => backupReceiptAuthority.consume(current, checkpoint),
       persist: candidate => secureStorage.saveMeta(candidate),
       publish: candidate => {
         metaRef.current = candidate;
@@ -3273,6 +3277,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
       }
+      backupReceiptAuthority.invalidate();
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
@@ -3306,7 +3311,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
+    backupReceiptAuthority.invalidate();
     try {
+      await mutationCoordinator.enqueueTask(async () => {
+      backupReceiptAuthority.invalidate();
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
@@ -3332,6 +3340,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
+      });
     } catch (error) {
       console.error('Secure factory reset failed', error);
       alert('Reset sicuro non riuscito. I dati cifrati non sono stati dichiarati cancellati.');

@@ -24,11 +24,11 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
   });
 
   test('backup receipt is serialized and subtracts only the checkpoint changes from current meta', () => {
-    expect(appSource).toContain('applyBackupReceipt');
+    expect(appSource).toContain('createBackupReceiptAuthority');
     const receipt = sectionBetween(appSource, 'const recordEncryptedBackupExport', '// Import Encrypted Backup');
     expect(receipt).toContain('mutationCoordinator.enqueue<SecureMeta>');
     expect(receipt).toContain('getCommitted: () => metaRef.current');
-    expect(receipt).toContain('derive: current => applyBackupReceipt(current, checkpoint)');
+    expect(receipt).toContain('derive: current => backupReceiptAuthority.consume(current, checkpoint)');
     expect(receipt).toContain('persist: candidate => secureStorage.saveMeta(candidate)');
     expect(receipt).toContain('metaRef.current = candidate');
     expect(receipt).toContain('setMeta(candidate)');
