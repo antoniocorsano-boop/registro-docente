@@ -1896,7 +1896,7 @@
     {
       "id": "MOBILE-DENSITY-04-I02",
       "owner": "MOBILE-DENSITY-04",
-      "statement": "The family restitution is a separate protected single-student read model, complete for the selected period with authoritative grade arithmetic and explicit non-numeric or zero-weight exclusions. Only teacher-entered narrative is included; no private behavior notes, peer comparisons or automatic judgement. Privacy, recipient and period changes discard transient drafts and validation. Explicit preview and confirmation; no persistence, network or export without separate S3 validation and explicit local-save confirmation. Synthetic qualification only.",
+      "statement": "The family restitution is a separate protected single-student read model, complete for the selected period with authoritative grade arithmetic and explicit non-numeric or zero-weight exclusions. Only teacher-entered narrative is included; no private behavior notes, peer comparisons or automatic judgement. Privacy, recipient and period changes discard transient drafts and validation. Explicit preview and confirmation; no persistence, network or export. Synthetic qualification only.",
       "impactPaths": [
         "src/components/StudentReportView.tsx",
         "src/components/FormativeRestitutionView.tsx",
