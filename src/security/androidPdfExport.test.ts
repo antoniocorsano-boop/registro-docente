@@ -44,3 +44,9 @@ describe('MOBILE-01/M2c Android PDF receipt', () => {
     await expect(saveWorkPdfOnAndroid(new TextEncoder().encode('not PDF').buffer, filename, () => true, r)).rejects.toThrow();
   });
 });
+
+test('formative PDF uses only the explicit neutral filename and the same verified local receipt', async()=>{
+  const r=runtime(async o=>{expect(o.filename).toBe('Bilancio_Formativo_2026-11-13.pdf');return {status:'selected',token:'pdf-token'};},async()=>verified());
+  expect(await saveWorkPdfOnAndroid(buffer,'Bilancio_Formativo_2026-11-13.pdf',()=>true,r)).toBe('verified');
+  await expect(saveWorkPdfOnAndroid(buffer,'Bilancio_Formativo_Persona_Fittizia.pdf',()=>true,r)).rejects.toThrow();
+});

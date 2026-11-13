@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
+import { renderFormativePdf } from '../report/formativePdfRendering';
+import { saveWorkPdfOnAndroid } from '../security/androidPdfExport';
+import { isAndroidBackupRuntime } from '../security/androidBackupExport';
 import type { AppSettings, ClassData, UdaRecord } from '../types';
 import { formatGrade } from '../utils';
 import {
   buildFormativeRestitution, checkedRestitutionDraft, emptyRestitutionDraft,
-  RESTITUTION_FIELDS, type FormativeRestitution, type RestitutionDraft, type RestitutionPeriod
+  RESTITUTION_FIELDS, FAMILY_RESTITUTION_HEADINGS, activityCountLabel, gradeCountLabel, type FormativeRestitution, type RestitutionDraft, type RestitutionPeriod
 } from '../report/formativeRestitution';
 
 interface Props {
@@ -34,9 +37,10 @@ function Evidence({ model }: {model: FormativeRestitution}) {
         </div>
       </div>
       <p className="text-sm text-slate-300">
-        {model.summary.numericCount} valutazioni numeriche; {model.summary.count-model.summary.numericCount} registrazioni senza voto numerico.
-        {' '}{model.summary.includedCount} voti concorrono alla media.
-        {' '}La media è un indicatore di andamento, non un voto di scrutinio.
+        {activityCountLabel(model.summary.count)}: {model.summary.numericCount} con voto numerico e {model.summary.count-model.summary.numericCount} senza voto numerico.
+        {' '}{gradeCountLabel(model.summary.includedCount)} {model.summary.includedCount===1?'utilizzato':'utilizzati'} per calcolare la media.
+        {' '}{model.weighted ? 'La media ponderata tiene conto del peso assegnato ai diversi tipi di prova.' : 'La media aritmetica è la media dei voti numerici: ogni voto incluso ha lo stesso peso.'}
+        {' '}La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.
       </p>
       {model.summary.mean === null && <p className="text-sm text-slate-300">Media non disponibile: non equivale a un giudizio negativo.</p>}
       {model.byType.length > 0 && (
@@ -46,7 +50,7 @@ function Evidence({ model }: {model: FormativeRestitution}) {
             <div key={item.type} className="flex flex-wrap justify-between gap-2 py-2 text-sm">
               <div className="min-w-0 break-words">
                 <p>{item.label}</p>
-                <p className="text-xs text-slate-400">{item.count} registrazioni · {item.includedCount} nella media{item.weight !== null ? ' · Peso ' + item.weight + '%' : ''}</p>
+                <p className="text-xs text-slate-400">{activityCountLabel(item.count)} · {item.includedCount} nella media{item.weight !== null ? ' · Peso ' + item.weight + '%' : ''}</p>
               </div>
               <b>{formatGrade(item.mean)}</b>
             </div>
@@ -72,7 +76,7 @@ function Evidence({ model }: {model: FormativeRestitution}) {
           ))}
         </div>
       }
-      <p className="text-xs text-slate-400">L’elenco comprende tutte le registrazioni disponibili per il destinatario e il periodo. Attività non registrate non sono desunte dall’assenza di un voto.</p>
+      <p className="text-xs text-slate-400">L’elenco comprende tutte le attività registrate per questo alunno nel periodo scelto. Un’attività senza voto numerico non è automaticamente un’insufficienza. Le voci fuori media non entrano nel calcolo.</p>
     </section>
   );
 }
@@ -83,6 +87,32 @@ function DraftEditor({ model, names }: {model: FormativeRestitution; names: read
   const [confirmed,setConfirmed] = useState(false);
   const [validated,setValidated] = useState(false);
   const [error,setError] = useState('');
+  const [exporting,setExporting] = useState(false);
+  const [exportMessage,setExportMessage] = useState('');
+  const mounted=React.useRef(false);
+  const pending=React.useRef(false);
+  React.useLayoutEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const savePdf=async()=>{
+    if(!preview||!validated||pending.current||!mounted.current)return;
+    if(!window.confirm('Verifica il destinatario e la cartella. Il PDF contiene informazioni riservate e non è cifrato. Salvalo localmente; nessun invio automatico. Continuare?'))return;
+    pending.current=true;setExporting(true);setExportMessage('');
+    const isActive=()=>mounted.current;
+    try{
+      const bytes=await renderFormativePdf(model,preview);
+      if(!isActive())return;
+      const filename='Bilancio_Formativo_'+new Date().toISOString().slice(0,10)+'.pdf';
+      if(isAndroidBackupRuntime()){
+        const receipt=await saveWorkPdfOnAndroid(bytes,filename,isActive);
+        if(isActive())setExportMessage(receipt==='verified'?'PDF salvato e verificato nella cartella scelta.':'Salvataggio annullato.');
+      }else{
+        const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+        try{const link=document.createElement('a');link.href=url;link.download=filename;link.click();}
+        finally{setTimeout(()=>URL.revokeObjectURL(url),30000);}
+        if(isActive())setExportMessage('Scaricamento avviato. Verifica il file nella cartella del dispositivo.');
+      }
+    }catch{if(isActive())setExportMessage('PDF non salvato o non verificato. Controlla la cartella e riprova.');}
+    finally{pending.current=false;if(isActive())setExporting(false);}
+  };
   const preparePreview = () => {
     const checked = checkedRestitutionDraft(draft,names);
     if (!checked) { setError('Rimuovi i nominativi e controlla la lunghezza dei testi.'); return; }
@@ -91,7 +121,7 @@ function DraftEditor({ model, names }: {model: FormativeRestitution; names: read
     setValidated(false);
     setPreview(checked);
   };
-  const edit = () => { setPreview(null); setConfirmed(false); setValidated(false); };
+  const edit = () => { if(pending.current)return; setPreview(null); setConfirmed(false); setValidated(false); setExportMessage(''); };
   return (
     <div className="min-w-0 space-y-4" data-testid="restitution-draft">
       {!preview ? (
@@ -116,18 +146,24 @@ function DraftEditor({ model, names }: {model: FormativeRestitution; names: read
         <>
           <div className="space-y-2">
             <p className="text-sm font-semibold">{validated ? 'Anteprima validata' : 'Anteprima da verificare'}</p>
-            <p className="text-xs text-slate-400">È la restituzione da comunicare, non il dossier interno. Nessun documento è stato ancora salvato o inviato.</p>
+            <p className="text-xs text-slate-400">È la restituzione da comunicare, non il dossier interno. Nessun invio automatico alla famiglia.</p>
           </div>
           <article data-testid="restitution-preview" className="min-w-0 space-y-4 border-y border-[var(--border)] py-4">
             <header className="space-y-1 break-words">
               <h3 className="text-lg font-semibold">Bilancio formativo individuale</h3>
               <p className="text-sm">{model.subject} · {model.schoolYear}</p>
               <p className="text-sm">{model.classLabel} · {periodLabel(model.period)}</p>
-              <p className="text-sm text-slate-400">Destinatario protetto</p>
+              <p className="text-sm text-slate-400">{model.recipientLabel}</p>
             </header>
-            {RESTITUTION_FIELDS.map(([field,label]) => preview[field] ? (
+            <div className="grid grid-cols-2 gap-3 border-y border-[var(--border)] py-3" aria-label="Il periodo in sintesi">
+              <div><p className="text-sm text-slate-400">Media del periodo</p><p className="text-xl font-semibold">{formatGrade(model.summary.mean)}</p></div>
+              <div><p className="text-sm text-slate-400">Attività registrate</p><p className="text-xl font-semibold">{model.summary.count}</p></div>
+              <div><p className="text-sm text-slate-400">Voti nella media</p><p className="text-xl font-semibold">{model.summary.includedCount}</p></div>
+              <p className="col-span-2 text-xs text-slate-400">La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.</p>
+            </div>
+            {RESTITUTION_FIELDS.map(([field]) => preview[field] ? (
               <section key={field} className="space-y-1">
-                <h4 className="text-sm font-semibold">{label}</h4>
+                <h4 className="text-sm font-semibold text-cyan-200">{FAMILY_RESTITUTION_HEADINGS[field]}</h4>
                 <p className="text-sm whitespace-pre-wrap break-words">{preview[field]}</p>
               </section>
             ) : null)}
@@ -141,9 +177,12 @@ function DraftEditor({ model, names }: {model: FormativeRestitution; names: read
           )}
           {validated && <p role="status" className="text-sm text-emerald-300">Validazione locale completata. L’anteprima resta disponibile in questa sessione; non è un documento ufficiale o un invio alla famiglia.</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass+' flex-1'} onClick={edit}>Modifica</button>
+            <button type="button" className={buttonClass+' flex-1 disabled:opacity-50'} disabled={exporting} onClick={edit}>Modifica</button>
             {!validated && <button type="button" className={primaryClass+' flex-1'} disabled={!confirmed} onClick={()=>setValidated(true)}>Valida anteprima</button>}
+            {validated && <button type="button" className={primaryClass+' flex-1'} disabled={exporting} onClick={savePdf}>{exporting?'Salvataggio in corso…':'Salva PDF'}</button>}
           </div>
+          {exportMessage && <p data-testid="restitution-export-status" aria-live="polite" className="text-sm text-slate-200">{exportMessage}</p>}
+
         </>
       )}
     </div>

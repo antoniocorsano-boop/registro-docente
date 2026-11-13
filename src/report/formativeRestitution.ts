@@ -12,6 +12,15 @@ export const RESTITUTION_FIELDS = [
   ['reflection', 'Domanda di autovalutazione per l’alunno']
 ] as const;
 export type RestitutionField = typeof RESTITUTION_FIELDS[number][0];
+// Family-facing headings only; teacher input labels and field identities stay unchanged.
+export const FAMILY_RESTITUTION_HEADINGS: Record<RestitutionField,string> = {
+  learning: 'Che cosa ha appreso', participation: 'Come lavora e partecipa',
+  strength: 'Che cosa sa fare bene', goal1: 'Su cosa lavorare adesso',
+  goal2: 'Un secondo obiettivo', support: 'Come possiamo aiutarlo',
+  reflection: 'Una domanda per riflettere'
+};
+export const activityCountLabel = (n:number) => n===1?'1 attività registrata':n+' attività registrate';
+export const gradeCountLabel = (n:number) => n===1?'1 voto':n+' voti';
 export type RestitutionDraft = Record<RestitutionField, string>;
 export const emptyRestitutionDraft = (): RestitutionDraft => ({
   learning: '', participation: '', strength: '', goal1: '', goal2: '', support: '', reflection: ''
@@ -62,6 +71,7 @@ export function buildFormativeRestitution(
   });
   return {
     version: 1 as const,
+    recipientLabel: 'Destinatario protetto · Alunno ' + String(cls.students.map(s => s.id).sort().indexOf(studentId) + 1).padStart(2, '0'),
     subject: protectedText(settings?.subject?.trim() || 'Disciplina non impostata', names),
     schoolYear: protectedText(settings?.year?.trim() || 'Anno scolastico non impostato', names),
     classLabel: protectedText(cls.name, names),

@@ -52,3 +52,10 @@ describe('MOBILE-DENSITY-04/S2 protected restitution', () => {
     expect(checkedRestitutionDraft({...emptyRestitutionDraft(),goal1:'x'.repeat(1201)},[])).toBeNull();
   });
 });
+
+test('protected recipient ordinal is distinct and independent of roster display ordering',()=>{
+  const reversed={...cls,students:[...cls.students].reverse()};
+  expect(buildFormativeRestitution(cls,'a','all',DEFAULT_SETTINGS,udas)?.recipientLabel).toBe('Destinatario protetto · Alunno 01');
+  expect(buildFormativeRestitution(reversed,'a','all',DEFAULT_SETTINGS,udas)?.recipientLabel).toBe('Destinatario protetto · Alunno 01');
+  expect(buildFormativeRestitution(reversed,'b','all',DEFAULT_SETTINGS,udas)?.recipientLabel).toBe('Destinatario protetto · Alunno 02');
+});

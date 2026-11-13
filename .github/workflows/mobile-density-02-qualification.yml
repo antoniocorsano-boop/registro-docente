@@ -6,6 +6,10 @@ on:
   pull_request:
     paths:
       - 'src/components/StudentReportView.tsx'
+      - 'src/components/FormativeRestitutionView.tsx'
+      - 'src/report/formative*.ts'
+      - 'src/security/androidPdfExport.ts'
+      - 'tests/browser/fixtures/nav-back-01-app*'
       - 'tests/browser/nav-back-01-student-report.spec.cjs'
       - 'src/components/AnalyticsView.tsx'
       - 'src/components/MatrixView.tsx'
@@ -69,6 +73,14 @@ jobs:
           done
           cat browser-evidence/vite.log
           exit 1
+      - name: Ensure PDF inspection tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null || ! command -v pdftoppm >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+          command -v pdftotext && command -v pdfinfo && command -v pdftoppm
       - name: Run real Chromium navigation regressions
         shell: bash
         run: |

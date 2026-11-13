@@ -34,7 +34,7 @@ public class RegistroPdfFilesPlugin extends Plugin {
     @PluginMethod
     public synchronized void choosePdfDestination(PluginCall call) {
         String filename = call.getString("filename");
-        if (filename == null || !filename.matches("Prospetto_Lavoro_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.pdf")) {
+        if (filename == null || !filename.matches("(?:Prospetto_Lavoro|Bilancio_Formativo)_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.pdf")) {
             call.reject("Nome PDF non valido.", "INVALID_FILENAME");
             return;
         }
