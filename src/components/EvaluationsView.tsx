@@ -4,7 +4,15 @@ import { normalizeGrade, today, TYPES_LABEL, uid, formatStudentNameWithPrivacy }
 import { Save, X, Calendar, BookOpen, Layers, Check, Clock } from 'lucide-react';
 import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
 
+export interface EvaluationDraftGuard {
+  hasUnsavedChanges:()=>boolean;
+  discardChanges:()=>void;
+  markCommitted:()=>void;
+}
+
 interface EvaluationsViewProps {
+  compact?: boolean;
+  onRegisterDraftGuard?: (guard: EvaluationDraftGuard | null)=>void;
   currentClass: ClassData;
   editingBatchId: string | null;
   udas?: UdaRecord[];
@@ -31,6 +39,8 @@ const isIsoDate = (value?: string): value is string => {
 
 export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   currentClass,
+  compact = false,
+  onRegisterDraftGuard,
   editingBatchId,
   udas = [],
   initialUdaId,
@@ -48,6 +58,15 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const [gradesMap, setGradesMap] = useState<Record<string, { value: string; delayed: boolean }>>({});
   const [isSaving, setIsSaving] = useState(false);
   const evaluationInitializationSignatureRef = useRef<string | null>(null);
+  const dirtyRef=useRef(false);
+  const submittingRef=useRef(false);
+  const [validationMessage,setValidationMessage]=useState('');
+  React.useLayoutEffect(()=>{
+    if(!compact||!onRegisterDraftGuard)return;
+    const guard:EvaluationDraftGuard={hasUnsavedChanges:()=>dirtyRef.current,markCommitted:()=>{dirtyRef.current=false;},discardChanges:()=>{dirtyRef.current=false;setGradesMap({});setTitle('');setUdaId('');setValidationMessage('');}};
+    onRegisterDraftGuard(guard);
+    return ()=>onRegisterDraftGuard(null);
+  },[compact,onRegisterDraftGuard,currentClass.id]);
 
   useEffect(() => {
     const safeInitialUdaId = udas.some(u => u.id === initialUdaId && u.className === currentClass.name) ? initialUdaId || '' : '';
@@ -87,6 +106,8 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   }, [editingBatchId, currentClass, udas, initialUdaId, initialDate]);
 
   const handleInputChange = (studentId: string, rawVal: string) => {
+    if(compact)dirtyRef.current=true;
+    setValidationMessage('');
     const isDelayed = rawVal.toUpperCase().includes('R') || rawVal.toUpperCase().includes('RIT');
     setGradesMap(prev => ({
       ...prev,
@@ -98,6 +119,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   };
 
   const toggleDelayed = (studentId: string) => {
+    if(compact)dirtyRef.current=true;
     setGradesMap(prev => ({
       ...prev,
       [studentId]: {
@@ -117,7 +139,12 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || submittingRef.current) return;
+    if(compact){
+      if(!isIsoDate(date)||!title.trim()){setValidationMessage('Indica data e argomento della prova.');return;}
+      if(udaId && (udas.filter(u=>u.id===udaId).length!==1||!udas.some(u=>u.id===udaId&&u.className===currentClass.name))){setValidationMessage('L’unità di apprendimento non è più disponibile.');return;}
+      if(currentClass.students.some(s=>gradesMap[s.id]?.value.trim()&&!normalizeGrade(gradesMap[s.id].value))){setValidationMessage('Controlla i voti non validi: nessuna valutazione è stata salvata.');return;}
+    }
 
     const staged: { studentId: string; value: string; delayed: boolean }[] = [];
     currentClass.students.forEach(s => {
@@ -140,6 +167,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     }
 
     const batchId = editingBatchId || uid();
+    submittingRef.current=true;
     setIsSaving(true);
     try {
       await onSaveEvaluations({
@@ -154,48 +182,50 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     } catch {
       return;
     } finally {
+      submittingRef.current=false;
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="neon-card neon-card-highlight p-5">
+    <div data-testid={compact?"matrix-evaluation-editor":undefined} className={compact?"min-w-0 space-y-3":"neon-card neon-card-highlight p-5"}>
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
         <div>
           <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
-            {editingBatchId ? 'Modifica Valutazione Esistente' : 'Nuova Valutazione di Classe'}
+            {compact ? 'Tabellone · Inserisci valutazione' : editingBatchId ? 'Modifica Valutazione Esistente' : 'Nuova Valutazione di Classe'}
           </h3>
           <p className="text-xs text-slate-400">
             Inserisci i voti numerici (1-10, +, -, ½) o codici speciali (A = Assente, NC = Non Classificato, G = Giustificato).
           </p>
         </div>
 
-        {editingBatchId && (
+        {(editingBatchId || compact) && (
           <button
             type="button"
             onClick={onCancelEdit}
             disabled={isSaving}
             className={`${MOBILE_TOUCH_TARGET_CLASS} px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1.5`}
           >
-            <X className="w-3.5 h-3.5" /> Annulla Modifica
+            <X className="w-3.5 h-3.5" /> {compact?'Annulla':'Annulla Modifica'}
           </button>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} onChangeCapture={()=>{if(compact)dirtyRef.current=true;}} className="space-y-4">
         <fieldset disabled={isSaving} className="space-y-4 border-0 p-0 m-0 min-w-0">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className={compact?"grid grid-cols-2 gap-2 min-w-0":"grid grid-cols-1 sm:grid-cols-3 gap-3"}>
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
               Periodo Didattico
             </label>
             <select
+              aria-label="Periodo didattico"
               value={period}
               onChange={e => setPeriod(e.target.value as 'Q1' | 'Q2')}
               className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
             >
-              <option value="Q1">1° Quadrimestre (Soglia Intermedia)</option>
-              <option value="Q2">2° Quadrimestre (Soglia Finale)</option>
+              <option value="Q1">{compact?"Primo periodo":"1° Quadrimestre (Soglia Intermedia)"}</option>
+              <option value="Q2">{compact?"Secondo periodo":"2° Quadrimestre (Soglia Finale)"}</option>
             </select>
           </div>
 
@@ -204,6 +234,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               Tipologia Prova
             </label>
             <select
+              aria-label="Tipologia prova"
               value={type}
               onChange={e => setType(e.target.value as EvaluationType)}
               className="w-full p-2.5 neon-input text-xs sm:text-sm text-white bg-slate-900"
@@ -216,9 +247,9 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
             </select>
           </div>
 
-          <div>
+          <div className={compact?"col-span-2 min-w-0":undefined}>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-              Collega a UDA Curricolare
+              {compact?"UDA (facoltativa)":"Collega a UDA Curricolare"}
             </label>
             <select
               aria-label="Collega a UDA Curricolare"
@@ -242,6 +273,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               Data Svolgimento
             </label>
             <input
+              aria-label="Data svolgimento"
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
@@ -255,6 +287,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               Titolo / Argomento Prova
             </label>
             <input
+              aria-label="Titolo / Argomento prova"
               type="text"
               placeholder="es. Verifica su Fonti Rinnovabili"
               value={title}
@@ -264,7 +297,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap pt-1">
+        {!compact && <div className="flex items-center gap-2 flex-wrap pt-1">
           <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
             Compilazione rapida:
           </span>
@@ -285,9 +318,10 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           >
             Svuota
           </button>
-        </div>
+        </div>}
 
-        <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto">
+        {compact && <div className="flex items-center justify-between text-sm"><strong>Alunni</strong><span>{currentClass.students.filter(s=>gradesMap[s.id]?.value.trim()).length} / {currentClass.students.length} inseriti</span></div>}
+        <div className={compact?"divide-y divide-[var(--border)] border-y border-[var(--border)]":"border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[50vh] overflow-y-auto"}>
           {currentClass.students.length === 0 ? (
             <p className="p-4 text-xs text-slate-400 text-center">
               Nessun alunno presente in questa classe. Aggiungili dalla sezione "Gestione Alunni".
@@ -300,11 +334,12 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
               return (
                 <div
                   key={student.id}
-                  className="p-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+                  data-testid={compact?"matrix-evaluation-row":undefined}
+                  className={compact?"min-h-[48px] py-1 flex items-center justify-between gap-2 min-w-0":"p-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"}
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
                     <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
-                    <span className="font-semibold text-slate-200 text-xs sm:text-sm truncate">
+                    <span className={compact?"font-medium text-slate-200 text-sm break-words min-w-0":"font-semibold text-slate-200 text-xs sm:text-sm truncate"}>
                       {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
                     </span>
                   </div>
@@ -318,18 +353,21 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
                           ? 'bg-amber-950/60 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                           : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
                       }`}
+                      aria-label={compact?"Recupero alunno "+(idx+1):undefined}
+                      aria-pressed={isDelayed}
                       title="Contrassegna come prova di recupero / svolta in ritardo"
                     >
                       <Clock className="w-3 h-3" />
-                      <span>{isDelayed ? 'Ritardo (R)' : 'R'}</span>
+                      <span>{compact?'R':isDelayed ? 'Ritardo (R)' : 'R'}</span>
                     </button>
 
                     <input
                       type="text"
+                      aria-label={compact?"Voto alunno "+(idx+1):undefined}
                       value={currentRecord.value}
                       onChange={e => handleInputChange(student.id, e.target.value)}
                       placeholder="es. 7.5"
-                      className="w-20 sm:w-24 p-1.5 text-center font-bold text-xs sm:text-sm neon-input text-white uppercase placeholder-slate-600"
+                      className={compact?"w-16 min-h-[48px] p-1 text-center font-semibold text-base neon-input text-white uppercase":"w-20 sm:w-24 p-1.5 text-center font-bold text-xs sm:text-sm neon-input text-white uppercase placeholder-slate-600"}
                     />
                   </div>
                 </div>
@@ -338,13 +376,14 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
           )}
         </div>
 
+        {validationMessage && <p role="alert" className="text-sm text-amber-200">{validationMessage}</p>}
         <button
           type="submit"
           disabled={isSaving}
           className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
         >
           <Save className="w-4 h-4" />
-          <span>{editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
+          <span>{isSaving?'Salvataggio…':compact?'Salva valutazioni':editingBatchId ? 'Aggiorna Valutazione' : 'Salva Valutazioni di Classe'}</span>
         </button>
         </fieldset>
       </form>

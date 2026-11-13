@@ -58,7 +58,9 @@ const initialSnapshot = {
 } as unknown as SecureAppSnapshot;
 
 // Safe for read-only UI journeys; no password, accounts, external services or writes.
-const inertStorage = {} as SecureAppStorage;
+const inertStorage = (new URLSearchParams(window.location.search).get('matrixWrite')==='1'?{
+  saveAppDataAndMeta:async(data:unknown)=>{(window as any).__matrixWrites=((window as any).__matrixWrites||0)+1;if((window as any).__matrixFail)throw Error('Synthetic write failure');(window as any).__matrixSaved=structuredClone(data);}
+}:{}) as SecureAppStorage;
 
 window.history.replaceState({ tab: 'home', classId: null }, '', window.location.pathname);
 createRoot(document.getElementById('root')!).render(

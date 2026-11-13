@@ -300,3 +300,26 @@ for (const width of [320, 390]) {
     });
   }
 }
+
+
+test('VAL-01/S4a — compact matrix entry, explicit save, protected roster and blank rows',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const page=await context.newPage();
+  await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+  await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
+  const editor=page.getByTestId('matrix-evaluation-editor');await expect(editor).toBeVisible();
+  await expect(editor.getByTestId('matrix-evaluation-row')).toHaveCount(2);
+  await expect(editor).not.toContainText('Persona Fittizia Uno');
+  await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova sintetica nuova');
+  await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');
+  await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('xyz');
+  await editor.getByRole('button',{name:'Salva valutazioni'}).click();await expect(editor.getByRole('alert')).toContainText('Controlla i voti');
+  expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+  await editor.getByRole('textbox',{name:'Voto alunno 2',exact:true}).fill('');
+  await editor.getByRole('button',{name:'Annulla',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('valutazioni non salvate');
+  await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
+  await editor.getByRole('button',{name:'Salva valutazioni'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();
+  const saved=await page.evaluate(()=>window.__matrixSaved);expect(saved.classes[0].grades).toHaveLength(3);expect(saved.classes[0].grades.filter(g=>g.title==='Prova sintetica nuova')).toHaveLength(1);expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
+  await page.getByRole('button',{name:'Inserisci valutazione'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('');
+  await context.close();
+});
