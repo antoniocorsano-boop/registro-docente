@@ -162,7 +162,7 @@ export const FormativeRestitutionView: React.FC<Props> = ({currentClass, student
       </div>
       <label className="block space-y-1">
         <span className="text-sm font-semibold">Periodo</span>
-        <select value={period} onChange={e=>setPeriod(e.target.value as RestitutionPeriod)} className="neon-input w-full min-h-[48px] p-2 text-sm">
+        <select aria-label="Periodo" value={period} onChange={e=>setPeriod(e.target.value as RestitutionPeriod)} className="neon-input w-full min-h-[48px] p-2 text-sm">
           <option value="all">Intero anno scolastico</option>
           <option value="Q1">1° periodo</option>
           <option value="Q2">2° periodo</option>
