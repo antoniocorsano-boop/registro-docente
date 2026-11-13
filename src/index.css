@@ -250,3 +250,17 @@ body {
 @media (max-width: 767px) {
   .analytics-workspace [data-testid="analytics-compact-row"] { scroll-margin-top: 6rem; }
 }
+
+/* MOBILE-DENSITY-03: one flat professional surface, no nested scrolling. */
+@media (max-width: 767px) {
+  .behavior-workspace.neon-card { container: behavior-controls / inline-size; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; backdrop-filter: none; }
+  .behavior-row-toggle { scroll-margin-top: 7rem; scroll-margin-bottom: 10rem; }
+  .behavior-row-status { max-width: 47%; overflow-wrap: anywhere; }
+  .behavior-save-bar { bottom: calc(3.75rem + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+  @container behavior-controls (max-width: 18rem) {
+    .behavior-row-toggle { flex-wrap: wrap; }
+    .behavior-row-toggle [data-testid="behavior-name"] { flex: 1 1 70%; overflow-wrap: anywhere; }
+    .behavior-row-status { max-width: 100%; text-align: left; }
+    [data-testid="behavior-options"] { grid-template-columns: minmax(0, 1fr); }
+  }
+}

@@ -8,17 +8,29 @@ const save=page=>page.getByRole('button',{name:'Salva Registro Comportamenti',ex
 const payload=async page=>JSON.parse(await page.getByTestId('fixture-saved').textContent());
 async function open(page){await page.goto(url);await expect(page.getByRole('heading',{name:'Valutazione Rapida Comportamenti'})).toBeVisible();}
 for(const width of [320,390]){
- test('baseline '+width+' — 8/25 synthetic rows and geometry',async({page})=>{
+ test('compact '+width+' — 8/25 synthetic rows and geometry',async({page})=>{
   await page.setViewportSize({width,height:width===320?700:844});
   await open(page);
   const out=process.env.BEHAVIOR_EVIDENCE_DIR||'../browser-evidence';
   fs.mkdirSync(out,{recursive:true});
   for(const count of [8,25]){
    if(count===25)await page.getByTestId('fixture-count').click();
-   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toHaveCount(count);
-   const geom=await page.evaluate(()=>({viewport:innerWidth,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,buttons:[...document.querySelectorAll('button')].filter(b=>b.textContent.trim()==='Ottimale 🌟').length}));
-   fs.writeFileSync(path.join(out,'baseline-'+width+'-'+count+'.json'),JSON.stringify(geom,null,2));
-   await page.screenshot({path:path.join(out,'baseline-'+width+'-'+count+'.png')});
+   await expect(page.getByTestId('behavior-row-toggle')).toHaveCount(count);
+   await expect(page.getByTestId('behavior-row-toggle').first()).toBeVisible();
+   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toHaveCount(0);
+   const geom=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row-toggle"]')];const r=rows[0].getBoundingClientRect();const n=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();return {viewport:innerWidth,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:r.height,rowWidth:r.width,nameWidth:n.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(innerHeight,save.top)}).length,saveBottom:save.bottom};});
+   expect(geom.overflow).toBeLessThanOrEqual(1);
+   expect(geom.rowHeight).toBeGreaterThanOrEqual(48);
+   expect(geom.rowsInView).toBeGreaterThanOrEqual(3);
+   expect(geom.saveBottom).toBeLessThanOrEqual(width===320?700:844);
+   fs.writeFileSync(path.join(out,'compact-'+width+'-'+count+'.json'),JSON.stringify(geom,null,2));
+   await page.screenshot({path:path.join(out,'compact-'+width+'-'+count+'.png')});
+   const row=page.getByTestId('behavior-row-toggle').first();
+   await row.click();
+   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(1);
+   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toBeVisible();
+   await page.screenshot({path:path.join(out,'compact-'+width+'-'+count+'-expanded.png')});
+   await row.click();
   }
  });
 }
@@ -109,3 +121,49 @@ test('restoring original status is a no-op and leaves no changes to save',async(
  await expect(save(page)).toBeDisabled();
  await expect(page.getByTestId('fixture-calls')).toHaveText('0');
 });
+
+for(const width of [320,390]){
+ test('actual App '+width+' — flat rows, one disclosure, accessible controls and 200% visual evidence',async({page})=>{
+  await page.setViewportSize({width,height:width===320?700:844});
+  const out=process.env.BEHAVIOR_EVIDENCE_DIR||'../browser-evidence';
+  fs.mkdirSync(out,{recursive:true});
+  for(const count of [8,25]){
+   await page.goto(base+'/tests/browser/fixtures/nav-back-01-app.html?visualRoster='+count);
+   await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+   await page.locator('nav').getByRole('button',{name:'Comportamento',exact:true}).click();
+   const rows=page.getByTestId('behavior-row-toggle');
+   await expect(rows).toHaveCount(count);
+   await expect(rows.first()).toContainText('Non registrato');
+   await expect(save(page)).toBeDisabled();
+   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(0);
+   const geometry=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="behavior-row-toggle"]')];const r=rows[0].getBoundingClientRect();const name=rows[0].querySelector('[data-testid="behavior-name"]').getBoundingClientRect();const save=document.querySelector('[data-testid="behavior-save-bar"]').getBoundingClientRect();const nav=document.querySelector('nav').getBoundingClientRect();return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowWidth:r.width,rowHeight:r.height,nameWidth:name.width,firstRowY:r.y,rowsInView:rows.filter(x=>{const b=x.getBoundingClientRect();return b.top>=0&&b.bottom<=Math.min(save.top,nav.top)}).length,saveBottom:save.bottom,navTop:nav.top};});
+   expect(geometry.overflow).toBeLessThanOrEqual(1);
+   expect(geometry.rowHeight).toBeGreaterThanOrEqual(48);
+   expect(geometry.rowsInView).toBeGreaterThanOrEqual(3);
+   expect(geometry.saveBottom).toBeLessThanOrEqual(geometry.navTop+1);
+   fs.writeFileSync(path.join(out,'app-'+width+'-'+count+'.json'),JSON.stringify({sha:process.env.CANDIDATE_SHA,...geometry},null,2));
+   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-list.png')});
+   await rows.first().click();
+   await expect(page.getByTestId('behavior-options').filter({visible:true})).toHaveCount(1);
+   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-expanded.png')});
+   await rows.nth(1).click();
+   await expect(rows.first()).toHaveAttribute('aria-expanded','false');
+   await expect(rows.nth(1)).toHaveAttribute('aria-expanded','true');
+   const choice=page.getByRole('button',{name:'Costruttivo 👍',exact:true});
+   expect((await choice.boundingBox()).height).toBeGreaterThanOrEqual(48);
+   await choice.click();
+   await expect(rows.nth(1)).toHaveAttribute('aria-expanded','false');
+   await expect(rows.nth(1)).toContainText('Da salvare');
+   await expect(save(page)).toBeEnabled();
+   await page.getByTestId('behavior-bulk-toggle').click();
+   await expect(page.getByRole('button',{name:'👍 Tutti Costruttivo',exact:true})).toBeVisible();
+   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-bulk.png')});
+   await page.getByTestId('behavior-bulk-toggle').click();
+   await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+   await rows.first().click();
+   await expect(page.getByRole('button',{name:'Ottimale 🌟',exact:true})).toBeVisible();
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+   await page.screenshot({path:path.join(out,'app-'+width+'-'+count+'-200-expanded.png')});
+  }
+ });
+}

@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { BehaviorRecord, ClassData } from '../types';
 import { BEHAVIOR_OPTIONS, today, formatStudentNameWithPrivacy } from '../utils';
-import { Save } from 'lucide-react';
+import { Save, ChevronDown } from 'lucide-react';
 import { buildObservationChanges, isObservationDate, recordedObservations, type ObservationStatus } from '../behavior/observationChanges';
 import { MOBILE_TOUCH_TARGET_CLASS } from './mobileTouch';
 
@@ -28,6 +28,9 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(today());
   const [isSaving, setIsSaving] = useState(false);
+  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const closeSelectors = () => { setExpandedStudent(null); setBulkOpen(false); };
   const savingRef = useRef(false);
   const [draft, setDraft] = useState<Map<string, ObservationStatus>>(() => new Map());
   const draftRef = useRef(draft);
@@ -41,7 +44,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
     draftRef.current = next;
     setDraft(next);
   };
-  const clearDraft = () => replaceDraft(new Map());
+  const clearDraft = () => { replaceDraft(new Map()); closeSelectors(); };
   const hasChanges = () => {
     const { currentClass: current, selectedDate: date } = contextRef.current;
     const records = recordedObservations(current, date);
@@ -65,6 +68,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
     if (existing.get(studentId)?.status === status) next.delete(studentId);
     else next.set(studentId, status);
     replaceDraft(next);
+    setExpandedStudent(null);
   };
   const setAll = (status: ObservationStatus) => {
     if (savingRef.current || !isObservationDate(selectedDate)) return;
@@ -73,6 +77,7 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
       if (existing.get(s.id)?.status !== status) next.set(s.id, status);
     });
     replaceDraft(next);
+    closeSelectors();
   };
 
   const handleSave = async () => {
@@ -94,60 +99,69 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
   };
 
   return (
-    <div className="neon-card neon-card-highlight p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-[var(--border)]">
+    <div data-testid="behavior-workspace" className="behavior-workspace neon-card neon-card-highlight min-w-0 md:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 md:mb-4 pb-2 md:pb-3 border-b border-[var(--border)]">
         <div>
-          <h3 className="text-lg font-bold text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">
+          <h3 className="text-base md:text-lg font-bold text-[var(--primary)] md:drop-shadow-[0_0_8px_var(--primary)]">
             Valutazione Rapida Comportamenti
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="hidden md:block text-xs text-slate-400">
             Registra le note disciplinari e l'attitudine partecipativa per la classe <b>{currentClass.name}</b>.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-400 font-semibold uppercase">Data:</label>
+        <div className="flex min-w-0 items-center gap-2">
+          <label htmlFor="behavior-date" className="text-xs text-slate-400 font-semibold uppercase">Data:</label>
           <input
             type="date"
+            id="behavior-date"
             value={selectedDate}
             onChange={e => handleDateChange(e.target.value)}
             disabled={isSaving}
-            className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 px-2.5 neon-input text-xs text-white`}
+            className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 min-w-0 max-w-full p-1.5 px-2.5 neon-input text-sm md:text-xs text-white`}
           />
         </div>
       </div>
 
       <fieldset disabled={isSaving || !isObservationDate(selectedDate)} className="border-0 p-0 m-0 min-w-0">
       {/* Bulk action buttons */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+      <button type="button" data-testid="behavior-bulk-toggle"
+        aria-expanded={bulkOpen} aria-controls="behavior-bulk-actions"
+        onClick={() => { setBulkOpen(open => !open); setExpandedStudent(null); }}
+        className="md:hidden min-h-[48px] w-full flex items-center justify-between gap-2 border-b border-[var(--border)] text-sm font-semibold text-cyan-300 focus-visible:outline focus-visible:outline-cyan-300">
+        Assegna a tutti <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 ${bulkOpen ? 'rotate-180' : ''}`}/>
+      </button>
+      <div id="behavior-bulk-actions" className={`${bulkOpen ? 'flex' : 'hidden'} md:flex items-center gap-2 flex-wrap mb-2 md:mb-4 py-2 md:py-0`}>
+        <p className="md:hidden w-full text-xs text-slate-400">La scelta sostituisce gli stati in bozza per questa giornata. Salva per registrarla.</p>
+        <span className="hidden md:inline text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           Assegna a tutti:
         </span>
         <button
           type="button"
           onClick={() => setAll('Ottimale 🌟')}
-          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-ok hover:brightness-110 transition-all font-semibold`}
+          className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 px-2.5 py-1 rounded text-xs badge-ok hover:brightness-110 transition-all font-semibold`}
         >
           🌟 Tutti Ottimale
         </button>
         <button
           type="button"
           onClick={() => setAll('Costruttivo 👍')}
-          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-info hover:brightness-110 transition-all font-semibold`}
+          className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 px-2.5 py-1 rounded text-xs badge-info hover:brightness-110 transition-all font-semibold`}
         >
           👍 Tutti Costruttivo
         </button>
         <button
           type="button"
           onClick={() => setAll('Distratto ⚠️')}
-          className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs badge-warn hover:brightness-110 transition-all font-semibold`}
+          className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 px-2.5 py-1 rounded text-xs badge-warn hover:brightness-110 transition-all font-semibold`}
         >
           ⚠️ Tutti Distratto
         </button>
       </div>
 
       {/* Student rows */}
-      <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-slate-900/60 divide-y divide-[var(--border)] max-h-[55vh] overflow-y-auto mb-4">
+      <div data-testid="behavior-list" className="min-w-0 divide-y divide-[var(--border)] md:border md:border-[var(--border)] md:rounded-lg md:overflow-hidden md:bg-slate-900/60 md:max-h-[55vh] md:overflow-y-auto mb-3 md:mb-4">
+        <div className="md:hidden flex justify-between gap-2 py-2 text-xs text-slate-400" aria-hidden="true"><span>Alunno</span><span>Osservazione</span></div>
         {currentClass.students.length === 0 ? (
           <p className="p-4 text-xs text-slate-400 text-center">
             Nessun alunno presente in questa classe.
@@ -156,21 +170,38 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
           currentClass.students.map((student, idx) => {
             const currentStatus = draft.get(student.id) ?? existing.get(student.id)?.status;
             const isChanged = draft.has(student.id) && draft.get(student.id) !== existing.get(student.id)?.status;
+            const expanded = expandedStudent === student.id;
+            const displayName = formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive);
+            const option = BEHAVIOR_OPTIONS.find(opt => opt.label === currentStatus);
+            const stateLabel = isChanged ? 'Da salvare' : currentStatus ? 'Registrato' : 'Non registrato';
 
             return (
               <div
                 key={student.id}
-                className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-800/40 transition-colors"
+                data-testid="behavior-row"
+                className="min-w-0 md:p-3 md:flex md:flex-row md:items-center md:justify-between md:gap-2.5 md:hover:bg-slate-800/40"
               >
-                <div className="flex items-center gap-2">
+                <button type="button" data-testid="behavior-row-toggle" aria-expanded={expanded}
+                  aria-controls={`behavior-options-${idx}`}
+                  onClick={() => { setExpandedStudent(expanded ? null : student.id); setBulkOpen(false); }}
+                  className="behavior-row-toggle md:hidden w-full min-w-0 min-h-[56px] flex items-center gap-2 text-left py-2 focus-visible:outline focus-visible:outline-cyan-300">
+                  <span className="min-w-0 flex-1 break-words text-sm font-semibold text-slate-100" data-testid="behavior-name">{displayName}</span>
+                  <span className="behavior-row-status min-w-0 shrink-0 text-right">
+                    {option && <span data-testid="behavior-current-status" className={`block text-sm font-semibold ${option.colorClass}`}>{option.label}</span>}
+                    <span data-testid="behavior-mobile-state" className={`block text-xs ${isChanged ? 'text-amber-300' : 'text-slate-400'}`}>{stateLabel}</span>
+                  </span>
+                  <ChevronDown aria-hidden="true" className={`w-4 h-4 shrink-0 text-slate-400 ${expanded ? 'rotate-180' : ''}`}/>
+                </button>
+                <div className="hidden md:flex items-center gap-2">
                   <span className="text-slate-500 font-mono text-xs w-5 text-right">{idx + 1}.</span>
                   <span className="font-semibold text-slate-200 text-xs sm:text-sm">
-                    {formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}
+                    {displayName}
                   </span>
-                  <span className="text-xs text-slate-400" data-testid="behavior-observation-state">{isChanged ? 'Da salvare' : currentStatus ? 'Registrato' : 'Non registrato'}</span>
+                  <span className="text-xs text-slate-400" data-testid="behavior-observation-state">{stateLabel}</span>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                <div id={`behavior-options-${idx}`} data-testid="behavior-options"
+                  className={`${expanded ? 'grid grid-cols-2' : 'hidden'} md:flex items-center gap-2 md:gap-1.5 md:flex-wrap md:justify-end pb-2 md:pb-0`}>
                   {BEHAVIOR_OPTIONS.map(opt => {
                     const isSelected = currentStatus === opt.label;
                     return (
@@ -178,10 +209,13 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
                         key={opt.label}
                         type="button"
                         aria-pressed={isSelected}
-                        onClick={() => handleSelectStatus(student.id, opt.label)}
-                        className={`${MOBILE_TOUCH_TARGET_CLASS} px-2.5 py-1 rounded text-xs font-semibold transition-all border ${
+                        onClick={event => {
+                          if (window.matchMedia('(max-width: 767px)').matches) event.currentTarget.closest('[data-testid="behavior-row"]')?.querySelector<HTMLButtonElement>('[data-testid="behavior-row-toggle"]')?.focus();
+                          handleSelectStatus(student.id, opt.label);
+                        }}
+                        className={`${MOBILE_TOUCH_TARGET_CLASS} min-h-[48px] md:min-h-0 min-w-0 px-2.5 py-1 rounded text-sm md:text-xs font-semibold transition-all border ${
                           isSelected
-                            ? `${opt.colorClass} border-[var(--primary)] ring-2 ring-[var(--primary)]/30 shadow-[0_0_8px_var(--primary)] scale-105`
+                            ? `${opt.colorClass} border-[var(--primary)] ring-2 ring-[var(--primary)]/30 md:shadow-[0_0_8px_var(--primary)] md:scale-105`
                             : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
                         }`}
                       >
@@ -198,15 +232,17 @@ const BehaviorEditor: React.FC<BehaviorsViewProps> = ({
 
       </fieldset>
 
-      <p role="status" className="mb-2 text-xs text-slate-400">{changeCount} osservazioni da salvare</p>
+      <div data-testid="behavior-save-bar" className="behavior-save-bar sticky md:static z-30 md:z-auto bg-[var(--background)] md:bg-transparent border-t md:border-0 border-[var(--border)] py-2 md:py-0">
+      <p role="status" className="mb-2 text-xs text-slate-300">{changeCount} osservazioni da salvare</p>
       <button
         onClick={handleSave}
         disabled={isSaving || changeCount === 0 || !isObservationDate(selectedDate)}
-        className="w-full py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
+        className="w-full min-h-[48px] py-3 rounded-lg neon-btn-primary text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
       >
         <Save className="w-4 h-4" />
         <span>Salva Registro Comportamenti</span>
       </button>
+      </div>
     </div>
   );
 };
