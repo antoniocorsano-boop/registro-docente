@@ -414,7 +414,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const evaluationDraftGuardRef=useRef<EvaluationDraftGuard|null>(null);
   const [dailyMatrixMode,setDailyMatrixMode]=useState(false);
   const dailyMatrixModeRef=useRef(false);
-  const acceptDailyMatrixMode=(value:boolean)=>{dailyMatrixModeRef.current=value;setDailyMatrixMode(value);};
+  // Session-only view preference for browser returns; no student or proof data in history.
+  const matrixModeByClassRef=useRef(new Map<string,boolean>());
+  const acceptDailyMatrixMode=useCallback((value:boolean)=>{dailyMatrixModeRef.current=value;setDailyMatrixMode(value);if(activeTabRef.current==='tabellone'&&currentClassIdRef.current)matrixModeByClassRef.current.set(currentClassIdRef.current,value);},[]);
   const evaluationSavePendingRef=useRef(false);
   const [evaluationSavePending,setEvaluationSavePending]=useState(false);
   const registerEvaluationDraftGuard=useCallback((guard:EvaluationDraftGuard|null)=>{evaluationDraftGuardRef.current=guard;},[]);
@@ -742,7 +744,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   const setActiveTab = useCallback((
     tab: ActiveTab,
-    options: { preserveStudentReturnContext?: boolean } = {}
+    options: { preserveStudentReturnContext?: boolean; matrixMode?: 'daily'|'historical' } = {}
   ) => {
     if (!planningExitBypassRef.current && tab !== activeTabRef.current && hasUnsavedActiveDraft()) {
       requestPlanningDeparture(() => setActiveTab(tab, options), tab);
@@ -754,7 +756,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setAppData(previous => ({ ...previous, currentClassId: null }));
     }
     if(tab!=='voti')acceptMatrixEvaluationMode(false);
-    if(tab!=='tabellone')acceptDailyMatrixMode(false);
+    const enteringMatrix=tab==='tabellone'&&activeTabRef.current!=='tabellone';
+    const nextMatrixMode=tab==='tabellone'?(options.matrixMode!==undefined?options.matrixMode==='daily':enteringMatrix?true:dailyMatrixModeRef.current):false;
     traceHpr('scheda-attivata', tab);
     if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
     if (tab !== 'verifiche-online') setPendingCopilotAssessment(null);
@@ -766,6 +769,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
     navigationVersionRef.current += 1;
     activeTabRef.current = tab;
+    acceptDailyMatrixMode(nextMatrixMode);
     setActiveTabState(tab);
     setTeachingFocus(previous =>
       transitionTeachingFocusForTab(previous, currentClassIdRef.current, tab, teachingUdaCatalogRef.current)
@@ -783,7 +787,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr, acceptMatrixEvaluationMode]);
+  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr, acceptMatrixEvaluationMode, acceptDailyMatrixMode]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -931,6 +935,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       evaluationBatchId?: string | null;
       returnTab?: ActiveTab;
       navigationMode?: 'push' | 'replace';
+      matrixMode?: 'daily' | 'historical';
     } = {}
   ) => {
     traceHpr('click-navigazione', tab);
@@ -938,6 +943,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     // compact editor. Only an explicit specialist target may change its mode.
     if (tab==='voti' && activeTabRef.current==='voti' && matrixEvaluationModeRef.current
       && options.returnTab===undefined && options.evaluationBatchId===undefined && !options.preserveRecordSession) return;
+    if(tab==='tabellone'&&activeTabRef.current==='tabellone'&&dailyMatrixModeRef.current&&options.matrixMode===undefined)return;
     const changesEvaluationMode=tab==='voti' && activeTabRef.current==='voti'
       && matrixEvaluationModeRef.current!==(options.returnTab==='tabellone');
     // Browser-history writes must be delayed with the actual tab change.
@@ -973,7 +979,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }
     const hadReviewSession = reviewSessionRef.current !== null;
     acceptMatrixEvaluationMode(tab==='voti'&&options.returnTab==='tabellone');
-    setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
+    setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext, matrixMode:options.matrixMode });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
       publishRecordSession(null);
@@ -2246,7 +2252,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         studentReportReturnContextRef.current = null;
       }
       setReturningToStudentOrigin(returningContext);
-      setActiveTab(effectiveTab, { preserveStudentReturnContext: true });
+      const restoreMatrixMode=effectiveTab==='tabellone'&&nextCurrentClassId
+        ? ((returningContext?.originTab==='tabellone'||isMobileMatrixDisclosureState(e.state,nextCurrentClassId)||matrixModeByClassRef.current.get(nextCurrentClassId)===false)?'historical':'daily')
+        : undefined;
+      setActiveTab(effectiveTab, { preserveStudentReturnContext: true, matrixMode:restoreMatrixMode });
       // Execute only after restoring the legitimate underlying history entry.
       // A class mismatch discards the queued destination rather than guessing.
       queuedEvaluationDestination?.();
@@ -2890,7 +2899,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Annulla Modifica: never write, and never leave an orphaned new-evaluation editor.
   const handleCancelEvaluationEdit = () => {
     const classId = currentClassIdRef.current;
-    if(matrixEvaluationModeRef.current){handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null});return;}
+    if(matrixEvaluationModeRef.current){handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null,matrixMode:'historical'});return;}
     const entry = window.history.state;
     forgetSpecialistTarget(
       evaluationTargetMemoryRef.current,

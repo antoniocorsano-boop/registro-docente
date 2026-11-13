@@ -1987,21 +1987,31 @@
     {
       "id": "VAL-01-S4B-I02",
       "owner": "VAL-01/S4b2",
-      "statement": "Daily matrix opt-in integration shares canonical storage, one explicit grade or behavior cell, proof context first and immutable, resumes daily batch, preserves historic, no backup interruption; dirty/pending departure guard. Historical initial view preserved during staged qualification.",
+      "statement": "Daily matrix opt-in integration shares canonical storage, one explicit grade or behavior cell, proof context first and immutable, resumes daily batch, preserves historic, no backup interruption; dirty/pending departure guard. New explicit entry opens Oggi; session-only class mode is restored on browser return, historical report and legacy editor return stay historic; active daily tab does not replace drafts.",
       "impactPaths": [
         "src/App.tsx",
         "src/index.css",
         "tests/browser/nav-context-01-return-origin.spec.cjs",
         "qualification/invariants.v1.json",
         "src/persistence/dailyMatrixWorkspace.ts",
-        "src/components/DailyMatrixWorkspace.tsx"
+        "src/components/DailyMatrixWorkspace.tsx",
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/nav-mobile-disclosure-back.spec.cjs",
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs",
+        "tests/browser/release-01-qualification.spec.cjs"
       ],
       "tests": [
         "src/security/dailyMatrixWorkspace.test.ts",
         "src/security/matrixCellMutation.test.ts"
       ],
       "browserSmoke": [
-        "tests/browser/nav-context-01-return-origin.spec.cjs"
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/nav-mobile-disclosure-back.spec.cjs",
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        "tests/browser/ux-trust-01-full-regression.spec.cjs",
+        "tests/browser/release-01-qualification.spec.cjs"
       ]
     }
   ]

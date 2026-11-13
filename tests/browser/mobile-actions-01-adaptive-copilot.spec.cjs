@@ -32,6 +32,7 @@ for (const width of [390, 320]) {
     // suppressed. Use the read-only Tabellone for adaptive visibility tests.
     const navigation = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Tabellone', exact: true }) });
     await navigation.getByRole('button', { name: 'Tabellone', exact: true }).click();
+    await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
     await expect(page.getByRole('heading', { name: /Tabellone Classe:/ })).toBeVisible();
     const trigger = page.getByTestId('library-copilot-trigger');
     const lock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
