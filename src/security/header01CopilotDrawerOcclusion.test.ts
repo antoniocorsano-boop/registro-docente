@@ -10,6 +10,8 @@ describe('HEADER-01 / Copilota e Drawer senza sovrapposizioni', () => {
   test('l’App nasconde il trigger mobile durante il pannello di navigazione', () => {
     expect(app).toContain("suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}");
     expect(app).toContain('isDrawerOpen={isDrawerOpen}');
+    // The individual report has no floating launcher on either layout.
+    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report'}");
   });
 
   test('il trigger Copilota rimane indipendente e rispetta la soppressione senza cambiare il desktop', () => {

@@ -277,3 +277,52 @@ body {
     .behavior-workspace button { scroll-margin-bottom: 5rem; }
   }
 }
+
+/* MOBILE-DENSITY-04: preserve desktop cards, flatten the mobile report shell. */
+@media (max-width: 767px) {
+  .student-report-selector,
+  .student-report-disclosure,
+  [data-testid="student-report-dossier"] > details > div > .neon-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding-inline: 0;
+  }
+  .student-report-disclosure {
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+/* MOBILE-DENSITY-04: reflow only the individual report when available
+   width is small relative to text size (including enlarged system text). */
+@media (max-width: 767px) {
+  [data-testid="header01-topbar"][data-report-context="true"] {
+    container: report-header / inline-size;
+  }
+  @container report-header (max-width: 19rem) {
+    .header01-row {
+      display: grid;
+      grid-template-columns: minmax(48px, 1fr) auto;
+      gap: 0.25rem 0.5rem;
+    }
+    .header01-row > [data-testid="header01-brand-navigation"] {
+      grid-column: 1;
+      grid-row: 1;
+      justify-self: start;
+    }
+    .header01-row > [data-testid="header01-context"] {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+    .header01-row > [role="group"] {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: end;
+    }
+  }
+  .student-report-mode,
+  .student-report-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  }
+}
