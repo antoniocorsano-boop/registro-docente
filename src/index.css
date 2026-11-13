@@ -327,9 +327,14 @@ body {
   }
 }
 
-/* S2: three mobile destinations; wrap intact labels at enlarged text. */
+/* S2: three mobile destinations; wrap whole controls rather than words. */
 @media (max-width: 767px) {
   .student-report-mode {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .student-report-mode > button {
+    flex: 1 1 7rem;
+    min-width: 0;
   }
 }

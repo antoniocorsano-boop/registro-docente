@@ -190,6 +190,20 @@ for (const width of [320,390,1280]) {
     const restitution=page.getByTestId('student-report-restitution');
     // The synthetic fixture starts with protected names.
     await expect(restitution).toBeVisible();
+    const assertModeLabels = async () => {
+      const mode = root.getByRole('group', {name:'Viste scheda alunno'});
+      for (const label of ['Essenziale','Dossier','Restituzione']) {
+        const button=mode.getByRole('button',{name:label,exact:true});
+        expect(await button.evaluate(el=>{
+          const range=document.createRange();
+          range.selectNodeContents(el);
+          return new Set(Array.from(range.getClientRects()).map(r=>Math.round(r.top))).size;
+        })).toBe(1);
+        expect(await button.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+        expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(48);
+      }
+    };
+    if(width<768) await assertModeLabels();
     await expect(restitution.getByTestId('restitution-row')).toHaveCount(2);
     await expect(restitution.getByTestId('restitution-mean')).toHaveText('8,5');
     await expect(root.getByTestId('student-report-dossier')).toHaveCount(0);
@@ -211,6 +225,8 @@ for (const width of [320,390,1280]) {
     await expect(restitution.getByRole('status')).toContainText('Validazione locale completata');
     const out=process.env.REPORT_EVIDENCE_DIR||'../browser-evidence';
     require('node:fs').mkdirSync(out,{recursive:true});
+    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.screenshot({path:out+'/restitution-'+width+'-viewport.png'});
     await page.screenshot({path:out+'/restitution-'+width+'-preview.png',fullPage:true});
     await restitution.getByRole('button',{name:'Modifica',exact:true}).click();
     await expect(restitution.getByLabel('Punti di forza',{exact:true})).toHaveValue('Evidenza sintetica del docente');
@@ -224,6 +240,9 @@ for (const width of [320,390,1280]) {
       await expect(restitution.getByLabel('Punti di forza',{exact:true})).toHaveValue('');
       await page.evaluate(()=>document.documentElement.style.fontSize='200%');
       expect(await restitution.evaluate(el=>el.scrollWidth-el.clientWidth)).toBeLessThanOrEqual(1);
+      await assertModeLabels();
+      await page.evaluate(()=>window.scrollTo(0,0));
+      await page.screenshot({path:out+'/restitution-'+width+'-200-viewport.png'});
       await page.screenshot({path:out+'/restitution-'+width+'-200.png',fullPage:true});
     }
     await select.selectOption('fittizio-studente-02');
