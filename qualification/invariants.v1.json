@@ -1967,6 +1967,22 @@
       "browserSmoke": [
         "tests/browser/nav-context-01-return-origin.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S4B-I01",
+      "owner": "VAL-01/S4b1",
+      "statement": "Daily context resolves only coherent class/date/batch identities, auto-selects unique daily namespace, requires explicit historical selection, isolates online and ambiguous rows; single observation mutation compares expected exact record, preserves notes, marks and other days/classes, rejects stale roster and identity. No schema changes or UI integration in S4b1.",
+      "impactPaths": [
+        "src/persistence/dailyMatrixWorkspace.ts",
+        "src/security/dailyMatrixWorkspace.test.ts",
+        "qualification/invariants.v1.json",
+        "docs/superpowers/specs/2026-11-13-val-01-s4b-smart-matrix-design.md"
+      ],
+      "tests": [
+        "src/security/dailyMatrixWorkspace.test.ts",
+        "src/security/matrixCellMutation.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
