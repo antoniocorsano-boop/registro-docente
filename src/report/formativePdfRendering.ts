@@ -1,7 +1,7 @@
 import regularFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url';
 import boldFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf?url';
 import { formatGrade } from '../utils';
-import { RESTITUTION_FIELDS, type FormativeRestitution, type RestitutionDraft } from './formativeRestitution';
+import { RESTITUTION_FIELDS, FAMILY_RESTITUTION_HEADINGS, activityCountLabel, gradeCountLabel, type FormativeRestitution, type RestitutionDraft } from './formativeRestitution';
 
 const TITLE = 'Bilancio formativo individuale';
 const LEFT=15, RIGHT=195, BOTTOM=274;
@@ -27,13 +27,13 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   if(typeof html2pdf==='undefined') throw new Error('Generatore PDF locale non disponibile.');
   if(model.version!==1 || model.rows.length!==model.summary.count) throw new Error('Bilancio non completo.');
   const header=[model.subject+' · '+model.schoolYear,model.classLabel+' · '+periodLabel(model.period),model.recipientLabel];
-  const narrative=RESTITUTION_FIELDS.filter(([field])=>draft[field].trim()).map(([field,label])=>[label,normalize(draft[field])]);
+  const narrative=RESTITUTION_FIELDS.filter(([field])=>draft[field].trim()).map(([field])=>[FAMILY_RESTITUTION_HEADINGS[field],normalize(draft[field])]);
   const metric='Media '+(model.weighted?'ponderata':'aritmetica')+': '+formatGrade(model.summary.mean);
-  const counts=model.summary.count+' attività registrate: '+model.summary.numericCount+' con voto numerico e '+(model.summary.count-model.summary.numericCount)+' senza voto numerico. '+model.summary.includedCount+' voti utilizzati per calcolare la media.';
+  const counts=activityCountLabel(model.summary.count)+': '+model.summary.numericCount+' con voto numerico e '+(model.summary.count-model.summary.numericCount)+' senza voto numerico. '+gradeCountLabel(model.summary.includedCount)+(model.summary.includedCount===1?' utilizzato':' utilizzati')+' per calcolare la media.';
   const method=model.weighted?'La media ponderata tiene conto del peso assegnato ai diversi tipi di prova.':'La media aritmetica è la media dei voti numerici: ogni voto incluso ha lo stesso peso.';
   const caution='La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.';
   const noMean=model.summary.mean===null?'Media non disponibile: non equivale a un giudizio negativo.':'';
-  const types=model.byType.map(t=>t.label+': '+formatGrade(t.mean)+' · '+t.count+' registrazioni · '+t.includedCount+' nella media'+(t.weight!==null?' · Peso '+t.weight+'%':''));
+  const types=model.byType.map(t=>t.label+': '+formatGrade(t.mean)+' · '+activityCountLabel(t.count)+' · '+t.includedCount+' nella media'+(t.weight!==null?' · Peso '+t.weight+'%':''));
   const rows=model.rows.map((r,i)=>[
     (i+1)+'. '+dateLabel(r.date)+'\n'+periodLabel(r.period),
     normalize(r.title)+(r.uda?'\n'+normalize(r.uda):'')+(r.delayed?'\nRitardo / recupero registrato':''),
@@ -44,7 +44,11 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   const widths=[36,78,32,34];
   const foot='L’elenco comprende tutte le attività registrate per questo alunno nel periodo scelto. Un’attività senza voto numerico non è automaticamente un’insufficienza. Le voci fuori media non entrano nel calcolo.';
   const empty='Nessuna registrazione disponibile per il periodo selezionato.';
-  const labels=[TITLE,'A. Sintesi formativa','B. Rendiconto delle valutazioni','Riepilogo per tipologia','Attività registrate nel periodo','Pagina 1 di 1','Nessuna sintesi inserita dal docente.'];
+  const quickMean=formatGrade(model.summary.mean);
+  const quickCount=String(model.summary.count);
+  const quickIncluded=String(model.summary.includedCount);
+  const quickLabels=['Media del periodo','Attività registrate','Voti nella media'];
+  const labels=[TITLE,'Per l’alunno e la famiglia',...quickLabels,quickMean,quickCount,quickIncluded,'A. Sintesi formativa','B. Rendiconto delle valutazioni','Riepilogo per tipologia','Attività registrate nel periodo','Pagina 1 di 1','Nessuna sintesi inserita dal docente.'];
   const allText=[...labels,...header,...narrative.flat(),metric,counts,method,caution,noMean,...types,...columns,...rows.flat(),foot,empty];
   const seed=document.createElement('canvas');seed.width=1;seed.height=1;
   const ctx=seed.getContext('2d');if(!ctx)throw new Error('Generatore PDF locale non disponibile.');
@@ -78,14 +82,17 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
     return normalize(text).split('\n').flatMap(line=>line?pdf.splitTextToSize(line,RIGHT-LEFT):['']);
   }
   function pageHeader(){
-    y=15;style(15,true);pdf.text(TITLE,LEFT,y+5);y+=10;
+    y=12;
+    pdf.setFillColor(20,78,82);pdf.rect(LEFT,y,RIGHT-LEFT,2,'F');y+=7;
+    style(18,true);pdf.text(TITLE,LEFT,y+6);y+=11;
+    style(10);pdf.setTextColor(20,78,82);pdf.text('Per l’alunno e la famiglia',LEFT,y+3.5);y+=6;
     for(const line of header){
       const lines=rawLines(line,10);
       if(y+lines.length*4.6>65)throw new Error('Intestazione PDF troppo lunga.');
       for(const part of lines){pdf.text(part,LEFT,y+3.5);y+=4.6;}
     }
-    y+=3;pdf.setDrawColor(160,174,192);pdf.line(LEFT,y,RIGHT,y);y+=6;
-    style(12,true);pdf.text(section,LEFT,y+4);y+=10;
+    y+=2;pdf.setDrawColor(160,174,192);pdf.line(LEFT,y,RIGHT,y);y+=4;
+    style(12,true);pdf.setTextColor(20,78,82);pdf.text(section,LEFT,y+4);y+=8;
   }
   function newPage(){pdf.addPage();pageHeader();}
   function ensure(height:number){if(y+height>BOTTOM)newPage();}
@@ -96,8 +103,22 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
     y+=2;
   }
   pageHeader();
+  // One concise, factual overview on the first page; no inferred level or judgement.
+  pdf.setFillColor(239,246,245);pdf.rect(LEFT,y,RIGHT-LEFT,25,'F');
+  const values=[quickMean,quickCount,quickIncluded];
+  quickLabels.forEach((label,i)=>{
+    const x=LEFT+4+i*60;
+    style(9);pdf.text(label,x,y+6);
+    style(19,true);pdf.setTextColor(20,78,82);pdf.text(values[i],x,y+16);
+    if(i<2){pdf.setDrawColor(190,211,210);pdf.line(LEFT+(i+1)*60,y+4,LEFT+(i+1)*60,y+21);}
+  });
+  y+=28;paragraph(caution,9);
   if(!narrative.length)paragraph('Nessuna sintesi inserita dal docente.');
-  for(const [label,body] of narrative){ensure(15);paragraph(label,11,true);paragraph(body,11);y+=2;}
+  for(const [label,body] of narrative){
+    ensure(18);pdf.setFillColor(20,78,82);pdf.rect(LEFT,y+0.6,1.2,5,'F');
+    style(11,true);pdf.setTextColor(20,78,82);pdf.text(label,LEFT+4,y+4);
+    y+=7;paragraph(body,11);y+=3;
+  }
   section='B. Rendiconto delle valutazioni';newPage();
   paragraph(metric,14,true);paragraph(counts);paragraph(method);paragraph(caution);paragraph(noMean);
   if(types.length){ensure(14);paragraph('Riepilogo per tipologia',11,true);for(const line of types)paragraph(line);}
@@ -114,7 +135,7 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
     style(9,true);
     let x=LEFT;
     for(let i=0;i<columns.length;i++){
-      pdf.setFillColor(226,232,240);pdf.rect(x,y,widths[i],8,'F');
+      pdf.setFillColor(220,235,233);pdf.rect(x,y,widths[i],8,'F');
       pdf.text(columns[i],x+2,y+5.2);x+=widths[i];
     }
     y+=8;

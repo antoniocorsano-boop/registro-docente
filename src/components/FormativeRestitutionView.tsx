@@ -6,7 +6,7 @@ import type { AppSettings, ClassData, UdaRecord } from '../types';
 import { formatGrade } from '../utils';
 import {
   buildFormativeRestitution, checkedRestitutionDraft, emptyRestitutionDraft,
-  RESTITUTION_FIELDS, type FormativeRestitution, type RestitutionDraft, type RestitutionPeriod
+  RESTITUTION_FIELDS, FAMILY_RESTITUTION_HEADINGS, activityCountLabel, gradeCountLabel, type FormativeRestitution, type RestitutionDraft, type RestitutionPeriod
 } from '../report/formativeRestitution';
 
 interface Props {
@@ -37,8 +37,8 @@ function Evidence({ model }: {model: FormativeRestitution}) {
         </div>
       </div>
       <p className="text-sm text-slate-300">
-        {model.summary.count} attività registrate: {model.summary.numericCount} con voto numerico e {model.summary.count-model.summary.numericCount} senza voto numerico.
-        {' '}{model.summary.includedCount} voti utilizzati per calcolare la media.
+        {activityCountLabel(model.summary.count)}: {model.summary.numericCount} con voto numerico e {model.summary.count-model.summary.numericCount} senza voto numerico.
+        {' '}{gradeCountLabel(model.summary.includedCount)} {model.summary.includedCount===1?'utilizzato':'utilizzati'} per calcolare la media.
         {' '}{model.weighted ? 'La media ponderata tiene conto del peso assegnato ai diversi tipi di prova.' : 'La media aritmetica è la media dei voti numerici: ogni voto incluso ha lo stesso peso.'}
         {' '}La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.
       </p>
@@ -50,7 +50,7 @@ function Evidence({ model }: {model: FormativeRestitution}) {
             <div key={item.type} className="flex flex-wrap justify-between gap-2 py-2 text-sm">
               <div className="min-w-0 break-words">
                 <p>{item.label}</p>
-                <p className="text-xs text-slate-400">{item.count} registrazioni · {item.includedCount} nella media{item.weight !== null ? ' · Peso ' + item.weight + '%' : ''}</p>
+                <p className="text-xs text-slate-400">{activityCountLabel(item.count)} · {item.includedCount} nella media{item.weight !== null ? ' · Peso ' + item.weight + '%' : ''}</p>
               </div>
               <b>{formatGrade(item.mean)}</b>
             </div>
@@ -155,9 +155,15 @@ function DraftEditor({ model, names }: {model: FormativeRestitution; names: read
               <p className="text-sm">{model.classLabel} · {periodLabel(model.period)}</p>
               <p className="text-sm text-slate-400">{model.recipientLabel}</p>
             </header>
-            {RESTITUTION_FIELDS.map(([field,label]) => preview[field] ? (
+            <div className="grid grid-cols-2 gap-3 border-y border-[var(--border)] py-3" aria-label="Il periodo in sintesi">
+              <div><p className="text-sm text-slate-400">Media del periodo</p><p className="text-xl font-semibold">{formatGrade(model.summary.mean)}</p></div>
+              <div><p className="text-sm text-slate-400">Attività registrate</p><p className="text-xl font-semibold">{model.summary.count}</p></div>
+              <div><p className="text-sm text-slate-400">Voti nella media</p><p className="text-xl font-semibold">{model.summary.includedCount}</p></div>
+              <p className="col-span-2 text-xs text-slate-400">La media aiuta a capire l’andamento degli apprendimenti. Non è il voto finale di scrutinio.</p>
+            </div>
+            {RESTITUTION_FIELDS.map(([field]) => preview[field] ? (
               <section key={field} className="space-y-1">
-                <h4 className="text-sm font-semibold">{label}</h4>
+                <h4 className="text-sm font-semibold text-cyan-200">{FAMILY_RESTITUTION_HEADINGS[field]}</h4>
                 <p className="text-sm whitespace-pre-wrap break-words">{preview[field]}</p>
               </section>
             ) : null)}
