@@ -141,11 +141,12 @@ test('S3d Android HPR rework: source action opens governed Copilota, not the man
 });
 
 
-test('INT-02: without a generator the teacher continues in a focused unsaved editor',async({page})=>{
+for (const offline of [false,true]) {
+test(`INT-02: ${offline?'actual offline network':'without a configured generator'} — teacher continues in a focused unsaved editor`,async({page,context})=>{
   let providerPosts=0;
   const pageErrors=[];
   page.on('pageerror',error=>pageErrors.push(error.message));
-  await page.route('**/api/copilot/assessment-draft/provider',route=>route.fulfill({
+  await page.route('**/api/copilot/assessment-draft/provider',route=>offline?route.abort('internetdisconnected'):route.fulfill({
     status:200,contentType:'application/json',
     body:JSON.stringify({available:false,provider:'Non configurato',model:'none'})
   }));
@@ -155,10 +156,21 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
   });
 
   await page.goto(baseURL,{waitUntil:'domcontentloaded'});
-  await page.locator('input[name="archive-mode"][value="demo"]').check();
+  await page.locator('input[name="archive-mode"][value="'+(offline?'professional':'demo')+'"]').check();
+  if(offline){
+    await page.getByLabel('Istituto',{exact:true}).fill('Istituto sintetico offline');
+    await page.getByLabel('Anno scolastico',{exact:true}).fill('2026/2027');
+    await page.getByLabel('Docente',{exact:true}).fill('Docente sintetico');
+    await page.getByLabel('Disciplina',{exact:true}).fill('Tecnologia');
+  }
   await page.locator('#vault-password').fill('synthetic-offline-continuity-vault');
-  await page.getByRole('button', { name: 'Avvia la prova' }).click();
+  await page.getByRole('button', { name: offline?'Crea il mio registro':'Avvia la prova' }).click();
   await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
+  if(offline){
+    await expect(page.getByText('Nessuna classe presente nel registro.',{exact:true})).toBeVisible();
+    await context.setOffline(true);
+    expect(await page.evaluate(()=>navigator.onLine)).toBe(false);
+  }
   page.once('dialog',dialog=>dialog.accept(CLASS_NAME));
   await page.getByRole('button',{name:/Nuova Classe/}).click();
   const notice=page.getByRole('heading',{name:'Dati Salvati in Locale con Successo!'});
@@ -217,7 +229,7 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
     document.documentElement.scrollWidth-document.documentElement.clientWidth);
   expect(horizontalOverflow).toBeLessThanOrEqual(1);
   fs.mkdirSync(evidenceDir,{recursive:true});
-  await page.screenshot({path:path.join(evidenceDir,'int02-copilot-offline-editor-390.png')});
+  await page.screenshot({path:path.join(evidenceDir,offline?'int02-copilot-network-disabled-390.png':'int02-copilot-offline-editor-390.png')});
 
   await page.goBack();
   const guard=page.getByRole('dialog',{name:'Modifiche non salvate'});
@@ -226,4 +238,9 @@ test('INT-02: without a generator the teacher continues in a focused unsaved edi
   await expect(page.getByRole('heading',{name:'Biblioteca privata',exact:true})).toBeVisible();
   expect(providerPosts).toBe(0);
   expect(pageErrors).toEqual([]);
+  if(offline){
+    expect(await page.evaluate(()=>navigator.onLine)).toBe(false);
+    await expect(page.getByRole('heading',{name:SOURCE_TITLE,exact:true})).toBeVisible();
+  }
 });
+}
