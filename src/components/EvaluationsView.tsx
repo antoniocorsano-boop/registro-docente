@@ -357,7 +357,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
                     <button
                       type="button"
                       onClick={() => toggleDelayed(student.id)}
-                      className={`${MOBILE_TOUCH_TARGET_CLASS} ${compact?"matrix-evaluation-recovery":""} p-1.5 rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
+                      className={`${MOBILE_TOUCH_TARGET_CLASS} p-1.5 ${compact?"matrix-evaluation-recovery":""} rounded text-[10px] font-semibold flex items-center gap-1 border transition-all ${
                         isDelayed
                           ? 'bg-amber-950/60 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.25)]'
                           : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
