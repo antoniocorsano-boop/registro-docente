@@ -98,6 +98,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         if (result === 'cancelled' || !mountedRef.current) return;
         // A native receipt requires verified bytes, not just an opened picker.
         downloadInitiated = true;
+        await onRecordBackupExport(checkpoint);
       } else {
         const blob = new Blob([encryptedString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -114,22 +115,22 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         }
       }
 
-      await onRecordBackupExport(checkpoint);
+      if (!mountedRef.current) return;
       setEncryptPassword('');
       setConfirmPassword('');
       alert(androidNative
         ? 'Copia di sicurezza salvata e verificata nella cartella scelta.'
-        : 'Backup protetto con crittografia AES-256-GCM esportato con successo!');
+        : 'Download avviato. La copia non è ancora verificata; il contatore delle modifiche resta invariato.');
     } catch (err) {
       if (androidNative) {
         if (mountedRef.current) alert(downloadInitiated
-          ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le modifiche restano da salvare.'
+          ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le registrazioni locali restano salvate; la copia non è registrata come aggiornata.'
           : 'Copia di sicurezza non verificata. Scegli una cartella locale (Download o Documenti) e riprova.');
         return;
       }
       console.error(err);
       if (downloadInitiated) {
-        alert('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
+        alert('Download avviato, ma non verificato. Le registrazioni locali restano salvate; la copia è da verificare.');
       } else {
         alert('Errore durante la preparazione o cifratura del backup.');
       }

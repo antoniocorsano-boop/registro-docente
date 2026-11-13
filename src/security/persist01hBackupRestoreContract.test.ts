@@ -51,7 +51,7 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(restore).toContain("setActiveTab('home')");
   });
 
-  test('PrivacyView exports the prepared checkpoint and records receipt only after download initiation', () => {
+  test('PrivacyView exports the prepared checkpoint and records receipt only after native verification', () => {
     expect(privacySource).not.toContain('backupSnapshot: CompleteSecureAppSnapshot;');
     expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;');
     expect(privacySource).toContain("onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;");
@@ -63,9 +63,10 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(exportSection).toContain('a.click();');
     expect(exportSection).toContain('downloadInitiated = true;');
     expect(exportSection).toContain('await onRecordBackupExport(checkpoint);');
-    expect(exportSection.indexOf('a.click();')).toBeLessThan(exportSection.indexOf('await onRecordBackupExport(checkpoint);'));
+    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportSection.indexOf('a.click();'));
+    expect(exportSection.slice(exportSection.indexOf('a.click();'))).not.toContain('onRecordBackupExport(');
     expect(exportSection.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportSection.indexOf("setEncryptPassword('');"));
-    expect(exportSection).toContain('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
+    expect(exportSection).toContain('Download avviato, ma non verificato. Le registrazioni locali restano salvate; la copia è da verificare.');
   });
 
   test('App wires PrivacyView to checkpoint and receipt callbacks instead of render-time snapshot export', () => {

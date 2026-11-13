@@ -202,9 +202,11 @@ describe('PERSIST-01H truthful backup and restore integration', () => {
     expect(exportFlow).toContain('await encryptDataWithPassword');
     expect(exportFlow).toContain('a.click();');
     expect(exportFlow).toContain('await onRecordBackupExport(checkpoint);');
-    expect(exportFlow.indexOf('a.click();')).toBeLessThan(exportFlow.indexOf('await onRecordBackupExport(checkpoint);'));
+    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportFlow.indexOf('a.click();'));
+    expect(exportFlow.slice(exportFlow.indexOf('a.click();'))).not.toContain('onRecordBackupExport(');
     expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportFlow.indexOf("setEncryptPassword('');"));
-    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportFlow.indexOf('esportato con successo'));
+    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportFlow.indexOf('Copia di sicurezza salvata e verificata'));
+    expect(exportFlow).toContain('Download avviato. La copia non è ancora verificata');
     expect(exportFlow).toContain('downloadInitiated');
   });
 

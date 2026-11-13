@@ -213,7 +213,7 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await page.getByRole('button', { name: 'Cifra e Scarica File', exact: true }).click();
   const download = await downloadPromise;
   await exportDialogHandled;
-  expect(exportMessage).toContain('Backup protetto');
+  expect(exportMessage).toContain('Download avviato. La copia non è ancora verificata');
   const backupPath = await download.path();
   expect(backupPath).not.toBeNull();
 

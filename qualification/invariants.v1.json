@@ -2021,6 +2021,28 @@
         "tests/browser/release-01-qualification.spec.cjs",
         "tests/browser/flow-04-review-session.spec.cjs"
       ]
+    },
+    {
+      "id": "BACKUP-02-B1-I01",
+      "owner": "BACKUP-02/B1",
+      "statement": "A browser download is not a verified backup receipt and must not reduce the outstanding change counter or claim successful verified storage. Android retains its checked native readback boundary and durable metadata commit. No automated transfers or device recovery qualification.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/PrivacyView.tsx",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "tests/browser/lib01-private-library-qualification.spec.cjs"
+      ],
+      "tests": [
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs"
+      ]
     }
   ]
 }
