@@ -1,7 +1,8 @@
 import type { AppData, BehaviorRecord, Grade } from '../types';
 import { applyObservationChanges, isObservationDate, recordedObservations, type ObservationStatus } from '../behavior/observationChanges';
 import { BEHAVIOR_OPTIONS, normalizeGrade } from '../utils';
-import { isMatrixDate, type MatrixProof } from './matrixCellMutation';
+import { applyMatrixCell, isMatrixDate, type MatrixProof, type MatrixCellWrite } from './matrixCellMutation';
+import type { UdaRecord } from '../types';
 
 /** Existing batchId field, no schema migration. Only the daily workspace may
  * create this namespace. Other compatible historical batches require selection. */
@@ -89,4 +90,17 @@ export function applyDailyObservation(data:AppData,classId:string,request:DailyO
   const change:BehaviorRecord={id,date,studentId,status};
   const updated=applyObservationChanges(target,[change]);
   return {...data,classes:data.classes.map(c=>c.id===classId?updated:c)};
+}
+
+export interface DailyGradeWrite extends MatrixCellWrite { explicitNew: boolean; }
+/** Recheck the daily workspace against the committed archive, not the UI snapshot. */
+export function applyDailyGrade(data:AppData,classId:string,request:DailyGradeWrite,udas:readonly UdaRecord[],newId:string):AppData {
+  const context=resolveDailyWorkspace(data,classId,request.proof.date);
+  if(request.existingBatch){
+    if(!context.candidates.some(c=>c.proof.batchId===request.proof.batchId))throw Error('Prova non più disponibile.');
+  }else{
+    if(!isDailyBatchId(request.proof.batchId))throw Error('Identità della nuova prova non valida.');
+    if(!request.explicitNew&&(context.candidates.length||context.historicalOnlyCount))throw Error('Scegli una prova della giornata.');
+  }
+  return applyMatrixCell(data,classId,request,udas,newId);
 }

@@ -348,3 +348,20 @@ for(const width of [320,390]){
   }finally{await context.close();}
  });
 }
+
+
+test('VAL-01/S4b2 — daily mode combines independent cells, resumes proof and preserves historic',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const page=await context.newPage();
+ try{
+  await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Oggi',exact:true}).click();
+  const day=page.getByTestId('daily-matrix');const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});const second=day.getByRole('textbox',{name:'Voto alunno 2',exact:true});
+  await day.getByRole('button',{name:/Comportamento alunno 1:/}).click();await day.getByRole('button',{name:'Costruttivo',exact:true}).click();await expect(day.getByRole('button',{name:/Comportamento alunno 1: Costruttivo/})).toBeVisible();expect(await page.evaluate(()=>window.__matrixSaved.classes[0].behaviors.length)).toBe(1);
+  await first.fill('8');await first.press('Enter');await expect(day.getByTestId('daily-proof-panel')).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
+  await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Disegno sintetico');await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByText('Disegno sintetico',{exact:false}).last()).toBeVisible();
+  await second.fill('7');await second.press('Enter');await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Disegno sintetico').length)).toBe(2);
+  const saved=await page.evaluate(()=>window.__matrixSaved.classes[0]);expect(saved.behaviors.length).toBe(1);const grades=saved.grades.filter(g=>g.title==='Disegno sintetico');expect(grades.every(g=>g.type==='disegno'&&g.batchId===grades[0].batchId)).toBe(true);
+  await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();await page.getByRole('button',{name:'Oggi',exact:true}).click();await expect(first).toHaveValue('8');await expect(second).toHaveValue('7');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
+  await first.fill('9');await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('voti non confermati');await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();await expect(first).toHaveValue('9');
+  await first.press('Enter');await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.find(g=>g.title==='Disegno sintetico'&&g.value==='9')?.id)).toBe(grades[0].id);await expect(page.getByRole('dialog')).toHaveCount(0);
+ }finally{await context.close();}
+});
