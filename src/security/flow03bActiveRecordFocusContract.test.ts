@@ -22,7 +22,7 @@ describe('FLOW-03B active recording focus contract', () => {
     const dashboard = await source('src/components/DashboardView.tsx');
 
     expect(app).toContain("const isActiveRecordFocus = todayAction === 'record' && recordSession !== null && recordSession.status !== 'saved' && recordSession.context.classId === currentClass?.id;");
-    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report'}");
+    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report' && !(activeTab==='tabellone'&&dailyMatrixMode)}");
     expect(app).toContain('onOpenRecordCopilot={reopenLibraryCopilot}');
     expect(app).toContain('onOpenCopilot={reopenLibraryCopilot}');
 

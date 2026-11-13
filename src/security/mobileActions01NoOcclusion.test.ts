@@ -20,7 +20,7 @@ describe('MOBILE-ACTIONS-01/B — no occlusion of professional writes', () => {
   });
 
   test('Copilota launcher yields to professional input and saving screens, desktop remains usable', () => {
-    expect(app).toContain("suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}");
+    expect(app).toContain("suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab) || (activeTab==='tabellone'&&dailyMatrixMode)}");
     expect(app).toContain('isDrawerOpen={isDrawerOpen}');
     // Biblioteca remains an eligible contextual Copilota entry for teacher-first source use.
     expect(app).toContain("'voti'");
