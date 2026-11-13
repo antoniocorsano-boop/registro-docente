@@ -286,13 +286,13 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   const mobileView = mobileMode?.studentId === currentStudent.id ? mobileMode.view : 'essential';
   const closeMobileDisclosures = () => {
     if (!window.matchMedia('(min-width: 768px)').matches) {
-      dossierRef.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach(el => { el.open = false; });
+      dossierRef.current?.querySelectorAll<HTMLDetailsElement>(':scope > details[open]').forEach(el => { el.open = false; });
     }
   };
   const onMobileDisclosureToggle = (event: React.SyntheticEvent<HTMLDetailsElement>) => {
     const opened = event.currentTarget;
-    if (!opened.open || window.matchMedia('(min-width: 768px)').matches) return;
-    dossierRef.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach(el => {
+    if (event.target !== opened || !opened.open || window.matchMedia('(min-width: 768px)').matches) return;
+    dossierRef.current?.querySelectorAll<HTMLDetailsElement>(':scope > details[open]').forEach(el => {
       if (el !== opened) el.open = false;
     });
   };
@@ -430,7 +430,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   return (
     <div data-testid="student-report-workspace" className="min-w-0 space-y-4">
       {/* Student Selector Card — one shared selector, no duplicate mobile context. */}
-      <div className="min-w-0 md:neon-card md:p-5">
+      <div className="neon-card student-report-selector min-w-0 md:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:mb-4">
           <div className="hidden md:block">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -561,7 +561,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       <div ref={dossierRef} data-testid="student-report-dossier"
         className={`min-w-0 space-y-3 md:space-y-4 md:block ${mobileView === 'dossier' ? 'block' : 'hidden'}`}>
       <details className="group" onToggle={onMobileDisclosureToggle}>
-        <summary className="md:neon-card min-h-[56px] cursor-pointer list-none py-3 md:p-4 border-b border-[var(--border)] md:border-b-0 flex items-center justify-between gap-3">
+        <summary className="neon-card student-report-disclosure min-h-[56px] cursor-pointer list-none py-3 md:p-4 flex items-center justify-between gap-3">
           <div className="min-w-0 break-words">
             <h3 className="text-sm font-bold text-white">Profilo interno di evidenze</h3>
             <p className="text-xs text-slate-400 mt-0.5">Grafico radar e sintesi diagnostica · disponibile con evidenze sufficienti</p>
@@ -814,7 +814,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       </details>
 
       <details className="group" onToggle={onMobileDisclosureToggle}>
-        <summary className="md:neon-card min-h-[56px] cursor-pointer list-none py-3 md:p-4 border-b border-[var(--border)] md:border-b-0 flex items-center justify-between gap-3">
+        <summary className="neon-card student-report-disclosure min-h-[56px] cursor-pointer list-none py-3 md:p-4 flex items-center justify-between gap-3">
           <div className="min-w-0 break-words">
             <h3 className="text-sm font-bold text-white">Dossier UDA</h3>
             <p className="text-xs text-slate-400 mt-0.5">{studentUdaDossier.length} UDA collegate alla classe</p>
@@ -1070,7 +1070,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       </details>
 
       <details className="group" onToggle={onMobileDisclosureToggle}>
-        <summary className="md:neon-card min-h-[56px] cursor-pointer list-none py-3 md:p-4 border-b border-[var(--border)] md:border-b-0 flex items-center justify-between gap-3">
+        <summary className="neon-card student-report-disclosure min-h-[56px] cursor-pointer list-none py-3 md:p-4 flex items-center justify-between gap-3">
           <div className="min-w-0 break-words">
             <h3 className="text-sm font-bold text-white">Elenco valutazioni</h3>
             <p className="text-xs text-slate-400 mt-0.5">{grades.length} valutazioni registrate</p>
@@ -1089,7 +1089,24 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             Nessuna valutazione registrata per questo alunno.
           </p>
         ) : (
-          <div className="overflow-x-auto border border-[var(--border)] rounded-lg">
+          <>
+          <div data-testid="student-report-mobile-grades" className="md:hidden divide-y divide-[var(--border)]">
+            {[...grades].sort((a, b) => a.date.localeCompare(b.date)).map(g => {
+              const linkedUda = udas.find(u => u.id === g.udaId);
+              return (
+                <article key={g.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 py-3 min-w-0">
+                  <div className="min-w-0 break-words">
+                    <p className="font-semibold text-sm text-slate-100">{g.title || 'Attività senza titolo'}</p>
+                    <p className="text-xs text-slate-400">{g.date.split('-').reverse().join('/')} · {TYPES_LABEL[g.type] || g.type}</p>
+                    {linkedUda && <p className="text-xs text-slate-400">{linkedUda.title}</p>}
+                    <p className="text-xs text-slate-400">{g.period === 'Q1' ? '1° periodo' : '2° periodo'}</p>
+                  </div>
+                  <div className="text-lg font-semibold self-start text-slate-100">{g.value}{g.delayed && <span className="text-xs text-amber-400 ml-1">R</span>}</div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-x-auto border border-[var(--border)] rounded-lg">
             <table className="w-full text-xs text-center border-collapse">
               <thead>
                 <tr className="bg-[var(--surface-variant)] text-slate-400 uppercase tracking-wider text-[10px] font-semibold">
@@ -1140,6 +1157,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -1147,7 +1165,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       </details>
 
       <details className="group" onToggle={onMobileDisclosureToggle}>
-        <summary className="md:neon-card min-h-[56px] cursor-pointer list-none py-3 md:p-4 border-b border-[var(--border)] md:border-b-0 flex items-center justify-between gap-3">
+        <summary className="neon-card student-report-disclosure min-h-[56px] cursor-pointer list-none py-3 md:p-4 flex items-center justify-between gap-3">
           <div className="min-w-0 break-words">
             <h3 className="text-sm font-bold text-white">Comportamenti e partecipazione</h3>
             <p className="text-xs text-slate-400 mt-0.5">{studentBehaviors.length} registrazioni</p>

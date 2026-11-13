@@ -277,3 +277,19 @@ body {
     .behavior-workspace button { scroll-margin-bottom: 5rem; }
   }
 }
+
+/* MOBILE-DENSITY-04: preserve desktop cards, flatten the mobile report shell. */
+@media (max-width: 767px) {
+  .student-report-selector,
+  .student-report-disclosure,
+  [data-testid="student-report-dossier"] > details > div > .neon-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding-inline: 0;
+  }
+  .student-report-disclosure {
+    border-bottom: 1px solid var(--border);
+  }
+}
