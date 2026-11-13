@@ -1,6 +1,6 @@
 import {describe,expect,test} from 'bun:test';
 import type {AppData,Grade,BehaviorRecord} from '../types';
-import {applyDailyObservation,createDailyBatchId,resolveDailyWorkspace} from '../persistence/dailyMatrixWorkspace';
+import {applyDailyGrade,applyDailyObservation,createDailyBatchId,resolveDailyWorkspace} from '../persistence/dailyMatrixWorkspace';
 const date='2026-11-13';
 const daily=createDailyBatchId('12345678-1234-4234-8234-123456789abc');
 const daily2=createDailyBatchId('22345678-1234-4234-8234-123456789abc');
@@ -47,4 +47,16 @@ describe('VAL-01/S4b1 daily context',()=>{
   expect(()=>applyDailyObservation(original,'a',{...req,studentId:'z'},'new')).toThrow();
   expect(()=>applyDailyObservation(original,'a',req,'obs')).toThrow();
  });
+});
+
+test('daily grade new proof must be explicit when the day already has records',()=>{
+ const source=data([grade('g1','x',daily)]);
+ const proof={batchId:daily2,date,type:'disegno' as const,period:'Q1' as const,title:'Altra prova'};
+ const request={proof,studentId:'y',value:'7',delayed:false,expected:null,existingBatch:false,explicitNew:false};
+ expect(()=>applyDailyGrade(source,'a',request,[],'g2')).toThrow();
+ const next=applyDailyGrade(source,'a',{...request,explicitNew:true},[],'g2');
+ expect(next.classes[0].grades.map(g=>g.batchId)).toEqual([daily,daily2]);
+ const online=data([grade('g1','x','online_sub')]);
+ expect(()=>applyDailyGrade(online,'a',request,[],'g2')).toThrow();
+ expect(()=>applyDailyGrade(online,'a',{...request,proof:{...proof,batchId:'online_sub'},existingBatch:true},[],'g2')).toThrow();
 });

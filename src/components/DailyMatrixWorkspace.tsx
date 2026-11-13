@@ -25,7 +25,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
   const [drafts,setDrafts]=useState<Record<string,Draft>>({});
   const draftsRef=useRef<Record<string,Draft>>({});
   const [first,setFirst]=useState<string|null>(null);
-  const firstRef=useRef<string|null>(null);
+  const proofDirtyRef=useRef(false);
   const [type,setType]=useState<EvaluationType|''>('');
   const [title,setTitle]=useState('');
   const [period,setPeriod]=useState<'Q1'|'Q2'>('Q1');
@@ -44,21 +44,21 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
   const hasConflict=selection.kind==='existing'&&!candidate;
   const needsChoice=selection.kind==='auto'&&!candidate&&(context.selectionRequired||context.historicalOnlyCount>0);
   const replaceDrafts=(next:Record<string,Draft>)=>{draftsRef.current=next;setDrafts(next);};
-  const setFirstCell=(id:string|null)=>{firstRef.current=id;setFirst(id);};
-  const clearDrafts=()=>{replaceDrafts({});setFirstCell(null);setOpenBehavior(null);setError(null);};
-  const resetProof=()=>{setType('');setTitle('');setPeriod('Q1');setUdaId('');};
+  const setFirstCell=(id:string|null)=>setFirst(id);
+  const clearDrafts=()=>{replaceDrafts({});setFirstCell(null);setOpenBehavior(null);setError(null);resetProof();};
+  const resetProof=()=>{proofDirtyRef.current=false;setType('');setTitle('');setPeriod('Q1');setUdaId('');};
   const fresh=(explicit:boolean):Selection=>({kind:'new',batchId:createDailyBatchId(crypto.randomUUID()),explicit});
   useLayoutEffect(()=>{
     mounted.current=true;
-    onRegisterDraftGuard({hasUnsavedChanges:()=>pendingRef.current||Object.keys(draftsRef.current).length>0,discardChanges:()=>{if(!pendingRef.current)clearDrafts();}});
+    onRegisterDraftGuard({hasUnsavedChanges:()=>pendingRef.current||proofDirtyRef.current||Object.keys(draftsRef.current).length>0,discardChanges:()=>{if(!pendingRef.current)clearDrafts();}});
     return()=>{mounted.current=false;onRegisterDraftGuard(null);};
   },[onRegisterDraftGuard]);
-  const changeContext=(action:()=>void)=>{if(!pendingRef.current)requestChange(()=>{clearDrafts();resetProof();action();});};
+  const changeContext=(action:()=>void)=>{if(!pendingRef.current)requestChange(()=>{clearDrafts();action();});};
   const changeDate=(next:string)=>{if(next!==date&&isMatrixDate(next))changeContext(()=>{setDate(next);setSelection({kind:'auto'});});};
   const changeValue=(studentId:string,raw:string)=>{
     if(pendingRef.current||needsChoice||hasConflict)return;
     const next={...draftsRef.current};
-    const expected=next[studentId]?.expected??grades.get(studentId)??null;
+    const expected=next[studentId]?next[studentId].expected:(grades.get(studentId)??null);
     if(raw===(expected?.value||''))delete next[studentId];else next[studentId]={raw,expected};
     replaceDrafts(next);setError(null);
   };
@@ -74,7 +74,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
       const receipt=await onSaveGrade({proof,studentId:id,value:parsed.value,delayed:parsed.delayed||!!draft.expected?.delayed,expected:draft.expected,existingBatch:existing,explicitNew});
       if(!mounted.current)return;
       const next={...draftsRef.current};delete next[id];replaceDrafts(next);
-      setSelection({kind:'existing',batchId:receipt.batchId!});setFirstCell(null);
+      setSelection({kind:'existing',batchId:receipt.batchId!});setFirstCell(null);resetProof();
       if(document.activeElement===inputs.current.get(id)||document.activeElement?.closest('[data-testid="daily-proof-panel"]'))advance(id);
     }catch{if(mounted.current)setError({studentId:id,message:'Voto non salvato. Riprova con Invio.'});}
     finally{pendingRef.current=false;if(mounted.current)setPending(null);}
@@ -90,6 +90,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
   };
   const firstSave=()=>{
     if(!first||selection.kind!=='new'||!type||!title.trim()){setError({message:'Scegli la tipologia e indica l’argomento.'});return;}
+    if(!draftsRef.current[first]||!normalizeGrade(draftsRef.current[first].raw)){setError({message:'Inserisci un voto valido nella riga da registrare.'});return;}
     void saveGrade(first,{batchId:selection.batchId,date,type,period,title:title.trim(),...(udaId?{udaId}:{})},false,selection.explicit);
   };
   const saveBehavior=async(id:string,status:Status)=>{
@@ -102,7 +103,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
     finally{pendingRef.current=false;if(mounted.current)setPending(null);}
   };
   return <section data-testid="daily-matrix" className="daily-matrix min-w-0 space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-2"><label className="text-sm font-semibold">Giornata<input data-testid="daily-date" aria-label="Giornata" type="date" value={date} disabled={pending!==null} onChange={e=>changeDate(e.target.value)} className="ml-2 min-h-[48px] max-w-full neon-input px-2"/></label><span className="text-xs text-slate-400">{currentClass.students.filter(st=>context.observations.has(st.id)).length} osservazioni · {grades.size} voti</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><label className="daily-date-label text-sm font-semibold">Giornata<input data-testid="daily-date" aria-label="Giornata" type="date" value={date} disabled={pending!==null} onChange={e=>changeDate(e.target.value)} className="ml-2 min-h-[48px] max-w-full neon-input px-2"/></label><span className="text-xs text-slate-400">{currentClass.students.filter(st=>context.observations.has(st.id)).length} osservazioni · {grades.size} voti</span></div>
     {context.candidates.length>0&&<div className="flex flex-wrap items-center gap-2">
       <label className="flex-1 min-w-0 text-sm">Prova<select aria-label="Prova della giornata" value={candidate?.proof.batchId||''} disabled={pending!==null} onChange={e=>{const id=e.target.value;if(id)changeContext(()=>setSelection({kind:'existing',batchId:id}));}} className="block w-full min-h-[48px] neon-input px-2"><option value="">Scegli la prova</option>{context.candidates.map(c=><option key={c.proof.batchId} value={c.proof.batchId}>{TYPES_LABEL[c.proof.type]} · {c.proof.title}</option>)}</select></label>
       <button type="button" disabled={pending!==null} onClick={()=>changeContext(()=>setSelection(fresh(true)))} className="min-h-[48px] px-3 rounded border border-[var(--border)]">Nuova prova</button>
@@ -111,8 +112,8 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
     {(needsChoice||hasConflict)&&<div className="space-y-2"><p role="status" className="text-sm">Scegli la prova da continuare oppure avvia una nuova prova.</p>{context.candidates.length===0&&<button type="button" onClick={()=>changeContext(()=>setSelection(fresh(true)))} disabled={pending!==null} className="min-h-[48px] px-3 rounded border border-[var(--border)]">Nuova prova</button>}</div>}
     {candidate&&<p className="text-sm break-words"><strong>{TYPES_LABEL[candidate.proof.type]}</strong> · {candidate.proof.title}</p>}
     {first&&selection.kind==='new'&&<div data-testid="daily-proof-panel" ref={proofPanel} className="space-y-2 border-y border-[var(--border)] py-3">
-      <strong>Definisci la prova</strong><p className="text-xs text-slate-400">Una sola tipologia per tutti i voti di questa prova.</p>
-      <fieldset disabled={pending!==null} className="daily-proof-fields gap-2">
+      <strong>Definisci la prova</strong><p className="text-xs text-slate-400">Voto da registrare: {drafts[first]?.raw||"—"}. Una sola tipologia per tutti i voti della prova.</p>
+      <fieldset disabled={pending!==null} onChangeCapture={()=>{proofDirtyRef.current=true;}} className="daily-proof-fields gap-2">
         <label>Tipologia<select aria-label="Tipologia prova" value={type} onChange={e=>setType(e.target.value as EvaluationType|'')} className="block w-full min-h-[48px] neon-input px-2"><option value="">Scegli</option>{(['test','verifica','orale','disegno','osserv'] as EvaluationType[]).map(k=><option key={k} value={k}>{TYPES_LABEL[k]}</option>)}</select></label>
         <label>Argomento<input aria-label="Argomento prova" value={title} onChange={e=>setTitle(e.target.value)} className="block w-full min-h-[48px] neon-input px-2"/></label>
         <label>Periodo<select aria-label="Periodo prova" value={period} onChange={e=>setPeriod(e.target.value as 'Q1'|'Q2')} className="block w-full min-h-[48px] neon-input px-2"><option value="Q1">Primo periodo</option><option value="Q2">Secondo periodo</option></select></label>
@@ -121,7 +122,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
       <button type="button" disabled={pending!==null} onClick={firstSave} className="min-h-[48px] w-full rounded-lg neon-btn-primary">Conferma e registra</button>
       {error&&!error.studentId&&<p role="alert" className="text-sm text-amber-200">{error.message}</p>}
     </div>}
-    <div className="daily-matrix-row border-b border-[var(--border)] pb-2 text-xs font-semibold text-slate-400"><span>Alunno</span><span className="text-center">Comportamento</span><span className="text-center">Voto</span></div>
+    <div className="daily-matrix-row border-b border-[var(--border)] pb-2 text-xs font-semibold text-slate-400"><span>Alunno</span><span className="text-center"><span aria-hidden="true">Comport.</span><span className="sr-only">Comportamento</span></span><span className="text-center">Voto</span></div>
     <div className="divide-y divide-[var(--border)]">
       {currentClass.students.map((st,i)=>{
         const observation=context.observations.get(st.id);const grade=grades.get(st.id);const draft=drafts[st.id];const rowError=error?.studentId===st.id?error.message:null;

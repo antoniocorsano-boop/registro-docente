@@ -365,3 +365,30 @@ test('VAL-01/S4b2 — daily mode combines independent cells, resumes proof and p
   await first.press('Enter');await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.find(g=>g.title==='Disegno sintetico'&&g.value==='9')?.id)).toBe(grades[0].id);await expect(page.getByRole('dialog')).toHaveCount(0);
  }finally{await context.close();}
 });
+
+
+test('VAL-01/S4b2 — first proof metadata stays protected after clearing the grade',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:320,height:700},isMobile:true,hasTouch:true});const page=await context.newPage();
+ try{await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Oggi',exact:true}).click();
+ const day=page.getByTestId('daily-matrix');const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});
+ await first.fill('8');await first.press('Enter');await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('orale');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Prova da conservare');await first.fill('');
+ await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByRole('alert')).toContainText('Inserisci un voto valido');
+ await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();await expect(day.getByRole('textbox',{name:'Argomento prova'})).toHaveValue('Prova da conservare');
+ await page.getByRole('button',{name:'Storico',exact:true}).click();await page.getByRole('button',{name:'Continua senza salvare'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();await page.getByRole('button',{name:'Oggi',exact:true}).click();await expect(day.getByTestId('daily-proof-panel')).toHaveCount(0);expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+ }finally{await context.close();}
+});
+for(const width of [320,390]){
+ test(`VAL-01/S4b2 — daily visual ${width}px / 25 synthetic students`,async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height:width===320?700:844},isMobile:true,hasTouch:true});const page=await context.newPage();const evidence=path.resolve(process.env.EVIDENCE_DIR||'../browser-evidence','daily-visual');await fs.mkdir(evidence,{recursive:true});
+  try{await page.goto(url+'?matrixWrite=1&visualRoster=25');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Oggi',exact:true}).click();const day=page.getByTestId('daily-matrix');const rows=day.getByTestId('daily-row');await expect(rows).toHaveCount(25);
+  await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0)});await page.screenshot({path:path.join(evidence,`giorno-${width}-inizio.png`),animations:'disabled'});
+  await day.getByRole('button',{name:/Comportamento alunno 1:/}).click();await page.screenshot({path:path.join(evidence,`giorno-${width}-scelta.png`),animations:'disabled'});await day.getByRole('button',{name:'Costruttivo',exact:true}).click();await expect(day.getByRole('button',{name:/Comportamento alunno 1: Costruttivo/})).toBeVisible();
+  const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});await first.fill('8');await first.press('Enter');await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Disegno sintetico');await page.screenshot({path:path.join(evidence,`giorno-${width}-prima-prova.png`),animations:'disabled'});await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByRole('status',{name:'Registrato',exact:true})).toHaveCount(1);
+  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(evidence,`giorno-${width}-registrato.png`),animations:'disabled'});
+  expect(await rows.evaluateAll(all=>all.every(row=>row.querySelector('input').getBoundingClientRect().height>=48&&row.querySelector('button').getBoundingClientRect().height>=48))).toBe(true);
+  await page.evaluate(()=>{document.documentElement.style.fontSize='200%';window.scrollTo(0,0)});await rows.first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,`giorno-${width}-200.png`),animations:'disabled'});
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);await fs.writeFile(path.join(evidence,`giorno-${width}-geometry.json`),JSON.stringify({overflow},null,2));expect(overflow).toBeLessThanOrEqual(1);
+  await rows.last().scrollIntoViewIfNeeded();await expect(rows.last()).toBeVisible();
+  }finally{await context.close();}
+ });
+}
