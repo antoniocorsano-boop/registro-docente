@@ -106,6 +106,7 @@ for (const width of [320, 390]) {
     const select = root.getByRole('combobox', { name: 'Seleziona alunno' });
     await expect(essential).toBeVisible();
     await expect(dossier).toBeHidden();
+    await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
     await expect(essential.getByTestId('student-report-average')).toHaveText('8,5');
     await expect(essential.getByTestId('student-report-grade-count')).toHaveText('2');
     await expect(root.getByRole('button', { name: 'Essenziale', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -115,6 +116,7 @@ for (const width of [320, 390]) {
     await root.getByRole('button', { name: 'Dossier', exact: true }).click();
     await expect(essential).toBeHidden();
     await expect(dossier).toBeVisible();
+    await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
     await expect(dossier.locator('details[open]')).toHaveCount(0);
     await dossier.getByText('Elenco valutazioni', { exact: true }).click();
     await expect(dossier.locator('details[open]')).toHaveCount(1);
@@ -125,6 +127,7 @@ for (const width of [320, 390]) {
     await expect(dossier.locator('details[open]')).toContainText('Nessuna nota comportamentale');
     // Landscape/desktop permits independent disclosures; mobile reconciles on return.
     await page.setViewportSize({ width: 900, height: 700 });
+    await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
     await dossier.getByText('Elenco valutazioni', { exact: true }).click();
     await expect(dossier.locator(':scope > details[open]')).toHaveCount(2);
     await page.setViewportSize({ width, height: width === 320 ? 700 : 844 });
@@ -140,6 +143,33 @@ for (const width of [320, 390]) {
     await page.evaluate(() => document.documentElement.style.fontSize = '200%');
     await expect(essential).toBeVisible();
     expect(await essential.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+    const header = page.getByTestId('header01-topbar');
+    const context = page.getByTestId('header01-context');
+    const mode = root.getByRole('group', { name: 'Viste scheda alunno' });
+    // At 200% each control and label can reflow instead of splitting words.
+    const headerWidth = await header.evaluate(el => el.clientWidth);
+    expect(await context.evaluate(el => el.clientWidth)).toBeGreaterThan(headerWidth * 0.8);
+    for (const name of ['header01-brand-navigation', 'header01-privacy', 'header01-lock']) {
+      const control = await page.getByTestId(name).boundingBox();
+      expect(control.width).toBeGreaterThanOrEqual(48);
+      expect(control.height).toBeGreaterThanOrEqual(48);
+    }
+    for (const label of ['Essenziale', 'Dossier']) {
+      const button = mode.getByRole('button', { name: label, exact: true });
+      expect(await button.evaluate(el => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return new Set(Array.from(range.getClientRects()).map(r => Math.round(r.top))).size;
+      })).toBe(1);
+      expect(await button.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    }
     await page.screenshot({ path: out + '/student-report-' + width + '-200.png' });
+    await mode.getByRole('button', { name: 'Dossier', exact: true }).click();
+    await dossier.getByText('Elenco valutazioni', { exact: true }).click();
+    await expect(dossier.locator('details[open]')).toHaveCount(1);
+    await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+    await dossier.getByTestId('student-report-mobile-grades').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: out + '/student-report-' + width + '-grades-200.png' });
   });
 }

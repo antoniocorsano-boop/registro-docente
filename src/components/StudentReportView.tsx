@@ -531,7 +531,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
       </div>
 
-      <div role="group" aria-label="Viste scheda alunno" className="md:hidden grid grid-cols-2 border-b border-[var(--border)]">
+      <div role="group" aria-label="Viste scheda alunno" className="md:hidden grid grid-cols-2 border-b border-[var(--border)] student-report-mode">
         {([['essential', 'Essenziale'], ['dossier', 'Dossier']] as const).map(([view, label]) => (
           <button key={view} type="button" aria-pressed={mobileView === view}
             onClick={() => {
@@ -545,7 +545,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       </div>
       <section data-testid="student-report-essential" aria-label="Sintesi individuale"
         className={`min-w-0 md:hidden ${mobileView === 'essential' ? 'block' : 'hidden'}`}>
-        <div className="grid grid-cols-2 gap-2 py-2 border-b border-[var(--border)]">
+        <div className="grid grid-cols-2 gap-2 py-2 border-b border-[var(--border)] student-report-metrics">
           <div className="min-w-0">
             <p className="text-sm text-slate-400 break-words">Media annuale</p>
             <p data-testid="student-report-average" className="text-2xl font-semibold text-slate-100">{formatGrade(activeTotalAvg)}</p>
@@ -557,7 +557,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
             <p className="text-xs text-slate-400 break-words">{allStudentUdaGrades.length} collegate a UDA</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 py-3 border-b border-[var(--border)]">
+        <div className="grid grid-cols-2 gap-2 py-3 border-b border-[var(--border)] student-report-metrics">
           <div className="min-w-0 break-words"><p className="text-xs text-slate-400">1° periodo</p><b className="text-lg">{formatGrade(activeQ1Avg)}</b></div>
           <div className="min-w-0 break-words"><p className="text-xs text-slate-400">2° periodo</p><b className="text-lg">{formatGrade(activeQ2Avg)}</b></div>
         </div>

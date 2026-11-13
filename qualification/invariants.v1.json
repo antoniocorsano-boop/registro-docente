@@ -1874,13 +1874,18 @@
         "tests/browser/nav-back-01-student-report.spec.cjs",
         ".github/workflows/mobile-density-02-qualification.yml",
         "qualification/invariants.v1.json",
-        "tests/browser/ux-trust-01-full-regression.spec.cjs"
+        "tests/browser/ux-trust-01-full-regression.spec.cjs",
+        "src/App.tsx",
+        "src/components/Header01TopBar.tsx",
+        "src/security/header01CopilotDrawerOcclusion.test.ts"
       ],
       "tests": [
         "src/security/p2DensityProgressiveDisclosureIntegrity.test.ts",
         "src/security/valuationSemanticIntegrity.test.ts",
         "src/security/navBack01StudentReportHistory.test.ts",
-        "src/security/navContext01ReturnState.test.ts"
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/header01TopBarContract.test.ts",
+        "src/security/header01CopilotDrawerOcclusion.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/nav-back-01-student-report.spec.cjs",

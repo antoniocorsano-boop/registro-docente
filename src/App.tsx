@@ -3317,7 +3317,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus}
+            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report'}
             suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab)}
             inlineMobileTrigger={['analytics', 'programmazione', 'verifiche-online'].includes(activeTab)}
           />
