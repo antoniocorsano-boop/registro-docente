@@ -658,6 +658,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const navigationVersionRef = useRef(0);
   const recordSpecialistNavigationVersionRef = useRef<number | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // Accepted application route, never a transient browser entry during guarded Back.
+  const [matrixEvaluationMode,setMatrixEvaluationMode]=useState(false);
+  const matrixEvaluationModeRef=useRef(false);
+  const acceptMatrixEvaluationMode=useCallback((value:boolean)=>{matrixEvaluationModeRef.current=value;setMatrixEvaluationMode(value);},[]);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<string | null>(null);
   // Batch IDs never enter the browser history; only per-unlocked-session opaque tokens do.
   const evaluationTargetMemoryRef = useRef<SpecialistTargetMemory>(new Map());
@@ -742,6 +746,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentClassIdRef.current = null;
       setAppData(previous => ({ ...previous, currentClassId: null }));
     }
+    if(tab!=='voti')acceptMatrixEvaluationMode(false);
     traceHpr('scheda-attivata', tab);
     if (tab !== 'verifiche-online') setAssessmentHandoffRequest(null);
     if (tab !== 'verifiche-online') setPendingCopilotAssessment(null);
@@ -770,7 +775,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (storedReviewSession && !nextReviewSession) {
       setTodayAction(null);
     }
-  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr]);
+  }, [hasUnsavedActiveDraft, publishReviewSession, requestPlanningDeparture, traceHpr, acceptMatrixEvaluationMode]);
 
   // A removed or no-longer-reconciled UDA can never remain a latent focus.
   useEffect(() => {
@@ -953,6 +958,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       }
     }
     const hadReviewSession = reviewSessionRef.current !== null;
+    acceptMatrixEvaluationMode(tab==='voti'&&options.returnTab==='tabellone');
     setActiveTab(tab, { preserveStudentReturnContext: options.preserveStudentReturnContext });
     const shouldPreserveRecordSession = Boolean(options.preserveRecordSession);
     if (!shouldPreserveRecordSession) {
@@ -1009,7 +1015,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } catch {
       // History API failures never authorize a professional write.
     }
-  }, [editingBatchId, hasUnsavedActiveDraft, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery]);
+  }, [editingBatchId, hasUnsavedActiveDraft, markHistoryPush, publishRecordSession, queueMobileMatrixExit, requestPlanningDeparture, setActiveTab, traceHpr, withHprTraceQuery, acceptMatrixEvaluationMode]);
 
   /** INT-02/S3c-02: explicit teacher adoption opens only a transient editor draft. */
   const handleAcceptAssessmentDraft = useCallback(async (
@@ -2201,6 +2207,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           nextCurrentClassId, nextTab
         );
       }
+      acceptMatrixEvaluationMode(nextTab==='voti'&&e.state?.returnTab==='tabellone'&&e.state?.classId===nextCurrentClassId&&!restoredBatch);
       setEditingBatchId(nextTab === 'voti' ? restoredBatch : null);
       currentClassIdRef.current = nextCurrentClassId;
       setAppData(prev => ({ ...prev, currentClassId: nextCurrentClassId }));
@@ -2719,7 +2726,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if (!classId) return Promise.resolve();
     const navigationVersionAtSave = navigationVersionRef.current;
     const recordSessionAtSave = recordSessionRef.current;
-    const matrixEntry=window.history.state?.tab==='voti' && window.history.state?.classId===classId && window.history.state?.returnTab==='tabellone';
+    const matrixEntry=matrixEvaluationModeRef.current;
     const originGuard=evaluationDraftGuardRef.current;
     if(matrixEntry){
       if(evaluationSavePendingRef.current||currentClassIdRef.current!==classId||activeTabRef.current!=='voti')return Promise.reject(new Error('Contesto valutazione non disponibile.'));
@@ -2832,6 +2839,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Annulla Modifica: never write, and never leave an orphaned new-evaluation editor.
   const handleCancelEvaluationEdit = () => {
     const classId = currentClassIdRef.current;
+    if(matrixEvaluationModeRef.current){handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null});return;}
     const entry = window.history.state;
     forgetSpecialistTarget(
       evaluationTargetMemoryRef.current,
@@ -3414,8 +3422,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {/* TAB 3: Inserisci Valutazioni */}
         {activeTab === 'voti' && currentClass && (
           <EvaluationsView
-            key={currentClass.id+':'+(window.history.state?.returnTab==='tabellone'?'matrix':'ordinary')}
-            compact={window.history.state?.tab==='voti'&&window.history.state?.classId===currentClass.id&&window.history.state?.returnTab==='tabellone'}
+            key={currentClass.id+':'+(matrixEvaluationMode?'matrix':'ordinary')}
+            compact={matrixEvaluationMode}
             onRegisterDraftGuard={registerEvaluationDraftGuard}
             currentClass={currentClass}
             editingBatchId={editingBatchId}
@@ -3425,7 +3433,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             initialDate={recordSession?.status === 'editing' && recordSession.evidenceKind === 'evaluation' ? today() : undefined}
             onSaveEvaluations={handleSaveEvaluations}
-            onCancelEdit={()=>{if(window.history.state?.returnTab==='tabellone')handleNavigateTab('tabellone',{navigationMode:'replace',evaluationBatchId:null});else handleCancelEvaluationEdit();}}
+            onCancelEdit={handleCancelEvaluationEdit}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
         )}

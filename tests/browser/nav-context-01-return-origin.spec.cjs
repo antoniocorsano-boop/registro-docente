@@ -323,3 +323,18 @@ test('VAL-01/S4a — compact matrix entry, explicit save, protected roster and b
   await page.getByRole('button',{name:'Inserisci valutazione'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('');
   await context.close();
 });
+
+
+test('VAL-01/S4a — guarded browser Back preserves draft and committed pending save cannot be resubmitted',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:320,height:700},isMobile:true,hasTouch:true});
+  const page=await context.newPage();await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();
+  await navigateTo(page,'Tabellone');await page.getByRole('button',{name:'Inserisci valutazione'}).click();
+  const editor=page.getByTestId('matrix-evaluation-editor');await editor.getByRole('textbox',{name:'Titolo / Argomento prova'}).fill('Prova sintetica Back');await editor.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');
+  await page.goBack();await expect(page.getByRole('dialog')).toContainText('valutazioni non salvate');
+  await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(editor.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
+  await page.evaluate(()=>window.__matrixHold=true);await editor.getByRole('button',{name:'Salva valutazioni'}).click();await expect.poll(()=>page.evaluate(()=>Boolean(window.__finishMatrixWrite))).toBe(true);
+  await page.locator('nav').getByRole('button',{name:'Tabellone'}).click();await expect(page.getByRole('dialog')).toContainText('Salvataggio delle valutazioni in corso');await expect(page.getByRole('button',{name:'Continua senza salvare'})).toBeDisabled();
+  await page.evaluate(()=>window.__finishMatrixWrite());await expect(page.getByTestId('matrix-evaluation-committed')).toBeAttached();
+  await page.getByRole('button',{name:'Rimani nelle valutazioni'}).click();await expect(page.getByTestId('matrix-evaluation-committed')).toBeVisible();await expect(page.getByRole('button',{name:'Salva valutazioni'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Torna al Tabellone'}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);await context.close();
+});

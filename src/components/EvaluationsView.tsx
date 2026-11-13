@@ -60,10 +60,12 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
   const evaluationInitializationSignatureRef = useRef<string | null>(null);
   const dirtyRef=useRef(false);
   const submittingRef=useRef(false);
+  const committedRef=useRef(false);
+  const [committed,setCommitted]=useState(false);
   const [validationMessage,setValidationMessage]=useState('');
   React.useLayoutEffect(()=>{
     if(!compact||!onRegisterDraftGuard)return;
-    const guard:EvaluationDraftGuard={hasUnsavedChanges:()=>dirtyRef.current,markCommitted:()=>{dirtyRef.current=false;},discardChanges:()=>{dirtyRef.current=false;setGradesMap({});setTitle('');setUdaId('');setValidationMessage('');}};
+    const guard:EvaluationDraftGuard={hasUnsavedChanges:()=>dirtyRef.current,markCommitted:()=>{dirtyRef.current=false;committedRef.current=true;setCommitted(true);},discardChanges:()=>{dirtyRef.current=false;setGradesMap({});setTitle('');setUdaId('');setValidationMessage('');}};
     onRegisterDraftGuard(guard);
     return ()=>onRegisterDraftGuard(null);
   },[compact,onRegisterDraftGuard,currentClass.id]);
@@ -139,7 +141,8 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving || submittingRef.current) return;
+    if (isSaving) return;
+    if (submittingRef.current || (compact&&committedRef.current)) return;
     if(compact){
       if(!isIsoDate(date)||!title.trim()){setValidationMessage('Indica data e argomento della prova.');return;}
       if(udaId && (udas.filter(u=>u.id===udaId).length!==1||!udas.some(u=>u.id===udaId&&u.className===currentClass.name))){setValidationMessage('L’unità di apprendimento non è più disponibile.');return;}
@@ -187,6 +190,7 @@ export const EvaluationsView: React.FC<EvaluationsViewProps> = ({
     }
   };
 
+  if(compact&&committed)return <div data-testid="matrix-evaluation-committed" className="space-y-3"><p role="status">Valutazioni salvate.</p><button type="button" onClick={onCancelEdit} className="min-h-[48px] w-full rounded-lg neon-btn-primary font-semibold">Torna al Tabellone</button></div>;
   return (
     <div data-testid={compact?"matrix-evaluation-editor":undefined} className={compact?"min-w-0 space-y-3":"neon-card neon-card-highlight p-5"}>
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
