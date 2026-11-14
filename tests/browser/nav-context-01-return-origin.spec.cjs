@@ -239,8 +239,7 @@ for (const width of [320, 390]) {
         await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
         await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
         const copilot = page.getByTestId('library-copilot-trigger');
-        await expect(copilot).toBeVisible();
-        expect(await copilot.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed');
+        await expect(copilot).toHaveCount(0);
         await capture('sintesi');
         const exportMenu = page.getByRole('button', { name: 'Esportazione e stampa' });
         await exportMenu.click();

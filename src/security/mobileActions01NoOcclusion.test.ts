@@ -20,7 +20,7 @@ describe('MOBILE-ACTIONS-01/B — no occlusion of professional writes', () => {
   });
 
   test('Copilota launcher yields to professional input and saving screens, desktop remains usable', () => {
-    expect(app).toContain('showClosedTrigger={shouldOfferAmbientCopilot({');
+    expect(app).toContain('showClosedTrigger={ambientCopilotAllowed}');
     expect(app).toContain('drawerOpen: isDrawerOpen');
     expect(app).toContain('inlineMobileTrigger={true}');
     expect(app).toContain('isDrawerOpen={isDrawerOpen}');

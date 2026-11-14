@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   ActiveTab,
   AppData,
@@ -701,15 +701,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [isAssessmentEditorFocus, setIsAssessmentEditorFocus] = useState(false);
   const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
   const [copilotSurfaceMode, setCopilotSurfaceMode] = useState<CopilotSurfaceMode>('closed');
-
-  useEffect(() => {
-    onCopilotSurfaceOpenChange?.(copilotSurfaceMode !== 'closed');
-  }, [copilotSurfaceMode, onCopilotSurfaceOpenChange]);
+  // Session-only presentation owner. Route changes cannot carry an open
+  // generic or dedicated panel into a different professional workspace.
+  const copilotOriginRef = useRef<{ version: number; classId: string | null; kind: 'ambient' | 'explicit' } | null>(null);
 
   const openLibraryCopilot = useCallback((
     context: CopilotLaunchContext,
     mission?: CopilotMissionLaunchV1
   ) => {
+    copilotOriginRef.current = { version: navigationVersionRef.current, classId: currentClassIdRef.current, kind: 'explicit' };
     setCopilotSurfaceMode('compose');
     setLaunchRequest(previous => ({
       nonce: (previous?.nonce ?? 0) + 1,
@@ -718,7 +718,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }));
   }, []);
 
-  const reopenLibraryCopilot = useCallback(() => {
+  const reopenLibraryCopilot = useCallback((kind: 'ambient' | 'explicit' = 'explicit') => {
+    copilotOriginRef.current = { version: navigationVersionRef.current, classId: currentClassIdRef.current, kind };
     setLaunchRequest(null);
     setCopilotSurfaceMode('compose');
     setCopilotOpenRequestNonce(previous => previous + 1);
@@ -1562,6 +1563,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     preview: CopilotMissionPreviewV1,
     materialFingerprint: string
   ): Promise<void> => {
+    const launchNavigationVersion = navigationVersionRef.current;
+    const launchClassId = currentClassIdRef.current;
+    const launchOrigin = copilotOriginRef.current;
     const uda = udasRef.current.find(candidate => candidate.id === opportunity.contextRef.udaId);
     if (!uda) throw new Error('Il contesto della missione non è più disponibile.');
     const sources = libraryRef.current.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
@@ -1630,6 +1634,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         occurredAt: now
       }
     ), 'Incarico del Copilota avviato');
+    if (navigationVersionRef.current !== launchNavigationVersion
+      || currentClassIdRef.current !== launchClassId
+      || copilotOriginRef.current !== launchOrigin) {
+      // Authorization was persisted, but the originating panel is gone.
+      // Keep the mission resumable without issuing a runtime grant.
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current, mission.id, suspendCopilotMission
+      ), '');
+      return;
+    }
     missionExecutionGrantsRef.current.set(mission.id, grant);
     const runtime = bindMissionRuntime(mission, grant);
     openLibraryCopilot({
@@ -1645,6 +1659,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleResumeCopilotMission = useCallback(async (
     mission: CopilotMissionV1
   ): Promise<MissionResumeDecision> => {
+    const launchNavigationVersion = navigationVersionRef.current;
+    const launchClassId = currentClassIdRef.current;
+    const launchOrigin = copilotOriginRef.current;
     const currentMission = copilotStateRef.current.missions.find(candidate => candidate.id === mission.id);
     if (!currentMission || currentMission.status !== 'suspended') return 'archive';
 
@@ -1722,6 +1739,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentMission.id,
       item => ({ ...item, status: 'authorized' })
     ), 'Incarico del Copilota ripreso');
+    if (navigationVersionRef.current !== launchNavigationVersion
+      || currentClassIdRef.current !== launchClassId
+      || copilotOriginRef.current !== launchOrigin) {
+      // Authorization was persisted, but the originating panel is gone.
+      // Keep the mission resumable without issuing a runtime grant.
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current, currentMission.id, suspendCopilotMission
+      ), '');
+      return 'resume';
+    }
     missionExecutionGrantsRef.current.set(currentMission.id, grant);
     const runtime = bindMissionRuntime({ ...currentMission, status: 'authorized' }, grant);
     openLibraryCopilot({
@@ -2143,6 +2170,68 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       });
 
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
+
+  const ambientCopilotAllowed = shouldOfferAmbientCopilot({
+    tab: activeTab,
+    hasClass: Boolean(currentClass),
+    drawerOpen: isDrawerOpen,
+    assessmentEditorFocused: isAssessmentEditorFocus,
+    conductActive: todayAction === 'conduct',
+    recordingActive: isActiveRecordFocus
+  });
+  const copilotRenderVersion = navigationVersionRef.current;
+  const copilotRenderClassId = currentClassIdRef.current;
+  const copilotOrigin = copilotOriginRef.current;
+  const ownsCopilot = Boolean(copilotOrigin
+    && copilotOrigin.version === copilotRenderVersion
+    && copilotOrigin.classId === copilotRenderClassId
+    && !studentMode.isOpen && !isAssessmentEditorFocus
+    && (copilotOrigin.kind === 'explicit' || ambientCopilotAllowed));
+  const visibleCopilotMode: CopilotSurfaceMode = ownsCopilot ? copilotSurfaceMode : 'closed';
+
+  useLayoutEffect(() => {
+    if (copilotSurfaceMode === 'closed' || ownsCopilot) return;
+    const interruptedMissionId = launchRequest?.mission?.missionId;
+    copilotOriginRef.current = null;
+    setCopilotSurfaceMode('closed');
+    if (interruptedMissionId) {
+      void handleMissionInterrupted({ missionId: interruptedMissionId }).catch(() => {
+        // The existing persistence error path reports the failed write.
+        // The panel stays closed; no new runtime authorization is issued.
+      });
+    }
+  }, [copilotSurfaceMode, ownsCopilot, launchRequest?.mission?.missionId, handleMissionInterrupted]);
+
+  useEffect(() => {
+    onCopilotSurfaceOpenChange?.(visibleCopilotMode !== 'closed');
+  }, [visibleCopilotMode, onCopilotSurfaceOpenChange]);
+
+  const isCurrentCopilotRender = () => navigationVersionRef.current === copilotRenderVersion
+    && currentClassIdRef.current === copilotRenderClassId;
+
+  const changeCopilotSurfaceMode = (mode: CopilotSurfaceMode) => {
+    if (!isCurrentCopilotRender()) return;
+    if (mode === 'closed') {
+      copilotOriginRef.current = null;
+      setCopilotSurfaceMode('closed');
+      return;
+    }
+    if (mode === 'home') {
+      if (!ambientCopilotAllowed) return;
+      copilotOriginRef.current = { version: copilotRenderVersion, classId: copilotRenderClassId, kind: 'ambient' };
+      setCopilotSurfaceMode('home');
+      return;
+    }
+    const owner = copilotOriginRef.current;
+    if (!owner || owner.version !== copilotRenderVersion || owner.classId !== copilotRenderClassId
+      || (owner.kind === 'ambient' && !ambientCopilotAllowed)) return;
+    setCopilotSurfaceMode('compose');
+  };
+  const openAmbientConversation = () => {
+    if (!isCurrentCopilotRender() || !ambientCopilotAllowed || !copilotOriginRef.current) return;
+    reopenLibraryCopilot('ambient');
+  };
+
 
   // Synchronize URL query params
   useEffect(() => {
@@ -3411,17 +3500,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onIgnore={handleIgnoreCopilotOpportunity}
             onResume={handleResumeCopilotMission}
             onStart={handleStartCopilotMission}
-            onOpenConversation={reopenLibraryCopilot}
-            surfaceMode={copilotSurfaceMode}
-            onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={shouldOfferAmbientCopilot({
-              tab: activeTab,
-              hasClass: Boolean(currentClass),
-              drawerOpen: isDrawerOpen,
-              assessmentEditorFocused: isAssessmentEditorFocus,
-              conductActive: todayAction === 'conduct',
-              recordingActive: isActiveRecordFocus
-            })}
+            onOpenConversation={openAmbientConversation}
+            surfaceMode={visibleCopilotMode}
+            onSurfaceModeChange={changeCopilotSurfaceMode}
+            showClosedTrigger={ambientCopilotAllowed}
             suppressMobileTrigger={isDrawerOpen}
             inlineMobileTrigger={true}
           />
@@ -3707,7 +3789,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteSource={handleDeleteLibrarySource}
             onOpenCopilot={openLibraryCopilot}
             onPrepareAssessment={handlePrepareAssessmentFromLibrary}
-            isCopilotOpen={copilotSurfaceMode === 'compose'}
+            isCopilotOpen={visibleCopilotMode === 'compose'}
             isPending={isLibraryMutationPending}
             errorMessage={libraryMutationError}
           />
@@ -3810,8 +3892,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               openRequestNonce={copilotOpenRequestNonce}
               ambientContext={ambientCopilotContext}
               showStandaloneTrigger={false}
-              surfaceMode={copilotSurfaceMode}
-              onSurfaceModeChange={setCopilotSurfaceMode}
+              surfaceMode={visibleCopilotMode}
+              onSurfaceModeChange={changeCopilotSurfaceMode}
               onAddSource={handleAddLibrarySource}
               onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
               onUpdateSource={handleUpdateLibrarySource}

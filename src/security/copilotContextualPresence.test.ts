@@ -19,8 +19,15 @@ describe('COPILOT-PRESENCE-01 — presentation is not authority', () => {
   test('production uses in-flow entry and retains explicit source and teaching actions', async () => {
     const app = await Bun.file('src/App.tsx').text();
     const deck = await Bun.file('src/components/CopilotDeck.tsx').text();
-    expect(app).toContain('showClosedTrigger={shouldOfferAmbientCopilot({');
+    expect(app).toContain('showClosedTrigger={ambientCopilotAllowed}');
     expect(app).toContain('inlineMobileTrigger={true}');
+    expect(app).toContain('surfaceMode={visibleCopilotMode}');
+    expect(app).toContain('copilotOrigin.version === copilotRenderVersion');
+    expect(app).toContain('copilotOrigin.classId === copilotRenderClassId');
+    expect(app).toContain("copilotOrigin.kind === 'explicit' || ambientCopilotAllowed");
+    expect(app).toContain('!isCurrentCopilotRender()');
+    expect(app).toContain('copilotOriginRef.current !== launchOrigin');
+    expect(app).toContain('handleMissionInterrupted({ missionId: interruptedMissionId })');
     expect(app).toContain('onOpenCopilot={openLibraryCopilot}');
     expect(app).toContain('onOpenPreparationCopilot={handleOpenPreparationCopilot}');
     expect(app).toContain('onOpenConductCopilot={handleOpenConductCopilot}');
