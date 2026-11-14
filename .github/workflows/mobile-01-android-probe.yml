@@ -19,6 +19,7 @@ jobs:
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PROBE_DIR: mobile/android-probe
+      B43_LAB: ${{ github.head_ref == 'test/b4-3-android-lab' || github.ref_name == 'test/b4-3-android-lab' }}
     steps:
       - name: Checkout the exact source commit
         uses: actions/checkout@v4
@@ -101,6 +102,14 @@ jobs:
           cp native/RegistroPdfFilesPlugin.java "$NATIVE_DIR/"
           grep -F 'registerPlugin(RegistroPdfFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
 
+      - name: Prepare independent B4.3 laboratory identity
+        if: env.B43_LAB == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check "$PROBE_DIR/prepare-b43-lab.mjs"
+          node "$PROBE_DIR/prepare-b43-lab.mjs"
+
       - name: Build debug APK (laboratory use only)
         shell: bash
         working-directory: mobile/android-probe/android
@@ -117,7 +126,19 @@ jobs:
           unzip -tq "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/probe-manifest-tree.txt"
-          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/probe-manifest-tree.txt"
+          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff          PROBE_APP_ID=it.trama.registrodocente.prova
+          if [[ "$B43_LAB" == true ]]; then
+            PROBE_APP_ID=it.trama.registrodocente.lab.b43
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > "$PROBE_DIR/b43-badging.txt"
+            grep -F "package: name='it.trama.registrodocente.lab.b43' versionCode='10005' versionName='0.1.0-b43-lab.1'" "$PROBE_DIR/b43-badging.txt"
+            grep -Fx "application-label:'Registro Docente - Collaudo B4.3'" "$PROBE_DIR/b43-badging.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'android:dataExtractionRules' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.lab.b43.fileprovider' "$PROBE_DIR/b43-manifest-tree.txt"
+            unzip -p "$APK" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente.lab.b43'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          fi
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
           unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
@@ -133,7 +154,13 @@ jobs:
           {
             printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
             printf 'source_sha=%s\n' "$SOURCE_SHA"
-            printf 'app_id=it.trama.registrodocente.prova\n'
+            printf 'app_id=%s\n' "$PROBE_APP_ID"
+            if [[ "$B43_LAB" == true ]]; then
+              printf 'application_candidate_sha=eecc8502bd5c9b8a143c44926a6c57596052cb11\n'
+              printf 'lab_identity=B4.3\n'
+              printf 'version_code=10005\n'
+              printf 'version_name=0.1.0-b43-lab.1\n'
+            fi
             printf 'capacitor_version=8.6.0\n'
             printf 'apk_sha256='
             sha256sum "$APK" | awk '{print $1}'
@@ -163,7 +190,7 @@ jobs:
       - name: Upload private debug artifact — not a release
         uses: actions/upload-artifact@v4
         with:
-          name: mobile01-android-debug-probe-${{ env.SOURCE_SHA }}
+          name: ${{ env.B43_LAB == 'true' && 'mobile01-android-b43-lab' || 'mobile01-android-debug-probe' }}-${{ env.SOURCE_SHA }}
           path: |
             mobile/android-probe/android/app/build/outputs/apk/debug/app-debug.apk
             mobile/android-probe/app-debug.sha256
@@ -173,6 +200,7 @@ jobs:
           retention-days: 7
 
       - name: Prepare separate unsigned Beta identity
+        if: env.B43_LAB != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -180,6 +208,7 @@ jobs:
           bash -n "$PROBE_DIR/sign-beta-locally.sh"
 
       - name: Build non-debuggable unsigned Beta candidate
+        if: env.B43_LAB != 'true'
         shell: bash
         working-directory: mobile/android-probe/android
         run: |
@@ -187,6 +216,7 @@ jobs:
           bash ./gradlew --no-daemon assembleRelease
 
       - name: Verify unsigned Beta package and provenance
+        if: env.B43_LAB != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -208,7 +238,159 @@ jobs:
             exit 1
           fi
           "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
-          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff
+          grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
+          unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for font in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
+          done
+          sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
+          {
+            printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente\n'
+            printf 'version_code=%s\n' "$version_code"
+            printf 'version_name=%s\n' "$version_name"
+            printf 'apk_sha256='
+            sha256sum "$apk" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'stable_owner_certificate_qualified=false\n'
+            printf 'upgrade_device_qualified=false\n'
+            printf 'migration_device_qualified=false\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'real_data_authorized=false\n'
+          } > "$PROBE_DIR/beta-unsigned-manifest.txt"
+
+      - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B43_LAB != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
+            mobile/android-probe/beta-unsigned.sha256
+            mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/beta-identity.json
+            mobile/android-probe/sign-beta-locally.sh
+          if-no-files-found: error
+          retention-days: 7
+ "$PROBE_DIR/probe-manifest-tree.txt"
+          PROBE_APP_ID=it.trama.registrodocente.prova
+          if [[ "$B43_LAB" == true ]]; then
+            PROBE_APP_ID=it.trama.registrodocente.lab.b43
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > "$PROBE_DIR/b43-badging.txt"
+            grep -F "package: name='it.trama.registrodocente.lab.b43' versionCode='10005' versionName='0.1.0-b43-lab.1'" "$PROBE_DIR/b43-badging.txt"
+            grep -Fx "application-label:'Registro Docente - Collaudo B4.3'" "$PROBE_DIR/b43-badging.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'android:dataExtractionRules' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.lab.b43.fileprovider' "$PROBE_DIR/b43-manifest-tree.txt"
+            unzip -p "$APK" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente.lab.b43'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          fi
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
+          unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for FONT in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$APK" "assets/public/assets/$(basename "$FONT")" | cmp - "$FONT"
+          done
+          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
+          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
+          sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
+          {
+            printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=%s\n' "$PROBE_APP_ID"
+            if [[ "$B43_LAB" == true ]]; then
+              printf 'application_candidate_sha=eecc8502bd5c9b8a143c44926a6c57596052cb11\n'
+              printf 'lab_identity=B4.3\n'
+              printf 'version_code=10005\n'
+              printf 'version_name=0.1.0-b43-lab.1\n'
+            fi
+            printf 'capacitor_version=8.6.0\n'
+            printf 'apk_sha256='
+            sha256sum "$APK" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'offline_end_to_end_qualified=false\n'
+            printf 'pdf_offline_bundle_present=true\n'
+            printf 'remote_fonts_required=false\n'
+            printf 'android_pdf_native_implemented=true\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'android_backup_native_implemented=true\n'
+            printf 'android_restore_native_implemented=true\n'
+            printf 'android_backup_device_qualified=false\n'
+            printf 'android_restore_device_qualified=false\n'
+            printf 'android_system_back_device_qualified=false\n'
+            printf 'android_hpr_qualified=false\n'
+            printf 'vault_android_qualified=false\n'
+          } > "$PROBE_DIR/probe-manifest.txt"
+          {
+            printf 'M1 PDF library and license are included byte-for-byte in the APK.\n'
+            printf 'No mandatory Google Fonts or CDN PDF script in index.html.\n'
+            printf 'Native encrypted backup writer and reader included; device round trip NOT qualified.\n'
+            printf 'Android native PDF writer included; PDF device save/open and sharing NOT qualified.\n'
+            printf 'Node/Express API and real remote Copilota NOT bundled; offline fallback only.\n'
+            printf 'Vault, lifecycle, Android device use and upgrades NOT qualified.\n'
+          } > "$PROBE_DIR/offline-gaps.txt"
+
+      - name: Upload private debug artifact — not a release
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.B43_LAB == 'true' && 'mobile01-android-b43-lab' || 'mobile01-android-debug-probe' }}-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/debug/app-debug.apk
+            mobile/android-probe/app-debug.sha256
+            mobile/android-probe/probe-manifest.txt
+            mobile/android-probe/offline-gaps.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Prepare separate unsigned Beta identity
+        if: env.B43_LAB != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$PROBE_DIR/prepare-beta.mjs"
+          bash -n "$PROBE_DIR/sign-beta-locally.sh"
+
+      - name: Build non-debuggable unsigned Beta candidate
+        if: env.B43_LAB != 'true'
+        shell: bash
+        working-directory: mobile/android-probe/android
+        run: |
+          set -euo pipefail
+          bash ./gradlew --no-daemon assembleRelease
+
+      - name: Verify unsigned Beta package and provenance
+        if: env.B43_LAB != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk="$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$apk"
+          unzip -tq "$apk" >/dev/null
+          if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Unexpected signature on unsigned candidate"
+            exit 1
+          fi
+          version_code="$(node -p "require('./mobile/android-probe/beta-identity.json').versionCode")"
+          version_name="$(node -p "require('./mobile/android-probe/beta-identity.json').versionName")"
+          "$tools/aapt" dump badging "$apk" > "$PROBE_DIR/beta-badging.txt"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$version_code' versionName='$version_name'" "$PROBE_DIR/beta-badging.txt"
+          grep -Fx "application-label:'Registro Docente'" "$PROBE_DIR/beta-badging.txt"
+          if grep -q '^application-debuggable' "$PROBE_DIR/beta-badging.txt"; then
+            echo "Beta candidate is debuggable"
+            exit 1
+          fi
+          "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
           grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
@@ -237,6 +419,394 @@ jobs:
           } > "$PROBE_DIR/beta-unsigned-manifest.txt"
 
       - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B43_LAB != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
+            mobile/android-probe/beta-unsigned.sha256
+            mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/beta-identity.json
+            mobile/android-probe/sign-beta-locally.sh
+          if-no-files-found: error
+          retention-days: 7
+ "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:allowBackup.*0x0
+          grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
+          unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for font in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
+          done
+          sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
+          {
+            printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente\n'
+            printf 'version_code=%s\n' "$version_code"
+            printf 'version_name=%s\n' "$version_name"
+            printf 'apk_sha256='
+            sha256sum "$apk" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'stable_owner_certificate_qualified=false\n'
+            printf 'upgrade_device_qualified=false\n'
+            printf 'migration_device_qualified=false\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'real_data_authorized=false\n'
+          } > "$PROBE_DIR/beta-unsigned-manifest.txt"
+
+      - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B43_LAB != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
+            mobile/android-probe/beta-unsigned.sha256
+            mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/beta-identity.json
+            mobile/android-probe/sign-beta-locally.sh
+          if-no-files-found: error
+          retention-days: 7
+ "$PROBE_DIR/probe-manifest-tree.txt"
+          PROBE_APP_ID=it.trama.registrodocente.prova
+          if [[ "$B43_LAB" == true ]]; then
+            PROBE_APP_ID=it.trama.registrodocente.lab.b43
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > "$PROBE_DIR/b43-badging.txt"
+            grep -F "package: name='it.trama.registrodocente.lab.b43' versionCode='10005' versionName='0.1.0-b43-lab.1'" "$PROBE_DIR/b43-badging.txt"
+            grep -Fx "application-label:'Registro Docente - Collaudo B4.3'" "$PROBE_DIR/b43-badging.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'android:dataExtractionRules' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.lab.b43.fileprovider' "$PROBE_DIR/b43-manifest-tree.txt"
+            unzip -p "$APK" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente.lab.b43'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          fi
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
+          unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for FONT in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$APK" "assets/public/assets/$(basename "$FONT")" | cmp - "$FONT"
+          done
+          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
+          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
+          sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
+          {
+            printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=%s\n' "$PROBE_APP_ID"
+            if [[ "$B43_LAB" == true ]]; then
+              printf 'application_candidate_sha=eecc8502bd5c9b8a143c44926a6c57596052cb11\n'
+              printf 'lab_identity=B4.3\n'
+              printf 'version_code=10005\n'
+              printf 'version_name=0.1.0-b43-lab.1\n'
+            fi
+            printf 'capacitor_version=8.6.0\n'
+            printf 'apk_sha256='
+            sha256sum "$APK" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'offline_end_to_end_qualified=false\n'
+            printf 'pdf_offline_bundle_present=true\n'
+            printf 'remote_fonts_required=false\n'
+            printf 'android_pdf_native_implemented=true\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'android_backup_native_implemented=true\n'
+            printf 'android_restore_native_implemented=true\n'
+            printf 'android_backup_device_qualified=false\n'
+            printf 'android_restore_device_qualified=false\n'
+            printf 'android_system_back_device_qualified=false\n'
+            printf 'android_hpr_qualified=false\n'
+            printf 'vault_android_qualified=false\n'
+          } > "$PROBE_DIR/probe-manifest.txt"
+          {
+            printf 'M1 PDF library and license are included byte-for-byte in the APK.\n'
+            printf 'No mandatory Google Fonts or CDN PDF script in index.html.\n'
+            printf 'Native encrypted backup writer and reader included; device round trip NOT qualified.\n'
+            printf 'Android native PDF writer included; PDF device save/open and sharing NOT qualified.\n'
+            printf 'Node/Express API and real remote Copilota NOT bundled; offline fallback only.\n'
+            printf 'Vault, lifecycle, Android device use and upgrades NOT qualified.\n'
+          } > "$PROBE_DIR/offline-gaps.txt"
+
+      - name: Upload private debug artifact — not a release
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.B43_LAB == 'true' && 'mobile01-android-b43-lab' || 'mobile01-android-debug-probe' }}-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/debug/app-debug.apk
+            mobile/android-probe/app-debug.sha256
+            mobile/android-probe/probe-manifest.txt
+            mobile/android-probe/offline-gaps.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Prepare separate unsigned Beta identity
+        if: env.B43_LAB != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$PROBE_DIR/prepare-beta.mjs"
+          bash -n "$PROBE_DIR/sign-beta-locally.sh"
+
+      - name: Build non-debuggable unsigned Beta candidate
+        if: env.B43_LAB != 'true'
+        shell: bash
+        working-directory: mobile/android-probe/android
+        run: |
+          set -euo pipefail
+          bash ./gradlew --no-daemon assembleRelease
+
+      - name: Verify unsigned Beta package and provenance
+        if: env.B43_LAB != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk="$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$apk"
+          unzip -tq "$apk" >/dev/null
+          if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Unexpected signature on unsigned candidate"
+            exit 1
+          fi
+          version_code="$(node -p "require('./mobile/android-probe/beta-identity.json').versionCode")"
+          version_name="$(node -p "require('./mobile/android-probe/beta-identity.json').versionName")"
+          "$tools/aapt" dump badging "$apk" > "$PROBE_DIR/beta-badging.txt"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$version_code' versionName='$version_name'" "$PROBE_DIR/beta-badging.txt"
+          grep -Fx "application-label:'Registro Docente'" "$PROBE_DIR/beta-badging.txt"
+          if grep -q '^application-debuggable' "$PROBE_DIR/beta-badging.txt"; then
+            echo "Beta candidate is debuggable"
+            exit 1
+          fi
+          "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
+          unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for font in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
+          done
+          sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
+          {
+            printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente\n'
+            printf 'version_code=%s\n' "$version_code"
+            printf 'version_name=%s\n' "$version_name"
+            printf 'apk_sha256='
+            sha256sum "$apk" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'stable_owner_certificate_qualified=false\n'
+            printf 'upgrade_device_qualified=false\n'
+            printf 'migration_device_qualified=false\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'real_data_authorized=false\n'
+          } > "$PROBE_DIR/beta-unsigned-manifest.txt"
+
+      - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B43_LAB != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
+            mobile/android-probe/beta-unsigned.sha256
+            mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/beta-identity.json
+            mobile/android-probe/sign-beta-locally.sh
+          if-no-files-found: error
+          retention-days: 7
+ "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
+          unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for font in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
+          done
+          sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
+          {
+            printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente\n'
+            printf 'version_code=%s\n' "$version_code"
+            printf 'version_name=%s\n' "$version_name"
+            printf 'apk_sha256='
+            sha256sum "$apk" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'stable_owner_certificate_qualified=false\n'
+            printf 'upgrade_device_qualified=false\n'
+            printf 'migration_device_qualified=false\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'real_data_authorized=false\n'
+          } > "$PROBE_DIR/beta-unsigned-manifest.txt"
+
+      - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B43_LAB != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
+            mobile/android-probe/beta-unsigned.sha256
+            mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/beta-identity.json
+            mobile/android-probe/sign-beta-locally.sh
+          if-no-files-found: error
+          retention-days: 7
+ "$PROBE_DIR/probe-manifest-tree.txt"
+          PROBE_APP_ID=it.trama.registrodocente.prova
+          if [[ "$B43_LAB" == true ]]; then
+            PROBE_APP_ID=it.trama.registrodocente.lab.b43
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > "$PROBE_DIR/b43-badging.txt"
+            grep -F "package: name='it.trama.registrodocente.lab.b43' versionCode='10005' versionName='0.1.0-b43-lab.1'" "$PROBE_DIR/b43-badging.txt"
+            grep -Fx "application-label:'Registro Docente - Collaudo B4.3'" "$PROBE_DIR/b43-badging.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'android:dataExtractionRules' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/b43-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.lab.b43.fileprovider' "$PROBE_DIR/b43-manifest-tree.txt"
+            unzip -p "$APK" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente.lab.b43'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          fi
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
+          unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for FONT in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$APK" "assets/public/assets/$(basename "$FONT")" | cmp - "$FONT"
+          done
+          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
+          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
+          sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
+          {
+            printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=%s\n' "$PROBE_APP_ID"
+            if [[ "$B43_LAB" == true ]]; then
+              printf 'application_candidate_sha=eecc8502bd5c9b8a143c44926a6c57596052cb11\n'
+              printf 'lab_identity=B4.3\n'
+              printf 'version_code=10005\n'
+              printf 'version_name=0.1.0-b43-lab.1\n'
+            fi
+            printf 'capacitor_version=8.6.0\n'
+            printf 'apk_sha256='
+            sha256sum "$APK" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'offline_end_to_end_qualified=false\n'
+            printf 'pdf_offline_bundle_present=true\n'
+            printf 'remote_fonts_required=false\n'
+            printf 'android_pdf_native_implemented=true\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'android_backup_native_implemented=true\n'
+            printf 'android_restore_native_implemented=true\n'
+            printf 'android_backup_device_qualified=false\n'
+            printf 'android_restore_device_qualified=false\n'
+            printf 'android_system_back_device_qualified=false\n'
+            printf 'android_hpr_qualified=false\n'
+            printf 'vault_android_qualified=false\n'
+          } > "$PROBE_DIR/probe-manifest.txt"
+          {
+            printf 'M1 PDF library and license are included byte-for-byte in the APK.\n'
+            printf 'No mandatory Google Fonts or CDN PDF script in index.html.\n'
+            printf 'Native encrypted backup writer and reader included; device round trip NOT qualified.\n'
+            printf 'Android native PDF writer included; PDF device save/open and sharing NOT qualified.\n'
+            printf 'Node/Express API and real remote Copilota NOT bundled; offline fallback only.\n'
+            printf 'Vault, lifecycle, Android device use and upgrades NOT qualified.\n'
+          } > "$PROBE_DIR/offline-gaps.txt"
+
+      - name: Upload private debug artifact — not a release
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.B43_LAB == 'true' && 'mobile01-android-b43-lab' || 'mobile01-android-debug-probe' }}-${{ env.SOURCE_SHA }}
+          path: |
+            mobile/android-probe/android/app/build/outputs/apk/debug/app-debug.apk
+            mobile/android-probe/app-debug.sha256
+            mobile/android-probe/probe-manifest.txt
+            mobile/android-probe/offline-gaps.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Prepare separate unsigned Beta identity
+        if: env.B43_LAB != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$PROBE_DIR/prepare-beta.mjs"
+          bash -n "$PROBE_DIR/sign-beta-locally.sh"
+
+      - name: Build non-debuggable unsigned Beta candidate
+        if: env.B43_LAB != 'true'
+        shell: bash
+        working-directory: mobile/android-probe/android
+        run: |
+          set -euo pipefail
+          bash ./gradlew --no-daemon assembleRelease
+
+      - name: Verify unsigned Beta package and provenance
+        if: env.B43_LAB != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk="$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -s "$apk"
+          unzip -tq "$apk" >/dev/null
+          if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "Unexpected signature on unsigned candidate"
+            exit 1
+          fi
+          version_code="$(node -p "require('./mobile/android-probe/beta-identity.json').versionCode")"
+          version_name="$(node -p "require('./mobile/android-probe/beta-identity.json').versionName")"
+          "$tools/aapt" dump badging "$apk" > "$PROBE_DIR/beta-badging.txt"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$version_code' versionName='$version_name'" "$PROBE_DIR/beta-badging.txt"
+          grep -Fx "application-label:'Registro Docente'" "$PROBE_DIR/beta-badging.txt"
+          if grep -q '^application-debuggable' "$PROBE_DIR/beta-badging.txt"; then
+            echo "Beta candidate is debuggable"
+            exit 1
+          fi
+          "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
+          unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
+          for font in dist/assets/DejaVuSans*.ttf; do
+            unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
+          done
+          sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
+          {
+            printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
+            printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=it.trama.registrodocente\n'
+            printf 'version_code=%s\n' "$version_code"
+            printf 'version_name=%s\n' "$version_name"
+            printf 'apk_sha256='
+            sha256sum "$apk" | awk '{print $1}'
+            printf 'release_signing=false\n'
+            printf 'stable_owner_certificate_qualified=false\n'
+            printf 'upgrade_device_qualified=false\n'
+            printf 'migration_device_qualified=false\n'
+            printf 'android_pdf_file_save_qualified=false\n'
+            printf 'real_data_authorized=false\n'
+          } > "$PROBE_DIR/beta-unsigned-manifest.txt"
+
+      - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B43_LAB != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
