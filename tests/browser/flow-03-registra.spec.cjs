@@ -508,7 +508,13 @@ test.describe('FLOW-03 mobile qualification', () => {
   const missionCopilot = focusedDossier.getByRole('button', { name: 'Copilota', exact: true });
   await expect(missionCopilot).toBeVisible();
   await expect(flow03bFloatingCopilot).toBeHidden();
-  await assertCriticalControlsTouchSafe(focusedDossier);
+  // This is the UDA dossier, not the Registra evidence selector.
+  // Verify the actual foreground Copilota action, including hit testing via
+  // a normal Playwright click; keep the earlier Registra controls checks.
+  const missionCopilotBox = await missionCopilot.boundingBox();
+  expect(missionCopilotBox).not.toBeNull();
+  expect(missionCopilotBox.width).toBeGreaterThanOrEqual(44);
+  expect(missionCopilotBox.height).toBeGreaterThanOrEqual(44);
   await missionCopilot.click();
   const missionComposer = page.getByTestId('library-copilot-composer');
   await expect(missionComposer).toBeVisible();
