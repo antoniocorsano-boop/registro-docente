@@ -1569,7 +1569,7 @@
     {
       "id": "MOBILE-01-M2A-NATIVE-BACKUP-I01",
       "owner": "MOBILE-01/M2a",
-      "statement": "Native Android must choose a local document and write only the already-encrypted AES-GCM v2 envelope. A one-use destination token, closed output followed by independent readback, exact byte count and SHA-256 checked by both native writer and frontend are required before the existing encrypted backup checkpoint can be recorded. Cancellation, errors, invalid or missing bridge, interrupted view or mismatched digest never fall back to a native Blob download or acknowledge a backup. The browser path and vault schema remain unchanged. APK build and synthetic tests do not prove Android save/restore or persistence on a device.",
+      "statement": "Native Android must choose a local document and write only the already-encrypted AES-GCM v2 envelope. A one-use destination token, closed output followed by independent readback, exact byte count and SHA-256 checked by both native writer and frontend are required before the existing encrypted backup checkpoint can be recorded. Cancellation, errors, invalid or missing bridge, interrupted view or mismatched digest never fall back to a native Blob download or acknowledge a backup. The native boundary remains independent from browser download and explicit readback; local verification metadata is not portable. APK build and synthetic tests do not prove Android save/restore or persistence on a device.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         "src/security/androidBackupExport.ts",
@@ -2075,6 +2075,28 @@
       "browserSmoke": [
         "tests/browser/ux-trust-01-qualification.spec.cjs",
         "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
+    },
+    {
+      "id": "BACKUP-02-B3-I01",
+      "owner": "BACKUP-02/B3",
+      "statement": "Web download never acknowledges a receipt. Explicit selection in the same Privacy view compares bounded raw byte length and SHA-256 to the exact encrypted export before consuming the one-use App receipt. Wrong, partial, unreadable, foreign, abandoned and stale files cannot update metadata. No import, restore, network or password retention in this verification; native verification remains independent.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/PrivacyView.tsx",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "src/security/webBackupVerification.ts",
+        "src/security/webBackupVerification.test.ts"
+      ],
+      "tests": [
+        "src/security/webBackupVerification.test.ts",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs"
       ]
     }
   ]
