@@ -495,7 +495,14 @@ test('AIC-05 fails closed for ambiguous student-bearing material and does not le
   await selectSyntheticClass(page);
   await page.getByRole('main').getByRole('button', { name: 'Valutazioni', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nuova Valutazione di Classe' })).toBeVisible();
+  // The evaluation surface must not offer or dispatch ambient Copilot actions.
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  expect(intentBodies).toHaveLength(0);
+  await page.getByRole('button', { name: 'Riepilogo', exact: true }).filter({visible:true}).click();
+  await expect(page.getByRole('heading', { name: `Panoramica Sezione: ${CLASS_NAME}` })).toBeVisible();
 
+  // The allowed professional surface still has a populated class context.
   let composer = await openComposer(page);
   await selectComposerSource(composer, STUDENT_SOURCE);
   const panel = await openMemoryPanel(composer);
@@ -535,7 +542,8 @@ test('AIC-05 fails closed for ambiguous student-bearing material and does not le
     intentRequestCount: intentBodies.length,
     checks: [
       'ambiguous-source-has-no-remember-path',
-      'evaluation-context-not-copied-to-routing',
+      'evaluation-surface-has-no-copilot-or-intent-request',
+      'class-context-with-evaluation-data-not-copied-to-routing',
       'student-bearing-source-content-not-copied-to-routing',
       'no-memory-write-after-reload'
     ],

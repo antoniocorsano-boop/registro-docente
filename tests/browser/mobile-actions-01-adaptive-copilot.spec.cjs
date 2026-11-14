@@ -127,17 +127,21 @@ test('MOBILE-ACTIONS-01 desktop retains labelled Copilota trigger and direct sec
   const page = await context.newPage();
   await prepare(page);
   await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
-  await page.getByRole('button', {name:'Riepilogo', exact:true}).first().click();
+  const overview = page.getByRole('button', {name:'Riepilogo', exact:true}).filter({visible:true});
+  await expect(overview).toHaveCount(1);
+  // Scope to the primary class toolbar, not the duplicate dashboard shortcuts.
+  const toolbar = overview.locator('..');
+  await overview.click();
   const trigger = page.getByTestId('library-copilot-trigger');
   await expect(trigger).toBeVisible();
   await expect(trigger).toContainText('Copilota');
   await expect(page.getByRole('button', { name: 'Blocca Registro', exact: true })).toBeVisible();
   await trigger.click();
   await expect(page.getByTestId('copilot-deck')).toBeVisible();
-  // Desktop exposes class navigation in a visible toolbar (not mobile <nav>).
-  const desktopAction = name => page.getByRole('button', {name, exact:true}).filter({visible:true});
+  const desktopAction = name => toolbar.getByRole('button', {name, exact:true});
   await expect(desktopAction('Valutazioni')).toHaveCount(1);
   await desktopAction('Valutazioni').click();
+  await expect(page.getByRole('heading', {name:'Nuova Valutazione di Classe'})).toBeVisible();
   await expect(page.getByTestId('copilot-deck')).toHaveCount(0);
   await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
   await expect(trigger).toHaveCount(0);
@@ -148,6 +152,7 @@ test('MOBILE-ACTIONS-01 desktop retains labelled Copilota trigger and direct sec
   await page.getByRole('button',{name:'Parla con il Copilota',exact:true}).click();
   await expect(page.getByTestId('library-copilot-composer')).toBeVisible();
   await desktopAction('Tabellone').click();
+  await expect(page.getByRole('group',{name:'Vista Tabellone'})).toBeVisible();
   await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
   await expect(trigger).toHaveCount(0);
   await page.goBack();
