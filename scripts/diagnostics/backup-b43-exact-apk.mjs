@@ -154,22 +154,33 @@ function nativePress(n){if(!n.bounds)throw Error('Native target has no bounds');
 const docNode=n=>/documentsui/i.test(n.pkg);
 async function picker(){return nativeFind(n=>docNode(n)&&(/save|salva/i.test(n.text)||/show roots|mostra radici|open navigation drawer/i.test(n.desc)),'Android document picker not available');}
 async function home(){
-  if(await evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))'))return;
-  await tap('[data-testid=header01-brand-navigation]','open menu');
-  await tap('[data-testid=header01-go-home]','return Oggi');
-  if(await evaluate('Boolean(document.querySelector("[data-testid=header01-home-confirm]"))'))await button('Torna a Oggi');
-  await until(()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))'),'Home backup indicator missing');
+  const isHome=()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))');
+  if(await isHome())return;
+  // Use the already-qualified Android Back path, not an animated drawer
+  // whose hidden/transitioning control can be returned by querySelector.
+  for(let step=0;step<5;step++){
+    const before=await tab();
+    adb('shell','input','keyevent','4');
+    await until(async()=>foreground()&&(await isHome()||(await tab())!==before),'Native Back did not restore previous view',10000);
+    if(await isHome()){record('home-reached-native-back','PASS',{steps:step+1});return;}
+  }
+  throw Error('Home backup indicator not reached by native Back');
 }
 async function expectCopy(label){
   await until(()=>evaluate('document.querySelector('+JSON.stringify(indicator)+')?.textContent.includes('+JSON.stringify(label)+')'),'Backup indicator not '+label);
   record('backup-indicator','PASS',{label});
 }
 async function exportForm(){
-  await tap('[aria-label="Esporta backup cifrato"]','open backup');
+  const selector=indicator+' button[aria-label="Esporta backup cifrato"]';
+  await until(()=>evaluate('Boolean(document.querySelector('+JSON.stringify(selector)+'))'),'Home export control missing');
+  // Application control is a normal DOM button; no native picker is simulated.
+  await click(selector);
+  record('backup-form-open-requested','PASS');
   await setField('input[placeholder="Inserisci password sicura (min. 6 caratteri)"]',backupPassword);
   await setField('input[placeholder="Ripeti la password"]',backupPassword);
   await button('Cifra e Scarica File');
   await picker();
+  record('native-picker-opened','PASS');
 }
 async function chooseDownload(){
   let nodes=nativeNodes(nativeXml()).filter(docNode);
