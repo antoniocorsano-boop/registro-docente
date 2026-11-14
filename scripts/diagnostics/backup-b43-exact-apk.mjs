@@ -60,7 +60,7 @@ function webViewBounds() {
   return bounds[0];
 }
 async function touch(expression,label='target') {
-  const geometry=await evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center",behavior:"instant"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight,dpr:devicePixelRatio}})()');
+  const geometry=await observe(()=>evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center",behavior:"instant"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight,dpr:devicePixelRatio}})()'), 'geometry '+label);
   if(!geometry || geometry.x<0 || geometry.y<0 || geometry.x>=geometry.w || geometry.y>=geometry.h)throw Error('Target not visible: '+label);
   const [l,t,r,b]=webViewBounds();
   const sx=(r-l)/geometry.w,sy=(b-t)/geometry.h;
@@ -69,9 +69,32 @@ async function touch(expression,label='target') {
   console.log('native-tap',label,JSON.stringify({x,y}));
   adb('shell','input','tap',String(x),String(y));
 }
+// Poll predicates are observational only. Reconnect once on transport timeout;
+// never repeat a click, input write, picker action or restore confirmation.
+async function observe(fn,label) {
+  try{return await fn()}catch(e){
+    if(!String(e.message).includes('CDP response timeout: Runtime.evaluate'))throw e;
+    record('diagnostic-transport-reconnect','RETRY',{label});
+    socket?.close();socket=null;
+    await connect();
+    return await fn();
+  }
+}
 async function until(fn,label,ms=15000) {
-  const end=Date.now()+ms;
-  while(Date.now()<end){if(await fn())return;await sleep(250)}
+  let end=Date.now()+ms;
+  let recovered=false;
+  while(Date.now()<end){
+    try{if(await fn())return;}
+    catch(e){
+      if(recovered||!String(e.message).includes('CDP response timeout: Runtime.evaluate'))throw e;
+      recovered=true;
+      record('diagnostic-transport-reconnect','RETRY',{label});
+      socket?.close();socket=null;
+      await connect();
+      end=Date.now()+ms;
+    }
+    await sleep(250);
+  }
   throw Error(label);
 }
 async function tap(selector, label) {
