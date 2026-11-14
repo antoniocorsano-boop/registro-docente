@@ -2179,7 +2179,7 @@
     {
       "id": "COPILOT-PRESENCE-01-I01",
       "owner": "COPILOT-PRESENCE-01",
-      "statement": "Supersedes the floating launcher placement and universal desktop availability of MOBILE-ACTIONS-01 only: production general Copilota entry is in normal layout flow on both mobile and desktop, allowed only for professional preparation, library, UDA, planning, online assessment and selected class overview; suppressed in drawer, focused assessment, conduct and recording, absent on routine grade/behavior, analytics, historical, council, student management and safety/settings views. Dedicated contextual tasks and mission/consent/privacy/storage gates are unchanged. No new capabilities or agent execution. Open panels are bound to the originating navigation version and class; stale callbacks cannot reopen on a new route. Interrupted mission is suspended through existing authority, not deleted; delayed intent replies are invalidated on close.",
+      "statement": "Supersedes the floating launcher placement and universal desktop availability of MOBILE-ACTIONS-01 only: production general Copilota entry is in normal layout flow on both mobile and desktop, allowed only for professional preparation, library, UDA, planning, online assessment and selected class overview; suppressed in drawer, focused assessment, conduct and recording, absent on routine grade/behavior, analytics, historical, council, student management and safety/settings views. Dedicated contextual tasks and mission/consent/privacy/storage gates are unchanged. No new capabilities or agent execution. Open panels are bound to the originating navigation version and class; stale callbacks cannot reopen on a new route. Interrupted mission is suspended through existing authority, not deleted; delayed intent replies are invalidated on close. The focused UDA recording dossier exposes its own explicit action above the modal backdrop and becomes inert while the composer is open. Navigation interruption revokes runtime authority before persisting suspension.",
       "impactPaths": [
         "src/App.tsx",
         "src/components/CopilotDeck.tsx",
@@ -2202,7 +2202,9 @@
         "src/security/librarySingleCopilotSurfaceContract.test.ts",
         "src/security/aic07MissionHandoffBehavior.test.ts",
         "src/security/aic07UiBehavior.test.ts",
-        "tests/browser/flow-03-registra.spec.cjs"
+        "tests/browser/flow-03-registra.spec.cjs",
+        "src/components/UdaWorkspaceView.tsx",
+        "src/components/UdaGanttView.tsx"
       ],
       "tests": [
         "src/security/copilotContextualPresence.test.ts",

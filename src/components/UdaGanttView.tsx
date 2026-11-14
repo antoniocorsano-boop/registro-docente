@@ -79,6 +79,8 @@ interface UdaGanttViewProps {
   getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   focusedRecordMode?: boolean;
+  onOpenRecordCopilot?: () => void;
+  recordCopilotOpen?: boolean;
   currentClassName?: string | null;
   planningFrame?: PlanningFrameResolution | null;
   teachingFocus?: LibraryTeachingContext | null;
@@ -475,6 +477,8 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
   getRecordLessonNavigationVersion,
   onRecordLessonCommitted,
   focusedRecordMode = false,
+  onOpenRecordCopilot,
+  recordCopilotOpen = false,
   currentClassName = null,
   planningFrame = null,
   teachingFocus = null,
@@ -2902,12 +2906,17 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         const otherUdas = scopedUdas.filter(u => u.id !== selectedUdaForDetail.id);
 
         return (
-          <div className="fixed inset-0 z-[70] bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Fascicolo UDA">
+          <div className="fixed inset-0 z-[70] bg-[#030712]/85 backdrop-blur-sm flex justify-center items-start p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal={focusedRecordMode && recordCopilotOpen ? undefined : true} aria-hidden={focusedRecordMode && recordCopilotOpen ? true : undefined} inert={focusedRecordMode && recordCopilotOpen ? true : undefined} aria-label="Fascicolo UDA">
             <div className="w-full max-w-4xl neon-card neon-card-highlight p-5 sm:p-7 my-6 space-y-6">
               {focusedRecordMode && (
                 <div className="rounded-xl border border-cyan-800/70 bg-cyan-950/30 p-3">
                   <p className="text-xs font-black uppercase tracking-wide text-cyan-300">Registrazione rapida</p>
                   <p className="mt-1 text-sm text-slate-300">Completa il diario dell'UDA; i dettagli progettuali restano disponibili solo se servono.</p>
+                  {onOpenRecordCopilot && (
+                    <button type="button" onClick={onOpenRecordCopilot} className="mt-3 min-h-[44px] rounded-xl border border-cyan-700 bg-slate-950 px-4 py-2 text-sm font-bold text-cyan-200 hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                      Copilota
+                    </button>
+                  )}
                 </div>
               )}
               {/* Header */}

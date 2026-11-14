@@ -28,6 +28,13 @@ describe('COPILOT-PRESENCE-01 — presentation is not authority', () => {
     expect(app).toContain('!isCurrentCopilotRender()');
     expect(app).toContain('copilotOriginRef.current !== launchOrigin');
     expect(app).toContain('handleMissionInterrupted({ missionId: interruptedMissionId })');
+    expect(app.indexOf('missionExecutionGrantsRef.current.delete(interruptedMissionId)')).toBeLessThan(app.indexOf('handleMissionInterrupted({ missionId: interruptedMissionId })'));
+    const workspace = await Bun.file('src/components/UdaWorkspaceView.tsx').text();
+    const dossier = await Bun.file('src/components/UdaGanttView.tsx').text();
+    expect(app).toContain('onOpenRecordCopilot={reopenLibraryCopilot}');
+    expect(workspace).toContain('onOpenRecordCopilot={onOpenRecordCopilot}');
+    expect(dossier).toContain('onClick={onOpenRecordCopilot}');
+    expect(dossier).toContain('inert={focusedRecordMode && recordCopilotOpen ? true : undefined}');
     expect(app).toContain('onOpenCopilot={openLibraryCopilot}');
     expect(app).toContain('onOpenPreparationCopilot={handleOpenPreparationCopilot}');
     expect(app).toContain('onOpenConductCopilot={handleOpenConductCopilot}');

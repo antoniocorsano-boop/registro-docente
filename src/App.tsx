@@ -2200,9 +2200,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     copilotOriginRef.current = null;
     setCopilotSurfaceMode('closed');
     if (interruptedMissionId) {
+      missionExecutionGrantsRef.current.delete(interruptedMissionId);
+      clearMissionRuntime(interruptedMissionId);
       void handleMissionInterrupted({ missionId: interruptedMissionId }).catch(() => {
         // The existing persistence error path reports the failed write.
-        // The panel stays closed; no new runtime authorization is issued.
+        // Runtime authorization is already revoked; the panel stays closed.
       });
     }
   }, [copilotSurfaceMode, ownsCopilot, launchRequest?.mission?.missionId, handleMissionInterrupted]);
@@ -3833,6 +3835,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             getRecordLessonNavigationVersion={() => navigationVersionRef.current}
             onRecordLessonCommitted={handleRecordLessonCommitted}
+            onOpenRecordCopilot={reopenLibraryCopilot}
+            recordCopilotOpen={visibleCopilotMode === 'compose'}
             onOpenCopilot={openLibraryCopilot}
           />
         )}

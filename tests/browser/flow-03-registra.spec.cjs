@@ -504,14 +504,19 @@ test.describe('FLOW-03 mobile qualification', () => {
 
   await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
   const mission = await assertRecordMission(page, 'Attività / nota UDA');
-  const missionCopilot = mission.getByRole('button', { name: 'Copilota', exact: true });
+  const focusedDossier = page.getByRole('dialog', { name: 'Fascicolo UDA' });
+  const missionCopilot = focusedDossier.getByRole('button', { name: 'Copilota', exact: true });
   await expect(missionCopilot).toBeVisible();
   await expect(flow03bFloatingCopilot).toBeHidden();
+  await assertCriticalControlsTouchSafe(focusedDossier);
   await missionCopilot.click();
   const missionComposer = page.getByTestId('library-copilot-composer');
   await expect(missionComposer).toBeVisible();
+  await expect(page.locator('[aria-label="Fascicolo UDA"]')).toHaveAttribute('inert', '');
   await missionComposer.getByRole('button',{name:'Chiudi Copilota',exact:true}).click();
   await expect(missionComposer).toHaveCount(0);
+  await expect(focusedDossier).toBeVisible();
+  await expect(focusedDossier).not.toHaveAttribute('inert', '');
   await expect(mission).toBeVisible();
   await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
   await expect(page.getByText('Diario della registrazione', { exact: true })).toBeVisible();
