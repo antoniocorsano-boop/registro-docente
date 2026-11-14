@@ -31,7 +31,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && unregisterPlatformBack == null) {
             unregisterPlatformBack = PlatformBack.register(this, this::navigateWebHistory);
@@ -39,7 +39,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         if (unregisterPlatformBack != null) {
             unregisterPlatformBack.run();
             unregisterPlatformBack = null;

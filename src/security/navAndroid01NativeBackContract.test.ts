@@ -10,6 +10,9 @@ describe('NAV-ANDROID-01 — Android system Back delegates to the existing histo
     expect(java.split('getOnBackPressedDispatcher().addCallback(')).toHaveLength(2);
     expect(java).toContain('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && unregisterPlatformBack == null)');
     expect(java.indexOf('super.onResume()')).toBeLessThan(java.indexOf('PlatformBack.register(this, this::navigateWebHistory)'));
+    // Capacitor 8.6 BridgeActivity declares these lifecycle overrides public.
+    expect(java).toContain('public void onResume()');
+    expect(java).toContain('public void onPause()');
     expect(java).toContain('unregisterPlatformBack.run();');
     expect(java).toContain('unregisterPlatformBack = null;');
     expect(java.indexOf('unregisterPlatformBack.run();')).toBeLessThan(java.indexOf('super.onPause()'));
