@@ -1,0 +1,84 @@
+name: Android Back Diagnostic (exact B4.2 APK)
+on:
+  pull_request:
+    branches: ['test/b4-2-android-lab']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-back:
+    if: github.head_ref == 'diagnostic/nav-android-b42-exact-apk'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    env:
+      LAB_PACKAGE: it.trama.registrodocente.lab.b42
+      LAB_SOURCE_SHA: 23997288c73db272dcfdd07c0e2b1c850c8e40a0
+      LAB_ARTIFACT_ID: '14118093957'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Obtain exact previously built artifact (no rebuild)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-evidence lab-apk
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$LAB_ARTIFACT_ID" > native-evidence/artifact.json
+          jq -e --arg sha "$LAB_SOURCE_SHA" '.expired == false and .workflow_run.head_sha == $sha' native-evidence/artifact.json
+          curl --fail --silent --show-error --location --retry 1 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$LAB_ARTIFACT_ID/zip" -o lab-apk/package.zip
+          unzip -q lab-apk/package.zip -d lab-apk
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          test "$(sha256sum "$APK" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$HASH")"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare Android 16 emulator using SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          timeout 300 "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-36;google_apis;x86_64'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name trama-back-api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_6
+          nohup "$ANDROID_HOME/emulator/emulator" -avd trama-back-api36 -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect > native-evidence/emulator.log 2>&1 &
+          timeout 240 adb wait-for-device
+          for i in $(seq 1 90); do
+            if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; then break; fi
+            sleep 2
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+          test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
+          adb shell input keyevent 82
+          adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
+          adb shell cmd overlay list > native-evidence/overlays.txt
+          grep -E '^\[x\] com\.android\.internal\.systemui\.navbar\.gestural$' native-evidence/overlays.txt
+          adb install "$APK"
+          adb shell am start -W -n "$LAB_PACKAGE/it.trama.registrodocente.prova.MainActivity"
+      - name: Exercise system Back on real WebView and Android activity
+        run: node --check scripts/diagnostics/back-exact-apk.mjs && node scripts/diagnostics/back-exact-apk.mjs
+      - name: Collect native evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p native-evidence
+          adb shell dumpsys activity activities > native-evidence/activity.txt 2>&1 || true
+          adb logcat -d -t 1500 > native-evidence/logcat.txt 2>&1 || true
+          adb emu kill || true
+      - name: Upload non-release diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-back-diagnostic-${{ github.event.pull_request.head.sha }}
+          path: native-evidence/
+          retention-days: 7
