@@ -25,7 +25,7 @@ async function connect() {
       if(!/^\d+$/.test(pid)) throw Error('No app pid');
       adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+pid);
       const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(2000)});
-      const target=(await res.json()).find(t=>t.type==='page'&&t.webSocketDebuggerUrl);
+      const target=(await res.json()).find(t=>t.type==='page'&&t.webSocketDebuggerUrl&&/^https?:\/\/localhost(?::\d+)?(?:\/|$)/.test(t.url));
       if(!target) throw Error('No WebView target');
       socket=new WebSocket(target.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/,'ws://127.0.0.1:9222'));
       await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true})});
@@ -61,26 +61,35 @@ async function until(fn,label,ms=15000) {
 async function tap(selector, label) {
   const q=JSON.stringify(selector);
   await until(()=>evaluate('Boolean(document.querySelector('+q+'))'),'Missing '+label);
-  await evaluate('document.querySelector('+q+').click(); true');
+  await touch('document.querySelector('+q+')');
 }
 async function button(label, scope='') {
-  const expr='Array.from(document.querySelectorAll('+JSON.stringify(scope+'button')+')).find(b=>b.getClientRects().length && b.textContent.trim()==='+JSON.stringify(label)+')';
+  const expr='Array.from(document.querySelectorAll('+JSON.stringify(scope+'button')+')).find(b=>b.getClientRects().length && !b.disabled && b.textContent.trim()==='+JSON.stringify(label)+')';
   await until(()=>evaluate('Boolean('+expr+')'),'Missing '+label);
   await touch(expr);
 }
 async function tab() { return evaluate('history.state?.tab || (new URL(location.href).searchParams.get("tab")) || "home"'); }
 async function assertTab(wanted,label) {
-  await until(async()=>foreground()&&(await tab())===wanted,label+': expected '+wanted,8000);
+  const names={dashboard:'Riepilogo',tabellone:'Tabellone',analytics:'Analisi'};
+  await until(async()=>foreground()&&(await tab())===wanted&&await evaluate('Array.from(document.querySelectorAll("nav button")).some(b=>b.getClientRects().length&&b.classList.contains("font-bold")&&b.textContent.trim()==='+JSON.stringify(names[wanted])+')'),label+': expected active '+wanted,8000);
+}
+async function snapshot() {
+  try {
+    return await evaluate('({origin:location.origin,tab:history.state?.tab||"home",historyLength:history.length,ready:document.readyState,visibility:document.visibilityState,headings:Array.from(document.querySelectorAll("h1,h2")).slice(0,5).map(e=>e.textContent.trim()),modeAvailable:!!document.querySelector("input[name=archive-mode]"),passwordAvailable:!!document.querySelector("#vault-password"),activeNav:Array.from(document.querySelectorAll("nav button.font-bold")).map(b=>b.textContent.trim())})');
+  } catch(e){return {snapshotError:e.message};}
 }
 async function back(label,cmd,wanted) {
+  const before=await snapshot();
   adb('shell','input',...cmd);
-  try { await assertTab(wanted,label);record(label,'PASS',{tab:wanted,foreground:true}); }
-  catch(e) {record(label,'FAIL',{foreground:foreground(),message:e.message});throw e;}
+  try { await assertTab(wanted,label);record(label,'PASS',{tab:wanted,foreground:true,before,after:await snapshot()}); }
+  catch(e) {record(label,'FAIL',{foreground:foreground(),message:e.message,before,after:await snapshot()});throw e;}
 }
 try {
   await connect();
-  await until(()=>evaluate('Boolean(document.querySelector(\'#vault-password\'))'),'Archive setup not available');
+  await until(()=>evaluate('Boolean(document.querySelector(\'input[name="archive-mode"][value="demo"]\'))'),'Archive mode choice not available',45000);
   await tap('input[name="archive-mode"][value="demo"]','demo archive');
+  await until(()=>evaluate('Boolean(document.querySelector("#vault-password"))'),'Demo password field not available after selecting mode');
+  record('demo-mode-selected','PASS');
   await evaluate('(()=>{const e=document.querySelector("#vault-password");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,"synthetic-back-diagnostic-only");e.dispatchEvent(new Event("input",{bubbles:true}));e.blur();return true})()');
   await button('Avvia la prova');
   await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo classes unavailable');
@@ -106,6 +115,6 @@ try {
   // Do not claim physical gesture, dirty-draft or root qualification from these tests.
   record('emulator-only-diagnostic','PASS');
 } catch(e) {
-  record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground()});
+  record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});
   process.exitCode=1;
 } finally {socket?.close();}
