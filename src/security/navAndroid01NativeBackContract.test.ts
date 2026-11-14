@@ -3,10 +3,22 @@ import { describe, expect, test } from 'bun:test';
 const read = (path: string) => Bun.file(path).text();
 
 describe('NAV-ANDROID-01 — Android system Back delegates to the existing history', () => {
-  test('native callback attaches once after BridgeActivity initialization, not a web swipe recognizer', async () => {
+  test('one native owner per API level, lifecycle-bound and committed Back only', async () => {
     const java = await read('mobile/android-probe/native/MainActivity.java');
-    expect(java.indexOf('super.onCreate(savedInstanceState)')).toBeLessThan(java.indexOf('getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true)'));
+    expect(java.indexOf('super.onCreate(savedInstanceState)')).toBeLessThan(java.indexOf('if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)'));
+    expect(java).toContain('if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU)');
     expect(java.split('getOnBackPressedDispatcher().addCallback(')).toHaveLength(2);
+    expect(java).toContain('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && unregisterPlatformBack == null)');
+    expect(java.indexOf('super.onResume()')).toBeLessThan(java.indexOf('PlatformBack.register(this, this::navigateWebHistory)'));
+    expect(java).toContain('unregisterPlatformBack.run();');
+    expect(java).toContain('unregisterPlatformBack = null;');
+    expect(java.indexOf('unregisterPlatformBack.run();')).toBeLessThan(java.indexOf('super.onPause()'));
+    expect(java).toContain('@TargetApi(33)');
+    expect(java).toContain('OnBackInvokedCallback callback = navigate::run;');
+    expect(java).toContain('dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback)');
+    expect(java).toContain('return () -> dispatcher.unregisterOnBackInvokedCallback(callback);');
+    expect(java.split('dispatcher.registerOnBackInvokedCallback(')).toHaveLength(2);
+    expect(java).not.toMatch(/PRIORITY_OVERLAY,|Build\.MANUFACTURER|Build\.MODEL|onBackStarted\(|onBackProgressed\(/);
     expect(java).toContain('if (getBridge() == null) return;');
     expect(java).toContain('WebView webView = getBridge().getWebView();');
     expect(java).toContain('if (webView != null && webView.canGoBack())');
@@ -33,6 +45,12 @@ describe('NAV-ANDROID-01 — Android system Back delegates to the existing histo
     const yml = await read('.github/workflows/mobile-01-android-probe.yml');
     expect(yml).toContain('bun test src/security/navAndroid01NativeBackContract.test.ts');
     expect(yml).toContain('cp native/MainActivity.java native/RegistroBackupFilesPlugin.java');
+    const manifest = await read('mobile/android-probe/prepare-native-back.mjs');
+    expect(manifest).toContain('android:enableOnBackInvokedCallback="true"');
+    expect(yml).toContain('node prepare-native-back.mjs');
+    expect(yml).toContain('probe-manifest-tree.txt');
+    expect(yml).toContain('beta-manifest-tree.txt');
+    expect(yml.match(/android:enableOnBackInvokedCallback/g)).toHaveLength(2);
     expect(yml).toContain('android_system_back_device_qualified=false');
     expect(yml).not.toContain('android_system_back_device_qualified=true');
   });
