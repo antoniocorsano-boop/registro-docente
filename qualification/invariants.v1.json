@@ -2154,6 +2154,27 @@
       "browserSmoke": [
         "tests/browser/nav-context-01-return-origin.spec.cjs"
       ]
+    },
+    {
+      "id": "NAV-ANDROID-01-I01",
+      "owner": "NAV-ANDROID-01",
+      "statement": "Android edge gesture and system Back enter the same lifecycle-bound native dispatcher callback; it traverses existing WebView history only when canGoBack, never synthesizes a route, exits or mutates an archive. Existing App popstate and draft guard remain the authority; no web swipe interception. Native compile and browser history checks do not qualify physical gesture, modal/IME handling or device lifecycle.",
+      "impactPaths": [
+        "mobile/android-probe/native/MainActivity.java",
+        ".github/workflows/mobile-01-android-probe.yml",
+        "qualification/invariants.v1.json",
+        "src/security/navAndroid01NativeBackContract.test.ts"
+      ],
+      "tests": [
+        "src/security/navAndroid01NativeBackContract.test.ts",
+        "src/security/navBack01StudentReportHistory.test.ts",
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
     }
   ]
 }

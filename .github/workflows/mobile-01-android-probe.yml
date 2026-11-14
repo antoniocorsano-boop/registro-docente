@@ -48,6 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           bun install --frozen-lockfile
+          bun test src/security/navAndroid01NativeBackContract.test.ts
           bun run build
           test -f dist/index.html
           test -s dist/vendor/html2pdf.bundle.min.js
@@ -142,6 +143,7 @@ jobs:
             printf 'android_restore_native_implemented=true\n'
             printf 'android_backup_device_qualified=false\n'
             printf 'android_restore_device_qualified=false\n'
+            printf 'android_system_back_device_qualified=false\n'
             printf 'android_hpr_qualified=false\n'
             printf 'vault_android_qualified=false\n'
           } > "$PROBE_DIR/probe-manifest.txt"
