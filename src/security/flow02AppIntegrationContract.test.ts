@@ -79,7 +79,8 @@ describe('FLOW-02 App integration contract', () => {
     const experience = await source('src/components/CopilotExperience.tsx');
     const deck = await source('src/components/CopilotDeck.tsx');
 
-    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct'");
+    expect(app).toContain('showClosedTrigger={ambientCopilotAllowed}');
+    expect(app).toContain("conductActive: todayAction === 'conduct'");
     expect(experience).toContain('showClosedTrigger?: boolean;');
     expect(experience).toContain('showClosedTrigger = true');
     expect(experience).toContain('showClosedTrigger={showClosedTrigger}');

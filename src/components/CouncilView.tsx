@@ -28,12 +28,11 @@ interface CouncilViewProps {
   onPrepareSnapshot: (context: CouncilSnapshotContextV1) => Promise<CouncilSnapshotPreviewV1>;
   onConfirmSnapshot: (reviewed: CouncilSnapshotPreviewV1, snapshotId: string) => Promise<void>;
   onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
-  onOpenCopilot: () => void;
 }
 
 export const CouncilView: React.FC<CouncilViewProps> = ({
   classes, settings, isPrivacyShieldActive, onSave, onCreateSession,
-  onPrepareSnapshot, onConfirmSnapshot, onRegisterDraftGuard, onOpenCopilot
+  onPrepareSnapshot, onConfirmSnapshot, onRegisterDraftGuard
 }) => {
   // Class choice is explicit. Do not infer one from the current navigation context.
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -225,11 +224,6 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         <h1 className="text-xl font-bold text-white flex items-center gap-2">
           <ClipboardList className="w-5 h-5 text-[var(--primary)]" /> Consigli di classe
         </h1>
-        <button type="button" onClick={onOpenCopilot}
-          aria-label="Apri Copilota dai Consigli di classe"
-          className="md:hidden mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
-          Apri Copilota
-        </button>
         <p className="text-sm text-slate-300 mt-1">Archivio dei Consigli · anno scolastico {schoolYear}.</p>
         <p className="text-xs text-slate-400 mt-1">
           La media è un riferimento matematico; il voto di ingresso è attribuito e confermato dal docente.

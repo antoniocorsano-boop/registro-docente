@@ -3,9 +3,10 @@ import { ClassData } from '../types';
 import type { TodayAction } from '../today/todayRouter';
 import { calcAvg, formatGrade } from '../utils';
 import { Sparkline } from './Sparkline';
+import { describeBackupCopy } from '../persistence/backupReminderPolicy';
 import {
-  AlertTriangle,
-  Download,
+  FileCheck2,
+  FileClock,
   FolderOpen,
   GraduationCap,
   Plus,
@@ -21,6 +22,7 @@ interface HomeViewProps {
   onDeleteClass: (classId: string) => Promise<void>;
   onExportBackup: () => void;
   lastBackupDate: string | null;
+  verifiedBackupDate?: string | null;
   unsavedChangesCount: number;
   onStartTodayAction: (action: TodayAction) => void;
   pendingTodayAction: TodayAction | null;
@@ -53,6 +55,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onDeleteClass,
   onExportBackup,
   lastBackupDate,
+  verifiedBackupDate,
   unsavedChangesCount,
   onStartTodayAction,
   pendingTodayAction,
@@ -120,7 +123,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const instituteSufficiency = allAverages.length > 0
     ? Math.round((allAverages.filter(value => value >= 6).length / allAverages.length) * 100)
     : null;
-  const isBackupStale = !lastBackupDate || unsavedChangesCount >= 10;
+  const backupCopy = describeBackupCopy(lastBackupDate, verifiedBackupDate, unsavedChangesCount);
 
   const modeClass = (mode: HomeViewMode) =>
     `min-h-[44px] px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
@@ -348,23 +351,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          <div className={`p-3 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs border ${isBackupStale ? 'bg-amber-950/30 border-amber-500/40 text-amber-200' : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'}`}>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className={`w-4 h-4 shrink-0 ${isBackupStale ? 'text-amber-400' : 'text-emerald-400'}`} />
-              <span>
-                Ultimo backup cifrato:{' '}
-                <b>{lastBackupDate ? new Date(lastBackupDate).toLocaleDateString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Mai effettuato'}</b>
-                {unsavedChangesCount > 0 && ` · (${unsavedChangesCount} modifiche da salvare)`}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={onExportBackup}
-              className="min-h-[44px] px-3 py-2 rounded bg-[var(--surface-variant)] hover:bg-slate-800 border border-[var(--border)] text-white text-xs font-semibold flex items-center gap-1.5 shrink-0"
-            >
-              <Download className="w-3.5 h-3.5 text-[var(--primary)]" /> Esporta backup cifrato
-            </button>
-          </div>
+
         </section>
       )}
 
@@ -414,6 +401,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </section>
       )}
+      <div data-testid="backup-copy-indicator" className="flex items-center gap-2 border-t border-[var(--border)] pt-2 text-xs text-slate-300">
+        {backupCopy.kind === 'current'
+          ? <FileCheck2 aria-hidden="true" className="w-4 h-4 shrink-0 text-emerald-400" />
+          : <FileClock aria-hidden="true" className="w-4 h-4 shrink-0 text-slate-400" />}
+        <div className="min-w-0 flex-1">
+          <p className="font-medium break-words">{backupCopy.label}</p>
+          {backupCopy.detail && <p className="text-slate-400 break-words">{backupCopy.detail}</p>}
+        </div>
+        <button type="button" onClick={onExportBackup} aria-label="Esporta backup cifrato"
+          className="min-h-[44px] px-2 text-xs font-medium text-[var(--primary)] shrink-0 rounded-md focus-visible:outline focus-visible:outline-2">
+          Gestisci
+        </button>
+      </div>
     </div>
   );
 };

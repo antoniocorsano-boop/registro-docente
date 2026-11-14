@@ -8,10 +8,12 @@ const browser = readFileSync('tests/browser/header-01-copilot-drawer-occlusion.s
 
 describe('HEADER-01 / Copilota e Drawer senza sovrapposizioni', () => {
   test('l’App nasconde il trigger mobile durante il pannello di navigazione', () => {
-    expect(app).toContain("suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab) || (activeTab==='tabellone'&&dailyMatrixMode)}");
+    expect(app).toContain('showClosedTrigger={ambientCopilotAllowed}');
+    expect(app).toContain('drawerOpen: isDrawerOpen');
+    expect(app).toContain('inlineMobileTrigger={true}');
     expect(app).toContain('isDrawerOpen={isDrawerOpen}');
     // The individual report has no floating launcher on either layout.
-    expect(app).toContain("showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report' && !(activeTab==='tabellone'&&dailyMatrixMode)}");
+    expect(app).toContain("recordingActive: isActiveRecordFocus");
   });
 
   test('il trigger Copilota rimane indipendente e rispetta la soppressione senza cambiare il desktop', () => {
@@ -20,7 +22,7 @@ describe('HEADER-01 / Copilota e Drawer senza sovrapposizioni', () => {
     // hides only floating launchers, never the in-flow launcher.
     expect(copilot).toContain('suppressMobileTrigger || (!inlineMobileTrigger && hiddenOnMobile)');
     expect(copilot).toContain("inlineMobileTrigger ? 'relative self-end");
-    expect(copilot).toContain('md:fixed');
+    expect(copilot).toContain("inlineMobileTrigger ? 'relative self-end mx-3 mt-1 shrink-0 md:mx-5'");
     expect(copilot).toContain("'max-md:hidden' : ''");
     expect(navbar).toContain('id="registro-navigation-drawer"');
     expect(navbar).toContain('isDrawerOpen ?');

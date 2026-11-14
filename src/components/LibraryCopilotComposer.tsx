@@ -260,6 +260,16 @@ export const LibraryCopilotComposer: React.FC<LibraryCopilotComposerProps> = ({
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   );
   const resolutionEpochRef = useRef(0);
+  const previouslyOpenRef = useRef(isOpen);
+  useLayoutEffect(() => {
+    if (previouslyOpenRef.current && !isOpen) {
+      // A route-driven close invalidates pending generic replies just as a
+      // changed material does. Never let a delayed reply revive the panel.
+      resolutionEpochRef.current += 1;
+      setIsResolving(false);
+    }
+    previouslyOpenRef.current = isOpen;
+  }, [isOpen]);
   const agentFallbackCodeRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const preserveGovernedContinuationOnReopenRef = useRef(false);

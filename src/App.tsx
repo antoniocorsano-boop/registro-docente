@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   ActiveTab,
   AppData,
@@ -59,6 +59,7 @@ import {
   type RememberProfessionalItemInput
 } from './memory/professionalMemory';
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
+import { shouldOfferAmbientCopilot } from './copilot/contextualPresence';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import { resolvePlanningFrame } from './planning/planningFrameResolver';
@@ -163,12 +164,15 @@ import {
   type TeachingProposalOutcomeMutationInput
 } from './persistence/teachingProposalOutcomeMutation';
 import {
-  applyBackupReceipt,
+  createBackupReceiptAuthority,
   incrementBackupChanges,
   prepareBackupCheckpoint,
+  verifiedBackupDate,
+  type AuthorizedBackupCheckpoint,
+  type ExpectedCopyEvidence,
+  type BackupReceipt,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
-import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
@@ -213,7 +217,6 @@ import { VerificheOnlineView, type AssessmentDraftGuard } from './components/Ver
 import { UdaGanttView } from './components/UdaGanttView';
 import { SettingsView } from './components/SettingsView';
 import { CopilotProactivitySettings } from './components/CopilotProactivitySettings';
-import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
@@ -684,7 +687,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // queued until its matching popstate is delivered (latest intent wins).
   const pendingEvaluationCancelRef = useRef<{ classId: string; proceed: (() => void) | null } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
   const saveIndicatorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
@@ -699,15 +701,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const [isAssessmentEditorFocus, setIsAssessmentEditorFocus] = useState(false);
   const [copilotOpenRequestNonce, setCopilotOpenRequestNonce] = useState(0);
   const [copilotSurfaceMode, setCopilotSurfaceMode] = useState<CopilotSurfaceMode>('closed');
-
-  useEffect(() => {
-    onCopilotSurfaceOpenChange?.(copilotSurfaceMode !== 'closed');
-  }, [copilotSurfaceMode, onCopilotSurfaceOpenChange]);
+  // Session-only presentation owner. Route changes cannot carry an open
+  // generic or dedicated panel into a different professional workspace.
+  const copilotOriginRef = useRef<{ version: number; classId: string | null; kind: 'ambient' | 'explicit' } | null>(null);
 
   const openLibraryCopilot = useCallback((
     context: CopilotLaunchContext,
     mission?: CopilotMissionLaunchV1
   ) => {
+    copilotOriginRef.current = { version: navigationVersionRef.current, classId: currentClassIdRef.current, kind: 'explicit' };
     setCopilotSurfaceMode('compose');
     setLaunchRequest(previous => ({
       nonce: (previous?.nonce ?? 0) + 1,
@@ -716,11 +718,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }));
   }, []);
 
-  const reopenLibraryCopilot = useCallback(() => {
+  const reopenCopilotForOrigin = useCallback((kind: 'ambient' | 'explicit') => {
+    copilotOriginRef.current = { version: navigationVersionRef.current, classId: currentClassIdRef.current, kind };
     setLaunchRequest(null);
     setCopilotSurfaceMode('compose');
     setCopilotOpenRequestNonce(previous => previous + 1);
   }, []);
+
+  // Event-facing contextual action deliberately ignores React's click event.
+  const reopenLibraryCopilot = useCallback(() => {
+    reopenCopilotForOrigin('explicit');
+  }, [reopenCopilotForOrigin]);
 
   // Metadata for backup tracking
   const [meta, setMeta] = useState<SecureMeta>(() =>
@@ -730,6 +738,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const appDataRef = useRef(appData);
   const currentClassIdRef = useRef(appData.currentClassId);
   const metaRef = useRef(meta);
+  const backupReceiptAuthorityRef = useRef<ReturnType<typeof createBackupReceiptAuthority> | null>(null);
+  const backupReceiptAuthority = backupReceiptAuthorityRef.current ?? (
+    backupReceiptAuthorityRef.current = createBackupReceiptAuthority()
+  );
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
@@ -1188,6 +1200,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const commitAppDataMutation = useCallback((
     derive: (current: AppData) => AppData,
     options: {
+      /** Historical caller option; backup maintenance never interrupts durable writes. */
       showBackupModal?: boolean;
       successMessage?: string;
       inlineFailure?: boolean;
@@ -1195,7 +1208,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ): Promise<AppData> => {
     const {
-      showBackupModal,
       successMessage = 'Salvato nel vault locale',
       inlineFailure = false,
       afterCommit
@@ -1227,12 +1239,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
       },
-      afterCommit: (candidate, previous) => {
+      afterCommit: () => {
         if (successMessage) toast(successMessage);
-        const shouldOpenBackupModal = showBackupModal === true
-          || (showBackupModal === undefined
-            && shouldSuggestBackupReminder(previous.meta, candidate.meta));
-        if (shouldOpenBackupModal) setIsBackupModalOpen(true);
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
@@ -1560,6 +1568,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     preview: CopilotMissionPreviewV1,
     materialFingerprint: string
   ): Promise<void> => {
+    const launchNavigationVersion = navigationVersionRef.current;
+    const launchClassId = currentClassIdRef.current;
+    const launchOrigin = copilotOriginRef.current;
     const uda = udasRef.current.find(candidate => candidate.id === opportunity.contextRef.udaId);
     if (!uda) throw new Error('Il contesto della missione non è più disponibile.');
     const sources = libraryRef.current.sources.filter(source => opportunity.proposedMission.sourceRefs.includes(source.id));
@@ -1628,6 +1639,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         occurredAt: now
       }
     ), 'Incarico del Copilota avviato');
+    if (navigationVersionRef.current !== launchNavigationVersion
+      || currentClassIdRef.current !== launchClassId
+      || copilotOriginRef.current !== launchOrigin) {
+      // Authorization was persisted, but the originating panel is gone.
+      // Keep the mission resumable without issuing a runtime grant.
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current, mission.id, suspendCopilotMission
+      ), '');
+      return;
+    }
     missionExecutionGrantsRef.current.set(mission.id, grant);
     const runtime = bindMissionRuntime(mission, grant);
     openLibraryCopilot({
@@ -1643,6 +1664,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleResumeCopilotMission = useCallback(async (
     mission: CopilotMissionV1
   ): Promise<MissionResumeDecision> => {
+    const launchNavigationVersion = navigationVersionRef.current;
+    const launchClassId = currentClassIdRef.current;
+    const launchOrigin = copilotOriginRef.current;
     const currentMission = copilotStateRef.current.missions.find(candidate => candidate.id === mission.id);
     if (!currentMission || currentMission.status !== 'suspended') return 'archive';
 
@@ -1720,6 +1744,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       currentMission.id,
       item => ({ ...item, status: 'authorized' })
     ), 'Incarico del Copilota ripreso');
+    if (navigationVersionRef.current !== launchNavigationVersion
+      || currentClassIdRef.current !== launchClassId
+      || copilotOriginRef.current !== launchOrigin) {
+      // Authorization was persisted, but the originating panel is gone.
+      // Keep the mission resumable without issuing a runtime grant.
+      await commitCopilotStateMutation(current => updateCopilotMission(
+        current, currentMission.id, suspendCopilotMission
+      ), '');
+      return 'resume';
+    }
     missionExecutionGrantsRef.current.set(currentMission.id, grant);
     const runtime = bindMissionRuntime({ ...currentMission, status: 'authorized' }, grant);
     openLibraryCopilot({
@@ -2141,6 +2175,70 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       });
 
   const ambientCopilotContext: CopilotLaunchContext = ambientCopilotProjection;
+
+  const ambientCopilotAllowed = shouldOfferAmbientCopilot({
+    tab: activeTab,
+    hasClass: Boolean(currentClass),
+    drawerOpen: isDrawerOpen,
+    assessmentEditorFocused: isAssessmentEditorFocus,
+    conductActive: todayAction === 'conduct',
+    recordingActive: isActiveRecordFocus
+  });
+  const copilotRenderVersion = navigationVersionRef.current;
+  const copilotRenderClassId = currentClassIdRef.current;
+  const copilotOrigin = copilotOriginRef.current;
+  const ownsCopilot = Boolean(copilotOrigin
+    && copilotOrigin.version === copilotRenderVersion
+    && copilotOrigin.classId === copilotRenderClassId
+    && !studentMode.isOpen && !isAssessmentEditorFocus
+    && (copilotOrigin.kind === 'explicit' || ambientCopilotAllowed));
+  const visibleCopilotMode: CopilotSurfaceMode = ownsCopilot ? copilotSurfaceMode : 'closed';
+
+  useLayoutEffect(() => {
+    if (copilotSurfaceMode === 'closed' || ownsCopilot) return;
+    const interruptedMissionId = launchRequest?.mission?.missionId;
+    copilotOriginRef.current = null;
+    setCopilotSurfaceMode('closed');
+    if (interruptedMissionId) {
+      missionExecutionGrantsRef.current.delete(interruptedMissionId);
+      clearMissionRuntime(interruptedMissionId);
+      void handleMissionInterrupted({ missionId: interruptedMissionId }).catch(() => {
+        // The existing persistence error path reports the failed write.
+        // Runtime authorization is already revoked; the panel stays closed.
+      });
+    }
+  }, [copilotSurfaceMode, ownsCopilot, launchRequest?.mission?.missionId, handleMissionInterrupted]);
+
+  useEffect(() => {
+    onCopilotSurfaceOpenChange?.(visibleCopilotMode !== 'closed');
+  }, [visibleCopilotMode, onCopilotSurfaceOpenChange]);
+
+  const isCurrentCopilotRender = () => navigationVersionRef.current === copilotRenderVersion
+    && currentClassIdRef.current === copilotRenderClassId;
+
+  const changeCopilotSurfaceMode = (mode: CopilotSurfaceMode) => {
+    if (!isCurrentCopilotRender()) return;
+    if (mode === 'closed') {
+      copilotOriginRef.current = null;
+      setCopilotSurfaceMode('closed');
+      return;
+    }
+    if (mode === 'home') {
+      if (!ambientCopilotAllowed) return;
+      copilotOriginRef.current = { version: copilotRenderVersion, classId: copilotRenderClassId, kind: 'ambient' };
+      setCopilotSurfaceMode('home');
+      return;
+    }
+    const owner = copilotOriginRef.current;
+    if (!owner || owner.version !== copilotRenderVersion || owner.classId !== copilotRenderClassId
+      || (owner.kind === 'ambient' && !ambientCopilotAllowed)) return;
+    setCopilotSurfaceMode('compose');
+  };
+  const openAmbientConversation = () => {
+    if (!isCurrentCopilotRender() || !ambientCopilotAllowed || !copilotOriginRef.current) return;
+    reopenCopilotForOrigin('ambient');
+  };
+
 
   // Synchronize URL query params
   useEffect(() => {
@@ -3188,10 +3286,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     meta: metaRef.current
   });
 
-  const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> => {
+  const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> => {
     return mutationCoordinator.enqueueTask(() =>
-      prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString())
+      backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
     );
+  };
+
+  const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
+    return mutationCoordinator.enqueueTask(() => backupReceiptAuthority.bindEvidence(receipt, evidence));
   };
 
   const recordEncryptedBackupExport = (
@@ -3199,7 +3301,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ): Promise<void> => {
     return mutationCoordinator.enqueue<SecureMeta>({
       getCommitted: () => metaRef.current,
-      derive: current => applyBackupReceipt(current, checkpoint),
+      derive: current => backupReceiptAuthority.consume(current, checkpoint),
       persist: candidate => secureStorage.saveMeta(candidate),
       publish: candidate => {
         metaRef.current = candidate;
@@ -3273,6 +3375,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
       }
+      backupReceiptAuthority.invalidate();
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
@@ -3306,7 +3409,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
+    backupReceiptAuthority.invalidate();
     try {
+      await mutationCoordinator.enqueueTask(async () => {
+      backupReceiptAuthority.invalidate();
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
@@ -3332,6 +3438,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
+      });
     } catch (error) {
       console.error('Secure factory reset failed', error);
       alert('Reset sicuro non riuscito. I dati cifrati non sono stati dichiarati cancellati.');
@@ -3400,12 +3507,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onIgnore={handleIgnoreCopilotOpportunity}
             onResume={handleResumeCopilotMission}
             onStart={handleStartCopilotMission}
-            onOpenConversation={reopenLibraryCopilot}
-            surfaceMode={copilotSurfaceMode}
-            onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report' && !(activeTab==='tabellone'&&dailyMatrixMode)}
-            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab) || (activeTab==='tabellone'&&dailyMatrixMode)}
-            inlineMobileTrigger={['analytics', 'programmazione', 'verifiche-online'].includes(activeTab)}
+            onOpenConversation={openAmbientConversation}
+            surfaceMode={visibleCopilotMode}
+            onSurfaceModeChange={changeCopilotSurfaceMode}
+            showClosedTrigger={ambientCopilotAllowed}
+            suppressMobileTrigger={isDrawerOpen}
+            inlineMobileTrigger={true}
           />
           )}
         </>
@@ -3422,6 +3529,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteClass={handleDeleteClass}
             onExportBackup={handleExportBackup}
             lastBackupDate={meta.lastBackup}
+            verifiedBackupDate={verifiedBackupDate(meta)}
             unsavedChangesCount={meta.changes || 0}
             onStartTodayAction={handleStartTodayAction}
             pendingTodayAction={todayAction}
@@ -3550,7 +3658,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onPrepareSnapshot={handlePrepareCouncilSnapshot}
             onConfirmSnapshot={handleConfirmCouncilSnapshot}
             onRegisterDraftGuard={registerCouncilDraftGuard}
-            onOpenCopilot={() => setCopilotSurfaceMode('home')}
           />
         )}
 
@@ -3689,7 +3796,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteSource={handleDeleteLibrarySource}
             onOpenCopilot={openLibraryCopilot}
             onPrepareAssessment={handlePrepareAssessmentFromLibrary}
-            isCopilotOpen={copilotSurfaceMode === 'compose'}
+            isCopilotOpen={visibleCopilotMode === 'compose'}
             isPending={isLibraryMutationPending}
             errorMessage={libraryMutationError}
           />
@@ -3728,6 +3835,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               : undefined}
             getRecordLessonNavigationVersion={() => navigationVersionRef.current}
             onRecordLessonCommitted={handleRecordLessonCommitted}
+            onOpenRecordCopilot={reopenLibraryCopilot}
+            recordCopilotOpen={visibleCopilotMode === 'compose'}
             onOpenCopilot={openLibraryCopilot}
           />
         )}
@@ -3764,6 +3873,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onBindBackupEvidence={bindBackupEvidence}
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
@@ -3791,8 +3901,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
               openRequestNonce={copilotOpenRequestNonce}
               ambientContext={ambientCopilotContext}
               showStandaloneTrigger={false}
-              surfaceMode={copilotSurfaceMode}
-              onSurfaceModeChange={setCopilotSurfaceMode}
+              surfaceMode={visibleCopilotMode}
+              onSurfaceModeChange={changeCopilotSurfaceMode}
               onAddSource={handleAddLibrarySource}
               onAdoptProposalToUda={handleAdoptTeachingProposalToUda}
               onUpdateSource={handleUpdateLibrarySource}
@@ -3906,12 +4016,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         </div>
       )}
 
-      {/* Persistence confirmation modal */}
-      <BackupReminderModal
-        isOpen={isBackupModalOpen}
-        onClose={() => setIsBackupModalOpen(false)}
-        onExport={handleExportBackup}
-      />
     </div>
   );
 }

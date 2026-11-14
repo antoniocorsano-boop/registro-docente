@@ -21,84 +21,41 @@ async function prepare(page) {
 }
 
 for (const width of [390, 320]) {
-  test(`MOBILE-ACTIONS-01 trigger compact, separate from Vault, auto-hides on downward scroll and form focus at ${width}px`, async ({ browser }) => {
-    const context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 700 } });
+  test(`MOBILE-ACTIONS-01 contextual in-flow launcher, no overlap or irrelevant entry at ${width}px`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 700 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await prepare(page);
-
-    // Gestione alunni is a writing surface where the launcher is intentionally
-    // suppressed. Use the read-only Tabellone for adaptive visibility tests.
     const navigation = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Tabellone', exact: true }) });
-    await navigation.getByRole('button', { name: 'Tabellone', exact: true }).click();
-    await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
-    await expect(page.getByRole('heading', { name: /Tabellone Classe:/ })).toBeVisible();
     const trigger = page.getByTestId('library-copilot-trigger');
-    const lock = page.getByRole('button', { name: 'Blocca Registro', exact: true });
-    const vault = lock.locator('..');
+    const lock = page.getByTestId('header01-lock');
+    await expect(trigger).toHaveCount(0);
+    await navigation.getByRole('button', { name: 'Riepilogo', exact: true }).click();
     await expect(trigger).toBeVisible();
-    await expect(lock).toBeVisible();
-    const initial = await trigger.boundingBox();
-    const security = await vault.boundingBox();
-    const nav = await navigation.boundingBox();
-    expect(initial).not.toBeNull();
-    expect(security).not.toBeNull();
-    expect(nav).not.toBeNull();
-    expect(initial.width).toBeGreaterThanOrEqual(48);
-    expect(initial.height).toBeGreaterThanOrEqual(48);
-    expect(initial.x + initial.width).toBeLessThan(security.x);
-    expect(initial.y + initial.height).toBeLessThanOrEqual(nav.y + 1);
-
-    // Synthetic geometry only; no professional entries are modified.
-    await page.evaluate(() => {
-      document.querySelector('main').style.minHeight = '2400px';
-      window.scrollTo(0, 0);
-    });
-    // Slow 4px events must accumulate; a single large scroll jump is insufficient evidence.
-    await page.evaluate(async () => {
-      for (let y = 4; y <= 400; y += 4) {
-        window.scrollTo(0, y);
-        await new Promise(resolve => requestAnimationFrame(resolve));
-      }
-    });
-    await expect(trigger).toBeHidden();
-    await expect(lock).toBeVisible();
-    await page.evaluate(async () => {
-      for (let y = 396; y >= 120; y -= 4) {
-        window.scrollTo(0, y);
-        await new Promise(resolve => requestAnimationFrame(resolve));
-      }
-    });
-    await expect(trigger).toBeVisible();
-
-    // The period filter is an editable select on a permitted read-only surface.
-    const periodSelect = page.locator('select').filter({ has: page.locator('option[value="ALL"]') });
-    await expect(periodSelect).toBeVisible();
-    await periodSelect.focus();
-    await expect(trigger).toBeHidden();
-    await periodSelect.blur();
-    await expect(trigger).toBeVisible();
-
+    await expect(trigger).toContainText('Copilota');
+    expect(await trigger.evaluate(el => getComputedStyle(el).position)).toBe('relative');
+    const box = await trigger.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(48);
+    expect(box.height).toBeGreaterThanOrEqual(48);
+    await expectNoOverlap(trigger, lock);
+    await expectNoOverlap(trigger, page.locator('main'));
     await trigger.click();
     const deck = page.getByTestId('copilot-deck');
     await expect(deck).toBeVisible();
     await expect(trigger).toHaveCount(0);
-    await expect(lock).toBeVisible();
-    // Scrolling inside the Copilota overlay must not hide the launcher after closing.
-    await deck.evaluate(async panel => {
-      const syntheticFiller = document.createElement('div');
-      syntheticFiller.style.height = '1200px';
-      syntheticFiller.setAttribute('data-test-only', 'copilot-scroll-filler');
-      panel.appendChild(syntheticFiller);
-      for (let y = 10; y <= 180; y += 10) {
-        panel.scrollTop = y;
-        panel.dispatchEvent(new Event('scroll', { bubbles: false }));
-        await new Promise(resolve => requestAnimationFrame(resolve));
-      }
-    });
+    await deck.evaluate(panel => { const filler = document.createElement('div'); filler.setAttribute('data-test-only','copilot-scroll-filler'); filler.style.height='1200px'; panel.appendChild(filler); panel.scrollTop=180; });
     await page.getByRole('button', { name: 'Chiudi opportunità del Copilota' }).click();
     await expect(trigger).toBeVisible();
+    await navigation.getByRole('button', { name: 'Tabellone', exact: true }).click();
+    await expect(trigger).toHaveCount(0);
+    await page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Storico',exact:true}).click();
+    await expect(trigger).toHaveCount(0);
+    await navigation.getByRole('button', { name: 'Analisi', exact: true }).click();
+    await expect(trigger).toHaveCount(0);
+    await navigation.getByRole('button', { name: 'Comportamento', exact: true }).click();
+    await expect(trigger).toHaveCount(0);
+    await expect(lock).toBeVisible();
     expect(errors).toEqual([]);
     await context.close();
   });
@@ -169,11 +126,37 @@ test('MOBILE-ACTIONS-01 desktop retains labelled Copilota trigger and direct sec
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
   await prepare(page);
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+  const overview = page.getByRole('button', {name:'Riepilogo', exact:true}).filter({visible:true});
+  await expect(overview).toHaveCount(1);
+  // Scope to the primary class toolbar, not the duplicate dashboard shortcuts.
+  const toolbar = overview.locator('..');
+  await overview.click();
   const trigger = page.getByTestId('library-copilot-trigger');
   await expect(trigger).toBeVisible();
   await expect(trigger).toContainText('Copilota');
   await expect(page.getByRole('button', { name: 'Blocca Registro', exact: true })).toBeVisible();
   await trigger.click();
   await expect(page.getByTestId('copilot-deck')).toBeVisible();
+  const desktopAction = name => toolbar.getByRole('button', {name, exact:true});
+  await expect(desktopAction('Valutazioni')).toHaveCount(1);
+  await desktopAction('Valutazioni').click();
+  await expect(page.getByRole('heading', {name:'Nuova Valutazione di Classe'})).toBeVisible();
+  await expect(page.getByTestId('copilot-deck')).toHaveCount(0);
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  await expect(trigger).toHaveCount(0);
+  await desktopAction('Riepilogo').click();
+  await expect(trigger).toBeVisible();
+  await expect(page.getByTestId('copilot-deck')).toHaveCount(0);
+  await trigger.click();
+  await page.getByRole('button',{name:'Parla con il Copilota',exact:true}).click();
+  await expect(page.getByTestId('library-copilot-composer')).toBeVisible();
+  await desktopAction('Tabellone').click();
+  await expect(page.getByRole('group',{name:'Vista Tabellone'})).toBeVisible();
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  await expect(trigger).toHaveCount(0);
+  await page.goBack();
+  await expect(trigger).toBeVisible();
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
   await context.close();
 });

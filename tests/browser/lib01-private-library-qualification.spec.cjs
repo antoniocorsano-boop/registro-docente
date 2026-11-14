@@ -213,9 +213,18 @@ test('LIB-01A private library targeted journey survives reload, limits, links an
   await page.getByRole('button', { name: 'Cifra e Scarica File', exact: true }).click();
   const download = await downloadPromise;
   await exportDialogHandled;
-  expect(exportMessage).toContain('Backup protetto');
+  expect(exportMessage).toContain('Download avviato. La copia non è ancora verificata');
   const backupPath = await download.path();
   expect(backupPath).not.toBeNull();
+
+  // Explicit readback must reject a wrong file, then accept the actual download.
+  const verifyInput = page.getByLabel('Verifica copia scaricata', { exact: true });
+  await expect(verifyInput).toBeVisible();
+  await verifyInput.setInputFiles({ name: 'wrong.enc.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+  await expect(page.getByRole('status').filter({ hasText: 'Il file non corrisponde' })).toBeVisible();
+  await verifyInput.setInputFiles(backupPath);
+  await expect(page.getByRole('status').filter({ hasText: 'Copia verificata. Le registrazioni successive' })).toBeVisible();
+  await expect(verifyInput).toHaveCount(0);
 
   await openLibrary(page);
   const deleteCard = await sourceCard(page, TEXT_TITLE);

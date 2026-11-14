@@ -2021,6 +2021,212 @@
         "tests/browser/release-01-qualification.spec.cjs",
         "tests/browser/flow-04-review-session.spec.cjs"
       ]
+    },
+    {
+      "id": "BACKUP-02-B1-I01",
+      "owner": "BACKUP-02/B1",
+      "statement": "A browser download is not a verified backup receipt and must not reduce the outstanding change counter or claim successful verified storage. Android retains its checked native readback boundary and durable metadata commit. No automated transfers or device recovery qualification. Receipt grants are exact-operation, one-use, archive-session-scoped; stale, foreign, tampered, reset/restore-invalidated or replayed grants fail closed; failed metadata writes do not publish or permit replay. Historical timestamps without local verification markers never assert verified storage; local markers are excluded from portable payloads and stripped on restore. Any outstanding changes prevent a current-copy indication.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/PrivacyView.tsx",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "src/App.tsx",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/backupPayload.ts",
+        "src/components/HomeView.tsx",
+        "src/security/backupPayload.test.ts"
+      ],
+      "tests": [
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs"
+      ]
+    },
+    {
+      "id": "BACKUP-02-B2-I01",
+      "owner": "BACKUP-02/B2",
+      "statement": "Backup maintenance never opens a modal on durable professional mutations, even at former ten-change checkpoints or legacy caller overrides. One compact nonmodal Home footer across views routes explicitly to Privacy. Historical and invalid metadata never claim verified or current storage, and one later change is sufficient to mark a verified copy outdated. No Tabellone changes or automatic copy.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/components/HomeView.tsx",
+        "src/components/BackupReminderModal.tsx",
+        "src/persistence/backupReminderPolicy.ts",
+        "src/security/flow03bBackupReminderContract.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "tests/browser/ux-trust-01-qualification.spec.cjs"
+      ],
+      "tests": [
+        "src/security/flow03bBackupReminderContract.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/uxTrust01Integrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/ux-trust-01-qualification.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
+    },
+    {
+      "id": "BACKUP-02-B3-I01",
+      "owner": "BACKUP-02/B3",
+      "statement": "Web download never acknowledges a receipt. Explicit selection in the same Privacy view compares bounded raw byte length and SHA-256 to the exact encrypted export before consuming the one-use App receipt. Wrong, partial, unreadable, foreign, abandoned and stale files cannot update metadata. No import, restore, network or password retention in this verification; native verification remains independent. Receipt identity and view-local pending verification retain only metadata and digest, never a plaintext snapshot; native boundary preserved and the historical invariant wording is not altered. All three operations share mutual exclusion.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/PrivacyView.tsx",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "src/security/webBackupVerification.ts",
+        "src/security/webBackupVerification.test.ts",
+        "src/persistence/backupCheckpoint.ts",
+        "src/App.tsx",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/privacyBackupOperationExclusion.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ],
+      "tests": [
+        "src/security/webBackupVerification.test.ts",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/persist01hUiContract.test.ts",
+        "src/security/privacyBackupOperationExclusion.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/cdc-01-consigli.spec.cjs"
+      ]
+    },
+    {
+      "id": "BACKUP-02-B3B-I01",
+      "owner": "BACKUP-02/B3b",
+      "statement": "The exact operation must bind bounded encrypted-byte evidence (SHA-256, byte count, source and payload version) once before external write. Only existing native verified or explicit web readback gates can consume a bound receipt. Durable local metadata stores only validated evidence and checkpoint date, never plaintext, paths or passwords. Timestamp-only or invalid evidence is unverified; export and restore exclude local evidence. No independent recovery qualification or automatic copying.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/secureAppStorage.ts",
+        "src/App.tsx",
+        "src/components/PrivacyView.tsx",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/backup02VerifiedCopyBoundary.test.ts"
+      ],
+      "tests": [
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/webBackupVerification.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S4B-B4-TOUCH-I01",
+      "owner": "VAL-01/S4b B4 HPR",
+      "statement": "A daily grade draft exposes a touch-safe explicit row confirmation, independent of keyboard IME. Touch and Enter share the existing first-proof and single durable mutation path; unsaved draft and pending states are distinct from persisted green status, guard remains active, errors retain draft, and navigation advances only after successful durable receipt. No change to archive schema, historical editor or observation mutation.",
+      "impactPaths": [
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/index.css",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/dailyMatrixWorkspace.test.ts",
+        "src/security/matrixCellMutation.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
+    },
+    {
+      "id": "NAV-ANDROID-01-I01",
+      "owner": "NAV-ANDROID-01",
+      "statement": "Android edge gesture and system Back enter the same lifecycle-bound native dispatcher callback; it traverses existing WebView history only when canGoBack, never synthesizes a route, exits or mutates an archive. Existing App popstate and draft guard remain the authority; no web swipe interception. Native compile and browser history checks do not qualify physical gesture, modal/IME handling or device lifecycle.",
+      "impactPaths": [
+        "mobile/android-probe/native/MainActivity.java",
+        ".github/workflows/mobile-01-android-probe.yml",
+        "qualification/invariants.v1.json",
+        "src/security/navAndroid01NativeBackContract.test.ts"
+      ],
+      "tests": [
+        "src/security/navAndroid01NativeBackContract.test.ts",
+        "src/security/navBack01StudentReportHistory.test.ts",
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/homeNavigationDuringSaveIntegrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-back-01-student-report.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
+    },
+    {
+      "id": "COPILOT-PRESENCE-01-I01",
+      "owner": "COPILOT-PRESENCE-01",
+      "statement": "Supersedes the floating launcher placement and universal desktop availability of MOBILE-ACTIONS-01 only: production general Copilota entry is in normal layout flow on both mobile and desktop, allowed only for professional preparation, library, UDA, planning, online assessment and selected class overview; suppressed in drawer, focused assessment, conduct and recording, absent on routine grade/behavior, analytics, historical, council, student management and safety/settings views. Dedicated contextual tasks and mission/consent/privacy/storage gates are unchanged. No new capabilities or agent execution. Open panels are bound to the originating navigation version and class; stale callbacks cannot reopen on a new route. Interrupted mission is suspended through existing authority, not deleted; delayed intent replies are invalidated on close. The focused UDA recording dossier exposes its own explicit action above the modal backdrop and becomes inert while the composer is open. Navigation interruption revokes runtime authority before persisting suspension.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/CopilotDeck.tsx",
+        "src/components/CouncilView.tsx",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/aic-01-context-projection.spec.cjs",
+        "tests/browser/aic-04-cross-surface-entry.spec.cjs",
+        "qualification/invariants.v1.json",
+        "src/copilot/contextualPresence.ts",
+        "src/security/copilotContextualPresence.test.ts",
+        "src/components/LibraryCopilotComposer.tsx",
+        "src/security/flow02AppIntegrationContract.test.ts",
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/aic-07-supervised-copilot.spec.cjs",
+        "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/aic07MissionHandoffBehavior.test.ts",
+        "src/security/aic07UiBehavior.test.ts",
+        "tests/browser/flow-03-registra.spec.cjs",
+        "src/components/UdaWorkspaceView.tsx",
+        "src/components/UdaGanttView.tsx"
+      ],
+      "tests": [
+        "src/security/copilotContextualPresence.test.ts",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/flow02AppIntegrationContract.test.ts",
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts",
+        "src/security/aic07MissionHandoffBehavior.test.ts",
+        "src/security/aic07UiBehavior.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/aic-01-context-projection.spec.cjs",
+        "tests/browser/aic-04-cross-surface-entry.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "tests/browser/aic-07-supervised-copilot.spec.cjs",
+        "tests/browser/flow-03-registra.spec.cjs"
+      ]
     }
   ]
 }

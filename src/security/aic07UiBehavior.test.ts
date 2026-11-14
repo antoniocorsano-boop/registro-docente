@@ -80,7 +80,7 @@ describe('AIC-07 supervised Copilot Deck UI contract', () => {
     expect(app).toContain('secureStorage.saveCopilotStateAndMeta');
     expect(app).toContain('<CopilotExperience');
     expect(app).toContain('showStandaloneTrigger={false}');
-    expect(app).toContain('onOpenConversation={reopenLibraryCopilot}');
+    expect(app).toContain('onOpenConversation={openAmbientConversation}');
     expect(app).toContain('openRequestNonce={copilotOpenRequestNonce}');
     expect(app).not.toContain('onOpenConversation={() => openLibraryCopilot(ambientCopilotContext)}');
     expect(app).not.toContain('aic07-hide-legacy-copilot-trigger');
