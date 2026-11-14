@@ -1,0 +1,205 @@
+name: Browser Diagnostic (non-release)
+
+on:
+  pull_request:
+    branches:
+      - 'fix/copilot-contextual-presence'
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  PLAYWRIGHT_VERSION: '1.64.1'
+  PORT: '4173'
+
+jobs:
+  browser-diagnostic:
+    if: startsWith(github.head_ref, 'diagnostic/')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [copilot-navigation, historical-library, historical-product]
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Candidate SHA: ${CANDIDATE_SHA}"
+          echo "Checkout SHA:  ${actual_sha}"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+
+      - name: Setup Node for isolated browser toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned Bun from npm (GitHub release CDN fallback)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund bun@1.4.4
+          test "$(bun --version)" = "1.4.4"
+
+      - name: Install application dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Build production application
+        env:
+          VITE_INT01_HPR_TRACE: '1'
+        run: bun run build
+
+      - name: Install isolated Playwright toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .browser-tools browser-evidence
+          cat > .browser-tools/package.json <<'JSON'
+          {
+            "name": "registro-docente-browser-qualification-tools",
+            "private": true
+          }
+          JSON
+          npm --prefix .browser-tools install \
+            --save-exact \
+            --package-lock=false \
+            "@playwright/test@${PLAYWRIGHT_VERSION}"
+          # All required Chromium libraries are already present on the hosted runner.
+          # Avoid Playwright --with-deps: apt recommends optional fonts and can
+          # retry unreachable Ubuntu mirrors for 10+ minutes (incident S4d).
+          # Cap browser download at 120 seconds; fail promptly with a clear error.
+          timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
+          cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
+          cp tests/browser/mobile01-m1-offline-pdf.spec.cjs .browser-tools/mobile01-m1-offline-pdf.spec.cjs
+          cp tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs .browser-tools/mobile01-m2-native-backup-roundtrip.spec.cjs
+          cp tests/browser/mobile01-m2c-native-pdf.spec.cjs .browser-tools/mobile01-m2c-native-pdf.spec.cjs
+          cp tests/browser/cdc-01-consigli.spec.cjs .browser-tools/cdc-01-consigli.spec.cjs
+          cp tests/browser/cdc-02-sessions.spec.cjs .browser-tools/cdc-02-sessions.spec.cjs
+          cp tests/browser/today-01-home-oggi-router.spec.cjs .browser-tools/today-01-home-oggi-router.spec.cjs
+          cp tests/browser/flow-01-prepara.spec.cjs .browser-tools/flow-01-prepara.spec.cjs
+          cp tests/browser/flow-02-conduci.spec.cjs .browser-tools/flow-02-conduci.spec.cjs
+          cp tests/browser/flow-03-registra.spec.cjs .browser-tools/flow-03-registra.spec.cjs
+          cp tests/browser/flow-04-review-session.spec.cjs .browser-tools/flow-04-review-session.spec.cjs
+          cp tests/browser/int-01-didactic-continuity.spec.cjs .browser-tools/int-01-didactic-continuity.spec.cjs
+          cp tests/browser/int-02-s1-library-assessment.spec.cjs .browser-tools/int-02-s1-library-assessment.spec.cjs
+          cp tests/browser/int-02-s3c02-copilot-assessment.spec.cjs .browser-tools/int-02-s3c02-copilot-assessment.spec.cjs
+          cp tests/browser/int-02-s3d02-library-assessment-shortcut.spec.cjs .browser-tools/int-02-s3d02-library-assessment-shortcut.spec.cjs
+          cp tests/browser/int-02-s4-teacher-cycle.spec.cjs .browser-tools/int-02-s4-teacher-cycle.spec.cjs
+          cp tests/browser/int-02-import-01.spec.cjs .browser-tools/int-02-import-01.spec.cjs
+          cp tests/browser/browser-qualification.spec.cjs .browser-tools/browser-qualification.spec.cjs
+          cp tests/browser/teacher-first-copilot-helpers.cjs .browser-tools/teacher-first-copilot-helpers.cjs
+          cp tests/browser/header01-navigation.cjs .browser-tools/header01-navigation.cjs
+          cp tests/browser/library-use-surface-helpers.cjs .browser-tools/library-use-surface-helpers.cjs
+          cp tests/browser/agent-intent-01-routing.spec.cjs .browser-tools/agent-intent-01-routing.spec.cjs
+          cp tests/browser/aic-01-context-projection.spec.cjs .browser-tools/aic-01-context-projection.spec.cjs
+          cp tests/browser/aic-02-prepare-outcome.spec.cjs .browser-tools/aic-02-prepare-outcome.spec.cjs
+          cp tests/browser/aic-03-review-v2.spec.cjs .browser-tools/aic-03-review-v2.spec.cjs
+          cp tests/browser/aic-04-cross-surface-entry.spec.cjs .browser-tools/aic-04-cross-surface-entry.spec.cjs
+          cp tests/browser/aic-05-professional-memory.spec.cjs .browser-tools/aic-05-professional-memory.spec.cjs
+          cp tests/browser/aic-06-budget-governor.spec.cjs .browser-tools/aic-06-budget-governor.spec.cjs
+          cp tests/browser/aic-07-supervised-copilot.spec.cjs .browser-tools/aic-07-supervised-copilot.spec.cjs
+          cp tests/browser/a4-r1-teacher-first.spec.cjs .browser-tools/a4-r1-teacher-first.spec.cjs
+          cp tests/browser/a4-r2-canonical-class.spec.cjs .browser-tools/a4-r2-canonical-class.spec.cjs
+          cp tests/browser/a4-r2b-projection-import-preview.spec.cjs .browser-tools/a4-r2b-projection-import-preview.spec.cjs
+          cp tests/browser/lib01-private-library-qualification.spec.cjs .browser-tools/lib01-private-library-qualification.spec.cjs
+          cp tests/browser/lib01b-contextual-core-qualification.spec.cjs .browser-tools/lib01b-contextual-core-qualification.spec.cjs
+          cp tests/browser/lib01c-teaching-context-qualification.spec.cjs .browser-tools/lib01c-teaching-context-qualification.spec.cjs
+          cp tests/browser/lib01d-governed-proposal-qualification.spec.cjs .browser-tools/lib01d-governed-proposal-qualification.spec.cjs
+          cp tests/browser/lib01e-governed-provider-runtime.spec.cjs .browser-tools/lib01e-governed-provider-runtime.spec.cjs
+          cp tests/browser/lib01e-provider-disclosure-review.spec.cjs .browser-tools/lib01e-provider-disclosure-review.spec.cjs
+          cp tests/browser/lib02-source-acquisition.spec.cjs .browser-tools/lib02-source-acquisition.spec.cjs
+          cp tests/browser/lib03c-progressive-relevance.spec.cjs .browser-tools/lib03c-progressive-relevance.spec.cjs
+          cp tests/browser/lib04b-copilot-composer.spec.cjs .browser-tools/lib04b-copilot-composer.spec.cjs
+          cp tests/browser/lib04c-copilot-link.spec.cjs .browser-tools/lib04c-copilot-link.spec.cjs
+          cp tests/browser/lib04d-copilot-prepare.spec.cjs .browser-tools/lib04d-copilot-prepare.spec.cjs
+          cp tests/browser/lib05a-local-semantic-retrieval.spec.cjs .browser-tools/lib05a-local-semantic-retrieval.spec.cjs
+          cp tests/browser/lsm-01c-consumer.spec.cjs .browser-tools/lsm-01c-consumer.spec.cjs
+          cp tests/browser/library-contextual-copilot-handoff.spec.cjs .browser-tools/library-contextual-copilot-handoff.spec.cjs
+          cp tests/browser/online-01-qualification.spec.cjs .browser-tools/online-01-qualification.spec.cjs
+          cp tests/browser/release-01-qualification.spec.cjs .browser-tools/release-01-qualification.spec.cjs
+          cp tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs .browser-tools/mobile-actions-01-adaptive-copilot.spec.cjs
+          cp tests/browser/reg-nav-01-main-reconciled.spec.cjs .browser-tools/reg-nav-01-main-reconciled.spec.cjs
+          cp tests/browser/ux-trust-01-qualification.spec.cjs .browser-tools/ux-trust-01-qualification.spec.cjs
+          cp tests/browser/ux-trust-01-full-regression.spec.cjs .browser-tools/ux-trust-01-full-regression.spec.cjs
+          cp tests/browser/ux-qa-01-navigation.spec.cjs .browser-tools/ux-qa-01-navigation.spec.cjs
+          cp tests/browser/ux-qa-01-review-regressions.spec.cjs .browser-tools/ux-qa-01-review-regressions.spec.cjs
+          cp tests/browser/ux-qa-02-progressive-disclosure.spec.cjs .browser-tools/ux-qa-02-progressive-disclosure.spec.cjs
+
+      - name: Start production server and wait for readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence
+          NODE_ENV=production PORT="${PORT}" bun run start > browser-evidence/server.log 2>&1 &
+          server_pid=$!
+          echo "${server_pid}" > browser-evidence/server.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/" > /dev/null; then
+              echo "Production server ready on attempt ${attempt}."
+              exit 0
+            fi
+
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              echo "Production server exited before readiness."
+              cat browser-evidence/server.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          echo "Production server did not become ready within 30 seconds."
+          cat browser-evidence/server.log
+          exit 1
+
+      - name: Run assigned diagnostic group (all selected specs)
+        shell: bash
+        env:
+          DIAGNOSTIC_GROUP: ${{ matrix.group }}
+        run: |
+          set -euo pipefail
+          case "${DIAGNOSTIC_GROUP}" in
+            copilot-navigation) specs=( mobile-actions-01-adaptive-copilot.spec.cjs flow-03-registra.spec.cjs aic-07-supervised-copilot.spec.cjs a4-r1-teacher-first.spec.cjs a4-r2-canonical-class.spec.cjs agent-intent-01-routing.spec.cjs aic-01-context-projection.spec.cjs aic-02-prepare-outcome.spec.cjs aic-03-review-v2.spec.cjs aic-04-cross-surface-entry.spec.cjs aic-05-professional-memory.spec.cjs aic-06-budget-governor.spec.cjs ) ;;
+            historical-library) specs=( lib01-private-library-qualification.spec.cjs lib01b-contextual-core-qualification.spec.cjs lib01c-teaching-context-qualification.spec.cjs lib01d-governed-proposal-qualification.spec.cjs lib01e-governed-provider-runtime.spec.cjs lib01e-provider-disclosure-review.spec.cjs lib02-source-acquisition.spec.cjs lib03c-progressive-relevance.spec.cjs lib04b-copilot-composer.spec.cjs lib04c-copilot-link.spec.cjs lib04d-copilot-prepare.spec.cjs lib05a-local-semantic-retrieval.spec.cjs library-contextual-copilot-handoff.spec.cjs ) ;;
+            historical-product) specs=( browser-qualification.spec.cjs online-01-qualification.spec.cjs release-01-qualification.spec.cjs ux-trust-01-qualification.spec.cjs ux-trust-01-full-regression.spec.cjs ux-qa-01-navigation.spec.cjs ux-qa-01-review-regressions.spec.cjs ux-qa-02-progressive-disclosure.spec.cjs reg-nav-01-main-reconciled.spec.cjs ) ;;
+            *) echo "Unknown diagnostic group"; exit 1 ;;
+          esac
+          test "${#specs[@]}" -gt 0
+          printf '%s\n' "${specs[@]}" > browser-evidence/diagnostic-specs.txt
+          printf 'candidate=%s\ngroup=%s\nrelease_qualified=false\n' "${CANDIDATE_SHA}" "${DIAGNOSTIC_GROUP}" > browser-evidence/diagnostic-receipt.txt
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          EVIDENCE_DIR="../browser-evidence" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test "${specs[@]}" \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/diagnostic-test-results
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f browser-evidence/server.pid ]]; then
+            server_pid="$(cat browser-evidence/server.pid)"
+            kill "${server_pid}" 2>/dev/null || true
+          fi
+
+      - name: Upload browser qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostic-${{ matrix.group }}-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
