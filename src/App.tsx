@@ -169,7 +169,6 @@ import {
   verifiedBackupDate,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
-import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
@@ -214,7 +213,6 @@ import { VerificheOnlineView, type AssessmentDraftGuard } from './components/Ver
 import { UdaGanttView } from './components/UdaGanttView';
 import { SettingsView } from './components/SettingsView';
 import { CopilotProactivitySettings } from './components/CopilotProactivitySettings';
-import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
@@ -685,7 +683,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // queued until its matching popstate is delivered (latest intent wins).
   const pendingEvaluationCancelRef = useRef<{ classId: string; proceed: (() => void) | null } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
   const saveIndicatorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
@@ -1193,6 +1190,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const commitAppDataMutation = useCallback((
     derive: (current: AppData) => AppData,
     options: {
+      /** Historical caller option; backup maintenance never interrupts durable writes. */
       showBackupModal?: boolean;
       successMessage?: string;
       inlineFailure?: boolean;
@@ -1200,7 +1198,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ): Promise<AppData> => {
     const {
-      showBackupModal,
       successMessage = 'Salvato nel vault locale',
       inlineFailure = false,
       afterCommit
@@ -1232,12 +1229,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
       },
-      afterCommit: (candidate, previous) => {
+      afterCommit: () => {
         if (successMessage) toast(successMessage);
-        const shouldOpenBackupModal = showBackupModal === true
-          || (showBackupModal === undefined
-            && shouldSuggestBackupReminder(previous.meta, candidate.meta));
-        if (shouldOpenBackupModal) setIsBackupModalOpen(true);
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
@@ -3917,12 +3910,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         </div>
       )}
 
-      {/* Persistence confirmation modal */}
-      <BackupReminderModal
-        isOpen={isBackupModalOpen}
-        onClose={() => setIsBackupModalOpen(false)}
-        onExport={handleExportBackup}
-      />
     </div>
   );
 }

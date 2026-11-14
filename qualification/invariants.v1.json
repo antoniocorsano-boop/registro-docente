@@ -2052,6 +2052,30 @@
       "browserSmoke": [
         "tests/browser/lib01-private-library-qualification.spec.cjs"
       ]
+    },
+    {
+      "id": "BACKUP-02-B2-I01",
+      "owner": "BACKUP-02/B2",
+      "statement": "Backup maintenance never opens a modal on durable professional mutations, even at former ten-change checkpoints or legacy caller overrides. One compact nonmodal Home footer across views routes explicitly to Privacy. Historical and invalid metadata never claim verified or current storage, and one later change is sufficient to mark a verified copy outdated. No Tabellone changes or automatic copy.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/components/HomeView.tsx",
+        "src/components/BackupReminderModal.tsx",
+        "src/persistence/backupReminderPolicy.ts",
+        "src/security/flow03bBackupReminderContract.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "tests/browser/ux-trust-01-qualification.spec.cjs"
+      ],
+      "tests": [
+        "src/security/flow03bBackupReminderContract.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/uxTrust01Integrity.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/ux-trust-01-qualification.spec.cjs",
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
     }
   ]
 }

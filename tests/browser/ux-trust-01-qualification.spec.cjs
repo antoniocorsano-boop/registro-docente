@@ -153,9 +153,15 @@ test('UXT-B encrypted backup shortcut and sufficiency denominator are truthful â
 
   await page.getByRole('button', { name: 'Riepilogo', exact: true }).locator('xpath=../..').getByRole('button', { name: 'Oggi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  const copyIndicator = page.getByTestId('backup-copy-indicator');
+  await expect(copyIndicator).toHaveCount(1);
+  await expect(copyIndicator).toContainText('Copia di sicurezza da verificare');
   await page.getByRole('main').getByRole('button', { name: 'Sintesi', exact: true }).click();
-  await expect(page.getByText(/Ultimo backup cifrato:/)).toBeVisible();
-  const encryptedBackupShortcut = page.getByRole('main').getByRole('button', { name: 'Esporta backup cifrato', exact: true });
+  await expect(copyIndicator).toBeVisible();
+  await page.getByRole('main').getByRole('button', { name: 'Confronto', exact: true }).click();
+  await expect(copyIndicator).toHaveCount(1);
+  await expect(copyIndicator).toBeVisible();
+  const encryptedBackupShortcut = copyIndicator.getByRole('button', { name: 'Esporta backup cifrato', exact: true });
   await expect(encryptedBackupShortcut).toBeVisible();
   await encryptedBackupShortcut.click();
   await expect(page.getByRole('heading', { name: /Privacy First & Protezione dei dati/ })).toBeVisible();

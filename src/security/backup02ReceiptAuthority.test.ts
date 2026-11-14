@@ -98,8 +98,10 @@ describe('BACKUP-02/B1c historical copy evidence', () => {
     const app = await Bun.file('src/App.tsx').text();
     const home = await Bun.file('src/components/HomeView.tsx').text();
     expect(app).toContain('verifiedBackupDate={verifiedBackupDate(meta)}');
-    expect(home).toContain('!verifiedDate || unsavedChangesCount > 0');
-    expect(home).toContain('Verifica non attestata');
+    const policy = await Bun.file('src/persistence/backupReminderPolicy.ts').text();
+    expect(home).toContain('describeBackupCopy(lastBackupDate, verifiedBackupDate, unsavedChangesCount)');
+    expect(policy).toContain('if (changes > 0)');
+    expect(policy).toContain('Verifica non attestata');
     expect(home).not.toContain('modifiche da salvare');
   });
 });
