@@ -1,0 +1,81 @@
+name: Android Platform Back Qualification (exact debug APK)
+on:
+  pull_request:
+    branches: ['fix/nav-android-platform-back']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-back:
+    if: github.head_ref == 'diagnostic/nav-android-platform-back'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.prova
+      LAB_SOURCE_SHA: eecc8502bd5c9b8a143c44926a6c57596052cb11
+      LAB_ARTIFACT_ID: '14123541005'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Obtain exact previously built artifact (no rebuild)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-evidence lab-apk
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$LAB_ARTIFACT_ID" > native-evidence/artifact.json
+          jq -e --arg sha "$LAB_SOURCE_SHA" '.expired == false and .workflow_run.head_sha == $sha' native-evidence/artifact.json
+          curl --fail --silent --show-error --location --retry 1 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$LAB_ARTIFACT_ID/zip" -o lab-apk/package.zip
+          unzip -q lab-apk/package.zip -d lab-apk
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          test "$(sha256sum "$APK" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$HASH")"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Set up Java 21 (same toolchain as packaging)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot Android API ${{ matrix.api }} and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
+        timeout-minutes: 14
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-back-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-back-exact-apk.sh
+      - name: Upload non-release diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-platform-back-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
+          path: native-evidence/
+          retention-days: 7
