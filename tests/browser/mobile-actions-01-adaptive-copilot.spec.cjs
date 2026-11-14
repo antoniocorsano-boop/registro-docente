@@ -134,18 +134,20 @@ test('MOBILE-ACTIONS-01 desktop retains labelled Copilota trigger and direct sec
   await expect(page.getByRole('button', { name: 'Blocca Registro', exact: true })).toBeVisible();
   await trigger.click();
   await expect(page.getByTestId('copilot-deck')).toBeVisible();
-  const nav = page.locator('nav').filter({ has: page.getByRole('button', { name: 'Tabellone', exact: true }) });
-  await nav.getByRole('button', {name:'Valutazioni',exact:true}).click();
+  // Desktop exposes class navigation in a visible toolbar (not mobile <nav>).
+  const desktopAction = name => page.getByRole('button', {name, exact:true}).filter({visible:true});
+  await expect(desktopAction('Valutazioni')).toHaveCount(1);
+  await desktopAction('Valutazioni').click();
   await expect(page.getByTestId('copilot-deck')).toHaveCount(0);
   await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
   await expect(trigger).toHaveCount(0);
-  await nav.getByRole('button', {name:'Riepilogo',exact:true}).click();
+  await desktopAction('Riepilogo').click();
   await expect(trigger).toBeVisible();
   await expect(page.getByTestId('copilot-deck')).toHaveCount(0);
   await trigger.click();
   await page.getByRole('button',{name:'Parla con il Copilota',exact:true}).click();
   await expect(page.getByTestId('library-copilot-composer')).toBeVisible();
-  await nav.getByRole('button',{name:'Tabellone',exact:true}).click();
+  await desktopAction('Tabellone').click();
   await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
   await expect(trigger).toHaveCount(0);
   await page.goBack();
