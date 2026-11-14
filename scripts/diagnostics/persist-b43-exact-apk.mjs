@@ -124,29 +124,38 @@ async function clickText(label,scope='') {
 async function openMatrix() {
   const expr='Array.from(document.querySelectorAll("button")).find(b=>b.getAttribute("aria-label")==='+JSON.stringify(classLabel)+')';
   await until(()=>evaluate('Boolean('+expr+')'),'Synthetic class missing');
-  await evaluate('(()=>{('+expr+').click();return true})()');
-  await clickText('Tabellone','nav ');
+  await touch(expr,'open synthetic class');
+  await until(()=>evaluate('Boolean(document.querySelector("nav"))'),'Class navigation absent');
+  await button('Tabellone','nav ');
   await until(()=>evaluate('Boolean(document.querySelector("[data-testid=daily-matrix]"))'),'Daily matrix missing');
   await setField('[data-testid=daily-date]',date);
+  record('daily-matrix-date-selected','PASS');
 }
 async function registered(expected) {
   await until(()=>evaluate('(()=>{const r=document.querySelector("[data-testid=daily-row]");return !!r&&r.querySelector("input")?.value==='+JSON.stringify(expected)+'&&!!r.querySelector("[aria-label=Registrato]")})()'),'Confirmed grade not present',30000);
 }
 try {
   await connect();
-  await click('input[name="archive-mode"][value="demo"]');
-  await setField('#vault-password',password);
-  await clickText('Avvia la prova');
-  await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo archive missing',45000);
+  record('initial-webview-connected','PASS');
+  await until(()=>evaluate('Boolean(document.querySelector(\'input[name="archive-mode"][value="demo"]\'))'),'Archive mode choice not available',45000);
+  await tap('input[name="archive-mode"][value="demo"]','demo archive');
+  await until(()=>evaluate('Boolean(document.querySelector("#vault-password"))'),'Demo password field not available after selecting mode');
+  record('demo-mode-selected','PASS');
+  await evaluate('(()=>{const e=document.querySelector("#vault-password");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,"synthetic-persist-diagnostic-only");e.dispatchEvent(new Event("input",{bubbles:true}));e.blur();return true})()');
+  // Setup is not a history traversal; use form submission and wait for the
+  // observed unlocked state, without retrying the action.
+  await evaluate('(()=>{const b=Array.from(document.querySelectorAll("button")).find(b=>!b.disabled&&b.textContent.trim()==="Avvia la prova");if(!b)throw Error("Demo submit absent");b.click();return true})()');
+  await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo classes unavailable',45000);
   classLabel=await evaluate('Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||"")).getAttribute("aria-label")');
   record('synthetic-archive-opened','PASS');
   await openMatrix();
   await until(()=>evaluate('document.querySelector("[aria-label=\\"Voto alunno 1\\"]")?.value===""'),'Expected empty daily grade');
   await setField('[aria-label="Voto alunno 1"]',grade);
-  await click('[aria-label="Conferma voto alunno 1"]');
+  await tap('[aria-label="Conferma voto alunno 1"]','confirm daily grade');
+  record('first-grade-draft-confirmed','PASS');
   await setField('[aria-label="Tipologia prova"]','disegno');
   await setField('[aria-label="Argomento prova"]',marker);
-  await clickText('Conferma e registra');
+  await button('Conferma e registra');
   await registered(grade);
   record('first-grade-confirmed','PASS');
   // Terminate the entire Android process immediately after the UI acknowledges commit.
@@ -156,6 +165,7 @@ try {
   adb('forward','--remove','tcp:9222');
   adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');
   await connect();
+  record('cold-process-connected','PASS');
   await until(()=>evaluate('document.querySelector("h1")?.textContent.includes("Sblocca Registro")'),'Fresh locked bootstrap missing',45000);
   await setField('#vault-password',password);
   await clickText('Sblocca Registro');
