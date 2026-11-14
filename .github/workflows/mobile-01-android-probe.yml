@@ -19,6 +19,7 @@ jobs:
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PROBE_DIR: mobile/android-probe
+      B4_LAB: ${{ github.head_ref == 'test/backup02-b4-android-lab' || github.ref_name == 'test/backup02-b4-android-lab' }}
     steps:
       - name: Checkout the exact source commit
         uses: actions/checkout@v4
@@ -98,6 +99,14 @@ jobs:
           cp native/RegistroPdfFilesPlugin.java "$NATIVE_DIR/"
           grep -F 'registerPlugin(RegistroPdfFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
 
+      - name: Prepare independent B4 laboratory identity
+        if: env.B4_LAB == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check "$PROBE_DIR/prepare-b4-lab.mjs"
+          node "$PROBE_DIR/prepare-b4-lab.mjs"
+
       - name: Build debug APK (laboratory use only)
         shell: bash
         working-directory: mobile/android-probe/android
@@ -113,6 +122,19 @@ jobs:
           test -s "$APK"
           unzip -tq "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
+          PROBE_APP_ID=it.trama.registrodocente.prova
+          if [[ "$B4_LAB" == true ]]; then
+            PROBE_APP_ID=it.trama.registrodocente.lab.b4
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" > "$PROBE_DIR/b4-badging.txt"
+            grep -F "package: name='it.trama.registrodocente.lab.b4'" "$PROBE_DIR/b4-badging.txt"
+            grep -Fx "application-label:'Registro Docente - Collaudo B4'" "$PROBE_DIR/b4-badging.txt"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/b4-manifest-tree.txt"
+            grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/b4-manifest-tree.txt"
+            grep -F 'android:dataExtractionRules' "$PROBE_DIR/b4-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/b4-manifest-tree.txt"
+            grep -F 'it.trama.registrodocente.lab.b4.fileprovider' "$PROBE_DIR/b4-manifest-tree.txt"
+            unzip -p "$APK" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente.lab.b4'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
+          fi
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
           unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
@@ -128,7 +150,7 @@ jobs:
           {
             printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
             printf 'source_sha=%s\n' "$SOURCE_SHA"
-            printf 'app_id=it.trama.registrodocente.prova\n'
+            printf 'app_id=%s\n' "$PROBE_APP_ID"
             printf 'capacitor_version=8.6.0\n'
             printf 'apk_sha256='
             sha256sum "$APK" | awk '{print $1}'
@@ -167,6 +189,7 @@ jobs:
           retention-days: 7
 
       - name: Prepare separate unsigned Beta identity
+        if: env.B4_LAB != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -174,6 +197,7 @@ jobs:
           bash -n "$PROBE_DIR/sign-beta-locally.sh"
 
       - name: Build non-debuggable unsigned Beta candidate
+        if: env.B4_LAB != 'true'
         shell: bash
         working-directory: mobile/android-probe/android
         run: |
@@ -181,6 +205,7 @@ jobs:
           bash ./gradlew --no-daemon assembleRelease
 
       - name: Verify unsigned Beta package and provenance
+        if: env.B4_LAB != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -230,6 +255,7 @@ jobs:
           } > "$PROBE_DIR/beta-unsigned-manifest.txt"
 
       - name: Upload unsigned Beta candidate only — no private key or release
+        if: env.B4_LAB != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: mobile01-android-beta-unsigned-${{ env.SOURCE_SHA }}
