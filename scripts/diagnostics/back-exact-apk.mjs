@@ -35,13 +35,23 @@ async function connect() {
   }
   throw Error('WebView CDP unavailable on exact debug APK; diagnostic incomplete');
 }
-function evaluate(expression) {
+function cdp(method, params) {
   const id=++seq;
   return new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP response timeout'))},4000);
-    pending.set(id,{resolve:r=>{clearTimeout(timer);r.exceptionDetails?reject(Error('WebView expression failed')):resolve(r.result.value)},reject:e=>{clearTimeout(timer);reject(e)}});
-    socket.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression,returnByValue:true,awaitPromise:true}}));
+    pending.set(id,{resolve:r=>{clearTimeout(timer);r.exceptionDetails?reject(Error('WebView expression failed')):resolve(r)},reject:e=>{clearTimeout(timer);reject(e)}});
+    socket.send(JSON.stringify({id,method,params}));
   });
+}
+async function evaluate(expression) {
+  const r=await cdp('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+  return r.result.value;
+}
+async function touch(expression) {
+  const point=await evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
+  if(!point || point.x<0 || point.y<0)throw Error('No target for trusted touch');
+  await cdp('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+  await cdp('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
 }
 async function until(fn,label,ms=15000) {
   const end=Date.now()+ms;
@@ -56,7 +66,7 @@ async function tap(selector, label) {
 async function button(label, scope='') {
   const expr='Array.from(document.querySelectorAll('+JSON.stringify(scope+'button')+')).find(b=>b.getClientRects().length && b.textContent.trim()==='+JSON.stringify(label)+')';
   await until(()=>evaluate('Boolean('+expr+')'),'Missing '+label);
-  await evaluate('('+expr+').click(); true');
+  await touch(expr);
 }
 async function tab() { return evaluate('history.state?.tab || (new URL(location.href).searchParams.get("tab")) || "home"'); }
 async function assertTab(wanted,label) {
@@ -74,7 +84,7 @@ try {
   await evaluate('(()=>{const e=document.querySelector("#vault-password");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,"synthetic-back-diagnostic-only");e.dispatchEvent(new Event("input",{bubbles:true}));e.blur();return true})()');
   await button('Avvia la prova');
   await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo classes unavailable');
-  await evaluate('Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||"")).click(); true');
+  await touch('Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))');
   await until(()=>evaluate('Boolean(document.querySelector("nav"))'),'Class navigation absent');
   await button('Riepilogo','nav ');
   await assertTab('dashboard','class overview');
@@ -83,15 +93,16 @@ try {
   await button('Analisi','nav ');
   await assertTab('analytics','analysis');
   record('setup','PASS',{foreground:foreground()});
-  await back('native-key-analytics-to-matrix',['keyevent','4'],'tabellone');
+  // Prioritize the actual reported right-edge swipe on Android 16.
   // Real system edge input via adb, with gesture overlay verified by workflow.
   const size=adb('shell','wm','size').match(/(\d+)x(\d+)(?![\s\S]*\d+x\d+)/);
   if(!size)throw Error('Screen dimensions unavailable');
   const w=Number(size[1]),h=Number(size[2]),y=Math.floor(h*.45);
-  await back('native-right-edge-matrix-to-overview',['swipe',String(w-1),String(y),String(Math.floor(w*.5)),String(y),'350'],'dashboard');
+  await back('native-right-edge-analysis-to-matrix',['swipe',String(w-1),String(y),String(Math.floor(w*.5)),String(y),'350'],'tabellone');
+  await back('native-left-edge-matrix-to-overview',['swipe','1',String(y),String(Math.floor(w*.5)),String(y),'350'],'dashboard');
   await button('Analisi','nav ');
   await assertTab('analytics','analysis again');
-  await back('native-left-edge-analysis-to-overview',['swipe','1',String(y),String(Math.floor(w*.5)),String(y),'350'],'dashboard');
+  await back('native-key-analysis-to-overview',['keyevent','4'],'dashboard');
   // Do not claim physical gesture, dirty-draft or root qualification from these tests.
   record('emulator-only-diagnostic','PASS');
 } catch(e) {

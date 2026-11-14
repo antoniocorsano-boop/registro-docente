@@ -47,54 +47,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Install Android SDK and emulator tools
-        uses: android-actions/setup-android@v3
-        timeout-minutes: 7
-        with:
-          packages: 'platform-tools emulator'
-      - name: Verify Android SDK prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v adb
-          command -v sdkmanager
-          command -v avdmanager
-          test -x "$ANDROID_HOME/emulator/emulator"
-          adb version
-          "$ANDROID_HOME/emulator/emulator" -version
-      - name: Prepare Android 16 emulator using SDK
+      - name: Enable hardware acceleration on isolated runner
         shell: bash
         run: |
           set -euo pipefail
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
-          "$ANDROID_HOME/emulator/emulator" -accel-check
-          timeout 300 sdkmanager 'system-images;android-36;google_apis;x86_64'
-          echo no | avdmanager create avd --force --name trama-back-api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_6
-          nohup "$ANDROID_HOME/emulator/emulator" -avd trama-back-api36 -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect > native-evidence/emulator.log 2>&1 &
-          timeout 240 adb wait-for-device
-          for i in $(seq 1 90); do
-            if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; then break; fi
-            sleep 2
-          done
-          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
-          test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
-          adb shell input keyevent 82
-          adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
-          adb shell cmd overlay list > native-evidence/overlays.txt
-          grep -E '^\[x\] com\.android\.internal\.systemui\.navbar\.gestural$' native-evidence/overlays.txt
-          adb install "$APK"
-          adb shell am start -W -n "$LAB_PACKAGE/it.trama.registrodocente.prova.MainActivity"
-      - name: Exercise system Back on real WebView and Android activity
-        run: node --check scripts/diagnostics/back-exact-apk.mjs && node scripts/diagnostics/back-exact-apk.mjs
-      - name: Collect native evidence
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p native-evidence
-          adb shell dumpsys activity activities > native-evidence/activity.txt 2>&1 || true
-          adb logcat -d -t 1500 > native-evidence/logcat.txt 2>&1 || true
-          adb emu kill || true
+      - name: Boot Android 16 and diagnose exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
+        timeout-minutes: 14
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-back-api36
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-back-exact-apk.sh
       - name: Upload non-release diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
