@@ -11,7 +11,7 @@ const evidence = [];
 mkdirSync('native-evidence',{recursive:true});
 function record(stage, status, details={}) {
   evidence.push({stage,status,...details});
-  writeFileSync('native-evidence/backup-result.json',JSON.stringify({sourceSha:process.env.LAB_SOURCE_SHA,api,releaseQualified:false,results:evidence},null,2));
+  writeFileSync('native-evidence/restore-result.json',JSON.stringify({sourceSha:process.env.LAB_SOURCE_SHA,api,releaseQualified:false,results:evidence},null,2));
   console.log(stage,status,JSON.stringify(details));
 }
 function foreground() {
@@ -228,6 +228,64 @@ async function verifyEncryptedDownload(){
   if(payload.app!=='registro-docente'||payload.backupDataVersion!==6||matches?.length!==1||payload.snapshot.meta.changes!==0||payload.snapshot.meta.verifiedBackupEvidence!==undefined)throw Error('Encrypted checkpoint does not match confirmed synthetic grade');
   record('independent-encrypted-file-readback','PASS',{bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),envelopeVersion:2,payloadVersion:6});
 }
+
+const restorePasswordSelector='input[placeholder="Inserisci la password impostata alla cifratura"]';
+const replacementWarning='Il ripristino sostituirà i dati del Registro';
+function backupFilename(){
+  const files=adb('shell','ls','-1','/sdcard/Download').split(/\r?\n/).filter(n=>/^Backup_Cifrato_GDPR_\d{4}-\d{2}-\d{2}\.enc\.json$/.test(n));
+  if(files.length!==1)throw Error('Expected exactly one generated backup');
+  return files[0];
+}
+async function openRestore(passwordValue){
+  const selector=indicator+' button[aria-label="Esporta backup cifrato"]';
+  await click(selector);
+  await setField(restorePasswordSelector,passwordValue);
+  await button('Scegli file e ripristina');
+  await nativeFind(n=>docNode(n)&&(/show roots|mostra radici|open navigation drawer/i.test(n.desc)||/^(Recent|Recenti|Downloads|Download)$/i.test(n.text)),'Restore document picker missing');
+  record('native-restore-picker-opened','PASS');
+}
+async function selectBackup(){
+  const filename=backupFilename();
+  const nodes=nativeNodes(nativeXml()).filter(docNode);
+  if(!nodes.some(n=>n.text===filename)){
+    if(!nodes.some(n=>/^(Downloads|Download)$/i.test(n.text))){
+      const roots=await nativeFind(n=>docNode(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc),'Restore picker navigation missing');
+      nativePress(roots);
+      const downloads=await nativeFind(n=>docNode(n)&&/^(Downloads|Download)$/i.test(n.text),'Restore Downloads missing');
+      nativePress(downloads);
+    }
+  }
+  const file=await nativeFind(n=>docNode(n)&&n.text===filename,'Generated encrypted backup not visible');
+  nativePress(file);
+}
+async function expectRestoreSettled(){
+  await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>!b.disabled&&b.textContent.trim()==="Scegli file e ripristina")'),'Restore did not settle',30000);
+}
+async function replacementDecision(accept){
+  await nativeFind(n=>n.text.includes(replacementWarning),'Replacement warning missing',45000);
+  const choice=await nativeFind(n=>accept?/^OK$/i.test(n.text):/^(Cancel|Annulla)$/i.test(n.text),'Explicit replacement decision missing');
+  nativePress(choice);
+}
+async function checkCurrentGrade(value,label){
+  await home();
+  await openMatrix();
+  await registered(value);
+  await until(()=>evaluate('document.querySelector(\'[aria-label="Prova della giornata"]\')?.selectedOptions[0]?.textContent.includes('+JSON.stringify(marker)+')'),'Assessment identity missing after restore attempt');
+  await home();
+  record(label,'PASS');
+}
+async function coldReopen(){
+  socket.close();socket=null;
+  adb('shell','am','force-stop',pkg);
+  await until(()=>{try{return !adb('shell','pidof',pkg)}catch{return true}},'Process still running');
+  adb('forward','--remove','tcp:9222');
+  adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');
+  await connect();
+  await until(()=>evaluate('document.querySelector("h1")?.textContent.includes("Sblocca Registro")'),'Fresh locked bootstrap missing',45000);
+  await setField('#vault-password',password);
+  await clickText('Sblocca Registro');
+  await until(()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))'),'Unlocked home absent',45000);
+}
 try {
   await connect();
   record('initial-webview-connected','PASS');
@@ -292,6 +350,35 @@ try {
   await home();
   await expectCopy('Copia da aggiornare');
   record('new-commit-invalidates-current-copy','PASS');
+  // All destructive restore operations concern only this isolated synthetic archive.
+  await openRestore(backupPassword);
+  adb('shell','input','keyevent','4');
+  await until(()=>foreground(),'Restore picker cancellation did not return');
+  await expectRestoreSettled();
+  await checkCurrentGrade('9','restore-picker-cancel-preserves-newer-grade');
+  await expectCopy('Copia da aggiornare');
+  await openRestore('synthetic-incorrect-backup-password');
+  await selectBackup();
+  await dismissSuccess('Ripristino non completato');
+  await expectRestoreSettled();
+  await checkCurrentGrade('9','wrong-password-preserves-newer-grade');
+  await expectCopy('Copia da aggiornare');
+  await openRestore(backupPassword);
+  await selectBackup();
+  await replacementDecision(false);
+  await expectRestoreSettled();
+  await checkCurrentGrade('9','replacement-cancel-preserves-newer-grade');
+  await expectCopy('Copia da aggiornare');
+  await openRestore(backupPassword);
+  await selectBackup();
+  await replacementDecision(true);
+  await dismissSuccess('Backup cifrato verificato e ripristinato con successo');
+  await checkCurrentGrade(grade,'confirmed-restore-recovers-backup-grade');
+  await expectCopy('Copia di sicurezza da verificare');
+  await coldReopen();
+  await checkCurrentGrade(grade,'restored-grade-persists-after-cold-reopen');
+  await expectCopy('Copia di sicurezza da verificare');
+  record('native-encrypted-restore-roundtrip','PASS');
 } catch(e) {
   record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});
   process.exitCode=1;
