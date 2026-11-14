@@ -1,4 +1,4 @@
-name: Android Back Diagnostic (exact B4.2 APK)
+name: Android Platform Back Qualification (exact debug APK)
 on:
   pull_request:
     branches: ['test/b4-2-android-lab']
@@ -10,10 +10,16 @@ jobs:
     if: github.head_ref == 'diagnostic/nav-android-b42-exact-apk'
     runs-on: ubuntu-22.04
     timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
     env:
-      LAB_PACKAGE: it.trama.registrodocente.lab.b42
-      LAB_SOURCE_SHA: 23997288c73db272dcfdd07c0e2b1c850c8e40a0
-      LAB_ARTIFACT_ID: '14118093957'
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.prova
+      LAB_SOURCE_SHA: eecc8502bd5c9b8a143c44926a6c57596052cb11
+      LAB_ARTIFACT_ID: '14123541005'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,7 +33,7 @@ jobs:
           set -euo pipefail
           mkdir -p native-evidence lab-apk
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$LAB_ARTIFACT_ID" > native-evidence/artifact.json
-          jq -e --arg sha "$LAB_SOURCE_SHA" '.expired == false and .workflow_run.head_sha == $sha' native-evidence/artifact.json
+          jq -e --arg sha "$LAB_SOURCE_SHA" '.expired == false and .workflow_run.head_sha == $sha and .name == ("mobile01-android-debug-probe-" + $sha)' native-evidence/artifact.json
           curl --fail --silent --show-error --location --retry 1 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$LAB_ARTIFACT_ID/zip" -o lab-apk/package.zip
           unzip -q lab-apk/package.zip -d lab-apk
           APK="$(find lab-apk -name app-debug.apk -type f)"
@@ -53,15 +59,15 @@ jobs:
           set -euo pipefail
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
-      - name: Boot Android 16 and diagnose exact APK
+      - name: Boot Android API ${{ matrix.api }} and exercise exact APK
         uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
         timeout-minutes: 14
         with:
-          api-level: 36
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          avd-name: trama-back-api36
+          avd-name: trama-back-api${{ matrix.api }}
           emulator-boot-timeout: 240
           disable-animations: false
           disable-linux-hw-accel: false
@@ -70,6 +76,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-back-diagnostic-${{ github.event.pull_request.head.sha }}
+          name: android-platform-back-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
           path: native-evidence/
           retention-days: 7

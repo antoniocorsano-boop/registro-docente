@@ -2,14 +2,15 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 const pkg = process.env.LAB_PACKAGE;
-if (pkg !== 'it.trama.registrodocente.lab.b42') throw new Error('Not an isolated laboratory package');
+const api = Number(process.env.LAB_API);
+if (pkg !== 'it.trama.registrodocente.prova' || ![32,36].includes(api)) throw new Error('Not an isolated emulator diagnostic');
 const adb = (...args) => execFileSync('adb', args, { encoding:'utf8', timeout:30000 }).trim();
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 const evidence = [];
 mkdirSync('native-evidence',{recursive:true});
 function record(stage, status, details={}) {
   evidence.push({stage,status,...details});
-  writeFileSync('native-evidence/back-result.json',JSON.stringify({sourceSha:process.env.LAB_SOURCE_SHA,api:36,releaseQualified:false,results:evidence},null,2));
+  writeFileSync('native-evidence/back-result.json',JSON.stringify({sourceSha:process.env.LAB_SOURCE_SHA,api,releaseQualified:false,results:evidence},null,2));
   console.log(stage,status,JSON.stringify(details));
 }
 function foreground() {
@@ -131,7 +132,19 @@ try {
   await button('Analisi','nav ');
   await assertTab('analytics','analysis again');
   await back('native-key-analysis-to-overview',['keyevent','4'],'dashboard');
-  // Do not claim physical gesture, dirty-draft or root qualification from these tests.
+  // Reach the known fresh archive root using actual system Back events.
+  for(let step=0;step<4 && (await tab())!=='home';step++){
+    adb('shell','input','keyevent','4');
+    await sleep(700);
+    if(!foreground())throw Error('Activity exited during return to root');
+  }
+  await until(async()=>foreground()&&(await tab())==='home'&&await evaluate('Array.from(document.querySelectorAll("h1,h2")).some(e=>e.textContent.includes("Oggi"))'),'Oggi root not reached');
+  const rootBefore=await snapshot();
+  adb('shell','input','keyevent','4');
+  await sleep(1000);
+  if(!foreground()||(await tab())!=='home')throw Error('System Back exited or changed the root');
+  record('native-root-retained','PASS',{before:rootBefore,after:await snapshot(),foreground:true});
+  // Physical device, IME, dialogs and dirty-draft behavior remain unqualified.
   record('emulator-only-diagnostic','PASS');
 } catch(e) {
   record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});

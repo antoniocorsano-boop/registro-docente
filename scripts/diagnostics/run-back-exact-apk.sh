@@ -8,7 +8,7 @@ collect() {
 }
 trap collect EXIT
 test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
-test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
+test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = "$LAB_API"
 adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
 adb shell cmd overlay list > native-evidence/overlays.txt
 grep -E '^\[x\] com\.android\.internal\.systemui\.navbar\.gestural$' native-evidence/overlays.txt

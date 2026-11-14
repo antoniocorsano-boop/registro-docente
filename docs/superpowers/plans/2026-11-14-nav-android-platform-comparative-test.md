@@ -1,0 +1,8 @@
+# NAV-ANDROID-01/S2 — Prova nativa comparativa
+
+Candidato applicativo #248 `eecc8502bd5c9b8a143c44926a6c57596052cb11`: compilazione Android e review PASS, esecuzione 43618482992. Artefatto debug 14123541005 verificato, ID prova, **solo emulatore isolato**. Non installare questo artefatto sul dispositivo del docente: identità già utilizzata, firma debug, non è il laboratorio B4.3. Nessun rebuild. Baseline B4.2 immutata già verificata su API 36 (43615602075) ma FAIL fisico.
+
+Due gruppi indipendenti: API 32 (AndroidX legacy) e API 36 (callback piattaforma). Stesso APK esatto, verifica SHA e identità, archivio demo, input Android reale, ritorno Analisi→Tabellone→Riepilogo, pulsante Back, radice Oggi. La prova osserva sia activity in primo piano sia cronologia e navigazione attiva. Nessun PASS ereditato, nessuna qualifica fisica, nessun rilascio. Se entrambi PASS, preparare lab B4.3 isolato con nuovo ID e poi verificare sul telefono in configurazione normale. Restano da qualificare IME, finestre, bozze, ciclo di vita e percorso completo di backup. Nessun merge.
+
+
+Esecuzione trasferita alla PR diagnostica #247 già funzionante: #249 non ha prodotto run osservabili sullo SHA 72aae293. La sorgente applicativa resta #248 eecc8502 e l'artefatto esatto 14123541005. Nessun cambio di base applicativa, nessun nuovo APK.
