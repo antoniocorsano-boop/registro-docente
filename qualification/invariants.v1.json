@@ -2158,9 +2158,10 @@
     {
       "id": "NAV-ANDROID-01-I01",
       "owner": "NAV-ANDROID-01",
-      "statement": "Android edge gesture and system Back enter the same lifecycle-bound native dispatcher callback; it traverses existing WebView history only when canGoBack, never synthesizes a route, exits or mutates an archive. Existing App popstate and draft guard remain the authority; no web swipe interception. Native compile and browser history checks do not qualify physical gesture, modal/IME handling or device lifecycle.",
+      "statement": "Android system Back has one native owner per API level: platform OnBackInvokedCallback at DEFAULT priority on API 33+ while resumed, AndroidX lifecycle callback below API 33. Both traverse existing WebView history only when canGoBack, never synthesize a route, exit or mutate an archive. Explicit predictive Back opt-in verified in packaged manifests. App popstate and draft guard remain authoritative; no web swipe interception or manufacturer-specific behavior. Native compile and browser history checks do not qualify physical gestures, modal/IME handling or device lifecycle.",
       "impactPaths": [
         "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/prepare-native-back.mjs",
         ".github/workflows/mobile-01-android-probe.yml",
         "qualification/invariants.v1.json",
         "src/security/navAndroid01NativeBackContract.test.ts"

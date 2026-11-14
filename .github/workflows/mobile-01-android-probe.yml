@@ -92,6 +92,8 @@ jobs:
           npx --no-install cap sync android
           test -f android/gradlew
           test -f android/app/src/main/AndroidManifest.xml
+          node --check prepare-native-back.mjs
+          node prepare-native-back.mjs
           NATIVE_DIR=android/app/src/main/java/it/trama/registrodocente/prova
           test -f "$NATIVE_DIR/MainActivity.java"
           cp native/MainActivity.java native/RegistroBackupFilesPlugin.java "$NATIVE_DIR/"
@@ -114,6 +116,8 @@ jobs:
           test -s "$APK"
           unzip -tq "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/probe-manifest-tree.txt"
+          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/probe-manifest-tree.txt"
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
           unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
@@ -204,6 +208,7 @@ jobs:
             exit 1
           fi
           "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
