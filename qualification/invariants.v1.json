@@ -2197,7 +2197,12 @@
         "src/security/flow02AppIntegrationContract.test.ts",
         "src/security/flow03bActiveRecordFocusContract.test.ts",
         "tests/browser/nav-context-01-return-origin.spec.cjs",
-        "tests/browser/aic-07-supervised-copilot.spec.cjs"
+        "tests/browser/aic-07-supervised-copilot.spec.cjs",
+        "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts",
+        "src/security/aic07MissionHandoffBehavior.test.ts",
+        "src/security/aic07UiBehavior.test.ts",
+        "tests/browser/flow-03-registra.spec.cjs"
       ],
       "tests": [
         "src/security/copilotContextualPresence.test.ts",
@@ -2206,7 +2211,10 @@
         "src/security/mobileActions01Contract.test.ts",
         "src/security/librarySingleCopilotSurfaceContract.test.ts",
         "src/security/flow02AppIntegrationContract.test.ts",
-        "src/security/flow03bActiveRecordFocusContract.test.ts"
+        "src/security/flow03bActiveRecordFocusContract.test.ts",
+        "src/security/a4R1TeacherFirstSurfaceCoordination.test.ts",
+        "src/security/aic07MissionHandoffBehavior.test.ts",
+        "src/security/aic07UiBehavior.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
@@ -2214,7 +2222,8 @@
         "tests/browser/aic-01-context-projection.spec.cjs",
         "tests/browser/aic-04-cross-surface-entry.spec.cjs",
         "tests/browser/nav-context-01-return-origin.spec.cjs",
-        "tests/browser/aic-07-supervised-copilot.spec.cjs"
+        "tests/browser/aic-07-supervised-copilot.spec.cjs",
+        "tests/browser/flow-03-registra.spec.cjs"
       ]
     }
   ]

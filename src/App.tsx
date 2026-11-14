@@ -718,12 +718,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     }));
   }, []);
 
-  const reopenLibraryCopilot = useCallback((kind: 'ambient' | 'explicit' = 'explicit') => {
+  const reopenCopilotForOrigin = useCallback((kind: 'ambient' | 'explicit') => {
     copilotOriginRef.current = { version: navigationVersionRef.current, classId: currentClassIdRef.current, kind };
     setLaunchRequest(null);
     setCopilotSurfaceMode('compose');
     setCopilotOpenRequestNonce(previous => previous + 1);
   }, []);
+
+  // Event-facing contextual action deliberately ignores React's click event.
+  const reopenLibraryCopilot = useCallback(() => {
+    reopenCopilotForOrigin('explicit');
+  }, [reopenCopilotForOrigin]);
 
   // Metadata for backup tracking
   const [meta, setMeta] = useState<SecureMeta>(() =>
@@ -2229,7 +2234,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
   const openAmbientConversation = () => {
     if (!isCurrentCopilotRender() || !ambientCopilotAllowed || !copilotOriginRef.current) return;
-    reopenLibraryCopilot('ambient');
+    reopenCopilotForOrigin('ambient');
   };
 
 

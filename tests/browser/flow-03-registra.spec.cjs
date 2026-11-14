@@ -347,8 +347,16 @@ test.describe('FLOW-03B desktop post-record UX qualification', () => {
     await expect(record.getByRole('button', { name: 'Copilota', exact: true })).toBeVisible();
 
     const mission = await openEvaluationFromRecord(page, record);
-    await expect(mission.getByRole('button', { name: 'Copilota', exact: true })).toBeVisible();
+    const missionCopilot = mission.getByRole('button', { name: 'Copilota', exact: true });
+    await expect(missionCopilot).toBeVisible();
     await expect(floatingCopilot).toBeHidden();
+    await missionCopilot.click();
+    const composer = page.getByTestId('library-copilot-composer');
+    await expect(composer).toBeVisible();
+    await composer.getByRole('button',{name:'Chiudi Copilota',exact:true}).click();
+    await expect(composer).toHaveCount(0);
+    await expect(mission).toBeVisible();
+    await expect(floatingCopilot).toHaveCount(0);
 
     await page.getByPlaceholder('es. Verifica su Fonti Rinnovabili').fill('Valutazione FLOW-03B');
     await page.getByRole('button', { name: 'Tutti 8', exact: true }).click();
@@ -496,8 +504,15 @@ test.describe('FLOW-03 mobile qualification', () => {
 
   await record.getByRole('button', { name: 'Attività / nota UDA', exact: true }).click();
   const mission = await assertRecordMission(page, 'Attività / nota UDA');
-  await expect(mission.getByRole('button', { name: 'Copilota', exact: true })).toBeVisible();
+  const missionCopilot = mission.getByRole('button', { name: 'Copilota', exact: true });
+  await expect(missionCopilot).toBeVisible();
   await expect(flow03bFloatingCopilot).toBeHidden();
+  await missionCopilot.click();
+  const missionComposer = page.getByTestId('library-copilot-composer');
+  await expect(missionComposer).toBeVisible();
+  await missionComposer.getByRole('button',{name:'Chiudi Copilota',exact:true}).click();
+  await expect(missionComposer).toHaveCount(0);
+  await expect(mission).toBeVisible();
   await expect(page.getByText('Registrazione rapida', { exact: true })).toBeVisible();
   await expect(page.getByText('Diario della registrazione', { exact: true })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Viste UDA' })).toBeHidden();

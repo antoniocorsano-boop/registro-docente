@@ -141,7 +141,7 @@ describe('single contextual Copilot surface contract', () => {
   });
 
   test('mobile Library use surface becomes assistive-technology inert while the Copilot modal is open', () => {
-    expect(appSource).toContain("isCopilotOpen={copilotSurfaceMode === 'compose'}");
+    expect(appSource).toContain("isCopilotOpen={visibleCopilotMode === 'compose'}");
     expect(libraryViewSource).toContain('isCopilotOpen');
     expect(libraryViewSource).toContain('isCopilotOpen={isCopilotOpen}');
     expect(sourceCardSource).toContain('isCopilotOpen: boolean;');
