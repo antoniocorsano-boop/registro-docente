@@ -2175,6 +2175,38 @@
         "tests/browser/nav-back-01-student-report.spec.cjs",
         "tests/browser/nav-context-01-return-origin.spec.cjs"
       ]
+    },
+    {
+      "id": "COPILOT-PRESENCE-01-I01",
+      "owner": "COPILOT-PRESENCE-01",
+      "statement": "Supersedes the floating launcher placement and universal desktop availability of MOBILE-ACTIONS-01 only: production general Copilota entry is in normal layout flow on both mobile and desktop, allowed only for professional preparation, library, UDA, planning, online assessment and selected class overview; suppressed in drawer, focused assessment, conduct and recording, absent on routine grade/behavior, analytics, historical, council, student management and safety/settings views. Dedicated contextual tasks and mission/consent/privacy/storage gates are unchanged. No new capabilities or agent execution.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/CopilotDeck.tsx",
+        "src/components/CouncilView.tsx",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/aic-01-context-projection.spec.cjs",
+        "tests/browser/aic-04-cross-surface-entry.spec.cjs",
+        "qualification/invariants.v1.json",
+        "src/copilot/contextualPresence.ts",
+        "src/security/copilotContextualPresence.test.ts"
+      ],
+      "tests": [
+        "src/security/copilotContextualPresence.test.ts",
+        "src/security/header01CopilotDrawerOcclusion.test.ts",
+        "src/security/mobileActions01NoOcclusion.test.ts",
+        "src/security/mobileActions01Contract.test.ts",
+        "src/security/librarySingleCopilotSurfaceContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile-actions-01-adaptive-copilot.spec.cjs",
+        "tests/browser/cdc-02-sessions.spec.cjs",
+        "tests/browser/aic-01-context-projection.spec.cjs",
+        "tests/browser/aic-04-cross-surface-entry.spec.cjs"
+      ]
     }
   ]
 }

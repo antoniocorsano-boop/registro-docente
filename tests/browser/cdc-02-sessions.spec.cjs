@@ -33,14 +33,9 @@ test('CDC-02/S1: on smartphone two sessions can be saved and reopened after retu
   await expect(overview).toContainText('Senza voto di ingresso salvato');
   await expect(overview.getByText('0', { exact: true })).toHaveCount(6);
   await expect(page.getByText('Nessuna seduta registrata per questa classe e questo anno.')).toBeVisible();
-  // UX review: the floating control must not obscure the Council while the
-  // equivalent entry point remains available directly in the Council header.
-  const councilCopilot = page.getByRole('button', { name: 'Apri Copilota dai Consigli di classe' });
-  await expect(councilCopilot).toBeVisible();
-  await expect(page.getByTestId('library-copilot-trigger')).toBeHidden();
-  await councilCopilot.click();
-  await expect(page.getByRole('region', { name: 'Opportunità del Copilota' })).toBeVisible();
-  await page.getByRole('button', { name: 'Chiudi opportunità del Copilota' }).click();
+  // No currently supported council-specific capability; no generic entry.
+  await expect(page.getByRole('button', { name: 'Apri Copilota dai Consigli di classe' })).toHaveCount(0);
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
 
   const year = await page.getByRole('combobox', { name: 'Seleziona anno scolastico del Consiglio' }).inputValue();
   const start = Number(year.slice(0, 4));

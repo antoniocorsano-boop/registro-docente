@@ -59,6 +59,7 @@ import {
   type RememberProfessionalItemInput
 } from './memory/professionalMemory';
 import { createEmptyCopilotState } from './copilot/emptyCopilotState';
+import { shouldOfferAmbientCopilot } from './copilot/contextualPresence';
 import { buildCopilotContextProjection } from './copilot/contextProjection';
 import { resolveProfessionalContext, toCopilotContextProjection } from './context/professionalContext';
 import { resolvePlanningFrame } from './planning/planningFrameResolver';
@@ -3413,9 +3414,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onOpenConversation={reopenLibraryCopilot}
             surfaceMode={copilotSurfaceMode}
             onSurfaceModeChange={setCopilotSurfaceMode}
-            showClosedTrigger={todayAction !== 'conduct' && !isActiveRecordFocus && activeTab !== 'report' && !(activeTab==='tabellone'&&dailyMatrixMode)}
-            suppressMobileTrigger={isDrawerOpen || ['voti', 'comportamenti', 'consigli'].includes(activeTab) || (activeTab==='tabellone'&&dailyMatrixMode)}
-            inlineMobileTrigger={['analytics', 'programmazione', 'verifiche-online'].includes(activeTab)}
+            showClosedTrigger={shouldOfferAmbientCopilot({
+              tab: activeTab,
+              hasClass: Boolean(currentClass),
+              drawerOpen: isDrawerOpen,
+              assessmentEditorFocused: isAssessmentEditorFocus,
+              conductActive: todayAction === 'conduct',
+              recordingActive: isActiveRecordFocus
+            })}
+            suppressMobileTrigger={isDrawerOpen}
+            inlineMobileTrigger={true}
           />
           )}
         </>
@@ -3561,7 +3569,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onPrepareSnapshot={handlePrepareCouncilSnapshot}
             onConfirmSnapshot={handleConfirmCouncilSnapshot}
             onRegisterDraftGuard={registerCouncilDraftGuard}
-            onOpenCopilot={() => setCopilotSurfaceMode('home')}
           />
         )}
 

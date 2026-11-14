@@ -191,7 +191,7 @@ export const CopilotDeck: React.FC<CopilotDeckProps> = ({
           aria-label="Apri Copilota"
           aria-expanded={false}
           onClick={() => onSurfaceModeChange('home')}
-          className={`${inlineMobileTrigger ? 'relative self-end mx-3 mt-1 md:fixed md:mx-0 md:mt-0' : 'fixed left-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))]'} md:right-4 md:left-auto md:bottom-20 z-[72] inline-flex min-h-12 min-w-12 items-center justify-center rounded-full border border-cyan-400/50 bg-slate-950/95 p-3 text-sm font-semibold text-cyan-100 shadow-2xl backdrop-blur focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 md:px-4 md:py-2.5 ${(suppressMobileTrigger || (!inlineMobileTrigger && hiddenOnMobile)) ? 'max-md:hidden' : ''}`}
+          className={`${inlineMobileTrigger ? 'relative self-end mx-3 mt-1 shrink-0 md:mx-5' : 'fixed left-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:right-4 md:left-auto md:bottom-20 z-[72] shadow-2xl backdrop-blur'} inline-flex min-h-12 min-w-12 items-center justify-center rounded-full border border-cyan-400/50 bg-slate-950/95 p-3 text-sm font-semibold text-cyan-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 md:px-4 md:py-2.5 ${(suppressMobileTrigger || (!inlineMobileTrigger && hiddenOnMobile)) ? 'max-md:hidden' : ''}`}
           title="Apri Copilota"
         >
           <Sparkles className="h-5 w-5 md:mr-2 md:h-4 md:w-4" aria-hidden="true" />
