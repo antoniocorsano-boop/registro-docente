@@ -156,8 +156,22 @@ async function picker(){return nativeFind(n=>docNode(n)&&(/save|salva/i.test(n.t
 async function home(){
   const isHome=()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))');
   if(await isHome())return;
-  // Use the already-qualified Android Back path, not an animated drawer
-  // whose hidden/transitioning control can be returned by querySelector.
+  const inPrivacy=await evaluate('Boolean(document.querySelector(\'input[placeholder="Ripeti la password"]\'))');
+  if(inPrivacy){
+    // Privacy entered by the Home export shortcut does not push a history
+    // entry. Test explicit Oggi separately, without claiming Back passed.
+    const drawer='#registro-navigation-drawer[aria-hidden="false"]';
+    const go=drawer+' [data-testid="header01-go-home"]';
+    await click('[data-testid="header01-brand-navigation"]');
+    await until(()=>evaluate('(()=>{const e=document.querySelector('+JSON.stringify(go)+');if(!e||e.closest("[inert]"))return false;const r=e.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth})()'),'Opened drawer Oggi not visible');
+    await click(go);
+    const confirmation='[data-testid="header01-home-confirm"]';
+    await until(async()=>await isHome()||await evaluate('Boolean(document.querySelector('+JSON.stringify(confirmation)+'))'),'Explicit Oggi did not open home or confirmation');
+    if(!await isHome())await clickText('Torna a Oggi',confirmation+' ');
+    await until(isHome,'Explicit Oggi did not restore home');
+    record('home-reached-explicit-privacy-exit','PASS');
+    return;
+  }
   for(let step=0;step<5;step++){
     const before=await tab();
     adb('shell','input','keyevent','4');
