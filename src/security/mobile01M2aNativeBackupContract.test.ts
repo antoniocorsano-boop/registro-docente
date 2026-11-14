@@ -40,8 +40,11 @@ describe('MOBILE-01/M2a native encrypted backup boundary', () => {
     expect(flow).toContain('await saveEncryptedBackupOnAndroid(');
     expect(flow).toContain("if (result === 'cancelled' || !mountedRef.current) return;");
     expect(flow.indexOf('await encryptDataWithPassword')).toBeLessThan(flow.indexOf('await saveEncryptedBackupOnAndroid'));
-    expect(flow.indexOf("if (result === 'cancelled' || !mountedRef.current) return;")).toBeLessThan(flow.indexOf('await onRecordBackupExport(checkpoint);'));
-    expect(flow).toContain('} else {\n        const blob = new Blob([encryptedString]');
+    expect(flow.indexOf("if (result === 'cancelled' || !mountedRef.current) return;")).toBeLessThan(flow.indexOf('await onRecordBackupExport(checkpoint.receipt);'));
+    const web = flow.slice(flow.indexOf('} else {', flow.indexOf('if (androidNative) {')));
+    expect(web).toContain('await expectedBackupEvidence(encryptedString)');
+    expect(web).toContain('const blob = new Blob([encryptedString]');
+    expect(web).not.toContain('onRecordBackupExport(');
     const bridge = await load('src/security/androidBackupExport.ts');
     expect(bridge).toContain('plugin.chooseBackupDestination({ filename })');
     expect(bridge).toContain('plugin.writeEncryptedBackup({ token: selection.token, encryptedText })');

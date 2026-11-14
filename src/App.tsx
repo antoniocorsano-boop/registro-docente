@@ -167,6 +167,7 @@ import {
   incrementBackupChanges,
   prepareBackupCheckpoint,
   verifiedBackupDate,
+  type AuthorizedBackupCheckpoint,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
@@ -3186,7 +3187,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     meta: metaRef.current
   });
 
-  const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> => {
+  const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> => {
     return mutationCoordinator.enqueueTask(() =>
       backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
     );

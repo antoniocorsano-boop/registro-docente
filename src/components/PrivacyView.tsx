@@ -4,7 +4,7 @@ import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
 import { expectedBackupEvidence, matchesDownloadedBackup, type BackupByteEvidence } from '../security/webBackupVerification';
-import type { PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
+import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
 import { today } from '../utils';
 import {
   ShieldCheck,
@@ -27,7 +27,7 @@ interface PrivacyViewProps {
   classes: ClassData[];
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
-  onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;
+  onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
@@ -51,7 +51,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const backupOperationPendingRef = useRef(false);
-  const webVerificationRef = useRef<{ checkpoint: PreparedBackupCheckpoint; evidence: BackupByteEvidence } | null>(null);
+  const webVerificationRef = useRef<{ receipt: BackupReceipt; evidence: BackupByteEvidence } | null>(null);
   const [webVerificationAvailable, setWebVerificationAvailable] = useState(false);
   const [webVerificationMessage, setWebVerificationMessage] = useState('');
   const [isVerifyingCopy, setIsVerifyingCopy] = useState(false);
@@ -107,7 +107,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         if (result === 'cancelled' || !mountedRef.current) return;
         // A native receipt requires verified bytes, not just an opened picker.
         downloadInitiated = true;
-        await onRecordBackupExport(checkpoint);
+        await onRecordBackupExport(checkpoint.receipt);
       } else {
         const evidence = await expectedBackupEvidence(encryptedString);
         if (!mountedRef.current) return;
@@ -120,7 +120,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         try {
           a.click();
           downloadInitiated = true;
-          webVerificationRef.current = { checkpoint, evidence };
+          webVerificationRef.current = { receipt: checkpoint.receipt, evidence };
           setWebVerificationAvailable(true);
         } finally {
           document.body.removeChild(a);
@@ -258,7 +258,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       webVerificationRef.current = null;
       setWebVerificationAvailable(false);
       recording = true;
-      await onRecordBackupExport(pending.checkpoint);
+      await onRecordBackupExport(pending.receipt);
       if (mountedRef.current) setWebVerificationMessage('Copia verificata. Le registrazioni successive restano da includere.');
     } catch {
       if (mountedRef.current) setWebVerificationMessage(recording
@@ -455,6 +455,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
                 Seleziona file di backup (.enc.json oppure .json precedente)
               </label>
               <input
+                id="restore-backup-file"
                 type="file"
                 accept=".json"
                 onChange={e => setSelectedEncryptedFile(e.target.files?.[0] || null)}

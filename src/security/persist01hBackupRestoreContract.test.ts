@@ -53,7 +53,7 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
 
   test('PrivacyView exports the prepared checkpoint and records receipt only after native verification', () => {
     expect(privacySource).not.toContain('backupSnapshot: CompleteSecureAppSnapshot;');
-    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;');
+    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;');
     expect(privacySource).toContain("onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;");
 
     const exportSection = sectionBetween(privacySource, 'const handleExportEncrypted', 'const handleImportEncrypted');
@@ -62,10 +62,10 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(exportSection).toContain('createBackupPayload(checkpoint.snapshot)');
     expect(exportSection).toContain('a.click();');
     expect(exportSection).toContain('downloadInitiated = true;');
-    expect(exportSection).toContain('await onRecordBackupExport(checkpoint);');
-    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportSection.indexOf('a.click();'));
+    expect(exportSection).toContain('await onRecordBackupExport(checkpoint.receipt);');
+    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportSection.indexOf('a.click();'));
     expect(exportSection.slice(exportSection.indexOf('a.click();'))).not.toContain('onRecordBackupExport(');
-    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportSection.indexOf("setEncryptPassword('');"));
+    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportSection.indexOf("setEncryptPassword('');"));
     expect(exportSection).toContain('Download avviato, ma non verificato. Le registrazioni locali restano salvate; la copia è da verificare.');
   });
 

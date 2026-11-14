@@ -11,16 +11,24 @@ const grant = (includedChanges = 3): PreparedBackupCheckpoint => ({
 });
 
 describe('BACKUP-02/B1b one-use archive-scoped receipt authority', () => {
+  test('issued receipt is independent of the plaintext archive and only the receipt can authorize a commit', () => {
+    const authority = createBackupReceiptAuthority();
+    const authorized = authority.issue(grant());
+    expect(Object.keys(authorized.receipt).sort()).toEqual(['checkpointAt', 'includedChanges']);
+    expect(authorized.receipt).not.toBe(authorized);
+    expect(() => authority.consume(meta(5), authorized)).toThrow();
+    expect(authority.consume(meta(5), authorized.receipt).changes).toBe(2);
+  });
   test('subtracts only included changes, rejects replay after later work', () => {
     const authority = createBackupReceiptAuthority();
-    const receipt = authority.issue(grant());
+    const receipt = authority.issue(grant()).receipt;
     expect(authority.consume(meta(5), receipt)).toEqual({ changes: 2, lastBackup: at, verifiedBackupAt: at });
     expect(() => authority.consume(meta(7), receipt)).toThrow();
   });
   test('rejects copied or foreign grants, even with identical timestamp and count', () => {
     const first = createBackupReceiptAuthority();
     const second = createBackupReceiptAuthority();
-    const receipt = first.issue(grant());
+    const receipt = first.issue(grant()).receipt;
     second.issue(grant());
     expect(() => second.consume(meta(5), receipt)).toThrow();
     expect(() => first.consume(meta(5), { ...receipt })).toThrow();
@@ -28,31 +36,31 @@ describe('BACKUP-02/B1b one-use archive-scoped receipt authority', () => {
   });
   test('new preparation supersedes previous grant even with same timestamp', () => {
     const authority = createBackupReceiptAuthority();
-    const older = authority.issue(grant());
-    const newer = authority.issue(grant());
+    const older = authority.issue(grant()).receipt;
+    const newer = authority.issue(grant()).receipt;
     expect(() => authority.consume(meta(5), older)).toThrow();
     expect(authority.consume(meta(5), newer).changes).toBe(2);
   });
   test('restore or reset invalidation rejects previously issued grant', () => {
     const authority = createBackupReceiptAuthority();
-    const receipt = authority.issue(grant());
+    const receipt = authority.issue(grant()).receipt;
     authority.invalidate();
     expect(() => authority.consume(meta(5), receipt)).toThrow();
-    expect(authority.consume(meta(5), authority.issue(grant(2))).changes).toBe(3);
+    expect(authority.consume(meta(5), authority.issue(grant(2)).receipt).changes).toBe(3);
   });
   test('tampering or impossible counts fail closed', () => {
     const authority = createBackupReceiptAuthority();
-    const receipt = authority.issue(grant());
+    const receipt = authority.issue(grant()).receipt;
     receipt.includedChanges = 1;
     expect(() => authority.consume(meta(5), receipt)).toThrow();
-    expect(() => authority.consume(meta(2), authority.issue(grant()))).toThrow();
-    expect(() => authority.consume(meta(5), authority.issue(grant(-1)))).toThrow();
+    expect(() => authority.consume(meta(2), authority.issue(grant()).receipt)).toThrow();
+    expect(() => authority.consume(meta(5), authority.issue(grant(-1)).receipt)).toThrow();
   });
   test('failed durable metadata write never publishes and cannot replay the consumed grant', async () => {
     const authority = createBackupReceiptAuthority();
     const coordinator = createDurableMutationCoordinator();
     let current = meta(5);
-    const receipt = authority.issue(grant());
+    const receipt = authority.issue(grant()).receipt;
     const record = () => coordinator.enqueue<SecureMeta>({
       getCommitted: () => current,
       derive: previous => authority.consume(previous, receipt),
@@ -86,7 +94,7 @@ describe('BACKUP-02/B1c historical copy evidence', () => {
   });
   test('only current authority sets local verification and later mutations preserve it', () => {
     const authority = createBackupReceiptAuthority();
-    const verified = authority.consume(meta(5), authority.issue(grant()));
+    const verified = authority.consume(meta(5), authority.issue(grant()).receipt);
     expect(verifiedBackupDate(verified)).toBe(at);
     expect(verifiedBackupDate(incrementBackupChanges(verified))).toBe(at);
     expect(incrementBackupChanges(verified).changes).toBe(3);

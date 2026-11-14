@@ -6,6 +6,9 @@ export interface PreparedBackupCheckpoint {
   checkpointAt: string;
 }
 
+export type BackupReceipt = Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>;
+export type AuthorizedBackupCheckpoint = PreparedBackupCheckpoint & { receipt: BackupReceipt };
+
 function cloneSnapshot(snapshot: CompleteSecureAppSnapshot): CompleteSecureAppSnapshot {
   return structuredClone(snapshot);
 }
@@ -59,20 +62,18 @@ export function applyBackupReceipt(
  * Consume before persistence: an uncertain write requires a fresh export, not replay.
  */
 export function createBackupReceiptAuthority() {
-  type Receipt = Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>;
-  let pending: { identity: Receipt; value: Receipt } | null = null;
+  let pending: { identity: BackupReceipt; value: BackupReceipt } | null = null;
   return {
-    issue(checkpoint: PreparedBackupCheckpoint): PreparedBackupCheckpoint {
-      pending = {
-        identity: checkpoint,
-        value: { includedChanges: checkpoint.includedChanges, checkpointAt: checkpoint.checkpointAt }
-      };
-      return checkpoint;
+    issue(checkpoint: PreparedBackupCheckpoint): AuthorizedBackupCheckpoint {
+      // Neither the identity nor the authority retains the plaintext snapshot.
+      const receipt: BackupReceipt = { includedChanges: checkpoint.includedChanges, checkpointAt: checkpoint.checkpointAt };
+      pending = { identity: receipt, value: { ...receipt } };
+      return { ...checkpoint, receipt };
     },
     invalidate(): void {
       pending = null;
     },
-    consume(current: SecureMeta, receipt: Receipt): SecureMeta {
+    consume(current: SecureMeta, receipt: BackupReceipt): SecureMeta {
       if (!pending || pending.identity !== receipt) {
         throw new Error('Ricevuta della copia non valida o non più attuale.');
       }
