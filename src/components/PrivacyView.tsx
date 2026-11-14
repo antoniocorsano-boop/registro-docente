@@ -3,7 +3,8 @@ import { isAndroidBackupRuntime, saveEncryptedBackupOnAndroid, readEncryptedBack
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
-import type { PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
+import { expectedBackupEvidence, matchesDownloadedBackup, type BackupByteEvidence } from '../security/webBackupVerification';
+import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint, ExpectedCopyEvidence } from '../persistence/backupCheckpoint';
 import { today } from '../utils';
 import {
   ShieldCheck,
@@ -26,7 +27,8 @@ interface PrivacyViewProps {
   classes: ClassData[];
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
-  onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;
+  onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;
+  onBindBackupEvidence: (receipt: BackupReceipt, evidence: ExpectedCopyEvidence) => Promise<void>;
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
@@ -38,6 +40,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   isPrivacyShieldActive,
   onTogglePrivacyShield,
   onPrepareEncryptedBackup,
+  onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
   onFactoryReset
@@ -50,11 +53,15 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const backupOperationPendingRef = useRef(false);
+  const webVerificationRef = useRef<{ receipt: BackupReceipt; evidence: BackupByteEvidence } | null>(null);
+  const [webVerificationAvailable, setWebVerificationAvailable] = useState(false);
+  const [webVerificationMessage, setWebVerificationMessage] = useState('');
+  const [isVerifyingCopy, setIsVerifyingCopy] = useState(false);
   const nativeBackupRuntime = isAndroidBackupRuntime();
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => { mountedRef.current = false; webVerificationRef.current = null; };
   }, []);
 
   // Total students & evaluations protected
@@ -83,22 +90,35 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
     backupOperationPendingRef.current = true;
     setIsEncrypting(true);
+    webVerificationRef.current = null;
+    setWebVerificationAvailable(false);
+    setWebVerificationMessage('');
     let downloadInitiated = false;
     const androidNative = isAndroidBackupRuntime();
     try {
       const checkpoint = await onPrepareEncryptedBackup();
       const payload = createBackupPayload(checkpoint.snapshot);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
+      if (!mountedRef.current) return;
 
       const filename = `Backup_Cifrato_GDPR_${today()}.enc.json`;
       if (androidNative) {
+        const evidence = await expectedBackupEvidence(encryptedString);
+        if (!mountedRef.current) return;
+        await onBindBackupEvidence(checkpoint.receipt, { ...evidence, source: 'android-readback', payloadVersion: payload.backupDataVersion });
+        if (!mountedRef.current) return;
         const result = await saveEncryptedBackupOnAndroid(
           encryptedString, filename, () => mountedRef.current
         );
         if (result === 'cancelled' || !mountedRef.current) return;
         // A native receipt requires verified bytes, not just an opened picker.
         downloadInitiated = true;
+        await onRecordBackupExport(checkpoint.receipt);
       } else {
+        const evidence = await expectedBackupEvidence(encryptedString);
+        if (!mountedRef.current) return;
+        await onBindBackupEvidence(checkpoint.receipt, { ...evidence, source: 'web-readback', payloadVersion: payload.backupDataVersion });
+        if (!mountedRef.current) return;
         const blob = new Blob([encryptedString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -108,30 +128,32 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         try {
           a.click();
           downloadInitiated = true;
+          webVerificationRef.current = { receipt: checkpoint.receipt, evidence };
+          setWebVerificationAvailable(true);
         } finally {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         }
       }
 
-      await onRecordBackupExport(checkpoint);
+      if (!mountedRef.current) return;
       setEncryptPassword('');
       setConfirmPassword('');
       alert(androidNative
         ? 'Copia di sicurezza salvata e verificata nella cartella scelta.'
-        : 'Backup protetto con crittografia AES-256-GCM esportato con successo!');
+        : 'Download avviato. La copia non è ancora verificata; il contatore delle modifiche resta invariato. Seleziona il file appena scaricato prima di uscire da Privacy.');
     } catch (err) {
       if (androidNative) {
         if (mountedRef.current) alert(downloadInitiated
-          ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le modifiche restano da salvare.'
+          ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le registrazioni locali restano salvate; la copia non è registrata come aggiornata.'
           : 'Copia di sicurezza non verificata. Scegli una cartella locale (Download o Documenti) e riprova.');
         return;
       }
       console.error(err);
       if (downloadInitiated) {
-        alert('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
+        alert('Download avviato, ma non verificato. Le registrazioni locali restano salvate; la copia è da verificare.');
       } else {
-        alert('Errore durante la preparazione o cifratura del backup.');
+        if (mountedRef.current) alert('Copia non esportata. Verifica lo spazio e il limite di 32 MiB.');
       }
     } finally {
       backupOperationPendingRef.current = false;
@@ -175,6 +197,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
     backupOperationPendingRef.current = true;
     setIsDecrypting(true);
+    webVerificationRef.current = null;
+    setWebVerificationAvailable(false);
+    setWebVerificationMessage('');
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -220,6 +245,37 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
       alert('Errore durante la lettura del file di backup cifrato.');
     };
     reader.readAsText(selectedEncryptedFile);
+  };
+
+  // Explicit readback of the exact web export, never an import or a restore.
+  const handleVerifyDownloadedCopy = async (file: File | null) => {
+    const pending = webVerificationRef.current;
+    if (!file || nativeBackupRuntime || !pending || backupOperationPendingRef.current) return;
+    backupOperationPendingRef.current = true;
+    setIsVerifyingCopy(true);
+    setWebVerificationMessage('');
+    let recording = false;
+    try {
+      const matches = await matchesDownloadedBackup(file, pending.evidence);
+      if (!mountedRef.current || webVerificationRef.current !== pending) return;
+      if (!matches) {
+        setWebVerificationMessage('Il file non corrisponde alla copia appena esportata. Seleziona il file corretto.');
+        return;
+      }
+      // Consume the view-local grant before requesting the serialized, one-use App receipt.
+      webVerificationRef.current = null;
+      setWebVerificationAvailable(false);
+      recording = true;
+      await onRecordBackupExport(pending.receipt);
+      if (mountedRef.current) setWebVerificationMessage('Copia verificata. Le registrazioni successive restano da includere.');
+    } catch {
+      if (mountedRef.current) setWebVerificationMessage(recording
+        ? 'Il file corrisponde, ma lo stato della copia non è stato aggiornato. Esporta una nuova copia.'
+        : 'Impossibile leggere la copia. Riprova con il file appena scaricato.');
+    } finally {
+      backupOperationPendingRef.current = false;
+      if (mountedRef.current) setIsVerifyingCopy(false);
+    }
   };
 
   return (
@@ -331,7 +387,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             <Lock className="w-4 h-4 text-emerald-400" /> Backup Cifrato con Password (AES-256-GCM)
           </h3>
           <p className="text-xs text-slate-400">
-            Se desideri conservare il backup su una chiavetta USB o inviartelo via email, cifralo con una password. In caso di smarrimento del supporto, i dati dei minori rimarranno inaccessibili.
+            Conserva una copia cifrata su un supporto separato autorizzato dall’istituto. La verifica del file non sostituisce una prova di recupero; una copia sullo stesso dispositivo non protegge dal suo smarrimento.
           </p>
         </div>
 
@@ -372,12 +428,28 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <button
               type="submit"
-              disabled={isEncrypting || isDecrypting}
+              disabled={isEncrypting || isDecrypting || isVerifyingCopy}
               className="w-full py-2.5 rounded-lg neon-btn-primary text-xs font-semibold flex items-center justify-center gap-1.5 mt-2"
             >
               <KeyRound className="w-3.5 h-3.5" />
               <span>{isEncrypting ? 'Cifratura in corso...' : 'Cifra e Scarica File'}</span>
             </button>
+            {!nativeBackupRuntime && (webVerificationAvailable || webVerificationMessage || isVerifyingCopy) && (
+              <div className="border-t border-[var(--border)] pt-3 space-y-2">
+                {webVerificationAvailable && (
+                  <>
+                    <p className="text-xs text-slate-300">Verifica il file appena scaricato prima di uscire da Privacy. Non sostituisce i dati del Registro.</p>
+                    <label htmlFor="verify-downloaded-backup" className="block text-xs font-semibold text-slate-200">Verifica copia scaricata</label>
+                    <input id="verify-downloaded-backup" type="file" accept=".enc.json,application/json"
+                      disabled={isEncrypting || isDecrypting || isVerifyingCopy}
+                      className="w-full min-h-[44px] min-w-0 text-xs neon-input p-1.5 file:mr-1 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-800 file:text-slate-200"
+                      onChange={e => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ''; void handleVerifyDownloadedCopy(file); }} />
+                  </>
+                )}
+                {isVerifyingCopy && <p role="status" className="text-xs text-slate-300">Verifica in corso…</p>}
+                {webVerificationMessage && <p role="status" className="text-xs text-slate-300">{webVerificationMessage}</p>}
+              </div>
+            )}
           </form>
 
           {/* Import Encrypted Form */}
@@ -391,6 +463,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
                 Seleziona file di backup (.enc.json oppure .json precedente)
               </label>
               <input
+                id="restore-backup-file"
                 type="file"
                 accept=".json"
                 onChange={e => setSelectedEncryptedFile(e.target.files?.[0] || null)}
@@ -420,7 +493,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
             <button
               type="submit"
-              disabled={isEncrypting || isDecrypting}
+              disabled={isEncrypting || isDecrypting || isVerifyingCopy}
               className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-cyan-300 flex items-center justify-center gap-1.5 mt-2 transition-colors"
             >
               <Lock className="w-3.5 h-3.5" />

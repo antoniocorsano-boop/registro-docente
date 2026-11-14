@@ -163,12 +163,15 @@ import {
   type TeachingProposalOutcomeMutationInput
 } from './persistence/teachingProposalOutcomeMutation';
 import {
-  applyBackupReceipt,
+  createBackupReceiptAuthority,
   incrementBackupChanges,
   prepareBackupCheckpoint,
+  verifiedBackupDate,
+  type AuthorizedBackupCheckpoint,
+  type ExpectedCopyEvidence,
+  type BackupReceipt,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
-import { shouldSuggestBackupReminder } from './persistence/backupReminderPolicy';
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
@@ -213,7 +216,6 @@ import { VerificheOnlineView, type AssessmentDraftGuard } from './components/Ver
 import { UdaGanttView } from './components/UdaGanttView';
 import { SettingsView } from './components/SettingsView';
 import { CopilotProactivitySettings } from './components/CopilotProactivitySettings';
-import { BackupReminderModal } from './components/BackupReminderModal';
 import { StudentPortal } from './components/StudentPortal';
 import { PrivacyView } from './components/PrivacyView';
 import { PlanningProfileView } from './components/planning/PlanningProfileView';
@@ -684,7 +686,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // queued until its matching popstate is delivered (latest intent wins).
   const pendingEvaluationCancelRef = useRef<{ classId: string; proceed: (() => void) | null } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [saveIndicatorText, setSaveIndicatorText] = useState('Sincronizzato');
   const saveIndicatorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLibraryMutationPending, setIsLibraryMutationPending] = useState(false);
@@ -730,6 +731,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const appDataRef = useRef(appData);
   const currentClassIdRef = useRef(appData.currentClassId);
   const metaRef = useRef(meta);
+  const backupReceiptAuthorityRef = useRef<ReturnType<typeof createBackupReceiptAuthority> | null>(null);
+  const backupReceiptAuthority = backupReceiptAuthorityRef.current ?? (
+    backupReceiptAuthorityRef.current = createBackupReceiptAuthority()
+  );
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
@@ -1188,6 +1193,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const commitAppDataMutation = useCallback((
     derive: (current: AppData) => AppData,
     options: {
+      /** Historical caller option; backup maintenance never interrupts durable writes. */
       showBackupModal?: boolean;
       successMessage?: string;
       inlineFailure?: boolean;
@@ -1195,7 +1201,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     } = {}
   ): Promise<AppData> => {
     const {
-      showBackupModal,
       successMessage = 'Salvato nel vault locale',
       inlineFailure = false,
       afterCommit
@@ -1227,12 +1232,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setAppData({ ...candidate.appData, currentClassId: visibleCurrentClassId });
         setMeta(candidate.meta);
       },
-      afterCommit: (candidate, previous) => {
+      afterCommit: () => {
         if (successMessage) toast(successMessage);
-        const shouldOpenBackupModal = showBackupModal === true
-          || (showBackupModal === undefined
-            && shouldSuggestBackupReminder(previous.meta, candidate.meta));
-        if (shouldOpenBackupModal) setIsBackupModalOpen(true);
         afterCommit?.();
       }
     }).then(candidate => candidate.appData).catch(error => {
@@ -3188,10 +3189,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     meta: metaRef.current
   });
 
-  const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> => {
+  const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> => {
     return mutationCoordinator.enqueueTask(() =>
-      prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString())
+      backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
     );
+  };
+
+  const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
+    return mutationCoordinator.enqueueTask(() => backupReceiptAuthority.bindEvidence(receipt, evidence));
   };
 
   const recordEncryptedBackupExport = (
@@ -3199,7 +3204,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ): Promise<void> => {
     return mutationCoordinator.enqueue<SecureMeta>({
       getCommitted: () => metaRef.current,
-      derive: current => applyBackupReceipt(current, checkpoint),
+      derive: current => backupReceiptAuthority.consume(current, checkpoint),
       persist: candidate => secureStorage.saveMeta(candidate),
       publish: candidate => {
         metaRef.current = candidate;
@@ -3273,6 +3278,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
       }
+      backupReceiptAuthority.invalidate();
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
@@ -3306,7 +3312,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
+    backupReceiptAuthority.invalidate();
     try {
+      await mutationCoordinator.enqueueTask(async () => {
+      backupReceiptAuthority.invalidate();
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
@@ -3332,6 +3341,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setMeta(resetMeta);
       setActiveTab('home');
       toast('Reset dati completato');
+      });
     } catch (error) {
       console.error('Secure factory reset failed', error);
       alert('Reset sicuro non riuscito. I dati cifrati non sono stati dichiarati cancellati.');
@@ -3422,6 +3432,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteClass={handleDeleteClass}
             onExportBackup={handleExportBackup}
             lastBackupDate={meta.lastBackup}
+            verifiedBackupDate={verifiedBackupDate(meta)}
             unsavedChangesCount={meta.changes || 0}
             onStartTodayAction={handleStartTodayAction}
             pendingTodayAction={todayAction}
@@ -3764,6 +3775,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onBindBackupEvidence={bindBackupEvidence}
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
@@ -3906,12 +3918,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         </div>
       )}
 
-      {/* Persistence confirmation modal */}
-      <BackupReminderModal
-        isOpen={isBackupModalOpen}
-        onClose={() => setIsBackupModalOpen(false)}
-        onExport={handleExportBackup}
-      />
     </div>
   );
 }

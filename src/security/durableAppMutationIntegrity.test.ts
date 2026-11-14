@@ -15,7 +15,16 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     expect(appSource).toContain('createDurableMutationCoordinator');
     expect(appSource).toContain('commitAppDataMutation');
     expect(appSource).toContain('recordEncryptedBackupExport');
-    expect(appSource).toContain('applyBackupReceipt');
+    const receipt = sectionBetween('const recordEncryptedBackupExport', '// CDC-01:');
+    expect(appSource).toContain('createBackupReceiptAuthority');
+    expect(receipt).toContain('mutationCoordinator.enqueue<SecureMeta>');
+    expect(receipt).toContain('getCommitted: () => metaRef.current');
+    expect(receipt).toContain('derive: current => backupReceiptAuthority.consume(current, checkpoint)');
+    expect(receipt).toContain('persist: candidate => secureStorage.saveMeta(candidate)');
+    expect(receipt).toContain('publish: candidate =>');
+    expect(receipt.indexOf('persist: candidate => secureStorage.saveMeta(candidate)')).toBeLessThan(receipt.indexOf('publish: candidate =>'));
+    expect(receipt).toContain('metaRef.current = candidate');
+    expect(receipt).toContain('setMeta(candidate)');
     expect(appSource).toContain('secureStorage.saveMeta');
     expect(appSource).toContain('saveAppDataAndMeta');
     expect(appSource).not.toContain('Promise.all([\n      secureStorage.saveAppData');
