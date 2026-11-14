@@ -94,7 +94,7 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   };
 
   await navigate(page, 'Privacy');
-  await page.locator('input[type=file]').setInputFiles({
+  await page.locator('#restore-backup-file').setInputFiles({
     name: 'legacy-sintetico.json', mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(legacy))
   });
@@ -130,7 +130,7 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   expect(encrypted.ciphertext).toBeTruthy();
   expect(encryptedBuffer.toString('utf8')).not.toContain('legacy-student');
 
-  await page.locator('input[type=file]').setInputFiles({
+  await page.locator('#restore-backup-file').setInputFiles({
     name: 'nuovo-archivio.enc.json', mimeType: 'application/json', buffer: encryptedBuffer
   });
   await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill('Backup!2026');

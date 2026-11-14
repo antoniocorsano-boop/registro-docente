@@ -24,11 +24,11 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
   });
 
   test('backup receipt is serialized and subtracts only the checkpoint changes from current meta', () => {
-    expect(appSource).toContain('applyBackupReceipt');
+    expect(appSource).toContain('createBackupReceiptAuthority');
     const receipt = sectionBetween(appSource, 'const recordEncryptedBackupExport', '// Import Encrypted Backup');
     expect(receipt).toContain('mutationCoordinator.enqueue<SecureMeta>');
     expect(receipt).toContain('getCommitted: () => metaRef.current');
-    expect(receipt).toContain('derive: current => applyBackupReceipt(current, checkpoint)');
+    expect(receipt).toContain('derive: current => backupReceiptAuthority.consume(current, checkpoint)');
     expect(receipt).toContain('persist: candidate => secureStorage.saveMeta(candidate)');
     expect(receipt).toContain('metaRef.current = candidate');
     expect(receipt).toContain('setMeta(candidate)');
@@ -51,9 +51,9 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(restore).toContain("setActiveTab('home')");
   });
 
-  test('PrivacyView exports the prepared checkpoint and records receipt only after download initiation', () => {
+  test('PrivacyView exports the prepared checkpoint and records receipt only after native verification', () => {
     expect(privacySource).not.toContain('backupSnapshot: CompleteSecureAppSnapshot;');
-    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;');
+    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;');
     expect(privacySource).toContain("onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;");
 
     const exportSection = sectionBetween(privacySource, 'const handleExportEncrypted', 'const handleImportEncrypted');
@@ -62,10 +62,11 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(exportSection).toContain('createBackupPayload(checkpoint.snapshot)');
     expect(exportSection).toContain('a.click();');
     expect(exportSection).toContain('downloadInitiated = true;');
-    expect(exportSection).toContain('await onRecordBackupExport(checkpoint);');
-    expect(exportSection.indexOf('a.click();')).toBeLessThan(exportSection.indexOf('await onRecordBackupExport(checkpoint);'));
-    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportSection.indexOf("setEncryptPassword('');"));
-    expect(exportSection).toContain('Il download è stato avviato, ma lo stato del backup nel Registro non è stato aggiornato. Le modifiche restano segnalate come da salvare.');
+    expect(exportSection).toContain('await onRecordBackupExport(checkpoint.receipt);');
+    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportSection.indexOf('a.click();'));
+    expect(exportSection.slice(exportSection.indexOf('a.click();'))).not.toContain('onRecordBackupExport(');
+    expect(exportSection.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportSection.indexOf("setEncryptPassword('');"));
+    expect(exportSection).toContain('Download avviato, ma non verificato. Le registrazioni locali restano salvate; la copia è da verificare.');
   });
 
   test('App wires PrivacyView to checkpoint and receipt callbacks instead of render-time snapshot export', () => {

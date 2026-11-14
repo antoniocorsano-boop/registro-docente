@@ -174,12 +174,12 @@ describe('PERSIST-01H pending intent boundaries', () => {
 describe('PERSIST-01H truthful backup and restore integration', () => {
   test('backup preparation is serialized and snapshots committed refs only when the task begins', () => {
     expect(appSource).toContain("from './persistence/backupCheckpoint'");
-    expect(appSource).toContain('applyBackupReceipt');
+    expect(appSource).toContain('createBackupReceiptAuthority');
     expect(appSource).toContain('incrementBackupChanges');
     expect(appSource).toContain('prepareBackupCheckpoint');
     expect(appSource).toContain('type PreparedBackupCheckpoint');
     const backup = sectionBetween('// Prepare encrypted backup checkpoint', '// Import Encrypted Backup');
-    expect(backup).toContain('const prepareEncryptedBackup = (): Promise<PreparedBackupCheckpoint> =>');
+    expect(backup).toContain('const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> =>');
     expect(backup).toContain('return mutationCoordinator.enqueueTask(() =>');
     expect(backup).toContain('appData: appDataRef.current');
     expect(backup).toContain('settings: settingsRef.current');
@@ -189,22 +189,24 @@ describe('PERSIST-01H truthful backup and restore integration', () => {
     expect(backup).toContain('meta: metaRef.current');
     expect(backup).toContain('prepareBackupCheckpoint');
     expect(backup).toContain('const recordEncryptedBackupExport');
-    expect(backup).toContain('applyBackupReceipt(current, checkpoint)');
+    expect(backup).toContain('backupReceiptAuthority.consume(current, checkpoint)');
   });
 
   test('PrivacyView exports only the prepared checkpoint and awaits its receipt before success cleanup', () => {
     expect(privacySource).not.toContain('backupSnapshot: CompleteSecureAppSnapshot;');
-    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<PreparedBackupCheckpoint>;');
+    expect(privacySource).toContain('onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;');
     expect(privacySource).toContain("onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;");
     const exportFlow = sourceSection(privacySource, 'const handleExportEncrypted', 'const handleImportEncrypted');
     expect(exportFlow).toContain('const checkpoint = await onPrepareEncryptedBackup();');
     expect(exportFlow).toContain('createBackupPayload(checkpoint.snapshot)');
     expect(exportFlow).toContain('await encryptDataWithPassword');
     expect(exportFlow).toContain('a.click();');
-    expect(exportFlow).toContain('await onRecordBackupExport(checkpoint);');
-    expect(exportFlow.indexOf('a.click();')).toBeLessThan(exportFlow.indexOf('await onRecordBackupExport(checkpoint);'));
-    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportFlow.indexOf("setEncryptPassword('');"));
-    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint);')).toBeLessThan(exportFlow.indexOf('esportato con successo'));
+    expect(exportFlow).toContain('await onRecordBackupExport(checkpoint.receipt);');
+    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportFlow.indexOf('a.click();'));
+    expect(exportFlow.slice(exportFlow.indexOf('a.click();'))).not.toContain('onRecordBackupExport(');
+    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportFlow.indexOf("setEncryptPassword('');"));
+    expect(exportFlow.indexOf('await onRecordBackupExport(checkpoint.receipt);')).toBeLessThan(exportFlow.indexOf('Copia di sicurezza salvata e verificata'));
+    expect(exportFlow).toContain('Download avviato. La copia non è ancora verificata');
     expect(exportFlow).toContain('downloadInitiated');
   });
 
