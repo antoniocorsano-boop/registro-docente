@@ -38,7 +38,7 @@ async function connect() {
 function cdp(method, params) {
   const id=++seq;
   return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP response timeout'))},4000);
+    const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP response timeout: '+method))},12000);
     pending.set(id,{resolve:r=>{clearTimeout(timer);r.exceptionDetails?reject(Error('WebView expression failed')):resolve(r)},reject:e=>{clearTimeout(timer);reject(e)}});
     socket.send(JSON.stringify({id,method,params}));
   });
@@ -47,11 +47,25 @@ async function evaluate(expression) {
   const r=await cdp('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
   return r.result.value;
 }
-async function touch(expression) {
-  const point=await evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
-  if(!point || point.x<0 || point.y<0)throw Error('No target for trusted touch');
-  await cdp('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
-  await cdp('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+// Read geometry from the actual WebView, but send touches through the Android
+// input dispatcher. No CDP Input acknowledgement can block the test.
+function webViewBounds() {
+  adb('shell','uiautomator','dump','/sdcard/trama-back-window.xml');
+  const xml=adb('shell','cat','/sdcard/trama-back-window.xml');
+  const nodes=Array.from(xml.matchAll(/<node\b[^>]*>/g),m=>m[0]);
+  const bounds=nodes.filter(n=>n.includes('class="android.webkit.WebView"')&&n.includes('package="'+pkg+'"')).map(n=>n.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)).filter(Boolean).map(m=>m.slice(1).map(Number)).filter(([l,t,r,b])=>r>l&&b>t).sort((a,b)=>(b[2]-b[0])*(b[3]-b[1])-(a[2]-a[0])*(a[3]-a[1]));
+  if(!bounds.length)throw Error('Native WebView bounds unavailable');
+  return bounds[0];
+}
+async function touch(expression,label='target') {
+  const geometry=await evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center",behavior:"instant"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight,dpr:devicePixelRatio}})()');
+  if(!geometry || geometry.x<0 || geometry.y<0 || geometry.x>=geometry.w || geometry.y>=geometry.h)throw Error('Target not visible: '+label);
+  const [l,t,r,b]=webViewBounds();
+  const sx=(r-l)/geometry.w,sy=(b-t)/geometry.h;
+  if(!Number.isFinite(sx)||!Number.isFinite(sy)||Math.abs(sx-sy)/Math.max(sx,sy)>.15||Math.abs(sx-geometry.dpr)/geometry.dpr>.15)throw Error('WebView native/CSS bounds mismatch: '+JSON.stringify({bounds:[l,t,r,b],geometry}));
+  const x=Math.round(l+geometry.x*sx),y=Math.round(t+geometry.y*sy);
+  console.log('native-tap',label,JSON.stringify({x,y}));
+  adb('shell','input','tap',String(x),String(y));
 }
 async function until(fn,label,ms=15000) {
   const end=Date.now()+ms;
@@ -61,12 +75,12 @@ async function until(fn,label,ms=15000) {
 async function tap(selector, label) {
   const q=JSON.stringify(selector);
   await until(()=>evaluate('Boolean(document.querySelector('+q+'))'),'Missing '+label);
-  await touch('document.querySelector('+q+')');
+  await touch('document.querySelector('+q+')',label);
 }
 async function button(label, scope='') {
   const expr='Array.from(document.querySelectorAll('+JSON.stringify(scope+'button')+')).find(b=>b.getClientRects().length && !b.disabled && b.textContent.trim()==='+JSON.stringify(label)+')';
   await until(()=>evaluate('Boolean('+expr+')'),'Missing '+label);
-  await touch(expr);
+  await touch(expr,label);
 }
 async function tab() { return evaluate('history.state?.tab || (new URL(location.href).searchParams.get("tab")) || "home"'); }
 async function assertTab(wanted,label) {
@@ -91,14 +105,19 @@ try {
   await until(()=>evaluate('Boolean(document.querySelector("#vault-password"))'),'Demo password field not available after selecting mode');
   record('demo-mode-selected','PASS');
   await evaluate('(()=>{const e=document.querySelector("#vault-password");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(e,"synthetic-back-diagnostic-only");e.dispatchEvent(new Event("input",{bubbles:true}));e.blur();return true})()');
-  await button('Avvia la prova');
-  await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo classes unavailable');
-  await touch('Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))');
+  // Setup is not a history traversal; use form submission and wait for the
+  // observed unlocked state, without retrying the action.
+  await evaluate('(()=>{const b=Array.from(document.querySelectorAll("button")).find(b=>!b.disabled&&b.textContent.trim()==="Avvia la prova");if(!b)throw Error("Demo submit absent");b.click();return true})()');
+  await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo classes unavailable',45000);
+  record('archive-opened','PASS',{view:await snapshot()});
+  await touch('Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))','open synthetic class');
   await until(()=>evaluate('Boolean(document.querySelector("nav"))'),'Class navigation absent');
   await button('Riepilogo','nav ');
   await assertTab('dashboard','class overview');
+  record('class-overview','PASS',{view:await snapshot()});
   await button('Tabellone','nav ');
   await assertTab('tabellone','class matrix');
+  record('matrix','PASS',{view:await snapshot()});
   await button('Analisi','nav ');
   await assertTab('analytics','analysis');
   record('setup','PASS',{foreground:foreground()});
