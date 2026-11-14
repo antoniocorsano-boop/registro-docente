@@ -42,6 +42,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Set up Java 21 (same toolchain as packaging)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Android SDK and emulator tools
+        uses: android-actions/setup-android@v3
+        timeout-minutes: 7
+        with:
+          packages: 'platform-tools emulator'
+      - name: Verify Android SDK prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v adb
+          command -v sdkmanager
+          command -v avdmanager
+          test -x "$ANDROID_HOME/emulator/emulator"
+          adb version
+          "$ANDROID_HOME/emulator/emulator" -version
       - name: Prepare Android 16 emulator using SDK
         shell: bash
         run: |
@@ -49,8 +69,8 @@ jobs:
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -accel-check
-          timeout 300 "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-36;google_apis;x86_64'
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name trama-back-api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_6
+          timeout 300 sdkmanager 'system-images;android-36;google_apis;x86_64'
+          echo no | avdmanager create avd --force --name trama-back-api36 --package 'system-images;android-36;google_apis;x86_64' --device pixel_6
           nohup "$ANDROID_HOME/emulator/emulator" -avd trama-back-api36 -no-window -no-audio -no-snapshot -no-boot-anim -gpu swiftshader_indirect > native-evidence/emulator.log 2>&1 &
           timeout 240 adb wait-for-device
           for i in $(seq 1 90); do
