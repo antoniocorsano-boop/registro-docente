@@ -63,7 +63,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
     replaceDrafts(next);setError(null);
   };
   const advance=(id:string)=>{const next=currentClass.students[currentClass.students.findIndex(s=>s.id===id)+1];if(next&&!document.querySelector('[aria-modal="true"]'))inputs.current.get(next.id)?.focus();};
-  const saveGrade=async(id:string,proof:MatrixProof,existing:boolean,explicitNew:boolean)=>{
+  const saveGrade=async(id:string,proof:MatrixProof,existing:boolean,explicitNew:boolean,advanceOnCommit=false)=>{
     if(pendingRef.current||!mounted.current)return;
     const draft=draftsRef.current[id];
     if(!draft){advance(id);return;}
@@ -75,23 +75,23 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
       if(!mounted.current)return;
       const next={...draftsRef.current};delete next[id];replaceDrafts(next);
       setSelection({kind:'existing',batchId:receipt.batchId!});setFirstCell(null);resetProof();
-      if(document.activeElement===inputs.current.get(id)||document.activeElement?.closest('[data-testid="daily-proof-panel"]'))advance(id);
-    }catch{if(mounted.current)setError({studentId:id,message:'Voto non salvato. Riprova con Invio.'});}
+      if(advanceOnCommit||document.activeElement===inputs.current.get(id)||document.activeElement?.closest('[data-testid="daily-proof-panel"]'))advance(id);
+    }catch{if(mounted.current)setError({studentId:id,message:'Voto non salvato. Riprova con il comando di conferma.'});}
     finally{pendingRef.current=false;if(mounted.current)setPending(null);}
   };
-  const confirmGrade=(id:string)=>{
+  const confirmGrade=(id:string,advanceOnCommit=false)=>{
     if(pendingRef.current||needsChoice||hasConflict)return;
     const draft=draftsRef.current[id];
     if(!draft){advance(id);return;}
     if(!normalizeGrade(draft.raw)){setError({studentId:id,message:draft.raw.trim()?'Voto non valido.':'Il campo vuoto non cancella un voto registrato.'});return;}
-    if(candidate){void saveGrade(id,candidate.proof,true,false);return;}
+    if(candidate){void saveGrade(id,candidate.proof,true,false,advanceOnCommit);return;}
     if(selection.kind!=='new')setSelection(fresh(false));
     setFirstCell(id);setError(null);requestAnimationFrame(()=>{proofPanel.current?.scrollIntoView({block:'center'});proofPanel.current?.querySelector('select')?.focus();});
   };
   const firstSave=()=>{
     if(!first||selection.kind!=='new'||!type||!title.trim()){setError({message:'Scegli la tipologia e indica l’argomento.'});return;}
     if(!draftsRef.current[first]||!normalizeGrade(draftsRef.current[first].raw)){setError({message:'Inserisci un voto valido nella riga da registrare.'});return;}
-    void saveGrade(first,{batchId:selection.batchId,date,type,period,title:title.trim(),...(udaId?{udaId}:{})},false,selection.explicit);
+    void saveGrade(first,{batchId:selection.batchId,date,type,period,title:title.trim(),...(udaId?{udaId}:{})},false,selection.explicit,true);
   };
   const saveBehavior=async(id:string,status:Status)=>{
     if(pendingRef.current)return;
@@ -130,14 +130,19 @@ export function DailyMatrixWorkspace({data,currentClass,udas,isPrivacyShieldActi
           <span data-testid="daily-student-name" className="daily-student-name min-w-0 text-sm font-medium break-words"><span aria-hidden="true" className="text-xs text-slate-400 shrink-0">{i+1}.</span><span className="min-w-0">{formatStudentNameWithPrivacy(st.name,isPrivacyShieldActive)}</span></span>
           <button type="button" aria-label={'Comportamento alunno '+(i+1)+': '+label(observation?.status)} aria-expanded={openBehavior===st.id} disabled={pending!==null} onClick={()=>{setOpenBehavior(openBehavior===st.id?null:st.id);setError(null);}} className="min-h-[48px] min-w-[48px] flex items-center justify-center gap-1 rounded border border-[var(--border)]">{pending?.studentId===st.id&&pending.kind==='behavior'?<LoaderCircle size={20} className="animate-spin"/>:<StatusIcon status={observation?.status}/>}<ChevronDown size={12} aria-hidden="true"/></button>
           <div className="flex items-center gap-1 min-w-0">
-            <input ref={el=>{if(el)inputs.current.set(st.id,el);else inputs.current.delete(st.id);}} aria-label={'Voto alunno '+(i+1)} value={draft?.raw??grade?.value??''} aria-invalid={Boolean(rowError)} readOnly={pending!==null||needsChoice||hasConflict} onChange={e=>changeValue(st.id,e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.nativeEvent.isComposing){e.preventDefault();confirmGrade(st.id);}}} enterKeyHint="next" autoComplete="off" spellCheck={false} placeholder="—" className="min-w-0 w-full min-h-[48px] neon-input text-center font-semibold"/>
-            <span role="status" aria-label={pending?.studentId===st.id&&pending.kind==='grade'?'Salvataggio in corso':draft?'Da confermare':grade?'Registrato':'Non registrato'} className="w-[18px] shrink-0">{pending?.studentId===st.id&&pending.kind==='grade'?<LoaderCircle size={18} className="animate-spin"/>:grade&&!draft?<Check size={18} className="text-emerald-300"/>:draft?<span aria-hidden="true">↵</span>:null}</span>
+            <input ref={el=>{if(el)inputs.current.set(st.id,el);else inputs.current.delete(st.id);}} aria-label={'Voto alunno '+(i+1)} value={draft?.raw??grade?.value??''} aria-invalid={Boolean(rowError)} readOnly={pending!==null||needsChoice||hasConflict} onChange={e=>changeValue(st.id,e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.nativeEvent.isComposing){e.preventDefault();confirmGrade(st.id);}}} enterKeyHint="done" autoComplete="off" spellCheck={false} placeholder="—" className="min-w-0 w-full min-h-[48px] neon-input text-center font-semibold"/>
+            <div className="w-[44px] shrink-0 flex items-center justify-center">
+              {pending?.studentId===st.id&&pending.kind==='grade'?
+                <span role="status" aria-label="Salvataggio in corso"><LoaderCircle size={18} className="animate-spin"/></span>:
+                draft?<><button type="button" aria-label={'Conferma voto alunno '+(i+1)} title="Conferma voto" disabled={pending!==null||needsChoice||hasConflict} onClick={()=>confirmGrade(st.id,true)} className="w-[44px] min-h-[48px] flex items-center justify-center rounded border border-[var(--primary)] text-[var(--primary)] focus-visible:outline focus-visible:outline-2"><Check size={20} aria-hidden="true"/></button><span role="status" aria-label="Da confermare" className="sr-only">Da confermare</span></>:
+                <span role="status" aria-label={grade?'Registrato':'Non registrato'}>{grade?<Check size={18} className="text-emerald-300" aria-hidden="true"/>:null}</span>}
+            </div>
           </div>
           {openBehavior===st.id&&<div className="daily-row-detail grid grid-cols-2 gap-2 py-2">{BEHAVIOR_OPTIONS.map(option=><button type="button" key={option.label} aria-pressed={observation?.status===option.label} disabled={pending!==null} onClick={()=>void saveBehavior(st.id,option.label)} className="min-h-[48px] flex items-center gap-2 justify-center rounded border border-[var(--border)] text-sm"><StatusIcon status={option.label}/>{label(option.label)}</button>)}</div>}
           {rowError&&<p role="alert" className="daily-row-detail text-xs text-amber-200 flex gap-1"><AlertCircle size={16} className="shrink-0"/>{rowError}</p>}
         </div>;
       })}
     </div>
-    <p className="text-xs text-slate-400">A: assente · NC: non classificato · G: giustificato. Il voto si registra con Invio.</p>
+    <p className="text-xs text-slate-400">A: assente · NC: non classificato · G: giustificato. Conferma il voto con la spunta accanto alla cella o con Invio.</p>
   </section>;
 }

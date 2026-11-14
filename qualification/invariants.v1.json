@@ -2136,6 +2136,24 @@
         "tests/browser/lib01-private-library-qualification.spec.cjs",
         "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S4B-B4-TOUCH-I01",
+      "owner": "VAL-01/S4b B4 HPR",
+      "statement": "A daily grade draft exposes a touch-safe explicit row confirmation, independent of keyboard IME. Touch and Enter share the existing first-proof and single durable mutation path; unsaved draft and pending states are distinct from persisted green status, guard remains active, errors retain draft, and navigation advances only after successful durable receipt. No change to archive schema, historical editor or observation mutation.",
+      "impactPaths": [
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/index.css",
+        "tests/browser/nav-context-01-return-origin.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/dailyMatrixWorkspace.test.ts",
+        "src/security/matrixCellMutation.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
     }
   ]
 }
