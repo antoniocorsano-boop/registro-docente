@@ -4,7 +4,7 @@ import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
 import { createBackupPayload } from '../security/backupPayload';
 import { expectedBackupEvidence, matchesDownloadedBackup, type BackupByteEvidence } from '../security/webBackupVerification';
-import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint } from '../persistence/backupCheckpoint';
+import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint, ExpectedCopyEvidence } from '../persistence/backupCheckpoint';
 import { today } from '../utils';
 import {
   ShieldCheck,
@@ -28,6 +28,7 @@ interface PrivacyViewProps {
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
   onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;
+  onBindBackupEvidence: (receipt: BackupReceipt, evidence: ExpectedCopyEvidence) => Promise<void>;
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
@@ -39,6 +40,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   isPrivacyShieldActive,
   onTogglePrivacyShield,
   onPrepareEncryptedBackup,
+  onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
   onFactoryReset
@@ -101,6 +103,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
       const filename = `Backup_Cifrato_GDPR_${today()}.enc.json`;
       if (androidNative) {
+        const evidence = await expectedBackupEvidence(encryptedString);
+        if (!mountedRef.current) return;
+        await onBindBackupEvidence(checkpoint.receipt, { ...evidence, source: 'android-readback', payloadVersion: payload.backupDataVersion });
+        if (!mountedRef.current) return;
         const result = await saveEncryptedBackupOnAndroid(
           encryptedString, filename, () => mountedRef.current
         );
@@ -110,6 +116,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         await onRecordBackupExport(checkpoint.receipt);
       } else {
         const evidence = await expectedBackupEvidence(encryptedString);
+        if (!mountedRef.current) return;
+        await onBindBackupEvidence(checkpoint.receipt, { ...evidence, source: 'web-readback', payloadVersion: payload.backupDataVersion });
         if (!mountedRef.current) return;
         const blob = new Blob([encryptedString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -379,7 +387,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             <Lock className="w-4 h-4 text-emerald-400" /> Backup Cifrato con Password (AES-256-GCM)
           </h3>
           <p className="text-xs text-slate-400">
-            Se desideri conservare il backup su una chiavetta USB o inviartelo via email, cifralo con una password. In caso di smarrimento del supporto, i dati dei minori rimarranno inaccessibili.
+            Conserva una copia cifrata su un supporto separato autorizzato dall’istituto. La verifica del file non sostituisce una prova di recupero; una copia sullo stesso dispositivo non protegge dal suo smarrimento.
           </p>
         </div>
 

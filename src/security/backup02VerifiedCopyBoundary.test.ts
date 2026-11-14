@@ -45,3 +45,14 @@ describe('BACKUP-02/B3 explicit web verification boundary', () => {
     expect(source).toContain('id="verify-downloaded-backup"');
   });
 });
+
+test('B3b both paths bind exact encrypted bytes before the external write and retain the native/readback gate', () => {
+  const nativeStart = flow.indexOf('if (androidNative) {');
+  const webStart = flow.indexOf('} else {', nativeStart);
+  const native = flow.slice(nativeStart, webStart);
+  const web = flow.slice(webStart);
+  expect(native).toContain("source: 'android-readback'");
+  expect(web).toContain("source: 'web-readback'");
+  expect(native.indexOf('await onBindBackupEvidence')).toBeLessThan(native.indexOf('await saveEncryptedBackupOnAndroid'));
+  expect(web.indexOf('await onBindBackupEvidence')).toBeLessThan(web.indexOf('a.click();'));
+});

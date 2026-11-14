@@ -168,6 +168,8 @@ import {
   prepareBackupCheckpoint,
   verifiedBackupDate,
   type AuthorizedBackupCheckpoint,
+  type ExpectedCopyEvidence,
+  type BackupReceipt,
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
@@ -3193,6 +3195,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     );
   };
 
+  const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
+    return mutationCoordinator.enqueueTask(() => backupReceiptAuthority.bindEvidence(receipt, evidence));
+  };
+
   const recordEncryptedBackupExport = (
     checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>
   ): Promise<void> => {
@@ -3769,6 +3775,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onBindBackupEvidence={bindBackupEvidence}
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}

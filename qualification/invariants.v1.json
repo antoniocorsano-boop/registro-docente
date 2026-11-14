@@ -2110,6 +2110,32 @@
         "tests/browser/lib01-private-library-qualification.spec.cjs",
         "tests/browser/cdc-01-consigli.spec.cjs"
       ]
+    },
+    {
+      "id": "BACKUP-02-B3B-I01",
+      "owner": "BACKUP-02/B3b",
+      "statement": "The exact operation must bind bounded encrypted-byte evidence (SHA-256, byte count, source and payload version) once before external write. Only existing native verified or explicit web readback gates can consume a bound receipt. Durable local metadata stores only validated evidence and checkpoint date, never plaintext, paths or passwords. Timestamp-only or invalid evidence is unverified; export and restore exclude local evidence. No independent recovery qualification or automatic copying.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/secureAppStorage.ts",
+        "src/App.tsx",
+        "src/components/PrivacyView.tsx",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/backup02VerifiedCopyBoundary.test.ts"
+      ],
+      "tests": [
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/backup02VerifiedCopyBoundary.test.ts",
+        "src/security/webBackupVerification.test.ts",
+        "src/security/mobile01M2aNativeBackupContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+      ]
     }
   ]
 }

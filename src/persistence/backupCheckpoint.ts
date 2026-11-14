@@ -1,4 +1,4 @@
-import type { CompleteSecureAppSnapshot, SecureMeta } from '../security/secureAppStorage';
+import type { BackupVerificationEvidence, CompleteSecureAppSnapshot, SecureMeta } from '../security/secureAppStorage';
 
 export interface PreparedBackupCheckpoint {
   snapshot: CompleteSecureAppSnapshot;
@@ -8,6 +8,15 @@ export interface PreparedBackupCheckpoint {
 
 export type BackupReceipt = Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>;
 export type AuthorizedBackupCheckpoint = PreparedBackupCheckpoint & { receipt: BackupReceipt };
+export type ExpectedCopyEvidence = Omit<BackupVerificationEvidence, 'checkpointAt'>;
+
+function validEvidence(value: unknown): value is ExpectedCopyEvidence {
+  if (!value || typeof value !== 'object') return false;
+  const e = value as Partial<ExpectedCopyEvidence>;
+  return typeof e.bytes === 'number' && Number.isSafeInteger(e.bytes) && e.bytes > 0 && e.bytes <= 32 * 1024 * 1024
+    && typeof e.sha256 === 'string' && /^[0-9a-f]{64}$/.test(e.sha256)
+    && (e.source === 'android-readback' || e.source === 'web-readback') && e.payloadVersion === 6;
+}
 
 function cloneSnapshot(snapshot: CompleteSecureAppSnapshot): CompleteSecureAppSnapshot {
   return structuredClone(snapshot);
@@ -62,13 +71,20 @@ export function applyBackupReceipt(
  * Consume before persistence: an uncertain write requires a fresh export, not replay.
  */
 export function createBackupReceiptAuthority() {
-  let pending: { identity: BackupReceipt; value: BackupReceipt } | null = null;
+  let pending: { identity: BackupReceipt; value: BackupReceipt; evidence: ExpectedCopyEvidence | null } | null = null;
   return {
     issue(checkpoint: PreparedBackupCheckpoint): AuthorizedBackupCheckpoint {
       // Neither the identity nor the authority retains the plaintext snapshot.
       const receipt: BackupReceipt = { includedChanges: checkpoint.includedChanges, checkpointAt: checkpoint.checkpointAt };
-      pending = { identity: receipt, value: { ...receipt } };
+      pending = { identity: receipt, value: { ...receipt }, evidence: null };
       return { ...checkpoint, receipt };
+    },
+    bindEvidence(receipt: BackupReceipt, evidence: ExpectedCopyEvidence): void {
+      if (!pending || pending.identity !== receipt || pending.evidence !== null || !validEvidence(evidence)) {
+        throw new Error('Evidenza della copia non valida o non più attuale.');
+      }
+      // Copy only the permitted fields; never retain extra caller properties.
+      pending.evidence = { bytes: evidence.bytes, sha256: evidence.sha256, source: evidence.source, payloadVersion: evidence.payloadVersion };
     },
     invalidate(): void {
       pending = null;
@@ -78,14 +94,19 @@ export function createBackupReceiptAuthority() {
         throw new Error('Ricevuta della copia non valida o non più attuale.');
       }
       const checkpoint = pending.value;
+      const evidence = pending.evidence;
       pending = null;
-      if (receipt.includedChanges !== checkpoint.includedChanges || receipt.checkpointAt !== checkpoint.checkpointAt ||
+      if (!evidence || receipt.includedChanges !== checkpoint.includedChanges || receipt.checkpointAt !== checkpoint.checkpointAt ||
           !Number.isSafeInteger(checkpoint.includedChanges) || checkpoint.includedChanges < 0 ||
           !Number.isSafeInteger(current.changes) || current.changes < checkpoint.includedChanges ||
           !Number.isFinite(Date.parse(checkpoint.checkpointAt))) {
         throw new Error('La ricevuta non corrisponde allo stato della copia.');
       }
-      return { ...applyBackupReceipt(current, checkpoint), verifiedBackupAt: checkpoint.checkpointAt };
+      return {
+        ...applyBackupReceipt(current, checkpoint),
+        verifiedBackupAt: checkpoint.checkpointAt,
+        verifiedBackupEvidence: { ...evidence, checkpointAt: checkpoint.checkpointAt }
+      };
     }
   };
 }
@@ -94,10 +115,12 @@ export function createBackupReceiptAuthority() {
 // must establish its own local evidence instead of inheriting another device's.
 export function verifiedBackupDate(meta: SecureMeta): string | null {
   const at = meta.verifiedBackupAt;
-  return typeof at === 'string' && at === meta.lastBackup && Number.isFinite(Date.parse(at)) ? at : null;
+  const evidence = meta.verifiedBackupEvidence;
+  return typeof at === 'string' && at === meta.lastBackup && Number.isFinite(Date.parse(at))
+    && evidence?.checkpointAt === at && validEvidence(evidence) ? at : null;
 }
 
 export function withoutLocalBackupVerification(meta: SecureMeta): SecureMeta {
-  const { verifiedBackupAt: _localOnly, ...portable } = meta;
+  const { verifiedBackupAt: _localOnly, verifiedBackupEvidence: _localEvidence, ...portable } = meta;
   return portable;
 }
