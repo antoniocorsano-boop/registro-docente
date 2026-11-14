@@ -1,13 +1,13 @@
-name: BACKUP-02 Android encrypted copy verification (exact consolidated APK)
+name: BACKUP-02/B Android encrypted restore roundtrip (exact consolidated APK)
 on:
   pull_request:
-    branches: ['test/b4-3-android-lab']
+    branches: ['diagnostic/b43-backup-roundtrip']
 permissions:
   contents: read
   actions: read
 jobs:
-  backup-copy:
-    if: github.head_ref == 'diagnostic/b43-backup-roundtrip'
+  restore-copy:
+    if: github.head_ref == 'diagnostic/b43-restore-roundtrip'
     runs-on: ubuntu-22.04
     timeout-minutes: 18
     strategy:
@@ -67,7 +67,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          avd-name: trama-backup-api${{ matrix.api }}
+          avd-name: trama-restore-api${{ matrix.api }}
           emulator-boot-timeout: 240
           disable-animations: false
           disable-linux-hw-accel: false
@@ -76,6 +76,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-backup02-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
+          name: android-restore02-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
           path: native-evidence/
           retention-days: 7
