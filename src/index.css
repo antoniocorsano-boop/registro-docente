@@ -381,11 +381,11 @@ body {
 
 /* Daily workspace: one roster with two independent cell controls. */
 .daily-matrix { container: daily-matrix / inline-size; }
-.daily-matrix-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(48px,auto) minmax(76px,90px); gap:8px; align-items:center; }
+.daily-matrix-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(48px,auto) minmax(108px,116px); gap:8px; align-items:center; }
 .daily-row-detail { grid-column:1/-1; }
 .daily-proof-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,8.5rem),1fr)); }
 .daily-proof-fields label,.daily-proof-fields input,.daily-proof-fields select { min-width:0; max-width:100%; }
-@container daily-matrix (max-width:18rem){.daily-matrix-row{grid-template-columns:minmax(0,1fr) 60px 84px;gap:4px}.daily-matrix-row>span{overflow-wrap:anywhere}.daily-matrix-row>button{min-width:0}}
+@container daily-matrix (max-width:18rem){.daily-matrix-row{grid-template-columns:minmax(0,1fr) 56px 108px;gap:4px}.daily-matrix-row>span{overflow-wrap:anywhere}.daily-matrix-row>button{min-width:0}}
 @container daily-matrix (max-width:12rem){.daily-matrix-row{grid-template-columns:1fr 1fr}.daily-matrix-row>span:first-child{grid-column:1/-1}}
 
 .daily-date-label { display:flex; align-items:center; flex-wrap:wrap; gap:4px; min-width:0; max-width:100%; }

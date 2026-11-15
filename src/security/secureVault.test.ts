@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { SecureVault } from './secureVault';
+import { createDurableMutationCoordinator } from '../persistence/durableMutationCoordinator';
 import { IndexedDbVaultStore, type VaultStore } from './vaultStore';
 import type { EncryptedVaultRecord, VaultMetadataV1, VaultRecordKey } from './vaultTypes';
 
@@ -253,6 +254,46 @@ describe('SEC-1 SecureVault lifecycle', () => {
 
     store.release();
     await Promise.all([first, second]);
+    await expect(vault.get('meta')).resolves.toEqual({ changes: 2, lastBackup: null });
+  });
+
+  test('observes an admitted queued mutation when suspension revokes the vault before drain', async () => {
+    const store = new BlockingVaultStore();
+    const vault = new SecureVault(store);
+    await vault.initializeActive('synthetic-suspension-test');
+    const coordinator = createDurableMutationCoordinator();
+    let published = 0;
+    const save = (value: number) => coordinator.enqueue<number>({
+      getCommitted: () => published,
+      derive: () => value,
+      persist: candidate => vault.put('meta', { changes: candidate, lastBackup: null }),
+      publish: candidate => { published = candidate; }
+    });
+    const first = save(1);
+    await store.firstEntered;
+    const second = save(2);
+    // Observe rejection from admission onward, without unhandled rejections.
+    const secondResult = second.then(value => ({ value }), error => ({ error: String(error) }));
+    const lease = coordinator.pauseAndDrain();
+    expect(lease.resume()).toBe(false);
+    await expect(save(3)).rejects.toThrow('Sessione in chiusura');
+    // Model the real root's deadline deterministically, without changing its timer.
+    vault.lock();
+    expect(vault.isUnlocked()).toBe(false);
+    await expect(vault.get('meta')).rejects.toThrow('bloccato');
+    store.release();
+    await expect(first).resolves.toBe(1);
+    const outcome = await secondResult;
+    expect(outcome).toHaveProperty('error');
+    expect('error' in outcome && outcome.error).toContain('bloccato');
+    await lease.drained;
+    expect(published).toBe(1);
+    expect(store.putCalls).toBe(1);
+    // Re-authenticate only after settlement; rejected work was never committed.
+    await vault.unlock('synthetic-suspension-test');
+    await expect(vault.get('meta')).resolves.toEqual({ changes: 1, lastBackup: null });
+    expect(lease.resume()).toBe(true);
+    await expect(save(2)).resolves.toBe(2);
     await expect(vault.get('meta')).resolves.toEqual({ changes: 2, lastBackup: null });
   });
 

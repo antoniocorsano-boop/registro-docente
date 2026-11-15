@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from '../../../src/App';
+import { registerAndroidFileAccess } from '../../../src/security/androidSessionLifecycle';
 import type { ClassData, Grade, Student } from '../../../src/types';
 import type { SecureAppSnapshot, SecureAppStorage } from '../../../src/security/secureAppStorage';
 import '../../../src/index.css';
@@ -39,6 +40,9 @@ if (rosterSize > 2) {
 }
 
 if(new URLSearchParams(window.location.search).get('pdfRoster')==='1') {
+  // This isolated synthetic App fixture deliberately has no Vault root.
+  // Install its explicit test-only authority, never a production fallback.
+  registerAndroidFileAccess(async isActive => isActive());
   grades.forEach(g=>{g.title='Proprietà dei materiali: esercizio';});
   for(let i=1;i<=45;i++)grades.push({id:'pdf-'+i,studentId:students[0].id,date:'2026-11-12',period:'Q1',title:'RIGA-'+String(i).padStart(3,'0')+' attività sintetica',type:i%2?'test':'disegno',value:i===3?'NC':'8'});
   grades.push({id:'pdf-peer',studentId:students[1].id,date:'2026-11-12',period:'Q1',title:'Scelta dei materiali per un oggetto',type:'orale',value:'6'});

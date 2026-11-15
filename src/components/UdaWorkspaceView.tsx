@@ -22,6 +22,8 @@ interface UdaWorkspaceViewProps {
   getRecordLessonNavigationVersion?: () => number;
   onRecordLessonCommitted?: (udaId: string, navigationVersion: number) => void;
   onOpenCopilot?: (context: CopilotLaunchContext) => void;
+  onOpenRecordCopilot?: () => void;
+  recordCopilotOpen?: boolean;
   currentClassName?: string | null;
   planningFrame?: PlanningFrameResolution | null;
   teachingFocus?: LibraryTeachingContext | null;
@@ -52,6 +54,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
   getRecordLessonNavigationVersion,
   onRecordLessonCommitted,
   onOpenCopilot,
+  onOpenRecordCopilot,
+  recordCopilotOpen = false,
   currentClassName = null,
   planningFrame = null,
   teachingFocus = null,
@@ -249,6 +253,8 @@ export const UdaWorkspaceView: React.FC<UdaWorkspaceViewProps> = ({
           getRecordLessonNavigationVersion={getRecordLessonNavigationVersion}
           onRecordLessonCommitted={onRecordLessonCommitted}
           focusedRecordMode={true}
+          onOpenRecordCopilot={onOpenRecordCopilot}
+          recordCopilotOpen={recordCopilotOpen}
         />
       </section>
     );

@@ -8,7 +8,6 @@ on:
       - 'docs/superpowers/specs/2026-11-11-mobile-01-android-apk-probe-design.md'
       - 'docs/superpowers/plans/2026-11-11-mobile-01-android-apk-probe.md'
   workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -48,7 +47,11 @@ jobs:
         run: |
           set -euo pipefail
           bun install --frozen-lockfile
+          bun test src/security/navAndroid01NativeBackContract.test.ts src/security/mobile01M4BetaIdentityContract.test.ts src/security/mobile01Beta2UpdateSigning.test.ts
+          export VITE_REGISTRO_BUILD_SHA="$SOURCE_SHA"
+          export VITE_REGISTRO_BUILD_KIND=android
           bun run build
+          grep -lF -- "$SOURCE_SHA" dist/assets/*.js
           test -f dist/index.html
           test -s dist/vendor/html2pdf.bundle.min.js
           test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
@@ -91,11 +94,14 @@ jobs:
           npx --no-install cap sync android
           test -f android/gradlew
           test -f android/app/src/main/AndroidManifest.xml
+          node --check prepare-native-back.mjs
+          node prepare-native-back.mjs
           NATIVE_DIR=android/app/src/main/java/it/trama/registrodocente/prova
           test -f "$NATIVE_DIR/MainActivity.java"
           cp native/MainActivity.java native/RegistroBackupFilesPlugin.java "$NATIVE_DIR/"
           grep -F 'registerPlugin(RegistroBackupFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
-          cp native/RegistroPdfFilesPlugin.java "$NATIVE_DIR/"
+          cp native/RegistroPdfFilesPlugin.java native/RegistroSessionPlugin.java "$NATIVE_DIR/"
+          grep -F 'registerPlugin(RegistroSessionPlugin.class)' "$NATIVE_DIR/MainActivity.java"
           grep -F 'registerPlugin(RegistroPdfFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
 
       - name: Build debug APK (laboratory use only)
@@ -113,6 +119,9 @@ jobs:
           test -s "$APK"
           unzip -tq "$APK" >/dev/null
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/probe-manifest-tree.txt"
+          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/probe-manifest-tree.txt"
+          PROBE_APP_ID=it.trama.registrodocente.prova
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
           unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
           unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
@@ -124,11 +133,13 @@ jobs:
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
           unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
           unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- "$SOURCE_SHA" > /dev/null
           sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
           {
             printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
             printf 'source_sha=%s\n' "$SOURCE_SHA"
-            printf 'app_id=it.trama.registrodocente.prova\n'
+            printf 'visible_build_source_sha=%s\n' "$SOURCE_SHA"
+            printf 'app_id=%s\n' "$PROBE_APP_ID"
             printf 'capacitor_version=8.6.0\n'
             printf 'apk_sha256='
             sha256sum "$APK" | awk '{print $1}'
@@ -142,6 +153,7 @@ jobs:
             printf 'android_restore_native_implemented=true\n'
             printf 'android_backup_device_qualified=false\n'
             printf 'android_restore_device_qualified=false\n'
+            printf 'android_system_back_device_qualified=false\n'
             printf 'android_hpr_qualified=false\n'
             printf 'vault_android_qualified=false\n'
           } > "$PROBE_DIR/probe-manifest.txt"
@@ -202,6 +214,7 @@ jobs:
             exit 1
           fi
           "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$PROBE_DIR/beta-manifest-tree.txt"
+          grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -E 'android:allowBackup.*0x0$' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'android:dataExtractionRules' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
@@ -212,10 +225,12 @@ jobs:
           for font in dist/assets/DejaVuSans*.ttf; do
             unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
           done
+          unzip -p "$apk" 'assets/public/assets/*.js' | grep -F -- "$SOURCE_SHA" > /dev/null
           sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
           {
             printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
             printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'visible_build_source_sha=%s\n' "$SOURCE_SHA"
             printf 'app_id=it.trama.registrodocente\n'
             printf 'version_code=%s\n' "$version_code"
             printf 'version_name=%s\n' "$version_name"

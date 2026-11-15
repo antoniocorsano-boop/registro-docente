@@ -94,7 +94,7 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   };
 
   await navigate(page, 'Privacy');
-  await page.locator('input[type=file]').setInputFiles({
+  await page.locator('#restore-backup-file').setInputFiles({
     name: 'legacy-sintetico.json', mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(legacy))
   });
@@ -130,13 +130,39 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   expect(encrypted.ciphertext).toBeTruthy();
   expect(encryptedBuffer.toString('utf8')).not.toContain('legacy-student');
 
-  await page.locator('input[type=file]').setInputFiles({
+  await page.locator('#restore-backup-file').setInputFiles({
     name: 'nuovo-archivio.enc.json', mimeType: 'application/json', buffer: encryptedBuffer
   });
   await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill('Backup!2026');
+  const restoreOrigin = await page.evaluate(() => ({
+    length: history.length,
+    entryId: history.state?.__tramaHistoryEntryId,
+    epoch: history.state?.__tramaHistoryEpoch,
+    position: history.state?.__tramaHistoryPosition
+  }));
+  expect(restoreOrigin.entryId).toBeTruthy();
   await page.getByRole('button', { name: 'Decifra e Ripristina Registro' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  // A completed archive restore must also synchronize the current route.
+  // Visible Home alone is insufficient: Android Back consumes this history.
+  await expect.poll(() => page.evaluate(() => ({
+    tab: history.state?.tab ?? 'home',
+    classId: history.state?.classId ?? null,
+    urlTab: new URL(location.href).searchParams.get('tab'),
+    urlClass: new URL(location.href).searchParams.get('class')
+  }))).toEqual({ tab: 'home', classId: null, urlTab: null, urlClass: null });
+  expect(await page.evaluate(() => ({
+    length: history.length,
+    entryId: history.state?.__tramaHistoryEntryId,
+    epoch: history.state?.__tramaHistoryEpoch,
+    position: history.state?.__tramaHistoryPosition
+  }))).toEqual(restoreOrigin);
   await navigate(page, 'Consigli di classe');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  expect(await page.evaluate(() => history.state?.tab)).toBe('home');
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: 'Consigli di classe', exact: true })).toBeVisible();
   await picker.selectOption({ label: '2C Legacy' });
   await expect(vote).toHaveValue('7');
   await expect(page.getByRole('cell', { name: /^8,5/ })).toBeVisible();

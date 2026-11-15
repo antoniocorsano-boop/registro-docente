@@ -10,7 +10,8 @@ if (identity.applicationId !== 'it.trama.registrodocente' ||
     identity.label !== 'Registro Docente' ||
     !Number.isSafeInteger(identity.versionCode) || identity.versionCode < 10001 ||
     identity.versionCode > 2100000000 ||
-    !/^0\.1\.0-beta\.1-rc\.[1-9][0-9]*$/.test(identity.versionName) ||
+    !/^0\.1\.0-beta\.[12]-rc\.[1-9][0-9]*$/.test(identity.versionName) ||
+    (identity.versionName.startsWith('0.1.0-beta.2-') && identity.versionCode < 10003) ||
     identity.status !== 'UNSIGNED_CANDIDATE_NOT_RELEASED') throw new Error('Invalid Beta identity');
 
 function replaceOnce(value, pattern, replacement) {

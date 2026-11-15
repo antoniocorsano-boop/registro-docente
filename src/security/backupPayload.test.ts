@@ -341,3 +341,15 @@ describe('BETA-1 restore archive identity', () => {
     expect(current.settings.archiveMode).toBe('professional');
   });
 });
+
+
+test('BACKUP-02/B1c local verified-copy marker cannot travel through a backup or be inherited on restore', () => {
+  const at = '2026-11-13T12:00:00.000Z';
+  const current = currentSnapshot();
+  const verified = { ...current, meta: { changes: 2, lastBackup: at, verifiedBackupAt: at, verifiedBackupEvidence: { bytes: 123, sha256: 'a'.repeat(64), source: 'web-readback' as const, payloadVersion: 6 as const, checkpointAt: at } } };
+  const payload = createBackupPayload(verified);
+  expect(payload.snapshot.meta).toEqual({ changes: 2, lastBackup: at });
+  const withForeignMarker = { ...payload, snapshot: { ...payload.snapshot, meta: verified.meta } };
+  expect(normalizeBackupPayload(withForeignMarker, current).meta).toEqual({ changes: 2, lastBackup: at });
+  expect(normalizeBackupPayload({ classes: [] }, verified).meta).toEqual({ changes: 2, lastBackup: at });
+});

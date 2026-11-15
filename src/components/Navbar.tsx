@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { BuildIdentity } from './BuildIdentity';
 import { Header01TopBar } from './Header01TopBar';
 import { Header01DrawerSecurity, type HeaderAutoLockMinutes } from './Header01DrawerSecurity';
 import { resolveHeaderContext } from './headerContext';
@@ -25,7 +26,8 @@ import {
   Library,
   ShieldCheck,
   Eye,
-  EyeOff
+  EyeOff,
+  LockKeyhole
 } from 'lucide-react';
 
 
@@ -182,9 +184,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <span className="hidden sm:block font-bold text-base tracking-tight text-white">
                 Registro<span className="text-[var(--primary)] drop-shadow-[0_0_8px_var(--primary)]">Docente</span>
-              </span>
-              <span className="hidden sm:inline-block ml-2 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-[var(--surface-variant)] text-slate-400 border border-[var(--border)]">
-                Pro Neon
               </span>
             </div>
           </div>
@@ -538,6 +537,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         )}
 
+        {headerSecurity && (
+          <button type="button" data-testid="header01-lock-exit"
+            onClick={() => { setIsDrawerOpen(false); headerSecurity.onLock(); }}
+            className="min-h-12 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-slate-200 hover:bg-slate-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+            <LockKeyhole className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Blocca ed esci</span>
+          </button>
+        )}
+
         {/* Drawer footer with backup actions */}
         <div className="pt-4 border-t border-[var(--border)] space-y-2 text-xs">
           <button
@@ -562,9 +570,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Ripristina backup cifrato</span>
           </button>
 
-          <div className="text-[10px] text-slate-500 text-center pt-1 font-mono">
-            Registro Docente Pro · v3.5 Neon
-          </div>
+          <BuildIdentity />
         </div>
       </aside>
 

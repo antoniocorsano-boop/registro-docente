@@ -461,6 +461,8 @@ test('AIC-07 Ignore suppresses the same fingerprint and a changed surface may su
 
   await deck.getByRole('button', { name: 'Chiudi opportunità del Copilota' }).click();
   await openDrawerItem(page, 'Impostazioni');
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+  await openDrawerItem(page, 'Biblioteca privata');
   deck = await openDeck(page);
   await expect(opportunityCard(todaySection(deck))).toBeVisible();
   expect(calls.intentProvider + calls.intent + calls.proposalProvider + calls.proposal).toBe(0);

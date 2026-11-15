@@ -33,6 +33,10 @@ public class RegistroPdfFilesPlugin extends Plugin {
 
     @PluginMethod
     public synchronized void choosePdfDestination(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDocumentSessionAuthorized()) {
+            call.reject("Autentica nuovamente il Registro.", "SESSION_LOCKED");
+            return;
+        }
         String filename = call.getString("filename");
         if (filename == null || !filename.matches("(?:Prospetto_Lavoro|Bilancio_Formativo)_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.pdf")) {
             call.reject("Nome PDF non valido.", "INVALID_FILENAME");
@@ -90,6 +94,10 @@ public class RegistroPdfFilesPlugin extends Plugin {
 
     @PluginMethod
     public void writePdf(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDocumentSessionAuthorized()) {
+            call.reject("Autentica nuovamente il Registro.", "SESSION_LOCKED");
+            return;
+        }
         final Uri uri;
         synchronized (this) {
             String token = call.getString("token");
