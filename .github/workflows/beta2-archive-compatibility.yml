@@ -37,6 +37,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/.beta1-exact/tests/browser/fixtures"
           cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts "$GITHUB_WORKSPACE/.beta1-exact/tests/browser/fixtures/beta2-archive-compatibility.fixture.ts"
           bun install --frozen-lockfile
+          bun run lint
           bun build tests/browser/fixtures/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta2.js"
           (
             cd "$GITHUB_WORKSPACE/.beta1-exact"
