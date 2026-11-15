@@ -12,7 +12,7 @@ env:
 
 jobs:
   contracts:
-    if: contains(fromJSON('["ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     name: Typecheck / security / invariant contracts
     runs-on: ubuntu-22.04
     timeout-minutes: 25
@@ -31,6 +31,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Validate qualification registry
         run: bun scripts/qualification/check-invariants.mjs
+      - name: Verify full reference browser coverage
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
       - name: Run NAV-CONTEXT and inherited contract tests
         run: |
           bun test \
@@ -47,7 +49,7 @@ jobs:
         run: bun run build
 
   chromium:
-    if: contains(fromJSON('["ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     name: Synthetic Chromium Android 390 / 320
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -79,6 +81,10 @@ jobs:
           cp tests/browser/nav-back-01-student-report.spec.cjs .nav-context-browser-tools/
           cp tests/browser/mobile-density-01-tabellone.spec.cjs .nav-context-browser-tools/
           cp tests/browser/behavior-integrity.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-compact-isolated.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-navbar-integration.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-mobile-disclosure-back.spec.cjs .nav-context-browser-tools/
       - name: Start synthetic Vite app fixture
         shell: bash
         run: |
@@ -86,7 +92,9 @@ jobs:
           ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
           echo $! > browser-evidence/vite.pid
           for attempt in $(seq 1 35); do
-            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html' > /dev/null; then
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html' > /dev/null \
+              && curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01.html' > /dev/null \
+              && curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01-navbar.html' > /dev/null; then
               exit 0
             fi
             sleep 1
@@ -111,13 +119,55 @@ jobs:
           DENSITY01_BASE_URL='http://127.0.0.1:4173' \
           BASE_URL='http://127.0.0.1:4173' \
           BEHAVIOR_EVIDENCE_DIR='../browser-evidence' \
+          HEADER01_BASE_URL='http://127.0.0.1:4173' \
+          HEADER01_DRAWER_BASE_URL='http://127.0.0.1:4173' \
+          NAV_MOBILE_DISCLOSURE_BASE_URL='http://127.0.0.1:4173' \
+          HEADER01_EVIDENCE_DIR='../browser-evidence' \
             ./node_modules/.bin/playwright test \
             nav-context-01-return-origin.spec.cjs \
             nav-back-01-student-report.spec.cjs \
             mobile-density-01-tabellone.spec.cjs \
             behavior-integrity.spec.cjs \
+            header-01-compact-isolated.spec.cjs \
+            header-01-navbar-integration.spec.cjs \
+            header-01-copilot-drawer-occlusion.spec.cjs \
+            nav-mobile-disclosure-back.spec.cjs \
             --workers=1 --reporter=line \
             --output=../browser-evidence/results
+      - name: Verify exact-SHA browser evidence completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = 'browser-evidence';
+          const expected = [
+            'geometry-320x700', 'geometry-390x844', 'geometry-1280x900',
+            'save-evidence', 'keyboard-390x844', 'text-200-percent-320x700',
+            'navbar-mobile-320', 'navbar-mobile-390', 'navbar-desktop-1280',
+            'navbar-keyboard-390',
+          ];
+          for (const caseId of expected) {
+            const file = path.join(dir, 'header01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.qualificationError || evidence.screenshotError ||
+                evidence.screenshot !== 'screenshots/' + caseId + '.png') {
+              throw new Error('Invalid or failing HEADER-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty HEADER-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: ten exact-SHA browser evidence JSON files and screenshots');
+          NODE
+
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -127,8 +177,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  historical-browser:
+    needs: contracts
+    uses: ./.github/workflows/browser-qualification.yml
+
   package:
-    needs: [contracts, chromium]
+    needs: [contracts, chromium, historical-browser]
     uses: ./.github/workflows/mobile-01-android-probe.yml
     with:
       lab_only: true
@@ -298,21 +352,22 @@ jobs:
           retention-days: 7
 
   technical-receipt:
-    if: always() && contains(fromJSON('["ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
-    needs: [contracts, chromium, package, native-back, native-archive]
+    if: always() && contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    needs: [contracts, chromium, historical-browser, package, native-back, native-archive]
     runs-on: ubuntu-22.04
     steps:
       - name: Record technical gates without granting release authorization
         env:
           CONTRACTS: ${{ needs.contracts.result }}
           CHROMIUM: ${{ needs.chromium.result }}
+          HISTORICAL: ${{ needs.historical-browser.result }}
           PACKAGE: ${{ needs.package.result }}
           BACK: ${{ needs.native-back.result }}
           ARCHIVE: ${{ needs.native-archive.result }}
         shell: bash
         run: |
           set -euo pipefail
-          jq -n --arg sha "$CANDIDATE_SHA" --arg run "$GITHUB_RUN_ID" --arg a "$CONTRACTS" --arg b "$CHROMIUM" --arg c "$PACKAGE" --arg d "$BACK" --arg e "$ARCHIVE" '{sourceSha:$sha,runId:$run,gates:{contracts:$a,chromium:$b,package:$c,nativeBack:$d,nativeArchive:$e},technicalPass:([$a,$b,$c,$d,$e]|all(.=="success")),releaseAuthorized:false,humanReview:"PENDING",remainingCoverage:["other registry browser suites","native dirty drafts and post-restore history","physical offline, lock, PDF, upgrade and migration"]}' > beta2-technical-receipt.json
+          jq -n --arg sha "$CANDIDATE_SHA" --arg run "$GITHUB_RUN_ID" --arg a "$CONTRACTS" --arg b "$CHROMIUM" --arg history "$HISTORICAL" --arg c "$PACKAGE" --arg d "$BACK" --arg e "$ARCHIVE" '{sourceSha:$sha,runId:$run,gates:{contracts:$a,chromium:$b,historicalBrowser:$history,package:$c,nativeBack:$d,nativeArchive:$e},technicalPass:([$a,$b,$history,$c,$d,$e]|all(.=="success")),releaseAuthorized:false,humanReview:"PENDING",remainingCoverage:["native dirty drafts and post-restore history","physical offline, lock, PDF, upgrade and migration"]}' > beta2-technical-receipt.json
           cat beta2-technical-receipt.json
           jq -e '.technicalPass == true' beta2-technical-receipt.json
       - uses: actions/upload-artifact@v4
