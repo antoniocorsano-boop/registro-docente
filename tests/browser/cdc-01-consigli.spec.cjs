@@ -136,6 +136,14 @@ test('CDC-01: legacy JSON import, council decision, encrypted export and restore
   await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill('Backup!2026');
   await page.getByRole('button', { name: 'Decifra e Ripristina Registro' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  // A completed archive restore must also synchronize the current route.
+  // Visible Home alone is insufficient: Android Back consumes this history.
+  await expect.poll(() => page.evaluate(() => ({
+    tab: history.state?.tab ?? 'home',
+    classId: history.state?.classId ?? null,
+    urlTab: new URL(location.href).searchParams.get('tab'),
+    urlClass: new URL(location.href).searchParams.get('class')
+  }))).toEqual({ tab: 'home', classId: null, urlTab: null, urlClass: null });
   await navigate(page, 'Consigli di classe');
   await picker.selectOption({ label: '2C Legacy' });
   await expect(vote).toHaveValue('7');
