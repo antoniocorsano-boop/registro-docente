@@ -31,6 +31,8 @@ async function installNativeDouble(page) {
           Boolean(document.querySelector('#vault-password'));
         if(authorized!==epoch&&!protectedSurface)throw Error('unsafe reveal');
         window.__sessionEvidence.push(['shield',epoch,protectedSurface]);
+        window.__sessionEvidence.push(['interactive',epoch,input.interactive===true]);
+        if(input.interactive===true&&protectedSurface)throw Error('protected surface cannot be interactive');
       }
     }}};
   });
@@ -219,4 +221,17 @@ test('SEC-SESSION-01: slow admitted daily grade settles without premature unlock
   await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();
   await expect(grade).toHaveValue('8');
   await expect(page.getByTestId('daily-registration-summary')).toContainText('1 voto registrato');
+});
+
+test('SEC-SESSION-01: explicit lock revokes native authority until fresh authenticated surface',async({page})=>{
+  await open(page);
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='interactive').at(-1))).toEqual(['interactive',0,true]);
+  await menu(page,'Blocca ed esci');
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.some(x=>x[0]==='revoke'&&x[1]===0))).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='interactive').at(-1))).toEqual(['interactive',0,false]);
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='interactive').at(-1))).toEqual(['interactive',0,true]);
 });
