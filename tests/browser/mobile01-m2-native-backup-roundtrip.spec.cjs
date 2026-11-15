@@ -16,7 +16,11 @@ test('M2 synthetic native bridge: verified export, wrong password, cancelled res
       const bytes = new TextEncoder().encode(text);
       return { bytes: bytes.length, sha256: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), x => x.toString(16).padStart(2, '0')).join('') };
     };
-    window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroBackupFiles: {
+    window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroSession: {
+      getState: async () => ({ epoch: 0, foreground: true }),
+      authorize: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); },
+      acknowledgeShield: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); }
+    }, RegistroBackupFiles: {
       chooseBackupDestination: async () => ({ status: 'selected', token: 'write' }),
       writeEncryptedBackup: async opts => {
         if (opts.token !== 'write') throw Error('invalid token');
