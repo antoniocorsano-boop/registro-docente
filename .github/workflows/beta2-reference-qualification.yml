@@ -259,7 +259,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-privacy-to-home' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/back-result.json
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
+          jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-privacy-to-home' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and any(.results[]; .stage == "uninterrupted-native-session" and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/back-result.json
       - name: Preserve native synthetic evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -341,6 +343,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
           jq -e --arg sha "$LAB_SOURCE_SHA" --argjson api "$LAB_API" --arg stage 'native-session-complete' '.sourceSha == $sha and .api == $api and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/sec-session-native-result.json
       - name: Preserve native synthetic evidence
         if: always()
@@ -423,6 +427,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
           jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-encrypted-restore-roundtrip' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/restore-result.json
       - name: Preserve native synthetic evidence
         if: always()
