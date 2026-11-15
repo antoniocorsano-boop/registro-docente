@@ -18,8 +18,8 @@ jobs:
     env:
       LAB_API: ${{ matrix.api }}
       LAB_PACKAGE: it.trama.registrodocente.prova
-      LAB_SOURCE_SHA: 7ef961d27a08825ad229bbfe172a44c5359fc6cb
-      LAB_ARTIFACT_ID: '14155778795'
+      LAB_SOURCE_SHA: 0900cdab5aa747dcea0345dbbb880e3ac1a3fcb5
+      LAB_ARTIFACT_ID: '14157301667'
     steps:
       - uses: actions/checkout@v4
         with:
