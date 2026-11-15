@@ -169,6 +169,7 @@ try {
   await assertUninterrupted('final native Back');
   record('native-privacy-to-home','PASS',{view:await snapshot()});
   // Physical device, IME, dialogs and dirty-draft behavior remain unqualified.
+  record('uninterrupted-native-session','PASS',{epoch:navigationEpoch});
   record('emulator-only-diagnostic','PASS');
 } catch(e) {
   record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});
