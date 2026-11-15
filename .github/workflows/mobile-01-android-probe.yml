@@ -20,6 +20,9 @@ permissions:
 
 jobs:
   android-probe:
+    # The reference workflow owns packaging for this integration PR. Preserve
+    # the standalone workflow on all other branches during the transition.
+    if: inputs.lab_only == true || github.head_ref != 'ci/beta2-native-reference'
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
