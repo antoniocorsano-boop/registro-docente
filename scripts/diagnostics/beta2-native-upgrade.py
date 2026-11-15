@@ -88,9 +88,13 @@ def package_state(expected):
     return {"version":int(version.group(1)),"uid":uid.group(1),"firstInstallTime":installed.group(1).strip()}
 
 def install(path,replace=False):
-    result=adb("install",*(["-r"] if replace else []),path)
-    if result.splitlines()[-1]!="Success":
+    # Avoid incremental installation's asynchronous serving path. ADB may
+    # append timing information after the exact Success line.
+    result=adb("install","--no-incremental",*(["-r"] if replace else []),path)
+    print("ADB installation output:",result,flush=True)
+    if sum(line.strip()=="Success" for line in result.splitlines())!=1:
         raise RuntimeError("Android install did not succeed: "+result)
+    # The caller independently verifies the installed package/version/UID.
 
 def find_class():
     # Observation plus bounded scroll, never repeat a mutation.
