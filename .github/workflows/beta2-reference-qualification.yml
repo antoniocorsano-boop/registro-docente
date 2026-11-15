@@ -346,7 +346,7 @@ jobs:
           grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
           test -s native-evidence/logcat-full.txt
           jq -e --arg sha "$LAB_SOURCE_SHA" --argjson api "$LAB_API" '.sourceSha == $sha and .api == $api and .releaseQualified == false and all(.results[]; .status != "FAIL") and any(.results[]; .stage == "locked-back-observation-complete" and .status == "PASS")' native-evidence/sec-session-boundary-result.json
-          for stage in locked-key-route locked-edge-route locked-no-popstate resume-no-draft-dialog resume-draft-and-route manual-locked-no-popstate manual-lock-restarts-home; do
+          for stage in build-identity-gate build-identity-drawer locked-key-route locked-edge-route locked-no-popstate resume-no-draft-dialog resume-draft-and-route manual-locked-no-popstate manual-lock-restarts-home; do
             jq -e --arg stage "$stage" 'any(.results[]; .stage == $stage and .status == "PASS")' native-evidence/sec-session-boundary-result.json
           done
       - name: Preserve native synthetic evidence
