@@ -1,0 +1,54 @@
+name: SEC-SESSION-01 S2b manual lock browser
+on:
+  pull_request:
+    branches: ['feat/sec-session-01-quiescence','test/b4-3-android-lab']
+permissions:
+  contents: read
+jobs:
+  browser:
+    if: github.head_ref == 'feat/sec-session-01-manual-lock'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      PORT: '4173'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - run: bun run lint && bun test src/security/durableMutationCoordinator.test.ts src/security/header01ProductionWiringContract.test.ts src/security/header01TopBarContract.test.ts
+      - run: bun run build
+      - name: Prepare isolated browser tools
+        run: |
+          mkdir -p .browser-tools browser-evidence
+          echo '{"name":"registro-sec-session-browser","private":true}' > .browser-tools/package.json
+          npm --prefix .browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
+          cp tests/browser/sec-session-01-manual-lock.spec.cjs tests/browser/header01-navigation.cjs .browser-tools/
+      - name: Start production server
+        run: |
+          NODE_ENV=production PORT="$PORT" bun run start > browser-evidence/server.log 2>&1 &
+          echo $! > browser-evidence/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:$PORT/" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify real manual lock and draft behavior
+        working-directory: .browser-tools
+        run: ./node_modules/.bin/playwright test sec-session-01-manual-lock.spec.cjs --workers=1 --output=../browser-evidence/results
+      - if: always()
+        run: test ! -f browser-evidence/server.pid || kill "$(cat browser-evidence/server.pid)" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sec-session-01-manual-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          retention-days: 7

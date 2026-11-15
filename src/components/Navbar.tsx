@@ -25,7 +25,8 @@ import {
   Library,
   ShieldCheck,
   Eye,
-  EyeOff
+  EyeOff,
+  LockKeyhole
 } from 'lucide-react';
 
 
@@ -536,6 +537,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               onAutoLockChange={headerSecurity.onAutoLockChange}
             />
           </div>
+        )}
+
+        {headerSecurity && (
+          <button type="button" data-testid="header01-lock-exit"
+            onClick={() => { setIsDrawerOpen(false); headerSecurity.onLock(); }}
+            className="min-h-12 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-slate-200 hover:bg-slate-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
+            <LockKeyhole className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Blocca ed esci</span>
+          </button>
         )}
 
         {/* Drawer footer with backup actions */}

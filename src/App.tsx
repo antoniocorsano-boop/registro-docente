@@ -245,15 +245,18 @@ const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non 
 
 export type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
 
+export type SessionLockRequest = (begin: (drain: () => Promise<void>) => void) => void;
+
 export interface AppProps {
   initialSnapshot: SecureAppSnapshot;
   secureStorage: SecureAppStorage;
   onFactoryReset: () => Promise<void>;
   onCopilotSurfaceOpenChange?: (isOpen: boolean) => void;
   headerSecurity?: Header01SecurityBindings;
+  registerSessionLockRequest?: (request: SessionLockRequest | null) => void;
 }
 
-export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity }: AppProps) {
+export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity, registerSessionLockRequest }: AppProps) {
   // Explicitly initialized archives are authoritative, including empty collections.
   const explicitArchive = initialSnapshot.settings?.archiveMode === 'professional'
     || initialSnapshot.settings?.archiveMode === 'demo';
@@ -1185,6 +1188,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
     mutationCoordinatorRef.current = createDurableMutationCoordinator()
   );
+
+  useLayoutEffect(() => {
+    if (!registerSessionLockRequest) return;
+    const request: SessionLockRequest = begin => {
+      requestPlanningDeparture(() => begin(() => mutationCoordinator.sealAndDrain()));
+    };
+    registerSessionLockRequest(request);
+    return () => registerSessionLockRequest(null);
+  }, [registerSessionLockRequest, requestPlanningDeparture, mutationCoordinator]);
 
   const toast = useCallback((msg: string) => {
     if (saveIndicatorResetTimerRef.current !== null) {
