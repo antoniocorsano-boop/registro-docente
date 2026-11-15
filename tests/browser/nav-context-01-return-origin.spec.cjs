@@ -207,14 +207,67 @@ test('NAV-CONTEXT-01 — a backup action leaves the report and discards the prev
   await page.getByTestId('header01-brand-navigation').click();
   await page.getByRole('button', { name: 'Esporta backup cifrato' }).click();
   await expect(page.getByTestId('header01-context')).toContainText('Privacy');
-  // The backup navigation is explicit, even though legacy code does not push
-  // a new history entry. Back must NOT revive the old expanded row.
+  // Backup owns a new history entry. Back first restores the report, then
+  // the Tabellone, without reviving an unrelated disclosure.
+  await expect.poll(()=>page.evaluate(()=>history.state?.tab)).toBe('privacy');
+  await page.goBack();
+  await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
   await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
   await context.close();
 });
 
+
+test('NAV-PRIVACY — home backup shortcut returns to Oggi, forward restores Privacy, repeated shortcut adds no entry',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const page=await context.newPage();
+  await page.goto(url,{waitUntil:'domcontentloaded'});
+  const indicator=page.getByTestId('backup-copy-indicator');
+  await expect(indicator).toBeVisible();
+  const before=await page.evaluate(()=>history.length);
+  await indicator.getByRole('button',{name:'Esporta backup cifrato'}).click();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  expect(await page.evaluate(()=>({tab:history.state?.tab,classId:history.state?.classId,length:history.length}))).toEqual({tab:'privacy',classId:null,length:before+1});
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.locator('#registro-navigation-drawer').getByRole('button',{name:'Ripristina backup cifrato',exact:true}).click();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  expect(await page.evaluate(()=>history.length)).toBe(before+1);
+  await page.goBack();
+  await expect(indicator).toBeVisible();
+  await expect(page.getByTestId('header01-context')).toContainText('Oggi');
+  await page.goForward();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  await page.goBack();
+  await expect(indicator).toBeVisible();
+  await context.close();
+});
+
+test('NAV-PRIVACY — drawer restore returns to class daily matrix without discarding a draft silently',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const page=await context.newPage();
+  await openClass(page);
+  await navigateTo(page,'Tabellone','daily');
+  const day=page.getByTestId('daily-matrix');
+  await day.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');
+  const before=await page.evaluate(()=>history.length);
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.locator('#registro-navigation-drawer').getByRole('button',{name:'Ripristina backup cifrato',exact:true}).click();
+  await expect(page.getByRole('dialog')).toContainText('voti non confermati');
+  await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();
+  await expect(day.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
+  expect(await page.evaluate(()=>history.length)).toBe(before);
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.locator('#registro-navigation-drawer').getByRole('button',{name:'Ripristina backup cifrato',exact:true}).click();
+  await page.getByRole('button',{name:'Continua senza salvare'}).click();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  await expect.poll(()=>page.evaluate(()=>history.state?.tab)).toBe('privacy');
+  await page.goBack();
+  await expect(page.getByTestId('daily-matrix')).toBeVisible();
+  await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+  expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+  await context.close();
+});
 
 // Actual App, not an isolated component: evidence for the mobile HPR.
 for (const width of [320, 390]) {
