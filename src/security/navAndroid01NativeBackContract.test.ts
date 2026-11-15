@@ -24,9 +24,11 @@ describe('NAV-ANDROID-01 — Android system Back delegates to the existing histo
     expect(java).not.toMatch(/PRIORITY_OVERLAY,|Build\.MANUFACTURER|Build\.MODEL|onBackStarted\(|onBackProgressed\(/);
     expect(java).toContain('if (getBridge() == null) return;');
     const back = java.slice(java.indexOf('private void navigateWebHistory()'), java.indexOf('// Isolate API 33'));
-    expect(back).toContain('if (!isDocumentSessionAuthorized() || sessionShield != null) return;');
+    expect(back).toContain('if (!isDocumentSessionAuthorized() || sessionShield != null || interactiveEpoch != sessionEpoch) return;');
     expect(back.indexOf('!isDocumentSessionAuthorized()')).toBeLessThan(back.indexOf('webView.goBack()'));
-    expect(java).toContain('if (sessionEpoch == epoch) authorizedEpoch = -1;');
+    expect(java).toContain('if (sessionEpoch == epoch) {');
+    expect(java).toContain('interactiveEpoch = interactive && isDocumentSessionAuthorized() ? epoch : -1;');
+    expect(java).toContain('requestId != visualRequestId');
     expect(java).toContain('WebView webView = getBridge().getWebView();');
     expect(java).toContain('if (webView != null && webView.canGoBack())');
     expect(java.split('webView.goBack();')).toHaveLength(2);
