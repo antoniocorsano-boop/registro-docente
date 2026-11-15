@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           bun install --frozen-lockfile
-          bun test src/security/navAndroid01NativeBackContract.test.ts
+          bun test src/security/navAndroid01NativeBackContract.test.ts src/security/mobile01M4BetaIdentityContract.test.ts src/security/mobile01Beta2UpdateSigning.test.ts
           export VITE_REGISTRO_BUILD_SHA="$SOURCE_SHA"
           if [[ "$B43_LAB" == true ]]; then
             export VITE_REGISTRO_BUILD_KIND=lab
@@ -274,6 +274,7 @@ jobs:
           {
             printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'
             printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'visible_build_source_sha=%s\n' "$SOURCE_SHA"
             printf 'app_id=it.trama.registrodocente\n'
             printf 'version_code=%s\n' "$version_code"
             printf 'version_name=%s\n' "$version_name"
