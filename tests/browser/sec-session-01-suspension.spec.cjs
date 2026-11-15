@@ -21,6 +21,10 @@ async function installNativeDouble(page) {
         authorized=epoch;
         window.__sessionEvidence.push(['authorize',epoch]);
       },
+      revoke:async(input)=>{
+        if(input.epoch===epoch)authorized=-1;
+        window.__sessionEvidence.push(['revoke',input.epoch]);
+      },
       acknowledgeShield:async(input)=>{
         if(!foreground||input.epoch!==epoch)throw Error('stale native shield');
         const protectedSurface=Boolean(document.querySelector('[inert][aria-hidden="true"]'))||
