@@ -67,7 +67,9 @@ jobs:
         run: |
           export BETA1_ARCHIVE_BUNDLE="$RUNNER_TEMP/archive-fixtures/beta1.js"
           export BETA2_ARCHIVE_BUNDLE="$RUNNER_TEMP/archive-fixtures/beta2.js"
-          ./node_modules/.bin/playwright test beta2-archive-compatibility.spec.cjs --workers=1 --output=../browser-evidence/results
+          ./node_modules/.bin/playwright test \
+            beta2-archive-compatibility.spec.cjs \
+            --workers=1 --output=../browser-evidence/results
       - if: always()
         run: test ! -f browser-evidence/server.pid || kill "$(cat browser-evidence/server.pid)" || true
       - uses: actions/upload-artifact@v4
