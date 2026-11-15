@@ -11,7 +11,7 @@ const evidence = [];
 mkdirSync('native-evidence',{recursive:true});
 function record(stage, status, details={}) {
   evidence.push({stage,status,...details});
-  writeFileSync('native-evidence/backup-result.json',JSON.stringify({sourceSha:process.env.LAB_SOURCE_SHA,api,releaseQualified:false,results:evidence},null,2));
+  writeFileSync('native-evidence/restore-result.json',JSON.stringify({sourceSha:process.env.LAB_SOURCE_SHA,api,releaseQualified:false,results:evidence},null,2));
   console.log(stage,status,JSON.stringify(details));
 }
 function foreground() {
@@ -60,7 +60,7 @@ function webViewBounds() {
   return bounds[0];
 }
 async function touch(expression,label='target') {
-  const geometry=await evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center",behavior:"instant"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight,dpr:devicePixelRatio}})()');
+  const geometry=await observe(()=>evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center",behavior:"instant"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight,dpr:devicePixelRatio}})()'), 'geometry '+label);
   if(!geometry || geometry.x<0 || geometry.y<0 || geometry.x>=geometry.w || geometry.y>=geometry.h)throw Error('Target not visible: '+label);
   const [l,t,r,b]=webViewBounds();
   const sx=(r-l)/geometry.w,sy=(b-t)/geometry.h;
@@ -69,9 +69,32 @@ async function touch(expression,label='target') {
   console.log('native-tap',label,JSON.stringify({x,y}));
   adb('shell','input','tap',String(x),String(y));
 }
+// Poll predicates are observational only. Reconnect once on transport timeout;
+// never repeat a click, input write, picker action or restore confirmation.
+async function observe(fn,label) {
+  try{return await fn()}catch(e){
+    if(!String(e.message).includes('CDP response timeout: Runtime.evaluate'))throw e;
+    record('diagnostic-transport-reconnect','RETRY',{label});
+    socket?.close();socket=null;
+    await connect();
+    return await fn();
+  }
+}
 async function until(fn,label,ms=15000) {
-  const end=Date.now()+ms;
-  while(Date.now()<end){if(await fn())return;await sleep(250)}
+  let end=Date.now()+ms;
+  let recovered=false;
+  while(Date.now()<end){
+    try{if(await fn())return;}
+    catch(e){
+      if(recovered||!String(e.message).includes('CDP response timeout: Runtime.evaluate'))throw e;
+      recovered=true;
+      record('diagnostic-transport-reconnect','RETRY',{label});
+      socket?.close();socket=null;
+      await connect();
+      end=Date.now()+ms;
+    }
+    await sleep(250);
+  }
   throw Error(label);
 }
 async function tap(selector, label) {
@@ -123,11 +146,18 @@ async function clickText(label,scope='') {
   await evaluate('(()=>{('+expr+').click();return true})()');
 }
 async function openMatrix() {
-  const expr='Array.from(document.querySelectorAll("button")).find(b=>b.getAttribute("aria-label")==='+JSON.stringify(classLabel)+')';
+  // Navigation is exercised through actual enabled application controls, not
+  // through coordinates during animated scrolling. The Android file picker,
+  // dialogs and process lifecycle remain native and unchanged.
+  const visible='b=>!b.disabled&&b.getClientRects().length&&!b.closest("[inert]")&&getComputedStyle(b).visibility==="visible"';
+  const expr='Array.from(document.querySelectorAll("button")).filter('+visible+').find(b=>b.getAttribute("aria-label")==='+JSON.stringify(classLabel)+')';
   await until(()=>evaluate('Boolean('+expr+')'),'Synthetic class missing');
-  await touch(expr,'open synthetic class');
-  await until(()=>evaluate('Boolean(document.querySelector("nav"))'),'Class navigation absent');
-  await button('Tabellone','nav ');
+  await evaluate('(()=>{const b='+expr+';if(!b)throw Error("Class control absent");b.click();return true})()');
+  await until(()=>evaluate('document.querySelector("[data-testid=header01-context-title]")?.textContent.trim()==="Riepilogo"'),'Class dashboard absent');
+  record('synthetic-class-opened','PASS');
+  const matrix='Array.from(document.querySelectorAll("nav button")).filter('+visible+').find(b=>b.textContent.trim()==="Tabellone")';
+  await until(()=>evaluate('Boolean('+matrix+')'),'Class matrix navigation absent');
+  await evaluate('(()=>{const b='+matrix+';if(!b)throw Error("Matrix control absent");b.click();return true})()');
   await until(()=>evaluate('Boolean(document.querySelector("[data-testid=daily-matrix]"))'),'Daily matrix missing');
   await setField('[data-testid=daily-date]',date);
   record('daily-matrix-date-selected','PASS');
@@ -156,29 +186,19 @@ async function picker(){return nativeFind(n=>docNode(n)&&(/save|salva/i.test(n.t
 async function home(){
   const isHome=()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))');
   if(await isHome())return;
-  const inPrivacy=await evaluate('Boolean(document.querySelector(\'input[placeholder="Ripeti la password"]\'))');
-  if(inPrivacy){
-    // Privacy entered by the Home export shortcut does not push a history
-    // entry. Test explicit Oggi separately, without claiming Back passed.
-    const drawer='#registro-navigation-drawer[aria-hidden="false"]';
-    const go=drawer+' [data-testid="header01-go-home"]';
-    await click('[data-testid="header01-brand-navigation"]');
-    await until(()=>evaluate('(()=>{const e=document.querySelector('+JSON.stringify(go)+');if(!e||e.closest("[inert]"))return false;const r=e.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth})()'),'Opened drawer Oggi not visible');
-    await click(go);
-    const confirmation='[data-testid="header01-home-confirm"]';
-    await until(async()=>await isHome()||await evaluate('Boolean(document.querySelector('+JSON.stringify(confirmation)+'))'),'Explicit Oggi did not open home or confirmation');
-    if(!await isHome())await clickText('Torna a Oggi',confirmation+' ');
-    await until(isHome,'Explicit Oggi did not restore home');
-    record('home-reached-explicit-privacy-exit','PASS');
-    return;
-  }
-  for(let step=0;step<5;step++){
-    const before=await tab();
-    adb('shell','input','keyevent','4');
-    await until(async()=>foreground()&&(await isHome()||(await tab())!==before),'Native Back did not restore previous view',10000);
-    if(await isHome()){record('home-reached-native-back','PASS',{steps:step+1});return;}
-  }
-  throw Error('Home backup indicator not reached by native Back');
+  // This suite qualifies the backup/restore transaction, not Android Back.
+  // Explicitly navigate via the actual app control, with visible drawer and
+  // confirmation; do not rely on browser history/user activation after DOM clicks.
+  const drawer='#registro-navigation-drawer[aria-hidden="false"]';
+  const go=drawer+' [data-testid="header01-go-home"]';
+  await click('[data-testid="header01-brand-navigation"]');
+  await until(()=>evaluate('(()=>{const e=document.querySelector('+JSON.stringify(go)+');if(!e||e.closest("[inert]"))return false;const r=e.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth})()'),'Opened drawer Oggi not visible');
+  await click(go);
+  const confirmation='[data-testid="header01-home-confirm"]';
+  await until(async()=>await isHome()||await evaluate('Boolean(document.querySelector('+JSON.stringify(confirmation)+'))'),'Explicit Oggi did not open home or confirmation');
+  if(!await isHome())await clickText('Torna a Oggi',confirmation+' ');
+  await until(isHome,'Explicit Oggi did not restore home');
+  record('home-reached-explicit-navigation','PASS');
 }
 async function expectCopy(label){
   await until(()=>evaluate('document.querySelector('+JSON.stringify(indicator)+')?.textContent.includes('+JSON.stringify(label)+')'),'Backup indicator not '+label);
@@ -227,6 +247,64 @@ async function verifyEncryptedDownload(){
   const matches=payload.snapshot?.appData?.classes?.flatMap(c=>c.grades).filter(g=>g.title===marker&&g.date===date&&g.value===grade&&g.type==='disegno');
   if(payload.app!=='registro-docente'||payload.backupDataVersion!==6||matches?.length!==1||payload.snapshot.meta.changes!==0||payload.snapshot.meta.verifiedBackupEvidence!==undefined)throw Error('Encrypted checkpoint does not match confirmed synthetic grade');
   record('independent-encrypted-file-readback','PASS',{bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),envelopeVersion:2,payloadVersion:6});
+}
+
+const restorePasswordSelector='input[placeholder="Inserisci la password impostata alla cifratura"]';
+const replacementWarning='Il ripristino sostituirà i dati del Registro';
+function backupFilename(){
+  const files=adb('shell','ls','-1','/sdcard/Download').split(/\r?\n/).filter(n=>/^Backup_Cifrato_GDPR_\d{4}-\d{2}-\d{2}\.enc\.json$/.test(n));
+  if(files.length!==1)throw Error('Expected exactly one generated backup');
+  return files[0];
+}
+async function openRestore(passwordValue){
+  const selector=indicator+' button[aria-label="Esporta backup cifrato"]';
+  await click(selector);
+  await setField(restorePasswordSelector,passwordValue);
+  await button('Scegli file e ripristina');
+  await nativeFind(n=>docNode(n)&&(/show roots|mostra radici|open navigation drawer/i.test(n.desc)||/^(Recent|Recenti|Downloads|Download)$/i.test(n.text)),'Restore document picker missing');
+  record('native-restore-picker-opened','PASS');
+}
+async function selectBackup(){
+  const filename=backupFilename();
+  const nodes=nativeNodes(nativeXml()).filter(docNode);
+  if(!nodes.some(n=>n.text===filename)){
+    if(!nodes.some(n=>/^(Downloads|Download)$/i.test(n.text))){
+      const roots=await nativeFind(n=>docNode(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc),'Restore picker navigation missing');
+      nativePress(roots);
+      const downloads=await nativeFind(n=>docNode(n)&&/^(Downloads|Download)$/i.test(n.text),'Restore Downloads missing');
+      nativePress(downloads);
+    }
+  }
+  const file=await nativeFind(n=>docNode(n)&&n.text===filename,'Generated encrypted backup not visible');
+  nativePress(file);
+}
+async function expectRestoreSettled(){
+  await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>!b.disabled&&b.textContent.trim()==="Scegli file e ripristina")'),'Restore did not settle',30000);
+}
+async function replacementDecision(accept){
+  await nativeFind(n=>n.text.includes(replacementWarning),'Replacement warning missing',45000);
+  const choice=await nativeFind(n=>accept?/^OK$/i.test(n.text):/^(Cancel|Annulla)$/i.test(n.text),'Explicit replacement decision missing');
+  nativePress(choice);
+}
+async function checkCurrentGrade(value,label){
+  await home();
+  await openMatrix();
+  await registered(value);
+  await until(()=>evaluate('document.querySelector(\'[aria-label="Prova della giornata"]\')?.selectedOptions[0]?.textContent.includes('+JSON.stringify(marker)+')'),'Assessment identity missing after restore attempt');
+  await home();
+  record(label,'PASS');
+}
+async function coldReopen(){
+  socket.close();socket=null;
+  adb('shell','am','force-stop',pkg);
+  await until(()=>{try{return !adb('shell','pidof',pkg)}catch{return true}},'Process still running');
+  adb('forward','--remove','tcp:9222');
+  adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');
+  await connect();
+  await until(()=>evaluate('document.querySelector("h1")?.textContent.includes("Sblocca Registro")'),'Fresh locked bootstrap missing',45000);
+  await setField('#vault-password',password);
+  await clickText('Sblocca Registro');
+  await until(()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))'),'Unlocked home absent',45000);
 }
 try {
   await connect();
@@ -292,6 +370,36 @@ try {
   await home();
   await expectCopy('Copia da aggiornare');
   record('new-commit-invalidates-current-copy','PASS');
+  // All destructive restore operations concern only this isolated synthetic archive.
+  await openRestore(backupPassword);
+  adb('shell','input','keyevent','4');
+  await until(()=>foreground(),'Restore picker cancellation did not return');
+  await expectRestoreSettled();
+  await checkCurrentGrade('9','restore-picker-cancel-preserves-newer-grade');
+  await expectCopy('Copia da aggiornare');
+  await openRestore('synthetic-incorrect-backup-password');
+  await selectBackup();
+  await dismissSuccess('Ripristino non completato');
+  await expectRestoreSettled();
+  await checkCurrentGrade('9','wrong-password-preserves-newer-grade');
+  await expectCopy('Copia da aggiornare');
+  await openRestore(backupPassword);
+  await selectBackup();
+  await replacementDecision(false);
+  await expectRestoreSettled();
+  record('replacement-cancel-dialog-settled','PASS');
+  await checkCurrentGrade('9','replacement-cancel-preserves-newer-grade');
+  await expectCopy('Copia da aggiornare');
+  await openRestore(backupPassword);
+  await selectBackup();
+  await replacementDecision(true);
+  await dismissSuccess('Backup cifrato verificato e ripristinato con successo');
+  await checkCurrentGrade(grade,'confirmed-restore-recovers-backup-grade');
+  await expectCopy('Copia di sicurezza da verificare');
+  await coldReopen();
+  await checkCurrentGrade(grade,'restored-grade-persists-after-cold-reopen');
+  await expectCopy('Copia di sicurezza da verificare');
+  record('native-encrypted-restore-roundtrip','PASS');
 } catch(e) {
   record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});
   process.exitCode=1;
