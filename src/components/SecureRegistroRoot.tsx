@@ -259,7 +259,7 @@ export const SecureRegistroRoot: React.FC = () => {
     if (protectedSurface || authenticatedEpochRef.current === nativeState.epoch) {
       // This acknowledgment only removes the native cover after React has committed
       // a protected surface or a freshly authenticated session.
-      void acknowledgeAndroidShield(nativeState.epoch).catch(() => {});
+      void acknowledgeAndroidShield(nativeState.epoch, !protectedSurface).catch(() => {});
     }
   }, [nativeState, gateState, closing, suspensionPhase]);
 
@@ -285,16 +285,16 @@ export const SecureRegistroRoot: React.FC = () => {
     };
     assertCurrent();
     try {
-    await authorizeAndroidSession(epoch);
-    // A successful bridge response can itself be stale. Query again and
-    // compare both the observed epoch and all intervening lifecycle signals.
-    const latest = await syncNativeSession();
-    if (!latest?.foreground || latest.epoch !== epoch) {
-      throw new Error('Sessione Android cambiata. Autenticati nuovamente.');
-    }
-    assertCurrent();
-    authenticatedEpochRef.current = epoch;
-    commit();
+      await authorizeAndroidSession(epoch);
+      // A successful bridge response can itself be stale. Query again and
+      // compare both the observed epoch and all intervening lifecycle signals.
+      const latest = await syncNativeSession();
+      if (!latest?.foreground || latest.epoch !== epoch) {
+        throw new Error('Sessione Android cambiata. Autenticati nuovamente.');
+      }
+      assertCurrent();
+      authenticatedEpochRef.current = epoch;
+      commit();
     } catch (error) {
       if (authenticatedEpochRef.current === epoch) authenticatedEpochRef.current = null;
       // Do not revoke a newer foreground generation after stale authorization.
