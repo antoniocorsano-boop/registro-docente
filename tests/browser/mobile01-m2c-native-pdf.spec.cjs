@@ -15,7 +15,11 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   });
   await page.addInitScript(() => {
     window.__pdf = { choose: 0, write: 0, cancel: false, wrongReceipt: false, valid: false, bytes: 0, filename: '', reportText: false, tableText: false, maskedRows: false, pageCount: false };
-    window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroPdfFiles: {
+    window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroSession: {
+      getState: async () => ({ epoch: 0, foreground: true }),
+      authorize: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); },
+      acknowledgeShield: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); }
+    }, RegistroPdfFiles: {
       choosePdfDestination: async options => {
         window.__pdf.choose++;
         window.__pdf.filename = options.filename;

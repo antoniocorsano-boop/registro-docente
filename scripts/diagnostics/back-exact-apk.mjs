@@ -58,7 +58,18 @@ function webViewBounds() {
   if(!bounds.length)throw Error('Native WebView bounds unavailable');
   return bounds[0];
 }
+let navigationEpoch;
+async function assertUninterrupted(label){
+  const state=await evaluate('Capacitor.Plugins.RegistroSession.getState()');
+  const gate=await evaluate('!!document.querySelector("#vault-password")');
+  if(navigationEpoch===undefined)navigationEpoch=state.epoch;
+  if(!state.foreground||state.epoch!==navigationEpoch) {
+    record('external-lifecycle-interruption','FAIL',{label,expectedEpoch:navigationEpoch,state,gate});
+    throw Error('Navigation test interrupted by Android lifecycle: '+label);
+  }
+}
 async function touch(expression,label='target') {
+  await assertUninterrupted('before '+label);
   const geometry=await evaluate('(()=>{const b='+expression+';if(!b)return null;b.scrollIntoView({block:"center",behavior:"instant"});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight,dpr:devicePixelRatio}})()');
   if(!geometry || geometry.x<0 || geometry.y<0 || geometry.x>=geometry.w || geometry.y>=geometry.h)throw Error('Target not visible: '+label);
   const [l,t,r,b]=webViewBounds();
@@ -66,7 +77,9 @@ async function touch(expression,label='target') {
   if(!Number.isFinite(sx)||!Number.isFinite(sy)||Math.abs(sx-sy)/Math.max(sx,sy)>.15||Math.abs(sx-geometry.dpr)/geometry.dpr>.15)throw Error('WebView native/CSS bounds mismatch: '+JSON.stringify({bounds:[l,t,r,b],geometry}));
   const x=Math.round(l+geometry.x*sx),y=Math.round(t+geometry.y*sy);
   console.log('native-tap',label,JSON.stringify({x,y}));
+  adb('shell','log','-t','TRAMA_BACK_QUAL','tap:'+label.replace(/[^a-zA-Z0-9_-]/g,'_'));
   adb('shell','input','tap',String(x),String(y));
+  await assertUninterrupted('after '+label);
 }
 async function until(fn,label,ms=15000) {
   const end=Date.now()+ms;
@@ -94,9 +107,11 @@ async function snapshot() {
   } catch(e){return {snapshotError:e.message};}
 }
 async function back(label,cmd,wanted) {
+  await assertUninterrupted('before '+label);
   const before=await snapshot();
+  adb('shell','log','-t','TRAMA_BACK_QUAL','back:'+label);
   adb('shell','input',...cmd);
-  try { await assertTab(wanted,label);record(label,'PASS',{tab:wanted,foreground:true,before,after:await snapshot()}); }
+  try { await assertTab(wanted,label);await assertUninterrupted('after '+label);record(label,'PASS',{tab:wanted,foreground:true,before,after:await snapshot()}); }
   catch(e) {record(label,'FAIL',{foreground:foreground(),message:e.message,before,after:await snapshot()});throw e;}
 }
 try {
@@ -110,6 +125,7 @@ try {
   // observed unlocked state, without retrying the action.
   await evaluate('(()=>{const b=Array.from(document.querySelectorAll("button")).find(b=>!b.disabled&&b.textContent.trim()==="Avvia la prova");if(!b)throw Error("Demo submit absent");b.click();return true})()');
   await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))'),'Demo classes unavailable',45000);
+  await assertUninterrupted('archive opened');
   record('archive-opened','PASS',{view:await snapshot()});
   await touch('Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))','open synthetic class');
   await until(()=>evaluate('Boolean(document.querySelector("nav"))'),'Class navigation absent');
@@ -150,8 +166,10 @@ try {
   await until(async()=>foreground()&&(await tab())==='privacy'&&await evaluate('document.querySelector("[data-testid=header01-context]")?.textContent.includes("Privacy")'),'Privacy route not established');
   adb('shell','input','swipe',String(w-1),String(y),String(Math.floor(w*.5)),String(y),'350');
   await until(async()=>foreground()&&(await tab())==='home'&&await evaluate('Boolean(document.querySelector("[data-testid=backup-copy-indicator]"))'),'Privacy native edge Back did not return to Oggi',15000);
+  await assertUninterrupted('final native Back');
   record('native-privacy-to-home','PASS',{view:await snapshot()});
   // Physical device, IME, dialogs and dirty-draft behavior remain unqualified.
+  record('uninterrupted-native-session','PASS',{epoch:navigationEpoch});
   record('emulator-only-diagnostic','PASS');
 } catch(e) {
   record('diagnostic-incomplete-or-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});
