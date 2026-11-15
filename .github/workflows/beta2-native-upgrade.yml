@@ -1,0 +1,134 @@
+name: BETA2-UPDATE-04 — native in-place upgrade
+on:
+  pull_request:
+    branches: ['test/b4-3-android-lab']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  upgrade:
+    if: github.head_ref == 'test/beta2-native-upgrade'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      BETA1_SHA: 37c61d4c64993c986a3edcd2b421310adf20de92
+      BETA2_SHA: 4236d6d7deef630685e3fe8853d64cf91b5dab63
+      BETA1_RUN: '43206101783'
+      BETA2_RUN: '43745259890'
+      BETA1_ARTIFACT: '13938285055'
+      BETA2_ARTIFACT: '14173773874'
+      LAB_API: '36'
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Confirm exact successful source runs and artifact identities
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          for series in 1 2; do
+            case "$series" in
+              1) source="$BETA1_SHA"; run="$BETA1_RUN"; artifact="$BETA1_ARTIFACT";;
+              2) source="$BETA2_SHA"; run="$BETA2_RUN"; artifact="$BETA2_ARTIFACT";;
+            esac
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" | jq -e --arg sha "$source" '.head_sha == $sha and .conclusion == "success"'
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact" | jq -e --arg sha "$source" --arg run "$run" '.expired == false and .workflow_run.head_sha == $sha and (.workflow_run.id|tostring) == $run and .name == ("mobile01-android-beta-unsigned-" + $sha)'
+          done
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.BETA1_SHA }}
+          run-id: ${{ env.BETA1_RUN }}
+          github-token: ${{ github.token }}
+          path: unsigned-old
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.BETA2_SHA }}
+          run-id: ${{ env.BETA2_RUN }}
+          github-token: ${{ github.token }}
+          path: unsigned-new
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Verify APKs and sign exclusively with an ephemeral CI test certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-evidence
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          temp="$(mktemp -d "$RUNNER_TEMP/registro-upgrade.XXXXXXXX")"
+          chmod 700 "$temp"
+          printf 'UPGRADE_TEMP=%s\n' "$temp" >> "$GITHUB_ENV"
+          keytool -genkeypair -keystore "$temp/synthetic.p12" -storetype PKCS12 -storepass SyntheticCIOnly2026 -keypass SyntheticCIOnly2026 -alias synthetic-ci-upgrade -keyalg RSA -keysize 2048 -validity 3 -dname 'CN=TRAMA SYNTHETIC CI ONLY'
+          for series in old new; do
+            case "$series" in
+              old) sha="$BETA1_SHA"; version=10002; name=0.1.0-beta.1-rc.2;;
+              new) sha="$BETA2_SHA"; version=10003; name=0.1.0-beta.2-rc.1;;
+            esac
+            apk="$(find "unsigned-$series" -type f -name app-release-unsigned.apk)"
+            manifest="$(find "unsigned-$series" -type f -name beta-unsigned-manifest.txt)"
+            checksum="$(find "unsigned-$series" -type f -name beta-unsigned.sha256)"
+            test -f "$apk" && test -f "$manifest" && test -f "$checksum"
+            digest="$(sha256sum "$apk" | awk '{print $1}')"
+            test "$digest" = "$(awk '{print $1}' "$checksum")"
+            grep -Fx "apk_sha256=$digest" "$manifest"
+            grep -Fx "source_sha=$sha" "$manifest"
+            grep -Fx 'app_id=it.trama.registrodocente' "$manifest"
+            grep -Fx "version_code=$version" "$manifest"
+            grep -Fx "version_name=$name" "$manifest"
+            grep -Fx 'release_signing=false' "$manifest"
+            if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then exit 1; fi
+            "$tools/aapt" dump badging "$apk" > "$temp/$series.badging"
+            grep -F "package: name='it.trama.registrodocente' versionCode='$version' versionName='$name'" "$temp/$series.badging"
+            if grep -q '^application-debuggable' "$temp/$series.badging"; then exit 1; fi
+            if [[ "$series" == new ]]; then
+              grep -Fx "visible_build_source_sha=$sha" "$manifest"
+              unzip -p "$apk" 'assets/public/assets/*.js' | grep -F -- "$sha" >/dev/null
+            fi
+            "$tools/zipalign" -P 16 -f 4 "$apk" "$temp/$series.aligned.apk"
+            "$tools/apksigner" sign --ks "$temp/synthetic.p12" --ks-key-alias synthetic-ci-upgrade --ks-pass pass:SyntheticCIOnly2026 --key-pass pass:SyntheticCIOnly2026 --out "$temp/$series.signed.apk" "$temp/$series.aligned.apk"
+            "$tools/apksigner" verify --print-certs "$temp/$series.signed.apk" > "$temp/$series.cert"
+            test "$(grep -Ec '^Signer #[0-9]+ certificate SHA-256 digest:' "$temp/$series.cert")" = 1
+            cert="$(awk -F': ' '/^Signer #1 certificate SHA-256 digest:/{print $2}' "$temp/$series.cert")"
+            [[ "$cert" =~ ^[0-9a-f]{64}$ ]]
+            printf '%s\n' "$cert" > "$temp/$series.digest"
+            printf 'series=%s source=%s unsigned_sha256=%s test_signed_sha256=%s test_cert=%s\n' "$series" "$sha" "$digest" "$(sha256sum "$temp/$series.signed.apk" | awk '{print $1}')" "$cert" >> native-evidence/provenance.txt
+          done
+          cmp "$temp/old.digest" "$temp/new.digest"
+          printf 'OLD_SIGNED_APK=%s\nNEW_SIGNED_APK=%s\n' "$temp/old.signed.apk" "$temp/new.signed.apk" >> "$GITHUB_ENV"
+      - name: Enable KVM and check diagnostic syntax
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+          python3 -m py_compile scripts/diagnostics/beta2-native-upgrade.py
+      - name: Install RC2, create synthetic record, upgrade RC1 without uninstalling
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: bash scripts/diagnostics/prepare-b43-emulator.sh && python3 scripts/diagnostics/beta2-native-upgrade.py
+      - name: Verify exact native evidence without release permission
+        run: |
+          jq -e --arg old "$BETA1_SHA" --arg new "$BETA2_SHA" '.oldSource == $old and .newSource == $new and .releaseAuthorized == false and .ownerSignatureQualified == false and ([.results[].stage] == ["beta1-installed","beta1-created-class-survives-reopen","in-place-upgrade","wrong-password-rejected","beta2-preserved-class-and-password","beta2-preserved-class-after-reopen"]) and all(.results[];.status=="PASS")' native-evidence/upgrade-result.json
+      - name: Remove all ephemeral signing material and signed APKs
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "$UPGRADE_TEMP" && "$UPGRADE_TEMP" == "$RUNNER_TEMP"/registro-upgrade.* ]]; then rm -rf -- "$UPGRADE_TEMP"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta2-native-upgrade-evidence
+          path: native-evidence/
+          retention-days: 7
