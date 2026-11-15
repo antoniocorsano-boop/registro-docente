@@ -213,7 +213,7 @@ try {
   await requireNativeGate('picker cancel');
   await resume();
   await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>!b.disabled&&b.textContent.trim()==="Cifra e Scarica File")'),'Cancelled export did not settle',30000);
-  const cancelled=adb('shell','ls','-1','/sdcard/Download').split(/\\r?\\n/).filter(n=>/^Backup_Cifrato_GDPR_/.test(n));
+  const cancelled=adb('shell','ls','-1','/sdcard/Download').split(/\r?\n/).filter(n=>/^Backup_Cifrato_GDPR_/.test(n));
   if(cancelled.length)throw Error('Cancelled picker wrote a file');
   record('picker-cancel-protected','PASS');
   await setField('input[placeholder="Inserisci password sicura (min. 6 caratteri)"]',backupPassword);
@@ -224,8 +224,8 @@ try {
   await requireNativeGate('picker confirm');
   await resume();
   await dismissSuccess('Copia di sicurezza salvata e verificata');
-  const files=adb('shell','ls','-1','/sdcard/Download').split(/\\r?\\n/).filter(n=>/^Backup_Cifrato_GDPR_\\d{4}-\\d{2}-\\d{2}\\.enc\\.json$/.test(n));
-  if(files.length!==1)throw Error('Expected exactly one verified synthetic encrypted copy');
+  const files=adb('shell','ls','-1','/sdcard/Download').split(/\r?\n/).filter(n=>/^Backup_Cifrato_GDPR_\d{4}-\d{2}-\d{2}\.enc\.json$/.test(n));
+  if(files.length!==1)throw Error('Expected exactly one verified synthetic encrypted copy; found '+files.length);
   const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+files[0]],{timeout:30000});
   const envelope=JSON.parse(bytes.toString('utf8'));
   if(envelope.version!==2||!envelope.ciphertext)throw Error('Backup envelope not valid');
