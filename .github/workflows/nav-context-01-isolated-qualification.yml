@@ -6,16 +6,19 @@ on:
   push:
     branches:
       - feat/nav-context-01-restore-student-origin
-      - fix/b43-privacy-history
+  pull_request:
+    branches:
+      - test/b4-3-android-lab
 
 permissions:
   contents: read
 
 env:
-  CANDIDATE_SHA: ${{ github.sha }}
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   contracts:
+    if: github.event_name == 'push' || github.head_ref == 'fix/b43-privacy-history'
     name: Typecheck / security / invariant contracts
     runs-on: ubuntu-22.04
     timeout-minutes: 25
@@ -50,6 +53,7 @@ jobs:
         run: bun run build
 
   chromium:
+    if: github.event_name == 'push' || github.head_ref == 'fix/b43-privacy-history'
     name: Synthetic Chromium Android 390 / 320
     runs-on: ubuntu-22.04
     timeout-minutes: 30
