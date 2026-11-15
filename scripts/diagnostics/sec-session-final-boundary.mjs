@@ -164,6 +164,11 @@ async function dismissSuccess(message){
 }
 try {
   await connect();
+  const expectedSha=process.env.LAB_SOURCE_SHA;
+  const identity=()=>evaluate('(()=>{const e=Array.from(document.querySelectorAll("[data-testid=registro-build-identity]")).find(e=>e.getClientRects().length&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");return e?{sha:e.dataset.sourceSha,text:e.textContent.trim()}:null})()');
+  const validIdentity=async()=>{const x=await identity();return x?.sha===expectedSha&&x.text==="Collaudo B4.3 · "+expectedSha.slice(0,12);};
+  await until(validIdentity,'Visible exact build identity missing in gate');
+  record('build-identity-gate','PASS',{identity:await identity()});
   await until(()=>evaluate('Boolean(document.querySelector(\'input[name="archive-mode"][value="demo"]\'))'),'Archive mode choice not available',45000);
   await tap('input[name="archive-mode"][value="demo"]','demo archive');
   await until(()=>evaluate('Boolean(document.querySelector("#vault-password"))'),'Demo password field not available after selecting mode');
@@ -193,6 +198,10 @@ try {
     await until(appVisible,'Authenticated application did not resume',45000);
     await until(()=>{try{return !!webViewBounds().length}catch{return false}},'Native WebView did not become accessible',30000);
   }
+  await click('[data-testid="header01-brand-navigation"]');
+  await until(validIdentity,'Visible exact build identity missing in drawer');
+  record('build-identity-drawer','PASS',{identity:await identity()});
+  await click('[data-testid="header01-brand-navigation"]');
   const openClass='Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))';
   await touch(openClass,'open synthetic class');
   await until(()=>evaluate('history.state?.tab==="dashboard"'),'Class overview unavailable');
