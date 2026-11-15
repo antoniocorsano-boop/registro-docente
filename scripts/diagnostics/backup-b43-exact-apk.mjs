@@ -278,6 +278,19 @@ async function selectBackup(){
   const file=await nativeFind(n=>docNode(n)&&n.text===filename,'Generated encrypted backup not visible');
   nativePress(file);
 }
+// Every return from Android DocumentsUI now requires a fresh local unlock.
+async function authenticatePickerReturn(label){
+  await until(foreground,label+': Android foreground unavailable',30000);
+  await until(()=>evaluate('Array.from(document.querySelectorAll("h1")).some(e=>e.textContent.trim()==="Sblocca Registro"&&getComputedStyle(e).visibility==="visible") && !!document.querySelector("#vault-password")'),label+': password gate unavailable',30000);
+  await nativeFind(n=>n.pkg===pkg&&(/Sblocca Registro|Password locale/.test(n.text)||/Sblocca Registro|Password locale/.test(n.desc)),label+': protected surface not accessible',30000);
+  const exposed=await evaluate('(()=>{const e=document.querySelector("[data-testid=header01-topbar]");return !!e&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible"})()');
+  if(exposed)throw Error(label+': application exposed before unlock');
+  await setField('#vault-password',password);
+  await evaluate('document.querySelector("#vault-password").form.requestSubmit()');
+  // A native confirmation or error alert may immediately block CDP after
+  // authentication. The caller must handle that expected alert first.
+  record(label,'PASS');
+}
 async function expectRestoreSettled(){
   await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>!b.disabled&&b.textContent.trim()==="Scegli file e ripristina")'),'Restore did not settle',30000);
 }
@@ -350,13 +363,14 @@ try {
   await expectCopy('Copia di sicurezza da verificare');
   await exportForm();
   adb('shell','input','keyevent','4');
-  await until(()=>foreground(),'App not foreground after cancellation');
+  await authenticatePickerReturn('export-cancel-reauthentication');
   await until(()=>evaluate('Array.from(document.querySelectorAll("button")).some(b=>!b.disabled&&b.textContent.trim()==="Cifra e Scarica File")'),'Export did not settle after cancellation');
   await home();
   await expectCopy('Copia di sicurezza da verificare');
   record('cancel-no-attestation','PASS');
   await exportForm();
   await chooseDownload();
+  await authenticatePickerReturn('export-confirm-reauthentication');
   await dismissSuccess('Copia di sicurezza salvata e verificata');
   await verifyEncryptedDownload();
   await home();
@@ -373,18 +387,20 @@ try {
   // All destructive restore operations concern only this isolated synthetic archive.
   await openRestore(backupPassword);
   adb('shell','input','keyevent','4');
-  await until(()=>foreground(),'Restore picker cancellation did not return');
+  await authenticatePickerReturn('restore-cancel-reauthentication');
   await expectRestoreSettled();
   await checkCurrentGrade('9','restore-picker-cancel-preserves-newer-grade');
   await expectCopy('Copia da aggiornare');
   await openRestore('synthetic-incorrect-backup-password');
   await selectBackup();
+  await authenticatePickerReturn('restore-wrong-password-reauthentication');
   await dismissSuccess('Ripristino non completato');
   await expectRestoreSettled();
   await checkCurrentGrade('9','wrong-password-preserves-newer-grade');
   await expectCopy('Copia da aggiornare');
   await openRestore(backupPassword);
   await selectBackup();
+  await authenticatePickerReturn('restore-replacement-cancel-reauthentication');
   await replacementDecision(false);
   await expectRestoreSettled();
   record('replacement-cancel-dialog-settled','PASS');
@@ -392,6 +408,7 @@ try {
   await expectCopy('Copia da aggiornare');
   await openRestore(backupPassword);
   await selectBackup();
+  await authenticatePickerReturn('restore-confirm-reauthentication');
   await replacementDecision(true);
   await dismissSuccess('Backup cifrato verificato e ripristinato con successo');
   await checkCurrentGrade(grade,'confirmed-restore-recovers-backup-grade');
