@@ -58,3 +58,46 @@ test('SEC-SESSION-01: dirty council draft can remain, save and lock, or be expli
   await picker.selectOption(selected);
   await expect(grade).toHaveValue('8.5');
 });
+
+test('SEC-SESSION-01: lock draining a confirmed reset preserves the setup gate',async({page})=>{
+  await open(page);
+  await menu(page,'Privacy');
+  // Delay only delivery of the real reset transaction completion, after
+  // IndexedDB has committed. No mock of the archive or of the root gate.
+  await page.evaluate(()=>{
+    const original=Object.getOwnPropertyDescriptor(IDBTransaction.prototype,'oncomplete');
+    if(!original?.get||!original?.set)throw Error('IDB completion descriptor unavailable');
+    window.__resetCompletionPending=false;
+    Object.defineProperty(IDBTransaction.prototype,'oncomplete',{
+      configurable:true,enumerable:original.enumerable,get:original.get,
+      set(handler){
+        if(this.mode==='readwrite'&&this.objectStoreNames.contains('metadata')&&this.objectStoreNames.contains('records')){
+          original.set.call(this,function(event){
+            window.__resetCompletionPending=true;
+            window.__releaseResetCompletion=()=>{
+              Object.defineProperty(IDBTransaction.prototype,'oncomplete',original);
+              handler.call(this,event);
+            };
+          });
+        }else original.set.call(this,handler);
+      }
+    });
+  });
+  page.on('dialog',async dialog=>{
+    if(dialog.type()==='prompt')await dialog.accept('CANCELLA');
+    else await dialog.accept();
+  });
+  await page.getByRole('button',{name:'Reset Totale Sicuro'}).click();
+  await expect.poll(()=>page.evaluate(()=>window.__resetCompletionPending)).toBe(true);
+  await page.getByTestId('header01-lock').click();
+  await expect(page.getByText('Chiusura protetta del Registro…')).toBeVisible();
+  await page.evaluate(()=>window.__releaseResetCompletion());
+  await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toHaveCount(0);
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Avvia la prova'}).click();
+  await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
+  await page.getByTestId('header01-lock').click();
+  await unlock(page);
+});
