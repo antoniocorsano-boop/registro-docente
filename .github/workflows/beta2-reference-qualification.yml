@@ -1,8 +1,8 @@
-# BETA2-QUAL-01 / stage A: single read-only technical gate. No release.
+# BETA2-QUAL-01: exact-head technical gates A–E. No release.
 name: BETA2-QUAL-01 Reference Qualification
 on:
   pull_request:
-    branches: ['fix/b43-privacy-history']
+    branches: ['fix/b43-privacy-history', 'test/b4-3-android-lab', 'fix/nav-android-platform-back']
 
 permissions:
   contents: read
@@ -12,7 +12,7 @@ env:
 
 jobs:
   contracts:
-    if: github.head_ref == 'ci/beta2-reference-qualification'
+    if: contains(fromJSON('["ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     name: Typecheck / security / invariant contracts
     runs-on: ubuntu-22.04
     timeout-minutes: 25
@@ -47,7 +47,7 @@ jobs:
         run: bun run build
 
   chromium:
-    if: github.head_ref == 'ci/beta2-reference-qualification'
+    if: contains(fromJSON('["ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     name: Synthetic Chromium Android 390 / 320
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -126,3 +126,199 @@ jobs:
           path: browser-evidence/
           if-no-files-found: warn
           retention-days: 14
+
+  package:
+    needs: [contracts, chromium]
+    uses: ./.github/workflows/mobile-01-android-probe.yml
+    with:
+      lab_only: true
+
+  native-back:
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+      LAB_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LAB_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Download the single APK from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-b43-lab-${{ env.LAB_SOURCE_SHA }}
+          path: lab-apk
+      - name: Verify exact APK provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LAB_SOURCE_SHA"
+          mkdir -p native-evidence
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "application_candidate_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          grep -Fx 'release_signing=false' "$MANIFEST"
+          digest="$(sha256sum "$APK" | cut -d' ' -f1)"
+          test "$digest" = "$(cut -d' ' -f1 "$HASH")"
+          grep -Fx "apk_sha256=$digest" "$MANIFEST"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot native Android and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        timeout-minutes: 16
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-native-back-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-back-exact-apk.sh
+      - name: Require terminal evidence, not merely runner success
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-privacy-to-home' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/back-result.json
+      - name: Preserve native synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-native-back-api${{ matrix.api }}-${{ env.LAB_SOURCE_SHA }}
+          path: native-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-archive:
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+      LAB_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LAB_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Download the single APK from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-b43-lab-${{ env.LAB_SOURCE_SHA }}
+          path: lab-apk
+      - name: Verify exact APK provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LAB_SOURCE_SHA"
+          mkdir -p native-evidence
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "application_candidate_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          grep -Fx 'release_signing=false' "$MANIFEST"
+          digest="$(sha256sum "$APK" | cut -d' ' -f1)"
+          test "$digest" = "$(cut -d' ' -f1 "$HASH")"
+          grep -Fx "apk_sha256=$digest" "$MANIFEST"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot native Android and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        timeout-minutes: 16
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-native-archive-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-backup-b43-exact-apk.sh
+      - name: Require terminal evidence, not merely runner success
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-encrypted-restore-roundtrip' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/restore-result.json
+      - name: Preserve native synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-native-archive-api${{ matrix.api }}-${{ env.LAB_SOURCE_SHA }}
+          path: native-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  technical-receipt:
+    if: always() && contains(fromJSON('["ci/beta2-native-reference","ci/beta2-reference-qualification","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    needs: [contracts, chromium, package, native-back, native-archive]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Record technical gates without granting release authorization
+        env:
+          CONTRACTS: ${{ needs.contracts.result }}
+          CHROMIUM: ${{ needs.chromium.result }}
+          PACKAGE: ${{ needs.package.result }}
+          BACK: ${{ needs.native-back.result }}
+          ARCHIVE: ${{ needs.native-archive.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --arg sha "$CANDIDATE_SHA" --arg run "$GITHUB_RUN_ID" --arg a "$CONTRACTS" --arg b "$CHROMIUM" --arg c "$PACKAGE" --arg d "$BACK" --arg e "$ARCHIVE" '{sourceSha:$sha,runId:$run,gates:{contracts:$a,chromium:$b,package:$c,nativeBack:$d,nativeArchive:$e},technicalPass:([$a,$b,$c,$d,$e]|all(.=="success")),releaseAuthorized:false,humanReview:"PENDING",remainingCoverage:["other registry browser suites","native dirty drafts and post-restore history","physical offline, lock, PDF, upgrade and migration"]}' > beta2-technical-receipt.json
+          cat beta2-technical-receipt.json
+          jq -e '.technicalPass == true' beta2-technical-receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta2-technical-receipt-${{ env.CANDIDATE_SHA }}
+          path: beta2-technical-receipt.json
+          if-no-files-found: error
+          retention-days: 7

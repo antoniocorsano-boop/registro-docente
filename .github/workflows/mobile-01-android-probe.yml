@@ -8,18 +8,27 @@ on:
       - 'docs/superpowers/specs/2026-11-11-mobile-01-android-apk-probe-design.md'
       - 'docs/superpowers/plans/2026-11-11-mobile-01-android-apk-probe.md'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      lab_only:
+        description: Build only the isolated B4.3 laboratory APK
+        required: true
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   android-probe:
+    # The reference workflow owns packaging for this integration PR. Preserve
+    # the standalone workflow on all other branches during the transition.
+    if: inputs.lab_only == true || github.head_ref != 'ci/beta2-native-reference'
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PROBE_DIR: mobile/android-probe
-      B43_LAB: ${{ github.head_ref == 'test/b4-3-android-lab' || github.ref_name == 'test/b4-3-android-lab' }}
+      B43_LAB: ${{ inputs.lab_only == true || github.head_ref == 'test/b4-3-android-lab' || github.ref_name == 'test/b4-3-android-lab' }}
     steps:
       - name: Checkout the exact source commit
         uses: actions/checkout@v4
@@ -157,7 +166,7 @@ jobs:
             printf 'source_sha=%s\n' "$SOURCE_SHA"
             printf 'app_id=%s\n' "$PROBE_APP_ID"
             if [[ "$B43_LAB" == true ]]; then
-              printf 'application_candidate_sha=eecc8502bd5c9b8a143c44926a6c57596052cb11\n'
+              printf 'application_candidate_sha=%s\n' "$SOURCE_SHA"
               printf 'lab_identity=B4.3\n'
               printf 'version_code=10005\n'
               printf 'version_name=0.1.0-b43-lab.1\n'
