@@ -146,11 +146,18 @@ async function clickText(label,scope='') {
   await evaluate('(()=>{('+expr+').click();return true})()');
 }
 async function openMatrix() {
-  const expr='Array.from(document.querySelectorAll("button")).find(b=>b.getAttribute("aria-label")==='+JSON.stringify(classLabel)+')';
+  // Navigation is exercised through actual enabled application controls, not
+  // through coordinates during animated scrolling. The Android file picker,
+  // dialogs and process lifecycle remain native and unchanged.
+  const visible='b=>!b.disabled&&b.getClientRects().length&&!b.closest("[inert]")&&getComputedStyle(b).visibility==="visible"';
+  const expr='Array.from(document.querySelectorAll("button")).filter('+visible+').find(b=>b.getAttribute("aria-label")==='+JSON.stringify(classLabel)+')';
   await until(()=>evaluate('Boolean('+expr+')'),'Synthetic class missing');
-  await touch(expr,'open synthetic class');
-  await until(()=>evaluate('Boolean(document.querySelector("nav"))'),'Class navigation absent');
-  await button('Tabellone','nav ');
+  await evaluate('(()=>{const b='+expr+';if(!b)throw Error("Class control absent");b.click();return true})()');
+  await until(()=>evaluate('document.querySelector("[data-testid=header01-context-title]")?.textContent.trim()==="Riepilogo"'),'Class dashboard absent');
+  record('synthetic-class-opened','PASS');
+  const matrix='Array.from(document.querySelectorAll("nav button")).filter('+visible+').find(b=>b.textContent.trim()==="Tabellone")';
+  await until(()=>evaluate('Boolean('+matrix+')'),'Class matrix navigation absent');
+  await evaluate('(()=>{const b='+matrix+';if(!b)throw Error("Matrix control absent");b.click();return true})()');
   await until(()=>evaluate('Boolean(document.querySelector("[data-testid=daily-matrix]"))'),'Daily matrix missing');
   await setField('[data-testid=daily-date]',date);
   record('daily-matrix-date-selected','PASS');
@@ -390,6 +397,7 @@ try {
   await selectBackup();
   await replacementDecision(false);
   await expectRestoreSettled();
+  record('replacement-cancel-dialog-settled','PASS');
   await checkCurrentGrade('9','replacement-cancel-preserves-newer-grade');
   await expectCopy('Copia da aggiornare');
   await openRestore(backupPassword);
