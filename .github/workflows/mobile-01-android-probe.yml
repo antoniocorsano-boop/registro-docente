@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           bun install --frozen-lockfile
-          bun test src/security/navAndroid01NativeBackContract.test.ts
+          bun test src/security/navAndroid01NativeBackContract.test.ts src/security/mobile01M4BetaIdentityContract.test.ts src/security/mobile01Beta2UpdateSigning.test.ts
           export VITE_REGISTRO_BUILD_SHA="$SOURCE_SHA"
           if [[ "$B43_LAB" == true ]]; then
             export VITE_REGISTRO_BUILD_KIND=lab
