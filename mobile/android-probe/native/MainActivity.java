@@ -4,6 +4,7 @@ import android.annotation.TargetApi;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebView;
+import android.view.WindowManager;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 import androidx.activity.OnBackPressedCallback;
@@ -17,6 +18,14 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(RegistroBackupFilesPlugin.class);
         registerPlugin(RegistroPdfFilesPlugin.class);
         super.onCreate(savedInstanceState);
+        // Never expose the professional archive in Android's task overview.
+        // API 33+ protects the task preview without disabling ordinary screenshots.
+        // Older Android has no public recents-only API: prefer FLAG_SECURE.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            PlatformBack.disableRecentsScreenshot(this);
+        } else {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
 
         // One owner per OS API level. Modern Android receives committed system
         // Back directly at the window; earlier versions use AndroidX.
@@ -60,6 +69,10 @@ public class MainActivity extends BridgeActivity {
     // Isolate API 33 classes from the pre-33 execution path.
     @TargetApi(33)
     private static final class PlatformBack {
+        static void disableRecentsScreenshot(MainActivity activity) {
+            activity.setRecentsScreenshotEnabled(false);
+        }
+
         static Runnable register(MainActivity activity, Runnable navigate) {
             OnBackInvokedDispatcher dispatcher = activity.getOnBackInvokedDispatcher();
             OnBackInvokedCallback callback = navigate::run;
