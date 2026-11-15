@@ -13,7 +13,7 @@ function runtime(
   choose: (options: { filename: string }) => Promise<unknown>,
   write: (options: { token: string; encryptedText: string }) => Promise<unknown>,
 ): AndroidBackupRuntime {
-  return { androidBridge: {}, Capacitor: { getPlatform: () => 'android', Plugins: {
+  return { sessionAccess: async isActive => isActive(), androidBridge: {}, Capacitor: { getPlatform: () => 'android', Plugins: {
     RegistroBackupFiles: { chooseBackupDestination: choose, writeEncryptedBackup: write },
   } } };
 }

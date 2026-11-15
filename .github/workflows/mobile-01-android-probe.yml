@@ -108,7 +108,8 @@ jobs:
           test -f "$NATIVE_DIR/MainActivity.java"
           cp native/MainActivity.java native/RegistroBackupFilesPlugin.java "$NATIVE_DIR/"
           grep -F 'registerPlugin(RegistroBackupFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
-          cp native/RegistroPdfFilesPlugin.java "$NATIVE_DIR/"
+          cp native/RegistroPdfFilesPlugin.java native/RegistroSessionPlugin.java "$NATIVE_DIR/"
+          grep -F 'registerPlugin(RegistroSessionPlugin.class)' "$NATIVE_DIR/MainActivity.java"
           grep -F 'registerPlugin(RegistroPdfFilesPlugin.class)' "$NATIVE_DIR/MainActivity.java"
 
       - name: Prepare independent B4.3 laboratory identity

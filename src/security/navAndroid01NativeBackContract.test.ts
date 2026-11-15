@@ -70,3 +70,26 @@ describe('SEC-SESSION-01 — native task preview privacy', () => {
     expect(java).not.toContain('clearFlags(WindowManager.LayoutParams.FLAG_SECURE)');
   });
 });
+
+describe('SEC-SESSION-01 — protected visual state', () => {
+  test('native cover survives until a current WebView visual-state callback', async () => {
+    const java = await read('mobile/android-probe/native/MainActivity.java');
+    const ack = java.slice(java.indexOf('void acknowledgeProtectedSurface'), java.indexOf('private void coverSessionSurface'));
+    const cover = java.slice(java.indexOf('private void coverSessionSurface'), java.indexOf('private void signalSessionChange'));
+    expect(cover).toContain('setVisibility(View.INVISIBLE)');
+    expect(cover).toContain('shield.setElevation(10000f)');
+    expect(cover).toContain('shield.bringToFront()');
+    expect(ack).toContain('expectedShield.bringToFront()');
+    expect(ack.indexOf('expectedShield.bringToFront()')).toBeLessThan(ack.indexOf('web.setVisibility(View.VISIBLE)'));
+    expect(ack.indexOf('web.setVisibility(View.VISIBLE)')).toBeLessThan(ack.indexOf('postVisualStateCallback'));
+    expect(ack).toContain('postVisualStateCallback');
+    const callback = ack.slice(ack.indexOf('public void onComplete(long requestId)'));
+    expect(callback).toContain('sessionEpoch != epoch || sessionShield != expectedShield');
+    expect(callback.indexOf('sessionEpoch != epoch')).toBeLessThan(callback.indexOf('web.setVisibility(View.VISIBLE)'));
+    expect(callback.indexOf('web.setVisibility(View.VISIBLE)')).toBeLessThan(callback.indexOf('parent.removeView(expectedShield)'));
+    expect(ack.slice(0, ack.indexOf('postVisualStateCallback'))).not.toContain('removeView');
+    const plugin = await read('mobile/android-probe/native/RegistroSessionPlugin.java');
+    expect(plugin).toContain('acknowledgeProtectedSurface(epoch,');
+    expect(plugin).toContain('() -> call.resolve(new JSObject())');
+  });
+});

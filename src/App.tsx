@@ -151,7 +151,7 @@ import {
   type CouncilSnapshotContextV1,
   type CouncilSnapshotPreviewV1
 } from './council/councilEvidenceSnapshots';
-import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
+import { createDurableMutationCoordinator, type SuspendedMutationLease } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
 import { persistLibraryMutation } from './persistence/libraryMutation';
@@ -254,9 +254,10 @@ export interface AppProps {
   onCopilotSurfaceOpenChange?: (isOpen: boolean) => void;
   headerSecurity?: Header01SecurityBindings;
   registerSessionLockRequest?: (request: SessionLockRequest | null) => void;
+  registerSessionSuspension?: (request: (() => SuspendedMutationLease) | null) => void;
 }
 
-export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity, registerSessionLockRequest }: AppProps) {
+export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity, registerSessionLockRequest, registerSessionSuspension }: AppProps) {
   // Explicitly initialized archives are authoritative, including empty collections.
   const explicitArchive = initialSnapshot.settings?.archiveMode === 'professional'
     || initialSnapshot.settings?.archiveMode === 'demo';
@@ -1197,6 +1198,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     registerSessionLockRequest(request);
     return () => registerSessionLockRequest(null);
   }, [registerSessionLockRequest, requestPlanningDeparture, mutationCoordinator]);
+
+  useLayoutEffect(() => {
+    if (!registerSessionSuspension) return;
+    registerSessionSuspension(() => mutationCoordinator.pauseAndDrain());
+    return () => registerSessionSuspension(null);
+  }, [registerSessionSuspension, mutationCoordinator]);
 
   const toast = useCallback((msg: string) => {
     if (saveIndicatorResetTimerRef.current !== null) {

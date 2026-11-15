@@ -44,6 +44,10 @@ public class RegistroBackupFilesPlugin extends Plugin {
     // No storage-wide permission, path supplied by JS, persisted URI grant or remote endpoint.
     @PluginMethod
     public synchronized void chooseBackupDestination(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDocumentSessionAuthorized()) {
+            call.reject("Autentica nuovamente il Registro.", "SESSION_LOCKED");
+            return;
+        }
         String filename = call.getString("filename");
         if (filename == null || !filename.matches("Backup_Cifrato_GDPR_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.enc\\.json")) {
             call.reject("Nome della copia di sicurezza non valido.", "INVALID_FILENAME");
@@ -105,6 +109,10 @@ public class RegistroBackupFilesPlugin extends Plugin {
 
     @PluginMethod
     public void writeEncryptedBackup(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDocumentSessionAuthorized()) {
+            call.reject("Autentica nuovamente il Registro.", "SESSION_LOCKED");
+            return;
+        }
         final Uri uri;
         synchronized (this) {
             String token = call.getString("token");
@@ -164,6 +172,10 @@ public class RegistroBackupFilesPlugin extends Plugin {
 
     @PluginMethod
     public synchronized void chooseBackupSource(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDocumentSessionAuthorized()) {
+            call.reject("Autentica nuovamente il Registro.", "SESSION_LOCKED");
+            return;
+        }
         if (pickerOpen || writing) {
             call.reject("Un'operazione sui documenti è già in corso.", "BUSY");
             return;
@@ -218,6 +230,10 @@ public class RegistroBackupFilesPlugin extends Plugin {
 
     @PluginMethod
     public void readEncryptedBackup(PluginCall call) {
+        if (!(getActivity() instanceof MainActivity) || !((MainActivity) getActivity()).isDocumentSessionAuthorized()) {
+            call.reject("Autentica nuovamente il Registro.", "SESSION_LOCKED");
+            return;
+        }
         final Uri uri;
         synchronized (this) {
             String token = call.getString("token");

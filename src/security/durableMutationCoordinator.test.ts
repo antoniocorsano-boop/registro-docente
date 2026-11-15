@@ -154,3 +154,42 @@ describe('SEC-SESSION-01 mutation admission boundary', () => {
     await expect(coordinator.enqueueTask(() => 'stale')).rejects.toThrow('Sessione in chiusura');
   });
 });
+
+describe('SEC-SESSION-01 temporary admission suspension', () => {
+  test('preserves admitted work, rejects new tasks, permits only settled one-use resumption', async () => {
+    const c = createDurableMutationCoordinator();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const task = c.enqueueTask(async () => { await gate; return 'saved'; });
+    const lease = c.pauseAndDrain();
+    expect(c.pauseAndDrain()).toBe(lease);
+    expect(lease.resume()).toBe(false);
+    await expect(c.enqueueTask(() => 'forbidden')).rejects.toThrow();
+    release();
+    await expect(task).resolves.toBe('saved');
+    await lease.drained;
+    expect(lease.resume()).toBe(true);
+    expect(lease.resume()).toBe(false);
+    await expect(c.enqueueTask(() => 'new')).resolves.toBe('new');
+    const second = c.pauseAndDrain();
+    await second.drained;
+    expect(lease.resume()).toBe(false);
+    expect(second.resume()).toBe(true);
+  });
+  test('permanent closure invalidates temporary suspension', async () => {
+    const c = createDurableMutationCoordinator();
+    const lease = c.pauseAndDrain();
+    await c.sealAndDrain();
+    await lease.drained;
+    expect(lease.resume()).toBe(false);
+    await expect(c.enqueueTask(() => 'forbidden')).rejects.toThrow();
+  });
+  test('a failed admitted operation settles but never becomes successful', async () => {
+    const c = createDurableMutationCoordinator();
+    const pending = c.enqueueTask(() => { throw Error('synthetic failure'); });
+    const lease = c.pauseAndDrain();
+    await expect(pending).rejects.toThrow('synthetic failure');
+    await lease.drained;
+    expect(lease.resume()).toBe(true);
+  });
+});
