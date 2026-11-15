@@ -99,3 +99,41 @@ test('SEC-SESSION-01: a second pause during unlock cannot authorize stale epoch'
   await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='authorize').map(x=>x[1]))).toEqual([0,2]);
 });
+
+test('SEC-SESSION-01: delayed successful authorization response cannot reopen a newer generation',async({page})=>{
+  await open(page);
+  await menu(page,'Consigli di classe');
+  await page.getByRole('combobox',{name:'Seleziona classe per il Consiglio'}).selectOption({index:1});
+  const grade=page.locator('input[aria-label^="Voto di ingresso per"]').first();
+  await grade.fill('8,5');
+  await suspend(page);
+  await page.evaluate(()=>{
+    const original=window.Capacitor.Plugins.RegistroSession.authorize;
+    window.Capacitor.Plugins.RegistroSession.authorize=async input=>{
+      await original(input); // Native accepted epoch 1, but JS response is held.
+      if(input.epoch===1)await new Promise(resolve=>{window.__releaseAuthorization=resolve;});
+    };
+    window.__exposedWhileStale=false;
+    const observe=()=>{
+      const top=document.querySelector('[data-testid="header01-topbar"]');
+      if(top&&!top.closest('[inert]')&&window.__watchStale)window.__exposedWhileStale=true;
+    };
+    window.__watchStale=true;
+    new MutationObserver(observe).observe(document.getElementById('root'),{subtree:true,attributes:true,childList:true});
+  });
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect.poll(()=>page.evaluate(()=>typeof window.__releaseAuthorization==='function')).toBe(true);
+  await page.evaluate(()=>{window.__transitionSession(false);window.__transitionSession(true);});
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.some(x=>x[0]==='shield'&&x[1]===2&&x[2]))).toBe(true);
+  await page.evaluate(()=>window.__releaseAuthorization());
+  await expect(page.getByText('Sessione Android cambiata. Autenticati nuovamente.')).toBeVisible();
+  await expect(grade).toBeHidden();
+  expect(await page.evaluate(()=>window.__exposedWhileStale)).toBe(false);
+  await page.evaluate(()=>{window.__watchStale=false;});
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(grade).toBeVisible();
+  await expect(grade).toHaveValue('8,5');
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='authorize').map(x=>x[1]))).toEqual([0,1,2]);
+});
