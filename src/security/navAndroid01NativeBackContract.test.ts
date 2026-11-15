@@ -58,3 +58,15 @@ describe('NAV-ANDROID-01 — Android system Back delegates to the existing histo
     expect(yml).not.toContain('android_system_back_device_qualified=true');
   });
 });
+
+describe('SEC-SESSION-01 — native task preview privacy', () => {
+  test('recents protection is installed at creation, not only after a pause', async () => {
+    const java = await read('mobile/android-probe/native/MainActivity.java');
+    const create = java.slice(java.indexOf('protected void onCreate'), java.indexOf('public void onResume'));
+    expect(create).toContain('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)');
+    expect(create).toContain('PlatformBack.disableRecentsScreenshot(this)');
+    expect(create).toContain('getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE)');
+    expect(java).toContain('activity.setRecentsScreenshotEnabled(false)');
+    expect(java).not.toContain('clearFlags(WindowManager.LayoutParams.FLAG_SECURE)');
+  });
+});
