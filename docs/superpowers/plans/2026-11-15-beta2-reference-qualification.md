@@ -25,3 +25,6 @@ A/B possono essere eseguiti in parallelo; C–F devono riferirsi allo stesso can
 4. Produrre un unico APK candidato per il collaudo umano, senza installazioni intermedie o accesso a dati reali.
 
 Nessuna modifica a main, firma stabile, distribuzione o archivio. Nessuna riduzione delle garanzie esistenti.
+
+## Implementazione C–E (PR di integrazione)
+A/B consolidati nella PR #256, commit di merge d1bd9587c93995e496b091ce53404fa1a5f491ce. Il workflow di riferimento chiama il packaging MOBILE-01 come workflow riusabile in modalità lab_only, dopo A/B. I job nativi scaricano il medesimo artefatto dalla stessa esecuzione, verificano SHA sorgente, identità, hash e manifest. Back usa gesti reali su API 32/36, con una nuova prova Privacy→Oggi; archivio su API36 usa il percorso esplicito già qualificato e selettori nativi. Ricevuta tecnica distinta da approvazione finale. I nuovi gate sono da qualificare. Restano non coperte alcune prove native (bozze, cronologia dopo ripristino, offline, blocco, PDF, migrazione) e le ulteriori suite del registro; nessuna dismissione o promozione.
