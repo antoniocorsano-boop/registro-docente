@@ -235,3 +235,107 @@ test('SEC-SESSION-01: explicit lock revokes native authority until fresh authent
   await expect(page.getByRole('heading',{name:'Le mie classi'})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='interactive').at(-1))).toEqual(['interactive',0,true]);
 });
+
+test('SEC-SESSION-01: recover a queued first grade after key revocation without reconstructing its proof',async({page})=>{
+  await open(page);
+  const dialogs=[];
+  page.on('dialog',async dialog=>{dialogs.push(dialog.type());await dialog.dismiss();});
+  await menu(page,'Impostazioni');
+  await expect(page.getByRole('button',{name:'Matrix Green',exact:true})).toBeVisible();
+  // First real settings write commits to IndexedDB; hold only its completion delivery.
+  // The shared App coordinator stays busy, so the subsequent grade is admitted but cannot start.
+  await page.evaluate(()=>{
+    const original=Object.getOwnPropertyDescriptor(IDBTransaction.prototype,'oncomplete');
+    if(!original?.get||!original?.set)throw Error('IDB completion descriptor unavailable');
+    window.__queuedRecoveryWrites=0;
+    window.__settingsCompletionHeld=false;
+    Object.defineProperty(IDBTransaction.prototype,'oncomplete',{
+      configurable:true,enumerable:original.enumerable,get:original.get,
+      set(handler){
+        if(this.mode==='readwrite'&&this.objectStoreNames.contains('records')){
+          window.__queuedRecoveryWrites++;
+          if(window.__queuedRecoveryWrites===1){
+            original.set.call(this,function(event){
+              window.__settingsCompletionHeld=true;
+              window.__releaseSettingsCompletion=()=>{
+                if(!window.__settingsCompletionHeld)throw Error('completion already released');
+                window.__settingsCompletionHeld=false;
+                handler.call(this,event);
+              };
+            });
+            return;
+          }
+        }
+        original.set.call(this,handler);
+      }
+    });
+  });
+  await page.getByRole('button',{name:'Matrix Green',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>window.__settingsCompletionHeld)).toBe(true);
+  await menu(page,'Oggi');
+  const homeConfirm=page.getByTestId('header01-home-confirm');
+  await expect(homeConfirm).toBeVisible();
+  await homeConfirm.getByRole('button',{name:'Torna a Oggi'}).click();
+  await page.getByRole('button',{name:/^Apri classe /}).first().click();
+  await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();
+  const grade=page.getByRole('textbox',{name:'Voto alunno 1',exact:true});
+  const proofTitle=page.getByRole('textbox',{name:'Argomento prova'});
+  const proofType=page.getByRole('combobox',{name:'Tipologia prova'});
+  const proofPeriod=page.getByRole('combobox',{name:'Periodo prova'});
+  const summary=page.getByTestId('daily-registration-summary');
+  await grade.fill('8,5');
+  await page.getByRole('button',{name:'Conferma voto alunno 1',exact:true}).click();
+  await proofType.selectOption('disegno');
+  await proofTitle.fill('Prova sintetica da recuperare');
+  await proofPeriod.selectOption('Q2');
+  await page.getByRole('button',{name:'Conferma e registra',exact:true}).click();
+  await expect(summary).toContainText('Salvataggio');
+  await expect(summary).toContainText('0 voti registrati');
+  expect(await page.evaluate(()=>window.__queuedRecoveryWrites)).toBe(1);
+  await page.evaluate(()=>{window.__transitionSession(false);window.__transitionSession(true);});
+  await expect(page.getByText('Protezione della sessione…',{exact:true})).toBeVisible();
+  await expect(grade).toBeHidden();
+  await expect(page.getByText('Sessione protetta. Attesa della conclusione dell’operazione locale.',{exact:true})).toBeVisible({timeout:16000});
+  await expect(page.locator('#vault-password')).toHaveCount(0);
+  await page.evaluate(()=>window.__releaseSettingsCompletion());
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await expect(grade).toBeHidden();
+  expect(await page.evaluate(()=>window.__queuedRecoveryWrites)).toBe(1);
+  // Wrong authentication cannot reveal the failed grade or proof.
+  await page.locator('#vault-password').fill('wrong-synthetic-password');
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(page.getByText(/Password errata/)).toBeVisible();
+  await expect(grade).toBeHidden();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(grade).toBeVisible();
+  await expect(grade).toHaveValue('8,5');
+  await expect(proofType).toHaveValue('disegno');
+  await expect(proofTitle).toHaveValue('Prova sintetica da recuperare');
+  await expect(proofPeriod).toHaveValue('Q2');
+  await expect(summary).toContainText('0 voti registrati');
+  await expect(summary).toContainText('1 da registrare');
+  await expect(page.getByText('Voto non salvato. Riprova con il comando di conferma.',{exact:true})).toBeVisible();
+  await expect(page.getByTestId('daily-grade-registered-icon')).toHaveCount(0);
+  expect(dialogs).toEqual([]);
+  // Explicitly retry the original proof; no retyping and no automatic replay.
+  await page.getByRole('button',{name:'Conferma e registra',exact:true}).click();
+  await expect(summary).toContainText('1 voto registrato');
+  await expect(summary).not.toContainText('da registrare');
+  await expect(page.getByTestId('daily-grade-registered-icon')).toHaveCount(1);
+  expect(await page.evaluate(()=>window.__queuedRecoveryWrites)).toBe(2);
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(page.locator('body')).toHaveClass(/theme-matrix/);
+  await page.getByRole('button',{name:/^Apri classe /}).first().click();
+  await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();
+  await expect(summary).toContainText('1 voto registrato');
+  await expect(page.getByTestId('daily-grade-registered-icon')).toHaveCount(1);
+  await expect(page.getByRole('combobox',{name:'Prova della giornata'}).locator('option:checked')).toHaveText('Disegno / Grafica · Prova sintetica da recuperare');
+  await expect(page.getByTestId('daily-matrix').getByText('Secondo periodo',{exact:true})).toBeVisible();
+  await expect(grade).toHaveValue('8.5');
+  await expect(page.getByTestId('daily-proof-panel')).toHaveCount(0);
+  expect(dialogs).toEqual([]);
+});
