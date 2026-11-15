@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - feat/nav-context-01-restore-student-origin
+      - fix/b43-privacy-history
 
 permissions:
   contents: read
