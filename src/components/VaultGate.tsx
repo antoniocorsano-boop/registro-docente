@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BuildIdentity } from './BuildIdentity';
 import type { ArchiveProfile, NewArchiveSetup } from '../security/initialArchiveSetup';
 import type { VaultGateState } from '../security/secureAppStorage';
 
@@ -69,20 +70,20 @@ export const VaultGate: React.FC<VaultGateProps> = ({
     }
   } else if (state === 'MIGRATION_REQUIRED') {
     title = 'Proteggi i dati esistenti';
-    description = 'I dati locali esistenti devono essere trasferiti nel Secure Local Vault prima di aprire il Registro.';
+    description = 'I dati locali esistenti devono essere trasferiti nell’archivio protetto prima di aprire il Registro.';
     actionLabel = 'Proteggi i dati esistenti';
     action = onMigrate;
   } else if (state === 'LOCKED') {
     title = 'Sblocca Registro';
-    description = 'Il Secure Local Vault è bloccato. Inserisci la password locale per accedere ai dati.';
+    description = 'L’archivio locale è protetto. Inserisci la password per accedere al Registro.';
     actionLabel = 'Sblocca Registro';
     action = onUnlock;
   } else if (state === 'MIGRATING') {
     title = 'Protezione dati in corso';
-    description = 'Il Registro sta verificando e trasferendo i dati nel vault cifrato. I dati restano nascosti fino al completamento.';
+    description = 'Il Registro sta verificando e trasferendo i dati nell’archivio cifrato. I dati restano nascosti fino al completamento.';
   } else if (state === 'ERROR') {
     title = 'Sicurezza non disponibile';
-    description = errorMessage || 'Il Registro non può aprire i dati in modo sicuro. Nessun fallback in chiaro è consentito.';
+    description = errorMessage || 'Il Registro non può aprire i dati in modo sicuro. I dati non saranno aperti senza protezione.';
   }
 
   return (
@@ -164,6 +165,7 @@ export const VaultGate: React.FC<VaultGateProps> = ({
             Riprova controllo sicurezza
           </button>
         )}
+        <div className="mt-5"><BuildIdentity /></div>
       </section>
     </div>
   );

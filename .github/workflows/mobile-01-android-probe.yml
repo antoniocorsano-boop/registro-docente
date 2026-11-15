@@ -59,7 +59,14 @@ jobs:
           set -euo pipefail
           bun install --frozen-lockfile
           bun test src/security/navAndroid01NativeBackContract.test.ts
+          export VITE_REGISTRO_BUILD_SHA="$SOURCE_SHA"
+          if [[ "$B43_LAB" == true ]]; then
+            export VITE_REGISTRO_BUILD_KIND=lab
+          else
+            export VITE_REGISTRO_BUILD_KIND=android
+          fi
           bun run build
+          grep -lF -- "$SOURCE_SHA" dist/assets/*.js
           test -f dist/index.html
           test -s dist/vendor/html2pdf.bundle.min.js
           test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
@@ -161,10 +168,12 @@ jobs:
           unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
           unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
           unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
+          unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- "$SOURCE_SHA" > /dev/null
           sha256sum "$APK" | sed "s|$APK|app-debug.apk|" > "$PROBE_DIR/app-debug.sha256"
           {
             printf 'MOBILE-01/S0 ANDROID DEBUG PROBE — NOT FOR REAL DATA\n'
             printf 'source_sha=%s\n' "$SOURCE_SHA"
+            printf 'visible_build_source_sha=%s\n' "$SOURCE_SHA"
             printf 'app_id=%s\n' "$PROBE_APP_ID"
             if [[ "$B43_LAB" == true ]]; then
               printf 'application_candidate_sha=%s\n' "$SOURCE_SHA"
@@ -260,6 +269,7 @@ jobs:
           for font in dist/assets/DejaVuSans*.ttf; do
             unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
           done
+          unzip -p "$apk" 'assets/public/assets/*.js' | grep -F -- "$SOURCE_SHA" > /dev/null
           sha256sum "$apk" | sed "s|$apk|app-release-unsigned.apk|" > "$PROBE_DIR/beta-unsigned.sha256"
           {
             printf 'MOBILE-01/M4 UNSIGNED BETA CANDIDATE — NOT INSTALLABLE OR RELEASED\n'

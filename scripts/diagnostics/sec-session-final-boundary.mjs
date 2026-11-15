@@ -164,7 +164,42 @@ async function dismissSuccess(message){
 }
 try {
   await connect();
+  const expectedSha=process.env.LAB_SOURCE_SHA;
+  // Check the rendered text, not merely DOM presence: a transitioning drawer
+  // still has client rects even when it is entirely outside the viewport.
+  const identity=(scope)=>evaluate(`(()=>{
+    const drawer=document.getElementById("registro-navigation-drawer");
+    const e=Array.from(document.querySelectorAll("[data-testid=registro-build-identity]")).find(el=>
+      (${JSON.stringify(scope)}==="drawer"?drawer?.contains(el):!drawer?.contains(el))&&
+      !el.closest("[inert]")&&getComputedStyle(el).visibility==="visible");
+    if(!e)return null;
+    const r=e.getBoundingClientRect(),v=window.visualViewport;
+    const left=v?.offsetLeft??0,top=v?.offsetTop??0;
+    const right=left+(v?.width??innerWidth),bottom=top+(v?.height??innerHeight);
+    const inside=q=>q.width>0&&q.height>0&&q.left>=left-0.5&&q.top>=top-0.5&&q.right<=right+0.5&&q.bottom<=bottom+0.5;
+    if(!inside(r))return null;
+    const range=document.createRange();range.selectNodeContents(e);
+    const textRects=Array.from(range.getClientRects());
+    if(!textRects.length||textRects.some(q=>!inside(q)))return null;
+    if(${JSON.stringify(scope)}==="drawer"){
+      const d=drawer.getBoundingClientRect();
+      if(drawer.getAttribute("aria-hidden")!=="false"||Math.abs(d.left)>0.5||
+         drawer.getAnimations().some(a=>a.playState==="running"||a.pending)||
+         r.left<d.left||r.right>d.right||r.top<d.top||r.bottom>d.bottom)return null;
+    }
+    const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+    if(!hit||!e.contains(hit))return null;
+    return {sha:e.dataset.sourceSha,text:e.textContent.trim(),bounds:{left:r.left,top:r.top,right:r.right,bottom:r.bottom},viewport:{left,top,right,bottom}};
+  })()`);
+  const validIdentity=async scope=>{const x=await identity(scope);return x?.sha===expectedSha&&x.text==="Collaudo B4.3 · "+expectedSha.slice(0,12);};
+  async function recordIdentity(scope,stage){
+    await until(()=>validIdentity(scope),'Fully visible exact build identity missing: '+stage);
+    const evidence=await identity(scope);
+    if(evidence?.sha!==expectedSha||evidence.text!=="Collaudo B4.3 · "+expectedSha.slice(0,12))throw Error('Identity changed before evidence: '+stage);
+    record(stage,'PASS',{identity:evidence});
+  }
   await until(()=>evaluate('Boolean(document.querySelector(\'input[name="archive-mode"][value="demo"]\'))'),'Archive mode choice not available',45000);
+  await recordIdentity('gate','build-identity-gate');
   await tap('input[name="archive-mode"][value="demo"]','demo archive');
   await until(()=>evaluate('Boolean(document.querySelector("#vault-password"))'),'Demo password field not available after selecting mode');
   record('demo-mode-selected','PASS');
@@ -193,6 +228,10 @@ try {
     await until(appVisible,'Authenticated application did not resume',45000);
     await until(()=>{try{return !!webViewBounds().length}catch{return false}},'Native WebView did not become accessible',30000);
   }
+  await click('[data-testid="header01-brand-navigation"]');
+  await recordIdentity('drawer','build-identity-drawer');
+  await click('[data-testid="header01-brand-navigation"]');
+  await until(()=>evaluate('(()=>{const d=document.getElementById("registro-navigation-drawer");return d?.inert&&d.getBoundingClientRect().right<=0.5&&!d.getAnimations().some(a=>a.playState==="running"||a.pending)})()'),'Drawer did not fully close');
   const openClass='Array.from(document.querySelectorAll("button")).find(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))';
   await touch(openClass,'open synthetic class');
   await until(()=>evaluate('history.state?.tab==="dashboard"'),'Class overview unavailable');
@@ -206,6 +245,7 @@ try {
   await until(()=>!foreground(),'Home did not background app');
   adb('shell','am','start','-W','-n',activity);
   await requireNativeGate('locked native Back');
+  await recordIdentity('gate','build-identity-locked-gate');
   await evaluate('window.__lockedBackPopstates=0;window.addEventListener("popstate",()=>window.__lockedBackPopstates++);true');
   const locked=await route();
   if(JSON.stringify(initial)!==JSON.stringify(locked))throw Error('Unexpected route change before Back');
