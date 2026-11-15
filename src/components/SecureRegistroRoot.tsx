@@ -398,17 +398,22 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
+    const { vault } = getRuntime();
     setGateState('MIGRATING');
     try {
-      const { vault } = getRuntime();
       await migrateLegacyToVault(window.localStorage, vault, password);
       await loadReadySnapshot(attempt);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Migrazione sicura non riuscita.');
-      setGateState('MIGRATION_REQUIRED');
+      // Activation may already have committed before foreground authorization
+      // failed. Always revoke the in-memory key and inspect durable state;
+      // never ask to migrate an ACTIVE archive again.
+      vault.lock();
+      authenticatedEpochRef.current = null;
+      setSnapshot(null);
+      await inspectBootstrap();
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap]);
 
   const handleRetry = useCallback(() => {
     void (async () => {
