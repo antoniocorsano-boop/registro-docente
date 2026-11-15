@@ -333,7 +333,9 @@ test('SEC-SESSION-01: recover a queued first grade after key revocation without 
   await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();
   await expect(summary).toContainText('1 voto registrato');
   await expect(page.getByTestId('daily-grade-registered-icon')).toHaveCount(1);
-  await expect(page.getByRole('combobox',{name:'Prova della giornata'}).locator('option:checked')).toContainText('Prova sintetica da recuperare');
-  await expect(grade).not.toHaveValue('');
+  await expect(page.getByRole('combobox',{name:'Prova della giornata'}).locator('option:checked')).toHaveText('Disegno / Grafica · Prova sintetica da recuperare');
+  await expect(page.getByTestId('daily-matrix').getByText('Secondo periodo',{exact:true})).toBeVisible();
+  await expect(grade).toHaveValue('8.5');
+  await expect(page.getByTestId('daily-proof-panel')).toHaveCount(0);
   expect(dialogs).toEqual([]);
 });
