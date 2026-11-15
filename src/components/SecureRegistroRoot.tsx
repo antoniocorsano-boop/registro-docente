@@ -71,6 +71,7 @@ export const SecureRegistroRoot: React.FC = () => {
   const [suspensionDelayed, setSuspensionDelayed] = useState(false);
   const nativeStateRef = useRef<AndroidSessionState | null>(null);
   const authenticatedEpochRef = useRef<number | null>(null);
+  const lifecycleRevisionRef = useRef(0);
   const [nativeState, setNativeState] = useState<AndroidSessionState | null>(null);
   const registerSessionSuspension = useCallback((request: (() => SuspendedMutationLease) | null) => {
     suspendRequestRef.current = request;
@@ -206,6 +207,9 @@ export const SecureRegistroRoot: React.FC = () => {
           (current.epoch === previous.epoch && previous.foreground && !current.foreground))) {
         return previous;
       }
+      if (!previous || current.epoch !== previous.epoch || current.foreground !== previous.foreground) {
+        lifecycleRevisionRef.current += 1;
+      }
       nativeStateRef.current = current;
       setNativeState(current);
       if (gateStateRef.current === 'READY' &&
@@ -215,6 +219,7 @@ export const SecureRegistroRoot: React.FC = () => {
       return current;
     } catch (error) {
       // A missing or invalid native authority must never be treated as a web fallback.
+      lifecycleRevisionRef.current += 1;
       beginSuspension();
       throw error;
     }
@@ -223,12 +228,18 @@ export const SecureRegistroRoot: React.FC = () => {
   useEffect(() => {
     if (!isAndroidSessionRuntime()) return;
     const sync = () => { void syncNativeSession().catch(() => {}); };
-    document.addEventListener(ANDROID_SESSION_EVENT, sync);
+    // Invalidate pending authorization synchronously on the lifecycle signal,
+    // even before the asynchronous native state query returns.
+    const lifecycleChanged = () => {
+      lifecycleRevisionRef.current += 1;
+      sync();
+    };
+    document.addEventListener(ANDROID_SESSION_EVENT, lifecycleChanged);
     // Visibility is only a secondary notification. The generation is native.
     document.addEventListener('visibilitychange', sync);
     sync();
     return () => {
-      document.removeEventListener(ANDROID_SESSION_EVENT, sync);
+      document.removeEventListener(ANDROID_SESSION_EVENT, lifecycleChanged);
       document.removeEventListener('visibilitychange', sync);
     };
   }, [syncNativeSession]);
@@ -243,42 +254,62 @@ export const SecureRegistroRoot: React.FC = () => {
     }
   }, [nativeState, gateState, closing, suspensionPhase]);
 
-  const getForegroundEpoch = useCallback(async (): Promise<number | null> => {
-    const native = await readAndroidSessionState();
-    if (!native) return null;
+  const getForegroundEpoch = useCallback(async () => {
+    const native = await syncNativeSession();
+    if (!native) return { epoch: null, revision: lifecycleRevisionRef.current };
     if (!native.foreground) throw new Error('Rientra nel Registro per autenticarti.');
-    return native.epoch;
-  }, []);
+    return { epoch: native.epoch, revision: lifecycleRevisionRef.current };
+  }, [syncNativeSession]);
 
-  const confirmForegroundEpoch = useCallback(async (epoch: number | null) => {
-    if (epoch === null) return;
+  // Only the synchronous commit callback may consume the admission lease or
+  // reveal the App. No await between the last validation and that commit.
+  const confirmForegroundEpoch = useCallback(async (
+    attempt: { epoch: number | null; revision: number }, commit: () => void
+  ) => {
+    const { epoch, revision } = attempt;
+    if (epoch === null) { commit(); return; }
+    const assertCurrent = () => {
+      const observed = nativeStateRef.current;
+      if (lifecycleRevisionRef.current !== revision || !observed?.foreground || observed.epoch !== epoch) {
+        throw new Error('Sessione Android cambiata. Autenticati nuovamente.');
+      }
+    };
+    assertCurrent();
     await authorizeAndroidSession(epoch);
+    // A successful bridge response can itself be stale. Query again and
+    // compare both the observed epoch and all intervening lifecycle signals.
+    const latest = await syncNativeSession();
+    if (!latest?.foreground || latest.epoch !== epoch) {
+      throw new Error('Sessione Android cambiata. Autenticati nuovamente.');
+    }
+    assertCurrent();
     authenticatedEpochRef.current = epoch;
-  }, []);
+    commit();
+  }, [syncNativeSession]);
 
   const resumeSuspendedSession = useCallback(async (password: string) => {
     const lease = suspendedRef.current;
     if (!lease) throw new Error('Sessione non disponibile.');
-    const epoch = await getForegroundEpoch();
-    if (epoch === null) throw new Error('Sessione Android non disponibile.');
+    const attempt = await getForegroundEpoch();
+    if (attempt.epoch === null) throw new Error('Sessione Android non disponibile.');
     const { vault } = getRuntime();
     try {
       await vault.unlock(password);
       // Recheck the native generation after the asynchronous cryptographic unlock.
-      await confirmForegroundEpoch(epoch);
-      if (suspendedRef.current !== lease || !lease.resume()) {
-        throw new Error('Sessione cambiata. Autenticati nuovamente.');
-      }
-      suspendedRef.current = null;
-      setSuspensionDelayed(false);
-      setSuspensionPhase(null);
-      await syncNativeSession();
+      await confirmForegroundEpoch(attempt, () => {
+        if (suspendedRef.current !== lease || !lease.resume()) {
+          throw new Error('Sessione cambiata. Autenticati nuovamente.');
+        }
+        suspendedRef.current = null;
+        setSuspensionDelayed(false);
+        setSuspensionPhase(null);
+      });
     } catch (error) {
       vault.lock();
       authenticatedEpochRef.current = null;
       throw error;
     }
-  }, [getRuntime, getForegroundEpoch, confirmForegroundEpoch, syncNativeSession]);
+  }, [getRuntime, getForegroundEpoch, confirmForegroundEpoch]);
 
   useEffect(() => {
     if (!isAndroidSessionRuntime()) return;
@@ -296,7 +327,7 @@ export const SecureRegistroRoot: React.FC = () => {
     });
   }, [syncNativeSession]);
 
-  const loadReadySnapshot = useCallback(async (epoch: number | null) => {
+  const loadReadySnapshot = useCallback(async (attempt: { epoch: number | null; revision: number }) => {
     const { storage } = getRuntime();
     const nextSnapshot = await storage.loadSnapshot();
 
@@ -330,21 +361,21 @@ export const SecureRegistroRoot: React.FC = () => {
       }
     }
 
-    await confirmForegroundEpoch(epoch);
-    setSnapshot(nextSnapshot);
-    setGateState('READY');
-    if (epoch !== null) await syncNativeSession();
-  }, [getRuntime, confirmForegroundEpoch, syncNativeSession]);
+    await confirmForegroundEpoch(attempt, () => {
+      setSnapshot(nextSnapshot);
+      setGateState('READY');
+    });
+  }, [getRuntime, confirmForegroundEpoch]);
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
-    const epoch = await getForegroundEpoch();
+    const attempt = await getForegroundEpoch();
     const { vault, store } = getRuntime();
     if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
       throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
     }
     await initializeNewArchive(vault, password, setup);
     try {
-      await loadReadySnapshot(epoch);
+      await loadReadySnapshot(attempt);
     } catch (error) {
       vault.lock();
       setGateState('LOCKED');
@@ -353,12 +384,12 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
 
   const handleUnlock = useCallback(async (password: string) => {
-    const epoch = await getForegroundEpoch();
+    const attempt = await getForegroundEpoch();
     const { vault } = getRuntime();
     await vault.unlock(password);
     try {
       await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
-      await loadReadySnapshot(epoch);
+      await loadReadySnapshot(attempt);
     } catch (error) {
       vault.lock();
       throw error;
@@ -366,12 +397,12 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
 
   const handleMigrate = useCallback(async (password: string) => {
-    const epoch = await getForegroundEpoch();
+    const attempt = await getForegroundEpoch();
     setGateState('MIGRATING');
     try {
       const { vault } = getRuntime();
       await migrateLegacyToVault(window.localStorage, vault, password);
-      await loadReadySnapshot(epoch);
+      await loadReadySnapshot(attempt);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Migrazione sicura non riuscita.');
       setGateState('MIGRATION_REQUIRED');
