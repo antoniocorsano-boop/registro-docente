@@ -223,7 +223,7 @@ try {
   await chooseDownload();
   await requireNativeGate('picker confirm');
   await resume();
-  await dismissSuccess('Backup cifrato');
+  await dismissSuccess('Copia di sicurezza salvata e verificata');
   const files=adb('shell','ls','-1','/sdcard/Download').split(/\\r?\\n/).filter(n=>/^Backup_Cifrato_GDPR_\\d{4}-\\d{2}-\\d{2}\\.enc\\.json$/.test(n));
   if(files.length!==1)throw Error('Expected exactly one verified synthetic encrypted copy');
   const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+files[0]],{timeout:30000});
