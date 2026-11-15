@@ -6,8 +6,8 @@ describe('SEC-1 secure backup UI boundary', () => {
 
     expect(app).not.toContain("input.accept = '.json'");
     expect(app).not.toContain('new Blob([JSON.stringify(payload');
-    expect(app).toContain("const handleExportBackup = () => {\n    setActiveTab('privacy');");
-    expect(app).toContain("const handleImportBackup = () => {\n    setActiveTab('privacy');");
+    expect(app).toContain("const handleExportBackup = () => {\n    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');");
+    expect(app).toContain("const handleImportBackup = () => {\n    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');");
   });
 
   test('PrivacyView uses a prepared secure checkpoint and avoids absolute cloud claims', async () => {
