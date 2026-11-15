@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   browser:
-    if: contains(fromJSON('["feat/sec-session-01-suspension","test/sec-session-01-final-boundary","fix/sec-session-01-protected-back"]'), github.head_ref)
+    if: contains(fromJSON('["feat/sec-session-01-suspension","test/sec-session-01-final-boundary","fix/sec-session-01-protected-back","test/beta2-update-readiness"]'), github.head_ref)
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
