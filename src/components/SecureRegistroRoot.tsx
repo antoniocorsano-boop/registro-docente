@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import App, { type SessionLockRequest } from '../App';
 import {
   CUSTOM_TESTS_KEY,
@@ -20,6 +20,12 @@ import { SecureVault } from '../security/secureVault';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
+import type { SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
+import {
+  ANDROID_SESSION_EVENT, isAndroidSessionRuntime, readAndroidSessionState,
+  authorizeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess,
+  type AndroidSessionState
+} from '../security/androidSessionLifecycle';
 
 const LEGACY_DATA_KEYS = [
   STORAGE_KEY,
@@ -41,7 +47,13 @@ function readAutoLockMinutes(): AutoLockMinutes {
 }
 
 export const SecureRegistroRoot: React.FC = () => {
-  const [gateState, setGateState] = useState<VaultGateState>('CHECKING');
+  const [gateState, setGateStateValue] = useState<VaultGateState>('CHECKING');
+  const gateStateRef = useRef<VaultGateState>('CHECKING');
+  const setGateState = useCallback((next: VaultGateState | ((current: VaultGateState) => VaultGateState)) => {
+    const value = typeof next === 'function' ? next(gateStateRef.current) : next;
+    gateStateRef.current = value;
+    setGateStateValue(value);
+  }, []);
   const [snapshot, setSnapshot] = useState<SecureAppSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(() => readAutoLockMinutes());
@@ -53,6 +65,16 @@ export const SecureRegistroRoot: React.FC = () => {
   const closingRef = useRef(false);
   const [closing, setClosing] = useState(false);
   const [closingDelayed, setClosingDelayed] = useState(false);
+  const suspendRequestRef = useRef<(() => SuspendedMutationLease) | null>(null);
+  const suspendedRef = useRef<SuspendedMutationLease | null>(null);
+  const [suspensionPhase, setSuspensionPhase] = useState<'draining' | 'locked' | null>(null);
+  const [suspensionDelayed, setSuspensionDelayed] = useState(false);
+  const nativeStateRef = useRef<AndroidSessionState | null>(null);
+  const authenticatedEpochRef = useRef<number | null>(null);
+  const [nativeState, setNativeState] = useState<AndroidSessionState | null>(null);
+  const registerSessionSuspension = useCallback((request: (() => SuspendedMutationLease) | null) => {
+    suspendRequestRef.current = request;
+  }, []);
   const registerSessionLockRequest = useCallback((request: SessionLockRequest | null) => {
     lockRequestRef.current = request;
   }, []);
@@ -110,6 +132,7 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const lockImmediately = useCallback(() => {
     vaultRef.current?.lock();
+    authenticatedEpochRef.current = null;
     setSnapshot(null);
     // A confirmed reset can finish while the manual lock is draining.
     // Its terminal setup state is authoritative, even if React batches
@@ -141,7 +164,139 @@ export const SecureRegistroRoot: React.FC = () => {
     });
   }, [lockImmediately]);
 
-  const loadReadySnapshot = useCallback(async () => {
+  // The Android shield is installed before onPause returns. JS admission closes
+  // on the native generation change; drafts remain only in this mounted tree.
+  // The archive key is dropped after admitted operations settle (or on deadline).
+  const beginSuspension = useCallback(() => {
+    if (gateStateRef.current !== 'READY' || closingRef.current || suspendedRef.current) return;
+    const request = suspendRequestRef.current;
+    if (!request) {
+      lockImmediately();
+      return;
+    }
+    const lease = request();
+    suspendedRef.current = lease;
+    authenticatedEpochRef.current = null;
+    setSuspensionDelayed(false);
+    setSuspensionPhase('draining');
+    const deadline = window.setTimeout(() => {
+      if (suspendedRef.current !== lease) return;
+      vaultRef.current?.lock();
+      setSuspensionDelayed(true);
+    }, 10_000);
+    void lease.drained.then(() => {
+      window.clearTimeout(deadline);
+      if (suspendedRef.current !== lease) return;
+      vaultRef.current?.lock();
+      if (gateStateRef.current !== 'READY') {
+        suspendedRef.current = null;
+        setSuspensionPhase(null);
+        return;
+      }
+      setSuspensionPhase('locked');
+    });
+  }, [lockImmediately]);
+
+  const syncNativeSession = useCallback(async (): Promise<AndroidSessionState | null> => {
+    try {
+      const current = await readAndroidSessionState();
+      if (!current) return null;
+      const previous = nativeStateRef.current;
+      if (previous && (current.epoch < previous.epoch ||
+          (current.epoch === previous.epoch && previous.foreground && !current.foreground))) {
+        return previous;
+      }
+      nativeStateRef.current = current;
+      setNativeState(current);
+      if (gateStateRef.current === 'READY' &&
+          (!current.foreground || authenticatedEpochRef.current !== current.epoch)) {
+        beginSuspension();
+      }
+      return current;
+    } catch (error) {
+      // A missing or invalid native authority must never be treated as a web fallback.
+      beginSuspension();
+      throw error;
+    }
+  }, [beginSuspension]);
+
+  useEffect(() => {
+    if (!isAndroidSessionRuntime()) return;
+    const sync = () => { void syncNativeSession().catch(() => {}); };
+    document.addEventListener(ANDROID_SESSION_EVENT, sync);
+    // Visibility is only a secondary notification. The generation is native.
+    document.addEventListener('visibilitychange', sync);
+    sync();
+    return () => {
+      document.removeEventListener(ANDROID_SESSION_EVENT, sync);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, [syncNativeSession]);
+
+  useLayoutEffect(() => {
+    if (!nativeState?.foreground) return;
+    const protectedSurface = gateState !== 'READY' || closing || suspensionPhase !== null;
+    if (protectedSurface || authenticatedEpochRef.current === nativeState.epoch) {
+      // This acknowledgment only removes the native cover after React has committed
+      // a protected surface or a freshly authenticated session.
+      void acknowledgeAndroidShield(nativeState.epoch).catch(() => {});
+    }
+  }, [nativeState, gateState, closing, suspensionPhase]);
+
+  const getForegroundEpoch = useCallback(async (): Promise<number | null> => {
+    const native = await readAndroidSessionState();
+    if (!native) return null;
+    if (!native.foreground) throw new Error('Rientra nel Registro per autenticarti.');
+    return native.epoch;
+  }, []);
+
+  const confirmForegroundEpoch = useCallback(async (epoch: number | null) => {
+    if (epoch === null) return;
+    await authorizeAndroidSession(epoch);
+    authenticatedEpochRef.current = epoch;
+  }, []);
+
+  const resumeSuspendedSession = useCallback(async (password: string) => {
+    const lease = suspendedRef.current;
+    if (!lease) throw new Error('Sessione non disponibile.');
+    const epoch = await getForegroundEpoch();
+    if (epoch === null) throw new Error('Sessione Android non disponibile.');
+    const { vault } = getRuntime();
+    try {
+      await vault.unlock(password);
+      // Recheck the native generation after the asynchronous cryptographic unlock.
+      await confirmForegroundEpoch(epoch);
+      if (suspendedRef.current !== lease || !lease.resume()) {
+        throw new Error('Sessione cambiata. Autenticati nuovamente.');
+      }
+      suspendedRef.current = null;
+      setSuspensionDelayed(false);
+      setSuspensionPhase(null);
+      await syncNativeSession();
+    } catch (error) {
+      vault.lock();
+      authenticatedEpochRef.current = null;
+      throw error;
+    }
+  }, [getRuntime, getForegroundEpoch, confirmForegroundEpoch, syncNativeSession]);
+
+  useEffect(() => {
+    if (!isAndroidSessionRuntime()) return;
+    return registerAndroidFileAccess(async isActive => {
+      // The document result may arrive before the native resume event. Query the
+      // authoritative generation before allowing any read, write or receipt.
+      const expires = Date.now() + 120_000;
+      while (isActive() && Date.now() < expires && gateStateRef.current === 'READY' && !closingRef.current) {
+        const current = await syncNativeSession();
+        if (current?.foreground && authenticatedEpochRef.current === current.epoch &&
+            !suspendedRef.current && vaultRef.current?.isUnlocked()) return isActive();
+        await new Promise<void>(resolve => window.setTimeout(resolve, 100));
+      }
+      return false;
+    });
+  }, [syncNativeSession]);
+
+  const loadReadySnapshot = useCallback(async (epoch: number | null) => {
     const { storage } = getRuntime();
     const nextSnapshot = await storage.loadSnapshot();
 
@@ -175,49 +330,54 @@ export const SecureRegistroRoot: React.FC = () => {
       }
     }
 
+    await confirmForegroundEpoch(epoch);
     setSnapshot(nextSnapshot);
     setGateState('READY');
-  }, [getRuntime]);
+    if (epoch !== null) await syncNativeSession();
+  }, [getRuntime, confirmForegroundEpoch, syncNativeSession]);
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
+    const epoch = await getForegroundEpoch();
     const { vault, store } = getRuntime();
     if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
       throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
     }
     await initializeNewArchive(vault, password, setup);
     try {
-      await loadReadySnapshot();
+      await loadReadySnapshot(epoch);
     } catch (error) {
       vault.lock();
       setGateState('LOCKED');
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
 
   const handleUnlock = useCallback(async (password: string) => {
+    const epoch = await getForegroundEpoch();
     const { vault } = getRuntime();
     await vault.unlock(password);
     try {
       await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
-      await loadReadySnapshot();
+      await loadReadySnapshot(epoch);
     } catch (error) {
       vault.lock();
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
 
   const handleMigrate = useCallback(async (password: string) => {
+    const epoch = await getForegroundEpoch();
     setGateState('MIGRATING');
     try {
       const { vault } = getRuntime();
       await migrateLegacyToVault(window.localStorage, vault, password);
-      await loadReadySnapshot();
+      await loadReadySnapshot(epoch);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Migrazione sicura non riuscita.');
       setGateState('MIGRATION_REQUIRED');
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
 
   const handleRetry = useCallback(() => {
     void (async () => {
@@ -242,13 +402,21 @@ export const SecureRegistroRoot: React.FC = () => {
     for (const legacyKey of LEGACY_DATA_KEYS) {
       window.localStorage.removeItem(legacyKey);
     }
+    authenticatedEpochRef.current = null;
+    suspendedRef.current = null;
+    setSuspensionPhase(null);
+    setSuspensionDelayed(false);
     setSnapshot(null);
     setGateState('SETUP_REQUIRED');
   }, [getRuntime]);
 
   useEffect(() => {
-    if (gateState !== 'READY' || closing || autoLockMinutes === 0) return;
-    const timeoutLock = () => { if (!closingRef.current) lockImmediately(); };
+    if (gateState !== 'READY' || closing || suspensionPhase !== null || autoLockMinutes === 0) return;
+    const timeoutLock = () => {
+      if (closingRef.current) return;
+      if (isAndroidSessionRuntime()) beginSuspension();
+      else lockImmediately();
+    };
 
     let timeoutId = window.setTimeout(timeoutLock, autoLockMinutes * 60_000);
     const resetTimer = () => {
@@ -267,7 +435,7 @@ export const SecureRegistroRoot: React.FC = () => {
         window.removeEventListener(eventName, resetTimer);
       }
     };
-  }, [autoLockMinutes, gateState, closing, lockImmediately]);
+  }, [autoLockMinutes, gateState, closing, lockImmediately, suspensionPhase, beginSuspension]);
 
   const handleAutoLockChange = (minutes: AutoLockMinutes) => {
     setAutoLockMinutes(minutes);
@@ -285,13 +453,14 @@ export const SecureRegistroRoot: React.FC = () => {
     >
       {snapshot && storageRef.current ? (
         <>
-          <div inert={closing} aria-hidden={closing || undefined} style={closing ? { visibility: 'hidden' } : undefined}>
+          <div inert={closing || suspensionPhase !== null} aria-hidden={closing || suspensionPhase !== null || undefined} style={closing || suspensionPhase !== null ? { visibility: 'hidden' } : undefined}>
           <App
             initialSnapshot={snapshot}
             secureStorage={storageRef.current}
             onFactoryReset={handleFactoryReset}
             onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
             registerSessionLockRequest={registerSessionLockRequest}
+            registerSessionSuspension={registerSessionSuspension}
             headerSecurity={{
               autoLockMinutes,
               onAutoLockChange: handleAutoLockChange,
@@ -306,6 +475,20 @@ export const SecureRegistroRoot: React.FC = () => {
             mobileControlsEnabled={false}
           />
           </div>
+          {suspensionPhase !== null && (
+            <div className="fixed inset-0 z-[110] overflow-y-auto bg-[#030712]">
+              {suspensionPhase === 'draining' ? (
+                <div role="status" className="min-h-screen flex items-center justify-center p-6 text-center text-slate-100">
+                  {suspensionDelayed ? 'Sessione protetta. Attesa della conclusione dell’operazione locale.' : 'Protezione della sessione…'}
+                </div>
+              ) : (
+                <VaultGate state="LOCKED" onUnlock={resumeSuspendedSession}
+                  onSetup={handleSetup} onMigrate={handleMigrate} onRetry={handleRetry}>
+                  {null}
+                </VaultGate>
+              )}
+            </div>
+          )}
           {closing && (
             <div role="status" className="fixed inset-0 z-[100] flex items-center justify-center bg-[#030712] p-6 text-center text-slate-100">
               {closingDelayed ? 'Chiusura in attesa di un’operazione locale. I dati sono nascosti; non spegnere il dispositivo durante il salvataggio.' : 'Chiusura protetta del Registro…'}
