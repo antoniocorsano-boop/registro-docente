@@ -206,6 +206,7 @@ try {
   await until(()=>!foreground(),'Home did not background app');
   adb('shell','am','start','-W','-n',activity);
   await requireNativeGate('locked native Back');
+  await evaluate('window.__lockedBackPopstates=0;window.addEventListener("popstate",()=>window.__lockedBackPopstates++);true');
   const locked=await route();
   if(JSON.stringify(initial)!==JSON.stringify(locked))throw Error('Unexpected route change before Back');
   adb('shell','input','keyevent','KEYCODE_BACK');
@@ -221,11 +222,30 @@ try {
   await requireNativeGate('after native edge');
   const afterEdge=await route();
   record('locked-edge-route',JSON.stringify(afterEdge)===JSON.stringify(locked)?'PASS':'FAIL',{before:locked,after:afterEdge});
+  const traversals=await evaluate('window.__lockedBackPopstates');
+  record('locked-no-popstate',traversals===0?'PASS':'FAIL',{traversals});
   await resume();
+  const dialog=await evaluate('Array.from(document.querySelectorAll("[role=dialog]")).some(e=>e.getClientRects().length&&e.textContent.includes("Modifiche non salvate"))');
+  record('resume-no-draft-dialog',!dialog?'PASS':'FAIL',{dialog});
   const final=await route();
   const preserved=await evaluate('document.querySelector(\'[aria-label="Voto alunno 1"]\')?.value==="8"');
   record('resume-draft-and-route',preserved&&JSON.stringify(final)===JSON.stringify(initial)?'PASS':'FAIL',{preserved,before:initial,after:final});
   const native=await evaluate('Capacitor.Plugins.RegistroSession.getState()');
+  // A confirmed manual lock starts a fresh session, unlike suspension.
+  await click('[data-testid="header01-lock"]');
+  await button('Continua senza salvare');
+  await requireNativeGate('manual lock');
+  const manualLocked=await route();
+  await evaluate('window.__lockedBackPopstates=0;true');
+  adb('shell','input','keyevent','KEYCODE_BACK');
+  await sleep(1200);
+  await requireNativeGate('manual lock after Back');
+  const manualAfter=await route();
+  const manualTraversals=await evaluate('window.__lockedBackPopstates');
+  record('manual-locked-no-popstate',manualTraversals===0&&JSON.stringify(manualLocked)===JSON.stringify(manualAfter)?'PASS':'FAIL',{manualTraversals,before:manualLocked,after:manualAfter});
+  await resume();
+  const home=await evaluate('Array.from(document.querySelectorAll("button")).some(b=>/^Apri classe /.test(b.getAttribute("aria-label")||""))');
+  record('manual-lock-restarts-home',home?'PASS':'FAIL');
   record('locked-back-observation-complete','PASS',{before,native});
 } catch(e) {
   record('native-session-failed','FAIL',{message:e.message,foreground:foreground(),view:await snapshot()});
