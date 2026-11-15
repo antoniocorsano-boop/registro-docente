@@ -151,7 +151,7 @@ import {
   type CouncilSnapshotContextV1,
   type CouncilSnapshotPreviewV1
 } from './council/councilEvidenceSnapshots';
-import { createDurableMutationCoordinator } from './persistence/durableMutationCoordinator';
+import { createDurableMutationCoordinator, type SuspendedMutationLease } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
 import { persistLibraryMutation } from './persistence/libraryMutation';
@@ -245,15 +245,19 @@ const DURABLE_SAVE_FAILURE_MESSAGE = 'Salvataggio non riuscito. La modifica non 
 
 export type CopilotSurfaceMode = 'closed' | 'home' | 'compose';
 
+export type SessionLockRequest = (begin: (drain: () => Promise<void>) => void) => void;
+
 export interface AppProps {
   initialSnapshot: SecureAppSnapshot;
   secureStorage: SecureAppStorage;
   onFactoryReset: () => Promise<void>;
   onCopilotSurfaceOpenChange?: (isOpen: boolean) => void;
   headerSecurity?: Header01SecurityBindings;
+  registerSessionLockRequest?: (request: SessionLockRequest | null) => void;
+  registerSessionSuspension?: (request: (() => SuspendedMutationLease) | null) => void;
 }
 
-export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity }: AppProps) {
+export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity, registerSessionLockRequest, registerSessionSuspension }: AppProps) {
   // Explicitly initialized archives are authoritative, including empty collections.
   const explicitArchive = initialSnapshot.settings?.archiveMode === 'professional'
     || initialSnapshot.settings?.archiveMode === 'demo';
@@ -1185,6 +1189,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const mutationCoordinator = mutationCoordinatorRef.current ?? (
     mutationCoordinatorRef.current = createDurableMutationCoordinator()
   );
+
+  useLayoutEffect(() => {
+    if (!registerSessionLockRequest) return;
+    const request: SessionLockRequest = begin => {
+      requestPlanningDeparture(() => begin(() => mutationCoordinator.sealAndDrain()));
+    };
+    registerSessionLockRequest(request);
+    return () => registerSessionLockRequest(null);
+  }, [registerSessionLockRequest, requestPlanningDeparture, mutationCoordinator]);
+
+  useLayoutEffect(() => {
+    if (!registerSessionSuspension) return;
+    registerSessionSuspension(() => mutationCoordinator.pauseAndDrain());
+    return () => registerSessionSuspension(null);
+  }, [registerSessionSuspension, mutationCoordinator]);
 
   const toast = useCallback((msg: string) => {
     if (saveIndicatorResetTimerRef.current !== null) {
@@ -3261,14 +3280,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return commitSettingsMutation(patch).then(() => undefined);
   };
 
-  // Backup actions are routed to the protected Privacy area.
+  // Backup shortcuts use the same guarded, history-owning navigation as the
+  // Privacy menu. A shortcut on Privacy itself must not add a duplicate entry.
   const handleExportBackup = () => {
-    setActiveTab('privacy');
+    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');
     toast('Usa il backup cifrato con password nella sezione Privacy');
   };
 
   const handleImportBackup = () => {
-    setActiveTab('privacy');
+    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');
     toast('Ripristina un backup cifrato nella sezione Privacy');
   };
 
@@ -3402,7 +3422,33 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setProfessionalMemory(restored.professionalMemory);
       setCopilotState(restored.copilotState);
       setMeta(restored.meta);
+      setEditingBatchId(null);
+      setSelectedStudentForReport(null);
+      evaluationTargetMemoryRef.current.clear();
       setActiveTab('home');
+      // Restore is committed: replace the current Privacy entry, do not push
+      // another route or replay the previous archive's specialist target.
+      // Preserve the current entry's coordinates for guarded Back/Forward.
+      try {
+        const entryId = historyEntryIdRef.current ?? crypto.randomUUID();
+        const position = historyPositionRef.current;
+        const epoch = historyEpochRef.current;
+        history.replaceState({
+          tab: 'home',
+          classId: null,
+          __tramaHistoryEntryId: entryId,
+          ...(position !== null && epoch !== null
+            ? { __tramaHistoryPosition: position, __tramaHistoryEpoch: epoch }
+            : {})
+        }, '', withHprTraceQuery(window.location.pathname));
+        historyEntryIdRef.current = entryId;
+        historyUrlRef.current = window.location.href;
+        browserHistoryIndexRef.current = readBrowserHistoryIndex();
+      } catch {
+        // History failure cannot turn an already durable restore into a
+        // reported restore failure or cause a second destructive operation.
+        console.warn('Cronologia non aggiornata dopo ripristino confermato.');
+      }
       toast('Backup cifrato verificato e ripristinato');
     });
   };

@@ -1,0 +1,556 @@
+# BETA2-QUAL-01: exact-head technical gates A–E. No release.
+name: BETA2-QUAL-01 Reference Qualification
+on:
+  pull_request:
+    branches: ['fix/b43-privacy-history', 'test/b4-3-android-lab', 'fix/nav-android-platform-back']
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  contracts:
+    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","feat/beta2-build-identity","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    name: Typecheck / security / invariant contracts
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact candidate without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify SHA
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate qualification registry
+        run: bun scripts/qualification/check-invariants.mjs
+      - name: Verify full reference browser coverage
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: Run NAV-CONTEXT and inherited contract tests
+        run: |
+          bun test \
+            src/security/navContext01ReturnState.test.ts \
+            src/security/navBack01StudentReportHistory.test.ts \
+            src/security/mobileDensity01TabelloneContract.test.ts \
+            src/security/mobileUxIntegrity.test.ts \
+            src/security/homeNavigationDuringSaveIntegrity.test.ts
+      - name: Typecheck
+        run: bun run lint
+      - name: Complete security and memory test suite
+        run: bun run test:security
+      - name: Build
+        run: bun run build
+
+  chromium:
+    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","feat/beta2-build-identity","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    name: Synthetic Chromium Android 390 / 320
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify SHA
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked application dependencies
+        run: bun install --frozen-lockfile
+      - name: Install isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .nav-context-browser-tools browser-evidence
+          echo '{"name":"nav-context-01-browser-tools","private":true}' > .nav-context-browser-tools/package.json
+          npm --prefix .nav-context-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.nav-context-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/mobile-density-01-tabellone.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/behavior-integrity.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-compact-isolated.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-navbar-integration.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-mobile-disclosure-back.spec.cjs .nav-context-browser-tools/
+      - name: Start synthetic Vite app fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html' > /dev/null \
+              && curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01.html' > /dev/null \
+              && curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01-navbar.html' > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Ensure PDF inspection tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null || ! command -v pdftoppm >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+          command -v pdftotext && command -v pdfinfo && command -v pdftoppm
+      - name: Run real Chromium navigation regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .nav-context-browser-tools
+          NAV_CONTEXT_BASE_URL='http://127.0.0.1:4173' \
+          NAV_BACK_BASE_URL='http://127.0.0.1:4173' \
+          DENSITY01_BASE_URL='http://127.0.0.1:4173' \
+          BASE_URL='http://127.0.0.1:4173' \
+          BEHAVIOR_EVIDENCE_DIR='../browser-evidence' \
+          HEADER01_BASE_URL='http://127.0.0.1:4173' \
+          HEADER01_DRAWER_BASE_URL='http://127.0.0.1:4173' \
+          NAV_MOBILE_DISCLOSURE_BASE_URL='http://127.0.0.1:4173' \
+          HEADER01_EVIDENCE_DIR='../browser-evidence' \
+            ./node_modules/.bin/playwright test \
+            nav-context-01-return-origin.spec.cjs \
+            nav-back-01-student-report.spec.cjs \
+            mobile-density-01-tabellone.spec.cjs \
+            behavior-integrity.spec.cjs \
+            header-01-compact-isolated.spec.cjs \
+            header-01-navbar-integration.spec.cjs \
+            header-01-copilot-drawer-occlusion.spec.cjs \
+            nav-mobile-disclosure-back.spec.cjs \
+            --workers=1 --reporter=line \
+            --output=../browser-evidence/results
+      - name: Verify exact-SHA browser evidence completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = 'browser-evidence';
+          const expected = [
+            'geometry-320x700', 'geometry-390x844', 'geometry-1280x900',
+            'save-evidence', 'keyboard-390x844', 'text-200-percent-320x700',
+            'navbar-mobile-320', 'navbar-mobile-390', 'navbar-desktop-1280',
+            'navbar-keyboard-390',
+          ];
+          for (const caseId of expected) {
+            const file = path.join(dir, 'header01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.qualificationError || evidence.screenshotError ||
+                evidence.screenshot !== 'screenshots/' + caseId + '.png') {
+              throw new Error('Invalid or failing HEADER-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty HEADER-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: ten exact-SHA browser evidence JSON files and screenshots');
+          NODE
+
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-reference-chromium-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  historical-browser:
+    needs: contracts
+    uses: ./.github/workflows/browser-qualification.yml
+
+  package:
+    needs: [contracts, chromium, historical-browser]
+    uses: ./.github/workflows/mobile-01-android-probe.yml
+    with:
+      lab_only: true
+
+  native-back:
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+      LAB_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LAB_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Download the single APK from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-b43-lab-${{ env.LAB_SOURCE_SHA }}
+          path: lab-apk
+      - name: Verify exact APK provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LAB_SOURCE_SHA"
+          mkdir -p native-evidence
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "application_candidate_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          grep -Fx 'release_signing=false' "$MANIFEST"
+          digest="$(sha256sum "$APK" | cut -d' ' -f1)"
+          test "$digest" = "$(cut -d' ' -f1 "$HASH")"
+          grep -Fx "apk_sha256=$digest" "$MANIFEST"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot native Android and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        timeout-minutes: 16
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-native-back-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-back-exact-apk.sh
+      - name: Require terminal evidence, not merely runner success
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
+          jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-privacy-to-home' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and any(.results[]; .stage == "uninterrupted-native-session" and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/back-result.json
+      - name: Preserve native synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-native-back-api${{ matrix.api }}-${{ env.LAB_SOURCE_SHA }}
+          path: native-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-locked-back:
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+      LAB_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LAB_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Download the single APK from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-b43-lab-${{ env.LAB_SOURCE_SHA }}
+          path: lab-apk
+      - name: Verify exact APK provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LAB_SOURCE_SHA"
+          mkdir -p native-evidence
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "application_candidate_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          grep -Fx 'release_signing=false' "$MANIFEST"
+          digest="$(sha256sum "$APK" | cut -d' ' -f1)"
+          test "$digest" = "$(cut -d' ' -f1 "$HASH")"
+          grep -Fx "apk_sha256=$digest" "$MANIFEST"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot native Android and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        timeout-minutes: 16
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-native-locked-back-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-sec-session-final-boundary.sh
+      - name: Require terminal evidence, not merely runner success
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
+          jq -e --arg sha "$LAB_SOURCE_SHA" --argjson api "$LAB_API" '.sourceSha == $sha and .api == $api and .releaseQualified == false and all(.results[]; .status != "FAIL") and any(.results[]; .stage == "locked-back-observation-complete" and .status == "PASS")' native-evidence/sec-session-boundary-result.json
+          for stage in build-identity-gate build-identity-drawer build-identity-locked-gate locked-key-route locked-edge-route locked-no-popstate resume-no-draft-dialog resume-draft-and-route manual-locked-no-popstate manual-lock-restarts-home; do
+            jq -e --arg stage "$stage" 'any(.results[]; .stage == $stage and .status == "PASS")' native-evidence/sec-session-boundary-result.json
+          done
+      - name: Preserve native synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-native-locked-back-api${{ matrix.api }}-${{ env.LAB_SOURCE_SHA }}
+          path: native-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-session:
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+      LAB_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LAB_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Download the single APK from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-b43-lab-${{ env.LAB_SOURCE_SHA }}
+          path: lab-apk
+      - name: Verify exact APK provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LAB_SOURCE_SHA"
+          mkdir -p native-evidence
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "application_candidate_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          grep -Fx 'release_signing=false' "$MANIFEST"
+          digest="$(sha256sum "$APK" | cut -d' ' -f1)"
+          test "$digest" = "$(cut -d' ' -f1 "$HASH")"
+          grep -Fx "apk_sha256=$digest" "$MANIFEST"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot native Android and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        timeout-minutes: 16
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-native-session-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-sec-session-native-qualification.sh
+      - name: Require terminal evidence, not merely runner success
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
+          jq -e --arg sha "$LAB_SOURCE_SHA" --argjson api "$LAB_API" --arg stage 'native-session-complete' '.sourceSha == $sha and .api == $api and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/sec-session-native-result.json
+      - name: Preserve native synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-native-session-api${{ matrix.api }}-${{ env.LAB_SOURCE_SHA }}
+          path: native-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-archive:
+    needs: package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [36]
+    env:
+      LAB_API: ${{ matrix.api }}
+      LAB_PACKAGE: it.trama.registrodocente.lab.b43
+      LAB_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LAB_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Download the single APK from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-b43-lab-${{ env.LAB_SOURCE_SHA }}
+          path: lab-apk
+      - name: Verify exact APK provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LAB_SOURCE_SHA"
+          mkdir -p native-evidence
+          APK="$(find lab-apk -name app-debug.apk -type f)"
+          MANIFEST="$(find lab-apk -name probe-manifest.txt -type f)"
+          HASH="$(find lab-apk -name app-debug.sha256 -type f)"
+          test -f "$APK" && test -f "$MANIFEST" && test -f "$HASH"
+          grep -Fx "source_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "application_candidate_sha=$LAB_SOURCE_SHA" "$MANIFEST"
+          grep -Fx "app_id=$LAB_PACKAGE" "$MANIFEST"
+          grep -Fx 'release_signing=false' "$MANIFEST"
+          digest="$(sha256sum "$APK" | cut -d' ' -f1)"
+          test "$digest" = "$(cut -d' ' -f1 "$HASH")"
+          grep -Fx "apk_sha256=$digest" "$MANIFEST"
+          cp "$MANIFEST" native-evidence/probe-manifest.txt
+          printf 'APK=%s\n' "$APK" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enable hardware acceleration on isolated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Boot native Android and exercise exact APK
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        timeout-minutes: 16
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          avd-name: trama-native-archive-api${{ matrix.api }}
+          emulator-boot-timeout: 240
+          disable-animations: false
+          disable-linux-hw-accel: false
+          script: bash scripts/diagnostics/run-backup-b43-exact-apk.sh
+      - name: Require terminal evidence, not merely runner success
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'EMULATOR_PREFLIGHT_PASS' native-evidence/emulator-readiness.txt
+          test -s native-evidence/logcat-full.txt
+          jq -e --arg sha "$LAB_SOURCE_SHA" --arg stage 'native-encrypted-restore-roundtrip' '.sourceSha == $sha and .releaseQualified == false and any(.results[]; .stage == $stage and .status == "PASS") and all(.results[]; .status != "FAIL")' native-evidence/restore-result.json
+      - name: Preserve native synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-native-archive-api${{ matrix.api }}-${{ env.LAB_SOURCE_SHA }}
+          path: native-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  technical-receipt:
+    if: always() && contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","feat/beta2-build-identity","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    needs: [contracts, chromium, historical-browser, package, native-back, native-locked-back, native-session, native-archive]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Record technical gates without granting release authorization
+        env:
+          CONTRACTS: ${{ needs.contracts.result }}
+          CHROMIUM: ${{ needs.chromium.result }}
+          HISTORICAL: ${{ needs.historical-browser.result }}
+          PACKAGE: ${{ needs.package.result }}
+          BACK: ${{ needs.native-back.result }}
+          LOCKED_BACK: ${{ needs.native-locked-back.result }}
+          ARCHIVE: ${{ needs.native-archive.result }}
+          SESSION: ${{ needs.native-session.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --arg sha "$CANDIDATE_SHA" --arg run "$GITHUB_RUN_ID" --arg a "$CONTRACTS" --arg b "$CHROMIUM" --arg history "$HISTORICAL" --arg c "$PACKAGE" --arg d "$BACK" --arg e "$ARCHIVE" --arg f "$SESSION" --arg g "$LOCKED_BACK" '{sourceSha:$sha,runId:$run,gates:{contracts:$a,chromium:$b,historicalBrowser:$history,package:$c,nativeBack:$d,nativeArchive:$e,nativeSession:$f,nativeLockedBack:$g},technicalPass:([$a,$b,$history,$c,$d,$e,$f,$g]|all(.=="success")),releaseAuthorized:false,humanReview:"PENDING",remainingCoverage:["native dirty drafts and post-restore history","physical offline, lock, PDF, upgrade and migration"]}' > beta2-technical-receipt.json
+          cat beta2-technical-receipt.json
+          jq -e '.technicalPass == true' beta2-technical-receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta2-technical-receipt-${{ env.CANDIDATE_SHA }}
+          path: beta2-technical-receipt.json
+          if-no-files-found: error
+          retention-days: 7

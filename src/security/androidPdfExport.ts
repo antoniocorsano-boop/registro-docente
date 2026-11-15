@@ -1,3 +1,4 @@
+import { awaitAndroidFileAccess, type AndroidFileAccess } from './androidSessionLifecycle';
 import { isAndroidBackupRuntime } from './androidBackupExport';
 
 export const ANDROID_PDF_MAX_BYTES = 32 * 1024 * 1024;
@@ -7,10 +8,18 @@ type PdfPlugin = {
   writePdf(options: { token: string; pdfBase64: string }): Promise<unknown>;
 };
 export type AndroidPdfRuntime = {
+  /** Explicit dependency for isolated bridge tests; never used by the real runtime. */
+  sessionAccess?: AndroidFileAccess;
   androidBridge?: unknown;
   Capacitor?: { getPlatform?: () => string; Plugins?: { RegistroPdfFiles?: PdfPlugin } };
 };
 const runtimeDefault = () => globalThis as unknown as AndroidPdfRuntime;
+function sessionAccess(runtime: AndroidPdfRuntime, isActive: () => boolean): Promise<boolean> {
+  if (!isActive()) return Promise.resolve(false);
+  if (runtime === globalThis as unknown) return awaitAndroidFileAccess(isActive);
+  if (!runtime.sessionAccess) throw new Error('Autorità di sessione non disponibile.');
+  return runtime.sessionAccess(isActive);
+}
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Risposta PDF non valida.');
   return value as Record<string, unknown>;
@@ -30,14 +39,14 @@ export async function saveWorkPdfOnAndroid(
     || new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw new Error('Documento PDF non valido.');
   if (!/^(?:Prospetto_Lavoro|Bilancio_Formativo)_[0-9]{4}-[0-9]{2}-[0-9]{2}\.pdf$/.test(filename)) throw new Error('Nome PDF non valido.');
   const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer)), v => v.toString(16).padStart(2, '0')).join('');
-  if (!isActive()) return 'cancelled';
+  if (!await sessionAccess(runtime, isActive)) return 'cancelled';
   // The picker never receives PDF content; activity recreation cannot resume a write.
   const selection = record(await plugin.choosePdfDestination({ filename }));
-  if (selection.status === 'cancelled' || !isActive()) return 'cancelled';
+  if (selection.status === 'cancelled' || !await sessionAccess(runtime, isActive)) return 'cancelled';
   if (selection.status !== 'selected' || typeof selection.token !== 'string' || !selection.token) throw new Error('Destinazione PDF non valida.');
   let binary = '';
   for (let i = 0; i < bytes.length; i += 16384) binary += String.fromCharCode(...bytes.subarray(i, i + 16384));
   const receipt = record(await plugin.writePdf({ token: selection.token, pdfBase64: btoa(binary) }));
   if (receipt.status !== 'verified' || receipt.bytes !== bytes.length || receipt.sha256 !== sha256) throw new Error('PDF non verificato.');
-  return isActive() ? 'verified' : 'cancelled';
+  return await sessionAccess(runtime, isActive) ? 'verified' : 'cancelled';
 }

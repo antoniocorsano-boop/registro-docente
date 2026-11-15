@@ -23,6 +23,12 @@ describe('NAV-ANDROID-01 — Android system Back delegates to the existing histo
     expect(java.split('dispatcher.registerOnBackInvokedCallback(')).toHaveLength(2);
     expect(java).not.toMatch(/PRIORITY_OVERLAY,|Build\.MANUFACTURER|Build\.MODEL|onBackStarted\(|onBackProgressed\(/);
     expect(java).toContain('if (getBridge() == null) return;');
+    const back = java.slice(java.indexOf('private void navigateWebHistory()'), java.indexOf('// Isolate API 33'));
+    expect(back).toContain('if (!isDocumentSessionAuthorized() || sessionShield != null || interactiveEpoch != sessionEpoch) return;');
+    expect(back.indexOf('!isDocumentSessionAuthorized()')).toBeLessThan(back.indexOf('webView.goBack()'));
+    expect(java).toContain('if (sessionEpoch == epoch) {');
+    expect(java).toContain('interactiveEpoch = interactive && isDocumentSessionAuthorized() ? epoch : -1;');
+    expect(java).toContain('requestId != visualRequestId');
     expect(java).toContain('WebView webView = getBridge().getWebView();');
     expect(java).toContain('if (webView != null && webView.canGoBack())');
     expect(java.split('webView.goBack();')).toHaveLength(2);
@@ -56,5 +62,40 @@ describe('NAV-ANDROID-01 — Android system Back delegates to the existing histo
     expect(yml.match(/android:enableOnBackInvokedCallback/g)).toHaveLength(2);
     expect(yml).toContain('android_system_back_device_qualified=false');
     expect(yml).not.toContain('android_system_back_device_qualified=true');
+  });
+});
+
+describe('SEC-SESSION-01 — native task preview privacy', () => {
+  test('recents protection is installed at creation, not only after a pause', async () => {
+    const java = await read('mobile/android-probe/native/MainActivity.java');
+    const create = java.slice(java.indexOf('protected void onCreate'), java.indexOf('public void onResume'));
+    expect(create).toContain('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)');
+    expect(create).toContain('PlatformBack.disableRecentsScreenshot(this)');
+    expect(create).toContain('getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE)');
+    expect(java).toContain('activity.setRecentsScreenshotEnabled(false)');
+    expect(java).not.toContain('clearFlags(WindowManager.LayoutParams.FLAG_SECURE)');
+  });
+});
+
+describe('SEC-SESSION-01 — protected visual state', () => {
+  test('native cover survives until a current WebView visual-state callback', async () => {
+    const java = await read('mobile/android-probe/native/MainActivity.java');
+    const ack = java.slice(java.indexOf('void acknowledgeProtectedSurface'), java.indexOf('private void coverSessionSurface'));
+    const cover = java.slice(java.indexOf('private void coverSessionSurface'), java.indexOf('private void signalSessionChange'));
+    expect(cover).toContain('setVisibility(View.INVISIBLE)');
+    expect(cover).toContain('shield.setElevation(10000f)');
+    expect(cover).toContain('shield.bringToFront()');
+    expect(ack).toContain('expectedShield.bringToFront()');
+    expect(ack.indexOf('expectedShield.bringToFront()')).toBeLessThan(ack.indexOf('web.setVisibility(View.VISIBLE)'));
+    expect(ack.indexOf('web.setVisibility(View.VISIBLE)')).toBeLessThan(ack.indexOf('postVisualStateCallback'));
+    expect(ack).toContain('postVisualStateCallback');
+    const callback = ack.slice(ack.indexOf('public void onComplete(long requestId)'));
+    expect(callback).toContain('sessionEpoch != epoch || sessionShield != expectedShield');
+    expect(callback.indexOf('sessionEpoch != epoch')).toBeLessThan(callback.indexOf('web.setVisibility(View.VISIBLE)'));
+    expect(callback.indexOf('web.setVisibility(View.VISIBLE)')).toBeLessThan(callback.indexOf('parent.removeView(expectedShield)'));
+    expect(ack.slice(0, ack.indexOf('postVisualStateCallback'))).not.toContain('removeView');
+    const plugin = await read('mobile/android-probe/native/RegistroSessionPlugin.java');
+    expect(plugin).toContain('acknowledgeProtectedSurface(epoch,');
+    expect(plugin).toContain('() -> call.resolve(new JSObject())');
   });
 });

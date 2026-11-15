@@ -59,7 +59,7 @@ describe('FLOW-03B backup reminder contract', () => {
     expect(home.match(/data-testid="backup-copy-indicator"/g)?.length).toBe(1);
     expect(home).toContain('onClick={onExportBackup}');
     expect(home).toContain('aria-label="Esporta backup cifrato"');
-    expect(app).toContain("const handleExportBackup = () => {\n    setActiveTab('privacy');");
+    expect(app).toContain("const handleExportBackup = () => {\n    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');");
     expect(app.match(/<HomeView\b/g)?.length).toBe(1);
   });
 });

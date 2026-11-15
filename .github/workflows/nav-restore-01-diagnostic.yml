@@ -1,0 +1,62 @@
+name: NAV-RESTORE-01 — isolated browser regression
+on:
+  pull_request:
+    branches: ['test/b4-3-android-lab']
+permissions:
+  contents: read
+jobs:
+  restore-history:
+    if: github.head_ref == 'diagnostic/restore-history-red'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      PORT: '4173'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked application dependencies
+        run: |
+          npm install --global --no-audit --no-fund bun@1.4.4
+          test "$(bun --version)" = '1.4.4'
+          bun install --frozen-lockfile
+      - name: Build application
+        run: bun run build
+      - name: Prepare existing isolated browser toolchain
+        run: |
+          mkdir -p .browser-tools browser-evidence
+          echo '{"name":"registro-restore-history-diagnostic","private":true}' > .browser-tools/package.json
+          npm --prefix .browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
+          cp tests/browser/cdc-01-consigli.spec.cjs tests/browser/header01-navigation.cjs .browser-tools/
+      - name: Start actual production server
+        run: |
+          NODE_ENV=production PORT="$PORT" bun run start > browser-evidence/server.log 2>&1 &
+          echo $! > browser-evidence/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:$PORT/" >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Run only the existing encrypted restore journey with the added route assertion
+        run: |
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:$PORT" ./node_modules/.bin/playwright test cdc-01-consigli.spec.cjs --grep 'legacy JSON import, council decision, encrypted export and restore' --workers=1 --reporter=line --output=../browser-evidence/restore-history-results
+      - name: Stop server
+        if: always()
+        run: |
+          if test -f browser-evidence/server.pid; then kill "$(cat browser-evidence/server.pid)" 2>/dev/null || true; fi
+      - name: Preserve diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nav-restore-01-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
