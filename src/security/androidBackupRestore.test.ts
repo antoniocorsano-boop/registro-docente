@@ -9,7 +9,7 @@ async function receipt(encryptedText: string, status = 'read') {
 }
 
 function bridge(choose: () => Promise<unknown>, read: (options: { token: string }) => Promise<unknown>): AndroidBackupRuntime {
-  return { androidBridge: {}, Capacitor: { getPlatform: () => 'android', Plugins: { RegistroBackupFiles: {
+  return { sessionAccess: async isActive => isActive(), androidBridge: {}, Capacitor: { getPlatform: () => 'android', Plugins: { RegistroBackupFiles: {
     chooseBackupDestination: async () => { throw Error('unexpected save'); },
     writeEncryptedBackup: async () => { throw Error('unexpected write'); },
     chooseBackupSource: choose,
