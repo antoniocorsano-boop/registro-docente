@@ -3261,14 +3261,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return commitSettingsMutation(patch).then(() => undefined);
   };
 
-  // Backup actions are routed to the protected Privacy area.
+  // Backup shortcuts use the same guarded, history-owning navigation as the
+  // Privacy menu. A shortcut on Privacy itself must not add a duplicate entry.
   const handleExportBackup = () => {
-    setActiveTab('privacy');
+    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');
     toast('Usa il backup cifrato con password nella sezione Privacy');
   };
 
   const handleImportBackup = () => {
-    setActiveTab('privacy');
+    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');
     toast('Ripristina un backup cifrato nella sezione Privacy');
   };
 
