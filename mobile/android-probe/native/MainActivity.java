@@ -22,6 +22,7 @@ public class MainActivity extends BridgeActivity {
     private volatile boolean sessionForeground = false;
     private volatile int authorizedEpoch = -1;
     private View sessionShield;
+    private long visualRequestId;
     private int priorWebAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
 
     JSObject readSessionState() {
@@ -41,17 +42,38 @@ public class MainActivity extends BridgeActivity {
         return sessionForeground && authorizedEpoch == sessionEpoch;
     }
 
-    boolean acknowledgeProtectedSurface(int epoch) {
-        if (!sessionForeground || sessionEpoch != epoch) return false;
-        if (sessionShield != null) {
-            ViewGroup parent = (ViewGroup) sessionShield.getParent();
-            if (parent != null) parent.removeView(sessionShield);
-            sessionShield = null;
-            if (getBridge() != null) {
-                getBridge().getWebView().setImportantForAccessibility(priorWebAccessibility);
-            }
+    void acknowledgeProtectedSurface(int epoch, Runnable onComplete, Runnable onStale) {
+        if (!sessionForeground || sessionEpoch != epoch) {
+            onStale.run();
+            return;
         }
-        return true;
+        if (sessionShield == null) {
+            onComplete.run();
+            return;
+        }
+        if (getBridge() == null || getBridge().getWebView() == null) {
+            onStale.run();
+            return;
+        }
+        final WebView web = getBridge().getWebView();
+        final View expectedShield = sessionShield;
+        // A DOM commit alone is insufficient. Keep the WebView invisible and
+        // the native shield attached until its protected visual state is ready.
+        web.postVisualStateCallback(++visualRequestId, new WebView.VisualStateCallback() {
+            @Override
+            public void onComplete(long requestId) {
+                if (!sessionForeground || sessionEpoch != epoch || sessionShield != expectedShield) {
+                    onStale.run();
+                    return;
+                }
+                web.setVisibility(View.VISIBLE);
+                web.setImportantForAccessibility(priorWebAccessibility);
+                ViewGroup parent = (ViewGroup) expectedShield.getParent();
+                if (parent != null) parent.removeView(expectedShield);
+                sessionShield = null;
+                onComplete.run();
+            }
+        });
     }
 
     private void coverSessionSurface() {
@@ -71,6 +93,9 @@ public class MainActivity extends BridgeActivity {
         decor.addView(shield, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sessionShield = shield;
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().setVisibility(View.INVISIBLE);
+        }
     }
 
     private void signalSessionChange() {
