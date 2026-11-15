@@ -137,3 +137,29 @@ test('SEC-SESSION-01: delayed successful authorization response cannot reopen a 
   await expect(grade).toHaveValue('8,5');
   await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='authorize').map(x=>x[1]))).toEqual([0,1,2]);
 });
+
+test('SEC-SESSION-01: interrupted foreground authorization after migration returns to the active locked vault',async({page})=>{
+  await installNativeDouble(page);
+  await page.addInitScript(()=>{
+    localStorage.setItem('registro_docente_data_v35',JSON.stringify({classes:[],currentClassId:null}));
+    const original=window.Capacitor.Plugins.RegistroSession.authorize;
+    window.Capacitor.Plugins.RegistroSession.authorize=async input=>{
+      await original(input);
+      if(input.epoch===0){
+        window.__transitionSession(false);
+        window.__transitionSession(true);
+      }
+    };
+  });
+  await page.goto(baseURL,{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Proteggi i dati esistenti'})).toBeVisible();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Proteggi i dati esistenti'}).click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(page.getByTestId('header01-topbar')).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='authorize').map(x=>x[1]))).toEqual([0,1]);
+});
