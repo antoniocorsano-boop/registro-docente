@@ -8,7 +8,7 @@ type NativeSessionPlugin = {
   getState(): Promise<unknown>;
   authorize(input: { epoch: number }): Promise<unknown>;
   revoke(input: { epoch: number }): Promise<unknown>;
-  acknowledgeShield(input: { epoch: number }): Promise<unknown>;
+  acknowledgeShield(input: { epoch: number; interactive: boolean }): Promise<unknown>;
 };
 type AndroidSessionRuntime = {
   androidBridge?: unknown;
@@ -44,8 +44,8 @@ export async function authorizeAndroidSession(epoch: number): Promise<void> {
 export async function revokeAndroidSession(epoch: number): Promise<void> {
   await bridge().revoke({ epoch });
 }
-export async function acknowledgeAndroidShield(epoch: number): Promise<void> {
-  await bridge().acknowledgeShield({ epoch });
+export async function acknowledgeAndroidShield(epoch: number, interactive: boolean): Promise<void> {
+  await bridge().acknowledgeShield({ epoch, interactive });
 }
 
 /** Installed by the mounted Vault owner, not by a document chooser. */
