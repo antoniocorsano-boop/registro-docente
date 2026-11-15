@@ -57,8 +57,12 @@ public class MainActivity extends BridgeActivity {
         }
         final WebView web = getBridge().getWebView();
         final View expectedShield = sessionShield;
-        // A DOM commit alone is insufficient. Keep the WebView invisible and
-        // the native shield attached until its protected visual state is ready.
+        // Keep the opaque shield on top and block accessibility, but let the
+        // attached WebView draw underneath it. An invisible renderer can stall
+        // on some Android/WebView combinations. Only a current visual-state
+        // callback may remove the cover; never use a timeout to reveal data.
+        expectedShield.bringToFront();
+        web.setVisibility(View.VISIBLE);
         web.postVisualStateCallback(++visualRequestId, new WebView.VisualStateCallback() {
             @Override
             public void onComplete(long requestId) {
@@ -81,6 +85,7 @@ public class MainActivity extends BridgeActivity {
         ViewGroup decor = (ViewGroup) getWindow().getDecorView();
         View shield = new View(this);
         shield.setBackgroundColor(Color.rgb(3, 7, 18));
+        shield.setElevation(10000f);
         shield.setClickable(true);
         shield.setFocusable(true);
         shield.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
@@ -93,6 +98,7 @@ public class MainActivity extends BridgeActivity {
         decor.addView(shield, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         sessionShield = shield;
+        shield.bringToFront();
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().setVisibility(View.INVISIBLE);
         }
