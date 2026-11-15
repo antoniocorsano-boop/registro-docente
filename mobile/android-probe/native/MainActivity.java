@@ -38,6 +38,10 @@ public class MainActivity extends BridgeActivity {
         return true;
     }
 
+    void revokeSessionEpoch(int epoch) {
+        if (sessionEpoch == epoch) authorizedEpoch = -1;
+    }
+
     boolean isDocumentSessionAuthorized() {
         return sessionForeground && authorizedEpoch == sessionEpoch;
     }
@@ -160,6 +164,9 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void navigateWebHistory() {
+        // A committed Back on the protected surface must not even start a
+        // WebView history traversal: a draft guard could otherwise open invisibly.
+        if (!isDocumentSessionAuthorized() || sessionShield != null) return;
         // Preserve the web app's existing route and draft authority.
         if (getBridge() == null) return;
         WebView webView = getBridge().getWebView();
