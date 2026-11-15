@@ -136,6 +136,9 @@ try:
         raise RuntimeError("Replacement did not retain Android package identity")
     stage("in-place-upgrade",**new)
     launch()
+    expected_build = "Android · " + os.environ["BETA2_SHA"][:12]
+    wait_node(lambda n:n.get("package")==PKG and expected_build in label(n), "promoted build on locked gate")
+    stage("promoted-build-visible-on-gate",identity=expected_build)
     enter_gate("Sblocca Registro","WrongSyntheticPassword")
     observe_text("Password errata")
     stage("wrong-password-rejected")
