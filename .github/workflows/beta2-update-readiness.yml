@@ -1,0 +1,21 @@
+name: BETA2-UPDATE-01 — queued mutation boundary
+on:
+  pull_request:
+    branches: ['test/b4-3-android-lab']
+permissions:
+  contents: read
+jobs:
+  observe:
+    if: github.head_ref == 'test/beta2-update-readiness'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test src/security/secureVault.test.ts src/security/durableMutationCoordinator.test.ts
+      - run: bun run lint
