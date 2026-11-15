@@ -52,6 +52,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate diagnostic syntax before booting emulator
+        run: |
+          bash -n scripts/diagnostics/run-sec-session-final-boundary.sh
+          bash -n scripts/diagnostics/prepare-b43-emulator.sh
+          node --check scripts/diagnostics/sec-session-final-boundary.mjs
       - name: Set up Java 21 (same toolchain as packaging)
         uses: actions/setup-java@v4
         with:
