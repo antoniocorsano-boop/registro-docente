@@ -15,17 +15,12 @@ collect() {
 trap collect EXIT
 test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
 test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = "$LAB_API"
+adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
+adb shell cmd overlay list > native-evidence/overlays.txt
+grep -E '^\[x\] com\.android\.internal\.systemui\.navbar\.gestural$' native-evidence/overlays.txt
 # Keep the full boot-to-test event stream, including late system dialogs.
 adb logcat -b all -v threadtime > native-evidence/logcat-full.txt &
 log_pid=$!
-adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
-adb shell cmd overlay list > native-evidence/overlays.txt
-grep -E '^\[x\] com\.android\.internal\.systemui\.navbar\.gestural
-adb install "$APK"
-adb shell am start -W -n "$LAB_PACKAGE/it.trama.registrodocente.prova.MainActivity"
-node --check scripts/diagnostics/sec-session-final-boundary.mjs
-node scripts/diagnostics/sec-session-final-boundary.mjs
- native-evidence/overlays.txt
 bash scripts/diagnostics/prepare-b43-emulator.sh
 adb install "$APK"
 adb shell am start -W -n "$LAB_PACKAGE/it.trama.registrodocente.prova.MainActivity"
