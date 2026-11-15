@@ -1,4 +1,4 @@
-name: BETA2-UPDATE-04 — native in-place upgrade
+name: BETA2-PROMOTION — exact native in-place upgrade
 on:
   pull_request:
     branches: ['test/b4-3-android-lab']
@@ -7,16 +7,16 @@ permissions:
   actions: read
 jobs:
   upgrade:
-    if: github.head_ref == 'test/beta2-native-upgrade'
+    if: github.head_ref == 'test/beta2-promotion-native-upgrade'
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     env:
       BETA1_SHA: 37c61d4c64993c986a3edcd2b421310adf20de92
-      BETA2_SHA: 4236d6d7deef630685e3fe8853d64cf91b5dab63
+      BETA2_SHA: 52018acc7d6a90e58d35780a66ae8744eae25f9e
       BETA1_RUN: '43206101783'
-      BETA2_RUN: '43745259890'
+      BETA2_RUN: '43753021964'
       BETA1_ARTIFACT: '13938285055'
-      BETA2_ARTIFACT: '14173773874'
+      BETA2_ARTIFACT: '14176923532'
       LAB_API: '36'
       LAB_PACKAGE: it.trama.registrodocente.lab.b43
     steps:
@@ -120,7 +120,7 @@ jobs:
           script: bash scripts/diagnostics/prepare-b43-emulator.sh && python3 scripts/diagnostics/beta2-native-upgrade.py
       - name: Verify exact native evidence without release permission
         run: |
-          jq -e --arg old "$BETA1_SHA" --arg new "$BETA2_SHA" '.oldSource == $old and .newSource == $new and .releaseAuthorized == false and .ownerSignatureQualified == false and ([.results[].stage] == ["beta1-installed","beta1-created-class-survives-reopen","in-place-upgrade","wrong-password-rejected","beta2-preserved-class-and-password","beta2-preserved-class-after-reopen"]) and all(.results[];.status=="PASS")' native-evidence/upgrade-result.json
+          jq -e --arg old "$BETA1_SHA" --arg new "$BETA2_SHA" '.oldSource == $old and .newSource == $new and .releaseAuthorized == false and .ownerSignatureQualified == false and ([.results[].stage] == ["beta1-installed","beta1-created-class-survives-reopen","in-place-upgrade","promoted-build-visible-on-gate","wrong-password-rejected","beta2-preserved-class-and-password","beta2-preserved-class-after-reopen"]) and all(.results[];.status=="PASS")' native-evidence/upgrade-result.json
       - name: Remove all ephemeral signing material and signed APKs
         if: always()
         shell: bash
@@ -129,6 +129,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: beta2-native-upgrade-evidence
+          name: beta2-promotion-native-upgrade-evidence
           path: native-evidence/
           retention-days: 7
