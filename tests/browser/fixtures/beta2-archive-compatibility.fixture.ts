@@ -1,14 +1,14 @@
-// Copied verbatim into src/ of each exact source checkout by the isolated workflow.
+// Kept in the same tests/browser/fixtures path in both exact source checkouts.
 // No production entrypoint, no native bridge, only synthetic data.
-import { SecureVault } from './security/secureVault';
-import { IndexedDbVaultStore } from './security/vaultStore';
-import { SecureAppStorage, type CompleteSecureAppSnapshot } from './security/secureAppStorage';
-import type { VaultRecordKey } from './security/vaultTypes';
-import { createBackupPayload, normalizeBackupPayloadVerified } from './security/backupPayload';
-import { encryptDataWithPassword, decryptDataWithPassword } from './cryptoUtils';
-import { createEmptyPlanningState } from './planning/emptyPlanningState';
-import { createEmptyProfessionalMemoryState } from './memory/emptyProfessionalMemoryState';
-import { createEmptyCopilotState } from './copilot/emptyCopilotState';
+import { SecureVault } from '../../../src/security/secureVault';
+import { IndexedDbVaultStore } from '../../../src/security/vaultStore';
+import { SecureAppStorage, type CompleteSecureAppSnapshot } from '../../../src/security/secureAppStorage';
+import type { VaultRecordKey } from '../../../src/security/vaultTypes';
+import { createBackupPayload, normalizeBackupPayloadVerified } from '../../../src/security/backupPayload';
+import { encryptDataWithPassword, decryptDataWithPassword } from '../../../src/cryptoUtils';
+import { createEmptyPlanningState } from '../../../src/planning/emptyPlanningState';
+import { createEmptyProfessionalMemoryState } from '../../../src/memory/emptyProfessionalMemoryState';
+import { createEmptyCopilotState } from '../../../src/copilot/emptyCopilotState';
 
 const keys: VaultRecordKey[] = ['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'];
 const password='synthetic-archive-compatibility-only';
