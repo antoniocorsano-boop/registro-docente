@@ -1,12 +1,12 @@
 name: BETA2-UPDATE-02 — exact Beta1 archive compatibility
 on:
   pull_request:
-    branches: ['test/b4-3-android-lab']
+    branches: ['test/b4-3-android-lab', 'main']
 permissions:
   contents: read
 jobs:
   compatibility:
-    if: github.head_ref == 'test/beta2-archive-compatibility'
+    if: contains(fromJSON('["test/beta2-archive-compatibility","fix/beta2-archive-fixture-integration","feat/beta2-promotion"]'), github.head_ref)
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
@@ -34,14 +34,14 @@ jobs:
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test "$(git -C "$GITHUB_WORKSPACE/.beta1-exact" rev-parse HEAD)" = "$BETA1_SHA"
           mkdir -p "$RUNNER_TEMP/archive-fixtures" browser-evidence .browser-tools
-          cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts src/beta2-archive-compatibility.fixture.ts
-          cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts "$GITHUB_WORKSPACE/.beta1-exact/src/beta2-archive-compatibility.fixture.ts"
+          mkdir -p "$GITHUB_WORKSPACE/.beta1-exact/tests/browser/fixtures"
+          cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts "$GITHUB_WORKSPACE/.beta1-exact/tests/browser/fixtures/beta2-archive-compatibility.fixture.ts"
           bun install --frozen-lockfile
-          bun build src/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta2.js"
+          bun build tests/browser/fixtures/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta2.js"
           (
             cd "$GITHUB_WORKSPACE/.beta1-exact"
             bun install --frozen-lockfile
-            bun build src/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta1.js"
+            bun build tests/browser/fixtures/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta1.js"
           )
           printf '<!doctype html><meta charset="utf-8"><title>Synthetic archive compatibility</title>' > "$RUNNER_TEMP/archive-fixtures/index.html"
           printf 'Beta1 source=%s\nBeta2 source=%s\n' "$BETA1_SHA" "$CANDIDATE_SHA" > browser-evidence/provenance.txt
