@@ -111,7 +111,10 @@ export const SecureRegistroRoot: React.FC = () => {
   const lockImmediately = useCallback(() => {
     vaultRef.current?.lock();
     setSnapshot(null);
-    setGateState('LOCKED');
+    // A confirmed reset can finish while the manual lock is draining.
+    // Its terminal setup state is authoritative, even if React batches
+    // the reset and lock updates in the same render.
+    setGateState(current => current === 'READY' ? 'LOCKED' : current);
   }, []);
 
   // Manual lock and menu exit share the App's existing draft guard.
