@@ -53,7 +53,7 @@ describe('PERSIST-01H App mutation boundary contract', () => {
     expect(settings).toContain('derive: current =>');
     expect(settings).toContain('applySettingsPatch(current.settings, patch)');
 
-    const handler = sectionBetween('// Save Settings', '// Backup actions are routed');
+    const handler = sectionBetween('const handleUpdateSettings = ', 'const handleExportBackup = ');
     expect(handler).toContain('const handleUpdateSettings = (patch: Partial<AppSettings>): Promise<void> =>');
     expect(handler).toContain('return commitSettingsMutation(patch).then(() => undefined);');
     expect(handler).not.toContain('void commitSettingsMutation');

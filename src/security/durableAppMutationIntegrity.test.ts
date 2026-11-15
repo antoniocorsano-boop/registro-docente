@@ -99,7 +99,7 @@ describe('PERSIST-01 durable App mutation integrity', () => {
     expect(udaSection).not.toContain('setUdas(newUdas)');
     expect(udaSection).not.toContain('secureStorage.saveUdas(newUdas)');
 
-    const settingsSection = sectionBetween('// Save Settings', '// Backup actions are routed');
+    const settingsSection = sectionBetween('const handleUpdateSettings = ', 'const handleExportBackup = ');
     expect(settingsSection).toContain('commitSettingsMutation');
     expect(settingsSection).not.toContain('setSettings(newSettings)');
     expect(settingsSection).not.toContain('secureStorage.saveSettings(newSettings)');
