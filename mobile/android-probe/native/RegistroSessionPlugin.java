@@ -37,12 +37,13 @@ public class RegistroSessionPlugin extends Plugin {
     public void acknowledgeShield(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             Integer epoch = call.getInt("epoch");
-            if (!(getActivity() instanceof MainActivity) || epoch == null
-                    || !((MainActivity) getActivity()).acknowledgeProtectedSurface(epoch)) {
+            if (!(getActivity() instanceof MainActivity) || epoch == null) {
                 call.reject("Superficie protetta: attendi il rientro nel Registro.");
                 return;
             }
-            call.resolve(new JSObject());
+            ((MainActivity) getActivity()).acknowledgeProtectedSurface(epoch,
+                    () -> call.resolve(new JSObject()),
+                    () -> call.reject("Superficie protetta: attendi il rientro nel Registro."));
         });
     }
 }
