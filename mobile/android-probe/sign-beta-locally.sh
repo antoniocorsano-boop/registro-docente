@@ -22,13 +22,30 @@ identity() {
   "$aapt" dump badging "$1" | sed -n "s/^package: name='\([^']*\)' versionCode='\([^']*\)' versionName='\([^']*\)'.*/\1 \2 \3/p"
 }
 read -r app version name < <(identity "$unsigned")
-[[ "$app" == "it.trama.registrodocente" && "$version" =~ ^[0-9]+$ && "$version" -ge 10001 ]]
-[[ "$name" =~ ^0\.1\.0-beta\.1-rc\.[1-9][0-9]*$ ]]
-if "$aapt" dump badging "$unsigned" | grep -q '^application-debuggable'; then
-  echo 'Debuggable candidate rejected' >&2; exit 1
-fi
+validate_beta_identity() {
+  local app_id="$1" code="$2" version_name="$3"
+  [[ "$app_id" == "it.trama.registrodocente" && "$code" =~ ^[1-9][0-9]{0,9}$ &&
+     "$code" -ge 10001 && "$code" -le 2100000000 &&
+     "$version_name" =~ ^0\.1\.0-beta\.[12]-rc\.[1-9][0-9]*$ ]]
+  if [[ "$version_name" == 0.1.0-beta.2-* && "$code" -lt 10003 ]]; then return 1; fi
+}
+validate_beta_identity "$app" "$version" "$name" || { echo 'Invalid candidate Beta identity' >&2; exit 1; }
+reject_debuggable() {
+  local badging
+  badging="$("$aapt" dump badging "$1")"
+  if grep -q '^application-debuggable' <<< "$badging"; then
+    echo 'Debuggable candidate rejected' >&2; exit 1
+  fi
+}
+reject_debuggable "$unsigned"
 cert() {
-  "$signer" verify --print-certs "$1" | awk -F': ' '/^Signer #1 certificate SHA-256 digest:/{print $2}'
+  local output count digest
+  output="$("$signer" verify --print-certs "$1")" || return 1
+  count="$(grep -Ec '^Signer #[0-9]+ certificate SHA-256 digest:' <<< "$output" || true)"
+  [[ "$count" == 1 ]] || return 1
+  digest="$(awk -F': ' '/^Signer #1 certificate SHA-256 digest:/{print $2}' <<< "$output")"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
 }
 if [[ "$version" -gt 10001 && -z "$previous" ]]; then
   echo 'Previous signed Beta required for subsequent updates' >&2; exit 1
@@ -36,7 +53,12 @@ fi
 if [[ -n "$previous" ]]; then
   "$signer" verify "$previous"
   read -r old_app old_version old_name < <(identity "$previous")
-  [[ "$old_app" == "$app" && "$old_version" =~ ^[0-9]+$ && "$version" -gt "$old_version" ]]
+  validate_beta_identity "$old_app" "$old_version" "$old_name" || { echo 'Invalid previous Beta identity' >&2; exit 1; }
+  [[ "$old_app" == "$app" && "$version" -gt "$old_version" ]] || { echo 'Non-increasing versionCode or different app identity' >&2; exit 1; }
+  if [[ "$old_name" == 0.1.0-beta.2-* && "$name" == 0.1.0-beta.1-* ]]; then
+    echo 'Beta series downgrade rejected' >&2; exit 1
+  fi
+  reject_debuggable "$previous"
   old_cert="$(cert "$previous")"
   [[ "$old_cert" =~ ^[0-9a-f]{64}$ ]]
 fi
