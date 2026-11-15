@@ -55,6 +55,7 @@ public class RegistroSessionPlugin extends Plugin {
                 return;
             }
             ((MainActivity) getActivity()).acknowledgeProtectedSurface(epoch,
+                    Boolean.TRUE.equals(call.getBoolean("interactive")),
                     () -> call.resolve(new JSObject()),
                     () -> call.reject("Superficie protetta: attendi il rientro nel Registro."));
         });
