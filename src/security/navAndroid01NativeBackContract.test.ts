@@ -77,6 +77,11 @@ describe('SEC-SESSION-01 — protected visual state', () => {
     const ack = java.slice(java.indexOf('void acknowledgeProtectedSurface'), java.indexOf('private void coverSessionSurface'));
     const cover = java.slice(java.indexOf('private void coverSessionSurface'), java.indexOf('private void signalSessionChange'));
     expect(cover).toContain('setVisibility(View.INVISIBLE)');
+    expect(cover).toContain('shield.setElevation(10000f)');
+    expect(cover).toContain('shield.bringToFront()');
+    expect(ack).toContain('expectedShield.bringToFront()');
+    expect(ack.indexOf('expectedShield.bringToFront()')).toBeLessThan(ack.indexOf('web.setVisibility(View.VISIBLE)'));
+    expect(ack.indexOf('web.setVisibility(View.VISIBLE)')).toBeLessThan(ack.indexOf('postVisualStateCallback'));
     expect(ack).toContain('postVisualStateCallback');
     const callback = ack.slice(ack.indexOf('public void onComplete(long requestId)'));
     expect(callback).toContain('sessionEpoch != epoch || sessionShield != expectedShield');
