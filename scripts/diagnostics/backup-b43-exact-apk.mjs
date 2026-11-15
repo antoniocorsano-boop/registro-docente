@@ -186,29 +186,19 @@ async function picker(){return nativeFind(n=>docNode(n)&&(/save|salva/i.test(n.t
 async function home(){
   const isHome=()=>evaluate('Boolean(document.querySelector('+JSON.stringify(indicator)+'))');
   if(await isHome())return;
-  const inPrivacy=await evaluate('Boolean(document.querySelector(\'input[placeholder="Ripeti la password"]\'))');
-  if(inPrivacy){
-    // Privacy entered by the Home export shortcut does not push a history
-    // entry. Test explicit Oggi separately, without claiming Back passed.
-    const drawer='#registro-navigation-drawer[aria-hidden="false"]';
-    const go=drawer+' [data-testid="header01-go-home"]';
-    await click('[data-testid="header01-brand-navigation"]');
-    await until(()=>evaluate('(()=>{const e=document.querySelector('+JSON.stringify(go)+');if(!e||e.closest("[inert]"))return false;const r=e.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth})()'),'Opened drawer Oggi not visible');
-    await click(go);
-    const confirmation='[data-testid="header01-home-confirm"]';
-    await until(async()=>await isHome()||await evaluate('Boolean(document.querySelector('+JSON.stringify(confirmation)+'))'),'Explicit Oggi did not open home or confirmation');
-    if(!await isHome())await clickText('Torna a Oggi',confirmation+' ');
-    await until(isHome,'Explicit Oggi did not restore home');
-    record('home-reached-explicit-privacy-exit','PASS');
-    return;
-  }
-  for(let step=0;step<5;step++){
-    const before=await tab();
-    adb('shell','input','keyevent','4');
-    await until(async()=>foreground()&&(await isHome()||(await tab())!==before),'Native Back did not restore previous view',10000);
-    if(await isHome()){record('home-reached-native-back','PASS',{steps:step+1});return;}
-  }
-  throw Error('Home backup indicator not reached by native Back');
+  // This suite qualifies the backup/restore transaction, not Android Back.
+  // Explicitly navigate via the actual app control, with visible drawer and
+  // confirmation; do not rely on browser history/user activation after DOM clicks.
+  const drawer='#registro-navigation-drawer[aria-hidden="false"]';
+  const go=drawer+' [data-testid="header01-go-home"]';
+  await click('[data-testid="header01-brand-navigation"]');
+  await until(()=>evaluate('(()=>{const e=document.querySelector('+JSON.stringify(go)+');if(!e||e.closest("[inert]"))return false;const r=e.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth})()'),'Opened drawer Oggi not visible');
+  await click(go);
+  const confirmation='[data-testid="header01-home-confirm"]';
+  await until(async()=>await isHome()||await evaluate('Boolean(document.querySelector('+JSON.stringify(confirmation)+'))'),'Explicit Oggi did not open home or confirmation');
+  if(!await isHome())await clickText('Torna a Oggi',confirmation+' ');
+  await until(isHome,'Explicit Oggi did not restore home');
+  record('home-reached-explicit-navigation','PASS');
 }
 async function expectCopy(label){
   await until(()=>evaluate('document.querySelector('+JSON.stringify(indicator)+')?.textContent.includes('+JSON.stringify(label)+')'),'Backup indicator not '+label);
