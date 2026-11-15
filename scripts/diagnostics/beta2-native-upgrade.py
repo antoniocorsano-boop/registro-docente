@@ -119,7 +119,8 @@ try:
     observe_text("Le mie classi")
     press(button("Nuova Classe"))
     press(edit());type_text(MARKER);hide_keyboard();press(button("OK"))
-    observe_text(MARKER)
+    wait_node(lambda n:n.get("class")!="android.widget.EditText" and
+        n.get("package")==PKG and any(MARKER in s for s in label(n)),"saved class context")
     # Confirm persistence in the old APK before replacing it.
     stop();launch();enter_gate("Sblocca Registro",PASSWORD)
     observe_text("Le mie classi");find_class()
