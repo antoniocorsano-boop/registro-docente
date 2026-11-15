@@ -10,9 +10,6 @@ test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = "$LAB_API"
 qemu="$(adb shell getprop ro.kernel.qemu | tr -d '\r')"
 boot_qemu="$(adb shell getprop ro.boot.qemu | tr -d '\r')"
 [[ "$qemu" == 1 || "$boot_qemu" == 1 ]]
-home="$(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tr -d '\r' | tail -n 1)"
-[[ "$home" == */* ]]
-home_package="${home%%/*}"
 # Send Home before the tested application is installed/launched. This is
 # environment initialization, not part of any navigation assertion.
 adb shell input keyevent KEYCODE_HOME
@@ -22,26 +19,39 @@ previous=""
 while (( SECONDS - start < 180 )); do
   sim="$(adb shell getprop gsm.sim.state | tr -d '\r')"
   boot="$(adb shell getprop sys.boot_completed | tr -d '\r')"
+  # HOME can resolve to CryptKeeper, FallbackHome or SetupWizard while boot
+  # is still completing. Re-resolve on each sample, never freeze that choice.
+  home="$(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tr -d '\r' | tail -n 1)"
+  home_package="${home%%/*}"
+  provisioned="$(adb shell settings get global device_provisioned | tr -d '\r')"
+  user_setup="$(adb shell settings --user 0 get secure user_setup_complete | tr -d '\r')"
   activities="$(adb shell dumpsys activity activities)"
   resumed="$(printf '%s\n' "$activities" | grep -E 'topResumedActivity|mResumedActivity' || true)"
+  home_ready=false
+  if [[ "$home" == */* && "$provisioned" == 1 && "$user_setup" == 1 && "$resumed" == *"$home_package/"* ]]; then
+    case "$home" in
+      *CryptKeeper*|*FallbackHome*|*SetupWizard*|*sdksetup*|*ResolverActivity*|*Provision*) ;;
+      *) home_ready=true ;;
+    esac
+  fi
   # Compare the tail of lifecycle and subscription changes, not all log traffic.
   # No clearing of the logs; the complete evidence is retained by the caller.
   events="$(adb logcat -b all -d -v brief | grep -E 'START.*SimDialogActivity|wm_(create|resume|pause|finish|destroy|set_resumed)_activity.*SimDialogActivity|Active subscription info list changed|notifySubscriptionInfoChanged|SIM_STATE_CHANGED' | tail -n 30 || true)"
-  fingerprint="$(printf '%s\n%s\n%s\n' "$sim" "$resumed" "$events" | sha256sum | cut -d' ' -f1)"
+  fingerprint="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$sim" "$resumed" "$events" "$home" "$provisioned" "$user_setup" | sha256sum | cut -d' ' -f1)"
   stable_sim=true
   IFS=, read -ra slots <<< "$sim"
   if (( ${#slots[@]} == 0 )); then stable_sim=false; fi
   for slot in "${slots[@]}"; do
     case "$slot" in READY|LOADED|ABSENT) ;; *) stable_sim=false;; esac
   done
-  if [[ "$fingerprint" != "$previous" || "$stable_sim" != true || "$boot" != 1 || "$resumed" != *"$home_package/"* ]]; then
+  if [[ "$fingerprint" != "$previous" || "$stable_sim" != true || "$boot" != 1 || "$home_ready" != true ]]; then
     quiet_since=$SECONDS
   fi
   previous="$fingerprint"
-  printf 'elapsed=%s quiet=%s sim=%s homeForeground=%s\n' "$((SECONDS-start))" "$((SECONDS-quiet_since))" "$sim" "$([[ "$resumed" == *"$home_package/"* ]] && echo true || echo false)" | tee -a native-evidence/emulator-readiness.txt
+  printf 'elapsed=%s quiet=%s sim=%s home=%s provisioned=%s userSetup=%s homeForeground=%s resumed=%s\n' "$((SECONDS-start))" "$((SECONDS-quiet_since))" "$sim" "$home" "$provisioned" "$user_setup" "$home_ready" "$resumed" | tee -a native-evidence/emulator-readiness.txt
   # Minimum warmup exceeds the measured late SIM initialization; the quiet
   # interval restarts after any observed subscription or activity transition.
-  if (( SECONDS - start >= 45 && SECONDS - quiet_since >= 20 )) && [[ "$stable_sim" == true && "$boot" == 1 && "$resumed" == *"$home_package/"* ]]; then
+  if (( SECONDS - start >= 45 && SECONDS - quiet_since >= 20 )) && [[ "$stable_sim" == true && "$boot" == 1 && "$home_ready" == true ]]; then
     echo 'EMULATOR_PREFLIGHT_PASS' | tee -a native-evidence/emulator-readiness.txt
     exit 0
   fi
