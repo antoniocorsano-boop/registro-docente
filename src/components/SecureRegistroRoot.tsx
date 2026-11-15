@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import App from '../App';
+import App, { type SessionLockRequest } from '../App';
 import {
   CUSTOM_TESTS_KEY,
   META_KEY,
@@ -49,6 +49,13 @@ export const SecureRegistroRoot: React.FC = () => {
   const storeRef = useRef<IndexedDbVaultStore | null>(null);
   const vaultRef = useRef<SecureVault | null>(null);
   const storageRef = useRef<SecureAppStorage | null>(null);
+  const lockRequestRef = useRef<SessionLockRequest | null>(null);
+  const closingRef = useRef(false);
+  const [closing, setClosing] = useState(false);
+  const [closingDelayed, setClosingDelayed] = useState(false);
+  const registerSessionLockRequest = useCallback((request: SessionLockRequest | null) => {
+    lockRequestRef.current = request;
+  }, []);
 
   const getRuntime = useCallback(() => {
     if (!storeRef.current) {
@@ -101,11 +108,35 @@ export const SecureRegistroRoot: React.FC = () => {
     void inspectBootstrap();
   }, [inspectBootstrap]);
 
-  const handleLock = useCallback(() => {
+  const lockImmediately = useCallback(() => {
     vaultRef.current?.lock();
     setSnapshot(null);
     setGateState('LOCKED');
   }, []);
+
+  // Manual lock and menu exit share the App's existing draft guard.
+  // Close admission synchronously before hiding the still-mounted App so
+  // already accepted durable work can settle without starting new work.
+  const handleLock = useCallback(() => {
+    if (closingRef.current) return;
+    const request = lockRequestRef.current;
+    if (!request) return; // No active App authority; never silently discard its drafts.
+    request(drain => {
+      if (closingRef.current) return;
+      closingRef.current = true;
+      const settled = drain();
+      setClosingDelayed(false);
+      setClosing(true);
+      const warning = window.setTimeout(() => setClosingDelayed(true), 10_000);
+      void settled.then(() => {
+        window.clearTimeout(warning);
+        lockImmediately();
+        closingRef.current = false;
+        setClosing(false);
+        setClosingDelayed(false);
+      });
+    });
+  }, [lockImmediately]);
 
   const loadReadySnapshot = useCallback(async () => {
     const { storage } = getRuntime();
@@ -213,12 +244,13 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [getRuntime]);
 
   useEffect(() => {
-    if (gateState !== 'READY' || autoLockMinutes === 0) return;
+    if (gateState !== 'READY' || closing || autoLockMinutes === 0) return;
+    const timeoutLock = () => { if (!closingRef.current) lockImmediately(); };
 
-    let timeoutId = window.setTimeout(handleLock, autoLockMinutes * 60_000);
+    let timeoutId = window.setTimeout(timeoutLock, autoLockMinutes * 60_000);
     const resetTimer = () => {
       window.clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(handleLock, autoLockMinutes * 60_000);
+      timeoutId = window.setTimeout(timeoutLock, autoLockMinutes * 60_000);
     };
 
     const activityEvents = ['pointerdown', 'keydown'] as const;
@@ -232,7 +264,7 @@ export const SecureRegistroRoot: React.FC = () => {
         window.removeEventListener(eventName, resetTimer);
       }
     };
-  }, [autoLockMinutes, gateState, handleLock]);
+  }, [autoLockMinutes, gateState, closing, lockImmediately]);
 
   const handleAutoLockChange = (minutes: AutoLockMinutes) => {
     setAutoLockMinutes(minutes);
@@ -250,11 +282,13 @@ export const SecureRegistroRoot: React.FC = () => {
     >
       {snapshot && storageRef.current ? (
         <>
+          <div inert={closing} aria-hidden={closing || undefined} style={closing ? { visibility: 'hidden' } : undefined}>
           <App
             initialSnapshot={snapshot}
             secureStorage={storageRef.current}
             onFactoryReset={handleFactoryReset}
             onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
+            registerSessionLockRequest={registerSessionLockRequest}
             headerSecurity={{
               autoLockMinutes,
               onAutoLockChange: handleAutoLockChange,
@@ -268,6 +302,12 @@ export const SecureRegistroRoot: React.FC = () => {
             copilotSurfaceOpen={isCopilotSurfaceOpen}
             mobileControlsEnabled={false}
           />
+          </div>
+          {closing && (
+            <div role="status" className="fixed inset-0 z-[100] flex items-center justify-center bg-[#030712] p-6 text-center text-slate-100">
+              {closingDelayed ? 'Chiusura in attesa di un’operazione locale. I dati sono nascosti; non spegnere il dispositivo durante il salvataggio.' : 'Chiusura protetta del Registro…'}
+            </div>
+          )}
         </>
       ) : null}
     </VaultGate>
