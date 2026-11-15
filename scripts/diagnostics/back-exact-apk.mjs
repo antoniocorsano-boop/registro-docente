@@ -3,6 +3,8 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 const pkg = process.env.LAB_PACKAGE;
 const api = Number(process.env.LAB_API);
+const gestureGapMs = Number(process.env.LAB_GESTURE_GAP_MS);
+if (api !== 36 || ![0,1500].includes(gestureGapMs)) throw Error('Unexpected comparison condition');
 if (pkg !== 'it.trama.registrodocente.lab.b43' || ![32,36].includes(api)) throw new Error('Not an isolated emulator diagnostic');
 const adb = (...args) => execFileSync('adb', args, { encoding:'utf8', timeout:30000 }).trim();
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
@@ -95,7 +97,10 @@ async function snapshot() {
 }
 async function back(label,cmd,wanted) {
   const before=await snapshot();
+  const inputAt=Date.now();
+  console.log('native-input',label,JSON.stringify({cmd,inputAt,gestureGapMs}));
   adb('shell','input',...cmd);
+  console.log('native-input-return',label,JSON.stringify({elapsedMs:Date.now()-inputAt}));
   try { await assertTab(wanted,label);record(label,'PASS',{tab:wanted,foreground:true,before,after:await snapshot()}); }
   catch(e) {record(label,'FAIL',{foreground:foreground(),message:e.message,before,after:await snapshot()});throw e;}
 }
@@ -128,6 +133,8 @@ try {
   if(!size)throw Error('Screen dimensions unavailable');
   const w=Number(size[1]),h=Number(size[2]),y=Math.floor(h*.45);
   await back('native-right-edge-analysis-to-matrix',['swipe',String(w-1),String(y),String(Math.floor(w*.5)),String(y),'350'],'tabellone');
+  record('inter-gesture-condition','PASS',{gestureGapMs});
+  if(gestureGapMs) await sleep(gestureGapMs);
   await back('native-left-edge-matrix-to-overview',['swipe','1',String(y),String(Math.floor(w*.5)),String(y),'350'],'dashboard');
   await button('Analisi','nav ');
   await assertTab('analytics','analysis again');
