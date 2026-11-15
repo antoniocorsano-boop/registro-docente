@@ -12,7 +12,7 @@ env:
 
 jobs:
   contracts:
-    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","feat/beta2-build-identity","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     name: Typecheck / security / invariant contracts
     runs-on: ubuntu-22.04
     timeout-minutes: 25
@@ -49,7 +49,7 @@ jobs:
         run: bun run build
 
   chromium:
-    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    if: contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","feat/beta2-build-identity","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     name: Synthetic Chromium Android 390 / 320
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -527,7 +527,7 @@ jobs:
           retention-days: 7
 
   technical-receipt:
-    if: always() && contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
+    if: always() && contains(fromJSON('["ci/beta2-historical-reference","ci/beta2-native-reference","ci/beta2-reference-qualification","ci/beta2-session-reference","fix/sec-session-01-protected-back","feat/beta2-build-identity","fix/b43-privacy-history","test/b4-3-android-lab"]'), github.head_ref)
     needs: [contracts, chromium, historical-browser, package, native-back, native-locked-back, native-session, native-archive]
     runs-on: ubuntu-22.04
     steps:
