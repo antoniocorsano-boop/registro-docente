@@ -1,3 +1,4 @@
+import { awaitAndroidFileAccess, type AndroidFileAccess } from './androidSessionLifecycle';
 /**
  * MOBILE-01/M2a: a native Android file receipt is different from a browser download.
  * Capacitor 8.6 injects the registered plugin methods into window.Capacitor.Plugins.
@@ -13,6 +14,8 @@ type NativeBackupPlugin = {
 };
 
 export type AndroidBackupRuntime = {
+  /** Explicit dependency for isolated bridge tests; never used by the real runtime. */
+  sessionAccess?: AndroidFileAccess;
   androidBridge?: unknown;
   Capacitor?: {
     getPlatform?: () => string;
@@ -21,6 +24,12 @@ export type AndroidBackupRuntime = {
 };
 
 const currentRuntime = () => globalThis as unknown as AndroidBackupRuntime;
+function sessionAccess(runtime: AndroidBackupRuntime, isActive: () => boolean): Promise<boolean> {
+  if (!isActive()) return Promise.resolve(false);
+  if (runtime === globalThis as unknown) return awaitAndroidFileAccess(isActive);
+  if (!runtime.sessionAccess) throw new Error('Autorità di sessione non disponibile.');
+  return runtime.sessionAccess(isActive);
+}
 
 export function isAndroidBackupRuntime(runtime = currentRuntime()): boolean {
   return Boolean(runtime.androidBridge) || runtime.Capacitor?.getPlatform?.() === 'android';
@@ -52,11 +61,11 @@ export async function saveEncryptedBackupOnAndroid(
   }
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   const expectedSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-  if (!isActive()) return 'cancelled';
+  if (!await sessionAccess(runtime, isActive)) return 'cancelled';
 
   // No ciphertext in the picker call: Android may retain activity options during process recreation.
   const selection = record(await plugin.chooseBackupDestination({ filename }));
-  if (selection.status === 'cancelled' || !isActive()) return 'cancelled';
+  if (selection.status === 'cancelled' || !await sessionAccess(runtime, isActive)) return 'cancelled';
   if (selection.status !== 'selected' || typeof selection.token !== 'string' || !selection.token) {
     throw new Error('Destinazione del backup non confermata.');
   }
@@ -65,7 +74,7 @@ export async function saveEncryptedBackupOnAndroid(
   if (receipt.status !== 'verified' || receipt.bytes !== bytes.length || receipt.sha256 !== expectedSha256) {
     throw new Error('La copia Android non ha superato la verifica di rilettura.');
   }
-  return isActive() ? 'verified' : 'cancelled';
+  return await sessionAccess(runtime, isActive) ? 'verified' : 'cancelled';
 }
 
 /** Only a local encrypted document is returned. Authentication stays in cryptoUtils. */
@@ -78,14 +87,14 @@ export async function readEncryptedBackupOnAndroid(
   if (typeof plugin?.chooseBackupSource !== 'function' || typeof plugin?.readEncryptedBackup !== 'function') {
     throw new Error('Il recupero protetto non è disponibile in questa versione Android.');
   }
-  if (!isActive()) return null;
+  if (!await sessionAccess(runtime, isActive)) return null;
   const selection = record(await plugin.chooseBackupSource({}));
-  if (selection.status === 'cancelled' || !isActive()) return null;
+  if (selection.status === 'cancelled' || !await sessionAccess(runtime, isActive)) return null;
   if (selection.status !== 'selected' || typeof selection.token !== 'string' || !selection.token) {
     throw new Error('File di backup non selezionato.');
   }
   const result = record(await plugin.readEncryptedBackup({ token: selection.token }));
-  if (!isActive()) return null;
+  if (!await sessionAccess(runtime, isActive)) return null;
   if (result.status !== 'read' || typeof result.encryptedText !== 'string') {
     throw new Error('Lettura del backup non verificata.');
   }
@@ -96,5 +105,5 @@ export async function readEncryptedBackupOnAndroid(
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
   const sha = Array.from(new Uint8Array(digest), x => x.toString(16).padStart(2, '0')).join('');
   if (result.sha256 !== sha) throw new Error('Integrità della lettura non verificata.');
-  return isActive() ? result.encryptedText : null;
+  return await sessionAccess(runtime, isActive) ? result.encryptedText : null;
 }
