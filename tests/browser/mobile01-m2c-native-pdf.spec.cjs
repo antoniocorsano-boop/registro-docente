@@ -18,6 +18,7 @@ test('M2c actual Analisi report renders offline and requires verified native rec
     window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroSession: {
       getState: async () => ({ epoch: 0, foreground: true }),
       authorize: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); },
+      revoke: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); },
       acknowledgeShield: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); }
     }, RegistroPdfFiles: {
       choosePdfDestination: async options => {
