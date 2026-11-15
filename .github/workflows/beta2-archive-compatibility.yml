@@ -10,13 +10,18 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
-      BETA1_SHA: e4d6b51ed2b11223f6f33d2904f69fa9032e9e57
+      BETA1_SHA: 37c61d4c64993c986a3edcd2b421310adf20de92
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ env.CANDIDATE_SHA }}
-          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout the exact original Beta1 RC2 candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.BETA1_SHA }}
+          path: .beta1-exact
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
@@ -27,15 +32,14 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          git worktree add --detach "$RUNNER_TEMP/beta1-exact" "$BETA1_SHA"
-          test "$(git -C "$RUNNER_TEMP/beta1-exact" rev-parse HEAD)" = "$BETA1_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE/.beta1-exact" rev-parse HEAD)" = "$BETA1_SHA"
           mkdir -p "$RUNNER_TEMP/archive-fixtures" browser-evidence .browser-tools
           cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts src/beta2-archive-compatibility.fixture.ts
-          cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts "$RUNNER_TEMP/beta1-exact/src/beta2-archive-compatibility.fixture.ts"
+          cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts "$GITHUB_WORKSPACE/.beta1-exact/src/beta2-archive-compatibility.fixture.ts"
           bun install --frozen-lockfile
           bun build src/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta2.js"
           (
-            cd "$RUNNER_TEMP/beta1-exact"
+            cd "$GITHUB_WORKSPACE/.beta1-exact"
             bun install --frozen-lockfile
             bun build src/beta2-archive-compatibility.fixture.ts --target browser --outfile "$RUNNER_TEMP/archive-fixtures/beta1.js"
           )
