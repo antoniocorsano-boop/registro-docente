@@ -222,8 +222,14 @@ try {
   await picker();
   await chooseDownload();
   await requireNativeGate('picker confirm');
-  await resume();
+  // The verified-copy alert can appear immediately after unlock and blocks
+  // the WebView accessibility tree and CDP. Verify the actual native alert
+  // first, then the restored interactive application. No retry of the write.
+  await submit('synthetic-back-diagnostic-only');
   await dismissSuccess('Copia di sicurezza salvata e verificata');
+  record('picker-confirm-native-receipt','PASS');
+  await until(appVisible,'Authenticated application did not resume after receipt',45000);
+  await until(()=>{try{return !!webViewBounds().length}catch{return false}},'Native WebView did not become accessible after receipt',30000);
   const files=adb('shell','ls','-1','/sdcard/Download').split(/\r?\n/).filter(n=>/^Backup_Cifrato_GDPR_\d{4}-\d{2}-\d{2}\.enc\.json$/.test(n));
   if(files.length!==1)throw Error('Expected exactly one verified synthetic encrypted copy; found '+files.length);
   const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+files[0]],{timeout:30000});
