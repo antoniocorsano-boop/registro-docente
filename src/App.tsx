@@ -3403,7 +3403,33 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       setProfessionalMemory(restored.professionalMemory);
       setCopilotState(restored.copilotState);
       setMeta(restored.meta);
+      setEditingBatchId(null);
+      setSelectedStudentForReport(null);
+      evaluationTargetMemoryRef.current.clear();
       setActiveTab('home');
+      // Restore is committed: replace the current Privacy entry, do not push
+      // another route or replay the previous archive's specialist target.
+      // Preserve the current entry's coordinates for guarded Back/Forward.
+      try {
+        const entryId = historyEntryIdRef.current ?? crypto.randomUUID();
+        const position = historyPositionRef.current;
+        const epoch = historyEpochRef.current;
+        history.replaceState({
+          tab: 'home',
+          classId: null,
+          __tramaHistoryEntryId: entryId,
+          ...(position !== null && epoch !== null
+            ? { __tramaHistoryPosition: position, __tramaHistoryEpoch: epoch }
+            : {})
+        }, '', withHprTraceQuery(window.location.pathname));
+        historyEntryIdRef.current = entryId;
+        historyUrlRef.current = window.location.href;
+        browserHistoryIndexRef.current = readBrowserHistoryIndex();
+      } catch {
+        // History failure cannot turn an already durable restore into a
+        // reported restore failure or cause a second destructive operation.
+        console.warn('Cronologia non aggiornata dopo ripristino confermato.');
+      }
       toast('Backup cifrato verificato e ripristinato');
     });
   };
