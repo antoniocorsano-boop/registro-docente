@@ -116,7 +116,8 @@
       "impactPaths": [
         "src/persistence/",
         "src/security/secureAppStorage.ts",
-        "src/App.tsx"
+        "src/App.tsx",
+        "src/security/durableMutationCoordinator.test.ts"
       ],
       "tests": [
         "src/security/persist01hCoordinatorContract.test.ts",
@@ -1653,12 +1654,14 @@
         "mobile/android-probe/beta-identity.json",
         "mobile/android-probe/prepare-beta.mjs",
         "mobile/android-probe/sign-beta-locally.sh",
-        ".github/workflows/mobile-01-android-probe.yml"
+        ".github/workflows/mobile-01-android-probe.yml",
+        "src/security/mobile01Beta2UpdateSigning.test.ts"
       ],
       "tests": [
         "src/security/mobile01M4BetaIdentityContract.test.ts",
         "src/security/mobile01M2aNativeBackupContract.test.ts",
-        "src/security/mobile01M2cNativePdfContract.test.ts"
+        "src/security/mobile01M2cNativePdfContract.test.ts",
+        "src/security/mobile01Beta2UpdateSigning.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
@@ -2039,7 +2042,8 @@
         "src/security/secureAppStorage.ts",
         "src/security/backupPayload.ts",
         "src/components/HomeView.tsx",
-        "src/security/backupPayload.test.ts"
+        "src/security/backupPayload.test.ts",
+        "src/security/backupUiGuard.test.ts"
       ],
       "tests": [
         "src/security/backup02VerifiedCopyBoundary.test.ts",
@@ -2047,7 +2051,8 @@
         "src/security/persist01hBackupRestoreContract.test.ts",
         "src/security/mobile01M2aNativeBackupContract.test.ts",
         "src/security/backup02ReceiptAuthority.test.ts",
-        "src/security/backupPayload.test.ts"
+        "src/security/backupPayload.test.ts",
+        "src/security/backupUiGuard.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/lib01-private-library-qualification.spec.cjs"
@@ -2227,6 +2232,104 @@
         "tests/browser/nav-context-01-return-origin.spec.cjs",
         "tests/browser/aic-07-supervised-copilot.spec.cjs",
         "tests/browser/flow-03-registra.spec.cjs"
+      ]
+    },
+    {
+      "id": "SEC-SESSION-01-I01",
+      "owner": "SEC-SESSION-01",
+      "statement": "Android session suspension revokes native interactive authorization, protects the surface and task preview, rejects protected Back and new durable mutations, drains admitted work and requires authentication before restoring the same mounted session. A rejected queued grade retains its draft for explicit retry while mounted; no guarantee after process death. Explicit lock uses the existing draft departure guard. File access requires current session authorization. Browser tests with lifecycle doubles do not establish physical device or release qualification.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/security/androidSessionLifecycle.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "src/components/VaultGate.tsx",
+        "src/App.tsx",
+        "src/persistence/durableMutationCoordinator.ts",
+        "src/security/durableMutationCoordinator.test.ts",
+        "src/security/secureVault.test.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidPdfExport.ts",
+        "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/native/RegistroSessionPlugin.java",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        "mobile/android-probe/native/RegistroPdfFilesPlugin.java",
+        "tests/browser/sec-session-01-manual-lock.spec.cjs",
+        "tests/browser/sec-session-01-suspension.spec.cjs",
+        ".github/workflows/browser-qualification.yml"
+      ],
+      "tests": [
+        "src/security/navAndroid01NativeBackContract.test.ts",
+        "src/security/durableMutationCoordinator.test.ts",
+        "src/security/secureVault.test.ts",
+        "src/security/androidBackupExport.test.ts",
+        "src/security/androidPdfExport.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/sec-session-01-manual-lock.spec.cjs",
+        "tests/browser/sec-session-01-suspension.spec.cjs"
+      ]
+    },
+    {
+      "id": "BUILD-ID-01-I01",
+      "owner": "BUILD-ID-01",
+      "statement": "The read-only build identity appears on the secure gate and drawer, accepts only complete lowercase 40-hex source SHA and never implies release status, signature or binary digest. Missing identity is explicit. Android packaging records and checks the embedded source SHA separately from APK digest.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "src/components/BuildIdentity.tsx",
+        "src/product/buildIdentity.ts",
+        "src/security/buildIdentity.test.ts",
+        "src/components/VaultGate.tsx",
+        "src/components/Navbar.tsx",
+        ".github/workflows/mobile-01-android-probe.yml"
+      ],
+      "tests": [
+        "src/security/buildIdentity.test.ts",
+        "src/security/mobile01M4BetaIdentityContract.test.ts"
+      ]
+    },
+    {
+      "id": "BETA2-UPDATE-02-I01",
+      "owner": "BETA2-UPDATE-02",
+      "statement": "Exact RC2 and candidate use independently bundled archive fixtures at a shared isolated browser origin. A synthetic existing or empty encrypted archive opens without rewriting its ten records; wrong password fails, a deliberate change persists and old encrypted backup restores. This does not qualify physical APK upgrade or owner signature. No real archive, credential or release is authorized.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        ".github/workflows/beta2-archive-compatibility.yml",
+        "tests/browser/beta2-archive-compatibility.spec.cjs",
+        "tests/browser/fixtures/beta2-archive-compatibility.fixture.ts",
+        "src/security/secureVault.test.ts",
+        "src/security/secureVault.ts",
+        "src/security/vaultStore.ts",
+        "src/security/vaultTypes.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/backupPayload.ts",
+        "src/cryptoUtils.ts"
+      ],
+      "tests": [
+        "src/security/secureVault.test.ts",
+        "src/security/secureAppStorage.test.ts",
+        "src/security/backupPayload.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/beta2-archive-compatibility.spec.cjs"
+      ]
+    },
+    {
+      "id": "BETA2-QUAL-01-I01",
+      "owner": "BETA2-QUAL-01",
+      "statement": "Exact-source reference qualification executes the mapped invariant browser suites without missing or duplicate ownership across the reference, historical and archive-compatibility workflows. Qualification evidence never grants owner signing, physical acceptance or release.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        ".github/workflows/beta2-reference-qualification.yml",
+        ".github/workflows/browser-qualification.yml",
+        ".github/workflows/beta2-archive-compatibility.yml",
+        "scripts/qualification/check-reference-browser-coverage.mjs"
+      ],
+      "tests": [
+        "src/security/navContext01ReturnState.test.ts",
+        "src/security/navAndroid01NativeBackContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/nav-context-01-return-origin.spec.cjs"
       ]
     }
   ]
