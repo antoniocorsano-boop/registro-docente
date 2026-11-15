@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     private volatile int sessionEpoch = 0;
     private volatile boolean sessionForeground = false;
     private volatile int authorizedEpoch = -1;
+    private int interactiveEpoch = -1;
     private View sessionShield;
     private long visualRequestId;
     private int priorWebAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO;
@@ -35,23 +36,29 @@ public class MainActivity extends BridgeActivity {
     boolean authorizeSessionEpoch(int epoch) {
         if (!sessionForeground || sessionEpoch != epoch) return false;
         authorizedEpoch = epoch;
+        interactiveEpoch = -1;
         return true;
     }
 
     void revokeSessionEpoch(int epoch) {
-        if (sessionEpoch == epoch) authorizedEpoch = -1;
+        if (sessionEpoch == epoch) {
+            authorizedEpoch = -1;
+            interactiveEpoch = -1;
+        }
     }
 
     boolean isDocumentSessionAuthorized() {
         return sessionForeground && authorizedEpoch == sessionEpoch;
     }
 
-    void acknowledgeProtectedSurface(int epoch, Runnable onComplete, Runnable onStale) {
+    void acknowledgeProtectedSurface(int epoch, boolean interactive, Runnable onComplete, Runnable onStale) {
         if (!sessionForeground || sessionEpoch != epoch) {
             onStale.run();
             return;
         }
+        if (!interactive) interactiveEpoch = -1;
         if (sessionShield == null) {
+            interactiveEpoch = interactive && isDocumentSessionAuthorized() ? epoch : -1;
             onComplete.run();
             return;
         }
@@ -70,7 +77,8 @@ public class MainActivity extends BridgeActivity {
         web.postVisualStateCallback(++visualRequestId, new WebView.VisualStateCallback() {
             @Override
             public void onComplete(long requestId) {
-                if (!sessionForeground || sessionEpoch != epoch || sessionShield != expectedShield) {
+                if (!sessionForeground || sessionEpoch != epoch || sessionShield != expectedShield
+                        || requestId != visualRequestId) {
                     onStale.run();
                     return;
                 }
@@ -79,6 +87,7 @@ public class MainActivity extends BridgeActivity {
                 ViewGroup parent = (ViewGroup) expectedShield.getParent();
                 if (parent != null) parent.removeView(expectedShield);
                 sessionShield = null;
+                interactiveEpoch = interactive && isDocumentSessionAuthorized() ? epoch : -1;
                 onComplete.run();
             }
         });
@@ -153,6 +162,7 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         sessionForeground = false;
         authorizedEpoch = -1;
+        interactiveEpoch = -1;
         sessionEpoch += 1;
         coverSessionSurface();
         signalSessionChange();
@@ -166,7 +176,7 @@ public class MainActivity extends BridgeActivity {
     private void navigateWebHistory() {
         // A committed Back on the protected surface must not even start a
         // WebView history traversal: a draft guard could otherwise open invisibly.
-        if (!isDocumentSessionAuthorized() || sessionShield != null) return;
+        if (!isDocumentSessionAuthorized() || sessionShield != null || interactiveEpoch != sessionEpoch) return;
         // Preserve the web app's existing route and draft authority.
         if (getBridge() == null) return;
         WebView webView = getBridge().getWebView();
