@@ -163,3 +163,56 @@ test('SEC-SESSION-01: interrupted foreground authorization after migration retur
   await expect(page.getByTestId('header01-topbar')).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>window.__sessionEvidence.filter(x=>x[0]==='authorize').map(x=>x[1]))).toEqual([0,1]);
 });
+
+test('SEC-SESSION-01: slow admitted daily grade settles without premature unlock or duplicate write',async({page})=>{
+  await open(page);
+  await page.getByRole('button',{name:/^Apri classe /}).first().click();
+  await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();
+  const grade=page.getByRole('textbox',{name:'Voto alunno 1',exact:true});
+  await expect(grade).toBeVisible();
+  await grade.fill('8');
+  await page.getByRole('button',{name:'Conferma voto alunno 1',exact:true}).click();
+  await page.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');
+  await page.getByRole('textbox',{name:'Argomento prova'}).fill('Prova sintetica sospensione lunga');
+  // Hold delivery of the real encrypted transaction completion, not a fake save.
+  await page.evaluate(()=>{
+    const original=Object.getOwnPropertyDescriptor(IDBTransaction.prototype,'oncomplete');
+    if(!original?.get||!original?.set)throw Error('IDB completion descriptor unavailable');
+    window.__gradeCompletionPending=false;
+    Object.defineProperty(IDBTransaction.prototype,'oncomplete',{
+      configurable:true,enumerable:original.enumerable,get:original.get,
+      set(handler){
+        if(this.mode==='readwrite'&&this.objectStoreNames.contains('records')){
+          Object.defineProperty(IDBTransaction.prototype,'oncomplete',original);
+          original.set.call(this,function(event){
+            window.__gradeCompletionPending=true;
+            window.__releaseGradeCompletion=()=>handler.call(this,event);
+          });
+        }else original.set.call(this,handler);
+      }
+    });
+  });
+  await page.getByRole('button',{name:'Conferma e registra',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>window.__gradeCompletionPending)).toBe(true);
+  await page.evaluate(()=>{window.__transitionSession(false);window.__transitionSession(true);});
+  await expect(page.getByText('Protezione della sessione…',{exact:true})).toBeVisible();
+  await expect(grade).toBeHidden();
+  await expect(page.getByText('Sessione protetta. Attesa della conclusione dell’operazione locale.',{exact:true})).toBeVisible({timeout:16000});
+  await expect(page.locator('#vault-password')).toHaveCount(0);
+  await page.evaluate(()=>window.__releaseGradeCompletion());
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await expect(grade).toBeVisible();
+  await expect(grade).toHaveValue('8');
+  await expect(page.getByTestId('daily-registration-summary')).toContainText('1 voto registrato');
+  await expect(page.getByTestId('daily-registration-summary')).not.toContainText('da registrare');
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro'}).click();
+  await page.getByRole('button',{name:/^Apri classe /}).first().click();
+  await page.locator('nav').getByRole('button',{name:'Tabellone',exact:true}).click();
+  await expect(grade).toHaveValue('8');
+  await expect(page.getByTestId('daily-registration-summary')).toContainText('1 voto registrato');
+});
