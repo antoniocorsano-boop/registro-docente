@@ -34,6 +34,19 @@ public class RegistroSessionPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void revoke(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            Integer epoch = call.getInt("epoch");
+            if (!(getActivity() instanceof MainActivity) || epoch == null) {
+                call.reject("Sessione Android non disponibile.");
+                return;
+            }
+            ((MainActivity) getActivity()).revokeSessionEpoch(epoch);
+            call.resolve(new JSObject());
+        });
+    }
+
+    @PluginMethod
     public void acknowledgeShield(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             Integer epoch = call.getInt("epoch");
