@@ -19,6 +19,7 @@ test('M2 synthetic native bridge: verified export, wrong password, cancelled res
     window.Capacitor = { getPlatform: () => 'android', Plugins: { RegistroSession: {
       getState: async () => ({ epoch: 0, foreground: true }),
       authorize: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); },
+      revoke: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); },
       acknowledgeShield: async ({epoch}) => { if(epoch!==0)throw Error('Invalid synthetic epoch'); }
     }, RegistroBackupFiles: {
       chooseBackupDestination: async () => ({ status: 'selected', token: 'write' }),

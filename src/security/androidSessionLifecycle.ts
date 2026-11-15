@@ -7,7 +7,8 @@ export interface AndroidSessionState {
 type NativeSessionPlugin = {
   getState(): Promise<unknown>;
   authorize(input: { epoch: number }): Promise<unknown>;
-  acknowledgeShield(input: { epoch: number }): Promise<unknown>;
+  revoke(input: { epoch: number }): Promise<unknown>;
+  acknowledgeShield(input: { epoch: number; interactive: boolean }): Promise<unknown>;
 };
 type AndroidSessionRuntime = {
   androidBridge?: unknown;
@@ -21,7 +22,7 @@ export function isAndroidSessionRuntime(): boolean {
 function bridge(): NativeSessionPlugin {
   const plugin = runtime().Capacitor?.Plugins?.RegistroSession;
   if (!plugin || typeof plugin.getState !== 'function' || typeof plugin.authorize !== 'function'
-      || typeof plugin.acknowledgeShield !== 'function') {
+      || typeof plugin.revoke !== 'function' || typeof plugin.acknowledgeShield !== 'function') {
     throw new Error('Protezione della sessione Android non disponibile.');
   }
   return plugin;
@@ -40,8 +41,11 @@ export async function readAndroidSessionState(): Promise<AndroidSessionState | n
 export async function authorizeAndroidSession(epoch: number): Promise<void> {
   await bridge().authorize({ epoch });
 }
-export async function acknowledgeAndroidShield(epoch: number): Promise<void> {
-  await bridge().acknowledgeShield({ epoch });
+export async function revokeAndroidSession(epoch: number): Promise<void> {
+  await bridge().revoke({ epoch });
+}
+export async function acknowledgeAndroidShield(epoch: number, interactive: boolean): Promise<void> {
+  await bridge().acknowledgeShield({ epoch, interactive });
 }
 
 /** Installed by the mounted Vault owner, not by a document chooser. */

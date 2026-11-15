@@ -23,7 +23,7 @@ import { VaultGate } from './VaultGate';
 import type { SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
 import {
   ANDROID_SESSION_EVENT, isAndroidSessionRuntime, readAndroidSessionState,
-  authorizeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess,
+  authorizeAndroidSession, revokeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess,
   type AndroidSessionState
 } from '../security/androidSessionLifecycle';
 
@@ -131,15 +131,23 @@ export const SecureRegistroRoot: React.FC = () => {
     void inspectBootstrap();
   }, [inspectBootstrap]);
 
-  const lockImmediately = useCallback(() => {
-    vaultRef.current?.lock();
+  const revokeNativeAuthorization = useCallback(() => {
+    const epoch = authenticatedEpochRef.current;
     authenticatedEpochRef.current = null;
+    if (epoch !== null && isAndroidSessionRuntime()) {
+      void revokeAndroidSession(epoch).catch(() => {});
+    }
+  }, []);
+
+  const lockImmediately = useCallback(() => {
+    revokeNativeAuthorization();
+    vaultRef.current?.lock();
     setSnapshot(null);
     // A confirmed reset can finish while the manual lock is draining.
     // Its terminal setup state is authoritative, even if React batches
     // the reset and lock updates in the same render.
     setGateState(current => current === 'READY' ? 'LOCKED' : current);
-  }, []);
+  }, [revokeNativeAuthorization]);
 
   // Manual lock and menu exit share the App's existing draft guard.
   // Close admission synchronously before hiding the still-mounted App so
@@ -151,6 +159,7 @@ export const SecureRegistroRoot: React.FC = () => {
     request(drain => {
       if (closingRef.current) return;
       closingRef.current = true;
+      revokeNativeAuthorization();
       const settled = drain();
       setClosingDelayed(false);
       setClosing(true);
@@ -163,7 +172,7 @@ export const SecureRegistroRoot: React.FC = () => {
         setClosingDelayed(false);
       });
     });
-  }, [lockImmediately]);
+  }, [lockImmediately, revokeNativeAuthorization]);
 
   // The Android shield is installed before onPause returns. JS admission closes
   // on the native generation change; drafts remain only in this mounted tree.
@@ -177,7 +186,7 @@ export const SecureRegistroRoot: React.FC = () => {
     }
     const lease = request();
     suspendedRef.current = lease;
-    authenticatedEpochRef.current = null;
+    revokeNativeAuthorization();
     setSuspensionDelayed(false);
     setSuspensionPhase('draining');
     const deadline = window.setTimeout(() => {
@@ -196,7 +205,7 @@ export const SecureRegistroRoot: React.FC = () => {
       }
       setSuspensionPhase('locked');
     });
-  }, [lockImmediately]);
+  }, [lockImmediately, revokeNativeAuthorization]);
 
   const syncNativeSession = useCallback(async (): Promise<AndroidSessionState | null> => {
     try {
@@ -250,7 +259,7 @@ export const SecureRegistroRoot: React.FC = () => {
     if (protectedSurface || authenticatedEpochRef.current === nativeState.epoch) {
       // This acknowledgment only removes the native cover after React has committed
       // a protected surface or a freshly authenticated session.
-      void acknowledgeAndroidShield(nativeState.epoch).catch(() => {});
+      void acknowledgeAndroidShield(nativeState.epoch, !protectedSurface).catch(() => {});
     }
   }, [nativeState, gateState, closing, suspensionPhase]);
 
@@ -275,16 +284,23 @@ export const SecureRegistroRoot: React.FC = () => {
       }
     };
     assertCurrent();
-    await authorizeAndroidSession(epoch);
-    // A successful bridge response can itself be stale. Query again and
-    // compare both the observed epoch and all intervening lifecycle signals.
-    const latest = await syncNativeSession();
-    if (!latest?.foreground || latest.epoch !== epoch) {
-      throw new Error('Sessione Android cambiata. Autenticati nuovamente.');
+    try {
+      await authorizeAndroidSession(epoch);
+      // A successful bridge response can itself be stale. Query again and
+      // compare both the observed epoch and all intervening lifecycle signals.
+      const latest = await syncNativeSession();
+      if (!latest?.foreground || latest.epoch !== epoch) {
+        throw new Error('Sessione Android cambiata. Autenticati nuovamente.');
+      }
+      assertCurrent();
+      authenticatedEpochRef.current = epoch;
+      commit();
+    } catch (error) {
+      if (authenticatedEpochRef.current === epoch) authenticatedEpochRef.current = null;
+      // Do not revoke a newer foreground generation after stale authorization.
+      await revokeAndroidSession(epoch).catch(() => {});
+      throw error;
     }
-    assertCurrent();
-    authenticatedEpochRef.current = epoch;
-    commit();
   }, [syncNativeSession]);
 
   const resumeSuspendedSession = useCallback(async (password: string) => {
@@ -438,13 +454,13 @@ export const SecureRegistroRoot: React.FC = () => {
     for (const legacyKey of LEGACY_DATA_KEYS) {
       window.localStorage.removeItem(legacyKey);
     }
-    authenticatedEpochRef.current = null;
+    revokeNativeAuthorization();
     suspendedRef.current = null;
     setSuspensionPhase(null);
     setSuspensionDelayed(false);
     setSnapshot(null);
     setGateState('SETUP_REQUIRED');
-  }, [getRuntime]);
+  }, [getRuntime, revokeNativeAuthorization]);
 
   useEffect(() => {
     if (gateState !== 'READY' || closing || suspensionPhase !== null || autoLockMinutes === 0) return;
