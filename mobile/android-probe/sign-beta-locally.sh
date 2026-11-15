@@ -26,7 +26,7 @@ validate_beta_identity() {
   local app_id="$1" code="$2" version_name="$3"
   [[ "$app_id" == "it.trama.registrodocente" && "$code" =~ ^[1-9][0-9]{0,9}$ &&
      "$code" -ge 10001 && "$code" -le 2100000000 &&
-     "$version_name" =~ ^0\.1\.0-beta\.[12]-rc\.[1-9][0-9]*$ ]]
+     "$version_name" =~ ^0\.1\.0-beta\.[12]-rc\.[1-9][0-9]*$ ]] || return 1
   if [[ "$version_name" == 0.1.0-beta.2-* && "$code" -lt 10003 ]]; then return 1; fi
 }
 validate_beta_identity "$app" "$version" "$name" || { echo 'Invalid candidate Beta identity' >&2; exit 1; }
