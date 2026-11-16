@@ -9,6 +9,8 @@ describe('VAL-01/D1b.2b historical compatibility gate wiring (not dynamic browse
     expect(w).toContain('test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"');
     expect(w).toContain('test "$(git -C "$GITHUB_WORKSPACE/.historical-exact" rev-parse HEAD)" = "$HISTORICAL_SHA"');
     expect(w).toContain('val01-historical-v7-compatibility.spec.cjs');
+    expect(w).not.toContain('beta2-archive-compatibility.spec.cjs');
+    expect(w.split('playwright test')[1]).toContain('val01-historical-v7-compatibility.spec.cjs');
     expect(w).toContain('if-no-files-found: error');
   });
   test('historical fixture imports only historical crypto, storage and backup reader, never candidate codec',async()=>{

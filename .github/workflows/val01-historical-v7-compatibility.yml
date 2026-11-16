@@ -76,7 +76,7 @@ jobs:
           export VAL01_HISTORICAL_BUNDLE="$RUNNER_TEMP/val01-archive-fixtures/historical.js"
           export VAL01_CANDIDATE_BUNDLE="$RUNNER_TEMP/val01-archive-fixtures/candidate.js"
           ./node_modules/.bin/playwright test \
-            beta2-archive-compatibility.spec.cjs \
+            val01-historical-v7-compatibility.spec.cjs \
             --workers=1 --output=../browser-evidence/results
       - if: always()
         run: test ! -f browser-evidence/server.pid || kill "$(cat browser-evidence/server.pid)" || true
