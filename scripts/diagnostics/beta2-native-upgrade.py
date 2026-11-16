@@ -117,9 +117,16 @@ try:
     if ("package:"+PKG) in adb("shell","pm","list","packages").splitlines():
         raise RuntimeError("Expected fresh emulator, never overwrite an existing archive")
     install(os.environ["OLD_SIGNED_APK"])
-    old=package_state(10002); stage("beta1-installed",**old)
+    old=package_state(10003); stage("beta1-installed",**old)
     launch()
-    enter_gate("Configura archivio protetto",PASSWORD)
+    observe_text("Configura archivio protetto")
+    # RC3 has a mandatory mode chooser; only the synthetic demo is selected.
+    # A single tap on the associated label selects the radio through the UI.
+    press(wait_node(lambda n: n.get("package")==PKG and "Ambiente dimostrativo" in label(n),
+                    "RC3 synthetic demo archive option"))
+    button("Avvia la prova")
+    stage("beta1-demo-mode-selected")
+    enter_gate("Avvia la prova",PASSWORD)
     observe_text("Le mie classi")
     press(button("Nuova Classe"))
     press(edit());type_text(MARKER);hide_keyboard();press(button("OK"))
@@ -131,11 +138,14 @@ try:
     stage("beta1-created-class-survives-reopen",marker=MARKER)
     stop()
     install(os.environ["NEW_SIGNED_APK"],replace=True)
-    new=package_state(10003)
+    new=package_state(10004)
     if any(old[k]!=new[k] for k in ("uid","firstInstallTime")):
         raise RuntimeError("Replacement did not retain Android package identity")
     stage("in-place-upgrade",**new)
     launch()
+    expected_build = "Android · " + os.environ["BETA2_SHA"][:12]
+    wait_node(lambda n:n.get("package")==PKG and expected_build in label(n), "promoted build on locked gate")
+    stage("promoted-build-visible-on-gate",identity=expected_build)
     enter_gate("Sblocca Registro","WrongSyntheticPassword")
     observe_text("Password errata")
     stage("wrong-password-rejected")
