@@ -136,11 +136,15 @@ function oneOf<T extends string>(x: unknown, values: readonly T[]): x is T {
   return typeof x === 'string' && (values as readonly string[]).includes(x);
 }
 function array(x: unknown): x is unknown[] {
-  return Array.isArray(x) && Reflect.ownKeys(x).length === x.length + 1 &&
-    Array.from({length:x.length},(_,i)=>i).every(i => {
-      const d = Object.getOwnPropertyDescriptor(x,String(i));
-      return !!d && 'value' in d && d.enumerable;
-    });
+  // JSON arrays have the canonical prototype, dense own data elements and no extra keys.
+  // Reject subclasses before any input-controlled collection method can run.
+  if (!Array.isArray(x) || Object.getPrototypeOf(x) !== Array.prototype ||
+      Reflect.ownKeys(x).length !== x.length + 1) return false;
+  for (let i = 0; i < x.length; i++) {
+    const d = Object.getOwnPropertyDescriptor(x,String(i));
+    if (!d || !('value' in d) || !d.enumerable) return false;
+  }
+  return true;
 }
 function ids(x: unknown, nonempty = false): x is string[] {
   return array(x) && (!nonempty || x.length > 0) && x.every(id) && new Set(x).size === x.length;
@@ -274,6 +278,11 @@ function chains(list: Row[], logicalKey: string, stable: (a:Row,b:Row)=>boolean)
   }
   return reached.size === list.length;
 }
+// Every frozen dependency must already have been confirmed when the dependent
+// revision is confirmed. Equal instants are valid for a single explicit confirmation.
+function availableAt(source: Row | undefined, dependent: Row): source is Row {
+  return source !== undefined && str(source.confirmedAt) <= str(dependent.confirmedAt);
+}
 const reject = (issue: AssessmentIssue): AssessmentValidation => ({valid:false,issues:[issue]});
 
 /** Structural validation only. Failure contains a stable non-personal code, never source values. */
@@ -304,12 +313,12 @@ export function validateAssessmentEvidenceV1(value: unknown, scope: unknown): As
     for (const c of criteria) {
       const targets = c.targetReferenceRevisionIds as string[], contextual = c.contextualReferenceRevisionIds as string[];
       const resolved = [...targets,...contextual].map(k=>refIndex.get(k));
-      if (resolved.some(x=>!x) || !unique(resolved as Row[],x=>str(x.referenceId)) ||
+      if (resolved.some(x=>!availableAt(x,c)) || !unique(resolved as Row[],x=>str(x.referenceId)) ||
           targets.some(k=>!oneOf(refIndex.get(k)?.kind,targetKinds))) return reject('INVALID_LINK');
     }
     for (const r of rubrics) {
       const resolved = rows(r.criteria).map(c=>criterionIndex.get(str(c.criterionRevisionId)));
-      if (resolved.some(x=>!x) || !unique(resolved as Row[],x=>str(x.criterionId))) return reject('INVALID_LINK');
+      if (resolved.some(x=>!availableAt(x,r)) || !unique(resolved as Row[],x=>str(x.criterionId))) return reject('INVALID_LINK');
     }
     const activities = new Map<string,string>();
     const year = str(scope.schoolYear);
@@ -320,11 +329,11 @@ export function validateAssessmentEvidenceV1(value: unknown, scope: unknown): As
       if (!inYear(str(a.date),year) || (has(a,'completedOn') && !inYear(str(a.completedOn),year))) return reject('INVALID_ASSESSMENT');
       const bindings = rows(a.criteria);
       const resolved = bindings.map(c=>criterionIndex.get(str(c.criterionRevisionId)));
-      if (resolved.some(x=>!x) || !unique(resolved as Row[],x=>str(x.criterionId))) return reject('INVALID_LINK');
+      if (resolved.some(x=>!availableAt(x,a)) || !unique(resolved as Row[],x=>str(x.criterionId))) return reject('INVALID_LINK');
       for (const b of bindings) {
         if (has(b,'rubricRevisionId')) {
           const r = rubricIndex.get(str(b.rubricRevisionId));
-          if (!r || !rows(r.criteria).some(c=>c.criterionRevisionId === b.criterionRevisionId)) return reject('INVALID_LINK');
+          if (!availableAt(r,a) || !rows(r.criteria).some(c=>c.criterionRevisionId === b.criterionRevisionId)) return reject('INVALID_LINK');
         }
       }
     }
@@ -332,7 +341,8 @@ export function validateAssessmentEvidenceV1(value: unknown, scope: unknown): As
     const roster = new Set(scope.studentIds as string[]);
     for (const e of evidence) {
       const a = assessmentIndex.get(str(e.assessmentRevisionId)), c = criterionIndex.get(str(e.criterionRevisionId));
-      if (!a || !c || a.status !== 'completed' || !roster.has(str(e.studentId)) || !inYear(str(e.observedOn),year)) return reject('INVALID_LINK');
+      if (!availableAt(a,e) || !availableAt(c,e) || a.status !== 'completed' ||
+          !roster.has(str(e.studentId)) || !inYear(str(e.observedOn),year)) return reject('INVALID_LINK');
       const binding = rows(a.criteria).find(b=>b.criterionRevisionId === e.criterionRevisionId);
       if (!binding) return reject('INVALID_LINK');
       const identity = JSON.stringify([a.assessmentId,c.criterionId,e.studentId,e.observationEventId]);
