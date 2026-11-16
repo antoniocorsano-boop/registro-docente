@@ -2290,7 +2290,7 @@
     {
       "id": "BETA2-UPDATE-02-I01",
       "owner": "BETA2-UPDATE-02",
-      "statement": "Exact RC2 and candidate use independently bundled archive fixtures at a shared isolated browser origin. A synthetic existing or empty encrypted archive opens without rewriting its ten records; wrong password fails, a deliberate change persists and old encrypted backup restores. This does not qualify physical APK upgrade or owner signature. No real archive, credential or release is authorized.",
+      "statement": "Exact installed RC3 and candidate use independently bundled archive fixtures at a shared isolated browser origin. A synthetic existing or empty encrypted archive opens without rewriting its ten records; wrong password fails, a deliberate change persists and old encrypted backup restores. This does not qualify physical APK upgrade or owner signature. No real archive, credential or release is authorized.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         ".github/workflows/beta2-archive-compatibility.yml",
