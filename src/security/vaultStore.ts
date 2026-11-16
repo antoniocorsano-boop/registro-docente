@@ -65,7 +65,7 @@ export class IndexedDbVaultStore implements VaultStore {
     this.factory = factory;
   }
 
-  private openDatabase(): Promise<IDBDatabase> {
+  protected openDatabase(): Promise<IDBDatabase> {
     if (this.databasePromise) return this.databasePromise;
 
     this.databasePromise = new Promise((resolve, reject) => {

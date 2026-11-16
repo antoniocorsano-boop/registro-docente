@@ -1,13 +1,12 @@
-// D1b.3a RED baseline: the unmodified v1 store cannot enforce a v2 fence.
-// Replace only the candidate store implementation after causal browser RED.
-import { IndexedDbVaultStore } from '../../../src/security/vaultStore';
+// D1b.3a GREEN candidate adapter: isolated version-fenced store.
+import { VersionFencedVaultStore } from '../../../src/security/versionFencedVaultStore';
 import { SecureVault } from '../../../src/security/secureVault';
 import { SecureAppStorage } from '../../../src/security/secureAppStorage';
 import type { VaultRecordKey } from '../../../src/security/vaultTypes';
 const name='registro-docente-secure-vault';
 const password='synthetic-archive-compatibility-only';
 const keys:VaultRecordKey[]=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'];
-const store=new IndexedDbVaultStore();
+const store=new VersionFencedVaultStore();
 const vault=new SecureVault(store);
 const storage=new SecureAppStorage(vault);
 const bytes=(value:ArrayBuffer|Uint8Array)=>new Uint8Array(value instanceof Uint8Array?value.slice().buffer:value);
