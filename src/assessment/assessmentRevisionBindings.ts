@@ -143,6 +143,25 @@ function validateCollection(bindings:readonly AssessmentRevisionBinding[],data:A
   return true;
 }
 
+/** Shared defensive JSON boundary for the isolated assessment archive validator.
+ * The detached value is not an authorization, persistence receipt or export. */
+export { snapshot as snapshotAssessmentData };
+
+/** Validate the entire frozen link collection without resolving current grades.
+ * Historical revisions remain valid even when a current grade is unavailable.
+ * This does not authorize a new link, mutation or restoration. */
+export function validateAssessmentRevisionBindings(
+  document:unknown,scope:unknown,bindings:unknown
+):boolean{
+  try{
+    const d=snapshot(document),s=snapshot(scope),b=snapshot(bindings);
+    if(!validateAssessmentEvidenceV1(d,s).valid)return false;
+    const context=s as AssessmentScopeV1;
+    return Array.isArray(b)&&b.every(x=>shape(x,context))&&
+      validateCollection(b as AssessmentRevisionBinding[],d as AssessmentEvidenceV1);
+  }catch{return false;}
+}
+
 /** Validate history independently from the current archive. Only the explicitly
  * requested active revision must resolve against that archive; a stale retry
  * fails closed, but cannot erase or reassign earlier frozen identities. */
