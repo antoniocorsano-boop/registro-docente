@@ -2367,6 +2367,18 @@
       "tests": [
         "src/security/val01AssessmentEvidence.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1A2-I01",
+      "owner": "VAL-01/D1a.2",
+      "statement": "An isolated explicit assessment batch link resolves only the selected globally unambiguous batch and optional exact individual grade identity in the confirmed class/year/subject context; rejects incoherent metadata, roster or grade identities, missing links, unconfirmed requests and online or malformed daily namespaces. No title/date matching, score or name copying, competence inference, grade mutation, runtime integration or automatic reassignment after identity change.",
+      "impactPaths": [
+        "src/assessment/assessmentBatchLink.ts",
+        "src/security/val01AssessmentBatchLink.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentBatchLink.test.ts"
+      ]
     }
   ]
 }
