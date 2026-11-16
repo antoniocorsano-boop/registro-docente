@@ -2455,6 +2455,26 @@
       "browserSmoke": [
         "tests/browser/val01-historical-v7-compatibility.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-D1B-I04",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated version-bound backup receipt authority generates and encrypts its own checkpoint using the selected codec, derives version and exact bytes/digest from the encrypted payload, forbids v6 evidence archives and version mismatch at consumption, requires actual web readback or verified Android bridge, invalidates on cancellation, stale session, replay and supersession, preserves later changes, never transfers local receipts and does not activate runtime writes. A v6 receipt cannot attest v7 coverage.",
+      "impactPaths": [
+        "src/persistence/versionedBackupReceipt.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/webBackupVerification.ts",
+        "src/cryptoUtils.ts"
+      ],
+      "tests": [
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
     }
   ]
 }
