@@ -34,15 +34,15 @@ async function connect(){
     return ws;
   },'WebView CDP not available',45000);
 }
-function evaluate(expression){
+function evaluate(expression,timeout=15000){
   const id=++seq;
   return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{pending.delete(id);reject(Error('WebView evaluation timeout'));},90000);
+    const timer=setTimeout(()=>{pending.delete(id);reject(Error('WebView evaluation timeout'));},timeout);
     pending.set(id,{timer,resolve:r=>resolve(r.result.value),reject});
     socket.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));
   });
 }
-const call=(api,method,...args)=>evaluate('window['+JSON.stringify(api)+']['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
+const call=(api,method,...args)=>evaluate('window['+JSON.stringify(api)+']['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')',method==='write'?90000:15000);
 const old=(m,...a)=>call('__beta2ArchiveCompatibility',m,...a);
 const hist=(m,...a)=>call('__val01FenceHistorical',m,...a);
 const lab=(m,...a)=>call('__val01NativeLab',m,...a);
@@ -65,6 +65,7 @@ function identity(version){
   return {uid,first};
 }
 function nodes(){
+  adb('shell','rm','-f','/sdcard/val01-ui.xml');
   adb('shell','uiautomator','dump','/sdcard/val01-ui.xml');
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
   return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
@@ -83,11 +84,33 @@ async function downloads(){
     tap(await find(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text),'Downloads root missing'));
   }
 }
-async function pickerRead(wrong=false){
-  const task=lab('readAndPrepare',wrong);task.catch(()=>{});
+function foreground(){
+  return adb('shell','dumpsys','activity','activities').split('\n').some(s=>/topResumedActivity|mResumedActivity/.test(s)&&s.includes(pkg+'/'));
+}
+async function startRead(wrong=false){
+  // Never hold a DevTools awaitPromise across a backgrounded WebView.
+  await evaluate('(()=>{window.__val01NativeLab.readAndPrepare('+JSON.stringify(wrong)+').catch(()=>{});return true})()');
   await downloads();
-  tap(await find(n=>doc(n)&&(n.text===filename||n.desc.includes(filename)),'Saved encrypted file missing'));
-  return task;
+}
+async function readResult(){
+  await until(foreground,'Android picker did not return to the laboratory app',20000);
+  const result=await until(async()=>{
+    const s=await lab('readState');
+    return ['cancelled','authorization-rejected','authorized','native-error'].includes(s.phase)?s:null;
+  },'Native read/authorization did not settle',30000);
+  console.log('native-read-phase',result.phase,result.bytes||0);
+  assert.notEqual(result.phase,'native-error');
+  return result;
+}
+async function pickerRead(wrong=false){
+  await startRead(wrong);
+  const row=await find(n=>doc(n)&&(n.text===filename||n.text.startsWith('Backup_Cifrato_GDPR_2031-01-15')||n.desc.includes(filename)),'Saved encrypted file missing');
+  console.log('native-file-target',JSON.stringify(row));
+  tap(row);
+  // Some DocumentsUI versions require explicit confirmation after selection.
+  await until(()=>foreground()||nodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),'File selection did not complete',12000);
+  if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Open confirmation absent'));
+  return readResult();
 }
 try{
   assert.equal(process.env.GITHUB_ACTIONS,'true');
@@ -115,18 +138,19 @@ try{
   const hash=createHash('sha256').update(bytes).digest('hex');
   stage('native-saf-write-readback',{bytes:bytes.length,sha256:hash});
   stop();await launch('__val01NativeLab');assert.equal(await lab('ready'),true);
-  const cancel=lab('readAndPrepare');cancel.catch(()=>{});
-  await downloads();adb('shell','input','keyevent','4');
-  assert.equal(await cancel,null);assert.equal(await candidate('version'),1);
+  await startRead();adb('shell','input','keyevent','4');
+  assert.equal((await readResult()).phase,'cancelled');assert.equal(await candidate('version'),1);
   stage('native-picker-cancel-no-migration');
-  await assert.rejects(pickerRead(true));assert.equal(await candidate('version'),1);
+  const denied=await pickerRead(true);
+  assert.equal(denied.phase,'authorization-rejected');assert.equal(denied.sha256,hash);assert.equal(denied.bytes,bytes.length);assert.equal(await candidate('version'),1);
   stage('native-wrong-copy-password-no-migration');
-  const grant=await pickerRead();
+  const selected=await pickerRead();assert.equal(selected.phase,'authorized');
+  const grant=selected.grant;
   assert.equal(grant.sha256,hash);assert.equal(grant.bytes,bytes.length);assert.equal(grant.payloadVersion,6);
   assert.equal(await candidate('version'),1);
   await assert.rejects(lab('migrate',false));assert.equal(await candidate('version'),1);
   stage('native-explicit-refusal-no-migration');
-  const fresh=await pickerRead();assert.deepEqual(fresh,grant);
+  const fresh=await pickerRead();assert.equal(fresh.phase,'authorized');assert.deepEqual(fresh.grant,grant);
   assert.equal(await lab('migrate',true),true);
   assert.equal(await candidate('version'),2);
   await assert.rejects(lab('migrate',true));
@@ -147,4 +171,10 @@ try{
   writeFileSync('native-evidence/failure.txt',String(e));
   process.exitCode=1;
   console.error(e.message);
-}finally{socket?.close();}
+  try{writeFileSync('native-evidence/synthetic-ui.json',JSON.stringify(nodes(),null,2));}catch{}
+  try{writeFileSync('native-evidence/foreground.txt',adb('shell','dumpsys','activity','activities'));}catch{}
+}finally{
+  // Bound the diagnostic itself even if a DevTools socket never closes.
+  socket?.close();for(const p of pending.values())clearTimeout(p.timer);pending.clear();
+  process.exit(process.exitCode||0);
+}
