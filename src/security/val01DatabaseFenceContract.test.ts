@@ -20,3 +20,17 @@ describe('VAL-01/D1b.3a database fence browser wiring (not native acceptance)',(
     expect(r.coverage.filter((e:any)=>e.workflow==='.github/workflows/val01-database-fence.yml')).toEqual([{workflow:'.github/workflows/val01-database-fence.yml',count:1}]);
   });
 });
+
+describe('VAL-01/D1b.3b authorized migration contract',()=>{
+  test('actual browser gate covers the authorized path and no production entrypoint imports it',async()=>{
+    const spec=await read('tests/browser/val01-database-fence.spec.cjs');
+    for(const name of ['authenticated local copy plus explicit one-use approval','wrong passwords, corrupt copy','changed archive between verification and upgrade','blocked authorization cannot upgrade later'])expect(spec).toContain(name);
+    const fixture=await read('tests/browser/fixtures/val01-fence-candidate.fixture.ts');
+    expect(fixture).toContain('createAuthorizedVaultMigration()');
+    const auth=await read('src/security/authorizedVaultMigration.ts');
+    for(const required of ['decryptJsonRecord','decryptDataWithPassword','inspectAssessmentBackupPayload','pending=null','confirmed!==true','same(checked(m,r),physical)','tx.abort()'])expect(auth).toContain(required);
+    const app=await read('src/App.tsx');
+    expect(app).not.toContain('authorizedVaultMigration');
+    expect(app).not.toContain('versionFencedVaultStore');
+  });
+});
