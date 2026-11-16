@@ -2391,6 +2391,18 @@
       "tests": [
         "src/security/val01AssessmentEvidenceProjection.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1A2-I03",
+      "owner": "VAL-01/D1a.2",
+      "statement": "Frozen assessment and individual evidence links are explicit, revision-specific and validated in local scope; current requests resolve exact batch and optional grade identity, historical bindings are not reassigned, duplicate ownership and conflicting retries fail closed, observed evidence stays independent from grade values. No inference, persistence, runtime integration or external disclosure.",
+      "impactPaths": [
+        "src/assessment/assessmentRevisionBindings.ts",
+        "src/security/val01AssessmentRevisionBindings.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentRevisionBindings.test.ts"
+      ]
     }
   ]
 }
