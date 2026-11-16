@@ -37,9 +37,20 @@ export interface VaultBootstrapInput {
   webCryptoAvailable: boolean;
 }
 
+export interface BackupVerificationEvidence {
+  readonly bytes: number;
+  readonly sha256: string;
+  readonly source: 'android-readback' | 'web-readback';
+  readonly payloadVersion: 6;
+  readonly checkpointAt: string;
+}
+
 export interface SecureMeta {
   changes: number;
   lastBackup: string | null;
+  /** Local-only attestation issued after verified copy and durable metadata commit. */
+  verifiedBackupAt?: string;
+  verifiedBackupEvidence?: BackupVerificationEvidence;
 }
 
 export interface SecureAppSnapshot {

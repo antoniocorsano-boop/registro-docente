@@ -9,6 +9,8 @@ describe('MOBILE-01/M4 separated Beta identity and owner-local signing', () => {
     expect(probe.appId).toBe('it.trama.registrodocente.prova');
     expect(beta.applicationId).toBe('it.trama.registrodocente');
     expect(beta.versionCode).toBeGreaterThanOrEqual(10001);
+    expect(beta.versionCode).toBe(10003);
+    expect(beta.versionName).toBe('0.1.0-beta.2-rc.1');
     expect(beta.status).toBe('UNSIGNED_CANDIDATE_NOT_RELEASED');
     const prepare = await load('mobile/android-probe/prepare-beta.mjs');
     for (const token of ['android:allowBackup="false"', 'android:fullBackupContent="false"', 'android:dataExtractionRules',
@@ -27,7 +29,7 @@ describe('MOBILE-01/M4 separated Beta identity and owner-local signing', () => {
   test('owner signer checks artifact integrity and stable certificate before returning an update', async () => {
     const script = await load('mobile/android-probe/sign-beta-locally.sh');
     for (const token of ['sha256sum "$unsigned"', 'Input must be unsigned', 'Previous signed Beta required',
-      '"$version" -gt "$old_version"', 'Signing certificate differs', 'verify --print-certs', '--ks-key-alias registro-docente',
+      '"$version" -gt "$old_version"', 'Signing certificate differs', 'Beta series downgrade rejected', 'validate_beta_identity', '[[ "$count" == 1 ]]', 'verify --print-certs', '--ks-key-alias registro-docente',
       'Debuggable candidate rejected', 'set -o noclobber', 'NOT released']) expect(script).toContain(token);
     expect(script).not.toMatch(/--ks-pass|--key-pass|curl|wget|gh release/);
   });

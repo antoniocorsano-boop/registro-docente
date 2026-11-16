@@ -16,6 +16,7 @@ import { createEmptyPlanningState } from '../planning/emptyPlanningState';
 import { normalizePlanningState } from '../planning/normalizePlanningState';
 import type { PlanningStateV1, PlanningStateV2 } from '../planning/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
+import { withoutLocalBackupVerification } from '../persistence/backupCheckpoint';
 
 export const BACKUP_DATA_VERSION_V2 = 2;
 export const BACKUP_DATA_VERSION_V3 = 3;
@@ -406,6 +407,7 @@ export function createBackupPayload(
     exportedAt,
     snapshot: {
       ...snapshot,
+      meta: withoutLocalBackupVerification(snapshot.meta),
       professionalMemory: snapshot.professionalMemory ?? createEmptyProfessionalMemoryState(),
       copilotState: normalizeLoadedCopilotState(snapshot.copilotState ?? createEmptyCopilotState())
     }
@@ -541,7 +543,8 @@ export function normalizeBackupPayload(
   payload: unknown,
   current: CompleteSecureAppSnapshot
 ): ReturnType<typeof normalizeBackupPayloadInternal> {
-  const restored = normalizeBackupPayloadInternal(payload, current);
+  const source = normalizeBackupPayloadInternal(payload, current);
+  const restored = { ...source, meta: withoutLocalBackupVerification(source.meta) };
   const mode = restored.settings.archiveMode;
   if (mode !== undefined && mode !== 'professional' && mode !== 'demo') {
     throw new Error('Modalità archivio non valida nel backup.');

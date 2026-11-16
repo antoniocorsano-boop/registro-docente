@@ -8,7 +8,7 @@ async function verified(data: ArrayBuffer = buffer) {
   return { status: 'verified', bytes: data.byteLength, sha256: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), b => b.toString(16).padStart(2, '0')).join('') };
 }
 function runtime(choose: (o: {filename: string}) => Promise<unknown>, write: (o: {token: string; pdfBase64: string}) => Promise<unknown>): AndroidPdfRuntime {
-  return { androidBridge: {}, Capacitor: { getPlatform: () => 'android', Plugins: { RegistroPdfFiles: { choosePdfDestination: choose, writePdf: write } } } };
+  return { sessionAccess: async isActive => isActive(), androidBridge: {}, Capacitor: { getPlatform: () => 'android', Plugins: { RegistroPdfFiles: { choosePdfDestination: choose, writePdf: write } } } };
 }
 describe('MOBILE-01/M2c Android PDF receipt', () => {
   test('picker receives only a neutral filename and writer receives exact bytes', async () => {

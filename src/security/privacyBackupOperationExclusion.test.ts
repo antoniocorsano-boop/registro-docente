@@ -24,6 +24,10 @@ describe('PERSIST-01H encrypted backup operation exclusion', () => {
     expect(importHandler).toContain('backupOperationPendingRef.current = true;');
     expect(importHandler).toContain('backupOperationPendingRef.current = false;');
 
-    expect(source.match(/disabled=\{isEncrypting \|\| isDecrypting\}/g)?.length).toBe(2);
+    const verifyHandler = sectionBetween(source, 'const handleVerifyDownloadedCopy', '  return (');
+    expect(verifyHandler).toContain('backupOperationPendingRef.current) return;');
+    expect(verifyHandler).toContain('backupOperationPendingRef.current = true;');
+    expect(verifyHandler).toContain('backupOperationPendingRef.current = false;');
+    expect(source.match(/disabled=\{isEncrypting \|\| isDecrypting \|\| isVerifyingCopy\}/g)?.length).toBe(3);
   });
 });

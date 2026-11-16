@@ -207,14 +207,67 @@ test('NAV-CONTEXT-01 — a backup action leaves the report and discards the prev
   await page.getByTestId('header01-brand-navigation').click();
   await page.getByRole('button', { name: 'Esporta backup cifrato' }).click();
   await expect(page.getByTestId('header01-context')).toContainText('Privacy');
-  // The backup navigation is explicit, even though legacy code does not push
-  // a new history entry. Back must NOT revive the old expanded row.
+  // Backup owns a new history entry. Back first restores the report, then
+  // the Tabellone, without reviving an unrelated disclosure.
+  await expect.poll(()=>page.evaluate(()=>history.state?.tab)).toBe('privacy');
+  await page.goBack();
+  await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
   await page.goBack();
   await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
   await expect(page.locator('[data-testid="matrix-compact-detail"]:visible')).toHaveCount(0);
   await context.close();
 });
 
+
+test('NAV-PRIVACY — home backup shortcut returns to Oggi, forward restores Privacy, repeated shortcut adds no entry',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const page=await context.newPage();
+  await page.goto(url,{waitUntil:'domcontentloaded'});
+  const indicator=page.getByTestId('backup-copy-indicator');
+  await expect(indicator).toBeVisible();
+  const before=await page.evaluate(()=>history.length);
+  await indicator.getByRole('button',{name:'Esporta backup cifrato'}).click();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  expect(await page.evaluate(()=>({tab:history.state?.tab,classId:history.state?.classId,length:history.length}))).toEqual({tab:'privacy',classId:null,length:before+1});
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.locator('#registro-navigation-drawer').getByRole('button',{name:'Ripristina backup cifrato',exact:true}).click();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  expect(await page.evaluate(()=>history.length)).toBe(before+1);
+  await page.goBack();
+  await expect(indicator).toBeVisible();
+  await expect(page.getByTestId('header01-context')).toContainText('Oggi');
+  await page.goForward();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  await page.goBack();
+  await expect(indicator).toBeVisible();
+  await context.close();
+});
+
+test('NAV-PRIVACY — drawer restore returns to class daily matrix without discarding a draft silently',async({browser})=>{
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  const page=await context.newPage();
+  await openClass(page);
+  await navigateTo(page,'Tabellone','daily');
+  const day=page.getByTestId('daily-matrix');
+  await day.getByRole('textbox',{name:'Voto alunno 1',exact:true}).fill('8');
+  const before=await page.evaluate(()=>history.length);
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.locator('#registro-navigation-drawer').getByRole('button',{name:'Ripristina backup cifrato',exact:true}).click();
+  await expect(page.getByRole('dialog')).toContainText('voti non confermati');
+  await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();
+  await expect(day.getByRole('textbox',{name:'Voto alunno 1',exact:true})).toHaveValue('8');
+  expect(await page.evaluate(()=>history.length)).toBe(before);
+  await page.getByTestId('header01-brand-navigation').click();
+  await page.locator('#registro-navigation-drawer').getByRole('button',{name:'Ripristina backup cifrato',exact:true}).click();
+  await page.getByRole('button',{name:'Continua senza salvare'}).click();
+  await expect(page.getByTestId('header01-context')).toContainText('Privacy');
+  await expect.poll(()=>page.evaluate(()=>history.state?.tab)).toBe('privacy');
+  await page.goBack();
+  await expect(page.getByTestId('daily-matrix')).toBeVisible();
+  await expect(page.getByTestId('header01-context')).toContainText('Tabellone');
+  expect(await page.evaluate(()=>window.__matrixWrites||0)).toBe(0);
+  await context.close();
+});
 
 // Actual App, not an isolated component: evidence for the mobile HPR.
 for (const width of [320, 390]) {
@@ -239,8 +292,7 @@ for (const width of [320, 390]) {
         await expect(privacy).toHaveAttribute('data-privacy-state', 'visible');
         await expect(page.getByTestId('analytics-mobile-summary')).toBeVisible();
         const copilot = page.getByTestId('library-copilot-trigger');
-        await expect(copilot).toBeVisible();
-        expect(await copilot.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed');
+        await expect(copilot).toHaveCount(0);
         await capture('sintesi');
         const exportMenu = page.getByRole('button', { name: 'Esportazione e stampa' });
         await exportMenu.click();
@@ -357,9 +409,9 @@ test('VAL-01/S4b2 — daily mode combines independent cells, resumes proof and p
   await page.goto(url+'?matrixWrite=1');await page.getByRole('button',{name:/Apri classe 3ª A.*Prova sintetica/i}).click();await navigateTo(page,'Tabellone','daily');await expect(page.getByRole('group',{name:'Vista Tabellone'}).getByRole('button',{name:'Oggi',exact:true})).toHaveAttribute('aria-pressed','true');
   const day=page.getByTestId('daily-matrix');const first=day.getByRole('textbox',{name:'Voto alunno 1',exact:true});const second=day.getByRole('textbox',{name:'Voto alunno 2',exact:true});
   await day.getByRole('button',{name:/Comportamento alunno 1:/}).click();await day.getByRole('button',{name:'Costruttivo',exact:true}).click();await expect(day.getByRole('button',{name:/Comportamento alunno 1: Costruttivo/})).toBeVisible();expect(await page.evaluate(()=>window.__matrixSaved.classes[0].behaviors.length)).toBe(1);
-  await first.fill('8');await first.press('Enter');await expect(day.getByTestId('daily-proof-panel')).toBeVisible();expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
-  await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Disegno sintetico');await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByRole('combobox',{name:'Prova della giornata'})).toBeVisible();await expect(day.getByRole('combobox',{name:'Prova della giornata'}).locator('option:checked')).toContainText('Disegno sintetico');
-  await second.fill('7');await second.press('Enter');await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Disegno sintetico').length)).toBe(2);
+  await first.fill('8');const confirmFirst=day.getByRole('button',{name:'Conferma voto alunno 1',exact:true});await expect(confirmFirst).toBeVisible();await expect(confirmFirst.getByTestId('daily-grade-save-icon')).toBeVisible();await expect(day.getByTestId('daily-registration-summary')).toContainText('0 voti registrati · 1 da registrare');await expect(day.getByRole('status',{name:'Da confermare',exact:true})).toHaveCount(1);expect(await confirmFirst.evaluate(el=>el.getBoundingClientRect().width>=44&&el.getBoundingClientRect().height>=48)).toBe(true);await confirmFirst.tap();await expect(day.getByTestId('daily-proof-panel')).toBeVisible();await expect(day.getByTestId('daily-proof-panel')).toContainText('non ancora registrato');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(1);
+  await day.getByRole('combobox',{name:'Tipologia prova'}).selectOption('disegno');await day.getByRole('textbox',{name:'Argomento prova'}).fill('Disegno sintetico');await page.evaluate(()=>{window.__matrixHold=true;});await day.getByRole('button',{name:'Conferma e registra'}).click();await expect(day.getByTestId('daily-grade-saving-icon')).toBeVisible();await expect(day.getByTestId('daily-registration-summary')).toContainText('Salvataggio…');await expect(day.getByTestId('daily-grade-registered-icon')).toHaveCount(0);await page.waitForFunction(()=>typeof window.__finishMatrixWrite==='function');await page.evaluate(()=>{window.__matrixHold=false;window.__finishMatrixWrite();});await expect(day.getByRole('combobox',{name:'Prova della giornata'})).toBeVisible();await expect(day.getByTestId('daily-registration-summary')).toContainText('1 voto registrato');await expect(day.getByTestId('daily-grade-registered-icon')).toHaveCount(1);await expect(day.getByRole('combobox',{name:'Prova della giornata'}).locator('option:checked')).toContainText('Disegno sintetico');
+  await second.fill('7');await day.getByRole('button',{name:'Conferma voto alunno 2',exact:true}).tap();await expect.poll(()=>page.evaluate(()=>window.__matrixSaved.classes[0].grades.filter(g=>g.title==='Disegno sintetico').length)).toBe(2);await expect(day.getByRole('status',{name:'Registrato',exact:true})).toHaveCount(2);await expect(day.getByTestId('daily-grade-registered-icon')).toHaveCount(2);await expect(day.getByTestId('daily-registration-summary')).toContainText('2 voti registrati');await expect(day.getByTestId('daily-grade-save-icon')).toHaveCount(0);await expect(day.getByRole('button',{name:'Conferma voto alunno 2',exact:true})).toHaveCount(0);
   const saved=await page.evaluate(()=>window.__matrixSaved.classes[0]);expect(saved.behaviors.length).toBe(1);const grades=saved.grades.filter(g=>g.title==='Disegno sintetico');expect(grades.every(g=>g.type==='disegno'&&g.batchId===grades[0].batchId)).toBe(true);
   await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByTestId('matrix-compact-list')).toBeVisible();await page.getByRole('button',{name:'Oggi',exact:true}).click();await expect(first).toHaveValue('8');await expect(second).toHaveValue('7');expect(await page.evaluate(()=>window.__matrixWrites)).toBe(3);
   await first.fill('9');await page.getByRole('button',{name:'Storico',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('voti non confermati');await page.getByRole('button',{name:'Rimani nel Tabellone'}).click();await expect(first).toHaveValue('9');

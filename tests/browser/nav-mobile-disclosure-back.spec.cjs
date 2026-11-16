@@ -257,9 +257,18 @@ test('NAV-MOBILE-BACK / 390 — Scheda alunno overrides a pending Valutazioni ex
 
     await expect(page.getByTestId('header01-context')).toContainText('Scheda alunno');
     const reportState = await page.evaluate(() => history.state);
+    // App-owned history coordinates are required for guarded Back traversal.
+    // Keep an exact allowlist: no additional student data in history state.
     expect(reportState).toEqual({
-      classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01'
+      classId: 'classe-fittizia-a', tab: 'report', studentId: 'fittizio-studente-01',
+      __tramaHistoryEntryId: expect.any(String),
+      __tramaHistoryEpoch: expect.any(String),
+      __tramaHistoryPosition: expect.any(Number)
     });
+    expect(reportState.__tramaHistoryEntryId.length).toBeGreaterThan(0);
+    expect(reportState.__tramaHistoryEpoch.length).toBeGreaterThan(0);
+    expect(Number.isSafeInteger(reportState.__tramaHistoryPosition)).toBe(true);
+    expect(reportState.__tramaHistoryPosition).toBeGreaterThanOrEqual(0);
     expect(page.url()).not.toContain('fittizio-studente-01');
 
     await page.goBack();

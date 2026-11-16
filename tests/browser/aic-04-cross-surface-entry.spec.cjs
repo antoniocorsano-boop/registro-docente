@@ -316,10 +316,13 @@ test('AIC-04 frames locally before projecting an explicitly bound teacher reques
   await closeComposer(page);
 
   await page.getByRole('button', { name: 'Valutazioni', exact: true }).click();
-  const evaluationsStaged = await stageTeacherFirstContextAndSource(page, intentRequests, 'Prepara dal contesto delle valutazioni');
-  const evaluations = await submitGovernedGoal(evaluationsStaged.composer, intentRequests, 'other-teacher-surface');
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+  expect(intentRequests).toHaveLength(3);
+  await openDrawerItem(page, 'Biblioteca privata');
+  const libraryStaged = await stageTeacherFirstContextAndSource(page, intentRequests, 'Prepara da un materiale');
+  const library = await submitGovernedGoal(libraryStaged.composer, intentRequests, 'library');
 
-  const composerBox = await evaluations.composer.boundingBox();
+  const composerBox = await library.composer.boundingBox();
   expect(composerBox).not.toBeNull();
   expect(composerBox.x).toBeGreaterThanOrEqual(0);
   expect(composerBox.x + composerBox.width).toBeLessThanOrEqual(1281);
@@ -334,7 +337,8 @@ test('AIC-04 frames locally before projecting an explicitly bound teacher reques
     explicitGovernedRequestCount: intentRequests.length,
     planningHasSelectedSource: planning.body.context.hasSelectedSource,
     onlineTestsHasSelectedSource: tests.body.context.hasSelectedSource,
-    evaluationsHasSelectedSource: evaluations.body.context.hasSelectedSource,
+    libraryHasSelectedSource: library.body.context.hasSelectedSource,
+    evaluationsLauncherAbsent: true,
     ...guards
   }, null, 2) + '\n');
 

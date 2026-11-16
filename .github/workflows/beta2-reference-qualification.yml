@@ -1,0 +1,177 @@
+# BETA2-QUAL-01: exact-head technical gates A–E. No release.
+name: BETA2 Reference — Contracts and mobile browser qualification
+on:
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  contracts:
+    name: Typecheck / security / invariant contracts
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact candidate without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify SHA
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate qualification registry
+        run: bun scripts/qualification/check-invariants.mjs
+      - name: Verify full reference browser coverage
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: Run NAV-CONTEXT and inherited contract tests
+        run: |
+          bun test \
+            src/security/navContext01ReturnState.test.ts \
+            src/security/navBack01StudentReportHistory.test.ts \
+            src/security/mobileDensity01TabelloneContract.test.ts \
+            src/security/mobileUxIntegrity.test.ts \
+            src/security/homeNavigationDuringSaveIntegrity.test.ts
+      - name: Typecheck
+        run: bun run lint
+      - name: Complete security and memory test suite
+        run: bun run test:security
+      - name: Build
+        run: bun run build
+
+  chromium:
+    name: Synthetic Chromium Android 390 / 320
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify SHA
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked application dependencies
+        run: bun install --frozen-lockfile
+      - name: Install isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .nav-context-browser-tools browser-evidence
+          echo '{"name":"nav-context-01-browser-tools","private":true}' > .nav-context-browser-tools/package.json
+          npm --prefix .nav-context-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.nav-context-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/mobile-density-01-tabellone.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/behavior-integrity.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-compact-isolated.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-navbar-integration.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-mobile-disclosure-back.spec.cjs .nav-context-browser-tools/
+      - name: Start synthetic Vite app fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html' > /dev/null \
+              && curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01.html' > /dev/null \
+              && curl --fail --silent 'http://127.0.0.1:4173/tests/browser/fixtures/header01-navbar.html' > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Ensure PDF inspection tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null || ! command -v pdftoppm >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+          command -v pdftotext && command -v pdfinfo && command -v pdftoppm
+      - name: Run real Chromium navigation regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .nav-context-browser-tools
+          NAV_CONTEXT_BASE_URL='http://127.0.0.1:4173' \
+          NAV_BACK_BASE_URL='http://127.0.0.1:4173' \
+          DENSITY01_BASE_URL='http://127.0.0.1:4173' \
+          BASE_URL='http://127.0.0.1:4173' \
+          BEHAVIOR_EVIDENCE_DIR='../browser-evidence' \
+          HEADER01_BASE_URL='http://127.0.0.1:4173' \
+          HEADER01_DRAWER_BASE_URL='http://127.0.0.1:4173' \
+          NAV_MOBILE_DISCLOSURE_BASE_URL='http://127.0.0.1:4173' \
+          HEADER01_EVIDENCE_DIR='../browser-evidence' \
+            ./node_modules/.bin/playwright test \
+            nav-context-01-return-origin.spec.cjs \
+            nav-back-01-student-report.spec.cjs \
+            mobile-density-01-tabellone.spec.cjs \
+            behavior-integrity.spec.cjs \
+            header-01-compact-isolated.spec.cjs \
+            header-01-navbar-integration.spec.cjs \
+            header-01-copilot-drawer-occlusion.spec.cjs \
+            nav-mobile-disclosure-back.spec.cjs \
+            --workers=1 --reporter=line \
+            --output=../browser-evidence/results
+      - name: Verify exact-SHA browser evidence completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = 'browser-evidence';
+          const expected = [
+            'geometry-320x700', 'geometry-390x844', 'geometry-1280x900',
+            'save-evidence', 'keyboard-390x844', 'text-200-percent-320x700',
+            'navbar-mobile-320', 'navbar-mobile-390', 'navbar-desktop-1280',
+            'navbar-keyboard-390',
+          ];
+          for (const caseId of expected) {
+            const file = path.join(dir, 'header01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.qualificationError || evidence.screenshotError ||
+                evidence.screenshot !== 'screenshots/' + caseId + '.png') {
+              throw new Error('Invalid or failing HEADER-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty HEADER-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: ten exact-SHA browser evidence JSON files and screenshots');
+          NODE
+
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta2-reference-chromium-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+

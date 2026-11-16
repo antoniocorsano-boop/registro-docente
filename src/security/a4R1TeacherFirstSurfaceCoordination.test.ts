@@ -20,8 +20,9 @@ describe('A4-R1 one Copilot surface coordination', () => {
 
     expect(app).toContain("type CopilotSurfaceMode = 'closed' | 'home' | 'compose'");
     expect(app).toContain('const [copilotSurfaceMode, setCopilotSurfaceMode]');
-    expect(app).toContain('surfaceMode={copilotSurfaceMode}');
-    expect(app).toContain('onSurfaceModeChange={setCopilotSurfaceMode}');
+    expect(app.split('surfaceMode={visibleCopilotMode}')).toHaveLength(3);
+    expect(app.split('onSurfaceModeChange={changeCopilotSurfaceMode}')).toHaveLength(3);
+    expect(app).toContain("const visibleCopilotMode: CopilotSurfaceMode = ownsCopilot ? copilotSurfaceMode : 'closed'");
 
     expect(experience).toContain('surfaceMode: CopilotSurfaceMode');
     expect(deck).toContain("const isOpen = surfaceMode === 'home'");
@@ -37,7 +38,7 @@ describe('A4-R1 one Copilot surface coordination', () => {
     const vault = await source(VAULT);
 
     expect(app).toContain('onCopilotSurfaceOpenChange?: (isOpen: boolean) => void');
-    expect(app).toContain("onCopilotSurfaceOpenChange?.(copilotSurfaceMode !== 'closed')");
+    expect(app).toContain("onCopilotSurfaceOpenChange?.(visibleCopilotMode !== 'closed')");
     expect(root).toContain('const [isCopilotSurfaceOpen, setIsCopilotSurfaceOpen] = useState(false)');
     expect(root).toContain('onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}');
     expect(root).toContain('copilotSurfaceOpen={isCopilotSurfaceOpen}');
@@ -50,12 +51,14 @@ describe('A4-R1 one Copilot surface coordination', () => {
     const app = await source(APP);
     const composer = await source(COMPOSER);
 
-    const reopenStart = app.indexOf('const reopenLibraryCopilot = useCallback(() => {');
+    const reopenStart = app.indexOf("const reopenCopilotForOrigin = useCallback((kind: 'ambient' | 'explicit') => {");
     const reopenEnd = app.indexOf('}, []);', reopenStart);
     const reopen = app.slice(reopenStart, reopenEnd);
     expect(reopenStart).toBeGreaterThanOrEqual(0);
     expect(reopen).toContain('setLaunchRequest(null)');
     expect(reopen).toContain('setCopilotOpenRequestNonce(previous => previous + 1)');
+    expect(app).toContain("const reopenLibraryCopilot = useCallback(() => {\n    reopenCopilotForOrigin('explicit');");
+    expect(app).toContain("reopenCopilotForOrigin('ambient');");
 
     expect(app).not.toContain('key={`library-copilot-${copilotOpenRequestNonce}`}');
     expect(composer).toContain('const preserveGovernedContinuationOnReopenRef = useRef(false);');

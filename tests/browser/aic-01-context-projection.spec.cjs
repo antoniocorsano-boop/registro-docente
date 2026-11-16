@@ -271,9 +271,9 @@ test('AIC-01 routes cross-surface teacher context without leaking individual stu
   await closeComposer(page);
 
   await page.getByRole('button', { name: 'Valutazioni', exact: true }).click();
-  submitted = await submitIntent(page, 'Controlla il contesto delle valutazioni', intentRequests);
-  assertMinimizedRequest(submitted.body, 'other-teacher-surface');
-  await closeComposer(page);
+  await expect(page.getByTestId('library-copilot-trigger')).toHaveCount(0);
+  await expect(page.getByTestId('library-copilot-composer')).toHaveCount(0);
+  expect(intentRequests).toHaveLength(2);
 
   await openDrawerItem(page, 'UDA');
   submitted = await submitIntent(page, 'Controlla questa superficie UDA senza selezionare una UDA esplicita', intentRequests);

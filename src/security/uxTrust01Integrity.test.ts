@@ -61,8 +61,8 @@ describe('UX-TRUST-01 Option B integrity', () => {
       expect(view).toContain('backup cifrato');
     }
 
-    expect(app).toContain("const handleExportBackup = () => {\n    setActiveTab('privacy');");
-    expect(app).toContain("const handleImportBackup = () => {\n    setActiveTab('privacy');");
+    expect(app).toContain("const handleExportBackup = () => {\n    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');");
+    expect(app).toContain("const handleImportBackup = () => {\n    if (activeTabRef.current !== 'privacy') handleNavigateTab('privacy');");
   });
 
   test('UXT-B exposes the sufficiency numerator and valid-average denominator without changing the rate formula', async () => {
