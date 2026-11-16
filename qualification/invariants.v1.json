@@ -2290,7 +2290,7 @@
     {
       "id": "BETA2-UPDATE-02-I01",
       "owner": "BETA2-UPDATE-02",
-      "statement": "Exact installed RC3 and candidate use independently bundled archive fixtures at a shared isolated browser origin. A synthetic existing or empty encrypted archive opens without rewriting its ten records; wrong password fails, a deliberate change persists and old encrypted backup restores. This does not qualify physical APK upgrade or owner signature. No real archive, credential or release is authorized.",
+      "statement": "Exact RC2 and candidate use independently bundled archive fixtures at a shared isolated browser origin. A synthetic existing or empty encrypted archive opens without rewriting its ten records; wrong password fails, a deliberate change persists and old encrypted backup restores. This does not qualify physical APK upgrade or owner signature. No real archive, credential or release is authorized.",
       "impactPaths": [
         "qualification/invariants.v1.json",
         ".github/workflows/beta2-archive-compatibility.yml",
@@ -2330,6 +2330,29 @@
       ],
       "browserSmoke": [
         "tests/browser/nav-context-01-return-origin.spec.cjs"
+      ]
+    },
+    {
+      "id": "BETA2-UPDATE-05-I01",
+      "owner": "BETA2-UPDATE-05",
+      "statement": "Beta2 RC2 must use code 10004, strictly above Beta1 RC3 code 10003; the superseded Beta2 RC1 code 10003 is rejected by preparation and owner signing. Preserve exact RC2 archive compatibility and independently repeat the same encrypted archive and backup scenarios against exact RC3. No APK signature, physical acceptance or release is implied.",
+      "impactPaths": [
+        "qualification/invariants.v1.json",
+        "mobile/android-probe/beta-identity.json",
+        "mobile/android-probe/prepare-beta.mjs",
+        "mobile/android-probe/sign-beta-locally.sh",
+        "src/security/mobile01M4BetaIdentityContract.test.ts",
+        "src/security/mobile01Beta2UpdateSigning.test.ts",
+        ".github/workflows/beta2-archive-compatibility.yml"
+      ],
+      "tests": [
+        "src/security/mobile01M4BetaIdentityContract.test.ts",
+        "src/security/mobile01Beta2UpdateSigning.test.ts",
+        "src/security/secureVault.test.ts",
+        "src/security/secureAppStorage.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/beta2-archive-compatibility.spec.cjs"
       ]
     }
   ]

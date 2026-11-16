@@ -6,17 +6,23 @@ permissions:
   contents: read
 jobs:
   compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        predecessor:
+          - { name: rc2, sha: 37c61d4c64993c986a3edcd2b421310adf20de92 }
+          - { name: rc3, sha: b726f4a6dc0eb90a066113bee7cceabf29c629a5 }
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     env:
-      BETA1_SHA: b726f4a6dc0eb90a066113bee7cceabf29c629a5
+      BETA1_SHA: ${{ matrix.predecessor.sha }}
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ env.CANDIDATE_SHA }}
           persist-credentials: false
-      - name: Checkout the exact installed Beta1 RC3 source
+      - name: Checkout exact Beta1 predecessor source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ env.BETA1_SHA }}
@@ -75,6 +81,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: beta2-archive-compatibility-${{ env.CANDIDATE_SHA }}
+          name: beta2-archive-compatibility-${{ matrix.predecessor.name }}-${{ env.CANDIDATE_SHA }}
           path: browser-evidence/
           retention-days: 7
