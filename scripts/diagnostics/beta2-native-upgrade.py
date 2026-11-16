@@ -119,7 +119,14 @@ try:
     install(os.environ["OLD_SIGNED_APK"])
     old=package_state(10003); stage("beta1-installed",**old)
     launch()
-    enter_gate("Configura archivio protetto",PASSWORD)
+    observe_text("Configura archivio protetto")
+    # RC3 has a mandatory mode chooser; only the synthetic demo is selected.
+    # A single tap on the associated label selects the radio through the UI.
+    press(wait_node(lambda n: n.get("package")==PKG and "Ambiente dimostrativo" in label(n),
+                    "RC3 synthetic demo archive option"))
+    button("Avvia la prova")
+    stage("beta1-demo-mode-selected")
+    enter_gate("Avvia la prova",PASSWORD)
     observe_text("Le mie classi")
     press(button("Nuova Classe"))
     press(edit());type_text(MARKER);hide_keyboard();press(button("OK"))

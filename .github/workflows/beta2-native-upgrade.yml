@@ -120,7 +120,7 @@ jobs:
           script: bash scripts/diagnostics/prepare-b43-emulator.sh && python3 scripts/diagnostics/beta2-native-upgrade.py
       - name: Verify exact native evidence without release permission
         run: |
-          jq -e --arg old "$BETA1_SHA" --arg new "$BETA2_SHA" '.oldSource == $old and .newSource == $new and .releaseAuthorized == false and .ownerSignatureQualified == false and ([.results[].stage] == ["beta1-installed","beta1-created-class-survives-reopen","in-place-upgrade","promoted-build-visible-on-gate","wrong-password-rejected","beta2-preserved-class-and-password","beta2-preserved-class-after-reopen"]) and all(.results[];.status=="PASS")' native-evidence/upgrade-result.json
+          jq -e --arg old "$BETA1_SHA" --arg new "$BETA2_SHA" '.oldSource == $old and .newSource == $new and .releaseAuthorized == false and .ownerSignatureQualified == false and ([.results[].stage] == ["beta1-installed","beta1-demo-mode-selected","beta1-created-class-survives-reopen","in-place-upgrade","promoted-build-visible-on-gate","wrong-password-rejected","beta2-preserved-class-and-password","beta2-preserved-class-after-reopen"]) and all(.results[];.status=="PASS")' native-evidence/upgrade-result.json
       - name: Remove all ephemeral signing material and signed APKs
         if: always()
         shell: bash
