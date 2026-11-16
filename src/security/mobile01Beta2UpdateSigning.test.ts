@@ -18,8 +18,8 @@ function write(path: string, value: string, executable=false) {
   if(executable)chmodSync(path,0o700);
 }
 type Identity = {app:string;code:number;name:string;debug?:boolean;cert?:string;second?:string};
-const base = {app:'it.trama.registrodocente',code:10002,name:'0.1.0-beta.1-rc.2'};
-const candidate = {app:base.app,code:10003,name:'0.1.0-beta.2-rc.1'};
+const base = {app:'it.trama.registrodocente',code:10003,name:'0.1.0-beta.1-rc.3'};
+const candidate = {app:base.app,code:10004,name:'0.1.0-beta.2-rc.2'};
 // Explicit SDK doubles, not cryptographic or APK evidence.
 function signingAttempt(dir:string, next:Identity, prior:Identity|null, options:{key?:string;badHash?:boolean}={}) {
   const sdk=join(dir,'sdk'), tools=join(sdk,'build-tools','36.0.0');
@@ -54,7 +54,7 @@ function signingAttempt(dir:string, next:Identity, prior:Identity|null, options:
   return {code:proc.exitCode,created:existsSync(out),output:proc.stdout.toString()+proc.stderr.toString()};
 }
 describe('BETA2-UPDATE-03 owner-local signing guard behavior (SDK doubles only)',()=>{
-  test('permits increasing Beta1 RC2 to Beta2 RC1 with matching signer',()=>withDirectory(dir=>{
+  test('permits increasing installed Beta1 RC3 to Beta2 RC2 with matching signer',()=>withDirectory(dir=>{
     const result=signingAttempt(dir,candidate,{...base,cert:certificate});
     expect(result.code).toBe(0);
     expect(result.created).toBe(true);
@@ -65,9 +65,10 @@ describe('BETA2-UPDATE-03 owner-local signing guard behavior (SDK doubles only)'
     {name:'wrong source hash',next:candidate,prior:{...base,cert:certificate},options:{badHash:true}},
     {name:'different certificate',next:candidate,prior:{...base,cert:certificate},options:{key:another}},
     {name:'multiple previous signers',next:candidate,prior:{...base,cert:certificate,second:another}},
-    {name:'Beta2 code below RC2 successor',next:{...candidate,code:10002},prior:{...base,cert:certificate}},
+    {name:'Beta2 code below RC3 successor',next:{...candidate,code:10002},prior:{...base,cert:certificate}},
+    {name:'rejected superseded Beta2 RC1 equals installed RC3 code',next:{...candidate,code:10003,name:'0.1.0-beta.2-rc.1'},prior:{...base,cert:certificate}},
     {name:'non-increasing code',next:candidate,prior:{...candidate,cert:certificate}},
-    {name:'Beta series downgrade despite higher code',next:{...base,code:10004},prior:{...candidate,cert:certificate}},
+    {name:'Beta series downgrade despite higher code',next:{...base,code:10005},prior:{...candidate,cert:certificate}},
     {name:'different application identity',next:{...candidate,app:'it.trama.registrodocente.lab.b43'},prior:{...base,cert:certificate}},
     {name:'unrecognized candidate version',next:{...candidate,name:'0.1.0-beta.3-rc.1'},prior:{...base,cert:certificate}},
     {name:'invalid predecessor version',next:candidate,prior:{...base,name:'unknown',cert:certificate}},
@@ -87,9 +88,10 @@ describe('BETA2-UPDATE-03 generated release identity validation',()=>{
     const proc=Bun.spawnSync(['node',join(dir,'prepare-beta.mjs')],{stdout:'pipe',stderr:'pipe'});
     return proc.stderr.toString();
   }
-  test('rejects invalid series and Beta2 version code below RC2 successor before accessing generated project',()=>withDirectory(dir=>{
+  test('rejects invalid series and Beta2 version code below RC3 successor before accessing generated project',()=>withDirectory(dir=>{
     expect(attempt(dir,10004,'0.1.0-beta.3-rc.1')).toContain('Invalid Beta identity');
     expect(attempt(dir,10002,candidate.name)).toContain('Invalid Beta identity');
-    expect(attempt(dir,10003,candidate.name)).toContain('ENOENT');
+    expect(attempt(dir,10003,'0.1.0-beta.2-rc.1')).toContain('Invalid Beta identity');
+    expect(attempt(dir,10004,candidate.name)).toContain('ENOENT');
   }));
 });

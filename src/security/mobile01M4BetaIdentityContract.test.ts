@@ -9,8 +9,8 @@ describe('MOBILE-01/M4 separated Beta identity and owner-local signing', () => {
     expect(probe.appId).toBe('it.trama.registrodocente.prova');
     expect(beta.applicationId).toBe('it.trama.registrodocente');
     expect(beta.versionCode).toBeGreaterThanOrEqual(10001);
-    expect(beta.versionCode).toBe(10003);
-    expect(beta.versionName).toBe('0.1.0-beta.2-rc.1');
+    expect(beta.versionCode).toBe(10004);
+    expect(beta.versionName).toBe('0.1.0-beta.2-rc.2');
     expect(beta.status).toBe('UNSIGNED_CANDIDATE_NOT_RELEASED');
     const prepare = await load('mobile/android-probe/prepare-beta.mjs');
     for (const token of ['android:allowBackup="false"', 'android:fullBackupContent="false"', 'android:dataExtractionRules',
