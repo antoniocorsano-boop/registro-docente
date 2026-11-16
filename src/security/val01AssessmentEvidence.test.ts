@@ -154,3 +154,88 @@ describe('VAL-01/D1a.1 — contratto puro locale', () => {
     bad(d => { d.assessments[0].source = {kind:'future-online', testId:'synthetic'}; });
   });
 });
+
+
+describe('VAL-01/D1a.1 — regressioni revisione indipendente', () => {
+  const later = '2027-01-16T09:00:00.000Z';
+
+  test('P2 forma: rifiuta sottoclasse Array senza chiamare every dell’input', () => {
+    let calls = 0;
+    class Unchecked extends Array<any> {
+      every(): boolean { calls++; return true; }
+    }
+    const data = fixture();
+    data.references[0].confirmedByTeacher = false;
+    data.references[0].extra = 'synthetic';
+    data.references = new Unchecked(...data.references);
+    const result = validateAssessmentEvidenceV1(data, scope);
+    expect({ valid: result.valid, calls }).toEqual({ valid: false, calls: 0 });
+  });
+
+  test('P2 forma: rifiuta prototipi non canonici anche per roster e livelli annidati', () => {
+    class NonCanonical extends Array<any> {}
+    expect(valid(fixture(), { ...scope, studentIds: new NonCanonical(...scope.studentIds) })).toBe(false);
+    const data = fixture();
+    data.rubrics[0].criteria[0].levels = new NonCanonical(...data.rubrics[0].criteria[0].levels);
+    expect(valid(data)).toBe(false);
+  });
+
+  test('P2 cronologia: criterio non può anticipare il riferimento target', () => {
+    bad(d => { d.references[0].confirmedAt = later; });
+  });
+
+  test('P2 cronologia: criterio non può anticipare il riferimento contestuale', () => {
+    bad(d => { d.references[2].confirmedAt = later; });
+  });
+
+  test('P2 cronologia: rubrica non può anticipare il criterio che descrive', () => {
+    const data = fixture();
+    data.criteria[0].confirmedAt = later;
+    data.assessments[0].confirmedAt = later;
+    data.evidence = [];
+    expect(valid(data)).toBe(false);
+  });
+
+  test('P2 cronologia: prova non può anticipare il criterio collegato', () => {
+    const data = fixture();
+    data.criteria[1].confirmedAt = later;
+    data.evidence = [];
+    expect(valid(data)).toBe(false);
+  });
+
+  test('P2 cronologia: prova non può anticipare la rubrica selezionata', () => {
+    const data = fixture();
+    data.rubrics[0].confirmedAt = later;
+    data.evidence = [];
+    expect(valid(data)).toBe(false);
+  });
+
+  test('P2 cronologia: evidenza non può anticipare la prova anche senza interpretazione', () => {
+    const data = fixture();
+    data.assessments[0].confirmedAt = later;
+    data.evidence[0].interpretation = { kind: 'pending' };
+    expect(valid(data)).toBe(false);
+  });
+
+  test('P2 cronologia: anche una rilevazione non osservata non anticipa la prova', () => {
+    const data = fixture();
+    data.assessments[0].confirmedAt = later;
+    data.evidence = [data.evidence[0]];
+    data.evidence[0].state = 'not_observed';
+    delete data.evidence[0].fact;
+    delete data.evidence[0].interpretation;
+    expect(valid(data)).toBe(false);
+  });
+
+  test('P2 cronologia: revisioni successive non cambiano i collegamenti storici', () => {
+    const data = fixture();
+    data.references.push({ ...structuredClone(data.references[0]), revisionId: 'or-later', supersedesRevisionId: 'or1', confirmedAt: later, text: 'Obiettivo aggiornato' });
+    data.criteria.push({ ...structuredClone(data.criteria[0]), revisionId: 'cr-later', supersedesRevisionId: 'cr1', confirmedAt: later, targetReferenceRevisionIds: ['or-later'] });
+    const rubric = { ...structuredClone(data.rubrics[0]), revisionId: 'rr-later', supersedesRevisionId: 'rr1', confirmedAt: later };
+    rubric.criteria[0].criterionRevisionId = 'cr-later';
+    data.rubrics.push(rubric);
+    expect(valid(data)).toBe(true);
+    expect(data.evidence[0].criterionRevisionId).toBe('cr1');
+    expect(data.assessments[0].criteria[0].rubricRevisionId).toBe('rr1');
+  });
+});
