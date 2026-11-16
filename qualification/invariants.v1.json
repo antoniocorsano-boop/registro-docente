@@ -2499,6 +2499,31 @@
       "browserSmoke": [
         "tests/browser/val01-database-fence.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-D1B3B-I01",
+      "owner": "VAL-01/D1b.3b",
+      "statement": "Existing DB1 archive migration remains isolated and requires authentication of all ten records, matching recovered v6 backup and explicit one-use consent; a changed physical archive or revoked or abandoned request cannot upgrade DB1. No runtime, native or release claim.",
+      "impactPaths": [
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "tests/browser/fixtures/val01-fence-candidate.fixture.ts",
+        "tests/browser/val01-database-fence.spec.cjs",
+        ".github/workflows/val01-database-fence.yml",
+        "src/security/cryptoPrimitives.ts",
+        "src/cryptoUtils.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/persistence/backupCheckpoint.ts"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
     }
   ]
 }
