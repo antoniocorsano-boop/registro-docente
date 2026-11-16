@@ -70,7 +70,7 @@ function nodes(){
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
   return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
     const s=m[0],get=k=>s.match(new RegExp('\\b'+k+'="([^"]*)"'))?.[1]||'';
-    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
+    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
   });
 }
 const doc=n=>/documentsui/i.test(n.pkg);
@@ -104,7 +104,12 @@ async function readResult(){
 }
 async function pickerRead(wrong=false){
   await startRead(wrong);
-  const row=await find(n=>doc(n)&&(n.text===filename||n.text.startsWith('Backup_Cifrato_GDPR_2031-01-15')||n.desc.includes(filename)),'Saved encrypted file missing');
+  // DocumentsUI exposes a separate preview button with the file name in its
+  // content description. That button never returns an ACTION_OPEN_DOCUMENT URI.
+  // Select the visible title instead; never fall back to a preview affordance.
+  const row=await find(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'Selectable encrypted file title missing (not preview)');
+  assert.equal(row.text,filename);
+  assert.ok(!/preview|anteprima/i.test(row.desc));
   console.log('native-file-target',JSON.stringify(row));
   tap(row);
   // Some DocumentsUI versions require explicit confirmation after selection.
