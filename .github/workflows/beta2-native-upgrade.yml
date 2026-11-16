@@ -1,4 +1,4 @@
-name: BETA2-PROMOTION — exact native in-place upgrade
+name: BETA2-UPDATE-05 — RC3 to RC2 native upgrade
 on:
   pull_request:
     branches: ['test/b4-3-android-lab']
@@ -7,16 +7,16 @@ permissions:
   actions: read
 jobs:
   upgrade:
-    if: github.head_ref == 'test/beta2-promotion-native-upgrade'
+    if: github.head_ref == 'test/beta2-rc3-native-upgrade'
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     env:
-      BETA1_SHA: 37c61d4c64993c986a3edcd2b421310adf20de92
-      BETA2_SHA: 52018acc7d6a90e58d35780a66ae8744eae25f9e
-      BETA1_RUN: '43206101783'
-      BETA2_RUN: '43753021964'
-      BETA1_ARTIFACT: '13938285055'
-      BETA2_ARTIFACT: '14176923532'
+      BETA1_SHA: b726f4a6dc0eb90a066113bee7cceabf29c629a5
+      BETA2_SHA: ddbf60781514b866b09e1fa1e014e6a6fc3989d3
+      BETA1_RUN: '43233573213'
+      BETA2_RUN: '43811185219'
+      BETA1_ARTIFACT: '13950428737'
+      BETA2_ARTIFACT: '14200343425'
       LAB_API: '36'
       LAB_PACKAGE: it.trama.registrodocente.lab.b43
     steps:
@@ -70,8 +70,8 @@ jobs:
           keytool -genkeypair -keystore "$temp/synthetic.p12" -storetype PKCS12 -storepass SyntheticCIOnly2026 -keypass SyntheticCIOnly2026 -alias synthetic-ci-upgrade -keyalg RSA -keysize 2048 -validity 3 -dname 'CN=TRAMA SYNTHETIC CI ONLY'
           for series in old new; do
             case "$series" in
-              old) sha="$BETA1_SHA"; version=10002; name=0.1.0-beta.1-rc.2;;
-              new) sha="$BETA2_SHA"; version=10003; name=0.1.0-beta.2-rc.1;;
+              old) sha="$BETA1_SHA"; version=10003; name=0.1.0-beta.1-rc.3;;
+              new) sha="$BETA2_SHA"; version=10004; name=0.1.0-beta.2-rc.2;;
             esac
             apk="$(find "unsigned-$series" -type f -name app-release-unsigned.apk)"
             manifest="$(find "unsigned-$series" -type f -name beta-unsigned-manifest.txt)"
@@ -109,7 +109,7 @@ jobs:
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
           python3 -m py_compile scripts/diagnostics/beta2-native-upgrade.py
-      - name: Install RC2, create synthetic record, upgrade RC1 without uninstalling
+      - name: Install Beta1 RC3, create synthetic record, upgrade Beta2 RC2 without uninstalling
         uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
         with:
           api-level: 36
@@ -129,6 +129,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: beta2-promotion-native-upgrade-evidence
+          name: beta2-rc3-native-upgrade-evidence
           path: native-evidence/
           retention-days: 7

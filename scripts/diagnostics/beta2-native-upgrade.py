@@ -117,7 +117,7 @@ try:
     if ("package:"+PKG) in adb("shell","pm","list","packages").splitlines():
         raise RuntimeError("Expected fresh emulator, never overwrite an existing archive")
     install(os.environ["OLD_SIGNED_APK"])
-    old=package_state(10002); stage("beta1-installed",**old)
+    old=package_state(10003); stage("beta1-installed",**old)
     launch()
     enter_gate("Configura archivio protetto",PASSWORD)
     observe_text("Le mie classi")
@@ -131,7 +131,7 @@ try:
     stage("beta1-created-class-survives-reopen",marker=MARKER)
     stop()
     install(os.environ["NEW_SIGNED_APK"],replace=True)
-    new=package_state(10003)
+    new=package_state(10004)
     if any(old[k]!=new[k] for k in ("uid","firstInstallTime")):
         raise RuntimeError("Replacement did not retain Android package identity")
     stage("in-place-upgrade",**new)
