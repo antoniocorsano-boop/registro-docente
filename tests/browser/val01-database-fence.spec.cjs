@@ -74,3 +74,71 @@ test('D1b.3a incomplete historical archive aborts the upgrade transaction and re
   await loadOld(page);
   expect(await historic(page,'read')).toBe('ACCEPTED');
 });
+
+test('D1b.3b authenticated local copy plus explicit one-use approval preserves all ten records',async({page})=>{
+  await loadOld(page);
+  const seed=await old(page,'seed',false);
+  await loadNew(page);
+  const grant=await candidate(page,'prepareMigration',seed.backup);
+  expect(grant).toMatchObject({payloadVersion:6,sha256:expect.stringMatching(/^[a-f0-9]{64}$/)});
+  expect(grant.bytes).toBe(Buffer.byteLength(seed.backup));
+  expect(await candidate(page,'version')).toBe(1);
+  expect(await candidate(page,'migrate')).toBe(2);
+  await expect(candidate(page,'migrate')).rejects.toThrow();
+  expect(await candidate(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+});
+
+test('D1b.3b wrong passwords, corrupt copy, cancellation and cloned grant cannot upgrade DB1',async({page})=>{
+  await loadOld(page);
+  const seed=await old(page,'seed',false);
+  await loadNew(page);
+  for(const args of [[seed.backup,true,false],[seed.backup,false,true],[seed.backup.slice(0,-10),false,false]]){
+    await expect(candidate(page,'prepareMigration',...args)).rejects.toThrow();
+    expect(await candidate(page,'version')).toBe(1);
+  }
+  await candidate(page,'prepareMigration',seed.backup);
+  await expect(candidate(page,'migrate',false)).rejects.toThrow();
+  await candidate(page,'prepareMigration',seed.backup);
+  await expect(candidate(page,'migrate',true,true)).rejects.toThrow();
+  await candidate(page,'prepareMigration',seed.backup);
+  await candidate(page,'invalidateMigration');
+  await expect(candidate(page,'migrate')).rejects.toThrow();
+  expect(await candidate(page,'version')).toBe(1);
+  await loadOld(page);
+  expect(await old(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+});
+
+test('D1b.3b changed archive between verification and upgrade cannot migrate on stale consent',async({page,context})=>{
+  await loadOld(page);
+  const seed=await old(page,'seed',false);
+  await loadNew(page);
+  await candidate(page,'prepareMigration',seed.backup);
+  const writer=await context.newPage();
+  await loadOld(writer);
+  await old(writer,'open');
+  const changed=await old(writer,'mutate');
+  await writer.close();
+  await expect(candidate(page,'migrate')).rejects.toThrow();
+  expect(await candidate(page,'version')).toBe(1);
+  await expect(candidate(page,'prepareMigration',seed.backup)).rejects.toThrow();
+  await loadOld(page);
+  expect(await old(page,'open')).toEqual(changed);
+});
+
+test('D1b.3b blocked authorization cannot upgrade later or be replayed',async({page,context})=>{
+  await loadOld(page);
+  const seed=await old(page,'seed',false);
+  const next=await context.newPage();
+  await loadNew(next);
+  await candidate(next,'prepareMigration',seed.backup);
+  await expect(candidate(next,'migrate')).rejects.toThrow(/bloccata/i);
+  await page.close();
+  const oldAgain=await context.newPage();
+  await loadOld(oldAgain);
+  expect(await old(oldAgain,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+  await oldAgain.close();
+  await expect(candidate(next,'migrate')).rejects.toThrow();
+  expect(await candidate(next,'version')).toBe(1);
+  await candidate(next,'prepareMigration',seed.backup);
+  expect(await candidate(next,'migrate')).toBe(2);
+});
