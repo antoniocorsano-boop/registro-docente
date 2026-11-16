@@ -56,6 +56,13 @@ Object.assign(globalThis,{__val01NativeLab:{
       return grant;
     }catch(e){readState={phase:'native-error'};throw e;}
   },
-  async migrate(confirmed:boolean){if(!grant)throw Error('No authorization');await migration.migrate(grant,confirmed);return true;},
+  async migrate(confirmed:boolean){
+    if(!grant)throw Error('No authorization');
+    try{await migration.migrate(grant,confirmed);return 'accepted';}
+    catch(e){
+      if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.')return 'rejected';
+      throw e;
+    }
+  },
   invalidate(){generation++;grant=null;migration.invalidate();}
 }});
