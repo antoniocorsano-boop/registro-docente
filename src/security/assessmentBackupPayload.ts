@@ -4,7 +4,10 @@
  */
 import { validateAssessmentArchiveV1 } from '../assessment/assessmentArchive';
 import { snapshotAssessmentData } from '../assessment/assessmentRevisionBindings';
-import { normalizeBackupPayloadVerified, BACKUP_DATA_VERSION_V6 } from './backupPayload';
+import { normalizeBackupPayloadVerified, isSnapshotV6 } from './backupPayload';
+import { assertCouncilSnapshotIntegrity } from '../council/councilEvidenceSnapshots';
+import { withoutLocalBackupVerification } from '../persistence/backupCheckpoint';
+import type { AppSettings } from '../types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { CompleteSecureAppSnapshot } from './secureAppStorage';
 
@@ -93,20 +96,45 @@ function assertV7Placement(s:Row):void{
   }
 }
 
-async function normalizeV7(s:unknown,scopes:unknown):Promise<NormalizedSnapshot>{
-  if(!exact(s,DATASETS)||!row(s.settings))throw bad();
+/** Validate the actual settings shape before allowing secret sanitization.
+ * Unknown portable fields are retained; invalid known fields are not repaired.
+ */
+function isV7Settings(v:unknown):v is AppSettings{
+  if(!row(v)||!['school','year','teacher','subject'].every(k=>typeof v[k]==='string')||
+     !['cyan','matrix','purple','amber','mixed'].includes(v.theme as string))return false;
+  if(own(v,'archiveMode')&&v.archiveMode!=='professional'&&v.archiveMode!=='demo')return false;
+  if(own(v,'embeddingConfig')){
+    const e=v.embeddingConfig;
+    if(!row(e)||!['local','gemini'].includes(e.provider as string)||
+       typeof e.endpointUrl!=='string'||typeof e.modelName!=='string'||
+       !['llama.cpp','ollama','openai-compatible'].includes(e.apiType as string)||
+       typeof e.enabled!=='boolean'||(own(e,'apiKey')&&typeof e.apiKey!=='string'))return false;
+  }
+  if(own(v,'useWeightedAverage')&&typeof v.useWeightedAverage!=='boolean')return false;
+  if(own(v,'evaluationWeights')){
+    const w=v.evaluationWeights;
+    if(!row(w)||!['test','verifica','orale','disegno','osserv'].every(k=>typeof w[k]==='number'&&Number.isFinite(w[k])))return false;
+  }
+  if(own(v,'aiBudgetProfile')&&!['economy','balanced','quality'].includes(v.aiBudgetProfile as string))return false;
+  if(own(v,'copilotProactivity')&&!['essential','balanced','present'].includes(v.copilotProactivity as string))return false;
+  return true;
+}
+
+/** Validate only. A v7 document must already contain canonical planning v2.
+ * Active mission statuses are historical facts here, not execution grants.
+ * Restore activation must still suspend active missions through the established
+ * runtime path; this isolated codec never returns execution authority.
+ */
+async function validateV7(s:unknown,scopes:unknown):Promise<NormalizedSnapshot>{
+  if(!exact(s,DATASETS)||!isV7Settings(s.settings))throw bad();
   assertV7Placement(s);
   if(!validateAssessmentArchiveV1(s.appData,scopes).valid)throw bad();
   assertPortable(s,true);
-  // Adapt only the version discriminator in memory to reuse all the existing
-  // v6 dataset and council-integrity checks. Never export this internal shape.
-  // Use the source itself as the mode reference; a destination must not confer
-  // a new archive mode on a v7 file that does not declare one.
-  const normalized=await normalizeBackupPayloadVerified({
-    app:'registro-docente',backupDataVersion:BACKUP_DATA_VERSION_V6,snapshot:s
-  },s as unknown as CompleteSecureAppSnapshot);
-  if(!validateAssessmentArchiveV1(normalized.appData,scopes).valid)throw bad();
-  return normalized;
+  if(!isSnapshotV6(s)||s.planning.schemaVersion!==2)throw bad();
+  await assertCouncilSnapshotIntegrity(s.appData);
+  // The sole permitted inspection projection is removal of device-local
+  // verification attestations. No planning or Copilot normalization here.
+  return {...s,planning:s.planning,meta:withoutLocalBackupVerification(s.meta)};
 }
 
 export async function createAssessmentBackupPayloadV7(
@@ -114,11 +142,11 @@ export async function createAssessmentBackupPayloadV7(
 ):Promise<AssessmentBackupPayloadV7>{
   if(!timestamp(exportedAt))throw bad();
   const s=detach(snapshot),scopes=detach(approvedScopes);
-  if(!exact(s,DATASETS)||!row(s.settings))throw bad();
+  if(!exact(s,DATASETS)||!isV7Settings(s.settings))throw bad();
   // Keep the established secret exclusion on export. All other apiKey
   // occurrences are refused rather than silently lost during encryption.
-  s.settings=sanitizePersistedSettings(s.settings as CompleteSecureAppSnapshot['settings']);
-  const normalized=await normalizeV7(s,scopes);
+  s.settings=sanitizePersistedSettings(s.settings);
+  const normalized=await validateV7(s,scopes);
   return {app:'registro-docente',backupDataVersion:7,exportedAt,snapshot:normalized};
 }
 
@@ -130,7 +158,7 @@ export async function inspectAssessmentBackupPayload(
   const replacementRequiresReview=hasDomain(destination.appData);
   if(p.backupDataVersion===7){
     if(!exact(p,ROOT)||p.app!=='registro-docente'||!timestamp(p.exportedAt))throw bad();
-    return {sourceVersion:7,snapshot:await normalizeV7(p.snapshot,scopes),replacementRequiresReview};
+    return {sourceVersion:7,snapshot:await validateV7(p.snapshot,scopes),replacementRequiresReview};
   }
 
   // Historic labels may not smuggle the new reserved domain through any
