@@ -34,3 +34,16 @@ describe('VAL-01/D1b.3b authorized migration contract',()=>{
     expect(app).not.toContain('versionFencedVaultStore');
   });
 });
+
+describe('VAL-01/D1b.3c isolated Android laboratory contract',()=>{
+  test('native gate builds two isolated APKs with exact historical source, actual SAF and downgrade',async()=>{
+    const w=await read('.github/workflows/val01-native-migration.yml');
+    for(const text of ['it.trama.registrodocente.lab.val01','37c61d4c64993c986a3edcd2b421310adf20de92','b726f4a6dc0eb90a066113bee7cceabf29c629a5','ddbf60781514b866b09e1fa1e014e6a6fc3989d3','assembleDebug','ReactiveCircus/android-emulator-runner@','api-level: 36','productionRelease==false'])expect(w).toContain(text);
+    expect(w).not.toMatch(/assembleRelease|push:\s|secrets\./);
+    const script=await read('scripts/diagnostics/val01-native-migration.mjs');
+    for(const text of ['ro.kernel.qemu','/sdcard/Download/','native-picker-cancel-no-migration','native-wrong-copy-password-no-migration','native-explicit-refusal-no-migration','native-authorized-migration-and-replay-rejection','native-v2-cold-reopen',"['-r','-d']", "'VersionError'",'native-reupgrade-archive-intact'])expect(script).toContain(text);
+    const fixture=await read('mobile/android-probe/val01-native-lab.fixture.ts');
+    for(const text of ['readEncryptedBackupOnAndroid(active)','saveEncryptedBackupOnAndroid','migration.prepare(password,new Blob([text])','migration.migrate(grant,confirmed)'])expect(fixture).toContain(text);
+    expect(await read('src/App.tsx')).not.toContain('val01-native-lab.fixture');
+  });
+});
