@@ -8,9 +8,10 @@ const password='synthetic-archive-compatibility-only';
 const backupPassword='synthetic-archive-backup-only';
 const filename='Backup_Cifrato_GDPR_2031-01-15.enc.json';
 const migration=createAuthorizedVaultMigration();
-let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
+type MigrationGrant=Awaited<ReturnType<typeof migration.prepare>>;
+let grant:MigrationGrant|null=null;
 let generation=0;
-let readState: {phase:string;sha256?:string;bytes?:number;grant?:typeof grant}={phase:'idle'};
+let readState: {phase:string;sha256?:string;bytes?:number;grant?:MigrationGrant|null}={phase:'idle'};
 // A synthetic lab session, not the production Vault owner. The native plugin
 // and actual document picker are unchanged. Reauthorize after picker return
 // only within the current synthetic operation; never use this in production.
