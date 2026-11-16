@@ -1,4 +1,5 @@
 // D1b.3a GREEN candidate adapter: isolated version-fenced store.
+import { createAuthorizedVaultMigration } from '../../../src/security/authorizedVaultMigration';
 import { VersionFencedVaultStore } from '../../../src/security/versionFencedVaultStore';
 import { SecureVault } from '../../../src/security/secureVault';
 import { SecureAppStorage } from '../../../src/security/secureAppStorage';
@@ -30,8 +31,22 @@ async function opened(){
   await vault.unlock(password);
   return {snapshot:await storage.loadSnapshot(),physical:await physical()};
 }
+const migration=createAuthorizedVaultMigration();
+let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
 Object.assign(globalThis,{__val01FenceCandidate:{
   version,
+  async prepareMigration(backup:string,wrongVault=false,wrongBackup=false){
+    grant=null;
+    grant=await migration.prepare(wrongVault?'wrong':password,new Blob([backup]),
+      wrongBackup?'wrong':'synthetic-archive-backup-only');
+    return grant;
+  },
+  async migrate(confirmed=true,copyGrant=false){
+    if(!grant)throw Error('No grant');
+    await migration.migrate(copyGrant?{...grant}:grant,confirmed);
+    return version();
+  },
+  invalidateMigration(){migration.invalidate();},
   async upgrade(){await store.getMetadata();return version();},
   open:opened,
   async mutate(){
