@@ -12,7 +12,8 @@
     "vite.config.ts",
     "index.html",
     "qualification/",
-    "scripts/qualification/"
+    "scripts/qualification/",
+    "src/assessment/"
   ],
   "invariants": [
     {
@@ -2353,6 +2354,18 @@
       ],
       "browserSmoke": [
         "tests/browser/beta2-archive-compatibility.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1A-I01",
+      "owner": "VAL-01/D1a",
+      "statement": "The isolated local assessment evidence contract rejects malformed or unknown versions, mismatched class/year/subject/roster, unqualified sources, invalid criteria and rubric links, missing observed facts, implicit scores, duplicate observation identities and invalid revision chains. Observed facts and teacher-confirmed interpretations are distinct; missing, not observed, not applicable and withdrawn never imply a level. Synthetic-only validation has no persistence, AI, network, grade mutation or authority import.",
+      "impactPaths": [
+        "src/assessment/",
+        "src/security/val01AssessmentEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentEvidence.test.ts"
       ]
     }
   ]
