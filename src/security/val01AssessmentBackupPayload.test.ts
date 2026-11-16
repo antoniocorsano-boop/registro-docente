@@ -156,4 +156,52 @@ describe('VAL-01/D1b.2a — isolated v7 codec',()=>{
     expect((await inspect(decrypted)).snapshot).toEqual(p.snapshot);
     expect(()=>normalizeBackupPayload(decrypted,base())).toThrow(/versione/i);
   });
+  // Independent review finding: codec must never apply restore normalization.
+  test('v7 preserves running and authorized mission history through export and inspection without reactivation',async()=>{
+    const x=withEvidence();
+    const mission={
+      schemaVersion:1 as const,id:'mission-synthetic',opportunityId:'opportunity-synthetic',
+      kind:'prepare-current-lesson' as const,goal:'Prepara una lezione sintetica',
+      contextRef:{className:'Classe sintetica',udaId:'uda-synthetic'},
+      sourceRefs:[],allowedCapabilities:['prepare' as const],
+      expectedOutputs:[{kind:'activity' as const,label:'Proposta sintetica'}],
+      authority:{persistentProfessionalWrite:false as const,externalAction:false as const,scopeExpansion:false as const},
+      budgetProfile:'balanced' as const,createdAt:stamp,contextFingerprint:'synthetic-context',
+      semanticExpiry:{kind:'context' as const},status:'running' as const
+    };
+    x.copilotState!.missions=[mission,{...mission,id:'mission-second',status:'authorized'}];
+    const before=structuredClone(x);
+    // Construct raw v7 without the legacy writer, which intentionally suspends missions.
+    const raw={app:'registro-docente',backupDataVersion:7,exportedAt:stamp,snapshot:structuredClone(x)};
+    const p=await generate(x);
+    expect(p.snapshot.copilotState).toEqual(before.copilotState);
+    expect((await inspect(raw)).snapshot.copilotState).toEqual(before.copilotState);
+    expect(x).toEqual(before);
+    const encrypted=await encryptDataWithPassword(p,'synthetic-test-password');
+    expect((await inspect(await decryptDataWithPassword(encrypted,'synthetic-test-password'))).snapshot).toEqual(p.snapshot);
+    expect(normalizeBackupPayload({...raw,backupDataVersion:6},base()).copilotState.missions.map(m=>m.status)).toEqual(['suspended','suspended']);
+  });
+  test('v7 rejects noncanonical planning v1 rather than silently upgrading it; old v6 remains readable',async()=>{
+    const x=base();const historical={...x.planning,schemaVersion:1};
+    delete (historical as any).docenteOsProjections;
+    (x as any).planning=historical;
+    const raw={app:'registro-docente',backupDataVersion:7,exportedAt:stamp,snapshot:x};
+    await expect(generate(x,[])).rejects.toThrow();
+    await expect(inspect(raw,base(),[])).rejects.toThrow();
+    const old=await inspect({...raw,backupDataVersion:6},base(),[]);
+    expect(old.snapshot.planning.schemaVersion).toBe(2);
+    expect(x.planning).toEqual(historical);
+  });
+  test('invalid v7 mode and malformed provider settings fail closed, without inheriting destination mode',async()=>{
+    const x=base();(x.settings as any).archiveMode='unknown';
+    await expect(generate(x,[])).rejects.toThrow();
+    await expect(inspect({app:'registro-docente',backupDataVersion:7,exportedAt:stamp,snapshot:x},base(),[])).rejects.toThrow();
+    const y=base();(y.settings as any).embeddingConfig='invalid';
+    await expect(generate(y,[])).rejects.toThrow();
+    await expect(inspect({app:'registro-docente',backupDataVersion:7,exportedAt:stamp,snapshot:y},base(),[])).rejects.toThrow();
+    const z=base();delete z.settings.archiveMode;
+    expect((await generate(z,[])).snapshot.settings.archiveMode).toBeUndefined();
+    expect((await inspect({app:'registro-docente',backupDataVersion:7,exportedAt:stamp,snapshot:z},base(),[])).snapshot.settings.archiveMode).toBeUndefined();
+  });
+
 });
