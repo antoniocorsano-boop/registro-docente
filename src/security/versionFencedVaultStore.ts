@@ -15,14 +15,14 @@ const error=()=>new Error('Archivio precedente assente, incompleto o non compati
 const object=(x:unknown):x is Record<string,unknown>=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const buffer=(x:unknown,min:number)=>x instanceof ArrayBuffer&&x.byteLength>=min;
 const bytes=(x:unknown,length:number)=>x instanceof Uint8Array&&x.byteLength===length;
-function validMeta(m:unknown):boolean{
+export function validMeta(m:unknown):boolean{
   return object(m)&&m.vaultVersion===1&&m.state==='ACTIVE'&&object(m.kdf)&&
     m.kdf.name==='PBKDF2'&&m.kdf.hash==='SHA-256'&&m.kdf.iterations===600000&&
     bytes(m.salt,16)&&bytes(m.wrapIv,12)&&buffer(m.wrappedDek,16)&&
     typeof m.createdAt==='string'&&Number.isFinite(Date.parse(m.createdAt))&&
     typeof m.updatedAt==='string'&&Number.isFinite(Date.parse(m.updatedAt));
 }
-function validRecords(values:unknown):boolean{
+export function validRecords(values:unknown):boolean{
   return Array.isArray(values)&&values.length===KEYS.length&&
     values.every(r=>object(r)&&typeof r.recordKey==='string'&&r.schemaVersion===1&&bytes(r.iv,12)&&buffer(r.ciphertext,16))&&
     values.map(r=>r.recordKey).sort().every((k,i)=>k===KEYS[i]);
@@ -32,14 +32,22 @@ function validRecords(values:unknown):boolean{
  * In particular an onblocked notification is NOT cancellation in IndexedDB.
  * An abandoned request must abort on any subsequent upgradeneeded event.
  */
+export type MigrationFenceGuard=(metadata:unknown,records:unknown,transaction:IDBTransaction)=>void;
+
 export class VersionFencedVaultStore extends IndexedDbVaultStore {
   private readonly versionFactory:IDBFactory;
   private opening:Promise<IDBDatabase>|null=null;
   private retired=false;
-  constructor(factory:IDBFactory|undefined=globalThis.indexedDB){
+  constructor(factory:IDBFactory|undefined=globalThis.indexedDB,private readonly migrationGuard?:MigrationFenceGuard){
     super(factory);
     if(!factory)throw error();
     this.versionFactory=factory;
+  }
+
+  /** Retire a one-shot migration connection; never clear the archive. */
+  async close():Promise<void>{
+    this.retired=true;
+    try{(await this.opening)?.close();}catch{/* An unsuccessful open has no connection. */}
   }
 
   protected override openDatabase():Promise<IDBDatabase>{
@@ -48,6 +56,7 @@ export class VersionFencedVaultStore extends IndexedDbVaultStore {
     const attempt=new Promise<IDBDatabase>((resolve,reject)=>{
       const request=this.versionFactory.open(DB_NAME,DB_VERSION);
       let abandoned=false;
+      let guardedUpgrade=false;
       let failure:Error|null=null;
       const abort=(tx:IDBTransaction,reason:Error)=>{
         failure=reason;
@@ -82,7 +91,8 @@ export class VersionFencedVaultStore extends IndexedDbVaultStore {
             if(--remaining!==0)return;
             try{
               if(abandoned||metaKeys.result.length!==1||metaKeys.result[0]!=='current'||
-                 !validMeta(meta.result)||!validRecords(encrypted.result))abort(tx,error());
+                 !validMeta(meta.result)||!validRecords(encrypted.result)){abort(tx,error());return;}
+              if(this.migrationGuard){this.migrationGuard(meta.result,encrypted.result,tx);guardedUpgrade=true;}
             }catch{abort(tx,error());}
           };
           metaKeys.onsuccess=check;meta.onsuccess=check;encrypted.onsuccess=check;
@@ -93,7 +103,7 @@ export class VersionFencedVaultStore extends IndexedDbVaultStore {
       request.onsuccess=()=>{
         const db=request.result;
         if(abandoned||this.retired){db.close();reject(failure??error());return;}
-        if(db.version!==DB_VERSION||db.objectStoreNames.length!==2||
+        if((this.migrationGuard&&!guardedUpgrade)||db.version!==DB_VERSION||db.objectStoreNames.length!==2||
            !db.objectStoreNames.contains(META)||!db.objectStoreNames.contains(RECORDS)){
           db.close();reject(error());return;
         }
