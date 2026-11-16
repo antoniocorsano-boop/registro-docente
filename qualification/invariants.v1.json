@@ -2403,6 +2403,19 @@
       "tests": [
         "src/security/val01AssessmentRevisionBindings.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1B-I01",
+      "owner": "VAL-01/D1b",
+      "statement": "The optional assessment archive envelope preserves legacy absence, validates every explicit class/year/subject scope against an independently approved context and actual roster, rejects malformed history and cross-scope batch or grade ownership, and never invents, rewrites or exposes evidence. Historical validation is independent of current grade values. No persistence or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentArchive.ts",
+        "src/assessment/assessmentRevisionBindings.ts",
+        "src/security/val01AssessmentArchive.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentArchive.test.ts"
+      ]
     }
   ]
 }
