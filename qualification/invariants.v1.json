@@ -2379,6 +2379,18 @@
       "tests": [
         "src/security/val01AssessmentBatchLink.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1A2-I02",
+      "owner": "VAL-01/D1a.2",
+      "statement": "A pure individual projection validates the complete local evidence graph and explicit student scope, selects active non-withdrawn revision heads only, preserves frozen criterion/objective references, separates observation states, counts each event once and reports undetermined coverage. No grade, level, personal prose, inference, history mutation, runtime or persistence.",
+      "impactPaths": [
+        "src/assessment/assessmentEvidenceProjection.ts",
+        "src/security/val01AssessmentEvidenceProjection.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentEvidenceProjection.test.ts"
+      ]
     }
   ]
 }
