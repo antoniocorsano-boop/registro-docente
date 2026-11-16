@@ -121,7 +121,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: false
-          script: node scripts/diagnostics/val01-native-migration.mjs
+          script: timeout --signal=TERM --kill-after=10s 600s node scripts/diagnostics/val01-native-migration.mjs
       - name: Require complete native laboratory evidence
         run: |
           jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" '.predecessor==$old and .candidate==$new and .productionRelease==false and ([.results[].stage]==["historical-seed-cold-reopen","native-saf-write-readback","native-picker-cancel-no-migration","native-wrong-copy-password-no-migration","native-explicit-refusal-no-migration","native-authorized-migration-and-replay-rejection","native-v2-cold-reopen","native-in-place-downgrade-all-six-operations-rejected","native-reupgrade-archive-intact"]) and all(.results[];.status=="PASS")' native-evidence/result.json
