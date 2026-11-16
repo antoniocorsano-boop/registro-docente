@@ -1,4 +1,5 @@
 import {describe,expect,test} from 'bun:test';
+import {execFileSync} from 'node:child_process';
 const read=(p:string)=>Bun.file(new URL('../../'+p,import.meta.url)).text();
 describe('VAL-01/D1b.2b historical compatibility gate wiring (not dynamic browser evidence)',()=>{
   test('pins all three exact predecessors, verifies both checkouts, and runs separate browser gate',async()=>{
@@ -25,4 +26,11 @@ describe('VAL-01/D1b.2b historical compatibility gate wiring (not dynamic browse
     expect(spec).toContain("old(page,'restoreOldBackup',seeded.backup)");
     expect(spec).toContain("old(page,'raw')).toEqual(seeded.physical)");
   });
+  test('registered historical spec has exactly one explicit reference workflow owner',()=>{
+    const result=JSON.parse(execFileSync(process.execPath,['scripts/qualification/check-reference-browser-coverage.mjs'],{cwd:new URL('../../',import.meta.url),encoding:'utf8'}));
+    expect(result.status).toBe('REFERENCE_BROWSER_COVERAGE_PASS');
+    expect(result.mapped).toBe(result.registered);
+    expect(result.coverage.filter((entry:any)=>entry.workflow==='.github/workflows/val01-historical-v7-compatibility.yml')).toEqual([{workflow:'.github/workflows/val01-historical-v7-compatibility.yml',count:1}]);
+  });
+
 });

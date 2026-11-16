@@ -2435,6 +2435,7 @@
       "owner": "VAL-01/D1b",
       "statement": "The historical compatibility browser gate pins and checks out exact Beta1 RC2, Beta1 RC3 and Beta2 RC2 source; each decrypts the candidate v7 with envelope v2, rejects unsupported application version through the old restore sequence, preserves all ten physical encrypted records and logical data after reopening, and proves legitimate v6 restore through a positive control. Wiring tests alone are not browser or native APK evidence.",
       "impactPaths": [
+        "scripts/qualification/check-reference-browser-coverage.mjs",
         ".github/workflows/val01-historical-v7-compatibility.yml",
         "tests/browser/fixtures/val01-historical-reader.fixture.ts",
         "tests/browser/fixtures/val01-v7-candidate.fixture.ts",
