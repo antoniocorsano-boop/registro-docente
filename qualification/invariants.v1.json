@@ -2475,6 +2475,30 @@
         "src/security/backup02ReceiptAuthority.test.ts",
         "src/security/val01AssessmentBackupPayload.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1B-I05",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated database version fence is qualified using exact historical source and real Chromium IndexedDB in the same origin. Existing complete active v1 archives upgrade without changing encrypted records, key or metadata; historical read, unlock, write, deletion, clear and initialization fail with VersionError after v2. Blocked upgrade cannot run later after rejection, fresh retry works, and missing or incomplete archives cannot create or upgrade a database. No native APK or runtime activation is claimed.",
+      "impactPaths": [
+        ".github/workflows/val01-database-fence.yml",
+        "tests/browser/fixtures/val01-fence-historical.fixture.ts",
+        "tests/browser/fixtures/val01-fence-candidate.fixture.ts",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "scripts/qualification/check-reference-browser-coverage.mjs",
+        "src/security/vaultStore.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureAppStorage.ts"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
     }
   ]
 }
