@@ -2524,6 +2524,27 @@
       "browserSmoke": [
         "tests/browser/val01-database-fence.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-D1B3C-I01",
+      "owner": "VAL-01/D1b.3c",
+      "statement": "Native migration laboratory uses separate debug APK identity, exact historical storage sources, real Android local document picker and encrypted readback, explicit consent, preserved physical and logical snapshots through cold restart and downgrade/reupgrade. No production release or exact historical production APK attestation.",
+      "impactPaths": [
+        ".github/workflows/val01-native-migration.yml",
+        "mobile/android-probe/val01-native-lab.fixture.ts",
+        "scripts/diagnostics/val01-native-migration.mjs",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidSessionLifecycle.ts",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/native/RegistroSessionPlugin.java"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ]
     }
   ]
 }
