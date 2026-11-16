@@ -148,12 +148,12 @@ try{
   const grant=selected.grant;
   assert.equal(grant.sha256,hash);assert.equal(grant.bytes,bytes.length);assert.equal(grant.payloadVersion,6);
   assert.equal(await candidate('version'),1);
-  await assert.rejects(lab('migrate',false));assert.equal(await candidate('version'),1);
+  assert.equal(await lab('migrate',false),'rejected');assert.equal(await candidate('version'),1);
   stage('native-explicit-refusal-no-migration');
   const fresh=await pickerRead();assert.equal(fresh.phase,'authorized');assert.deepEqual(fresh.grant,grant);
-  assert.equal(await lab('migrate',true),true);
+  assert.equal(await lab('migrate',true),'accepted');
   assert.equal(await candidate('version'),2);
-  await assert.rejects(lab('migrate',true));
+  assert.equal(await lab('migrate',true),'rejected');
   assert.deepEqual(await candidate('open'),{snapshot:seed.snapshot,physical:seed.physical});
   stage('native-authorized-migration-and-replay-rejection');
   stop();await launch('__val01NativeLab');
