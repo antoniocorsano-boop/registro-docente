@@ -143,15 +143,16 @@ async function findMarker(){
   }
   throw Error('Synthetic class not located on verified original home screen');
 }
-function uiCheckpoint(label){
+async function uiCheckpoint(label){
   // Only synthetic CI UI, never archive contents or passwords.
-  const view=nodes().map(n=>({text:n.password?'[redacted]':n.text,desc:n.password?'[redacted]':n.desc,pkg:n.pkg,id:n.id,clazz:n.clazz,enabled:n.enabled,clickable:n.clickable,bounds:n.bounds}));
+  const safe=value=>!value?'':/Collaudo migrazione VAL01|^Classe creata$|^Le mie classi$|^Oggi$|^Torna a Oggi$|^Nuova Classe$|^OK$|^Annulla$|^Sblocca Registro$|^Configura archivio protetto$|^Inserisci la denominazione della nuova classe/.test(value)?value:'[redacted]';
+  const view=(await until(()=>{const n=nodes();return n.length?n:null;},'UI checkpoint unavailable',12000)).map(n=>({text:n.password?'[redacted]':safe(n.text),desc:n.password?'[redacted]':safe(n.desc),pkg:n.pkg,id:n.id,clazz:n.clazz,enabled:n.enabled,clickable:n.clickable,bounds:n.bounds}));
   writeFileSync('native-evidence/ui-'+label+'.json',JSON.stringify(view,null,2));
   console.log('original-ui',label);
 }
 async function ensureHome(){
   // handleAddClass navigates to 'dati' after durable commit in all 3 SHAs.
-  const home=()=>nodes().some(n=>nativeApp(n)&&n.text.includes('Le mie classi'));
+  const home=()=>{try{return nodes().some(n=>nativeApp(n)&&(n.text.includes('Le mie classi')||n.desc.includes('Le mie classi')));}catch{return false;}};
   if(!home()){
     tap(await appButton('Oggi'));
     // Some historical navigation routes request confirmation.
@@ -164,7 +165,7 @@ async function seedOriginal(version){
   launchOriginal();await appText('Configura archivio protetto');
   if(version!==10002){tap(await appText('Ambiente dimostrativo'));await gate('Avvia la prova');}
   else await gate('Configura archivio protetto');
-  await appText('Le mie classi');uiCheckpoint('initial-home');
+  await appText('Le mie classi');await uiCheckpoint('initial-home');
   tap(await appButton('Nuova Classe'));
   await appText('Inserisci la denominazione della nuova classe');
   tap(await appEdit());inputText(marker);
@@ -172,11 +173,11 @@ async function seedOriginal(version){
   hideKeyboard();tap(await appButton('OK'));
   // Verify that the app actually left the prompt and committed/navigated.
   await until(()=>nodes().some(n=>nativeApp(n)&&(n.text===marker||n.desc===marker||n.text==='Classe creata'||n.desc==='Classe creata')),'Class creation not observed in original UI',30000);
-  uiCheckpoint('class-created');
-  await ensureHome();uiCheckpoint('home-after-create');await findMarker();
+  await uiCheckpoint('class-created');
+  await ensureHome();await uiCheckpoint('home-after-create');await findMarker();
   console.log('original-class-visible-before-restart');
   stop();launchOriginal();await gate('Sblocca Registro');await ensureHome();
-  uiCheckpoint('home-after-restart');await findMarker();
+  await uiCheckpoint('home-after-restart');await findMarker();
   console.log('original-class-visible-after-restart');
 }
 try{
