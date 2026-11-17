@@ -1,7 +1,7 @@
 name: VAL-01 D1b.3a — exact historical database fence
 on:
   pull_request:
-    branches: ['main', 'docs/val-01-d1b4-session-preflight', 'feat/val-01-d1b4a-archive-preflight', 'feat/val-01-d1b4b-session-boundary', 'feat/val-01-d1b4b2-existing-store']
+    branches: ['main', 'docs/val-01-d1b4-session-preflight', 'feat/val-01-d1b4a-archive-preflight', 'feat/val-01-d1b4b-session-boundary', 'feat/val-01-d1b4b2-existing-store', 'feat/val-01-d1b4b2-recovery-handoff']
 permissions:
   contents: read
 jobs:
@@ -71,9 +71,20 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Start real candidate UI on separate synthetic origin
+        shell: bash
+        run: |
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4174 --strictPort > browser-evidence/product-server.log 2>&1 &
+          echo $! > browser-evidence/product-server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4174/tests/browser/fixtures/val01-product-session.html >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
       - name: Verify migration, blocked upgrade and exact downgrade rejection
         working-directory: .browser-tools
         run: |
+          export VAL01_PRODUCT_ORIGIN="http://127.0.0.1:4174"
           export VAL01_FENCE_HISTORICAL_BUNDLE="$RUNNER_TEMP/val01-fence-fixtures/historical.js"
           export VAL01_FENCE_CANDIDATE_BUNDLE="$RUNNER_TEMP/val01-fence-fixtures/candidate.js"
           ./node_modules/.bin/playwright test \
@@ -81,6 +92,8 @@ jobs:
             --workers=1 --output=../browser-evidence/results
       - if: always()
         run: test ! -f browser-evidence/server.pid || kill "$(cat browser-evidence/server.pid)" || true
+      - if: always()
+        run: test ! -f browser-evidence/product-server.pid || kill "$(cat browser-evidence/product-server.pid)" || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

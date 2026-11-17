@@ -50,7 +50,7 @@ export class ExistingSessionVaultStore extends IndexedDbVaultStore{
   }
   /** Permanent retirement, including an open request that has not resolved.
    * IDB close waits for existing transactions: owner must drain first. */
-  async retireConnection():Promise<void>{
+  override async retireConnection():Promise<void>{
     this.retired=true;
     this.cancelOpening?.();
     this.connection?.close();

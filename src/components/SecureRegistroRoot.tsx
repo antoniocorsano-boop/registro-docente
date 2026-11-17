@@ -20,7 +20,11 @@ import { SecureVault } from '../security/secureVault';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
-import type { SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
+import { ExistingSessionVaultStore } from '../security/existingSessionVaultStore';
+import { inspectArchiveVersion } from '../security/inspectArchiveVersion';
+import { createRecoveryCopyHandoff, type RecoverySessionStamp } from '../security/migrationRecoveryHandoff';
+import { createLocalMigrationSessionBoundary, type MigrationSessionResult } from '../security/migrationSessionBoundary';
+import type { DurableMutationCoordinator, SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
 import {
   ANDROID_SESSION_EVENT, isAndroidSessionRuntime, readAndroidSessionState,
   authorizeAndroidSession, revokeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess,
@@ -46,7 +50,8 @@ function readAutoLockMinutes(): AutoLockMinutes {
   return parsed === 0 || parsed === 15 || parsed === 30 || parsed === 60 ? parsed : 15;
 }
 
-export const SecureRegistroRoot: React.FC = () => {
+/** Explicit lab entrypoint only: main.tsx never enables this candidate. */
+export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> = ({archiveMigrationCandidate=false}) => {
   const [gateState, setGateStateValue] = useState<VaultGateState>('CHECKING');
   const gateStateRef = useRef<VaultGateState>('CHECKING');
   const setGateState = useCallback((next: VaultGateState | ((current: VaultGateState) => VaultGateState)) => {
@@ -73,6 +78,18 @@ export const SecureRegistroRoot: React.FC = () => {
   const authenticatedEpochRef = useRef<number | null>(null);
   const lifecycleRevisionRef = useRef(0);
   const [nativeState, setNativeState] = useState<AndroidSessionState | null>(null);
+  const archiveVersionRef=useRef<1|2|null>(null);
+  const [archiveVersion,setArchiveVersion]=useState<1|2|null>(null);
+  const requireExistingRef=useRef(false);
+  const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
+  const archiveMigrationRef=useRef<ReturnType<typeof createLocalMigrationSessionBoundary>|null>(null);
+  const [migrationNotice,setMigrationNotice]=useState<string|null>(null);
+  const discardRecoveryCopy=useCallback(()=>{handoffRef.current?.invalidate();handoffRef.current=null;},[]);
+  const invalidateArchiveMigration=useCallback(()=>{
+    discardRecoveryCopy();
+    archiveMigrationRef.current?.revoke();
+  },[discardRecoveryCopy]);
+  useEffect(()=>()=>invalidateArchiveMigration(),[invalidateArchiveMigration]);
   const registerSessionSuspension = useCallback((request: (() => SuspendedMutationLease) | null) => {
     suspendRequestRef.current = request;
   }, []);
@@ -82,7 +99,9 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const getRuntime = useCallback(() => {
     if (!storeRef.current) {
-      storeRef.current = new IndexedDbVaultStore(globalThis.indexedDB);
+      storeRef.current = archiveMigrationCandidate && archiveVersionRef.current===2
+        ? new ExistingSessionVaultStore(2)
+        : new IndexedDbVaultStore(globalThis.indexedDB,archiveMigrationCandidate&&archiveVersionRef.current===1);
       vaultRef.current = new SecureVault(storeRef.current);
       storageRef.current = new SecureAppStorage(vaultRef.current);
     }
@@ -92,7 +111,7 @@ export const SecureRegistroRoot: React.FC = () => {
       vault: vaultRef.current!,
       storage: storageRef.current!
     };
-  }, []);
+  }, [archiveMigrationCandidate]);
 
   const inspectBootstrap = useCallback(async () => {
     setGateState('CHECKING');
@@ -107,8 +126,19 @@ export const SecureRegistroRoot: React.FC = () => {
     }
 
     try {
+      if(archiveMigrationCandidate){
+        const version=await inspectArchiveVersion();
+        if(version===null&&requireExistingRef.current)throw Error('Archivio esistente non verificabile. Nessun nuovo archivio verrà creato.');
+        if(storeRef.current&&archiveVersionRef.current!==version){
+          vaultRef.current?.lock();await storeRef.current.retireConnection();
+          storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+        }
+        archiveVersionRef.current=version;setArchiveVersion(version);
+      }
       const { store } = getRuntime();
       const metadata = await store.getMetadata();
+      if(archiveMigrationCandidate&&requireExistingRef.current&&metadata?.state!=='ACTIVE')throw Error('Archivio esistente non verificabile. Nessun ripristino automatico.');
+      if(archiveMigrationCandidate&&archiveVersionRef.current===null){archiveVersionRef.current=1;setArchiveVersion(1);}
       const hasLegacyData = LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null);
       const nextState = decideVaultBootstrap({
         metadataState: metadata?.state ?? null,
@@ -122,10 +152,14 @@ export const SecureRegistroRoot: React.FC = () => {
       }
       setGateState(nextState);
     } catch (error) {
+      if(archiveMigrationCandidate){
+        vaultRef.current?.lock();await storeRef.current?.retireConnection();
+        storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+      }
       setErrorMessage(error instanceof Error ? error.message : 'Controllo del Secure Local Vault non riuscito.');
       setGateState('ERROR');
     }
-  }, [getRuntime]);
+  }, [getRuntime,archiveMigrationCandidate]);
 
   useEffect(() => {
     void inspectBootstrap();
@@ -140,6 +174,7 @@ export const SecureRegistroRoot: React.FC = () => {
   }, []);
 
   const lockImmediately = useCallback(() => {
+    invalidateArchiveMigration();
     revokeNativeAuthorization();
     vaultRef.current?.lock();
     setSnapshot(null);
@@ -147,18 +182,19 @@ export const SecureRegistroRoot: React.FC = () => {
     // Its terminal setup state is authoritative, even if React batches
     // the reset and lock updates in the same render.
     setGateState(current => current === 'READY' ? 'LOCKED' : current);
-  }, [revokeNativeAuthorization]);
+  }, [revokeNativeAuthorization,invalidateArchiveMigration]);
 
   // Manual lock and menu exit share the App's existing draft guard.
   // Close admission synchronously before hiding the still-mounted App so
   // already accepted durable work can settle without starting new work.
   const handleLock = useCallback(() => {
-    if (closingRef.current) return;
+    if (closingRef.current) {archiveMigrationRef.current?.revoke();return;}
     const request = lockRequestRef.current;
     if (!request) return; // No active App authority; never silently discard its drafts.
     request(drain => {
       if (closingRef.current) return;
       closingRef.current = true;
+      invalidateArchiveMigration();
       revokeNativeAuthorization();
       const settled = drain();
       setClosingDelayed(false);
@@ -172,7 +208,7 @@ export const SecureRegistroRoot: React.FC = () => {
         setClosingDelayed(false);
       });
     });
-  }, [lockImmediately, revokeNativeAuthorization]);
+  }, [lockImmediately, revokeNativeAuthorization,invalidateArchiveMigration]);
 
   // The Android shield is installed before onPause returns. JS admission closes
   // on the native generation change; drafts remain only in this mounted tree.
@@ -218,6 +254,7 @@ export const SecureRegistroRoot: React.FC = () => {
       }
       if (!previous || current.epoch !== previous.epoch || current.foreground !== previous.foreground) {
         lifecycleRevisionRef.current += 1;
+        archiveMigrationRef.current?.revoke();
       }
       nativeStateRef.current = current;
       setNativeState(current);
@@ -229,6 +266,7 @@ export const SecureRegistroRoot: React.FC = () => {
     } catch (error) {
       // A missing or invalid native authority must never be treated as a web fallback.
       lifecycleRevisionRef.current += 1;
+      archiveMigrationRef.current?.revoke();
       beginSuspension();
       throw error;
     }
@@ -241,6 +279,7 @@ export const SecureRegistroRoot: React.FC = () => {
     // even before the asynchronous native state query returns.
     const lifecycleChanged = () => {
       lifecycleRevisionRef.current += 1;
+      archiveMigrationRef.current?.revoke();
       sync();
     };
     document.addEventListener(ANDROID_SESSION_EVENT, lifecycleChanged);
@@ -276,7 +315,10 @@ export const SecureRegistroRoot: React.FC = () => {
     attempt: { epoch: number | null; revision: number }, commit: () => void
   ) => {
     const { epoch, revision } = attempt;
-    if (epoch === null) { commit(); return; }
+    if (epoch === null) {
+      if(archiveMigrationCandidate&&(document.hidden||lifecycleRevisionRef.current!==revision))throw Error('Sessione cambiata. Autenticati nuovamente.');
+      commit(); return;
+    }
     const assertCurrent = () => {
       const observed = nativeStateRef.current;
       if (lifecycleRevisionRef.current !== revision || !observed?.foreground || observed.epoch !== epoch) {
@@ -301,7 +343,7 @@ export const SecureRegistroRoot: React.FC = () => {
       await revokeAndroidSession(epoch).catch(() => {});
       throw error;
     }
-  }, [syncNativeSession]);
+  }, [syncNativeSession,archiveMigrationCandidate]);
 
   const resumeSuspendedSession = useCallback(async (password: string) => {
     const lease = suspendedRef.current;
@@ -401,16 +443,22 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const handleUnlock = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
-    const { vault } = getRuntime();
-    await vault.unlock(password);
+    const { vault,store } = getRuntime();
     try {
-      await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
+      if(archiveMigrationCandidate&&store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
+      await vault.unlock(password);
+      if(!archiveMigrationCandidate||archiveVersionRef.current!==2)await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
       await loadReadySnapshot(attempt);
+      setMigrationNotice(null);
     } catch (error) {
       vault.lock();
+      if(store instanceof ExistingSessionVaultStore){
+        await store.retireConnection();
+        if(storeRef.current===store){storeRef.current=null;vaultRef.current=null;storageRef.current=null;}
+      }
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate]);
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -434,7 +482,7 @@ export const SecureRegistroRoot: React.FC = () => {
   const handleRetry = useCallback(() => {
     void (async () => {
       try {
-        if (storeRef.current && vaultRef.current) {
+        if (storeRef.current && vaultRef.current && !requireExistingRef.current && archiveVersionRef.current!==2) {
           const metadata = await storeRef.current.getMetadata();
           if (metadata?.state === 'STAGING') {
             await vaultRef.current.discardStaging();
@@ -449,6 +497,8 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [inspectBootstrap]);
 
   const handleFactoryReset = useCallback(async () => {
+    invalidateArchiveMigration();
+    if(archiveMigrationCandidate&&archiveVersionRef.current===2)throw Error('Operazione non disponibile in questa versione di collaudo.');
     const { vault } = getRuntime();
     await vault.clearAll();
     for (const legacyKey of LEGACY_DATA_KEYS) {
@@ -460,12 +510,12 @@ export const SecureRegistroRoot: React.FC = () => {
     setSuspensionDelayed(false);
     setSnapshot(null);
     setGateState('SETUP_REQUIRED');
-  }, [getRuntime, revokeNativeAuthorization]);
+  }, [getRuntime, revokeNativeAuthorization,invalidateArchiveMigration,archiveMigrationCandidate]);
 
   useEffect(() => {
     if (gateState !== 'READY' || closing || suspensionPhase !== null || autoLockMinutes === 0) return;
     const timeoutLock = () => {
-      if (closingRef.current) return;
+      if (closingRef.current) {archiveMigrationRef.current?.revoke();return;}
       if (isAndroidSessionRuntime()) beginSuspension();
       else lockImmediately();
     };
@@ -489,6 +539,90 @@ export const SecureRegistroRoot: React.FC = () => {
     };
   }, [autoLockMinutes, gateState, closing, lockImmediately, suspensionPhase, beginSuspension]);
 
+  // The candidate's logical owner survives the existing native suspension UI,
+  // not an explicit lock, replacement or unmount. No alternate native authority.
+  const stampCurrent=useCallback((stamp:RecoverySessionStamp)=>{
+    if(lifecycleRevisionRef.current!==stamp.revision)return false;
+    if(isAndroidSessionRuntime())return stamp.epoch!==null&&nativeStateRef.current?.foreground===true&&
+      nativeStateRef.current.epoch===stamp.epoch&&authenticatedEpochRef.current===stamp.epoch;
+    return stamp.epoch===null&&!document.hidden;
+  },[]);
+  const recoveryOwnerReady=useCallback(()=>gateStateRef.current==='READY'&&!closingRef.current&&
+    !suspendedRef.current&&vaultRef.current?.isUnlocked()===true&&archiveVersionRef.current===1,[]);
+  const selectRecoveryCopy=useCallback(async(file?:File)=>{
+    if(!archiveMigrationCandidate||!recoveryOwnerReady())return false;
+    const logicalOwner=storeRef.current;
+    if(!logicalOwner)return false;
+    const owns=()=>storeRef.current===logicalOwner&&gateStateRef.current==='READY'&&!closingRef.current;
+    const handoff=handoffRef.current??(handoffRef.current=createRecoveryCopyHandoff({
+      isOwner:owns,
+      observeAuthenticated:async()=>{
+        const state=await syncNativeSession();
+        if(!owns()||!recoveryOwnerReady()||(isAndroidSessionRuntime()&&!state?.foreground))return null;
+        return {epoch:state?.epoch??null,revision:lifecycleRevisionRef.current};
+      },
+      isCurrent:stamp=>owns()&&recoveryOwnerReady()&&stampCurrent(stamp)
+    }));
+    return isAndroidSessionRuntime()?handoff.selectAndroid():file?handoff.selectWeb(file):false;
+  },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,syncNativeSession]);
+
+  const startArchiveMigration=useCallback((
+    queue:DurableMutationCoordinator,localPassword:string,copyPassword:string
+  ):Promise<MigrationSessionResult>=>{
+    const handoff=handoffRef.current;
+    if(!archiveMigrationCandidate||!handoff||!recoveryOwnerReady()||archiveMigrationRef.current)return Promise.resolve('not-started');
+    return handoff.consume((copy,stamp)=>{
+      const oldStore=storeRef.current,oldVault=vaultRef.current;
+      if(!oldStore||!oldVault||!recoveryOwnerReady()||!stampCurrent(stamp))return Promise.resolve<MigrationSessionResult>('not-started');
+      handoffRef.current=null;
+      let boundary:ReturnType<typeof createLocalMigrationSessionBoundary>;
+      const current=()=>archiveMigrationRef.current===boundary&&storeRef.current===oldStore&&
+        closingRef.current&&gateStateRef.current==='READY'&&!suspendedRef.current&&stampCurrent(stamp);
+      boundary=createLocalMigrationSessionBoundary({
+        queue,isCurrent:current,
+        readLocalCopy:async signal=>signal.aborted?null:copy,
+        confirm:async signal=>!signal.aborted&&current()&&window.confirm('La copia è stata verificata. Aggiornare l’archivio locale? Dovrai autenticarti nuovamente.'),
+        retireDb1:async()=>{
+          if(isAndroidSessionRuntime())await syncNativeSession();
+          if(!current())throw Error('Sessione non attuale.');
+          oldVault.lock();await oldStore.retireConnection();
+        }
+      });
+      archiveMigrationRef.current=boundary;
+      closingRef.current=true;setClosing(true);setClosingDelayed(false);
+      // run seals the actual App coordinator before its first await.
+      return (async()=>{
+        let result:MigrationSessionResult='inspect-reopen-required';
+        const deadline=window.setTimeout(()=>boundary.revoke(),120_000);
+        try{result=await boundary.run(localPassword,copyPassword);return result;}
+        finally{
+          window.clearTimeout(deadline);
+          boundary.revoke();archiveMigrationRef.current=null;
+          oldVault.lock();await oldStore.retireConnection();
+          storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+          requireExistingRef.current=true;
+          revokeNativeAuthorization();setSnapshot(null);
+          setMigrationNotice(result==='migrated-reopen-required'
+            ?'Archivio aggiornato. Autenticati per verificarlo e riaprire il Registro.'
+            :result==='inspect-reopen-required'
+              ?'Operazione interrotta. Autenticati per verificare lo stato dell’archivio.'
+              :'Aggiornamento non completato. Autenticati per riaprire il Registro.');
+          await inspectBootstrap();
+          closingRef.current=false;setClosing(false);
+        }
+      })();
+    })??Promise.resolve('not-started');
+  },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,revokeNativeAuthorization,inspectBootstrap,syncNativeSession]);
+
+  useEffect(()=>{
+    if(!archiveMigrationCandidate)return;
+    const protect=()=>{if(document.hidden){archiveMigrationRef.current?.revoke();if(!isAndroidSessionRuntime()){lifecycleRevisionRef.current++;discardRecoveryCopy();}}};
+    const hide=()=>invalidateArchiveMigration();
+    document.addEventListener('visibilitychange',protect);
+    window.addEventListener('pagehide',hide);
+    return()=>{document.removeEventListener('visibilitychange',protect);window.removeEventListener('pagehide',hide);};
+  },[archiveMigrationCandidate,discardRecoveryCopy,invalidateArchiveMigration]);
+
   const handleAutoLockChange = (minutes: AutoLockMinutes) => {
     setAutoLockMinutes(minutes);
     window.localStorage.setItem(AUTO_LOCK_STORAGE_KEY, String(minutes));
@@ -498,6 +632,7 @@ export const SecureRegistroRoot: React.FC = () => {
     <VaultGate
       state={gateState}
       errorMessage={errorMessage}
+      notice={migrationNotice}
       onSetup={handleSetup}
       onUnlock={handleUnlock}
       onMigrate={handleMigrate}
@@ -513,6 +648,11 @@ export const SecureRegistroRoot: React.FC = () => {
             onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
             registerSessionLockRequest={registerSessionLockRequest}
             registerSessionSuspension={registerSessionSuspension}
+            archiveMigration={archiveMigrationCandidate&&archiveVersion===1?{
+              select:selectRecoveryCopy,start:startArchiveMigration,discard:discardRecoveryCopy
+            }:undefined}
+            onInvalidateArchiveMigration={archiveMigrationCandidate?invalidateArchiveMigration:undefined}
+            archiveReplacementBlocked={archiveMigrationCandidate&&archiveVersion===2}
             headerSecurity={{
               autoLockMinutes,
               onAutoLockChange: handleAutoLockChange,

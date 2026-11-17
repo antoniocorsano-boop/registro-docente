@@ -57,21 +57,41 @@ function isVaultRecordKey(value: IDBValidKey): value is VaultRecordKey {
 export class IndexedDbVaultStore implements VaultStore {
   private readonly factory: IDBFactory;
   private databasePromise: Promise<IDBDatabase> | null = null;
+  private connectionRetired = false;
+  private activeConnection: IDBDatabase | null = null;
+  private abandonOpen: (() => void) | null = null;
 
-  constructor(factory: IDBFactory | undefined = globalThis.indexedDB) {
+  constructor(factory: IDBFactory | undefined = globalThis.indexedDB, private readonly existingOnly = false) {
     if (!factory) {
       throw new Error('IndexedDB non disponibile: impossibile usare il Secure Local Vault.');
     }
     this.factory = factory;
   }
 
+  /** The owner must drain admitted work before retiring its runtime. */
+  async retireConnection(): Promise<void> {
+    this.connectionRetired = true;
+    this.abandonOpen?.();
+    this.activeConnection?.close();
+    this.activeConnection = null;
+  }
+
   protected openDatabase(): Promise<IDBDatabase> {
+    if (this.connectionRetired) return Promise.reject(new Error('Sessione archivio non più attuale.'));
     if (this.databasePromise) return this.databasePromise;
 
     this.databasePromise = new Promise((resolve, reject) => {
       const request = this.factory.open(DB_NAME, DB_VERSION);
+      let abandoned = false;
+      const fail = (error: Error | DOMException) => {
+        abandoned = true;
+        this.abandonOpen = null;
+        reject(error);
+      };
+      this.abandonOpen = () => fail(new Error('Sessione archivio non più attuale.'));
 
       request.onupgradeneeded = () => {
+        if (abandoned || this.connectionRetired || this.existingOnly) { request.transaction?.abort(); return; }
         const db = request.result;
         if (!db.objectStoreNames.contains(METADATA_STORE)) {
           db.createObjectStore(METADATA_STORE);
@@ -81,9 +101,15 @@ export class IndexedDbVaultStore implements VaultStore {
         }
       };
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error ?? new Error('Apertura IndexedDB non riuscita.'));
-      request.onblocked = () => reject(new Error('Apertura IndexedDB bloccata da un’altra sessione.'));
+      request.onsuccess = () => {
+        const db = request.result;
+        if (abandoned || this.connectionRetired) { db.close(); return; }
+        this.abandonOpen = null;
+        this.activeConnection = db;
+        resolve(db);
+      };
+      request.onerror = () => fail(request.error ?? new Error('Apertura IndexedDB non riuscita.'));
+      request.onblocked = () => fail(new Error('Apertura IndexedDB bloccata da un’altra sessione.'));
     });
 
     return this.databasePromise;

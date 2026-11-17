@@ -50,6 +50,8 @@ export class VersionFencedVaultStore extends IndexedDbVaultStore {
     try{(await this.opening)?.close();}catch{/* An unsuccessful open has no connection. */}
   }
 
+  override async retireConnection():Promise<void>{await this.close();}
+
   protected override openDatabase():Promise<IDBDatabase>{
     if(this.retired)return Promise.reject(new Error('Sessione archivio non più attuale.'));
     if(this.opening)return this.opening;

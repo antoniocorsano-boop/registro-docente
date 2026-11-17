@@ -253,3 +253,97 @@ for(const anomaly of ['sparse','unknown','tamper','metadata','record-shape']){
     expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
   });
 }
+
+const productOrigin=process.env.VAL01_PRODUCT_ORIGIN;
+const productSeed=()=>productOrigin+'/tests/browser/fixtures/val01-product-seed.html';
+const productApp=()=>productOrigin+'/tests/browser/fixtures/val01-product-session.html';
+async function seedProduct(page){
+  if(!productOrigin)throw Error('Missing isolated product origin');
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(productSeed());
+  await page.addScriptTag({path:oldBundle});
+  const seed=await old(page,'seed',false);
+  await page.goto(productApp());
+  return seed;
+}
+async function unlockProduct(page,password='synthetic-archive-compatibility-only'){
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  await page.getByLabel('Password locale',{exact:true}).fill(password);
+  await page.getByRole('button',{name:'Sblocca Registro',exact:true}).click();
+  await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:15000});
+}
+async function privacyProduct(page){
+  await page.getByRole('button',{name:'Apri navigazione del Registro'}).click();
+  await page.getByRole('button',{name:'Privacy',exact:true}).click();
+}
+async function selectProductCopy(page,backup){
+  const panel=page.getByRole('region',{name:'Aggiornamento protetto archivio'});
+  await expect(panel).toBeVisible();
+  await panel.locator('input[type=file]').setInputFiles({name:'synthetic.enc.json',mimeType:'application/json',buffer:Buffer.from(backup)});
+  await expect(panel.getByLabel('Password locale',{exact:true})).toBeVisible();
+  return panel;
+}
+async function physicalAfterProduct(page,expectedVersion,seed){
+  await page.goto(productSeed());
+  await page.addScriptTag({path:newBundle});
+  expect(await candidate(page,'version')).toBe(expectedVersion);
+  if(expectedVersion===2)expect(await candidate(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+  else{
+    await page.goto(productSeed());await page.addScriptTag({path:oldBundle});
+    expect(await old(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+  }
+}
+
+test('D1b.4b.2b product Root/App/Privacy approved migration reopens only through new authentication',async({page})=>{
+  test.setTimeout(120000);
+  const seed=await seedProduct(page);
+  await unlockProduct(page);await privacyProduct(page);
+  const panel=await selectProductCopy(page,seed.backup);
+  await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await panel.getByLabel('Password della copia',{exact:true}).fill('synthetic-archive-backup-only');
+  let confirmations=0;
+  page.on('dialog',async dialog=>{if(dialog.message().includes('La copia è stata verificata')){confirmations++;await dialog.accept();}else await dialog.dismiss();});
+  await panel.getByRole('button',{name:'Verifica e aggiorna archivio'}).click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  expect(confirmations).toBe(1);
+  await expect(page.getByText('Archivio aggiornato. Autenticati per verificarlo e riaprire il Registro.')).toBeVisible();
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await unlockProduct(page);
+  await privacyProduct(page);
+  await expect(page.getByRole('region',{name:'Aggiornamento protetto archivio'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Reset Totale Sicuro'})).toBeDisabled();
+  await page.reload();await unlockProduct(page);
+  await physicalAfterProduct(page,2,seed);
+});
+
+for(const mode of ['refuse','wrong-copy']){
+  test('D1b.4b.2b actual application '+mode+' preserves original DB1 and requires a new session',async({page})=>{
+    test.setTimeout(120000);
+    const seed=await seedProduct(page);
+    await unlockProduct(page);await privacyProduct(page);
+    const panel=await selectProductCopy(page,seed.backup);
+    await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+    await panel.getByLabel('Password della copia',{exact:true}).fill(mode==='wrong-copy'?'wrong':'synthetic-archive-backup-only');
+    let confirmations=0;
+    page.on('dialog',async dialog=>{if(dialog.message().includes('La copia è stata verificata'))confirmations++;await dialog.dismiss();});
+    await panel.getByRole('button',{name:'Verifica e aggiorna archivio'}).click();
+    await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+    expect(confirmations).toBe(mode==='refuse'?1:0);
+    await expect(page.getByText('Aggiornamento non completato. Autenticati per riaprire il Registro.')).toBeVisible();
+    await unlockProduct(page);await physicalAfterProduct(page,1,seed);
+  });
+}
+
+test('D1b.4b.2b manual lock invalidates selected copy and normal entrypoint does not enable candidate',async({page})=>{
+  test.setTimeout(120000);
+  const seed=await seedProduct(page);
+  await unlockProduct(page);await privacyProduct(page);
+  await selectProductCopy(page,seed.backup);
+  await page.getByTestId('header01-lock').click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await unlockProduct(page);await privacyProduct(page);
+  await expect(page.getByRole('region',{name:'Aggiornamento protetto archivio'}).getByLabel('Password locale',{exact:true})).toHaveCount(0);
+  await physicalAfterProduct(page,1,seed);
+  await page.goto(productOrigin+'/');await unlockProduct(page);await privacyProduct(page);
+  await expect(page.getByRole('region',{name:'Aggiornamento protetto archivio'})).toHaveCount(0);
+});
