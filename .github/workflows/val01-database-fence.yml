@@ -1,7 +1,7 @@
 name: VAL-01 D1b.3a — exact historical database fence
 on:
   pull_request:
-    branches: ['main', 'docs/val-01-d1b4-session-preflight', 'feat/val-01-d1b4a-archive-preflight', 'feat/val-01-d1b4b-session-boundary', 'feat/val-01-d1b4b2-existing-store', 'feat/val-01-d1b4b2-recovery-handoff', 'feat/val-01-d1b4b2-product-session', 'test/val-01-d1b5-native-product', 'feat/val-01-d1b5-db2-lifecycle', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native', 'test/val-01-stab04b-repeatability']
+    branches: ['main', 'docs/val-01-d1b4-session-preflight', 'feat/val-01-d1b4a-archive-preflight', 'feat/val-01-d1b4b-session-boundary', 'feat/val-01-d1b4b2-existing-store', 'feat/val-01-d1b4b2-recovery-handoff', 'feat/val-01-d1b4b2-product-session', 'test/val-01-d1b5-native-product', 'feat/val-01-d1b5-db2-lifecycle', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native', 'test/val-01-stab04b-repeatability', 'test/val-01-stab05-exact-cumulative']
 permissions:
   contents: read
 jobs:
