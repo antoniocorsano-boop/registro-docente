@@ -2,7 +2,7 @@
 name: BETA2 Reference — Contracts and mobile browser qualification
 on:
   pull_request:
-    branches: ['main', 'feat/val-01-d1b4b2-product-session', 'test/val-01-d1b5-native-product', 'feat/val-01-d1b5-db2-lifecycle']
+    branches: ['main', 'feat/val-01-d1b4b2-product-session', 'test/val-01-d1b5-native-product', 'feat/val-01-d1b5-db2-lifecycle', 'feat/val-01-d1b5-db2-product']
 
 permissions:
   contents: read

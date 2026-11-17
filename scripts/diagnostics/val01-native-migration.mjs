@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
+const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
 const api=product?Number(process.env.VAL01_API):36;
 const pkg=integral?'it.trama.registrodocente':'it.trama.registrodocente.lab.val01';
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
@@ -75,7 +76,7 @@ function nodes(){
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
   return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
     const s=m[0],get=k=>s.match(new RegExp('\\b'+k+'="([^"]*)"'))?.[1]||'';
-    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',focused:get('focused')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
+    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',focused:get('focused')==='true',checked:get('checked')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
   });
 }
 const doc=n=>/documentsui/i.test(n.pkg);
@@ -154,15 +155,52 @@ function inputText(value){adb('shell','input','text',value.replace(/ /g,'%s'));}
 function hideKeyboard(){if(/mInputShown=true|mIsInputViewShown=true/.test(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');}
 function launchOriginal(){adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');}
 const vaultField=n=>nativeApp(n)&&n.id==='vault-password'&&n.clazz==='android.widget.EditText'&&n.password;
+// API32 failure artifact 14321827343 exposes both the actionable radio
+// and its non-clickable title. A substring match on either is insufficient.
+const demoRadio=n=>nativeApp(n)&&n.clazz==='android.widget.RadioButton'&&n.enabled&&n.clickable&&
+  [n.text,n.desc].some(label=>label==='Ambiente dimostrativo'||label==='Ambiente dimostrativo Esplora con dati di esempio, non reali.');
+const demoFormReady=view=>view.some(vaultField)&&view.some(n=>named(n,'Avvia la prova')&&n.enabled&&(n.clickable||n.clazz==='android.widget.Button'));
+function verifyDemoSelectionRecognition(){
+  const radio={pkg,text:'Ambiente dimostrativo Esplora con dati di esempio, non reali.',desc:'',clazz:'android.widget.RadioButton',enabled:true,clickable:true};
+  const title={pkg,text:'Ambiente dimostrativo',desc:'',clazz:'android.widget.TextView',enabled:true,clickable:false};
+  assert.equal(demoRadio(radio),true);
+  assert.equal(demoRadio(title),false);
+  assert.equal(demoRadio({...radio,pkg:'unrelated.package'}),false);
+  assert.equal(demoRadio({...radio,text:'Archivio professionale Inizia con un registro vuoto.'}),false);
+  const password={pkg,id:'vault-password',clazz:'android.widget.EditText',password:true};
+  const submit={pkg,text:'Avvia la prova',clazz:'android.widget.Button',enabled:true,clickable:true};
+  assert.equal(demoFormReady([radio,title]),false);
+  assert.equal(demoFormReady([password]),false);
+  assert.equal(demoFormReady([password,submit]),true);
+  console.log('original-demo-selection-recognition-replay PASS');
+}
+async function selectOriginalDemo(){
+  for(let attempt=1;attempt<=3;attempt++){
+    // No authentication or setup submission in this retry loop.
+    const view=await until(()=>{const current=nodes();return current.some(demoRadio)||demoFormReady(current)?current:null;},'Original demonstration option not visible',15000);
+    if(demoFormReady(view))return;
+    if(!foreground()||!view.some(n=>named(n,'Configura archivio protetto')))throw Error('Original setup surface no longer active');
+    const radio=view.find(n=>demoRadio(n)&&n.bounds);
+    if(!radio)throw Error('Actionable demonstration radio missing');
+    tap(radio);
+    try{
+      const selected=await until(()=>{const current=nodes();return demoFormReady(current)?current:null;},'Demonstration form did not open',8000);
+      console.log('original-demo-form-verified',attempt,selected.some(n=>demoRadio(n)&&n.checked));
+      return;
+    }catch{console.log('original-demo-selection-retry',attempt);}
+  }
+  throw Error('Original demonstration form not attested; no setup submitted');
+}
+
 const passwordRejected=view=>view.some(n=>nativeApp(n)&&n.text==='Password errata o metadata del vault manomesso.');
 // UIAutomator may mask password text on older WebView/Android releases.
 // Accept only an exact value or a full-length mask, and require the ordinary
 // vault authentication plus independent cold reopen with the same fixture
 // credential. Never submit an unverified, partial or empty field.
 const passwordEmpty=n=>!n.text||n.text==='Password locale';
-const passwordEvidence=n=>n.text===vaultPassword?'exact':
-  /^[•●*]+$/u.test(n.text)&&[...n.text].length===vaultPassword.length?'masked-length':null;
-async function enterSyntheticPassword(){
+const passwordEvidence=(n,credential)=>n.text===credential?'exact':
+  /^[•●*]+$/u.test(n.text)&&[...n.text].length===credential.length?'masked-length':null;
+async function enterSyntheticPassword(credential=vaultPassword){
   for(let attempt=1;attempt<=3;attempt++){
     const field=await find(vaultField,'Original vault password field missing');
     tap(field);
@@ -178,22 +216,22 @@ async function enterSyntheticPassword(){
     // Verify the focused field immediately before injection, not just the
     // initially tapped element. Retry input only; no authentication retries.
     if(!current.focused)continue;
-    inputText(vaultPassword);
+    inputText(credential);
     let verified;
-    try{verified=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n)),'Synthetic password input differs from expected',5000);}
+    try{verified=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n,credential)),'Synthetic password input differs from expected',5000);}
     catch{console.log('synthetic-password-entry-retry',attempt);continue;}
     // Keyboard dismissal must not navigate or clear the password.
     hideKeyboard();
     try{
-      const final=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n)),'Synthetic password changed before submit',5000);
-      console.log('synthetic-password-evidence',passwordEvidence(final));
+      const final=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n,credential)),'Synthetic password changed before submit',5000);
+      console.log('synthetic-password-evidence',passwordEvidence(final,credential));
       return;
     }catch{console.log('synthetic-password-focus-retry',attempt);}
   }
   throw Error('Synthetic password input could not be attested; no authentication submitted');
 }
-async function gate(action){
-  await enterSyntheticPassword();
+async function gate(action,credential=vaultPassword){
+  await enterSyntheticPassword(credential);
   console.log('original-gate-input-verified',action);
   tap(await appButton(action));
   const outcome=await until(()=>{
@@ -241,7 +279,7 @@ async function ensureHome(){
 }
 async function seedOriginal(version){
   launchOriginal();await appText('Configura archivio protetto');
-  if(version!==10002){tap(await appText('Ambiente dimostrativo'));await gate('Avvia la prova');}
+  if(version!==10002){await selectOriginalDemo();await gate('Avvia la prova');}
   else await gate('Configura archivio protetto');
   await appText('Le mie classi');await uiCheckpoint('initial-home');
   tap(await appButton('Nuova Classe'));
@@ -280,7 +318,7 @@ async function seedOriginal(version){
 // D1b.5 actual product path. No synthetic native session authority.
 // CDP only drives DOM and reads synthetic archive diagnostics; SAF and
 // reauthentication use the mounted Root and Android's own activity lifecycle.
-const inspectProduct=(includeCopy=false)=>call('__val01ProductInspection','inspect',includeCopy);
+const inspectProduct=(includeCopy=false,fresh=false)=>call('__val01ProductInspection','inspect',includeCopy,fresh);
 const readProductRaw=()=>call('__val01ProductInspection','raw');
 async function navigateProduct(path,ready){
   await evaluate('(()=>{setTimeout(()=>location.replace('+JSON.stringify(path)+'),0);return true})()');
@@ -293,7 +331,7 @@ async function productGate(){
   await navigateProduct('/index.html','!!document.querySelector("#vault-password")');
   await gate('Sblocca Registro');
 }
-const productPanel='section[aria-label="Aggiornamento protetto archivio"]';
+let productPanel='section[aria-label="Aggiornamento protetto archivio"]';
 const query=(selector)=>'document.querySelector('+JSON.stringify(selector)+')';
 async function visible(selector){
   return evaluate('(()=>{const e='+query(selector)+';return !!e&&e.getClientRects().length>0&&getComputedStyle(e).visibility!=="hidden"&&!e.closest("[inert],[aria-hidden=true]")})()');
@@ -343,7 +381,7 @@ async function selectProductFile(cancel=false){
   assert.equal(await visible(productPanel+' input[type=password]'),false,'Recovery credentials visible before reauthentication');
   await gate('Sblocca Registro');
   if(cancel)await waitText('Copia non disponibile o selezione annullata.');
-  else await waitText('Copia selezionata. L’integrità sarà verificata prima dell’aggiornamento.');
+  else await waitText(productPanel.includes('Ripristino')?'Copia selezionata. L’integrità sarà verificata prima del ripristino.':'Copia selezionata. L’integrità sarà verificata prima dell’aggiornamento.');
 }
 async function fillMigrationPasswords(copyPassword){
   // Synthetic UI input only. Never print or persist these test credentials.
@@ -371,6 +409,137 @@ async function assertUnchanged(before,version=1){
   assert.equal(raw.version,version);
   assert.equal(raw.digest,before.digest);
   assert.deepEqual(raw.keys,before.keys);
+}
+async function writeSyntheticRestoreFile(backup){
+  const dir=mkdtempSync(join(tmpdir(),'val01-restore-'));
+  try{
+    const file=join(dir,filename);writeFileSync(file,backup,{mode:0o600});
+    adb('shell','mkdir','-p','/sdcard/Download');
+    adb('push',file,'/sdcard/Download/'+filename);
+    adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file:///sdcard/Download/'+filename);
+    assert.equal(execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000}).toString('utf8'),backup);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+}
+async function clickDeferred(selector){
+  await until(()=>visible(selector),'Visible submit absent: '+selector,15000);
+  await evaluate('(()=>{const e='+query(selector)+';if(e.disabled)throw Error("Disabled submit");e.scrollIntoView({block:"center"});setTimeout(()=>e.click(),0);return true})()');
+}
+async function nativeConfirm(message,approve){
+  await appText(message);
+  tap(await find(n=>nativeApp(n)&&n.enabled&&n.clickable&&(approve?/^(OK|Yes|Sì)$/i:/^(Cancel|Annulla|No)$/i).test(n.text||n.desc),'Explicit native confirmation absent'));
+}
+async function submitRestore(copyPassword,approve){
+  await fillMigrationPasswords(copyPassword);
+  await clickDeferred(productPanel+' form button[type=submit]');
+  if(approve!==null)await nativeConfirm('Sostituire tutti i dati attuali',approve);
+  await until(()=>visible('#vault-password'),'Restore did not reach protected gate',60000);
+  await waitText(approve===true?'Archivio ripristinato. Autenticati per riaprire il Registro.':'Operazione non completata. Autenticati per riaprire il Registro.');
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+}
+async function submitErase(approve){
+  // Only the visible product form and actual confirmation grant permission.
+  await evaluate('(()=>{const p='+query(productPanel)+';const b=[...p.querySelectorAll("button")].find(x=>x.textContent.trim()==="Prepara cancellazione");if(!b||b.disabled)throw Error("Erase unavailable");b.scrollIntoView({block:"center"});b.click();return true})()');
+  await until(()=>visible(productPanel+' input[type=password]'),'Erase form missing',15000);
+  await evaluate('(()=>{const p='+query(productPanel)+';const fields=[...p.querySelectorAll("form input")];if(fields.length!==2)throw Error("Unexpected erase fields");const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;for(const [i,v] of '+JSON.stringify([vaultPassword,'CANCELLA'])+'.entries()){set.call(fields[i],v);fields[i].dispatchEvent(new Event("input",{bubbles:true}));}return true})()');
+  await clickDeferred(productPanel+' form button[type=submit]');
+  await nativeConfirm('Cancellare tutti i dati e la chiave',approve);
+  if(approve){
+    await waitText('Configura archivio protetto');
+    await waitText('Archivio locale cancellato. Configura un nuovo archivio. Le copie esterne non sono state cancellate.');
+  }else{
+    await until(()=>visible('#vault-password'),'Refused erasure did not reach protected gate',60000);
+    await waitText('Operazione non completata. Autenticati per riaprire il Registro.');
+  }
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+}
+async function assertErased(){
+  await diagnostic();
+  const raw=await readProductRaw();
+  assert.equal(raw.version,2);assert.deepEqual(raw.keys,[]);
+  assert.equal(await call('__val01ProductInspection','state'),'erased');
+  return raw;
+}
+async function setupFreshProduct(){
+  // The explicit professional setup form is driven via the actual Root UI.
+  const freshPassword='synthetic-new-password';
+  await waitText('Configura archivio protetto');
+  await domClick('input[name="archive-mode"][value="professional"]');
+  await until(()=>visible('#vault-password'),'Fresh professional form absent',15000);
+  const profile={'Istituto':'Synthetic school','Anno scolastico':'2026/2027','Docente':'Synthetic teacher','Disciplina':'Tecnologia'};
+  await evaluate('(()=>{const values='+JSON.stringify(profile)+';const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;for(const [label,value] of Object.entries(values)){const l=[...document.querySelectorAll("label")].find(e=>e.childNodes[0]?.textContent.trim()===label);const input=l?.querySelector("input");if(!input)throw Error("Profile field missing");set.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));}return true})()');
+  await evaluate('(()=>{document.querySelector("#vault-password").scrollIntoView({block:"center"});return true})()');
+  await enterSyntheticPassword(freshPassword);
+  await clickDeferred('form button[type=submit]');
+  await waitText('Sblocca Registro');
+  await waitText('Nuovo archivio creato. Autenticati con la nuova password.');
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro',freshPassword);
+  await diagnostic();
+  const fresh=await inspectProduct(false,true);
+  assert.equal(fresh.version,2);assert.equal(fresh.keys.length,10);
+  assert.deepEqual(fresh.snapshot.appData.classes,[]);
+  assert.equal(fresh.snapshot.settings.archiveMode,'professional');
+  assert.deepEqual(fresh.snapshot.meta,{changes:0,lastBackup:null});
+  stage('db2-fresh-setup-reauthenticated');
+  stop();launchOriginal();await connect();await gate('Sblocca Registro',freshPassword);
+  await diagnostic();const cold=await inspectProduct(false,true);
+  assert.equal(cold.version,2);assert.equal(cold.digest,fresh.digest);assert.deepEqual(cold.snapshot,fresh.snapshot);
+  stage('db2-fresh-cold-reopen');
+}
+async function productLifecycleSuite(oldVersion,initial,before){
+  // Called only after all original migration, downgrade and re-upgrade checks.
+  const copy=await call('__val01ProductInspection','restoreCopy');
+  await writeSyntheticRestoreFile(copy.backup);
+  productPanel='section[aria-label="Ripristino protetto archivio"]';
+  await productGate();await privacyProduct();await selectProductFile(true);
+  stage('db2-restore-picker-cancel');
+  await selectProductFile();
+  adb('shell','input','keyevent','3');
+  await until(()=>!foreground(),'Restore owner did not leave foreground',15000);
+  launchOriginal();
+  await until(()=>visible('#vault-password'),'Restore selection did not lock',45000);
+  await gate('Sblocca Registro');
+  await until(()=>visible(productPanel),'Restore panel missing after suspension',15000);
+  await until(async()=>!(await visible(productPanel+' input[type=password]')),'Restore ticket survived session change',15000);
+  stage('db2-restore-background-revoked');
+  await selectProductFile();await submitRestore('wrong-synthetic',null);
+  await assertUnchanged(before,2);
+  stage('db2-restore-wrong-copy');
+  await productGate();await privacyProduct();await selectProductFile();
+  await submitRestore('synthetic-archive-backup-only',false);
+  await assertUnchanged(before,2);
+  stage('db2-restore-refused');
+  await productGate();await privacyProduct();await selectProductFile();
+  await submitRestore('synthetic-archive-backup-only',true);
+  await gate('Sblocca Registro');await diagnostic();
+  const restored=await inspectProduct();
+  assert.equal(restored.version,2);assert.equal(restored.keys.length,10);
+  assert.notEqual(restored.digest,before.digest);assert.deepEqual(restored.snapshot,copy.expected);
+  stage('db2-restore-authorized-reauthenticated');
+  stop();launchOriginal();await connect();await gate('Sblocca Registro');
+  await diagnostic();const cold=await inspectProduct();
+  assert.equal(cold.digest,restored.digest);assert.deepEqual(cold.snapshot,restored.snapshot);
+  stage('db2-restore-cold-reopen');
+  await productGate();await privacyProduct();await submitErase(false);
+  await assertUnchanged(restored,2);
+  stage('db2-erase-refused');
+  await productGate();await privacyProduct();await submitErase(true);
+  const erased=await assertErased();
+  stage('db2-erase-authorized');
+  stop();launchOriginal();await connect();await waitText('Configura archivio protetto');
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  assert.equal((await assertErased()).digest,erased.digest);
+  stage('db2-erased-cold-reopen');
+  // Emulator only: the exact original cannot recreate DB1 after erasure.
+  stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
+  launchOriginal();await appText('Sicurezza non disponibile');
+  assert.ok(!nodes().some(n=>nativeApp(n)&&(/Sblocca Registro|Configura archivio protetto|Le mie classi|Proteggi i dati esistenti/.test(n.text)||n.password)));
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();await waitText('Configura archivio protetto');
+  assert.equal((await assertErased()).digest,erased.digest);
+  stage('db2-erased-downgrade-refused');
+  await navigateProduct('/index.html','!!document.querySelector("input[name=archive-mode]")');
+  await setupFreshProduct();
 }
 async function productSuite(oldVersion,initial){
   assert.equal(integral,true);
@@ -460,9 +629,11 @@ async function productSuite(oldVersion,initial){
   await diagnostic();const final=await inspectProduct();
   assert.equal(final.version,2);assert.equal(final.digest,before.digest);assert.deepEqual(final.snapshot,before.snapshot);
   stage('product-reupgrade-archive-intact');
+  if(db2Lifecycle)await productLifecycleSuite(oldVersion,initial,final);
 }
 try{
   verifyOriginalUiRecognition();
+  verifyDemoSelectionRecognition();
   assert.equal(process.env.GITHUB_ACTIONS,'true');
   assert.ok(adb('shell','getprop','ro.kernel.qemu')==='1'||adb('shell','getprop','ro.boot.qemu')==='1');
   assert.ok(api===32||api===36);assert.equal(adb('shell','getprop','ro.build.version.sdk'),String(api));

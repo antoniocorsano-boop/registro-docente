@@ -1,7 +1,7 @@
 name: VAL-01 D1b.5 — actual Android application from original APKs
 on:
   pull_request:
-    branches: ['feat/val-01-d1b4b2-product-session']
+    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product']
 permissions:
   contents: read
   actions: read
@@ -16,7 +16,7 @@ jobs:
           - { name: beta2-rc2, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, api: 36, version: 10004, run: '43811185219', artifact: '14200343425' }
           - { name: beta2-rc2-android12, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, api: 32, version: 10004, run: '43811185219', artifact: '14200343425' }
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       HISTORICAL_SHA: ${{ matrix.predecessor.sha }}
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
@@ -25,6 +25,7 @@ jobs:
       OLD_ARTIFACT: ${{ matrix.predecessor.artifact }}
       VAL01_INTEGRAL: 'true'
       VAL01_PRODUCT: 'true'
+      VAL01_DB2_LIFECYCLE: ${{ github.event.pull_request.base.ref == 'feat/val-01-d1b5-db2-product' && 'true' || 'false' }}
       VAL01_API: ${{ matrix.predecessor.api }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -170,11 +171,11 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: false
-          script: timeout --signal=TERM --kill-after=10s 1050s node scripts/diagnostics/val01-native-migration.mjs
+          script: timeout --signal=TERM --kill-after=10s 2400s node scripts/diagnostics/val01-native-migration.mjs
       - name: Require complete product evidence for exact API and support scope
         run: |
           set -euo pipefail
-          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --argjson version "$OLD_VERSION" --argjson api "$VAL01_API" '
+          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --argjson version "$OLD_VERSION" --argjson api "$VAL01_API" --arg lifecycle "$VAL01_DB2_LIFECYCLE" '
             .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and
             all(.results[];.status=="PASS") and
             (if $version==10002 then
@@ -183,7 +184,7 @@ jobs:
               .results[1].classification=="incomplete" and .results[1].recordCount==2
             elif $version==10003 or $version==10004 then
               .qualification=="supported-migration" and
-              ([.results[].stage]==["historical-seed-cold-reopen","product-local-preflight","product-picker-cancel-reauthenticated","product-picker-read-reauthenticated","product-background-revokes-selection","product-wrong-copy-no-change","product-refusal-no-change","product-authorized-migration-reauthenticated","product-v2-cold-reopen","product-original-downgrade-refused","product-reupgrade-archive-intact"]) and
+              ([.results[].stage]==["historical-seed-cold-reopen","product-local-preflight","product-picker-cancel-reauthenticated","product-picker-read-reauthenticated","product-background-revokes-selection","product-wrong-copy-no-change","product-refusal-no-change","product-authorized-migration-reauthenticated","product-v2-cold-reopen","product-original-downgrade-refused","product-reupgrade-archive-intact"]+(if $lifecycle=="true" then ["db2-restore-picker-cancel","db2-restore-background-revoked","db2-restore-wrong-copy","db2-restore-refused","db2-restore-authorized-reauthenticated","db2-restore-cold-reopen","db2-erase-refused","db2-erase-authorized","db2-erased-cold-reopen","db2-erased-downgrade-refused","db2-fresh-setup-reauthenticated","db2-fresh-cold-reopen"] else [] end)) and
               .results[1].classification=="complete" and .results[1].recordCount==10
             else false end)
           ' native-evidence/result.json
