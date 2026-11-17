@@ -76,7 +76,7 @@ function nodes(){
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
   return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
     const s=m[0],get=k=>s.match(new RegExp('\\b'+k+'="([^"]*)"'))?.[1]||'';
-    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',focused:get('focused')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
+    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',focused:get('focused')==='true',checked:get('checked')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
   });
 }
 const doc=n=>/documentsui/i.test(n.pkg);
@@ -155,6 +155,43 @@ function inputText(value){adb('shell','input','text',value.replace(/ /g,'%s'));}
 function hideKeyboard(){if(/mInputShown=true|mIsInputViewShown=true/.test(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');}
 function launchOriginal(){adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');}
 const vaultField=n=>nativeApp(n)&&n.id==='vault-password'&&n.clazz==='android.widget.EditText'&&n.password;
+// API32 failure artifact 14321827343 exposes both the actionable radio
+// and its non-clickable title. A substring match on either is insufficient.
+const demoRadio=n=>nativeApp(n)&&n.clazz==='android.widget.RadioButton'&&n.enabled&&n.clickable&&
+  [n.text,n.desc].some(label=>label==='Ambiente dimostrativo'||label==='Ambiente dimostrativo Esplora con dati di esempio, non reali.');
+const demoFormReady=view=>view.some(vaultField)&&view.some(n=>named(n,'Avvia la prova')&&n.enabled&&(n.clickable||n.clazz==='android.widget.Button'));
+function verifyDemoSelectionRecognition(){
+  const radio={pkg,text:'Ambiente dimostrativo Esplora con dati di esempio, non reali.',desc:'',clazz:'android.widget.RadioButton',enabled:true,clickable:true};
+  const title={pkg,text:'Ambiente dimostrativo',desc:'',clazz:'android.widget.TextView',enabled:true,clickable:false};
+  assert.equal(demoRadio(radio),true);
+  assert.equal(demoRadio(title),false);
+  assert.equal(demoRadio({...radio,pkg:'unrelated.package'}),false);
+  assert.equal(demoRadio({...radio,text:'Archivio professionale Inizia con un registro vuoto.'}),false);
+  const password={pkg,id:'vault-password',clazz:'android.widget.EditText',password:true};
+  const submit={pkg,text:'Avvia la prova',clazz:'android.widget.Button',enabled:true,clickable:true};
+  assert.equal(demoFormReady([radio,title]),false);
+  assert.equal(demoFormReady([password]),false);
+  assert.equal(demoFormReady([password,submit]),true);
+  console.log('original-demo-selection-recognition-replay PASS');
+}
+async function selectOriginalDemo(){
+  for(let attempt=1;attempt<=3;attempt++){
+    // No authentication or setup submission in this retry loop.
+    const view=await until(()=>{const current=nodes();return current.some(demoRadio)||demoFormReady(current)?current:null;},'Original demonstration option not visible',15000);
+    if(demoFormReady(view))return;
+    if(!foreground()||!view.some(n=>named(n,'Configura archivio protetto')))throw Error('Original setup surface no longer active');
+    const radio=view.find(n=>demoRadio(n)&&n.bounds);
+    if(!radio)throw Error('Actionable demonstration radio missing');
+    tap(radio);
+    try{
+      const selected=await until(()=>{const current=nodes();return demoFormReady(current)?current:null;},'Demonstration form did not open',8000);
+      console.log('original-demo-form-verified',attempt,selected.some(n=>demoRadio(n)&&n.checked));
+      return;
+    }catch{console.log('original-demo-selection-retry',attempt);}
+  }
+  throw Error('Original demonstration form not attested; no setup submitted');
+}
+
 const passwordRejected=view=>view.some(n=>nativeApp(n)&&n.text==='Password errata o metadata del vault manomesso.');
 // UIAutomator may mask password text on older WebView/Android releases.
 // Accept only an exact value or a full-length mask, and require the ordinary
@@ -242,7 +279,7 @@ async function ensureHome(){
 }
 async function seedOriginal(version){
   launchOriginal();await appText('Configura archivio protetto');
-  if(version!==10002){tap(await appText('Ambiente dimostrativo'));await gate('Avvia la prova');}
+  if(version!==10002){await selectOriginalDemo();await gate('Avvia la prova');}
   else await gate('Configura archivio protetto');
   await appText('Le mie classi');await uiCheckpoint('initial-home');
   tap(await appButton('Nuova Classe'));
@@ -596,6 +633,7 @@ async function productSuite(oldVersion,initial){
 }
 try{
   verifyOriginalUiRecognition();
+  verifyDemoSelectionRecognition();
   assert.equal(process.env.GITHUB_ACTIONS,'true');
   assert.ok(adb('shell','getprop','ro.kernel.qemu')==='1'||adb('shell','getprop','ro.boot.qemu')==='1');
   assert.ok(api===32||api===36);assert.equal(adb('shell','getprop','ro.build.version.sdk'),String(api));
