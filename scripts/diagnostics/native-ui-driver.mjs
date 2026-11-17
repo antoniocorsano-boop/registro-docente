@@ -123,7 +123,6 @@ export function createNativeUiDriver({pkg,readNodes,isForeground,tap,input,clear
     }
     throw new NativeUiFault('UI_ACTION_UNAVAILABLE','password-entry');
   }
-  const submitted=new Set();
   async function submitGate(action,credential,expected){
     const selected=await stable('gate-submit-admission',view=>{
       if(surface(view,pkg)!==expected)return null;
@@ -133,9 +132,39 @@ export function createNativeUiDriver({pkg,readNodes,isForeground,tap,input,clear
     });
     // Each invocation is one explicit gate operation; no retry around the
     // action or its outcome. The caller must attest authentication outcome.
-    const token=Symbol(action);submitted.add(token);
-    try{tap(selected.target);report({phase:'gate-submit',status:'SUBMITTED',action});}
-    finally{submitted.delete(token);}
+    tap(selected.target);report({phase:'gate-submit',status:'SUBMITTED',action});
   }
-  return {selectDemo,enterPassword,submitGate,stable};
+  async function enterClassName(value){
+    const prompt='Inserisci la denominazione della nuova classe';
+    const select=(view,predicate)=>{
+      if(!view.some(n=>n.pkg===pkg&&labels(n).some(v=>v.startsWith(prompt))))return null;
+      const target=unique(view,n=>n.pkg===pkg&&n.clazz==='android.widget.EditText'&&!n.password&&n.enabled&&hasArea(n)&&predicate(n));
+      return target?{key:fingerprint(target),target}:null;
+    };
+    for(let attempt=1;attempt<=3;attempt++){
+      try{
+        const target=await stable('class-input-target',view=>select(view,()=>true));
+        if(!target.target.focused)tap(target.target);
+        const focused=await stable('class-input-focus',view=>select(view,n=>n.focused),{ms:8000});
+        if(focused.target.text&&focused.target.text!==value){clear();await stable('class-input-empty',view=>select(view,n=>n.focused&&!n.text),{ms:8000});}
+        const before=await stable('class-input-admission',view=>select(view,n=>n.focused&&(!n.text||n.text===value)),{ms:8000});
+        if(before.target.text!==value)input(value);
+        await stable('class-input-value',view=>select(view,n=>n.focused&&n.text===value),{ms:8000});
+        hideKeyboard();
+        await stable('class-input-postcondition',view=>select(view,n=>n.text===value),{ms:8000});
+        report({phase:'class-input',status:'PASS',attempt});return;
+      }catch(e){report({phase:'class-input',status:'RETRY',attempt,code:e?.code||'UI_ACTION_FAILED'});}
+    }
+    throw new NativeUiFault('UI_ACTION_UNAVAILABLE','class-input');
+  }
+  async function submitClass(value){
+    const selected=await stable('class-submit-admission',view=>{
+      if(!view.some(n=>n.pkg===pkg&&labels(n).some(v=>v.startsWith('Inserisci la denominazione della nuova classe'))))return null;
+      const field=unique(view,n=>n.pkg===pkg&&n.clazz==='android.widget.EditText'&&!n.password&&n.enabled&&hasArea(n)&&n.text===value);
+      const target=unique(view,n=>actionButton(n,pkg,'OK'));
+      return field&&target?{key:fingerprint(field)+fingerprint(target),target}:null;
+    });
+    tap(selected.target);report({phase:'class-submit',status:'SUBMITTED'});
+  }
+  return {selectDemo,enterPassword,submitGate,enterClassName,submitClass,stable};
 }
