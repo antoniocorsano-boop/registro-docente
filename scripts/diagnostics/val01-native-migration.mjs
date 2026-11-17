@@ -430,8 +430,9 @@ async function setupFreshProduct(){
   await until(()=>visible('#vault-password'),'Fresh professional form absent',15000);
   const profile={'Istituto':'Synthetic school','Anno scolastico':'2026/2027','Docente':'Synthetic teacher','Disciplina':'Tecnologia'};
   await evaluate('(()=>{const values='+JSON.stringify(profile)+';const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;for(const [label,value] of Object.entries(values)){const l=[...document.querySelectorAll("label")].find(e=>e.childNodes[0]?.textContent.trim()===label);const input=l?.querySelector("input");if(!input)throw Error("Profile field missing");set.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));}return true})()');
+  await evaluate('(()=>{document.querySelector("#vault-password").scrollIntoView({block:"center"});return true})()');
   await enterSyntheticPassword(freshPassword);
-  tap(await appButton('Crea il mio registro'));
+  await clickDeferred('form button[type=submit]');
   await waitText('Sblocca Registro');
   await waitText('Nuovo archivio creato. Autenticati con la nuova password.');
   assert.equal(await visible('[data-testid="header01-topbar"]'),false);
@@ -455,6 +456,15 @@ async function productLifecycleSuite(oldVersion,initial,before){
   productPanel='section[aria-label="Ripristino protetto archivio"]';
   await productGate();await privacyProduct();await selectProductFile(true);
   stage('db2-restore-picker-cancel');
+  await selectProductFile();
+  adb('shell','input','keyevent','3');
+  await until(()=>!foreground(),'Restore owner did not leave foreground',15000);
+  launchOriginal();
+  await until(()=>visible('#vault-password'),'Restore selection did not lock',45000);
+  await gate('Sblocca Registro');
+  await until(()=>visible(productPanel),'Restore panel missing after suspension',15000);
+  await until(async()=>!(await visible(productPanel+' input[type=password]')),'Restore ticket survived session change',15000);
+  stage('db2-restore-background-revoked');
   await selectProductFile();await submitRestore('wrong-synthetic',null);
   await assertUnchanged(before,2);
   stage('db2-restore-wrong-copy');
