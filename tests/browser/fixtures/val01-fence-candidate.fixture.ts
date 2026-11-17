@@ -71,6 +71,27 @@ Object.assign(globalThis,{__val01FenceCandidate:{
       return {result:'committed',state:await inspectDb2LifecycleState(),replay,staleRejected,version:await version()};
     }finally{stale.lock();await old.retireConnection();service.invalidate();}
   },
+  async db2Interrupt(action:'restore'|'erase',backup:string,stage:'before-commit'|'after-commit'){
+    const service=createDb2Lifecycle();
+    const grant=await service.prepare(action==='restore'?{operation:'restore',password,file:new Blob([backup]),backupPassword:'synthetic-archive-backup-only'}:{operation:'erase',password});
+    // Test-only instrumentation of the actual IndexedDB transaction; never a
+    // production fault injection port. Trigger only for metadata replacement.
+    const original=IDBObjectStore.prototype.put;
+    let triggered=false;
+    IDBObjectStore.prototype.put=function(value:any,key?:IDBValidKey){
+      const request=key===undefined?original.call(this,value):original.call(this,value,key);
+      if(!triggered&&this.name==='metadata'&&key==='current'&&this.transaction.mode==='readwrite'){
+        triggered=true;
+        if(stage==='before-commit')service.invalidate();
+        else this.transaction.addEventListener('complete',()=>service.invalidate(),{once:true});
+      }
+      return request;
+    };
+    let rejected=false;
+    try{await service.commit(grant,true);}catch{rejected=true;}
+    finally{IDBObjectStore.prototype.put=original;service.invalidate();}
+    return {triggered,rejected,state:await inspectDb2LifecycleState(),version:await version()};
+  },
   async db2Read(newPassword=false){
     const existing=new ExistingSessionVaultStore(2),v=new SecureVault(existing);
     try{
