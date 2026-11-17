@@ -1,7 +1,7 @@
 name: VAL-01 D1b.5 — actual Android application from original APKs
 on:
   pull_request:
-    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product']
+    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native']
 permissions:
   contents: read
   actions: read
@@ -10,11 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        predecessor:
-          - { name: beta1-rc2, sha: 37c61d4c64993c986a3edcd2b421310adf20de92, api: 36, version: 10002, run: '43206101783', artifact: '13938285055' }
-          - { name: beta1-rc3, sha: b726f4a6dc0eb90a066113bee7cceabf29c629a5, api: 36, version: 10003, run: '43233573213', artifact: '13950428737' }
-          - { name: beta2-rc2, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, api: 36, version: 10004, run: '43811185219', artifact: '14200343425' }
-          - { name: beta2-rc2-android12, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, api: 32, version: 10004, run: '43811185219', artifact: '14200343425' }
+        predecessor: ${{ fromJSON(github.event.pull_request.base.ref == 'test/val-01-d1b5-db2-native' && '[{"name":"beta2-rc2-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"},{"name":"beta2-rc2-android12-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-android12-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"}]' || '[{"name":"beta1-rc2","sha":"37c61d4c64993c986a3edcd2b421310adf20de92","api":36,"version":10002,"run":"43206101783","artifact":"13938285055"},{"name":"beta1-rc3","sha":"b726f4a6dc0eb90a066113bee7cceabf29c629a5","api":36,"version":10003,"run":"43233573213","artifact":"13950428737"},{"name":"beta2-rc2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"beta2-rc2-android12","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425"}]') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
@@ -26,6 +22,7 @@ jobs:
       VAL01_INTEGRAL: 'true'
       VAL01_PRODUCT: 'true'
       VAL01_DB2_LIFECYCLE: ${{ github.event.pull_request.base.ref == 'feat/val-01-d1b5-db2-product' && 'true' || 'false' }}
+      VAL01_MIGRATION_CUT: ${{ matrix.predecessor.cut || '' }}
       VAL01_API: ${{ matrix.predecessor.api }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -175,6 +172,16 @@ jobs:
       - name: Require complete product evidence for exact API and support scope
         run: |
           set -euo pipefail
+          if [ -n "$VAL01_MIGRATION_CUT" ]; then
+            jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --arg cut "$VAL01_MIGRATION_CUT" --argjson api "$VAL01_API" '
+              .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and .cut==$cut and
+              all(.results[];.status=="PASS") and
+              ([.results[].stage]==(["historical-seed-cold-reopen","interruption-original-preflight","interruption-picker-reauthenticated",("interruption-guard-"+$cut),"interruption-process-stopped","interruption-reopen-authenticated"]+(if $cut=="before-commit" then ["interruption-original-reopened","interruption-fresh-consent-migrated"] else [] end)+["interruption-downgrade-refused","interruption-final-cold-reopen"])) and
+              .results[1].classification=="complete" and .results[1].recordCount==10 and .results[3].realVersionchange==true and .results[4].forcedStop==true and
+              .results[5].version==(if $cut=="before-commit" then 1 else 2 end) and .results[5].recordCount==10 and .results[-1].version==2 and .results[-1].recordCount==10 and .results[5].physicalSha256==.results[-1].physicalSha256
+            ' native-evidence/result.json
+            exit 0
+          fi
           jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --argjson version "$OLD_VERSION" --argjson api "$VAL01_API" --arg lifecycle "$VAL01_DB2_LIFECYCLE" '
             .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and
             all(.results[];.status=="PASS") and
