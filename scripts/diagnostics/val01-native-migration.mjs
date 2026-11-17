@@ -157,9 +157,12 @@ async function gate(action){
   const field=await find(vaultField,'Original vault password field missing');
   tap(field);
   await until(()=>nodes().some(n=>vaultField(n)&&n.focused),'Password field not focused',15000);
-  adb('shell','input','keycombination','113','29'); // Ctrl+A, clear focused input
-  adb('shell','input','keyevent','67');
-  await until(()=>nodes().some(n=>vaultField(n)&&n.text===''),'Password field not empty',15000);
+  const current=await find(n=>vaultField(n)&&n.focused,'Password field focus lost');
+  if(current.text&&current.text!==current.id){
+    adb('shell','input','keycombination','113','29'); // Ctrl+A, clear focused input
+    adb('shell','input','keyevent','67');
+  }
+  await until(()=>nodes().some(n=>vaultField(n)&&(!n.text||n.text==='Password locale')),'Password field not empty',15000);
   inputText(vaultPassword);
   await until(()=>nodes().some(n=>vaultField(n)&&n.text===vaultPassword),'Synthetic password input differs from expected',15000);
   hideKeyboard();
@@ -234,9 +237,11 @@ async function seedOriginal(version){
     // No migration, no reset, no recovery attempt and no password guessing.
     if(String(e).includes('Original authentication rejected')){
       try{
-        stop();install(process.env.NEW_APK,['-r']);
+        stop();const before=identity(version);install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),before);
         await launch('__val01NativeLab');
+        assert.equal(await candidate('version'),1);
         await lab('inspectHistoricalArchive');
+        assert.equal(await candidate('version'),1);
         console.log('diagnostic-candidate-readonly-authentication PASS');
       }catch{console.log('diagnostic-candidate-readonly-authentication FAILED');}
     }
