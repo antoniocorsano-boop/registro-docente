@@ -155,23 +155,45 @@ function hideKeyboard(){if(/mInputShown=true|mIsInputViewShown=true/.test(adb('s
 function launchOriginal(){adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');}
 const vaultField=n=>nativeApp(n)&&n.id==='vault-password'&&n.clazz==='android.widget.EditText'&&n.password;
 const passwordRejected=view=>view.some(n=>nativeApp(n)&&n.text==='Password errata o metadata del vault manomesso.');
-async function gate(action){
-  // Use only the exact synthetic password field. Both failed cold starts
-  // displayed the expected text but initial setup input was not attested.
-  const field=await find(vaultField,'Original vault password field missing');
-  tap(field);
-  await until(()=>nodes().some(n=>vaultField(n)&&n.focused),'Password field not focused',15000);
-  const current=await find(n=>vaultField(n)&&n.focused,'Password field focus lost');
-  if(current.text&&current.text!==current.id){
-    adb('shell','input','keycombination','113','29'); // Ctrl+A, clear focused input
-    adb('shell','input','keyevent','67');
+// UIAutomator may mask password text on older WebView/Android releases.
+// Accept only an exact value or a full-length mask, and require the ordinary
+// vault authentication plus independent cold reopen with the same fixture
+// credential. Never submit an unverified, partial or empty field.
+const passwordEmpty=n=>!n.text||n.text==='Password locale';
+const passwordEvidence=n=>n.text===vaultPassword?'exact':
+  /^[•●*]+$/u.test(n.text)&&[...n.text].length===vaultPassword.length?'masked-length':null;
+async function enterSyntheticPassword(){
+  for(let attempt=1;attempt<=3;attempt++){
+    const field=await find(vaultField,'Original vault password field missing');
+    tap(field);
+    await until(()=>nodes().some(n=>vaultField(n)&&n.focused),'Password field not focused',15000);
+    let current=await find(n=>vaultField(n)&&n.focused,'Password field focus lost');
+    if(!passwordEmpty(current)){
+      // MOVE_END followed by bounded Delete events works on API32 and API36;
+      // avoid input keycombination, which is not portable to API32.
+      adb('shell','input','keyevent','123');
+      adb('shell','input','keyevent',...Array(96).fill('67'));
+      current=await find(n=>vaultField(n)&&n.focused&&passwordEmpty(n),'Password field not empty');
+    }
+    // Verify the focused field immediately before injection, not just the
+    // initially tapped element. Retry input only; no authentication retries.
+    if(!current.focused)continue;
+    inputText(vaultPassword);
+    let verified;
+    try{verified=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n)),'Synthetic password input differs from expected',5000);}
+    catch{console.log('synthetic-password-entry-retry',attempt);continue;}
+    // Keyboard dismissal must not navigate or clear the password.
+    hideKeyboard();
+    try{
+      const final=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n)),'Synthetic password changed before submit',5000);
+      console.log('synthetic-password-evidence',passwordEvidence(final));
+      return;
+    }catch{console.log('synthetic-password-focus-retry',attempt);}
   }
-  await until(()=>nodes().some(n=>vaultField(n)&&(!n.text||n.text==='Password locale')),'Password field not empty',15000);
-  inputText(vaultPassword);
-  await until(()=>nodes().some(n=>vaultField(n)&&n.text===vaultPassword),'Synthetic password input differs from expected',15000);
-  hideKeyboard();
-  // Attest again immediately before submission; never record password value.
-  await until(()=>nodes().some(n=>vaultField(n)&&n.text===vaultPassword),'Synthetic password changed before submit',15000);
+  throw Error('Synthetic password input could not be attested; no authentication submitted');
+}
+async function gate(action){
+  await enterSyntheticPassword();
   console.log('original-gate-input-verified',action);
   tap(await appButton(action));
   const outcome=await until(()=>{
@@ -290,11 +312,24 @@ async function privacyProduct(){
   tap(await appButton('Privacy'));
   await until(()=>visible(productPanel),'Migration panel not visible',45000);
 }
+// Back may first dismiss a DocumentsUI location or overlay. Require actual
+// return to the calling activity; no am start, forced foreground or bypass.
+async function cancelProductPicker(){
+  for(let attempt=1;attempt<=4;attempt++){
+    if(foreground())return;
+    const view=await until(()=>{const n=nodes();return n.some(doc)?n:null;},'DocumentsUI not active for cancellation',10000);
+    assert.ok(view.some(doc));
+    adb('shell','input','keyevent','4');
+    try{await until(foreground,'Picker still open after Back',5000);console.log('product-picker-cancel-back',attempt);return;}
+    catch{console.log('product-picker-cancel-still-open',attempt);}
+  }
+  throw Error('Native picker cancellation did not return after four verified Back actions');
+}
 async function selectProductFile(cancel=false){
   // The click invokes the actual React handler, not a fixture API.
   await domClick(productPanel+' > button');
   await downloads();
-  if(cancel)adb('shell','input','keyevent','4');
+  if(cancel)await cancelProductPicker();
   else{
     const row=await find(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'Candidate encrypted file title absent');
     tap(row);
