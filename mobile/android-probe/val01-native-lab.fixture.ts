@@ -8,6 +8,7 @@ import { createBackupPayload } from '../../src/security/backupPayload';
 import { withoutLocalBackupVerification } from '../../src/persistence/backupCheckpoint';
 import { encryptDataWithPassword } from '../../src/cryptoUtils';
 import { createAuthorizedVaultMigration } from '../../src/security/authorizedVaultMigration';
+import { VersionFencedVaultStore } from '../../src/security/versionFencedVaultStore';
 import { readEncryptedBackupOnAndroid, saveEncryptedBackupOnAndroid } from '../../src/security/androidBackupExport';
 import { readAndroidSessionState, authorizeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess } from '../../src/security/androidSessionLifecycle';
 
@@ -75,6 +76,56 @@ async function probeHistoricalArchive(){
     }finally{vault.lock();await store.release();}
   }catch{return report;}
 }
+// Negative acceptance only for the retired original RC2 on a fresh CI emulator.
+// Atomic physical fingerprint includes every metadata/record entry and key,
+// including unknown keys. No plaintext or encrypted record bytes leave the WebView.
+async function historicalFingerprint(){
+  const name='registro-docente-secure-vault';
+  const physical=await new Promise<unknown>((resolve,reject)=>{
+    const request=indexedDB.open(name,1);
+    let abandoned=false;
+    request.onblocked=()=>{abandoned=true;reject(Error('Historical fingerprint blocked'));};
+    request.onupgradeneeded=()=>request.transaction?.abort();
+    request.onerror=()=>reject(Error('Historical fingerprint unavailable'));
+    request.onsuccess=()=>{
+      const db=request.result;
+      if(abandoned){db.close();return;}
+      try{
+        if(db.version!==1||db.objectStoreNames.length!==2||
+           !db.objectStoreNames.contains('metadata')||!db.objectStoreNames.contains('records'))throw Error('Unexpected historical database schema');
+        const tx=db.transaction(['metadata','records'],'readonly');
+        const metadata=tx.objectStore('metadata'),records=tx.objectStore('records');
+        if(metadata.keyPath!==null||metadata.autoIncrement||records.keyPath!=='recordKey'||records.autoIncrement)throw Error('Unexpected historical store schema');
+        const mk=metadata.getAllKeys(),mv=metadata.getAll(),rk=records.getAllKeys(),rv=records.getAll();
+        tx.oncomplete=()=>{db.close();resolve({version:1,metadataKeys:mk.result,metadata:mv.result,recordKeys:rk.result,records:rv.result});};
+        tx.onerror=tx.onabort=()=>{db.close();reject(Error('Historical fingerprint transaction failed'));};
+      }catch(e){db.close();reject(e);}
+    };
+  });
+  const text=JSON.stringify(physical,(_key,value)=>{
+    if(value instanceof ArrayBuffer)return {kind:'buffer',bytes:Array.from(new Uint8Array(value))};
+    if(ArrayBuffer.isView(value))return {kind:value.constructor.name,bytes:Array.from(new Uint8Array(value.buffer,value.byteOffset,value.byteLength))};
+    return value;
+  });
+  const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function rejectSparseFence(){
+  let guardReached=false;
+  // This guard always aborts. The negative case passes only if the strict
+  // structural fence rejects BEFORE reaching even this guard.
+  const store=new VersionFencedVaultStore(indexedDB,()=>{
+    guardReached=true;
+    throw Error('Negative laboratory guard must never authorize migration');
+  });
+  let blocked=false;
+  try{await store.getMetadata();}
+  catch(e){
+    if(e instanceof Error&&e.message==='Archivio precedente assente, incompleto o non compatibile.'&&!guardReached)blocked=true;
+    else throw e;
+  }finally{await store.close();}
+  return {blocked,guardReached};
+}
 async function inspectHistoricalArchive(){
   const name='registro-docente-secure-vault';
   if((await indexedDB.databases()).find(db=>db.name===name)?.version!==1)throw Error('Expected existing DB1');
@@ -106,6 +157,8 @@ async function inspectHistoricalArchive(){
 Object.assign(globalThis,{__val01NativeLab:{
   inspectHistoricalArchive,
   probeHistoricalArchive,
+  historicalFingerprint,
+  rejectSparseFence,
   async ready(){return access(()=>true);},
   async write(backup:string){const epoch=++generation;return saveEncryptedBackupOnAndroid(backup,filename,()=>epoch===generation);},
   readState(){return readState;},
