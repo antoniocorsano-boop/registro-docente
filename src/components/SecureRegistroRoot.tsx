@@ -21,6 +21,8 @@ import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
 import { ExistingSessionVaultStore } from '../security/existingSessionVaultStore';
+import { createDb2Lifecycle } from '../security/db2Lifecycle';
+import { captureDb2, type ErasedDb2 } from '../security/db2PhysicalLifecycle';
 import { inspectArchiveVersion } from '../security/inspectArchiveVersion';
 import { createRecoveryCopyHandoff, type RecoverySessionStamp } from '../security/migrationRecoveryHandoff';
 import { createLocalMigrationSessionBoundary, type MigrationSessionResult } from '../security/migrationSessionBoundary';
@@ -82,7 +84,8 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   const [archiveVersion,setArchiveVersion]=useState<1|2|null>(null);
   const requireExistingRef=useRef(false);
   const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
-  const archiveMigrationRef=useRef<ReturnType<typeof createLocalMigrationSessionBoundary>|null>(null);
+  const archiveMigrationRef=useRef<{revoke():void}|null>(null);
+  const erasedDb2Ref=useRef<ErasedDb2|null>(null);
   const [migrationNotice,setMigrationNotice]=useState<string|null>(null);
   const discardRecoveryCopy=useCallback(()=>{handoffRef.current?.invalidate();handoffRef.current=null;},[]);
   const invalidateArchiveMigration=useCallback(()=>{
@@ -134,6 +137,17 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
           storeRef.current=null;vaultRef.current=null;storageRef.current=null;
         }
         archiveVersionRef.current=version;setArchiveVersion(version);
+        erasedDb2Ref.current=null;
+        if(version===2){
+          const physical=await captureDb2(globalThis.indexedDB);
+          if(physical.state==='erased'){
+            vaultRef.current?.lock();await storeRef.current?.retireConnection();
+            storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+            if(LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Residui di un archivio precedente da verificare. Nessun dato verrà recuperato automaticamente.');
+            erasedDb2Ref.current=physical.metadata;requireExistingRef.current=true;
+            setGateState('SETUP_REQUIRED');return;
+          }
+        }
       }
       const { store } = getRuntime();
       const metadata = await store.getMetadata();
@@ -427,6 +441,33 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
     const attempt = await getForegroundEpoch();
+    if(archiveMigrationCandidate&&archiveVersionRef.current===2){
+      const erased=erasedDb2Ref.current;
+      if(!erased||archiveMigrationRef.current||closingRef.current||gateStateRef.current!=='SETUP_REQUIRED')throw Error('Nuova configurazione non autorizzata.');
+      const service=createDb2Lifecycle();
+      const owner={revoke:()=>service.invalidate()};
+      const current=()=>archiveMigrationRef.current===owner&&erasedDb2Ref.current===erased&&
+        gateStateRef.current==='MIGRATING'&&lifecycleRevisionRef.current===attempt.revision&&
+        (attempt.epoch===null?!document.hidden:nativeStateRef.current?.foreground===true&&nativeStateRef.current.epoch===attempt.epoch);
+      archiveMigrationRef.current=owner;closingRef.current=true;
+      setGateState('MIGRATING');
+      let committed=false;
+      const deadline=window.setTimeout(()=>owner.revoke(),120_000);
+      try{
+        if(!current()||LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Configurazione non autorizzata.');
+        const grant=await service.prepare({operation:'setup',password,setup},erased);
+        if(isAndroidSessionRuntime())await syncNativeSession();
+        if(!current())throw Error('Sessione cambiata.');
+        // Submitting the explicit new-archive setup form is the consent.
+        await service.commit(grant,true);committed=true;
+      }finally{
+        window.clearTimeout(deadline);owner.revoke();archiveMigrationRef.current=null;
+        closingRef.current=false;revokeNativeAuthorization();setSnapshot(null);
+        setMigrationNotice(committed?'Nuovo archivio creato. Autenticati con la nuova password.':'Configurazione non confermata. Verifica lo stato dell’archivio.');
+        await inspectBootstrap();
+      }
+      return;
+    }
     const { vault, store } = getRuntime();
     if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
       throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
@@ -439,7 +480,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       setGateState('LOCKED');
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState]);
 
   const handleUnlock = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -548,12 +589,12 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     return stamp.epoch===null&&!document.hidden;
   },[]);
   const recoveryOwnerReady=useCallback(()=>gateStateRef.current==='READY'&&!closingRef.current&&
-    !suspendedRef.current&&vaultRef.current?.isUnlocked()===true&&archiveVersionRef.current===1,[]);
+    !suspendedRef.current&&vaultRef.current?.isUnlocked()===true&&(archiveVersionRef.current===1||archiveVersionRef.current===2),[]);
   const selectRecoveryCopy=useCallback(async(file?:File)=>{
     if(!archiveMigrationCandidate||!recoveryOwnerReady())return false;
-    const logicalOwner=storeRef.current;
+    const logicalOwner=storeRef.current,version=archiveVersionRef.current;
     if(!logicalOwner)return false;
-    const owns=()=>storeRef.current===logicalOwner&&gateStateRef.current==='READY'&&!closingRef.current;
+    const owns=()=>storeRef.current===logicalOwner&&archiveVersionRef.current===version&&gateStateRef.current==='READY'&&!closingRef.current;
     const handoff=handoffRef.current??(handoffRef.current=createRecoveryCopyHandoff({
       isOwner:owns,
       observeAuthenticated:async()=>{
@@ -570,7 +611,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     queue:DurableMutationCoordinator,localPassword:string,copyPassword:string
   ):Promise<MigrationSessionResult>=>{
     const handoff=handoffRef.current;
-    if(!archiveMigrationCandidate||!handoff||!recoveryOwnerReady()||archiveMigrationRef.current)return Promise.resolve('not-started');
+    if(!archiveMigrationCandidate||archiveVersionRef.current!==1||!handoff||!recoveryOwnerReady()||archiveMigrationRef.current)return Promise.resolve('not-started');
     return handoff.consume((copy,stamp)=>{
       const oldStore=storeRef.current,oldVault=vaultRef.current;
       if(!oldStore||!oldVault||!recoveryOwnerReady()||!stampCurrent(stamp))return Promise.resolve<MigrationSessionResult>('not-started');
@@ -614,6 +655,70 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     })??Promise.resolve('not-started');
   },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,revokeNativeAuthorization,inspectBootstrap,syncNativeSession]);
 
+  const runDb2Replacement=useCallback((
+    queue:DurableMutationCoordinator,stamp:RecoverySessionStamp,password:string,
+    replacement:{operation:'restore';file:Blob;backupPassword:string}|{operation:'erase'}
+  ):Promise<MigrationSessionResult>=>{
+    const oldStore=storeRef.current,oldVault=vaultRef.current;
+    if(!archiveMigrationCandidate||archiveVersionRef.current!==2||!oldStore||!oldVault||
+      !recoveryOwnerReady()||!stampCurrent(stamp)||archiveMigrationRef.current)return Promise.resolve('not-started');
+    const service=createDb2Lifecycle(),owner={revoke:()=>service.invalidate()};
+    const current=()=>archiveMigrationRef.current===owner&&storeRef.current===oldStore&&closingRef.current&&
+      gateStateRef.current==='READY'&&!suspendedRef.current&&stampCurrent(stamp);
+    archiveMigrationRef.current=owner;
+    closingRef.current=true;setClosing(true);setClosingDelayed(false);
+    return (async()=>{
+      let result:MigrationSessionResult='blocked-reopen-required',invoked=false;
+      const deadline=window.setTimeout(()=>owner.revoke(),120_000);
+      try{
+        await queue.sealAndDrain();
+        if(!current()||LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Archivio non verificabile.');
+        const metadata=await oldStore.getMetadata();
+        if(!metadata||!current())throw Error('Sessione cambiata.');
+        const grant=await service.prepare({...replacement,password},metadata);
+        if(!current())throw Error('Sessione cambiata.');
+        const confirmation=replacement.operation==='erase'
+          ?'Cancellare tutti i dati e la chiave dell’archivio locale? Le copie esterne restano disponibili.'
+          :'La copia è stata verificata. Sostituire tutti i dati attuali con quelli della copia? Dovrai autenticarti nuovamente.';
+        if(!window.confirm(confirmation)){result='cancelled-reopen-required';return result;}
+        if(isAndroidSessionRuntime())await syncNativeSession();
+        if(!current())throw Error('Sessione cambiata.');
+        oldVault.lock();await oldStore.retireConnection();
+        if(!current())throw Error('Sessione cambiata.');
+        invoked=true;await service.commit(grant,true);
+        result=current()?'migrated-reopen-required':'inspect-reopen-required';
+        return result;
+      }catch{
+        result=invoked?'inspect-reopen-required':current()?'blocked-reopen-required':'cancelled-reopen-required';
+        return result;
+      }finally{
+        window.clearTimeout(deadline);owner.revoke();archiveMigrationRef.current=null;
+        oldVault.lock();await oldStore.retireConnection();
+        storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+        requireExistingRef.current=true;revokeNativeAuthorization();setSnapshot(null);
+        setMigrationNotice(result==='migrated-reopen-required'
+          ?replacement.operation==='erase'?'Archivio locale cancellato. Configura un nuovo archivio. Le copie esterne non sono state cancellate.':'Archivio ripristinato. Autenticati per riaprire il Registro.'
+          :result==='inspect-reopen-required'?'Operazione interrotta. Verifica lo stato dell’archivio.':'Operazione non completata. Autenticati per riaprire il Registro.');
+        await inspectBootstrap();
+        closingRef.current=false;setClosing(false);
+      }
+    })();
+  },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,syncNativeSession,revokeNativeAuthorization,inspectBootstrap]);
+
+  const startDb2Restore=useCallback((queue:DurableMutationCoordinator,password:string,backupPassword:string)=>{
+    const handoff=handoffRef.current;
+    if(!handoff||archiveVersionRef.current!==2)return Promise.resolve<MigrationSessionResult>('not-started');
+    return handoff.consume((file,stamp)=>{
+      handoffRef.current=null;
+      return runDb2Replacement(queue,stamp,password,{operation:'restore',file,backupPassword});
+    })??Promise.resolve<MigrationSessionResult>('not-started');
+  },[runDb2Replacement]);
+  const startDb2Erase=useCallback((queue:DurableMutationCoordinator,password:string)=>{
+    discardRecoveryCopy();
+    const stamp={epoch:isAndroidSessionRuntime()?authenticatedEpochRef.current:null,revision:lifecycleRevisionRef.current};
+    return runDb2Replacement(queue,stamp,password,{operation:'erase'});
+  },[discardRecoveryCopy,runDb2Replacement]);
+
   useEffect(()=>{
     if(!archiveMigrationCandidate)return;
     const protect=()=>{if(document.hidden){archiveMigrationRef.current?.revoke();if(!isAndroidSessionRuntime()){lifecycleRevisionRef.current++;discardRecoveryCopy();}}};
@@ -648,8 +753,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
             onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
             registerSessionLockRequest={registerSessionLockRequest}
             registerSessionSuspension={registerSessionSuspension}
-            archiveMigration={archiveMigrationCandidate&&archiveVersion===1?{
-              select:selectRecoveryCopy,start:startArchiveMigration,discard:discardRecoveryCopy
+            archiveMigration={archiveMigrationCandidate&&archiveVersion!==null?{
+              select:selectRecoveryCopy,start:archiveVersion===2?startDb2Restore:startArchiveMigration,discard:discardRecoveryCopy,
+              mode:archiveVersion===2?'restore':'migrate',erase:archiveVersion===2?startDb2Erase:undefined
             }:undefined}
             onInvalidateArchiveMigration={archiveMigrationCandidate?invalidateArchiveMigration:undefined}
             archiveReplacementBlocked={archiveMigrationCandidate&&archiveVersion===2}
