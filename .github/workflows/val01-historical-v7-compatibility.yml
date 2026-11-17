@@ -1,7 +1,7 @@
 name: VAL-01 D1b.2b — exact historical v7 rejection
 on:
   pull_request:
-    branches: ['main']
+    branches: ['main', 'feat/val-01-d1b4b2-product-session']
 permissions:
   contents: read
 jobs:
