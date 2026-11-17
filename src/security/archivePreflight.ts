@@ -54,7 +54,8 @@ function capture(factory: IDBFactory, signal?: AbortSignal): Promise<Physical> {
       request.onupgradeneeded = () => {
         // Missing database: never create stores or commit version 1.
         request.transaction?.abort();
-        stop();
+        // Wait for the request error after rollback before reporting absence.
+        // A previously revoked or timed-out request remains abandoned.
       };
       request.onerror = stop;
       request.onsuccess = () => {
