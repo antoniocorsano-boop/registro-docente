@@ -148,6 +148,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       return;
     }
     if(archiveMigrationCandidate){
+      setBootTrace([]);
       const generation=++bootstrapGenerationRef.current;
       const current=()=>bootstrapGenerationRef.current===generation;
       const run=async()=>{
@@ -177,6 +178,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         }catch(error){
           if(!current())return;
           const failure=error instanceof BootFault?error:new BootFault('classification','unknown');
+          setBootTrace(previous=>previous.some(t=>t.phase===failure.phase&&t.code===failure.code)?previous:[...previous,{attempt:previous.length+1,phase:failure.phase,code:failure.code}]);
           setErrorMessage(bootMessage(failure));setGateState('ERROR');
         }
       };
@@ -508,17 +510,30 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       }
       archiveVersionRef.current=inspected.observation.kind==='empty'?1:null;
     }
-    const { vault, store } = getRuntime();
-    if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
-      throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+    if(!archiveMigrationCandidate){
+      const {vault,store}=getRuntime();
+      if(await store.getMetadata()||LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+      await initializeNewArchive(vault,password,setup);
+      try{await loadReadySnapshot(attempt);}catch(error){vault.lock();setGateState('LOCKED');throw error;}
+      return;
     }
-    await initializeNewArchive(vault, password, setup);
-    if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
-    try {
+    if(archiveMigrationCandidate){
+      if(lifecycleRevisionRef.current!==attempt.revision||document.hidden||
+        (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch)))throw Error('Sessione cambiata.');
+      // Protected gate is closed synchronously before the explicit first setup.
+      setGateState('MIGRATING');
+    }
+    const { vault, store } = getRuntime();
+    try{
+      if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
+        throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+      }
+      await initializeNewArchive(vault, password, setup);
+      if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
       await loadReadySnapshot(attempt);
-    } catch (error) {
+    }catch(error){
       vault.lock();
-      setGateState('LOCKED');
+      await inspectBootstrap();
       throw error;
     }
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState,established,protectedBootstrap,markEstablished]);
