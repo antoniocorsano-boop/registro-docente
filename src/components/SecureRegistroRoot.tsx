@@ -86,6 +86,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
   const archiveMigrationRef=useRef<{revoke():void}|null>(null);
   const erasedDb2Ref=useRef<ErasedDb2|null>(null);
+  const db2ChannelRef=useRef<BroadcastChannel|null>(null);
   const [migrationNotice,setMigrationNotice]=useState<string|null>(null);
   const discardRecoveryCopy=useCallback(()=>{handoffRef.current?.invalidate();handoffRef.current=null;},[]);
   const invalidateArchiveMigration=useCallback(()=>{
@@ -445,8 +446,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       const erased=erasedDb2Ref.current;
       if(!erased||archiveMigrationRef.current||closingRef.current||gateStateRef.current!=='SETUP_REQUIRED')throw Error('Nuova configurazione non autorizzata.');
       const service=createDb2Lifecycle();
-      const owner={revoke:()=>service.invalidate()};
-      const current=()=>archiveMigrationRef.current===owner&&erasedDb2Ref.current===erased&&
+      let revoked=false;
+      const owner={revoke:()=>{revoked=true;service.invalidate();}};
+      const current=()=>!revoked&&archiveMigrationRef.current===owner&&erasedDb2Ref.current===erased&&
         gateStateRef.current==='MIGRATING'&&lifecycleRevisionRef.current===attempt.revision&&
         (attempt.epoch===null?!document.hidden:nativeStateRef.current?.foreground===true&&nativeStateRef.current.epoch===attempt.epoch);
       archiveMigrationRef.current=owner;closingRef.current=true;
@@ -463,6 +465,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       }finally{
         window.clearTimeout(deadline);owner.revoke();archiveMigrationRef.current=null;
         closingRef.current=false;revokeNativeAuthorization();setSnapshot(null);
+        try{db2ChannelRef.current?.postMessage('archive-generation-changed');}catch{/* Advisory only; durable generation is authoritative. */}
         setMigrationNotice(committed?'Nuovo archivio creato. Autenticati con la nuova password.':'Configurazione non confermata. Verifica lo stato dell’archivio.');
         await inspectBootstrap();
       }
@@ -662,8 +665,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     const oldStore=storeRef.current,oldVault=vaultRef.current;
     if(!archiveMigrationCandidate||archiveVersionRef.current!==2||!oldStore||!oldVault||
       !recoveryOwnerReady()||!stampCurrent(stamp)||archiveMigrationRef.current)return Promise.resolve('not-started');
-    const service=createDb2Lifecycle(),owner={revoke:()=>service.invalidate()};
-    const current=()=>archiveMigrationRef.current===owner&&storeRef.current===oldStore&&closingRef.current&&
+    const service=createDb2Lifecycle();let revoked=false;
+    const owner={revoke:()=>{revoked=true;service.invalidate();}};
+    const current=()=>!revoked&&archiveMigrationRef.current===owner&&storeRef.current===oldStore&&closingRef.current&&
       gateStateRef.current==='READY'&&!suspendedRef.current&&stampCurrent(stamp);
     archiveMigrationRef.current=owner;
     closingRef.current=true;setClosing(true);setClosingDelayed(false);
@@ -696,6 +700,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         oldVault.lock();await oldStore.retireConnection();
         storeRef.current=null;vaultRef.current=null;storageRef.current=null;
         requireExistingRef.current=true;revokeNativeAuthorization();setSnapshot(null);
+        if(invoked)try{db2ChannelRef.current?.postMessage('archive-generation-changed');}catch{/* Advisory only. */}
         setMigrationNotice(result==='migrated-reopen-required'
           ?replacement.operation==='erase'?'Archivio locale cancellato. Configura un nuovo archivio. Le copie esterne non sono state cancellate.':'Archivio ripristinato. Autenticati per riaprire il Registro.'
           :result==='inspect-reopen-required'?'Operazione interrotta. Verifica lo stato dell’archivio.':'Operazione non completata. Autenticati per riaprire il Registro.');
@@ -727,6 +732,44 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     window.addEventListener('pagehide',hide);
     return()=>{document.removeEventListener('visibilitychange',protect);window.removeEventListener('pagehide',hide);};
   },[archiveMigrationCandidate,discardRecoveryCopy,invalidateArchiveMigration]);
+
+  // Broadcast carries no data or authority; verify durable generation even
+  // without BroadcastChannel. Stale writes are independently fenced by DB2.
+  useEffect(()=>{
+    if(!archiveMigrationCandidate)return;
+    let disposed=false,checking=false;
+    const probe=async()=>{
+      if(disposed||checking||closingRef.current||archiveVersionRef.current!==2||
+        gateStateRef.current!=='READY')return;
+      const store=storeRef.current;
+      if(!store)return;
+      checking=true;
+      try{await store.getMetadata();}
+      catch{
+        if(disposed||storeRef.current!==store||closingRef.current)return;
+        invalidateArchiveMigration();
+        revokeNativeAuthorization();vaultRef.current?.lock();
+        suspendedRef.current=null;setSuspensionPhase(null);setSuspensionDelayed(false);
+        setSnapshot(null);setGateState('CHECKING');
+        await store.retireConnection();
+        if(storeRef.current===store){storeRef.current=null;vaultRef.current=null;storageRef.current=null;}
+        requireExistingRef.current=true;
+        setMigrationNotice('L’archivio è cambiato. Verifica lo stato e autenticati nuovamente.');
+        await inspectBootstrap();
+      }finally{checking=false;}
+    };
+    const check=()=>{void probe();};
+    const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('registro-docente-db2-generation'):null;
+    db2ChannelRef.current=channel;
+    if(channel)channel.onmessage=check;
+    const timer=window.setInterval(check,2000);
+    window.addEventListener('focus',check);document.addEventListener('visibilitychange',check);
+    return()=>{
+      disposed=true;window.clearInterval(timer);
+      window.removeEventListener('focus',check);document.removeEventListener('visibilitychange',check);
+      channel?.close();if(db2ChannelRef.current===channel)db2ChannelRef.current=null;
+    };
+  },[archiveMigrationCandidate,invalidateArchiveMigration,revokeNativeAuthorization,inspectBootstrap,setGateState]);
 
   const handleAutoLockChange = (minutes: AutoLockMinutes) => {
     setAutoLockMinutes(minutes);
