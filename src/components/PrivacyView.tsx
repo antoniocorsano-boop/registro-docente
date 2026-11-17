@@ -564,7 +564,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
           <button
             type="button"
+            disabled={archiveReplacementBlocked}
             onClick={() => {
+              if(archiveReplacementBlocked)return;
               if (confirm('ATTENZIONE: Stai per eliminare TUTTI i dati del registro (classi, alunni, voti, note e impostazioni). Questa azione è irreversibile!\n\nHai già scaricato una copia di backup?')) {
                 if (prompt('Scrivi "CANCELLA" per confermare l\'eliminazione definitiva:') === 'CANCELLA') {
                   onFactoryReset();
