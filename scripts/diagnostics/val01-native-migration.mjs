@@ -71,7 +71,7 @@ function nodes(){
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
   return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
     const s=m[0],get=k=>s.match(new RegExp('\\b'+k+'="([^"]*)"'))?.[1]||'';
-    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
+    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',focused:get('focused')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
   });
 }
 const doc=n=>/documentsui/i.test(n.pkg);
@@ -149,8 +149,32 @@ const appEdit=(secret=false)=>find(n=>nativeApp(n)&&n.clazz==='android.widget.Ed
 function inputText(value){adb('shell','input','text',value.replace(/ /g,'%s'));}
 function hideKeyboard(){if(/mInputShown=true|mIsInputViewShown=true/.test(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');}
 function launchOriginal(){adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');}
+const vaultField=n=>nativeApp(n)&&n.id==='vault-password'&&n.clazz==='android.widget.EditText'&&n.password;
+const passwordRejected=view=>view.some(n=>nativeApp(n)&&n.text==='Password errata o metadata del vault manomesso.');
 async function gate(action){
-  tap(await appEdit(true));inputText(vaultPassword);hideKeyboard();tap(await appButton(action));
+  // Use only the exact synthetic password field. Both failed cold starts
+  // displayed the expected text but initial setup input was not attested.
+  const field=await find(vaultField,'Original vault password field missing');
+  tap(field);
+  await until(()=>nodes().some(n=>vaultField(n)&&n.focused),'Password field not focused',15000);
+  adb('shell','input','keycombination','113','29'); // Ctrl+A, clear focused input
+  adb('shell','input','keyevent','67');
+  await until(()=>nodes().some(n=>vaultField(n)&&n.text===''),'Password field not empty',15000);
+  inputText(vaultPassword);
+  await until(()=>nodes().some(n=>vaultField(n)&&n.text===vaultPassword),'Synthetic password input differs from expected',15000);
+  hideKeyboard();
+  // Attest again immediately before submission; never record password value.
+  await until(()=>nodes().some(n=>vaultField(n)&&n.text===vaultPassword),'Synthetic password changed before submit',15000);
+  console.log('original-gate-input-verified',action);
+  tap(await appButton(action));
+  const outcome=await until(()=>{
+    const view=nodes();
+    if(passwordRejected(view))return 'rejected';
+    if(view.some(n=>nativeApp(n)&&n.text==='Le mie classi')||view.some(n=>named(n,'Apri navigazione del Registro')))return 'opened';
+    return null;
+  },'Original gate did not reach an explicit outcome: '+action,45000);
+  console.log('original-gate-outcome',action,outcome);
+  if(outcome!=='opened')throw Error('Original authentication rejected: '+action);
 }
 async function findMarker(){
   for(let i=0;i<5;i++){
@@ -165,7 +189,7 @@ async function findMarker(){
 }
 async function uiCheckpoint(label){
   // Only synthetic CI UI, never archive contents or passwords.
-  const safe=value=>!value?'':/Collaudo migrazione VAL01|^Classe creata$|^Gestione alunni$|^Apri navigazione del Registro$|^Chiudi navigazione del Registro$|^Le mie classi$|^Oggi$|^Torna a Oggi$|^Nuova Classe$|^OK$|^Annulla$|^Sblocca Registro$|^Configura archivio protetto$|^Inserisci la denominazione della nuova classe/.test(value)?value:'[redacted]';
+  const safe=value=>!value?'':/Collaudo migrazione VAL01|^Classe creata$|^Gestione alunni$|^Apri navigazione del Registro$|^Chiudi navigazione del Registro$|^Le mie classi$|^Oggi$|^Torna a Oggi$|^Nuova Classe$|^OK$|^Annulla$|^Sblocca Registro$|^Password errata o metadata del vault manomesso\.$|^Configura archivio protetto$|^Inserisci la denominazione della nuova classe/.test(value)?value:'[redacted]';
   const view=(await until(()=>{const n=nodes();return n.length?n:null;},'UI checkpoint unavailable',12000)).map(n=>({text:n.password?'[redacted]':safe(n.text),desc:n.password?'[redacted]':safe(n.desc),pkg:n.pkg,id:n.id,clazz:n.clazz,enabled:n.enabled,clickable:n.clickable,bounds:n.bounds}));
   writeFileSync('native-evidence/ui-'+label+'.json',JSON.stringify(view,null,2));
   console.log('original-ui',label);
@@ -201,7 +225,24 @@ async function seedOriginal(version){
   await uiCheckpoint('class-created');
   await ensureHome();await uiCheckpoint('home-after-create');await findMarker();
   console.log('original-class-visible-before-restart');
-  stop();launchOriginal();await gate('Sblocca Registro');await ensureHome();
+  stop();launchOriginal();
+  try{await gate('Sblocca Registro');}catch(e){
+    // Preserve failed original UI before optional read-only diagnostic.
+    await uiCheckpoint('authentication-failed').catch(()=>{});
+    // Do not turn an original unlock failure into a PASS. The isolated candidate
+    // may only authenticate the existing DB1 with the same synthetic credential.
+    // No migration, no reset, no recovery attempt and no password guessing.
+    if(String(e).includes('Original authentication rejected')){
+      try{
+        stop();install(process.env.NEW_APK,['-r']);
+        await launch('__val01NativeLab');
+        await lab('inspectHistoricalArchive');
+        console.log('diagnostic-candidate-readonly-authentication PASS');
+      }catch{console.log('diagnostic-candidate-readonly-authentication FAILED');}
+    }
+    throw e;
+  }
+  await ensureHome();
   await uiCheckpoint('home-after-restart');await findMarker();
   console.log('original-class-visible-after-restart');
 }
@@ -284,7 +325,7 @@ try{
   writeFileSync('native-evidence/failure.txt',String(e));
   process.exitCode=1;
   console.error(e.message);
-  try{writeFileSync('native-evidence/synthetic-ui.json',JSON.stringify(nodes(),null,2));}catch{}
+  try{writeFileSync('native-evidence/synthetic-ui.json',JSON.stringify(nodes().map(n=>n.password?{...n,text:'[redacted]',desc:'[redacted]'}:n),null,2));}catch{}
   try{writeFileSync('native-evidence/foreground.txt',adb('shell','dumpsys','activity','activities'));}catch{}
 }finally{
   // Bound the diagnostic itself even if a DevTools socket never closes.
