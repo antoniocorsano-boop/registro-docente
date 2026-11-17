@@ -61,3 +61,22 @@ describe('VAL-01/D1b.3c integral historical binaries',()=>{
     for(const t of ['Expected existing DB1','vault.lock();await store.release()','Collaudo migrazione VAL01','withoutLocalBackupVerification'])expect(fixture).toContain(t);
   });
 });
+
+describe('VAL-01/D1b.3c support boundary approved 2026-11-17',()=>{
+  test('retired RC2 is a mandatory negative case, not a skipped or successful migration',async()=>{
+    const workflow=await read('.github/workflows/val01-integral-android.yml');
+    for(const value of ['--argjson version "$OLD_VERSION"','$version==10002','.qualification=="negative-only"','unsupported-sparse-archive-refused-without-mutation','unsupported-sparse-original-reopen','$version==10003 or $version==10004','.qualification=="supported-migration"','else false end','all(.results[];.status=="PASS")'])expect(workflow).toContain(value);
+    expect(workflow).not.toContain('continue-on-error:');
+    const script=await read('scripts/diagnostics/val01-native-migration.mjs');
+    for(const value of ["assert.deepEqual(inventory.present,['appData','meta'])","assert.deepEqual(await lab('rejectSparseFence'),{blocked:true,guardReached:false})","assert.equal(await lab('historicalFingerprint'),before)","assert.equal(await candidate('version'),1)","assert.deepEqual(await lab('probeHistoricalArchive'),inventory)","stage('unsupported-sparse-original-reopen'","Supported historical DB1 has missing physical records; no migration allowed"])expect(script).toContain(value);
+    const fixture=await read('mobile/android-probe/val01-native-lab.fixture.ts');
+    for(const value of ["db.transaction(['metadata','records'],'readonly')","metadata.getAllKeys()","records.getAllKeys()","request.onupgradeneeded=()=>request.transaction?.abort()","!guardReached)blocked=true","guardReached=true"])expect(fixture).toContain(value);
+    const strict=await read('src/security/versionFencedVaultStore.ts');
+    expect(strict).toContain('values.length===KEYS.length');
+    expect(strict).toContain('!validRecords(encrypted.result)');
+    const auth=await read('src/security/authorizedVaultMigration.ts');
+    expect(auth).toContain('!validRecords(records)');
+    // Exact RC2 source, historical backup and complete-storage downgrade coverage stay active.
+    for(const path of ['.github/workflows/val01-database-fence.yml','.github/workflows/val01-native-migration.yml','.github/workflows/val01-historical-v7-compatibility.yml'])expect(await read(path)).toContain('37c61d4c64993c986a3edcd2b421310adf20de92');
+  });
+});
