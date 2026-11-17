@@ -585,3 +585,50 @@ test('D1b.5 actual erasure closes other authenticated UI, persists DB2, and new 
   await page.goto(productSeed());await page.addScriptTag({path:oldBundle});
   expect(await historic(page,'initialize')).toBe('VersionError');
 });
+
+for(const signal of ['broadcast','durable-polling']){
+  test('D1b.5 locked observer '+signal+' recognizes erasure and later setup without reload',async({page,context})=>{
+    test.setTimeout(120000);
+    await productDb2(page);
+    const other=await context.newPage();
+    await other.setViewportSize({width:390,height:844});
+    if(signal==='durable-polling')await other.addInitScript(()=>Object.defineProperty(window,'BroadcastChannel',{value:undefined,configurable:true}));
+    await other.bringToFront();await other.goto(productApp());await unlockProduct(other);
+    await other.getByTestId('header01-lock').click();
+    await expect(other.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+    await other.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+    await page.bringToFront();
+    await expect.poll(()=>page.evaluate(()=>document.visibilityState)).toBe('visible');
+    page.on('dialog',async d=>{if(d.message().includes('Cancellare tutti i dati e la chiave'))await d.accept();else await d.dismiss();});
+    await submitProductErase(page);
+    await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible({timeout:30000});
+    await other.bringToFront();
+    await expect(other.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible({timeout:30000});
+    await expect(other.getByRole('heading',{name:'Sblocca Registro'})).toHaveCount(0);
+    await expect(other.getByLabel('Password locale',{exact:true})).toHaveCount(0);
+    await expect(other.getByTestId('header01-topbar')).toHaveCount(0);
+    // A fresh setup elsewhere must invalidate the stale erased form as well.
+    await other.getByRole('radio',{name:/Ambiente dimostrativo/}).check();
+    await other.getByLabel('Password locale',{exact:true}).fill('synthetic-unused-password');
+    await page.bringToFront();
+    await page.getByRole('radio',{name:/Archivio professionale/}).check();
+    await page.getByLabel('Istituto',{exact:true}).fill('Synthetic school');
+    await page.getByLabel('Anno scolastico',{exact:true}).fill('2026/2027');
+    await page.getByLabel('Docente',{exact:true}).fill('Synthetic teacher');
+    await page.getByLabel('Disciplina',{exact:true}).fill('Tecnologia');
+    await page.getByLabel('Password locale',{exact:true}).fill('synthetic-new-password');
+    await page.getByRole('button',{name:'Crea il mio registro'}).click();
+    await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+    await other.bringToFront();
+    await expect(other.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+    await expect(other.getByLabel('Password locale',{exact:true})).toHaveValue('');
+    await expect(other.getByRole('heading',{name:'Configura archivio protetto'})).toHaveCount(0);
+    await unlockProduct(other,'synthetic-new-password');
+    await other.close();await page.bringToFront();
+    const fresh=await readProductDb2(page,true);
+    expect(fresh.appData.classes).toEqual([]);
+    expect(fresh.settings.archiveMode).toBe('professional');
+    expect(fresh.meta).toEqual({changes:0,lastBackup:null});
+    expect(await candidate(page,'version')).toBe(2);
+  });
+}
