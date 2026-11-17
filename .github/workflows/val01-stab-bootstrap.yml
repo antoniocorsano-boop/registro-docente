@@ -1,7 +1,7 @@
 name: STAB-01/02 — protected startup fast qualification
 on:
   pull_request:
-    branches: ['test/val-01-d1b6-migration-interruption']
+    branches: ['test/val-01-d1b6-migration-interruption', 'test/val-01-stab04b-repeatability']
 permissions:
   contents: read
 jobs:
@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 15
     env:
       HISTORICAL_SHA: ${{ matrix.predecessor.sha }}
-      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      CANDIDATE_SHA: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
