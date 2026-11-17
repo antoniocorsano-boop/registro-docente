@@ -705,3 +705,107 @@ for(const cut of ['before-commit','after-commit']){
     for(const operation of ['read','unlock','write','delete','clear','initialize'])expect(await historic(page,operation)).toBe('VersionError');
   });
 }
+
+const bootTrace=async page=>JSON.parse(await page.locator('[data-bootstrap-trace]').getAttribute('data-bootstrap-trace'));
+async function noArchive(page){
+  expect(await page.evaluate(async()=> (await indexedDB.databases()).filter(d=>d.name==='registro-docente-secure-vault'))).toEqual([]);
+}
+test('STAB-02 fresh candidate observes absence twice and does not create DB1 before explicit setup',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+  expect(await bootTrace(page)).toEqual([{attempt:1,phase:'classification',code:'confirm-absence'}]);
+  await noArchive(page);
+  await page.reload();await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+  await noArchive(page);
+  await page.getByRole('radio',{name:/Ambiente dimostrativo/}).check();
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await noArchive(page);
+  await page.getByRole('button',{name:'Avvia la prova'}).click();
+  await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+  await page.reload();await unlockProduct(page);
+  expect(await page.evaluate(async()=> (await indexedDB.databases()).find(d=>d.name==='registro-docente-secure-vault')?.version)).toBe(1);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBe('1');
+});
+test('STAB-02 established marker with missing DB refuses setup and manual retry never creates',async({page})=>{
+  await page.addInitScript(()=>localStorage.setItem('registro_archive_established_v1','1'));
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible({timeout:20000});
+  expect((await bootTrace(page)).map(t=>t.code)).toEqual(['missing-established','missing-established','missing-established']);
+  await noArchive(page);
+  await page.getByRole('button',{name:'Riprova controllo sicurezza'}).click();
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible({timeout:20000});
+  await noArchive(page);
+  await expect(page.getByRole('radio')).toHaveCount(0);
+});
+test('STAB-02 transient enumeration AbortError recovers existing DB1 without modifying it',async({page})=>{
+  await page.addInitScript(()=>{
+    if(!location.pathname.endsWith('val01-product-session.html'))return;
+    const original=IDBFactory.prototype.databases;let calls=0;
+    IDBFactory.prototype.databases=function(){
+      if(++calls===1)return Promise.reject(new DOMException('synthetic read interrupted','AbortError'));
+      return original.call(this);
+    };
+  });
+  const seed=await seedProduct(page);
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:20000});
+  expect(await bootTrace(page)).toEqual([{attempt:1,phase:'enumeration',code:'aborted-read'}]);
+  await unlockProduct(page);await physicalAfterProduct(page,1,seed);
+});
+test('STAB-02 unclassified first read failure remains blocked; explicit readonly retry recovers',async({page})=>{
+  await page.addInitScript(()=>{
+    if(!location.pathname.endsWith('val01-product-session.html'))return;
+    const original=IDBFactory.prototype.databases;let calls=0;
+    IDBFactory.prototype.databases=function(){
+      if(++calls===1)return Promise.reject(new DOMException('synthetic unknown','UnknownError'));
+      return original.call(this);
+    };
+  });
+  const seed=await seedProduct(page);
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  expect(await bootTrace(page)).toEqual([{attempt:1,phase:'enumeration',code:'unknown'}]);
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await page.getByRole('button',{name:'Riprova controllo sicurezza'}).click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await unlockProduct(page);await physicalAfterProduct(page,1,seed);
+});
+test('STAB-02 interrupted staging is never discarded by candidate Retry',async({page})=>{
+  await seedProduct(page);
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  const before=await candidate(page,'preflightInventory','metadata');
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  expect(await bootTrace(page)).toEqual([{attempt:1,phase:'classification',code:'staging'}]);
+  await page.getByRole('button',{name:'Riprova controllo sicurezza'}).click();
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  expect(await candidate(page,'preflightInventory')).toBe(before);
+  expect(await candidate(page,'version')).toBe(1);
+});
+test('STAB-02 sparse historical DB1 remains accessible and is not automatically upgraded',async({page})=>{
+  await seedProduct(page);
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  const before=await candidate(page,'preflightInventory','sparse');
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await unlockProduct(page);
+  // A sparse archive must never become a setup surface. The migration
+  // preflight still rejects it; this proof is ordinary read access only.
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  expect(await candidate(page,'version')).toBe(1);
+  expect(await candidate(page,'preflightInventory')).toBe(before);
+});
+test('STAB-02 corrupt DB2 remains blocked and Retry cannot recreate it',async({page})=>{
+  await seedProduct(page);
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  await candidate(page,'upgrade');
+  const before=await candidate(page,'preflightInventory','sparse',2);
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  expect(await bootTrace(page)).toEqual([{attempt:1,phase:'classification',code:'invalid-inventory'}]);
+  await page.getByRole('button',{name:'Riprova controllo sicurezza'}).click();
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  expect(await candidate(page,'version')).toBe(2);
+  expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+});
