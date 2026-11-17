@@ -11,7 +11,7 @@ const evidence=[];
 mkdirSync('native-evidence',{recursive:true});
 function stage(name,details={}){
   evidence.push({stage:name,status:'PASS',...details});
-  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api:36,scope:integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',productionRelease:false,results:evidence},null,2));
+  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api:36,scope:integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,results:evidence},null,2));
   console.log(name,'PASS');
 }
 async function until(fn,label,ms=30000){
@@ -273,9 +273,29 @@ try{
     assert.equal(inventory.authentication,'accepted','Historical vault authentication failed');
     assert.deepEqual(inventory.failed,[],'Encrypted record authentication failed');
     assert.equal(inventory.marker,true,'Historical synthetic marker absent');
-    assert.equal(inventory.missing.length,0,'Historical DB1 has missing physical records; no migration allowed');
-    seed=await lab('inspectHistoricalArchive');
-    assert.equal(seed.physical.keys.length,10);
+    if(oldVersion===10002){
+      // Explicit approved support policy: retired RC2 is a negative case,
+      // not a successful migration. Must prove rejection and intact DB1.
+      assert.equal(inventory.metadata,'ACTIVE');
+      assert.deepEqual(inventory.present,['appData','meta']);
+      assert.deepEqual(inventory.authenticated,inventory.present);
+      assert.equal(inventory.missing.length,8);
+      const before=await lab('historicalFingerprint');
+      assert.match(before,/^[a-f0-9]{64}$/);
+      assert.deepEqual(await lab('rejectSparseFence'),{blocked:true,guardReached:false});
+      assert.equal(await candidate('version'),1);
+      assert.equal(await lab('historicalFingerprint'),before);
+      assert.deepEqual(await lab('probeHistoricalArchive'),inventory);
+      stage('unsupported-sparse-archive-refused-without-mutation',{qualification:'negative-only',present:inventory.present,missing:inventory.missing,physicalSha256:before});
+      stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
+      launchOriginal();await gate('Sblocca Registro');await ensureHome();await findMarker();
+      stage('unsupported-sparse-original-reopen',{qualification:'negative-only'});
+    }else{
+      assert.ok(oldVersion===10003||oldVersion===10004,'Unrecognized integral predecessor');
+      assert.equal(inventory.missing.length,0,'Supported historical DB1 has missing physical records; no migration allowed');
+      seed=await lab('inspectHistoricalArchive');
+      assert.equal(seed.physical.keys.length,10);
+    }
   }else{
     await launch('__val01FenceHistorical');
     seed=await old('seed',false);
@@ -286,6 +306,7 @@ try{
     stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
     await launch('__val01NativeLab');
   }
+  if(!(integral&&oldVersion===10002)){
   assert.equal(await candidate('version'),1);
   assert.equal(await lab('ready'),true);
   const write=lab('write',seed.backup);write.catch(()=>{});
@@ -334,6 +355,7 @@ try{
   await launch('__val01NativeLab');
   assert.deepEqual(await candidate('open'),{snapshot:seed.snapshot,physical:seed.physical});
   stage('native-reupgrade-archive-intact');
+  }
 }catch(e){
   writeFileSync('native-evidence/failure.txt',String(e));
   process.exitCode=1;
