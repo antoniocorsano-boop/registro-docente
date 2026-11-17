@@ -1,7 +1,7 @@
 name: VAL-01 D1b.3a — exact historical database fence
 on:
   pull_request:
-    branches: ['main']
+    branches: ['main', 'docs/val-01-d1b4-session-preflight']
 permissions:
   contents: read
 jobs:

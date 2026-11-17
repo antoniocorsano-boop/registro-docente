@@ -142,3 +142,51 @@ test('D1b.3b blocked authorization cannot upgrade later or be replayed',async({p
   await candidate(next,'prepareMigration',seed.backup);
   expect(await candidate(next,'migrate')).toBe(2);
 });
+
+test('D1b.4a read-only preflight refuses an absent DB without creating it',async({page})=>{
+  await loadNew(page);
+  expect(await candidate(page,'version')).toBeNull();
+  expect(await candidate(page,'preflight')).toBe('unverifiable');
+  expect(await candidate(page,'version')).toBeNull();
+});
+
+test('D1b.4a full authenticated DB1 is classified without changing any byte or authorizing migration',async({page})=>{
+  await loadOld(page);await old(page,'seed',false);
+  await loadNew(page);
+  const before=await candidate(page,'preflightInventory');
+  expect(await candidate(page,'preflight')).toBe('complete');
+  expect(await candidate(page,'preflight',true)).toBe('unverifiable');
+  expect(await candidate(page,'preflight',false,true)).toBe('unverifiable');
+  await expect(candidate(page,'migrate')).rejects.toThrow();
+  expect(await candidate(page,'version')).toBe(1);
+  expect(await candidate(page,'preflightInventory')).toBe(before);
+});
+
+test('D1b.4a authentic sparse DB1 is not complete and remains byte-identical',async({page})=>{
+  await loadOld(page);await old(page,'seed',false);
+  await loadNew(page);
+  const before=await candidate(page,'preflightInventory','sparse');
+  expect(await candidate(page,'preflight')).toBe('incomplete');
+  expect(await candidate(page,'preflight',true)).toBe('unverifiable');
+  expect(await candidate(page,'preflightInventory')).toBe(before);
+  expect(await candidate(page,'version')).toBe(1);
+});
+
+for(const anomaly of ['unknown','tamper','metadata','record-shape']){
+  test('D1b.4a '+anomaly+' is unverifiable and remains unchanged',async({page})=>{
+    await loadOld(page);await old(page,'seed',false);
+    await loadNew(page);
+    const before=await candidate(page,'preflightInventory',anomaly);
+    expect(await candidate(page,'preflight')).toBe('unverifiable');
+    expect(await candidate(page,'preflightInventory')).toBe(before);
+    expect(await candidate(page,'version')).toBe(1);
+  });
+}
+
+test('D1b.4a already upgraded DB2 is not interpreted as an empty DB1',async({page})=>{
+  await loadOld(page);const seed=await old(page,'seed',false);
+  await loadNew(page);await candidate(page,'upgrade');
+  expect(await candidate(page,'preflight')).toBe('unverifiable');
+  expect(await candidate(page,'version')).toBe(2);
+  expect(await candidate(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+});
