@@ -125,7 +125,10 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       storeRef.current = archiveMigrationCandidate && archiveVersionRef.current===2
         ? new ExistingSessionVaultStore(2)
         : new IndexedDbVaultStore(globalThis.indexedDB,archiveMigrationCandidate&&archiveVersionRef.current===1);
-      vaultRef.current = new SecureVault(storeRef.current);
+      const store = storeRef.current;
+      vaultRef.current = new SecureVault(store, archiveMigrationCandidate && archiveVersionRef.current !== 2
+        ? metadata => store.claimInitialMetadata(metadata)
+        : undefined);
       storageRef.current = new SecureAppStorage(vaultRef.current);
     }
 

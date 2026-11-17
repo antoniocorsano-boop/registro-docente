@@ -89,6 +89,45 @@ class RejectOnceBatchStore extends MemoryVaultStore {
 }
 
 describe('SEC-1 vault storage boundary', () => {
+  test('S-R01 candidate reservation rejection never publishes a session key', async () => {
+    const store = new MemoryVaultStore();
+    let calls = 0;
+    const vault = new SecureVault(store, async () => {
+      calls++;
+      throw new Error('Archivio non vuoto.');
+    });
+    await expect(vault.createStaging('synthetic-reservation-only')).rejects.toThrow('Archivio non vuoto.');
+    expect(calls).toBe(1);
+    expect(vault.isUnlocked()).toBe(false);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+  });
+
+  test('S-R01 candidate reservation commits before the session key becomes available', async () => {
+    const store = new MemoryVaultStore();
+    let release!: () => void;
+    let entered!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const vault = new SecureVault(store, async metadata => {
+      entered();
+      await pending;
+      await store.putMetadata(metadata);
+    });
+    const setup = vault.createStaging('synthetic-reservation-only');
+    await started;
+    try {
+      expect(vault.isUnlocked()).toBe(false);
+      expect(await store.getMetadata()).toBeNull();
+    } finally {
+      release();
+      await setup;
+    }
+    expect(vault.isUnlocked()).toBe(true);
+    expect((await store.getMetadata())?.state).toBe('STAGING');
+    vault.lock();
+  });
+
   test('rejects an unavailable IndexedDB factory instead of falling back to plaintext storage', () => {
     expect(() => new IndexedDbVaultStore(undefined)).toThrow('IndexedDB');
   });
