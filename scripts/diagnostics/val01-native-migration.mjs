@@ -141,16 +141,43 @@ async function findMarker(){
       const [w,h]=size;adb('shell','input','swipe',String(w/2),String(Math.round(h*.75)),String(w/2),String(Math.round(h*.35)),'450');
     }
   }
-  throw Error('Synthetic class did not persist in original APK');
+  throw Error('Synthetic class not located on verified original home screen');
+}
+function uiCheckpoint(label){
+  // Only synthetic CI UI, never archive contents or passwords.
+  const view=nodes().map(n=>({text:n.password?'[redacted]':n.text,desc:n.password?'[redacted]':n.desc,pkg:n.pkg,id:n.id,clazz:n.clazz,enabled:n.enabled,clickable:n.clickable,bounds:n.bounds}));
+  writeFileSync('native-evidence/ui-'+label+'.json',JSON.stringify(view,null,2));
+  console.log('original-ui',label);
+}
+async function ensureHome(){
+  // handleAddClass navigates to 'dati' after durable commit in all 3 SHAs.
+  const home=()=>nodes().some(n=>nativeApp(n)&&n.text.includes('Le mie classi'));
+  if(!home()){
+    tap(await appButton('Oggi'));
+    // Some historical navigation routes request confirmation.
+    await until(()=>home()||nodes().some(n=>named(n,'Torna a Oggi')&&n.enabled),'Return to Oggi not completed',20000);
+    if(!home())tap(await appButton('Torna a Oggi'));
+  }
+  await appText('Le mie classi');
 }
 async function seedOriginal(version){
   launchOriginal();await appText('Configura archivio protetto');
   if(version!==10002){tap(await appText('Ambiente dimostrativo'));await gate('Avvia la prova');}
   else await gate('Configura archivio protetto');
-  await appText('Le mie classi');
-  tap(await appButton('Nuova Classe'));tap(await appEdit());inputText(marker);hideKeyboard();tap(await appButton('OK'));
-  await findMarker();
-  stop();launchOriginal();await gate('Sblocca Registro');await appText('Le mie classi');await findMarker();
+  await appText('Le mie classi');uiCheckpoint('initial-home');
+  tap(await appButton('Nuova Classe'));
+  await appText('Inserisci la denominazione della nuova classe');
+  tap(await appEdit());inputText(marker);
+  await until(()=>nodes().some(n=>nativeApp(n)&&n.clazz==='android.widget.EditText'&&n.text===marker),'Class prompt value not entered exactly',15000);
+  hideKeyboard();tap(await appButton('OK'));
+  // Verify that the app actually left the prompt and committed/navigated.
+  await until(()=>nodes().some(n=>nativeApp(n)&&(n.text===marker||n.desc===marker||n.text==='Classe creata'||n.desc==='Classe creata')),'Class creation not observed in original UI',30000);
+  uiCheckpoint('class-created');
+  await ensureHome();uiCheckpoint('home-after-create');await findMarker();
+  console.log('original-class-visible-before-restart');
+  stop();launchOriginal();await gate('Sblocca Registro');await ensureHome();
+  uiCheckpoint('home-after-restart');await findMarker();
+  console.log('original-class-visible-after-restart');
 }
 try{
   assert.equal(process.env.GITHUB_ACTIONS,'true');
