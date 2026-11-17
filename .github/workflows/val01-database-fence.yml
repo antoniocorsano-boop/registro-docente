@@ -1,0 +1,89 @@
+name: VAL-01 D1b.3a — exact historical database fence
+on:
+  pull_request:
+    branches: ['main']
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        predecessor:
+          - { name: beta1-rc2, sha: 37c61d4c64993c986a3edcd2b421310adf20de92 }
+          - { name: beta1-rc3, sha: b726f4a6dc0eb90a066113bee7cceabf29c629a5 }
+          - { name: beta2-rc2, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3 }
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      HISTORICAL_SHA: ${{ matrix.predecessor.sha }}
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Checkout exact historical predecessor source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HISTORICAL_SHA }}
+          path: .historical-exact
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build isolated fixtures from both exact source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE/.historical-exact" rev-parse HEAD)" = "$HISTORICAL_SHA"
+          mkdir -p "$RUNNER_TEMP/val01-fence-fixtures" browser-evidence .browser-tools
+          mkdir -p "$GITHUB_WORKSPACE/.historical-exact/tests/browser/fixtures"
+          cp tests/browser/fixtures/beta2-archive-compatibility.fixture.ts "$GITHUB_WORKSPACE/.historical-exact/tests/browser/fixtures/beta2-archive-compatibility.fixture.ts"
+          cp tests/browser/fixtures/val01-fence-historical.fixture.ts "$GITHUB_WORKSPACE/.historical-exact/tests/browser/fixtures/val01-fence-historical.fixture.ts"
+          bun install --frozen-lockfile
+          bun run lint
+          bun build tests/browser/fixtures/val01-fence-candidate.fixture.ts --target browser --outfile "$RUNNER_TEMP/val01-fence-fixtures/candidate.js"
+          (
+            cd "$GITHUB_WORKSPACE/.historical-exact"
+            bun install --frozen-lockfile
+            bun build tests/browser/fixtures/val01-fence-historical.fixture.ts --target browser --outfile "$RUNNER_TEMP/val01-fence-fixtures/historical.js"
+          )
+          printf '<!doctype html><meta charset="utf-8"><title>Synthetic database fence</title>' > "$RUNNER_TEMP/val01-fence-fixtures/index.html"
+          printf 'Historical source=%s\nCandidate source=%s\n' "$HISTORICAL_SHA" "$CANDIDATE_SHA" > browser-evidence/provenance.txt
+          sha256sum "$RUNNER_TEMP/val01-fence-fixtures/"*.js >> browser-evidence/provenance.txt
+      - name: Prepare browser tools
+        run: |
+          echo '{"name":"registro-beta2-archive-browser","private":true}' > .browser-tools/package.json
+          npm --prefix .browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
+          cp tests/browser/val01-database-fence.spec.cjs .browser-tools/
+      - name: Start isolated local origin
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory "$RUNNER_TEMP/val01-fence-fixtures" > browser-evidence/server.log 2>&1 &
+          echo $! > browser-evidence/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify migration, blocked upgrade and exact downgrade rejection
+        working-directory: .browser-tools
+        run: |
+          export VAL01_FENCE_HISTORICAL_BUNDLE="$RUNNER_TEMP/val01-fence-fixtures/historical.js"
+          export VAL01_FENCE_CANDIDATE_BUNDLE="$RUNNER_TEMP/val01-fence-fixtures/candidate.js"
+          ./node_modules/.bin/playwright test \
+            val01-database-fence.spec.cjs \
+            --workers=1 --output=../browser-evidence/results
+      - if: always()
+        run: test ! -f browser-evidence/server.pid || kill "$(cat browser-evidence/server.pid)" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: val01-database-fence-${{ matrix.predecessor.name }}-${{ env.CANDIDATE_SHA }}
+          path: browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
