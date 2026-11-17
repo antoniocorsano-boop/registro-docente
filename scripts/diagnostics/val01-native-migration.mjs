@@ -286,7 +286,8 @@ async function domClick(selector){
 }
 async function privacyProduct(){
   await domClick('[data-testid="header01-brand-navigation"]');
-  await tap(await appButton('Privacy'));
+  await evaluate('(()=>{const e=[...document.querySelectorAll("button")].find(e=>e.textContent.trim()==="Privacy"&&e.getClientRects().length&&!e.closest("[inert],[aria-hidden=true]"));if(!e)throw Error("Privacy unavailable");e.scrollIntoView({block:"center"});return true})()');
+  tap(await appButton('Privacy'));
   await until(()=>visible(productPanel),'Migration panel not visible',45000);
 }
 async function selectProductFile(cancel=false){
@@ -359,6 +360,8 @@ async function productSuite(oldVersion,initial){
     writeFileSync(file,before.backup,{mode:0o600});
     adb('shell','mkdir','-p','/sdcard/Download');
     adb('push',file,'/sdcard/Download/'+filename);
+    // Refresh DocumentsUI's local provider index; never download or expose a copy.
+    adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE','-d','file:///sdcard/Download/'+filename);
     const local=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000});
     assert.equal(local.toString('utf8'),before.backup);
   }finally{rmSync(dir,{recursive:true,force:true});}
