@@ -1,16 +1,35 @@
 name: VAL-01 D1b.5 — actual Android application from original APKs
 on:
   pull_request:
-    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native']
+    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native', 'test/val-01-stab04-native-smoke']
 permissions:
   contents: read
   actions: read
 jobs:
+  driver:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify driver on exact candidate SHA
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          node --check scripts/diagnostics/val01-native-migration.mjs
+          node --check scripts/diagnostics/native-ui-driver.mjs
+          node --check scripts/diagnostics/native-process-probe.mjs
+          node --test scripts/diagnostics/native-ui-driver.test.mjs scripts/diagnostics/native-process-probe.test.mjs
   native-product:
+    needs: driver
     strategy:
       fail-fast: false
       matrix:
-        predecessor: ${{ fromJSON(github.event.pull_request.base.ref == 'test/val-01-d1b5-db2-native' && '[{"name":"beta2-rc2-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"},{"name":"beta2-rc2-android12-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-android12-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"}]' || '[{"name":"beta1-rc2","sha":"37c61d4c64993c986a3edcd2b421310adf20de92","api":36,"version":10002,"run":"43206101783","artifact":"13938285055"},{"name":"beta1-rc3","sha":"b726f4a6dc0eb90a066113bee7cceabf29c629a5","api":36,"version":10003,"run":"43233573213","artifact":"13950428737"},{"name":"beta2-rc2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"beta2-rc2-android12","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425"}]') }}
+        predecessor: ${{ fromJSON(github.event.pull_request.base.ref == 'test/val-01-stab04-native-smoke' && '[{"name":"stab04b-rc2-api36-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"}]' || github.event.pull_request.base.ref == 'test/val-01-d1b5-db2-native' && '[{"name":"beta2-rc2-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"},{"name":"beta2-rc2-android12-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-android12-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"}]' || '[{"name":"beta1-rc2","sha":"37c61d4c64993c986a3edcd2b421310adf20de92","api":36,"version":10002,"run":"43206101783","artifact":"13938285055"},{"name":"beta1-rc3","sha":"b726f4a6dc0eb90a066113bee7cceabf29c629a5","api":36,"version":10003,"run":"43233573213","artifact":"13950428737"},{"name":"beta2-rc2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"beta2-rc2-android12","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425"}]') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
@@ -178,7 +197,7 @@ jobs:
               all(.results[];.status=="PASS") and
               ([.results[].stage]==(["historical-seed-cold-reopen","interruption-original-preflight","interruption-picker-reauthenticated",("interruption-guard-"+$cut),"interruption-process-stopped","interruption-reopen-authenticated"]+(if $cut=="before-commit" then ["interruption-original-reopened","interruption-fresh-consent-migrated"] else [] end)+["interruption-downgrade-refused","interruption-final-cold-reopen"])) and
               .results[1].classification=="complete" and .results[1].recordCount==10 and .results[3].realVersionchange==true and .results[4].forcedStop==true and (.results[4].beforePids|length)>0 and all(.results[4].beforePids[];type=="number" and .>0) and .results[4].afterPids==[] and .results[4].absenceSamples==2 and .results[4].observations>=2 and
-              .results[5].version==(if $cut=="before-commit" then 1 else 2 end) and .results[5].recordCount==10 and .results[-1].version==2 and .results[-1].recordCount==10 and .results[5].physicalSha256==.results[-1].physicalSha256
+              .results[5].version==(if $cut=="before-commit" then 1 else 2 end) and .results[5].recordCount==10 and .results[5].coldGate.archiveHidden==true and (.results[5].coldGate.reopenedPids|length)>0 and all(.results[5].coldGate.reopenedPids[];type=="number" and .>0) and (.results[5].coldGate.bootstrapTrace|type)=="array" and .results[-1].version==2 and .results[-1].recordCount==10 and .results[5].physicalSha256==.results[-1].physicalSha256
             ' native-evidence/result.json
             exit 0
           fi
@@ -197,7 +216,7 @@ jobs:
           ' native-evidence/result.json
       - name: Destroy signed laboratory APKs and key
         if: always()
-        run: rm -rf "$RUNNER_TEMP/val01"
+        run: rm -rf "$RUNNER_TEMP/val01" original-unsigned
       - uses: actions/upload-artifact@v4
         if: always()
         with:

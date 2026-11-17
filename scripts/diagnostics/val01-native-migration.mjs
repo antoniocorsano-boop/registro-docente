@@ -595,16 +595,26 @@ async function migrationInterruptionSuite(oldVersion,initial){
   // read. Do not replay a grant, assume rollback or attempt automatic repair.
   assert.deepEqual(identity(10005),initial);
   launchOriginal();
-  try{await connect();await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);}
-  catch(error){await collectColdInterruptionDiagnostics(before);throw error;}
-  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  let coldGate;
+  try{
+    await connect();
+    await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);
+    await waitText('Sblocca Registro');
+    assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+    const reopenedPids=packagePids();
+    assert.ok(reopenedPids.length>0,'Relaunched candidate process not observed');
+    const bootstrapTrace=await evaluate('JSON.parse(document.querySelector("[data-bootstrap-trace]")?.getAttribute("data-bootstrap-trace")||"null")');
+    assert.ok(Array.isArray(bootstrapTrace),'STAB-01 bootstrap trace missing');
+    coldGate={archiveHidden:true,reopenedPids,bootstrapTrace};
+    writeFileSync('native-evidence/cold-reopen-protected.json',JSON.stringify(coldGate,null,2));
+  }catch(error){await collectColdInterruptionDiagnostics(before);throw error;}
   await gate('Sblocca Registro');await ensureHome();await findMarker();
   await diagnostic();const recovered=await inspectProduct();
   const expected=interruptionCut==='before-commit'?1:2;
   assert.equal(recovered.version,expected);
   assert.equal(recovered.digest,before.digest);
   assert.deepEqual(recovered.keys,before.keys);assert.deepEqual(recovered.snapshot,before.snapshot);
-  stage('interruption-reopen-authenticated',{version:expected,recordCount:10,physicalSha256:recovered.digest});
+  stage('interruption-reopen-authenticated',{version:expected,recordCount:10,physicalSha256:recovered.digest,coldGate});
   if(expected===1){
     stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
     launchOriginal();await gate('Sblocca Registro');await ensureHome();await findMarker();
