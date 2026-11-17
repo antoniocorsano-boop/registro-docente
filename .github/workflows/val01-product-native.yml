@@ -1,0 +1,199 @@
+name: VAL-01 D1b.5 — actual Android application from original APKs
+on:
+  pull_request:
+    branches: ['feat/val-01-d1b4b2-product-session']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-product:
+    strategy:
+      fail-fast: false
+      matrix:
+        predecessor:
+          - { name: beta1-rc2, sha: 37c61d4c64993c986a3edcd2b421310adf20de92, api: 36, version: 10002, run: '43206101783', artifact: '13938285055' }
+          - { name: beta1-rc3, sha: b726f4a6dc0eb90a066113bee7cceabf29c629a5, api: 36, version: 10003, run: '43233573213', artifact: '13950428737' }
+          - { name: beta2-rc2, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, api: 36, version: 10004, run: '43811185219', artifact: '14200343425' }
+          - { name: beta2-rc2-android12, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, api: 32, version: 10004, run: '43811185219', artifact: '14200343425' }
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      HISTORICAL_SHA: ${{ matrix.predecessor.sha }}
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      OLD_VERSION: ${{ matrix.predecessor.version }}
+      OLD_RUN: ${{ matrix.predecessor.run }}
+      OLD_ARTIFACT: ${{ matrix.predecessor.artifact }}
+      VAL01_INTEGRAL: 'true'
+      VAL01_PRODUCT: 'true'
+      VAL01_API: ${{ matrix.predecessor.api }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify original historical artifact provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p native-evidence
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OLD_RUN" | jq -e --arg sha "$HISTORICAL_SHA" '.head_sha==$sha and .conclusion=="success"'
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$OLD_ARTIFACT" | jq -e --arg sha "$HISTORICAL_SHA" --arg run "$OLD_RUN" '.expired==false and .workflow_run.head_sha==$sha and (.workflow_run.id|tostring)==$run and .name==("mobile01-android-beta-unsigned-"+$sha)'
+          printf 'original_run=%s\noriginal_artifact=%s\n' "$OLD_RUN" "$OLD_ARTIFACT" > native-evidence/provenance.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.HISTORICAL_SHA }}
+          run-id: ${{ env.OLD_RUN }}
+          github-token: ${{ github.token }}
+          path: original-unsigned
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Verify original unsigned binary and build actual application candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p "$RUNNER_TEMP/val01" native-evidence dist
+          apk="$(find original-unsigned -type f -name app-release-unsigned.apk)"
+          manifest="$(find original-unsigned -type f -name beta-unsigned-manifest.txt)"
+          checksum="$(find original-unsigned -type f -name beta-unsigned.sha256)"
+          test -f "$apk" && test -f "$manifest" && test -f "$checksum"
+          digest="$(sha256sum "$apk" | awk '{print $1}')"
+          test "$digest" = "$(awk '{print $1}' "$checksum")"
+          grep -Fx "apk_sha256=$digest" "$manifest"
+          grep -Fx "source_sha=$HISTORICAL_SHA" "$manifest"
+          grep -Fx 'app_id=it.trama.registrodocente' "$manifest"
+          grep -Fx "version_code=$OLD_VERSION" "$manifest"
+          grep -Fx 'release_signing=false' "$manifest"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then exit 1; fi
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/val01/original.badging"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$OLD_VERSION'" "$RUNNER_TEMP/val01/original.badging"
+          if grep -q '^application-debuggable' "$RUNNER_TEMP/val01/original.badging"; then exit 1; fi
+          cp "$apk" "$RUNNER_TEMP/val01/original.apk"
+          printf 'candidate=%s\nhistorical=%s\noriginal_unsigned_sha256=%s\n' "$CANDIDATE_SHA" "$HISTORICAL_SHA" "$digest" >> native-evidence/provenance.txt
+          bun install --frozen-lockfile
+          bun run lint
+          node scripts/diagnostics/build-val01-product.mjs
+          node --check scripts/diagnostics/val01-native-migration.mjs
+          test -f dist/index.html && test -f dist/diagnostic.html
+          (cd dist; find . -type f -print0 | sort -z | xargs -0 sha256sum) > native-evidence/candidate-assets.sha256
+      - name: Build candidate CI-only debug APK and re-sign original with ephemeral debug key
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          cp native/*.java android/app/src/main/java/it/trama/registrodocente/prova/
+          python3 - <<'PY'
+          import pathlib,re,json
+          root=pathlib.Path('android/app')
+          def change(p,pattern,value):
+              f=root/p
+              text,n=re.subn(pattern,value,f.read_text())
+              assert n==1,(p,pattern,n)
+              f.write_text(text)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"','applicationId "it.trama.registrodocente"')
+          change('build.gradle',r'versionCode\s+1\b','versionCode 10005')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"','android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"','android:allowBackup="false" android:fullBackupContent="false"')
+          p=root/'src/main/assets/capacitor.config.json'
+          c=json.loads(p.read_text())
+          assert not c.get('server',{}).get('url')
+          c['appId']='it.trama.registrodocente'
+          c['appName']='VAL01 CI laboratory ONLY'
+          p.write_text(json.dumps(c))
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/val01/new-initial.apk"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          # Do not depend on Gradle's environment-dependent default debug.keystore.
+          # Explicit ephemeral CI-only certificate, applied to both packages.
+          key="$RUNNER_TEMP/val01/ci-signing.p12"
+          keytool -genkeypair -storetype PKCS12 -keystore "$key" -storepass SyntheticCIOnly2026 -keypass SyntheticCIOnly2026 -alias val01-ci-only -keyalg RSA -keysize 2048 -validity 3 -dname 'CN=VAL01 SYNTHETIC CI ONLY'
+          chmod 600 "$key"
+          echo 'Ephemeral CI key created'
+          "$tools/zipalign" -P 16 -f 4 "$RUNNER_TEMP/val01/original.apk" "$RUNNER_TEMP/val01/aligned.apk"
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias val01-ci-only --ks-pass pass:SyntheticCIOnly2026 --key-pass pass:SyntheticCIOnly2026 --out "$RUNNER_TEMP/val01/old.apk" "$RUNNER_TEMP/val01/aligned.apk"
+          echo 'Original binary signed for isolated CI'
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias val01-ci-only --ks-pass pass:SyntheticCIOnly2026 --key-pass pass:SyntheticCIOnly2026 --out "$RUNNER_TEMP/val01/new.apk" "$RUNNER_TEMP/val01/new-initial.apk"
+          echo 'Candidate binary signed for isolated CI'
+          for apk in old new; do
+            file="$RUNNER_TEMP/val01/$apk.apk"
+            "$tools/apksigner" verify --print-certs "$file" > "$RUNNER_TEMP/val01/$apk.cert"
+            "$tools/aapt" dump badging "$file" > "$RUNNER_TEMP/val01/$apk.badging"
+            grep -F "package: name='it.trama.registrodocente'" "$RUNNER_TEMP/val01/$apk.badging"
+            sha256sum "$file" >> ../../native-evidence/provenance.txt
+          done
+          for apk in old new; do
+            test "$(grep -Ec '^Signer #[0-9]+ certificate SHA-256 digest:' "$RUNNER_TEMP/val01/$apk.cert")" = 1
+          done
+          diff <(grep 'certificate SHA-256 digest:' "$RUNNER_TEMP/val01/old.cert") <(grep 'certificate SHA-256 digest:' "$RUNNER_TEMP/val01/new.cert")
+          python3 - <<'PY'
+          import os,zipfile,pathlib,hashlib
+          dist=pathlib.Path("../../dist")
+          with zipfile.ZipFile(pathlib.Path(os.environ["RUNNER_TEMP"])/"val01/new.apk") as z:
+              for p in dist.rglob("*"):
+                  if p.is_file(): assert hashlib.sha256(p.read_bytes()).digest()==hashlib.sha256(z.read("assets/public/"+p.relative_to(dist).as_posix())).digest(),p
+          PY
+          # Verify historical manifest and all original assets/dex/resources are byte-identical.
+          python3 - <<'PY'
+          import os,zipfile,pathlib,hashlib
+          d=pathlib.Path(os.environ['RUNNER_TEMP'])/'val01'
+          with zipfile.ZipFile(d/'original.apk') as a,zipfile.ZipFile(d/'old.apk') as b:
+              names=lambda z: {n for n in z.namelist() if not n.startswith('META-INF/') and not n.endswith('/')}
+              assert names(a)==names(b)
+              for n in names(a): assert hashlib.sha256(a.read(n)).digest()==hashlib.sha256(b.read(n)).digest(),n
+          PY
+          printf 'OLD_APK=%s\nNEW_APK=%s\n' "$RUNNER_TEMP/val01/old.apk" "$RUNNER_TEMP/val01/new.apk" >> "$GITHUB_ENV"
+      - name: Enable isolated emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Real application, Android SAF, reauthentication and in-place migration
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.predecessor.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: timeout --signal=TERM --kill-after=10s 1050s node scripts/diagnostics/val01-native-migration.mjs
+      - name: Require complete product evidence for exact API and support scope
+        run: |
+          set -euo pipefail
+          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --argjson version "$OLD_VERSION" --argjson api "$VAL01_API" '
+            .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and
+            all(.results[];.status=="PASS") and
+            (if $version==10002 then
+              .qualification=="negative-only" and
+              ([.results[].stage]==["historical-seed-cold-reopen","product-local-preflight","product-incomplete-refused","product-unsupported-original-reopen"]) and
+              .results[1].classification=="incomplete" and .results[1].recordCount==2
+            elif $version==10003 or $version==10004 then
+              .qualification=="supported-migration" and
+              ([.results[].stage]==["historical-seed-cold-reopen","product-local-preflight","product-picker-cancel-reauthenticated","product-picker-read-reauthenticated","product-background-revokes-selection","product-wrong-copy-no-change","product-refusal-no-change","product-authorized-migration-reauthenticated","product-v2-cold-reopen","product-original-downgrade-refused","product-reupgrade-archive-intact"]) and
+              .results[1].classification=="complete" and .results[1].recordCount==10
+            else false end)
+          ' native-evidence/result.json
+      - name: Destroy signed laboratory APKs and key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/val01"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: val01-product-native-${{ matrix.predecessor.name }}-${{ env.CANDIDATE_SHA }}
+          path: native-evidence/
+          retention-days: 7
+          if-no-files-found: error
