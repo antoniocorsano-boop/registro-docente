@@ -43,7 +43,7 @@ describe('VAL-01/D1b.3c isolated Android laboratory contract',()=>{
     const script=await read('scripts/diagnostics/val01-native-migration.mjs');
     for(const text of ['ro.kernel.qemu','/sdcard/Download/','native-picker-cancel-no-migration','native-wrong-copy-password-no-migration','native-explicit-refusal-no-migration','native-authorized-migration-and-replay-rejection','native-v2-cold-reopen',"['-r','-d']", "'VersionError'",'native-reupgrade-archive-intact'])expect(script).toContain(text);
     const fixture=await read('mobile/android-probe/val01-native-lab.fixture.ts');
-    for(const text of ['readEncryptedBackupOnAndroid(active)','saveEncryptedBackupOnAndroid','migration.prepare(password,new Blob([text])','migration.migrate(grant,confirmed)'])expect(fixture).toContain(text);
+    for(const text of ['handoff.selectAndroid()','saveEncryptedBackupOnAndroid','migration.prepare(password,selected.copy','migration.migrate(grant,confirmed)'])expect(fixture).toContain(text);
     expect(await read('src/App.tsx')).not.toContain('val01-native-lab.fixture');
   });
 });

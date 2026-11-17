@@ -9,8 +9,9 @@ import { withoutLocalBackupVerification } from '../../src/persistence/backupChec
 import { encryptDataWithPassword } from '../../src/cryptoUtils';
 import { createAuthorizedVaultMigration } from '../../src/security/authorizedVaultMigration';
 import { VersionFencedVaultStore } from '../../src/security/versionFencedVaultStore';
-import { readEncryptedBackupOnAndroid, saveEncryptedBackupOnAndroid } from '../../src/security/androidBackupExport';
-import { readAndroidSessionState, authorizeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess } from '../../src/security/androidSessionLifecycle';
+import { createRecoveryCopyHandoff, type RecoverySessionStamp } from '../../src/security/migrationRecoveryHandoff';
+import { saveEncryptedBackupOnAndroid } from '../../src/security/androidBackupExport';
+import { ANDROID_SESSION_EVENT, readAndroidSessionState, authorizeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess } from '../../src/security/androidSessionLifecycle';
 
 const password='synthetic-archive-compatibility-only';
 const backupPassword='synthetic-archive-backup-only';
@@ -19,6 +20,14 @@ const migration=createAuthorizedVaultMigration();
 type MigrationGrant=Awaited<ReturnType<typeof migration.prepare>>;
 let grant:MigrationGrant|null=null;
 let generation=0;
+let authenticatedEpoch:number|null=null;
+let lifecycleRevision=0;
+let grantStamp:RecoverySessionStamp|null=null;
+let grantOperation=-1;
+document.addEventListener(ANDROID_SESSION_EVENT,()=>{
+  lifecycleRevision++;authenticatedEpoch=null;
+  if(grantStamp){grantStamp=null;migration.invalidate();}
+});
 let readState: {phase:string;sha256?:string;bytes?:number;grant?:MigrationGrant|null}={phase:'idle'};
 // A synthetic lab session, not the production Vault owner. The native plugin
 // and actual document picker are unchanged. Reauthorize after picker return
@@ -27,9 +36,14 @@ async function access(active:()=>boolean){
   for(let i=0;i<100&&active();i++){
     const s=await readAndroidSessionState();
     if(s?.foreground){
+      const revision=lifecycleRevision;
       await authorizeAndroidSession(s.epoch);
       if(!active())return false;
       await acknowledgeAndroidShield(s.epoch,true);
+      const observed=await readAndroidSessionState();
+      if(!active())return false;
+      if(!observed?.foreground||observed.epoch!==s.epoch||lifecycleRevision!==revision)continue;
+      authenticatedEpoch=s.epoch;
       return active();
     }
     await new Promise(r=>setTimeout(r,100));
@@ -163,36 +177,53 @@ Object.assign(globalThis,{__val01NativeLab:{
   async write(backup:string){const epoch=++generation;return saveEncryptedBackupOnAndroid(backup,filename,()=>epoch===generation);},
   readState(){return readState;},
   async readAndPrepare(wrongPassword=false){
-    migration.invalidate();grant=null;
+    migration.invalidate();grant=null;grantStamp=null;
     const epoch=++generation;
     const active=()=>epoch===generation;
     readState={phase:'picker'};
     try{
-      const text=await readEncryptedBackupOnAndroid(active);
-      if(text===null||!active()){readState={phase:'cancelled'};return null;}
-      const bytes=new TextEncoder().encode(text);
+      const current=(stamp:RecoverySessionStamp)=>active()&&authenticatedEpoch===stamp.epoch&&lifecycleRevision===stamp.revision;
+      const handoff=createRecoveryCopyHandoff({
+        isOwner:active,
+        observeAuthenticated:async()=>{
+          const revision=lifecycleRevision;
+          const state=await readAndroidSessionState();
+          return state?.foreground&&authenticatedEpoch===state.epoch&&revision===lifecycleRevision
+            ?{epoch:state.epoch,revision}:null;
+        },
+        isCurrent:current
+      });
+      if(!await handoff.selectAndroid()||!active()){readState={phase:'cancelled'};return null;}
+      const selected=handoff.consume((copy,stamp)=>({copy,stamp}));
+      if(!selected||!current(selected.stamp)){readState={phase:'cancelled'};return null;}
+      const bytes=new Uint8Array(await selected.copy.arrayBuffer());
       const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
+      if(!current(selected.stamp)){readState={phase:'cancelled'};return null;}
       readState={phase:'native-read-verified',sha256,bytes:bytes.length};
       try{
-        grant=await migration.prepare(password,new Blob([text]),wrongPassword?'wrong-synthetic':backupPassword);
+        grantStamp=selected.stamp;grantOperation=epoch;
+        grant=await migration.prepare(password,selected.copy,wrongPassword?'wrong-synthetic':backupPassword);
       }catch(e){
         if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.'){
           readState={...readState,phase:'authorization-rejected'};return null;
         }
         throw e;
       }
-      if(!active()){migration.invalidate();grant=null;readState={phase:'cancelled'};return null;}
+      if(!current(selected.stamp)||grantStamp!==selected.stamp){migration.invalidate();grant=null;grantStamp=null;readState={phase:'cancelled'};return null;}
       readState={...readState,phase:'authorized',grant};
       return grant;
     }catch(e){readState={phase:'native-error'};throw e;}
   },
   async migrate(confirmed:boolean){
     if(!grant)throw Error('No authorization');
+    const stamp=grantStamp;
+    const current=await readAndroidSessionState();
+    if(grantOperation!==generation||!stamp||!current?.foreground||current.epoch!==stamp.epoch||authenticatedEpoch!==stamp.epoch||lifecycleRevision!==stamp.revision){migration.invalidate();grantStamp=null;return 'rejected';}
     try{await migration.migrate(grant,confirmed);return 'accepted';}
     catch(e){
       if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.')return 'rejected';
       throw e;
     }
   },
-  invalidate(){generation++;grant=null;migration.invalidate();}
+  invalidate(){generation++;grant=null;grantStamp=null;migration.invalidate();}
 }});

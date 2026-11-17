@@ -1,7 +1,7 @@
 name: VAL-01 D1b.3a — exact historical database fence
 on:
   pull_request:
-    branches: ['main', 'docs/val-01-d1b4-session-preflight', 'feat/val-01-d1b4a-archive-preflight', 'feat/val-01-d1b4b-session-boundary']
+    branches: ['main', 'docs/val-01-d1b4-session-preflight', 'feat/val-01-d1b4a-archive-preflight', 'feat/val-01-d1b4b-session-boundary', 'feat/val-01-d1b4b2-existing-store']
 permissions:
   contents: read
 jobs:
@@ -45,7 +45,7 @@ jobs:
           cp tests/browser/fixtures/val01-fence-historical.fixture.ts "$GITHUB_WORKSPACE/.historical-exact/tests/browser/fixtures/val01-fence-historical.fixture.ts"
           bun install --frozen-lockfile
           bun run lint
-          bun test src/security/val01MigrationSessionBoundary.test.ts src/security/durableMutationCoordinator.test.ts
+          bun test src/security/val01MigrationSessionBoundary.test.ts src/security/durableMutationCoordinator.test.ts src/security/val01MigrationRecoveryHandoff.test.ts src/security/androidBackupRestore.test.ts
           bun build tests/browser/fixtures/val01-fence-candidate.fixture.ts --target browser --outfile "$RUNNER_TEMP/val01-fence-fixtures/candidate.js"
           (
             cd "$GITHUB_WORKSPACE/.historical-exact"
