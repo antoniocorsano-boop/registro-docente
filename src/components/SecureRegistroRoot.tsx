@@ -471,6 +471,17 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     });
   }, [getRuntime, confirmForegroundEpoch]);
 
+  // The readonly probe can outlive the foreground session. Use one
+  // admission predicate for both explicit first setup and legacy migration.
+  const assertInitialAdmission=useCallback((
+    attempt:{epoch:number|null;revision:number},expected:'SETUP_REQUIRED'|'MIGRATION_REQUIRED'
+  )=>{
+    if(gateStateRef.current!==expected||closingRef.current||established()||
+      lifecycleRevisionRef.current!==attempt.revision||document.hidden||
+      (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch)))
+      throw Error('Sessione cambiata. Ripeti l’operazione in primo piano.');
+  },[established]);
+
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
     const attempt = await getForegroundEpoch();
     if(archiveMigrationCandidate&&archiveVersionRef.current===2){
@@ -518,8 +529,8 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       return;
     }
     if(archiveMigrationCandidate){
-      if(lifecycleRevisionRef.current!==attempt.revision||document.hidden||
-        (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch)))throw Error('Sessione cambiata.');
+      if(isAndroidSessionRuntime())await syncNativeSession();
+      assertInitialAdmission(attempt,'SETUP_REQUIRED');
       // Protected gate is closed synchronously before the explicit first setup.
       setGateState('MIGRATING');
     }
@@ -536,7 +547,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       await inspectBootstrap();
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState,established,protectedBootstrap,markEstablished]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState,established,protectedBootstrap,markEstablished,assertInitialAdmission]);
 
   const handleUnlock = useCallback(async (password: string) => {
     const track=archiveMigrationCandidate;
@@ -578,10 +589,12 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       if(inspected.kind!=='ok'||(inspected.observation.kind!=='absent'&&inspected.observation.kind!=='empty')||gateStateRef.current!=='MIGRATION_REQUIRED'||closingRef.current||established()){
         await inspectBootstrap();throw Error('Stato dell’archivio cambiato.');
       }
+      if(isAndroidSessionRuntime())await syncNativeSession();
+      assertInitialAdmission(attempt,'MIGRATION_REQUIRED');
       archiveVersionRef.current=inspected.observation.kind==='empty'?1:null;
     }
-    const { vault } = getRuntime();
     setGateState('MIGRATING');
+    const { vault } = getRuntime();
     try {
       await migrateLegacyToVault(window.localStorage, vault, password);
       if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
@@ -596,7 +609,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       await inspectBootstrap();
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap,archiveMigrationCandidate,established,protectedBootstrap,markEstablished]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap,archiveMigrationCandidate,established,protectedBootstrap,markEstablished,syncNativeSession,assertInitialAdmission]);
 
   const handleRetry = useCallback(() => {
     void (async () => {
