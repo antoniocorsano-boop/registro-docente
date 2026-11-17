@@ -2545,6 +2545,27 @@
       "tests": [
         "src/security/val01DatabaseFenceContract.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1B3C-I02",
+      "owner": "VAL-01/D1b.3c",
+      "statement": "Integral historical original unsigned APK verified against exact artifact manifest and all non-signature ZIP entries, installed only on fresh CI emulator with ephemeral key; genuine historical UI creates synthetic archive and refuses DB2 on downgrade. Candidate laboratory bundle remains nonproduction, no owner key or signed APK artifact.",
+      "impactPaths": [
+        ".github/workflows/val01-integral-android.yml",
+        "mobile/android-probe/val01-native-lab.fixture.ts",
+        "scripts/diagnostics/val01-native-migration.mjs",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidSessionLifecycle.ts",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/native/RegistroSessionPlugin.java"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ]
     }
   ]
 }
