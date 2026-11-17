@@ -931,3 +931,95 @@ test('S-R01 initial reservation refuses residual records without overwriting or 
   });
   expect(outcome).toEqual({rejected:true,locked:true,metadata:null,keys:['meta'],bytes:Array(24).fill(7)});
 });
+
+
+// S-R03: exercise the actual Privacy export and local verification, rather
+// than supplying a backup constructed by a fixture. Only synthetic archives.
+async function exportActualRecoveryCopy(page,testInfo,name){
+  const password='synthetic-archive-backup-only';
+  await page.getByPlaceholder('Inserisci password sicura (min. 6 caratteri)',{exact:true}).fill(password);
+  await page.getByPlaceholder('Ripeti la password',{exact:true}).fill(password);
+  const downloaded=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Cifra e Scarica File'}).click();
+  const download=await downloaded;
+  expect(download.suggestedFilename()).toMatch(/\.enc\.json$/);
+  const file=testInfo.outputPath(name+'.enc.json');
+  await download.saveAs(file);
+  const bytes=require('node:fs').readFileSync(file);
+  const envelope=JSON.parse(bytes.toString('utf8'));
+  expect(envelope.version).toBe(2);
+  expect(bytes.length).toBeLessThanOrEqual(32*1024*1024);
+  const payload=await page.evaluate(async text=>{
+    const {decryptDataWithPassword}=await import('/src/cryptoUtils.ts');
+    return decryptDataWithPassword(text,'synthetic-archive-backup-only');
+  },bytes.toString('utf8'));
+  expect(payload.app).toBe('registro-docente');
+  expect(payload.backupDataVersion).toBe(6);
+  expect(Object.keys(payload.snapshot).sort()).toEqual(['appData','copilotState','customTests','library','meta','planning','professionalMemory','settings','submissions','udas']);
+  expect(payload.snapshot.meta.changes).toBe(0);
+  expect(payload.snapshot.meta.verifiedBackupEvidence).toBeUndefined();
+  await page.locator('#verify-downloaded-backup').setInputFiles(file);
+  await expect(page.getByText('Copia verificata. Le registrazioni successive restano da includere.')).toBeVisible({timeout:30000});
+  return {file,payload,sha256:require('node:crypto').createHash('sha256').update(bytes).digest('hex')};
+}
+function withoutReceipt(snapshot){
+  const {verifiedBackupAt,verifiedBackupEvidence,...meta}=snapshot.meta;
+  return {...snapshot,meta};
+}
+
+test('S-R03 verified file actually exported from historical DB1 authorizes migration with unchanged ciphertext',async({page},testInfo)=>{
+  test.setTimeout(120000);
+  await seedProduct(page);await unlockProduct(page);await privacyProduct(page);
+  let confirmations=0;
+  page.on('dialog',async d=>{
+    if(d.type()==='alert')await d.accept();
+    else if(d.message().includes('La copia è stata verificata')){confirmations++;await d.accept();}
+    else await d.dismiss();
+  });
+  const copy=await exportActualRecoveryCopy(page,testInfo,'sr03-db1-verified');
+  await page.goto(productSeed());await page.addScriptTag({path:oldBundle});
+  const before=await old(page,'open');
+  expect(before.snapshot.meta.verifiedBackupEvidence.sha256).toBe(copy.sha256);
+  expect(withoutReceipt(before.snapshot)).toEqual(copy.payload.snapshot);
+  await page.goto(productApp());await unlockProduct(page);await privacyProduct(page);
+  const panel=page.getByRole('region',{name:'Aggiornamento protetto archivio'});
+  await panel.locator('input[type=file]').setInputFiles(copy.file);
+  await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await panel.getByLabel('Password della copia',{exact:true}).fill('synthetic-archive-backup-only');
+  await panel.getByRole('button',{name:'Verifica e aggiorna archivio'}).click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  expect(confirmations).toBe(1);
+  await expect(page.getByText('Archivio aggiornato. Autenticati per verificarlo e riaprire il Registro.')).toBeVisible();
+  await unlockProduct(page);
+  await physicalAfterProduct(page,2,before);
+});
+
+test('S-R03 verified file actually exported from DB2 can be restored with new authentication',async({page},testInfo)=>{
+  test.setTimeout(120000);
+  await productDb2(page);
+  let confirmations=0;
+  page.on('dialog',async d=>{
+    if(d.type()==='alert')await d.accept();
+    else if(d.message().includes('Sostituire tutti i dati attuali')){confirmations++;await d.accept();}
+    else await d.dismiss();
+  });
+  const copy=await exportActualRecoveryCopy(page,testInfo,'sr03-db2-verified');
+  const before=await readProductDb2(page);
+  expect(before.meta.verifiedBackupEvidence.sha256).toBe(copy.sha256);
+  expect(withoutReceipt(before)).toEqual(copy.payload.snapshot);
+  const previousPhysical=await candidate(page,'preflightInventory',null,2);
+  await page.goto(productApp());await unlockProduct(page);await privacyProduct(page);
+  const panel=restorePanel(page);
+  await panel.locator('input[type=file]').setInputFiles(copy.file);
+  await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await panel.getByLabel('Password della copia',{exact:true}).fill('synthetic-archive-backup-only');
+  await panel.getByRole('button',{name:'Verifica e ripristina archivio'}).click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  expect(confirmations).toBe(1);
+  await expect(page.getByText('Archivio ripristinato. Autenticati per riaprire il Registro.')).toBeVisible();
+  await unlockProduct(page);
+  await page.reload();await unlockProduct(page);
+  expect(await readProductDb2(page)).toEqual(copy.payload.snapshot);
+  expect(await candidate(page,'version')).toBe(2);
+  expect(await candidate(page,'preflightInventory',null,2)).not.toBe(previousPhysical);
+});
