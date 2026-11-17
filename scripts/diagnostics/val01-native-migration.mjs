@@ -238,9 +238,8 @@ async function seedOriginal(version){
   await appText('Le mie classi');await uiCheckpoint('initial-home');
   tap(await appButton('Nuova Classe'));
   await appText('Inserisci la denominazione della nuova classe');
-  tap(await appEdit());inputText(marker);
-  await until(()=>nodes().some(n=>nativeApp(n)&&n.clazz==='android.widget.EditText'&&n.text===marker),'Class prompt value not entered exactly',15000);
-  hideKeyboard();tap(await appButton('OK'));
+  await uiDriver.enterClassName(marker);
+  await uiDriver.submitClass(marker);
   // Verify that the app actually left the prompt and committed/navigated.
   await until(()=>originalClassCreated(nodes()),'Post-commit class management headings not observed in original UI',30000);
   await uiCheckpoint('class-created');
@@ -538,7 +537,7 @@ async function collectColdInterruptionDiagnostics(before){
     const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(3000)});
     return (await res.json()).map(t=>({id:t.id,type:t.type,local:t.url?.startsWith('https://localhost')||t.url?.startsWith('http://localhost'),url:t.url?.split(/[?#]/)[0]}));
   });
-  await observe('document',()=>evaluate('(()=>{const root=document.getElementById("root");return {href:location.origin+location.pathname,ready:document.readyState,visibility:document.visibilityState,boot:window.__val01Boot||null,rootChildren:root?.childElementCount??null,heading:[...document.querySelectorAll("h1")].map(h=>h.textContent).filter(t=>["Sblocca Registro","Configura archivio protetto","Sicurezza non disponibile","Protezione del Registro","Protezione dati in corso","Oggi"].includes(t)),passwordField:!!document.querySelector("#vault-password"),scripts:[...document.scripts].filter(s=>s.src).map(s=>new URL(s.src).pathname),resources:performance.getEntriesByType("resource").filter(r=>r.initiatorType==="script").map(r=>({path:new URL(r.name).pathname,duration:Math.round(r.duration),transferSize:r.transferSize})),indexedDB:typeof indexedDB,crypto:!!globalThis.crypto?.subtle}})()',5000));
+  await observe('document',()=>evaluate('(()=>{const root=document.getElementById("root");return {href:location.origin+location.pathname,ready:document.readyState,visibility:document.visibilityState,boot:window.__val01Boot||null,bootstrapTrace:(()=>{try{return JSON.parse(document.querySelector("[data-bootstrap-trace]")?.getAttribute("data-bootstrap-trace")||"null")}catch{return null}})(),rootChildren:root?.childElementCount??null,heading:[...document.querySelectorAll("h1")].map(h=>h.textContent).filter(t=>["Sblocca Registro","Configura archivio protetto","Sicurezza non disponibile","Protezione del Registro","Protezione dati in corso","Oggi"].includes(t)),passwordField:!!document.querySelector("#vault-password"),scripts:[...document.scripts].filter(s=>s.src).map(s=>new URL(s.src).pathname),resources:performance.getEntriesByType("resource").filter(r=>r.initiatorType==="script").map(r=>({path:new URL(r.name).pathname,duration:Math.round(r.duration),transferSize:r.transferSize})),indexedDB:typeof indexedDB,crypto:!!globalThis.crypto?.subtle}})()',5000));
   await observe('archiveVersion',()=>evaluate('Promise.race([indexedDB.databases().then(d=>({status:"resolved",versions:d.filter(x=>x.name==="registro-docente-secure-vault").map(x=>x.version)})),new Promise(r=>setTimeout(()=>r({status:"timed-out"}),5000))])',8000));
   // Direct readonly capture on the observed version, no page navigation and
   // no crypto authorization. Abort on unexpected upgrade and close any handle.
