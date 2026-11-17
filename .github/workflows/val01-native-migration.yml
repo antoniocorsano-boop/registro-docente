@@ -1,11 +1,12 @@
 name: VAL-01 D1b.3c — Android laboratory migration
 on:
   pull_request:
-    branches: ['main']
+    branches: ['main', 'feat/val-01-d1b4b2-existing-store']
     paths:
       - 'src/security/authorizedVaultMigration.ts'
       - 'src/security/versionFencedVaultStore.ts'
       - 'src/security/androidBackupExport.ts'
+      - 'src/security/migrationRecoveryHandoff.ts'
       - 'src/security/androidSessionLifecycle.ts'
       - 'mobile/android-probe/**'
       - 'tests/browser/fixtures/**'
