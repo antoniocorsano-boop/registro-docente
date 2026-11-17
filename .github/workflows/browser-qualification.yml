@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feat/val-01-d1b4b2-product-session
+      - test/val-01-d1b5-native-product
   workflow_dispatch:
   workflow_call:
 
