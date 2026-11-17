@@ -8,6 +8,7 @@ on:
       - test/val-01-d1b5-native-product
       - feat/val-01-d1b5-db2-lifecycle
       - feat/val-01-d1b5-db2-product
+      - test/val-01-d1b5-db2-native
   workflow_dispatch:
   workflow_call:
 
