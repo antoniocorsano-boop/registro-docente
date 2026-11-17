@@ -1,4 +1,5 @@
 // D1b.3a GREEN candidate adapter: isolated version-fenced store.
+import { ExistingSessionVaultStore } from '../../../src/security/existingSessionVaultStore';
 import { createLocalMigrationSessionBoundary } from '../../../src/security/migrationSessionBoundary';
 import { createDurableMutationCoordinator } from '../../../src/persistence/durableMutationCoordinator';
 import { classifyArchivePreflight } from '../../../src/security/archivePreflight';
@@ -38,6 +39,46 @@ const migration=createAuthorizedVaultMigration();
 let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
 Object.assign(globalThis,{__val01FenceCandidate:{
   version,
+  async verifyExisting(version:1|2,wrong=false){
+    const existing=new ExistingSessionVaultStore(version);
+    try{
+      await existing.verifyAuthenticatedRecords(wrong?'wrong':password);
+      return true;
+    }catch{return false;}
+    finally{await existing.retireConnection();}
+  },
+  async retireDuringOpen(expected:1|2){
+    const existing=new ExistingSessionVaultStore(expected);
+    const pending=existing.getMetadata().then(()=>false,()=>true);
+    await existing.retireConnection();
+    return {rejected:await pending,version:await version()};
+  },
+  async migrateWithOwnedConnection(backup:string){
+    const queue=createDurableMutationCoordinator();
+    const previous=new ExistingSessionVaultStore(1);
+    const oldVault=new SecureVault(previous);
+    await previous.verifyAuthenticatedRecords(password);
+    await oldVault.unlock(password);
+    const owner=createLocalMigrationSessionBoundary({
+      queue,isCurrent:()=>true,
+      readLocalCopy:async()=>new Blob([backup]),
+      confirm:async()=>true,
+      retireDb1:async()=>{oldVault.lock();await previous.retireConnection();}
+    });
+    const result=await owner.run(password,'synthetic-archive-backup-only');
+    let retired=false;
+    try{await previous.getMetadata();}catch{retired=true;}
+    const next=new ExistingSessionVaultStore(2);
+    try{
+      await next.verifyAuthenticatedRecords(password);
+      const nextVault=new SecureVault(next);
+      await nextVault.unlock(password);
+      try{
+        const snapshot=await new SecureAppStorage(nextVault).loadSnapshot();
+        return {result,retired,version:await version(),snapshot};
+      }finally{nextVault.lock();}
+    }finally{await next.retireConnection();}
+  },
   async runSessionMigration(backup:string,mode:'approve'|'refuse'|'revoke'|'wrong-copy'){
     // Isolated browser fixture: no live App, no native file authority.
     // The historical page was unloaded before this adapter is invoked.
@@ -60,11 +101,11 @@ Object.assign(globalThis,{__val01FenceCandidate:{
     if(revocation)controller.abort();
     return pending;
   },
-  async preflightInventory(change?:'sparse'|'unknown'|'tamper'|'metadata'|'record-shape'){
+  async preflightInventory(change?:'sparse'|'unknown'|'tamper'|'metadata'|'record-shape',expectedVersion:1|2=1){
     // Synthetic fixture only. Fingerprint the raw database, including all keys
     // and byte arrays, not the logical defaults returned by the historical App.
     const db=await new Promise<IDBDatabase>((resolve,reject)=>{
-      const req=indexedDB.open(name,1);
+      const req=indexedDB.open(name,expectedVersion);
       req.onupgradeneeded=()=>req.transaction?.abort();
       req.onerror=()=>reject(req.error);req.onsuccess=()=>resolve(req.result);
     });
