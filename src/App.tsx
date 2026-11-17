@@ -151,7 +151,9 @@ import {
   type CouncilSnapshotContextV1,
   type CouncilSnapshotPreviewV1
 } from './council/councilEvidenceSnapshots';
-import { createDurableMutationCoordinator, type SuspendedMutationLease } from './persistence/durableMutationCoordinator';
+import type { ArchiveMigrationControls } from './components/ArchiveMigrationPanel';
+import type { MigrationSessionResult } from './security/migrationSessionBoundary';
+import { createDurableMutationCoordinator, type DurableMutationCoordinator, type SuspendedMutationLease } from './persistence/durableMutationCoordinator';
 import { createUdaSnapshotMutation } from './persistence/udaSnapshotMutation';
 import { applyPlanningMutation } from './persistence/planningMutation';
 import { persistLibraryMutation } from './persistence/libraryMutation';
@@ -255,9 +257,12 @@ export interface AppProps {
   headerSecurity?: Header01SecurityBindings;
   registerSessionLockRequest?: (request: SessionLockRequest | null) => void;
   registerSessionSuspension?: (request: (() => SuspendedMutationLease) | null) => void;
+  archiveMigration?: Omit<ArchiveMigrationControls,'start'>&{start:(queue:DurableMutationCoordinator,localPassword:string,copyPassword:string)=>Promise<MigrationSessionResult>};
+  onInvalidateArchiveMigration?:()=>void;
+  archiveReplacementBlocked?:boolean;
 }
 
-export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity, registerSessionLockRequest, registerSessionSuspension }: AppProps) {
+export default function App({ initialSnapshot, secureStorage, onFactoryReset, onCopilotSurfaceOpenChange, headerSecurity, registerSessionLockRequest, registerSessionSuspension, archiveMigration, onInvalidateArchiveMigration, archiveReplacementBlocked }: AppProps) {
   // Explicitly initialized archives are authoritative, including empty collections.
   const explicitArchive = initialSnapshot.settings?.archiveMode === 'professional'
     || initialSnapshot.settings?.archiveMode === 'demo';
@@ -3388,6 +3393,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Import Encrypted Backup
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
+    onInvalidateArchiveMigration?.();
+    if(archiveReplacementBlocked)return Promise.reject(Error('Ripristino non disponibile in questa versione di collaudo.'));
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
       const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
@@ -3455,6 +3462,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
 
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
+    onInvalidateArchiveMigration?.();
+    if(archiveReplacementBlocked){toast('Operazione non disponibile in questa versione di collaudo.');return;}
     backupReceiptAuthority.invalidate();
     try {
       await mutationCoordinator.enqueueTask(async () => {
@@ -3923,6 +3932,17 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
             onFactoryReset={handleFactoryReset}
+            archiveReplacementBlocked={archiveReplacementBlocked}
+            archiveMigration={archiveMigration?{
+              select:archiveMigration.select,discard:archiveMigration.discard,
+              start:(localPassword,copyPassword)=>{
+                // Never retain credentials in a pending draft-navigation callback.
+                // Privacy must be the active, unblocked surface at admission.
+                if(activeTabRef.current!=='privacy'||pendingExitRef.current||hasUnsavedActiveDraft())return Promise.resolve('not-started');
+                backupReceiptAuthority.invalidate();
+                return archiveMigration.start(mutationCoordinator,localPassword,copyPassword);
+              }
+            }:undefined}
           />
         )}
 
