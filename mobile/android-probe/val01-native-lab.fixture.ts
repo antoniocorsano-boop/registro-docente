@@ -38,6 +38,43 @@ async function access(active:()=>boolean){
 registerAndroidFileAccess(access);
 // In the integral-APK lab only, inspect DB1 actually created by the original
 // app UI. No writes or migration here; close the v1 connection before upgrading.
+// Diagnostic only: disclose record categories and stage, never record values.
+async function probeHistoricalArchive(){
+  const name='registro-docente-secure-vault';
+  const required:VaultRecordKey[]=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'];
+  const report={version:0,metadata:'unverified',authentication:'not-run',present:[] as VaultRecordKey[],missing:[...required],authenticated:[] as VaultRecordKey[],failed:[] as VaultRecordKey[],marker:false,phase:'version'};
+  try{
+    report.version=(await indexedDB.databases()).find(db=>db.name===name)?.version??0;
+    if(report.version!==1)return report;
+    const store=new class extends IndexedDbVaultStore{
+      async release(){(await this.openDatabase()).close();}
+    }();
+    const vault=new SecureVault(store);
+    try{
+      report.phase='inventory';
+      report.present=(await store.listRecordKeys()).sort();
+      report.missing=required.filter(k=>!report.present.includes(k));
+      const meta=await store.getMetadata();
+      report.metadata=meta?.state??'absent';
+      report.phase='unlock';
+      try{await vault.unlock(password);report.authentication='accepted';}
+      catch{report.authentication='rejected';return report;}
+      report.phase='record-authentication';
+      for(const key of report.present){
+        try{
+          const value=await vault.get<unknown>(key);
+          report.authenticated.push(key);
+          if(key==='appData'){
+            const data=value as CompleteSecureAppSnapshot['appData']|null;
+            report.marker=!!data?.classes?.some(c=>c.name==='Collaudo migrazione VAL01');
+          }
+        }catch{report.failed.push(key);}
+      }
+      report.phase='complete';
+      return report;
+    }finally{vault.lock();await store.release();}
+  }catch{return report;}
+}
 async function inspectHistoricalArchive(){
   const name='registro-docente-secure-vault';
   if((await indexedDB.databases()).find(db=>db.name===name)?.version!==1)throw Error('Expected existing DB1');
@@ -68,6 +105,7 @@ async function inspectHistoricalArchive(){
 }
 Object.assign(globalThis,{__val01NativeLab:{
   inspectHistoricalArchive,
+  probeHistoricalArchive,
   async ready(){return access(()=>true);},
   async write(backup:string){const epoch=++generation;return saveEncryptedBackupOnAndroid(backup,filename,()=>epoch===generation);},
   readState(){return readState;},
