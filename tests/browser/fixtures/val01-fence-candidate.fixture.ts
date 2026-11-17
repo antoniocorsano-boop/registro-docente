@@ -38,11 +38,23 @@ async function opened(){
   await vault.unlock(password);
   return {snapshot:await storage.loadSnapshot(),physical:await physical()};
 }
+let secondTab:{store:ExistingSessionVaultStore;vault:SecureVault}|null=null;
 const migration=createAuthorizedVaultMigration();
 let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
 Object.assign(globalThis,{__val01FenceCandidate:{
   version,
   db2State:()=>inspectDb2LifecycleState(),
+  async db2HoldWriter(){
+    const store=new ExistingSessionVaultStore(2),vault=new SecureVault(store);
+    await vault.unlock(password);secondTab={store,vault};return true;
+  },
+  async db2TryHeldWrite(){
+    if(!secondTab)throw Error('No synthetic writer');
+    const held=secondTab;secondTab=null;
+    try{await held.vault.put('meta',{changes:1234,lastBackup:null});return 'accepted';}
+    catch{return 'rejected';}
+    finally{held.vault.lock();await held.store.retireConnection();}
+  },
   async db2Lifecycle(action:'restore'|'erase'|'setup',backup?:string,mode='approve'){
     const service=createDb2Lifecycle();
     const old=new ExistingSessionVaultStore(2);
@@ -100,7 +112,7 @@ Object.assign(globalThis,{__val01FenceCandidate:{
       return await new SecureAppStorage(v).loadSnapshot();
     }finally{v.lock();await existing.retireConnection();}
   },
-  async db2ChangedCopy(){
+  async db2ChangedCopy(format:'v6'|'v7'|'legacy'|'partial'='v6'){
     const current=await (async()=>{
       const existing=new ExistingSessionVaultStore(2),v=new SecureVault(existing);
       try{await v.unlock(password);return await new SecureAppStorage(v).loadSnapshot();}
@@ -108,7 +120,9 @@ Object.assign(globalThis,{__val01FenceCandidate:{
     })();
     if(!current.appData||!current.meta)throw Error('Synthetic snapshot missing');
     const next={...current,appData:{...current.appData,classes:[]},meta:{changes:19,lastBackup:null,verifiedBackupAt:'2031-01-01T00:00:00.000Z'}};
-    return encryptDataWithPassword(createBackupPayload(next as Parameters<typeof createBackupPayload>[0]),'synthetic-archive-backup-only');
+    const payload=createBackupPayload(next as Parameters<typeof createBackupPayload>[0]);
+    const data=format==='v7'?{...payload,backupDataVersion:7}:format==='legacy'?{classes:[]}:format==='partial'?{...payload,snapshot:{...payload.snapshot,library:undefined}}:payload;
+    return encryptDataWithPassword(data,'synthetic-archive-backup-only');
   },
   async verifyExisting(version:1|2,wrong=false){
     const existing=new ExistingSessionVaultStore(version);
