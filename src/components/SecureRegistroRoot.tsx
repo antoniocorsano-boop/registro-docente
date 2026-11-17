@@ -23,7 +23,7 @@ import { VaultGate } from './VaultGate';
 import { ExistingSessionVaultStore } from '../security/existingSessionVaultStore';
 import { createDb2Lifecycle } from '../security/db2Lifecycle';
 import { captureDb2, sameDb2Physical, type ErasedDb2 } from '../security/db2PhysicalLifecycle';
-import { inspectArchiveVersion } from '../security/inspectArchiveVersion';
+import { BootFault, bootMessage, createProtectedBootstrap, observeArchive, type BootTrace } from '../security/protectedBootstrap';
 import { createRecoveryCopyHandoff, type RecoverySessionStamp } from '../security/migrationRecoveryHandoff';
 import { createLocalMigrationSessionBoundary, type MigrationSessionResult } from '../security/migrationSessionBoundary';
 import type { DurableMutationCoordinator, SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
@@ -42,6 +42,9 @@ const LEGACY_DATA_KEYS = [
   META_KEY
 ] as const;
 
+// Positive evidence only: absence of this local, non-identifying flag is
+// never proof that an archive has not existed. No credential or record data.
+const ESTABLISHED_ARCHIVE_KEY='registro_archive_established_v1';
 const AUTO_LOCK_STORAGE_KEY = 'registro_auto_lock_minutes';
 const DEFAULT_AUTO_LOCK_MS = 15 * 60_000;
 type AutoLockMinutes = 0 | 15 | 30 | 60;
@@ -83,6 +86,21 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   const archiveVersionRef=useRef<1|2|null>(null);
   const [archiveVersion,setArchiveVersion]=useState<1|2|null>(null);
   const requireExistingRef=useRef(false);
+  const bootstrapRef=useRef<ReturnType<typeof createProtectedBootstrap>|null>(null);
+  const bootstrapFlightRef=useRef<Promise<void>|null>(null);
+  const bootstrapGenerationRef=useRef(0);
+  const [bootTrace,setBootTrace]=useState<BootTrace[]>([]);
+  const markEstablished=useCallback(()=>{
+    requireExistingRef.current=true;
+    window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY,'1');
+  },[]);
+  const established=useCallback(()=>requireExistingRef.current||window.localStorage.getItem(ESTABLISHED_ARCHIVE_KEY)==='1',[]);
+  const protectedBootstrap=useCallback(()=>{
+    if(!bootstrapRef.current)bootstrapRef.current=createProtectedBootstrap({
+      observe:signal=>observeArchive(globalThis.indexedDB,signal),established
+    });
+    return bootstrapRef.current;
+  },[established]);
   const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
   const archiveMigrationRef=useRef<{revoke():void}|null>(null);
   const erasedDb2Ref=useRef<ErasedDb2|null>(null);
@@ -119,9 +137,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   }, [archiveMigrationCandidate]);
 
   const inspectBootstrap = useCallback(async () => {
+    if(archiveMigrationCandidate&&bootstrapFlightRef.current)return bootstrapFlightRef.current;
     setGateState('CHECKING');
     setErrorMessage(null);
-
     const indexedDbAvailable = Boolean(globalThis.indexedDB);
     const webCryptoAvailable = Boolean(globalThis.crypto?.subtle);
     if (!indexedDbAvailable || !webCryptoAvailable) {
@@ -129,57 +147,69 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       setGateState('ERROR');
       return;
     }
-
-    try {
-      if(archiveMigrationCandidate){
-        const version=await inspectArchiveVersion();
-        if(version===null&&requireExistingRef.current)throw Error('Archivio esistente non verificabile. Nessun nuovo archivio verrà creato.');
-        if(storeRef.current&&archiveVersionRef.current!==version){
-          vaultRef.current?.lock();await storeRef.current.retireConnection();
+    if(archiveMigrationCandidate){
+      setBootTrace([]);
+      const generation=++bootstrapGenerationRef.current;
+      const current=()=>bootstrapGenerationRef.current===generation;
+      const run=async()=>{
+        try{
+          // Only an owner already at a protected boundary may call this.
+          // Do not keep a possibly failed or stale store across attempts.
+          vaultRef.current?.lock();await storeRef.current?.retireConnection();
+          if(!current())return;
           storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+          erasedDb2Ref.current=null;
+          const result=await protectedBootstrap().run();
+          if(!current())return;
+          setBootTrace(result.trace);
+          if(result.kind==='error')throw result.fault;
+          const observation=result.observation;
+          const hasLegacyData=LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null);
+          if(observation.kind==='erased'&&hasLegacyData)throw new BootFault('classification','invalid-inventory');
+          if(observation.kind==='active'||observation.kind==='erased')markEstablished();
+          // A successful inspection never opens a writable runtime. In
+          // particular, absence must not create DB1 before explicit setup.
+          const version=observation.kind==='absent'?null:observation.version;
+          archiveVersionRef.current=version;setArchiveVersion(version);
+          if(observation.kind==='erased')erasedDb2Ref.current=observation.marker;
+          if(observation.kind==='active')setGateState('LOCKED');
+          else if(observation.kind==='erased')setGateState('SETUP_REQUIRED');
+          else setGateState(hasLegacyData?'MIGRATION_REQUIRED':'SETUP_REQUIRED');
+        }catch(error){
+          if(!current())return;
+          const failure=error instanceof BootFault?error:new BootFault('classification','unknown');
+          setBootTrace(previous=>previous.some(t=>t.phase===failure.phase&&t.code===failure.code)?previous:[...previous,{attempt:previous.length+1,phase:failure.phase,code:failure.code}]);
+          setErrorMessage(bootMessage(failure));setGateState('ERROR');
         }
-        archiveVersionRef.current=version;setArchiveVersion(version);
-        erasedDb2Ref.current=null;
-        if(version===2){
-          const physical=await captureDb2(globalThis.indexedDB);
-          if(physical.state==='erased'){
-            vaultRef.current?.lock();await storeRef.current?.retireConnection();
-            storeRef.current=null;vaultRef.current=null;storageRef.current=null;
-            if(LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Residui di un archivio precedente da verificare. Nessun dato verrà recuperato automaticamente.');
-            erasedDb2Ref.current=physical.metadata;requireExistingRef.current=true;
-            setGateState('SETUP_REQUIRED');return;
-          }
-        }
-      }
-      const { store } = getRuntime();
-      const metadata = await store.getMetadata();
-      if(archiveMigrationCandidate&&requireExistingRef.current&&metadata?.state!=='ACTIVE')throw Error('Archivio esistente non verificabile. Nessun ripristino automatico.');
-      if(archiveMigrationCandidate&&archiveVersionRef.current===null){archiveVersionRef.current=1;setArchiveVersion(1);}
-      const hasLegacyData = LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null);
-      const nextState = decideVaultBootstrap({
-        metadataState: metadata?.state ?? null,
-        hasLegacyData,
-        indexedDbAvailable,
-        webCryptoAvailable
-      });
-
-      if (nextState === 'ERROR' && metadata?.state === 'STAGING') {
-        setErrorMessage('È stata rilevata una configurazione o migrazione interrotta. Riprova: gli archivi già attivi non verranno cancellati.');
-      }
+      };
+      const pending=run().finally(()=>{if(bootstrapGenerationRef.current===generation)bootstrapFlightRef.current=null;});
+      bootstrapFlightRef.current=pending;
+      return pending;
+    }
+    // Existing non-candidate entrypoint retains its qualified legacy behavior.
+    try{
+      const {store}=getRuntime();
+      const metadata=await store.getMetadata();
+      const hasLegacyData=LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null);
+      const nextState=decideVaultBootstrap({metadataState:metadata?.state??null,hasLegacyData,indexedDbAvailable,webCryptoAvailable});
+      if(nextState==='ERROR'&&metadata?.state==='STAGING')setErrorMessage('È stata rilevata una configurazione o migrazione interrotta. Riprova: gli archivi già attivi non verranno cancellati.');
       setGateState(nextState);
-    } catch (error) {
-      if(archiveMigrationCandidate){
-        vaultRef.current?.lock();await storeRef.current?.retireConnection();
-        storeRef.current=null;vaultRef.current=null;storageRef.current=null;
-      }
-      setErrorMessage(error instanceof Error ? error.message : 'Controllo del Secure Local Vault non riuscito.');
+    }catch(error){
+      setErrorMessage(error instanceof Error?error.message:'Controllo del Secure Local Vault non riuscito.');
       setGateState('ERROR');
     }
-  }, [getRuntime,archiveMigrationCandidate]);
+  }, [getRuntime,archiveMigrationCandidate,protectedBootstrap,markEstablished,setGateState]);
 
-  useEffect(() => {
+  useEffect(()=>{
     void inspectBootstrap();
-  }, [inspectBootstrap]);
+    return ()=>{
+      if(archiveMigrationCandidate){
+        bootstrapGenerationRef.current++;
+        bootstrapFlightRef.current=null;
+        bootstrapRef.current?.cancel();
+      }
+    };
+  },[inspectBootstrap,archiveMigrationCandidate]);
 
   const revokeNativeAuthorization = useCallback(() => {
     const epoch = authenticatedEpochRef.current;
@@ -441,6 +471,17 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     });
   }, [getRuntime, confirmForegroundEpoch]);
 
+  // The readonly probe can outlive the foreground session. Use one
+  // admission predicate for both explicit first setup and legacy migration.
+  const assertInitialAdmission=useCallback((
+    attempt:{epoch:number|null;revision:number},expected:'SETUP_REQUIRED'|'MIGRATION_REQUIRED'
+  )=>{
+    if(gateStateRef.current!==expected||closingRef.current||established()||
+      lifecycleRevisionRef.current!==attempt.revision||document.hidden||
+      (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch)))
+      throw Error('Sessione cambiata. Ripeti l’operazione in primo piano.');
+  },[established]);
+
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
     const attempt = await getForegroundEpoch();
     if(archiveMigrationCandidate&&archiveVersionRef.current===2){
@@ -472,22 +513,44 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       }
       return;
     }
-    const { vault, store } = getRuntime();
-    if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
-      throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+    if(archiveMigrationCandidate){
+      if(gateStateRef.current!=='SETUP_REQUIRED'||closingRef.current||established())throw Error('Nuova configurazione non autorizzata.');
+      const inspected=await protectedBootstrap().run();
+      if(inspected.kind!=='ok'||(inspected.observation.kind!=='absent'&&inspected.observation.kind!=='empty')||gateStateRef.current!=='SETUP_REQUIRED'||closingRef.current||established()){
+        await inspectBootstrap();throw Error('Stato dell’archivio cambiato. Verifica prima di configurare.');
+      }
+      archiveVersionRef.current=inspected.observation.kind==='empty'?1:null;
     }
-    await initializeNewArchive(vault, password, setup);
-    try {
+    if(!archiveMigrationCandidate){
+      const {vault,store}=getRuntime();
+      if(await store.getMetadata()||LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+      await initializeNewArchive(vault,password,setup);
+      try{await loadReadySnapshot(attempt);}catch(error){vault.lock();setGateState('LOCKED');throw error;}
+      return;
+    }
+    if(archiveMigrationCandidate){
+      if(isAndroidSessionRuntime())await syncNativeSession();
+      assertInitialAdmission(attempt,'SETUP_REQUIRED');
+      // Protected gate is closed synchronously before the explicit first setup.
+      setGateState('MIGRATING');
+    }
+    const { vault, store } = getRuntime();
+    try{
+      if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
+        throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+      }
+      await initializeNewArchive(vault, password, setup);
+      if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
       await loadReadySnapshot(attempt);
-    } catch (error) {
+    }catch(error){
       vault.lock();
-      setGateState('LOCKED');
+      await inspectBootstrap();
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState,established,protectedBootstrap,markEstablished,assertInitialAdmission]);
 
   const handleUnlock = useCallback(async (password: string) => {
-    const track=archiveMigrationCandidate&&archiveVersionRef.current===2;
+    const track=archiveMigrationCandidate;
     if(track&&(db2UnlockBusyRef.current||gateStateRef.current!=='LOCKED'||closingRef.current))throw Error('Sessione non attuale.');
     if(track)db2UnlockBusyRef.current=true;
     try{
@@ -502,7 +565,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         setMigrationNotice(null);
       } catch (error) {
         vault.lock();
-        if(store instanceof ExistingSessionVaultStore){
+        if(archiveMigrationCandidate){
           await store.retireConnection();
           if(storeRef.current===store){
             storeRef.current=null;vaultRef.current=null;storageRef.current=null;
@@ -520,10 +583,21 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
-    const { vault } = getRuntime();
+    if(archiveMigrationCandidate){
+      if(gateStateRef.current!=='MIGRATION_REQUIRED'||closingRef.current||established())throw Error('Migrazione non autorizzata.');
+      const inspected=await protectedBootstrap().run();
+      if(inspected.kind!=='ok'||(inspected.observation.kind!=='absent'&&inspected.observation.kind!=='empty')||gateStateRef.current!=='MIGRATION_REQUIRED'||closingRef.current||established()){
+        await inspectBootstrap();throw Error('Stato dell’archivio cambiato.');
+      }
+      if(isAndroidSessionRuntime())await syncNativeSession();
+      assertInitialAdmission(attempt,'MIGRATION_REQUIRED');
+      archiveVersionRef.current=inspected.observation.kind==='empty'?1:null;
+    }
     setGateState('MIGRATING');
+    const { vault } = getRuntime();
     try {
       await migrateLegacyToVault(window.localStorage, vault, password);
+      if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
       await loadReadySnapshot(attempt);
     } catch (error) {
       // Activation may already have committed before foreground authorization
@@ -535,12 +609,12 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       await inspectBootstrap();
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap,archiveMigrationCandidate,established,protectedBootstrap,markEstablished,syncNativeSession,assertInitialAdmission]);
 
   const handleRetry = useCallback(() => {
     void (async () => {
       try {
-        if (storeRef.current && vaultRef.current && !requireExistingRef.current && archiveVersionRef.current!==2) {
+        if (!archiveMigrationCandidate && storeRef.current && vaultRef.current && !requireExistingRef.current && archiveVersionRef.current!==2) {
           const metadata = await storeRef.current.getMetadata();
           if (metadata?.state === 'STAGING') {
             await vaultRef.current.discardStaging();
@@ -552,7 +626,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         setGateState('ERROR');
       }
     })();
-  }, [inspectBootstrap]);
+  }, [inspectBootstrap,archiveMigrationCandidate]);
 
   const handleFactoryReset = useCallback(async () => {
     invalidateArchiveMigration();
@@ -561,6 +635,11 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     await vault.clearAll();
     for (const legacyKey of LEGACY_DATA_KEYS) {
       window.localStorage.removeItem(legacyKey);
+    }
+    if(archiveMigrationCandidate){
+      // Only the explicit legacy DB1 reset can remove the positive marker.
+      window.localStorage.removeItem(ESTABLISHED_ARCHIVE_KEY);requireExistingRef.current=false;
+      await storeRef.current?.retireConnection();storeRef.current=null;vaultRef.current=null;storageRef.current=null;
     }
     revokeNativeAuthorization();
     suspendedRef.current = null;
@@ -808,6 +887,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     <VaultGate
       state={gateState}
       errorMessage={errorMessage}
+      bootTrace={archiveMigrationCandidate?bootTrace:undefined}
       notice={migrationNotice}
       onSetup={handleSetup}
       onUnlock={handleUnlock}
