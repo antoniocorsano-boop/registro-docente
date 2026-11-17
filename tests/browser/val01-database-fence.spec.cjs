@@ -809,3 +809,53 @@ test('STAB-02 corrupt DB2 remains blocked and Retry cannot recreate it',async({p
   expect(await candidate(page,'version')).toBe(2);
   expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
 });
+
+test('STAB-02 legacy migration revocation during readonly probe preserves plaintext source and creates no archive',async({page})=>{
+  const legacy={classes:[],currentClassId:null};
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(productSeed());
+  await page.evaluate(value=>localStorage.setItem('registro_docente_data_v35',JSON.stringify(value)),legacy);
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Proteggi i dati esistenti'})).toBeVisible();
+  await noArchive(page);
+  // Hold the next real enumeration, then revoke foreground while the
+  // admission recheck is in progress. The synthetic visibility event and
+  // override model a hidden WebView, not a fabricated migration result.
+  await page.evaluate(()=>{
+    const original=IDBFactory.prototype.databases;
+    let intercepted=false;
+    window.__legacyProbeStarted=false;
+    IDBFactory.prototype.databases=function(){
+      if(intercepted)return original.call(this);
+      intercepted=true;
+      window.__legacyProbeStarted=true;
+      return new Promise((resolve,reject)=>{
+        window.__releaseLegacyProbe=()=>original.call(this).then(resolve,reject);
+      });
+    };
+  });
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await page.getByRole('button',{name:'Proteggi i dati esistenti',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>window.__legacyProbeStarted)).toBe(true);
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.__releaseLegacyProbe();
+    // Return to foreground before the asynchronous probe finishes. The
+    // revision, not just current visibility, must reject the stale request.
+    delete document.hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.getByText('Sessione cambiata. Ripeti l’operazione in primo piano.')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Proteggi i dati esistenti'})).toBeVisible();
+  await noArchive(page);
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('registro_docente_data_v35')))).toEqual(legacy);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBeNull();
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  // A fresh explicit user action, not automatic continuation, may proceed.
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await page.getByRole('button',{name:'Proteggi i dati esistenti',exact:true}).click();
+  await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  await page.reload();await unlockProduct(page);
+});
