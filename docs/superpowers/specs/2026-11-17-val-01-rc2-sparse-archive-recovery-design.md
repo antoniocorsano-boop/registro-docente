@@ -1,5 +1,5 @@
 # VAL-01 / D1b.3c-I03 — Compatibilità protetta degli archivi storici parziali
-**Stato:** proposta progettuale per revisione indipendente. Non autorizza migrazione produttiva, merge, rilascio o operazioni su dispositivi reali. Baseline di evidenza: `37f5809f36a45f2526ae47b2a6a61b08abf3fbe5`.
+**Stato: SOSPESO / archiviato come analisi di riserva.** Decisione del titolare del progetto del 17 novembre 2026: nessuna distribuzione a utenti reali; Beta 1 RC2 non è più un predecessore da migrare direttamente. Non implementare I03a–I03d nella sequenza corrente. Il caso sparso resta una prova negativa obbligatoria, non un successo di migrazione. Nessuna autorizzazione a migrazione produttiva, merge, rilascio o operazioni su dispositivi reali. Baseline di evidenza: `37f5809f36a45f2526ae47b2a6a61b08abf3fbe5`.
 
 ## 1. Evidenza causale e confini
 - Run integrale 44029635272, job 133858171742, APK originale Beta 1 RC2, source `37c61d4c64993c986a3edcd2b421310adf20de92`, versionCode 10002: DB1 ACTIVE, autenticazione accettata, presenti e autenticati appData e meta, nessun errore di autenticazione dei record, marker sintetico persistente prima/dopo riavvio. Assenti settings, udas, customTests, submissions, planning, library, professionalMemory, copilotState. Rifiuto del gate a dieci record intenzionale. Non prova che ogni archivio parziale sia legittimo.
@@ -56,3 +56,6 @@ I03b non può usare fixture che scriva arbitrariamente i record mancanti per ott
 
 ## 5. Decisione di avanzamento
 Revisione indipendente della progettazione prima di I03a. Non toccare l'app installata, non effettuare downgrade reale, non chiedere chiavi/password. Il percorso Beta2 RC2 attuale resta indipendente dalla specificità RC2; non abbassare il gate per accelerare. PR #291 in bozza.
+
+## 6. Sospensione approvata e criterio di riapertura
+La progettazione I03 resta come conoscenza conservata, non come lavoro attivo. Riaprire solo se una necessità effettiva e documentata di recupero di un archivio parziale non è risolvibile con il percorso di copia/ripristino già previsto e qualificato per quello specifico caso; serve una nuova decisione esplicita. La versione installata non dimostra la provenienza o la completezza del DB: prima della futura migrazione produttiva verificare localmente tutti i dieci record fisici e la loro autenticità, non soltanto il contenuto logico del backup. Se parziale, bloccare e conservare i dati; valutare separatamente il ripristino da una copia indipendente verificata, senza reset o downgrade reale. Il piano D1b.4–5 resta prioritario.
