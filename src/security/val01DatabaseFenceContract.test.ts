@@ -47,3 +47,17 @@ describe('VAL-01/D1b.3c isolated Android laboratory contract',()=>{
     expect(await read('src/App.tsx')).not.toContain('val01-native-lab.fixture');
   });
 });
+
+describe('VAL-01/D1b.3c integral historical binaries',()=>{
+  test('original APK provenance, isolated ephemeral signing and real legacy UI are mandatory',async()=>{
+    const workflow=await read('.github/workflows/val01-integral-android.yml');
+    for(const t of ['13938285055','13950428737','14200343425','actions/download-artifact@v4','original_unsigned_sha256','names(a)==names(b)','application-debuggable','debug.keystore','Destroy signed laboratory APKs and key','original-downgrade-ui-fail-closed','VAL01_INTEGRAL'])expect(workflow).toContain(t);
+    expect(workflow).not.toMatch(/assembleRelease|push:\s|secrets\./);
+    const script=await read('scripts/diagnostics/val01-native-migration.mjs');
+    for(const t of ['seedOriginal(oldVersion)','inspectHistoricalArchive','Sicurezza non disponibile','Riprova controllo sicurezza','original-downgrade-ui-fail-closed','ro.kernel.qemu','Expected']) {
+      if(t!=='Expected')expect(script).toContain(t);
+    }
+    const fixture=await read('mobile/android-probe/val01-native-lab.fixture.ts');
+    for(const t of ['Expected existing DB1','vault.lock();await store.release()','Collaudo migrazione VAL01','withoutLocalBackupVerification'])expect(fixture).toContain(t);
+  });
+});
