@@ -1,7 +1,7 @@
 name: BETA2-UPDATE-02 — exact Beta1 archive compatibility
 on:
   pull_request:
-    branches: ['main']
+    branches: ['main', 'feat/val-01-d1b4b2-product-session']
 permissions:
   contents: read
 jobs:
