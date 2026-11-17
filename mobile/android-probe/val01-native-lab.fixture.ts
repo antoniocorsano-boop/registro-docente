@@ -23,6 +23,7 @@ let generation=0;
 let authenticatedEpoch:number|null=null;
 let lifecycleRevision=0;
 let grantStamp:RecoverySessionStamp|null=null;
+let grantOperation=-1;
 document.addEventListener(ANDROID_SESSION_EVENT,()=>{
   lifecycleRevision++;authenticatedEpoch=null;
   if(grantStamp){grantStamp=null;migration.invalidate();}
@@ -35,11 +36,13 @@ async function access(active:()=>boolean){
   for(let i=0;i<100&&active();i++){
     const s=await readAndroidSessionState();
     if(s?.foreground){
+      const revision=lifecycleRevision;
       await authorizeAndroidSession(s.epoch);
       if(!active())return false;
       await acknowledgeAndroidShield(s.epoch,true);
       const observed=await readAndroidSessionState();
-      if(!active()||!observed?.foreground||observed.epoch!==s.epoch)return false;
+      if(!active())return false;
+      if(!observed?.foreground||observed.epoch!==s.epoch||lifecycleRevision!==revision)continue;
       authenticatedEpoch=s.epoch;
       return active();
     }
@@ -198,7 +201,7 @@ Object.assign(globalThis,{__val01NativeLab:{
       if(!current(selected.stamp)){readState={phase:'cancelled'};return null;}
       readState={phase:'native-read-verified',sha256,bytes:bytes.length};
       try{
-        grantStamp=selected.stamp;
+        grantStamp=selected.stamp;grantOperation=epoch;
         grant=await migration.prepare(password,selected.copy,wrongPassword?'wrong-synthetic':backupPassword);
       }catch(e){
         if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.'){
@@ -215,7 +218,7 @@ Object.assign(globalThis,{__val01NativeLab:{
     if(!grant)throw Error('No authorization');
     const stamp=grantStamp;
     const current=await readAndroidSessionState();
-    if(!stamp||!current?.foreground||current.epoch!==stamp.epoch||authenticatedEpoch!==stamp.epoch||lifecycleRevision!==stamp.revision){migration.invalidate();grantStamp=null;return 'rejected';}
+    if(grantOperation!==generation||!stamp||!current?.foreground||current.epoch!==stamp.epoch||authenticatedEpoch!==stamp.epoch||lifecycleRevision!==stamp.revision){migration.invalidate();grantStamp=null;return 'rejected';}
     try{await migration.migrate(grant,confirmed);return 'accepted';}
     catch(e){
       if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.')return 'rejected';
