@@ -6,7 +6,7 @@ import {validMeta,validRecords} from './versionFencedVaultStore';
 import type {ErasedDb2} from './db2PhysicalLifecycle';
 const NAME='registro-docente-secure-vault';
 export type BootPhase='capability'|'enumeration'|'open'|'inventory'|'classification'|'deadline';
-export type BootCode='unavailable'|'blocked'|'timeout'|'aborted-read'|'version-changed'|'connection-closed'|'missing-established'|'unsupported'|'invalid-inventory'|'staging'|'unknown'|'cancelled';
+export type BootCode='unavailable'|'blocked'|'timeout'|'aborted-read'|'version-changed'|'connection-closed'|'missing-established'|'confirm-absence'|'unsupported'|'invalid-inventory'|'staging'|'unknown'|'cancelled';
 export class BootFault extends Error{
   constructor(readonly phase:BootPhase,readonly code:BootCode){super(code);this.name='BootFault';}
 }
@@ -29,7 +29,7 @@ function classifyError(phase:BootPhase,error:unknown):BootFault{
   // UnknownError is not evidence of a transient fault. No speculative retry.
   return fault(phase,'unknown');
 }
-const retryable=(e:BootFault)=>['blocked','timeout','aborted-read','version-changed','connection-closed','missing-established'].includes(e.code);
+const retryable=(e:BootFault)=>['blocked','timeout','aborted-read','version-changed','connection-closed','missing-established','confirm-absence'].includes(e.code);
 const erased=(v:unknown):v is ErasedDb2=>{
   if(!v||typeof v!=='object')return false;
   const x=v as Record<string,unknown>;
@@ -92,7 +92,8 @@ function inspectExisting(factory:IDBFactory,version:1|2,signal:AbortSignal):Prom
           // DB1 can legitimately be sparse (historical RC2); only DB2 requires
           // complete physical ciphertext here. Migration preflight is separate.
           const rv=version===2?r.getAll():null;
-          tx.onabort=tx.onerror=()=>finish(undefined,classifyError('inventory',tx?.error??new DOMException('','AbortError')));
+          tx.onabort=()=>finish(undefined,classifyError('inventory',tx?.error??new DOMException('','AbortError')));
+          tx.onerror=event=>finish(undefined,classifyError('inventory',(event.target as IDBRequest|null)?.error??tx?.error));
           tx.oncomplete=()=>{
             if(settled)return;
             phase='classification';
@@ -156,11 +157,13 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
         if(signal.aborted||generation!==current)return {kind:'error',fault:fault('deadline','cancelled'),trace};
         if(remaining<=0)return {kind:'error',fault:fault('deadline','timeout'),trace};
         const child=new AbortController();
-        const cancel=()=>child.abort();
+        let rejectCancelled:(()=>void)|undefined;
+        const cancel=()=>{rejectCancelled?.();child.abort();};
         signal.addEventListener('abort',cancel,{once:true});
         let timer:ReturnType<typeof setTimeout>|undefined;
         try{
           const observation=await Promise.race([
+            new Promise<never>((_,reject)=>{rejectCancelled=()=>reject(fault('deadline','cancelled'));}),
             ports.observe(child.signal),
             new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(fault('deadline','timeout'));child.abort();},Math.min(remaining,attemptMs));})
           ]);
@@ -170,7 +173,7 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
           if((observation.kind==='absent'||observation.kind==='empty')&&established)throw fault('classification','missing-established');
           if(observation.kind==='absent'&&!absentSeen){
             absentSeen=true;
-            throw fault('classification','missing-established'); // confirm a second independent absence
+            throw fault('classification','confirm-absence'); // confirm a second independent absence
           }
           return {kind:'ok',observation,trace};
         }catch(e){phaseFault=classifyError('classification',e);}
