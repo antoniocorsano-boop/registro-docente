@@ -5,20 +5,23 @@ import { mkdirSync,writeFileSync,mkdtempSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import {probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
 import {createNativeUiDriver,parseNativeNodes,resumedActivity,NativeUiFault,demoRadio as strictDemoRadio,vaultField as strictVaultField} from './native-ui-driver.mjs';
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
 const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
 const interruptionCut=process.env.VAL01_MIGRATION_CUT||'';
+const smoke=process.env.VAL01_HISTORICAL_SMOKE==='true';
 const api=product?Number(process.env.VAL01_API):36;
 const pkg=integral?'it.trama.registrodocente':'it.trama.registrodocente.lab.val01';
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
+const packagePids=()=>probePackagePids(adb,pkg);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const evidence=[];
 mkdirSync('native-evidence',{recursive:true});
 function stage(name,details={}){
   evidence.push({stage:name,status:'PASS',...details});
-  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api,scope:product?'original historical APK; actual candidate Root/App/Privacy; synthetic emulator only':integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,cut:interruptionCut||undefined,results:evidence},null,2));
+  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api,scope:smoke?'original historical APK only; native UI; synthetic emulator only':product?'original historical APK; actual candidate Root/App/Privacy; synthetic emulator only':integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:smoke?'historical-ui-smoke':integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,smoke:smoke||undefined,cut:interruptionCut||undefined,results:evidence},null,2));
   console.log(name,'PASS');
 }
 async function until(fn,label,ms=30000){
@@ -30,9 +33,11 @@ async function until(fn,label,ms=30000){
 let socket,seq=0;
 const pending=new Map();
 async function connect(){
+  assert.equal(smoke,false,'Historical smoke cannot use DevTools');
   socket=await until(async()=>{
-    const pid=adb('shell','pidof',pkg).split(/\s+/)[0];
-    if(!/^\d+$/.test(pid))return null;
+    const pids=packagePids();
+    if(pids.length!==1)return null;
+    const pid=String(pids[0]);
     adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+pid);
     const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(2000)});
     const target=(await res.json()).find(t=>t.type==='page'&&t.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(t.url));
@@ -236,6 +241,7 @@ async function seedOriginal(version){
   if(version!==10002){await selectOriginalDemo();await gate('Avvia la prova');}
   else await gate('Configura archivio protetto');
   await appText('Le mie classi');await uiCheckpoint('initial-home');
+  if(smoke)stage('smoke-explicit-demo-setup-authenticated',{originalBinary:true});
   tap(await appButton('Nuova Classe'));
   await appText('Inserisci la denominazione della nuova classe');
   await uiDriver.enterClassName(marker);
@@ -245,14 +251,32 @@ async function seedOriginal(version){
   await uiCheckpoint('class-created');
   await ensureHome();await uiCheckpoint('home-after-create');await findMarker();
   console.log('original-class-visible-before-restart');
-  stop();launchOriginal();
+  if(smoke)stage('smoke-synthetic-class-created-visible',{durableSubmission:true});
+  if(smoke){
+    const proof=await verifiedProcessStop({probe:packagePids,forceStop:()=>adb('shell','am','force-stop',pkg),pause:sleep});
+    stage('smoke-process-stopped',proof);
+  }else stop();
+  launchOriginal();
+  if(smoke){
+    // Verify the cold gate natively, before any credential is entered.
+    await uiDriver.stable('smoke-cold-protected-gate',view=>{
+      const fields=view.filter(vaultField);
+      const locked=view.some(n=>named(n,'Sblocca Registro')&&n.clazz==='android.widget.TextView');
+      const visibleArchive=view.some(n=>named(n,'Apri navigazione del Registro')||named(n,'Le mie classi')||named(n,'Apri classe '+marker));
+      return locked&&fields.length===1&&!visibleArchive?{key:'locked'}:null;
+    },{ms:45000});
+    await uiCheckpoint('cold-locked');
+    const reopenedPids=packagePids();
+    assert.ok(reopenedPids.length>0,'Relaunched historical process not observed');
+    stage('smoke-cold-protected-gate',{archiveHidden:true,reopenedPids});
+  }
   try{await gate('Sblocca Registro');}catch(e){
     // Preserve failed original UI before optional read-only diagnostic.
     await uiCheckpoint('authentication-failed').catch(()=>{});
     // Do not turn an original unlock failure into a PASS. The isolated candidate
     // may only authenticate the existing DB1 with the same synthetic credential.
     // No migration, no reset, no recovery attempt and no password guessing.
-    if(!product&&String(e).includes('Original authentication rejected')){
+    if(!smoke&&!product&&String(e).includes('Original authentication rejected')){
       try{
         stop();const before=identity(version);install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),before);
         await launch('__val01NativeLab');
@@ -267,6 +291,7 @@ async function seedOriginal(version){
   await ensureHome();
   await uiCheckpoint('home-after-restart');await findMarker();
   console.log('original-class-visible-after-restart');
+  if(smoke)stage('smoke-class-reopened-after-authentication',{markerVisible:true});
 }
 // D1b.5 actual product path. No synthetic native session authority.
 // CDP only drives DOM and reads synthetic archive diagnostics; SAF and
@@ -517,13 +542,12 @@ async function armMigrationProcessCut(cut){
     // Do not disconnect or resume the debugger before killing the process:
     // the before-commit callback must not be allowed to finish normally.
     assert.ok(foreground());
-    adb('shell','am','force-stop',pkg);
-    await until(()=>!adb('shell','sh','-c','pidof '+pkg+' || true'),'Original candidate process survived force-stop',15000);
+    const proof=await verifiedProcessStop({probe:packagePids,forceStop:()=>adb('shell','am','force-stop',pkg),pause:sleep});
     observedSocket.removeEventListener('message',listener);
     observedSocket.close();socket=null;
     for(const p of pending.values())clearTimeout(p.timer);pending.clear();
     try{adb('forward','--remove','tcp:9222');}catch{}
-    stage('interruption-process-stopped',{forcedStop:true});
+    stage('interruption-process-stopped',proof);
   };
 }
 // Failure-only, read-only evidence. Never reload, clear WebView storage,
@@ -703,7 +727,14 @@ try{
   const oldVersion=Number(process.env.OLD_VERSION);
   install(process.env.OLD_APK);
   const initial=identity(oldVersion);
-  if(product){if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
+  if(smoke){
+    assert.equal(integral,true);assert.equal(product,true);assert.equal(oldVersion,10004);
+    assert.equal(db2Lifecycle,false);assert.equal(interruptionCut,'');assert.ok(!process.env.NEW_APK,'Smoke must not have a candidate APK');
+    await seedOriginal(oldVersion);
+    assert.deepEqual(identity(oldVersion),initial);
+    assert.ok(!socket,'Historical smoke must not use DevTools');
+    stage('smoke-original-installation-preserved',{sameUid:true,sameFirstInstall:true,versionCode:oldVersion,noCandidateInstall:true});
+  }else if(product){if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
   else{
   let seed;
   if(integral){

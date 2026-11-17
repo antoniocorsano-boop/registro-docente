@@ -1,0 +1,159 @@
+name: STAB-04a — historical Android smoke qualification
+on:
+  pull_request:
+    branches: ['test/val-01-stab03-android-driver']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  driver:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact SHA, script syntax and deterministic driver
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          node --check scripts/diagnostics/val01-native-migration.mjs
+          node --check scripts/diagnostics/native-ui-driver.mjs
+          node --check scripts/diagnostics/native-process-probe.mjs
+          node --test scripts/diagnostics/native-ui-driver.test.mjs scripts/diagnostics/native-process-probe.test.mjs
+  smoke:
+    needs: driver
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [32, 36]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      HISTORICAL_SHA: ddbf60781514b866b09e1fa1e014e6a6fc3989d3
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      OLD_VERSION: '10004'
+      OLD_RUN: '43811185219'
+      OLD_ARTIFACT: '14200343425'
+      VAL01_INTEGRAL: 'true'
+      VAL01_PRODUCT: 'true'
+      VAL01_HISTORICAL_SMOKE: 'true'
+      VAL01_API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify provenance of exact original APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p native-evidence
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OLD_RUN" | jq -e --arg sha "$HISTORICAL_SHA" '.head_sha==$sha and .conclusion=="success"'
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$OLD_ARTIFACT" | jq -e --arg sha "$HISTORICAL_SHA" --arg run "$OLD_RUN" '.expired==false and .workflow_run.head_sha==$sha and (.workflow_run.id|tostring)==$run and .name==("mobile01-android-beta-unsigned-"+$sha)'
+          printf 'driver_sha=%s\noriginal_run=%s\noriginal_artifact=%s\n' "$CANDIDATE_SHA" "$OLD_RUN" "$OLD_ARTIFACT" > native-evidence/provenance.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile01-android-beta-unsigned-${{ env.HISTORICAL_SHA }}
+          run-id: ${{ env.OLD_RUN }}
+          github-token: ${{ github.token }}
+          path: original-unsigned
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools build-tools;36.0.0'
+      - name: Sign only the original binary with ephemeral laboratory certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/val01-smoke"
+          apk="$(find original-unsigned -type f -name app-release-unsigned.apk)"
+          manifest="$(find original-unsigned -type f -name beta-unsigned-manifest.txt)"
+          checksum="$(find original-unsigned -type f -name beta-unsigned.sha256)"
+          test -f "$apk" && test -f "$manifest" && test -f "$checksum"
+          digest="$(sha256sum "$apk" | awk '{print $1}')"
+          test "$digest" = "$(awk '{print $1}' "$checksum")"
+          grep -Fx "apk_sha256=$digest" "$manifest"
+          grep -Fx "source_sha=$HISTORICAL_SHA" "$manifest"
+          grep -Fx 'app_id=it.trama.registrodocente' "$manifest"
+          grep -Fx "version_code=$OLD_VERSION" "$manifest"
+          grep -Fx 'release_signing=false' "$manifest"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          if "$tools/apksigner" verify "$apk" >/dev/null 2>&1; then exit 1; fi
+          d="$RUNNER_TEMP/val01-smoke"
+          cp "$apk" "$d/original.apk"
+          "$tools/aapt" dump badging "$d/original.apk" > "$d/original.badging"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$OLD_VERSION'" "$d/original.badging"
+          if grep -q '^application-debuggable' "$d/original.badging"; then exit 1; fi
+          key="$d/ci-only.p12"
+          keytool -genkeypair -storetype PKCS12 -keystore "$key" -storepass SyntheticCIOnly2026 -keypass SyntheticCIOnly2026 -alias val01-ci-only -keyalg RSA -keysize 2048 -validity 3 -dname 'CN=VAL01 SYNTHETIC CI ONLY'
+          chmod 600 "$key"
+          "$tools/zipalign" -P 16 -f 4 "$d/original.apk" "$d/aligned.apk"
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias val01-ci-only --ks-pass pass:SyntheticCIOnly2026 --key-pass pass:SyntheticCIOnly2026 --out "$d/old.apk" "$d/aligned.apk"
+          "$tools/apksigner" verify --print-certs "$d/old.apk" > "$d/cert.txt"
+          test "$(grep -Ec '^Signer #[0-9]+ certificate SHA-256 digest:' "$d/cert.txt")" = 1
+          "$tools/aapt" dump badging "$d/old.apk" > "$d/signed.badging"
+          grep -F "package: name='it.trama.registrodocente' versionCode='$OLD_VERSION'" "$d/signed.badging"
+          if grep -q '^application-debuggable' "$d/signed.badging"; then exit 1; fi
+          python3 - <<'PY'
+          import os,zipfile,pathlib,hashlib
+          d=pathlib.Path(os.environ['RUNNER_TEMP'])/'val01-smoke'
+          with zipfile.ZipFile(d/'original.apk') as a,zipfile.ZipFile(d/'old.apk') as b:
+              names=lambda z: {n for n in z.namelist() if not n.startswith('META-INF/') and not n.endswith('/')}
+              assert names(a)==names(b)
+              for n in names(a): assert hashlib.sha256(a.read(n)).digest()==hashlib.sha256(b.read(n)).digest(),n
+          PY
+          printf 'original_unsigned_sha256=%s\n' "$digest" >> native-evidence/provenance.txt
+          sha256sum "$d/old.apk" >> native-evidence/provenance.txt
+          printf 'OLD_APK=%s\n' "$d/old.apk" >> "$GITHUB_ENV"
+      - name: Enable isolated emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Historical demo setup, class creation and protected cold reopen
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/val01-native-migration.mjs
+      - name: Require exact smoke scope, no extra submission and preserved installation
+        run: |
+          set -euo pipefail
+          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --argjson api "$VAL01_API" '
+            .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and .smoke==true and .qualification=="historical-ui-smoke" and .cut==null and
+            all(.results[];.status=="PASS") and
+            [.results[].stage]==["smoke-explicit-demo-setup-authenticated","smoke-synthetic-class-created-visible","smoke-process-stopped","smoke-cold-protected-gate","smoke-class-reopened-after-authentication","smoke-original-installation-preserved"] and
+            .results[0].originalBinary==true and .results[1].durableSubmission==true and .results[2].forcedStop==true and (.results[2].beforePids|length)>0 and all(.results[2].beforePids[];type=="number" and .>0) and .results[2].afterPids==[] and .results[2].absenceSamples==2 and .results[2].observations>=2 and .results[3].archiveHidden==true and (.results[3].reopenedPids|length)>0 and all(.results[3].reopenedPids[];type=="number" and .>0) and .results[4].markerVisible==true and
+            .results[5].sameUid==true and .results[5].sameFirstInstall==true and .results[5].versionCode==10004 and .results[5].noCandidateInstall==true
+          ' native-evidence/result.json
+          jq -e '
+            [.[] | select(.phase=="gate-submit" and .status=="SUBMITTED") | .action]==["Avvia la prova","Sblocca Registro"] and
+            ([.[] | select(.phase=="class-submit" and .status=="SUBMITTED")] | length)==1 and
+            ([.[] | select(.phase=="password-entry" and .status=="PASS")] | length)==2 and
+            ([.[] | select(.phase=="demo-selection" and .status=="PASS")] | length)==1 and
+            ([.[] | select(.phase=="class-input" and .status=="PASS")] | length)==1
+          ' native-evidence/native-ui-driver.json
+      - name: Destroy signed original and ephemeral key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/val01-smoke" original-unsigned
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stab04a-smoke-api-${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
+          path: native-evidence/
+          retention-days: 7
+          if-no-files-found: error

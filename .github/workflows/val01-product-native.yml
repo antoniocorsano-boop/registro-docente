@@ -177,7 +177,7 @@ jobs:
               .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and .cut==$cut and
               all(.results[];.status=="PASS") and
               ([.results[].stage]==(["historical-seed-cold-reopen","interruption-original-preflight","interruption-picker-reauthenticated",("interruption-guard-"+$cut),"interruption-process-stopped","interruption-reopen-authenticated"]+(if $cut=="before-commit" then ["interruption-original-reopened","interruption-fresh-consent-migrated"] else [] end)+["interruption-downgrade-refused","interruption-final-cold-reopen"])) and
-              .results[1].classification=="complete" and .results[1].recordCount==10 and .results[3].realVersionchange==true and .results[4].forcedStop==true and
+              .results[1].classification=="complete" and .results[1].recordCount==10 and .results[3].realVersionchange==true and .results[4].forcedStop==true and (.results[4].beforePids|length)>0 and all(.results[4].beforePids[];type=="number" and .>0) and .results[4].afterPids==[] and .results[4].absenceSamples==2 and .results[4].observations>=2 and
               .results[5].version==(if $cut=="before-commit" then 1 else 2 end) and .results[5].recordCount==10 and .results[-1].version==2 and .results[-1].recordCount==10 and .results[5].physicalSha256==.results[-1].physicalSha256
             ' native-evidence/result.json
             exit 0
