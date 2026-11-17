@@ -209,3 +209,47 @@ for(const mode of ['refuse','revoke','wrong-copy']){
     expect(await candidate(page,'preflightInventory')).toBe(before);
   });
 }
+
+test('D1b.4b.2 existing-only readers never create an absent archive, even if retired while opening',async({page})=>{
+  await loadNew(page);
+  for(const version of [1,2]){
+    expect(await candidate(page,'verifyExisting',version)).toBe(false);
+    expect(await candidate(page,'version')).toBeNull();
+    expect(await candidate(page,'retireDuringOpen',version)).toMatchObject({rejected:true});
+    await expect.poll(()=>candidate(page,'version')).toBeNull();
+  }
+});
+
+test('D1b.4b.2 existing-only DB2 reader cannot upgrade a complete DB1',async({page})=>{
+  await loadOld(page);await old(page,'seed',false);
+  await loadNew(page);
+  const before=await candidate(page,'preflightInventory');
+  expect(await candidate(page,'verifyExisting',1)).toBe(true);
+  expect(await candidate(page,'verifyExisting',2)).toBe(false);
+  expect(await candidate(page,'retireDuringOpen',2)).toMatchObject({rejected:true});
+  expect(await candidate(page,'version')).toBe(1);
+  expect(await candidate(page,'preflightInventory')).toBe(before);
+});
+
+test('D1b.4b.2 retire actual DB1 owner before migration and authenticate fresh DB2 session',async({page})=>{
+  await loadOld(page);const seed=await old(page,'seed',false);
+  await loadNew(page);
+  expect(await candidate(page,'migrateWithOwnedConnection',seed.backup)).toEqual({
+    result:'migrated-reopen-required',retired:true,version:2,snapshot:seed.snapshot
+  });
+  expect(await candidate(page,'verifyExisting',1)).toBe(false);
+  expect(await candidate(page,'verifyExisting',2,true)).toBe(false);
+  expect(await candidate(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+});
+
+for(const anomaly of ['sparse','unknown','tamper','metadata','record-shape']){
+  test('D1b.4b.2 '+anomaly+' DB2 is refused without reset or byte changes',async({page})=>{
+    await loadOld(page);await old(page,'seed',false);
+    await loadNew(page);
+    await candidate(page,'upgrade');
+    const before=await candidate(page,'preflightInventory',anomaly,2);
+    expect(await candidate(page,'verifyExisting',2)).toBe(false);
+    expect(await candidate(page,'version')).toBe(2);
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+  });
+}
