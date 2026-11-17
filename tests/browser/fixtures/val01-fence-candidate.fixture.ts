@@ -1,4 +1,7 @@
 // D1b.3a GREEN candidate adapter: isolated version-fenced store.
+import {createDb2Lifecycle,inspectDb2LifecycleState} from '../../../src/security/db2Lifecycle';
+import {createBackupPayload} from '../../../src/security/backupPayload';
+import {encryptDataWithPassword} from '../../../src/cryptoUtils';
 import { ExistingSessionVaultStore } from '../../../src/security/existingSessionVaultStore';
 import { createLocalMigrationSessionBoundary } from '../../../src/security/migrationSessionBoundary';
 import { createDurableMutationCoordinator } from '../../../src/persistence/durableMutationCoordinator';
@@ -39,6 +42,53 @@ const migration=createAuthorizedVaultMigration();
 let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
 Object.assign(globalThis,{__val01FenceCandidate:{
   version,
+  db2State:()=>inspectDb2LifecycleState(),
+  async db2Lifecycle(action:'restore'|'erase'|'setup',backup?:string,mode='approve'){
+    const service=createDb2Lifecycle();
+    const old=new ExistingSessionVaultStore(2);
+    const stale=new SecureVault(old);
+    let staleReady=false;
+    if(action!=='setup'&&await inspectDb2LifecycleState()==='active'){
+      await stale.unlock(password);staleReady=true;
+    }
+    try{
+      let grant;
+      try{
+        grant=await service.prepare(action==='restore'?{operation:'restore',password:mode==='wrong-vault'?'wrong':password,file:new Blob([backup??'']),backupPassword:mode==='wrong-copy'?'wrong':'synthetic-archive-backup-only'}:
+          action==='erase'?{operation:'erase',password:mode==='wrong-vault'?'wrong':password}:
+          {operation:'setup',password:'synthetic-new-password',setup:{mode:'professional',profile:{school:'Synthetic school',year:'2026/2027',teacher:'Synthetic teacher',subject:'Tecnologia'}}});
+      }catch{return {result:'prepare-rejected',state:await inspectDb2LifecycleState()};}
+      if(mode==='race'&&staleReady)await stale.put('meta',{changes:999,lastBackup:null});
+      if(mode==='revoke')service.invalidate();
+      try{await service.commit(grant,mode!=='refuse');}
+      catch{return {result:'commit-rejected',state:await inspectDb2LifecycleState()};}
+      let replay=false;
+      try{await service.commit(grant,true);}catch{replay=true;}
+      let staleRejected=false;
+      if(staleReady){
+        try{await stale.put('meta',{changes:1000,lastBackup:null});}catch{staleRejected=true;}
+      }
+      return {result:'committed',state:await inspectDb2LifecycleState(),replay,staleRejected,version:await version()};
+    }finally{stale.lock();await old.retireConnection();service.invalidate();}
+  },
+  async db2Read(newPassword=false){
+    const existing=new ExistingSessionVaultStore(2),v=new SecureVault(existing);
+    try{
+      await existing.verifyAuthenticatedRecords(newPassword?'synthetic-new-password':password);
+      await v.unlock(newPassword?'synthetic-new-password':password);
+      return await new SecureAppStorage(v).loadSnapshot();
+    }finally{v.lock();await existing.retireConnection();}
+  },
+  async db2ChangedCopy(){
+    const current=await (async()=>{
+      const existing=new ExistingSessionVaultStore(2),v=new SecureVault(existing);
+      try{await v.unlock(password);return await new SecureAppStorage(v).loadSnapshot();}
+      finally{v.lock();await existing.retireConnection();}
+    })();
+    if(!current.appData||!current.meta)throw Error('Synthetic snapshot missing');
+    const next={...current,appData:{...current.appData,classes:[]},meta:{changes:19,lastBackup:null,verifiedBackupAt:'2031-01-01T00:00:00.000Z'}};
+    return encryptDataWithPassword(createBackupPayload(next as Parameters<typeof createBackupPayload>[0]),'synthetic-archive-backup-only');
+  },
   async verifyExisting(version:1|2,wrong=false){
     const existing=new ExistingSessionVaultStore(version);
     try{
