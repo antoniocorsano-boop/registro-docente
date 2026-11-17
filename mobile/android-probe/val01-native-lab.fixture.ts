@@ -22,7 +22,11 @@ let grant:MigrationGrant|null=null;
 let generation=0;
 let authenticatedEpoch:number|null=null;
 let lifecycleRevision=0;
-document.addEventListener(ANDROID_SESSION_EVENT,()=>{lifecycleRevision++;authenticatedEpoch=null;});
+let grantStamp:RecoverySessionStamp|null=null;
+document.addEventListener(ANDROID_SESSION_EVENT,()=>{
+  lifecycleRevision++;authenticatedEpoch=null;
+  if(grantStamp){grantStamp=null;migration.invalidate();}
+});
 let readState: {phase:string;sha256?:string;bytes?:number;grant?:MigrationGrant|null}={phase:'idle'};
 // A synthetic lab session, not the production Vault owner. The native plugin
 // and actual document picker are unchanged. Reauthorize after picker return
@@ -170,7 +174,7 @@ Object.assign(globalThis,{__val01NativeLab:{
   async write(backup:string){const epoch=++generation;return saveEncryptedBackupOnAndroid(backup,filename,()=>epoch===generation);},
   readState(){return readState;},
   async readAndPrepare(wrongPassword=false){
-    migration.invalidate();grant=null;
+    migration.invalidate();grant=null;grantStamp=null;
     const epoch=++generation;
     const active=()=>epoch===generation;
     readState={phase:'picker'};
@@ -194,6 +198,7 @@ Object.assign(globalThis,{__val01NativeLab:{
       if(!current(selected.stamp)){readState={phase:'cancelled'};return null;}
       readState={phase:'native-read-verified',sha256,bytes:bytes.length};
       try{
+        grantStamp=selected.stamp;
         grant=await migration.prepare(password,selected.copy,wrongPassword?'wrong-synthetic':backupPassword);
       }catch(e){
         if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.'){
@@ -201,18 +206,21 @@ Object.assign(globalThis,{__val01NativeLab:{
         }
         throw e;
       }
-      if(!current(selected.stamp)){migration.invalidate();grant=null;readState={phase:'cancelled'};return null;}
+      if(!current(selected.stamp)||grantStamp!==selected.stamp){migration.invalidate();grant=null;grantStamp=null;readState={phase:'cancelled'};return null;}
       readState={...readState,phase:'authorized',grant};
       return grant;
     }catch(e){readState={phase:'native-error'};throw e;}
   },
   async migrate(confirmed:boolean){
     if(!grant)throw Error('No authorization');
+    const stamp=grantStamp;
+    const current=await readAndroidSessionState();
+    if(!stamp||!current?.foreground||current.epoch!==stamp.epoch||authenticatedEpoch!==stamp.epoch||lifecycleRevision!==stamp.revision){migration.invalidate();grantStamp=null;return 'rejected';}
     try{await migration.migrate(grant,confirmed);return 'accepted';}
     catch(e){
       if(e instanceof Error&&e.message==='Migrazione non autorizzata: archivio o copia di recupero non verificabili.')return 'rejected';
       throw e;
     }
   },
-  invalidate(){generation++;grant=null;migration.invalidate();}
+  invalidate(){generation++;grant=null;grantStamp=null;migration.invalidate();}
 }});
