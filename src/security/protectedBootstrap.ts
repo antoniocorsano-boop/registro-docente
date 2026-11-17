@@ -178,6 +178,7 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
           return {kind:'ok',observation,trace};
         }catch(e){phaseFault=classifyError('classification',e);}
         finally{if(timer!==undefined)clearTimeout(timer);signal.removeEventListener('abort',cancel);child.abort();}
+        if(phaseFault.code!=='confirm-absence')absentSeen=false;
         trace.push({attempt,phase:phaseFault.phase,code:phaseFault.code});
         if(signal.aborted||generation!==current)return {kind:'error',fault:fault('deadline','cancelled'),trace};
         if(!retryable(phaseFault)||attempt===3||(phaseFault.code==='version-changed'&&versionRetried))return {kind:'error',fault:phaseFault,trace};
