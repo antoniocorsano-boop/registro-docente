@@ -347,3 +347,129 @@ test('D1b.4b.2b manual lock invalidates selected copy and normal entrypoint does
   await page.goto(productOrigin+'/');await unlockProduct(page);await privacyProduct(page);
   await expect(page.getByRole('region',{name:'Aggiornamento protetto archivio'})).toHaveCount(0);
 });
+
+async function seedDb2(page){
+  await loadOld(page);const seed=await old(page,'seed',false);
+  await loadNew(page);await candidate(page,'upgrade');
+  return seed;
+}
+test('D1b.5 lifecycle refuses absent DB and DB1 without creating or upgrading them',async({page})=>{
+  await loadNew(page);
+  expect(await candidate(page,'db2State')).toBe('unverifiable');
+  expect(await candidate(page,'db2Lifecycle','setup')).toEqual({result:'prepare-rejected',state:'unverifiable'});
+  expect(await candidate(page,'version')).toBeNull();
+  await loadOld(page);await old(page,'seed',false);await loadNew(page);
+  const before=await candidate(page,'preflightInventory');
+  expect(await candidate(page,'db2Lifecycle','erase')).toEqual({result:'prepare-rejected',state:'unverifiable'});
+  expect(await candidate(page,'version')).toBe(1);
+  expect(await candidate(page,'preflightInventory')).toBe(before);
+});
+
+test('D1b.5 restore rotates the key and replaces all ten records; stale writer and replay are rejected',async({page})=>{
+  await seedDb2(page);
+  const before=await candidate(page,'open');
+  const copy=await candidate(page,'db2ChangedCopy');
+  expect(await candidate(page,'db2Lifecycle','restore',copy)).toEqual({result:'committed',state:'active',replay:true,staleRejected:true,version:2});
+  await loadNew(page);
+  const after=await candidate(page,'open');
+  expect(after.physical.salt).not.toBe(before.physical.salt);
+  expect(after.physical.wrappedDek).not.toBe(before.physical.wrappedDek);
+  expect(after.physical.records.every(r=>r.ciphertext!==before.physical.records.find(p=>p.key===r.key).ciphertext)).toBe(true);
+  expect(after.snapshot.appData.classes).toEqual([]);
+  expect(after.snapshot.meta).toEqual({changes:19,lastBackup:null});
+  expect(await candidate(page,'db2Read')).toEqual(after.snapshot);
+  await loadOld(page);
+  for(const operation of ['read','unlock','write','delete','clear','initialize'])expect(await historic(page,operation)).toBe('VersionError');
+});
+
+for(const [action,mode] of [['restore','wrong-copy'],['restore','wrong-vault'],['restore','refuse'],['restore','revoke'],['erase','wrong-vault'],['erase','refuse'],['erase','revoke']]){
+  test('D1b.5 '+action+' '+mode+' preserves every original byte',async({page})=>{
+    const seed=await seedDb2(page);
+    const before=await candidate(page,'preflightInventory',null,2);
+    expect(await candidate(page,'db2Lifecycle',action,seed.backup,mode)).toEqual({
+      result:mode.startsWith('wrong')?'prepare-rejected':'commit-rejected',state:'active'
+    });
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+    expect(await candidate(page,'db2Read')).toEqual(seed.snapshot);
+  });
+}
+
+test('D1b.5 changed physical inventory invalidates previously prepared replacement',async({page})=>{
+  const seed=await seedDb2(page);
+  expect(await candidate(page,'db2Lifecycle','restore',seed.backup,'race')).toEqual({result:'commit-rejected',state:'active'});
+  const after=await candidate(page,'db2Read');
+  expect(after.meta.changes).toBe(999);
+  expect(after.appData).toEqual(seed.snapshot.appData);
+});
+
+test('D1b.5 explicit erasure retains version fence and removes records/key; fresh setup needs new authorization',async({page})=>{
+  await seedDb2(page);
+  expect(await candidate(page,'db2Lifecycle','setup')).toEqual({result:'prepare-rejected',state:'active'});
+  expect(await candidate(page,'db2Lifecycle','erase')).toEqual({result:'committed',state:'erased',replay:true,staleRejected:true,version:2});
+  const erased=await page.evaluate(async()=>{
+    const db=await new Promise((resolve,reject)=>{const req=indexedDB.open('registro-docente-secure-vault',2);req.onupgradeneeded=()=>req.transaction.abort();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
+    try{return await new Promise((resolve,reject)=>{
+      const tx=db.transaction(['metadata','records'],'readonly'),m=tx.objectStore('metadata').getAll(),r=tx.objectStore('records').getAll();
+      tx.oncomplete=()=>resolve({metadata:m.result,records:r.result,version:db.version});tx.onabort=tx.onerror=()=>reject(tx.error);
+    });}finally{db.close();}
+  });
+  expect(erased).toEqual({metadata:[{kind:'ERASED_DB2',nonce:expect.stringMatching(/^[a-f0-9]{32}$/)}],records:[],version:2});
+  await loadOld(page);
+  for(const operation of ['read','unlock','write','delete','clear','initialize'])expect(await historic(page,operation)).toBe('VersionError');
+  await loadNew(page);
+  expect(await candidate(page,'db2State')).toBe('erased');
+  expect(await candidate(page,'verifyExisting',2)).toBe(false);
+  expect(await candidate(page,'db2Lifecycle','setup',null,'refuse')).toEqual({result:'commit-rejected',state:'erased'});
+  expect(await candidate(page,'db2Lifecycle','setup')).toMatchObject({result:'committed',state:'active',replay:true,version:2});
+  expect(await candidate(page,'verifyExisting',2)).toBe(false);
+  const fresh=await candidate(page,'db2Read',true);
+  expect(fresh.appData.classes).toEqual([]);
+  expect(fresh.settings.archiveMode).toBe('professional');
+  expect(fresh.meta).toEqual({changes:0,lastBackup:null});
+  await loadNew(page);
+  expect(await candidate(page,'db2Read',true)).toEqual(fresh);
+});
+
+for(const action of ['restore','erase']){
+  test('D1b.5 '+action+' interrupted during transaction rolls back the complete physical image',async({page})=>{
+    const seed=await seedDb2(page);
+    const before=await candidate(page,'preflightInventory',null,2);
+    expect(await candidate(page,'db2Interrupt',action,seed.backup,'before-commit')).toEqual({triggered:true,rejected:true,state:'active',version:2});
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+    expect(await candidate(page,'db2Read')).toEqual(seed.snapshot);
+  });
+  test('D1b.5 '+action+' revoked after commit is inspected without rolling back or resurrecting data',async({page})=>{
+    await seedDb2(page);
+    const before=await candidate(page,'preflightInventory',null,2);
+    const copy=await candidate(page,'db2ChangedCopy');
+    expect(await candidate(page,'db2Interrupt',action,copy,'after-commit')).toEqual({triggered:true,rejected:true,state:action==='erase'?'erased':'active',version:2});
+    await loadNew(page);
+    if(action==='erase')expect(await candidate(page,'db2State')).toBe('erased');
+    else{
+      expect(await candidate(page,'preflightInventory',null,2)).not.toBe(before);
+      expect((await candidate(page,'db2Read')).appData.classes).toEqual([]);
+    }
+  });
+}
+
+test('D1b.5 an authenticated second tab cannot reintroduce erased or restored data',async({page,context})=>{
+  await seedDb2(page);
+  const second=await context.newPage();
+  await loadNew(second);
+  expect(await candidate(second,'db2HoldWriter')).toBe(true);
+  expect(await candidate(page,'db2Lifecycle','erase')).toMatchObject({result:'committed',state:'erased'});
+  expect(await candidate(page,'db2Lifecycle','setup')).toMatchObject({result:'committed',state:'active'});
+  expect(await candidate(second,'db2TryHeldWrite')).toBe('rejected');
+  expect((await candidate(page,'db2Read',true)).meta).toEqual({changes:0,lastBackup:null});
+  await second.close();
+});
+
+test('D1b.5 unsupported v7, legacy and incomplete v6 restore candidates remain unchanged',async({page})=>{
+  await seedDb2(page);
+  const before=await candidate(page,'preflightInventory',null,2);
+  for(const format of ['v7','legacy','partial']){
+    const copy=await candidate(page,'db2ChangedCopy',format);
+    expect(await candidate(page,'db2Lifecycle','restore',copy)).toEqual({result:'prepare-rejected',state:'active'});
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+  }
+});

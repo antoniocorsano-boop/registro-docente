@@ -1,4 +1,7 @@
 // D1b.3a GREEN candidate adapter: isolated version-fenced store.
+import {createDb2Lifecycle,inspectDb2LifecycleState} from '../../../src/security/db2Lifecycle';
+import {createBackupPayload} from '../../../src/security/backupPayload';
+import {encryptDataWithPassword} from '../../../src/cryptoUtils';
 import { ExistingSessionVaultStore } from '../../../src/security/existingSessionVaultStore';
 import { createLocalMigrationSessionBoundary } from '../../../src/security/migrationSessionBoundary';
 import { createDurableMutationCoordinator } from '../../../src/persistence/durableMutationCoordinator';
@@ -35,10 +38,92 @@ async function opened(){
   await vault.unlock(password);
   return {snapshot:await storage.loadSnapshot(),physical:await physical()};
 }
+let secondTab:{store:ExistingSessionVaultStore;vault:SecureVault}|null=null;
 const migration=createAuthorizedVaultMigration();
 let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
 Object.assign(globalThis,{__val01FenceCandidate:{
   version,
+  db2State:()=>inspectDb2LifecycleState(),
+  async db2HoldWriter(){
+    const store=new ExistingSessionVaultStore(2),vault=new SecureVault(store);
+    await vault.unlock(password);secondTab={store,vault};return true;
+  },
+  async db2TryHeldWrite(){
+    if(!secondTab)throw Error('No synthetic writer');
+    const held=secondTab;secondTab=null;
+    try{await held.vault.put('meta',{changes:1234,lastBackup:null});return 'accepted';}
+    catch{return 'rejected';}
+    finally{held.vault.lock();await held.store.retireConnection();}
+  },
+  async db2Lifecycle(action:'restore'|'erase'|'setup',backup?:string,mode='approve'){
+    const service=createDb2Lifecycle();
+    const old=new ExistingSessionVaultStore(2);
+    const stale=new SecureVault(old);
+    let staleReady=false;
+    if(action!=='setup'&&await inspectDb2LifecycleState()==='active'){
+      await stale.unlock(password);staleReady=true;
+    }
+    try{
+      let grant;
+      try{
+        grant=await service.prepare(action==='restore'?{operation:'restore',password:mode==='wrong-vault'?'wrong':password,file:new Blob([backup??'']),backupPassword:mode==='wrong-copy'?'wrong':'synthetic-archive-backup-only'}:
+          action==='erase'?{operation:'erase',password:mode==='wrong-vault'?'wrong':password}:
+          {operation:'setup',password:'synthetic-new-password',setup:{mode:'professional',profile:{school:'Synthetic school',year:'2026/2027',teacher:'Synthetic teacher',subject:'Tecnologia'}}});
+      }catch{return {result:'prepare-rejected',state:await inspectDb2LifecycleState()};}
+      if(mode==='race'&&staleReady)await stale.put('meta',{changes:999,lastBackup:null});
+      if(mode==='revoke')service.invalidate();
+      try{await service.commit(grant,mode!=='refuse');}
+      catch{return {result:'commit-rejected',state:await inspectDb2LifecycleState()};}
+      let replay=false;
+      try{await service.commit(grant,true);}catch{replay=true;}
+      let staleRejected=false;
+      if(staleReady){
+        try{await stale.put('meta',{changes:1000,lastBackup:null});}catch{staleRejected=true;}
+      }
+      return {result:'committed',state:await inspectDb2LifecycleState(),replay,staleRejected,version:await version()};
+    }finally{stale.lock();await old.retireConnection();service.invalidate();}
+  },
+  async db2Interrupt(action:'restore'|'erase',backup:string,stage:'before-commit'|'after-commit'){
+    const service=createDb2Lifecycle();
+    const grant=await service.prepare(action==='restore'?{operation:'restore',password,file:new Blob([backup]),backupPassword:'synthetic-archive-backup-only'}:{operation:'erase',password});
+    // Test-only instrumentation of the actual IndexedDB transaction; never a
+    // production fault injection port. Trigger only for metadata replacement.
+    const original=IDBObjectStore.prototype.put;
+    let triggered=false;
+    IDBObjectStore.prototype.put=function(value:any,key?:IDBValidKey){
+      const request=key===undefined?original.call(this,value):original.call(this,value,key);
+      if(!triggered&&this.name==='metadata'&&key==='current'&&this.transaction.mode==='readwrite'){
+        triggered=true;
+        if(stage==='before-commit')service.invalidate();
+        else this.transaction.addEventListener('complete',()=>service.invalidate(),{once:true});
+      }
+      return request;
+    };
+    let rejected=false;
+    try{await service.commit(grant,true);}catch{rejected=true;}
+    finally{IDBObjectStore.prototype.put=original;service.invalidate();}
+    return {triggered,rejected,state:await inspectDb2LifecycleState(),version:await version()};
+  },
+  async db2Read(newPassword=false){
+    const existing=new ExistingSessionVaultStore(2),v=new SecureVault(existing);
+    try{
+      await existing.verifyAuthenticatedRecords(newPassword?'synthetic-new-password':password);
+      await v.unlock(newPassword?'synthetic-new-password':password);
+      return await new SecureAppStorage(v).loadSnapshot();
+    }finally{v.lock();await existing.retireConnection();}
+  },
+  async db2ChangedCopy(format:'v6'|'v7'|'legacy'|'partial'='v6'){
+    const current=await (async()=>{
+      const existing=new ExistingSessionVaultStore(2),v=new SecureVault(existing);
+      try{await v.unlock(password);return await new SecureAppStorage(v).loadSnapshot();}
+      finally{v.lock();await existing.retireConnection();}
+    })();
+    if(!current.appData||!current.meta)throw Error('Synthetic snapshot missing');
+    const next={...current,appData:{...current.appData,classes:[]},meta:{changes:19,lastBackup:null,verifiedBackupAt:'2031-01-01T00:00:00.000Z'}};
+    const payload=createBackupPayload(next as Parameters<typeof createBackupPayload>[0]);
+    const data=format==='v7'?{...payload,backupDataVersion:7}:format==='legacy'?{classes:[]}:format==='partial'?{...payload,snapshot:{...payload.snapshot,library:undefined}}:payload;
+    return encryptDataWithPassword(data,'synthetic-archive-backup-only');
+  },
   async verifyExisting(version:1|2,wrong=false){
     const existing=new ExistingSessionVaultStore(version);
     try{
