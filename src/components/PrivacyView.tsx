@@ -459,7 +459,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           </form>
 
           {/* Import Encrypted Form */}
-          {archiveReplacementBlocked?<p role="status" className="text-sm text-slate-300">Il ripristino e il reset non sono attivi nell’archivio aggiornato di collaudo.</p>:<form onSubmit={handleImportEncrypted} className="p-4 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
+          {archiveReplacementBlocked?<p role="status" className="text-sm text-slate-300">{archiveMigration?.mode==='restore'?'Per ripristinare o cancellare l’archivio aggiornato usa i comandi protetti qui sotto.':'Il ripristino e il reset non sono attivi nell’archivio aggiornato di collaudo.'}</p>:<form onSubmit={handleImportEncrypted} className="p-4 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
             <h4 className="text-xs uppercase tracking-wider font-bold text-slate-200 flex items-center gap-1.5">
               <Upload className="w-3.5 h-3.5 text-cyan-400" /> {nativeBackupRuntime ? 'Ripristina backup cifrato' : 'Ripristina Backup Cifrato o Precedente'}
             </h4>
@@ -550,8 +550,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         </div>
       </div>
 
-      {/* Right to be Forgotten / Factory Reset */}
-      <div className="neon-card p-5 border border-rose-950/60">
+      {/* Legacy reset is not a second path for DB2. */}
+      {archiveMigration?.mode!=='restore'&&<div className="neon-card p-5 border border-rose-950/60">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-rose-400 flex items-center gap-2">
@@ -578,7 +578,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Reset Totale Sicuro
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

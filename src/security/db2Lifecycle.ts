@@ -2,7 +2,7 @@
  * No runtime activation. A fresh Root session must reopen after every attempt.
  * The owner must seal and drain writes before prepare and revoke on lifecycle
  * changes; consent is bound to the complete physical inventory at commit. */
-import {captureDb2,replaceDb2,createErasedDb2,db2Failure,type Db2Inventory,sameDb2Physical} from './db2PhysicalLifecycle';
+import {captureDb2,replaceDb2,createErasedDb2,db2Failure,type Db2Inventory,type ErasedDb2,sameDb2Physical} from './db2PhysicalLifecycle';
 import {deriveKeyEncryptionKey,unwrapDataEncryptionKey,decryptJsonRecord,encryptJsonRecord,generateDataEncryptionKey,wrapDataEncryptionKey,KDF_ITERATIONS_V1} from './cryptoPrimitives';
 import {decryptDataWithPassword,BACKUP_VERSION_V2} from '../cryptoUtils';
 import {inspectAssessmentBackupPayload} from './assessmentBackupPayload';
@@ -65,11 +65,12 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
   function invalidate(){controller?.abort();controller=null;pending=null;}
   return {
     invalidate,
-    async prepare(intent:Intent):Promise<Grant>{
+    async prepare(intent:Intent,expectedOwner?:VaultMetadataV1|ErasedDb2):Promise<Grant>{
       invalidate();
       const attempt=new AbortController();controller=attempt;
       try{
         const previous=await captureDb2(factory,attempt.signal);
+        if(expectedOwner&&!sameDb2Physical(previous.metadata,expectedOwner))throw db2Failure();
         let next:Db2Inventory;
         if(intent.operation==='setup'){
           if(previous.state!=='erased')throw db2Failure();

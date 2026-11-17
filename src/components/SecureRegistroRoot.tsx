@@ -21,6 +21,8 @@ import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
 import { ExistingSessionVaultStore } from '../security/existingSessionVaultStore';
+import { createDb2Lifecycle } from '../security/db2Lifecycle';
+import { captureDb2, sameDb2Physical, type ErasedDb2 } from '../security/db2PhysicalLifecycle';
 import { inspectArchiveVersion } from '../security/inspectArchiveVersion';
 import { createRecoveryCopyHandoff, type RecoverySessionStamp } from '../security/migrationRecoveryHandoff';
 import { createLocalMigrationSessionBoundary, type MigrationSessionResult } from '../security/migrationSessionBoundary';
@@ -82,7 +84,10 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   const [archiveVersion,setArchiveVersion]=useState<1|2|null>(null);
   const requireExistingRef=useRef(false);
   const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
-  const archiveMigrationRef=useRef<ReturnType<typeof createLocalMigrationSessionBoundary>|null>(null);
+  const archiveMigrationRef=useRef<{revoke():void}|null>(null);
+  const erasedDb2Ref=useRef<ErasedDb2|null>(null);
+  const db2UnlockBusyRef=useRef(false);
+  const db2ChannelRef=useRef<BroadcastChannel|null>(null);
   const [migrationNotice,setMigrationNotice]=useState<string|null>(null);
   const discardRecoveryCopy=useCallback(()=>{handoffRef.current?.invalidate();handoffRef.current=null;},[]);
   const invalidateArchiveMigration=useCallback(()=>{
@@ -134,6 +139,17 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
           storeRef.current=null;vaultRef.current=null;storageRef.current=null;
         }
         archiveVersionRef.current=version;setArchiveVersion(version);
+        erasedDb2Ref.current=null;
+        if(version===2){
+          const physical=await captureDb2(globalThis.indexedDB);
+          if(physical.state==='erased'){
+            vaultRef.current?.lock();await storeRef.current?.retireConnection();
+            storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+            if(LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Residui di un archivio precedente da verificare. Nessun dato verrà recuperato automaticamente.');
+            erasedDb2Ref.current=physical.metadata;requireExistingRef.current=true;
+            setGateState('SETUP_REQUIRED');return;
+          }
+        }
       }
       const { store } = getRuntime();
       const metadata = await store.getMetadata();
@@ -427,6 +443,35 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
     const attempt = await getForegroundEpoch();
+    if(archiveMigrationCandidate&&archiveVersionRef.current===2){
+      const erased=erasedDb2Ref.current;
+      if(!erased||archiveMigrationRef.current||closingRef.current||gateStateRef.current!=='SETUP_REQUIRED')throw Error('Nuova configurazione non autorizzata.');
+      const service=createDb2Lifecycle();
+      let revoked=false;
+      const owner={revoke:()=>{revoked=true;service.invalidate();}};
+      const current=()=>!revoked&&archiveMigrationRef.current===owner&&erasedDb2Ref.current===erased&&
+        gateStateRef.current==='MIGRATING'&&lifecycleRevisionRef.current===attempt.revision&&
+        (attempt.epoch===null?!document.hidden:nativeStateRef.current?.foreground===true&&nativeStateRef.current.epoch===attempt.epoch);
+      archiveMigrationRef.current=owner;closingRef.current=true;
+      setGateState('MIGRATING');
+      let committed=false;
+      const deadline=window.setTimeout(()=>owner.revoke(),120_000);
+      try{
+        if(!current()||LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Configurazione non autorizzata.');
+        const grant=await service.prepare({operation:'setup',password,setup},erased);
+        if(isAndroidSessionRuntime())await syncNativeSession();
+        if(!current())throw Error('Sessione cambiata.');
+        // Submitting the explicit new-archive setup form is the consent.
+        await service.commit(grant,true);committed=true;
+      }finally{
+        window.clearTimeout(deadline);owner.revoke();archiveMigrationRef.current=null;
+        closingRef.current=false;revokeNativeAuthorization();setSnapshot(null);
+        try{db2ChannelRef.current?.postMessage('archive-generation-changed');}catch{/* Advisory only; durable generation is authoritative. */}
+        setMigrationNotice(committed?'Nuovo archivio creato. Autenticati con la nuova password.':'Configurazione non confermata. Verifica lo stato dell’archivio.');
+        await inspectBootstrap();
+      }
+      return;
+    }
     const { vault, store } = getRuntime();
     if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
       throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
@@ -439,26 +484,39 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       setGateState('LOCKED');
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState]);
 
   const handleUnlock = useCallback(async (password: string) => {
-    const attempt = await getForegroundEpoch();
-    const { vault,store } = getRuntime();
-    try {
-      if(archiveMigrationCandidate&&store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
-      await vault.unlock(password);
-      if(!archiveMigrationCandidate||archiveVersionRef.current!==2)await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
-      await loadReadySnapshot(attempt);
-      setMigrationNotice(null);
-    } catch (error) {
-      vault.lock();
-      if(store instanceof ExistingSessionVaultStore){
-        await store.retireConnection();
-        if(storeRef.current===store){storeRef.current=null;vaultRef.current=null;storageRef.current=null;}
+    const track=archiveMigrationCandidate&&archiveVersionRef.current===2;
+    if(track&&(db2UnlockBusyRef.current||gateStateRef.current!=='LOCKED'||closingRef.current))throw Error('Sessione non attuale.');
+    if(track)db2UnlockBusyRef.current=true;
+    try{
+      const attempt = await getForegroundEpoch();
+      if(track&&(gateStateRef.current!=='LOCKED'||closingRef.current))throw Error('Sessione non attuale.');
+      const { vault,store } = getRuntime();
+      try {
+        if(archiveMigrationCandidate&&store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
+        await vault.unlock(password);
+        if(!archiveMigrationCandidate||archiveVersionRef.current!==2)await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
+        await loadReadySnapshot(attempt);
+        setMigrationNotice(null);
+      } catch (error) {
+        vault.lock();
+        if(store instanceof ExistingSessionVaultStore){
+          await store.retireConnection();
+          if(storeRef.current===store){
+            storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+            // Concurrent erasure can look like a failed password. Inspect
+            // durable state rather than repeatedly opening the erased archive.
+            requireExistingRef.current=true;
+            revokeNativeAuthorization();setSnapshot(null);
+            await inspectBootstrap();
+          }
+        }
+        throw error;
       }
-      throw error;
-    }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate]);
+    }finally{if(track)db2UnlockBusyRef.current=false;}
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,revokeNativeAuthorization,inspectBootstrap]);
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -548,12 +606,12 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     return stamp.epoch===null&&!document.hidden;
   },[]);
   const recoveryOwnerReady=useCallback(()=>gateStateRef.current==='READY'&&!closingRef.current&&
-    !suspendedRef.current&&vaultRef.current?.isUnlocked()===true&&archiveVersionRef.current===1,[]);
+    !suspendedRef.current&&vaultRef.current?.isUnlocked()===true&&(archiveVersionRef.current===1||archiveVersionRef.current===2),[]);
   const selectRecoveryCopy=useCallback(async(file?:File)=>{
     if(!archiveMigrationCandidate||!recoveryOwnerReady())return false;
-    const logicalOwner=storeRef.current;
+    const logicalOwner=storeRef.current,version=archiveVersionRef.current;
     if(!logicalOwner)return false;
-    const owns=()=>storeRef.current===logicalOwner&&gateStateRef.current==='READY'&&!closingRef.current;
+    const owns=()=>storeRef.current===logicalOwner&&archiveVersionRef.current===version&&gateStateRef.current==='READY'&&!closingRef.current;
     const handoff=handoffRef.current??(handoffRef.current=createRecoveryCopyHandoff({
       isOwner:owns,
       observeAuthenticated:async()=>{
@@ -570,7 +628,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     queue:DurableMutationCoordinator,localPassword:string,copyPassword:string
   ):Promise<MigrationSessionResult>=>{
     const handoff=handoffRef.current;
-    if(!archiveMigrationCandidate||!handoff||!recoveryOwnerReady()||archiveMigrationRef.current)return Promise.resolve('not-started');
+    if(!archiveMigrationCandidate||archiveVersionRef.current!==1||!handoff||!recoveryOwnerReady()||archiveMigrationRef.current)return Promise.resolve('not-started');
     return handoff.consume((copy,stamp)=>{
       const oldStore=storeRef.current,oldVault=vaultRef.current;
       if(!oldStore||!oldVault||!recoveryOwnerReady()||!stampCurrent(stamp))return Promise.resolve<MigrationSessionResult>('not-started');
@@ -614,6 +672,72 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     })??Promise.resolve('not-started');
   },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,revokeNativeAuthorization,inspectBootstrap,syncNativeSession]);
 
+  const runDb2Replacement=useCallback((
+    queue:DurableMutationCoordinator,stamp:RecoverySessionStamp,password:string,
+    replacement:{operation:'restore';file:Blob;backupPassword:string}|{operation:'erase'}
+  ):Promise<MigrationSessionResult>=>{
+    const oldStore=storeRef.current,oldVault=vaultRef.current;
+    if(!archiveMigrationCandidate||archiveVersionRef.current!==2||!oldStore||!oldVault||
+      !recoveryOwnerReady()||!stampCurrent(stamp)||archiveMigrationRef.current)return Promise.resolve('not-started');
+    const service=createDb2Lifecycle();let revoked=false;
+    const owner={revoke:()=>{revoked=true;service.invalidate();}};
+    const current=()=>!revoked&&archiveMigrationRef.current===owner&&storeRef.current===oldStore&&closingRef.current&&
+      gateStateRef.current==='READY'&&!suspendedRef.current&&stampCurrent(stamp);
+    archiveMigrationRef.current=owner;
+    closingRef.current=true;setClosing(true);setClosingDelayed(false);
+    return (async()=>{
+      let result:MigrationSessionResult='blocked-reopen-required',invoked=false;
+      const deadline=window.setTimeout(()=>owner.revoke(),120_000);
+      try{
+        await queue.sealAndDrain();
+        if(!current()||LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))throw Error('Archivio non verificabile.');
+        const metadata=await oldStore.getMetadata();
+        if(!metadata||!current())throw Error('Sessione cambiata.');
+        const grant=await service.prepare({...replacement,password},metadata);
+        if(!current())throw Error('Sessione cambiata.');
+        const confirmation=replacement.operation==='erase'
+          ?'Cancellare tutti i dati e la chiave dell’archivio locale? Le copie esterne restano disponibili.'
+          :'La copia è stata verificata. Sostituire tutti i dati attuali con quelli della copia? Dovrai autenticarti nuovamente.';
+        if(!window.confirm(confirmation)){result='cancelled-reopen-required';return result;}
+        if(isAndroidSessionRuntime())await syncNativeSession();
+        if(!current())throw Error('Sessione cambiata.');
+        oldVault.lock();await oldStore.retireConnection();
+        if(!current())throw Error('Sessione cambiata.');
+        invoked=true;await service.commit(grant,true);
+        result=current()?'migrated-reopen-required':'inspect-reopen-required';
+        return result;
+      }catch{
+        result=invoked?'inspect-reopen-required':current()?'blocked-reopen-required':'cancelled-reopen-required';
+        return result;
+      }finally{
+        window.clearTimeout(deadline);owner.revoke();archiveMigrationRef.current=null;
+        oldVault.lock();await oldStore.retireConnection();
+        storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+        requireExistingRef.current=true;revokeNativeAuthorization();setSnapshot(null);
+        if(invoked)try{db2ChannelRef.current?.postMessage('archive-generation-changed');}catch{/* Advisory only. */}
+        setMigrationNotice(result==='migrated-reopen-required'
+          ?replacement.operation==='erase'?'Archivio locale cancellato. Configura un nuovo archivio. Le copie esterne non sono state cancellate.':'Archivio ripristinato. Autenticati per riaprire il Registro.'
+          :result==='inspect-reopen-required'?'Operazione interrotta. Verifica lo stato dell’archivio.':'Operazione non completata. Autenticati per riaprire il Registro.');
+        await inspectBootstrap();
+        closingRef.current=false;setClosing(false);
+      }
+    })();
+  },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,syncNativeSession,revokeNativeAuthorization,inspectBootstrap]);
+
+  const startDb2Restore=useCallback((queue:DurableMutationCoordinator,password:string,backupPassword:string)=>{
+    const handoff=handoffRef.current;
+    if(!handoff||archiveVersionRef.current!==2)return Promise.resolve<MigrationSessionResult>('not-started');
+    return handoff.consume((file,stamp)=>{
+      handoffRef.current=null;
+      return runDb2Replacement(queue,stamp,password,{operation:'restore',file,backupPassword});
+    })??Promise.resolve<MigrationSessionResult>('not-started');
+  },[runDb2Replacement]);
+  const startDb2Erase=useCallback((queue:DurableMutationCoordinator,password:string)=>{
+    discardRecoveryCopy();
+    const stamp={epoch:isAndroidSessionRuntime()?authenticatedEpochRef.current:null,revision:lifecycleRevisionRef.current};
+    return runDb2Replacement(queue,stamp,password,{operation:'erase'});
+  },[discardRecoveryCopy,runDb2Replacement]);
+
   useEffect(()=>{
     if(!archiveMigrationCandidate)return;
     const protect=()=>{if(document.hidden){archiveMigrationRef.current?.revoke();if(!isAndroidSessionRuntime()){lifecycleRevisionRef.current++;discardRecoveryCopy();}}};
@@ -622,6 +746,58 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     window.addEventListener('pagehide',hide);
     return()=>{document.removeEventListener('visibilitychange',protect);window.removeEventListener('pagehide',hide);};
   },[archiveMigrationCandidate,discardRecoveryCopy,invalidateArchiveMigration]);
+
+  // Broadcast carries no data or authority; verify durable generation even
+  // without BroadcastChannel. Stale writes are independently fenced by DB2.
+  useEffect(()=>{
+    if(!archiveMigrationCandidate)return;
+    let disposed=false,checking=false;
+    const probe=async()=>{
+      const state=gateStateRef.current;
+      if(disposed||checking||closingRef.current||db2UnlockBusyRef.current||archiveVersionRef.current!==2||
+        (state!=='READY'&&state!=='LOCKED'&&state!=='SETUP_REQUIRED'))return;
+      const store=storeRef.current,marker=erasedDb2Ref.current;
+      checking=true;
+      try{
+        let changed=false;
+        try{
+          if(store&&state!=='SETUP_REQUIRED'){
+            // Metadata-only guarded read for active or manually locked owners.
+            await store.getMetadata();
+          }else{
+            // An erased setup gate has no handle. Verify its durable marker.
+            const physical=await captureDb2(globalThis.indexedDB);
+            changed=state==='SETUP_REQUIRED'
+              ?physical.state!=='erased'||!sameDb2Physical(physical.metadata,marker)
+              :physical.state!=='active'||state==='READY';
+          }
+        }catch{changed=true;}
+        if(!changed||disposed||storeRef.current!==store||erasedDb2Ref.current!==marker||
+          closingRef.current||db2UnlockBusyRef.current||gateStateRef.current!==state)return;
+        // Do not race an in-flight authentication or local setup.
+        invalidateArchiveMigration();
+        revokeNativeAuthorization();vaultRef.current?.lock();
+        suspendedRef.current=null;setSuspensionPhase(null);setSuspensionDelayed(false);
+        setSnapshot(null);setGateState('CHECKING');
+        await store?.retireConnection();
+        if(storeRef.current===store){storeRef.current=null;vaultRef.current=null;storageRef.current=null;}
+        requireExistingRef.current=true;
+        setMigrationNotice('L’archivio è cambiato. Verifica lo stato e autenticati nuovamente.');
+        await inspectBootstrap();
+      }finally{checking=false;}
+    };
+    const check=()=>{void probe();};
+    const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('registro-docente-db2-generation'):null;
+    db2ChannelRef.current=channel;
+    if(channel)channel.onmessage=check;
+    const timer=window.setInterval(check,2000);
+    window.addEventListener('focus',check);document.addEventListener('visibilitychange',check);
+    return()=>{
+      disposed=true;window.clearInterval(timer);
+      window.removeEventListener('focus',check);document.removeEventListener('visibilitychange',check);
+      channel?.close();if(db2ChannelRef.current===channel)db2ChannelRef.current=null;
+    };
+  },[archiveMigrationCandidate,invalidateArchiveMigration,revokeNativeAuthorization,inspectBootstrap,setGateState]);
 
   const handleAutoLockChange = (minutes: AutoLockMinutes) => {
     setAutoLockMinutes(minutes);
@@ -648,8 +824,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
             onCopilotSurfaceOpenChange={setIsCopilotSurfaceOpen}
             registerSessionLockRequest={registerSessionLockRequest}
             registerSessionSuspension={registerSessionSuspension}
-            archiveMigration={archiveMigrationCandidate&&archiveVersion===1?{
-              select:selectRecoveryCopy,start:startArchiveMigration,discard:discardRecoveryCopy
+            archiveMigration={archiveMigrationCandidate&&archiveVersion!==null?{
+              select:selectRecoveryCopy,start:archiveVersion===2?startDb2Restore:startArchiveMigration,discard:discardRecoveryCopy,
+              mode:archiveVersion===2?'restore':'migrate',erase:archiveVersion===2?startDb2Erase:undefined
             }:undefined}
             onInvalidateArchiveMigration={archiveMigrationCandidate?invalidateArchiveMigration:undefined}
             archiveReplacementBlocked={archiveMigrationCandidate&&archiveVersion===2}

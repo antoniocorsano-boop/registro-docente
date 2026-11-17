@@ -257,7 +257,7 @@ export interface AppProps {
   headerSecurity?: Header01SecurityBindings;
   registerSessionLockRequest?: (request: SessionLockRequest | null) => void;
   registerSessionSuspension?: (request: (() => SuspendedMutationLease) | null) => void;
-  archiveMigration?: Omit<ArchiveMigrationControls,'start'>&{start:(queue:DurableMutationCoordinator,localPassword:string,copyPassword:string)=>Promise<MigrationSessionResult>};
+  archiveMigration?: Omit<ArchiveMigrationControls,'start'|'erase'>&{start:(queue:DurableMutationCoordinator,localPassword:string,copyPassword:string)=>Promise<MigrationSessionResult>;erase?:(queue:DurableMutationCoordinator,password:string)=>Promise<MigrationSessionResult>};
   onInvalidateArchiveMigration?:()=>void;
   archiveReplacementBlocked?:boolean;
 }
@@ -3934,7 +3934,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onFactoryReset={handleFactoryReset}
             archiveReplacementBlocked={archiveReplacementBlocked}
             archiveMigration={archiveMigration?{
-              select:archiveMigration.select,discard:archiveMigration.discard,
+              select:archiveMigration.select,discard:archiveMigration.discard,mode:archiveMigration.mode,
+              erase:archiveMigration.erase?(password)=>{
+                if(activeTabRef.current!=='privacy'||pendingExitRef.current||hasUnsavedActiveDraft())return Promise.resolve('not-started');
+                backupReceiptAuthority.invalidate();
+                return archiveMigration.erase!(mutationCoordinator,password);
+              }:undefined,
               start:(localPassword,copyPassword)=>{
                 // Never retain credentials in a pending draft-navigation callback.
                 // Privacy must be the active, unblocked surface at admission.
