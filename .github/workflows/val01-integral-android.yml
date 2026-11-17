@@ -134,17 +134,28 @@ jobs:
           p.write_text(json.dumps(c))
           PY
           (cd android; bash ./gradlew --no-daemon assembleDebug)
-          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/val01/new.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/val01/new-initial.apk"
           tools="$ANDROID_HOME/build-tools/36.0.0"
-          key="$HOME/.android/debug.keystore"
-          test -f "$key"
+          # Do not depend on Gradle's environment-dependent default debug.keystore.
+          # Explicit ephemeral CI-only certificate, applied to both packages.
+          key="$RUNNER_TEMP/val01/ci-signing.p12"
+          keytool -genkeypair -storetype PKCS12 -keystore "$key" -storepass SyntheticCIOnly2026 -keypass SyntheticCIOnly2026 -alias val01-ci-only -keyalg RSA -keysize 2048 -validity 3 -dname 'CN=VAL01 SYNTHETIC CI ONLY'
+          chmod 600 "$key"
+          echo 'Ephemeral CI key created'
           "$tools/zipalign" -P 16 -f 4 "$RUNNER_TEMP/val01/original.apk" "$RUNNER_TEMP/val01/aligned.apk"
-          "$tools/apksigner" sign --ks "$key" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/val01/old.apk" "$RUNNER_TEMP/val01/aligned.apk"
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias val01-ci-only --ks-pass pass:SyntheticCIOnly2026 --key-pass pass:SyntheticCIOnly2026 --out "$RUNNER_TEMP/val01/old.apk" "$RUNNER_TEMP/val01/aligned.apk"
+          echo 'Original binary signed for isolated CI'
+          "$tools/apksigner" sign --ks "$key" --ks-key-alias val01-ci-only --ks-pass pass:SyntheticCIOnly2026 --key-pass pass:SyntheticCIOnly2026 --out "$RUNNER_TEMP/val01/new.apk" "$RUNNER_TEMP/val01/new-initial.apk"
+          echo 'Candidate binary signed for isolated CI'
           for apk in old new; do
             file="$RUNNER_TEMP/val01/$apk.apk"
             "$tools/apksigner" verify --print-certs "$file" > "$RUNNER_TEMP/val01/$apk.cert"
-            "$tools/aapt" dump badging "$file" | grep -F "package: name='it.trama.registrodocente'"
+            "$tools/aapt" dump badging "$file" > "$RUNNER_TEMP/val01/$apk.badging"
+            grep -F "package: name='it.trama.registrodocente'" "$RUNNER_TEMP/val01/$apk.badging"
             sha256sum "$file" >> ../../native-evidence/provenance.txt
+          done
+          for apk in old new; do
+            test "$(grep -Ec '^Signer #[0-9]+ certificate SHA-256 digest:' "$RUNNER_TEMP/val01/$apk.cert")" = 1
           done
           diff <(grep 'certificate SHA-256 digest:' "$RUNNER_TEMP/val01/old.cert") <(grep 'certificate SHA-256 digest:' "$RUNNER_TEMP/val01/new.cert")
           unzip -p "$RUNNER_TEMP/val01/new.apk" assets/public/fixture.js | cmp - ../../dist/fixture.js
@@ -176,7 +187,7 @@ jobs:
           jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" '.predecessor==$old and .candidate==$new and .productionRelease==false and ([.results[].stage]==["historical-seed-cold-reopen","native-saf-write-readback","native-picker-cancel-no-migration","native-wrong-copy-password-no-migration","native-explicit-refusal-no-migration","native-authorized-migration-and-replay-rejection","native-v2-cold-reopen","original-downgrade-ui-fail-closed","native-reupgrade-archive-intact"]) and all(.results[];.status=="PASS")' native-evidence/result.json
       - name: Destroy signed laboratory APKs and key
         if: always()
-        run: rm -rf "$RUNNER_TEMP/val01" "$HOME/.android/debug.keystore"
+        run: rm -rf "$RUNNER_TEMP/val01"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
