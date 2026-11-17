@@ -137,6 +137,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       }
       const { store } = getRuntime();
       const metadata = await store.getMetadata();
+      if(archiveMigrationCandidate&&requireExistingRef.current&&metadata?.state!=='ACTIVE')throw Error('Archivio esistente non verificabile. Nessun ripristino automatico.');
       if(archiveMigrationCandidate&&archiveVersionRef.current===null){archiveVersionRef.current=1;setArchiveVersion(1);}
       const hasLegacyData = LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null);
       const nextState = decideVaultBootstrap({
@@ -151,6 +152,10 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       }
       setGateState(nextState);
     } catch (error) {
+      if(archiveMigrationCandidate){
+        vaultRef.current?.lock();await storeRef.current?.retireConnection();
+        storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+      }
       setErrorMessage(error instanceof Error ? error.message : 'Controllo del Secure Local Vault non riuscito.');
       setGateState('ERROR');
     }
@@ -310,7 +315,10 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     attempt: { epoch: number | null; revision: number }, commit: () => void
   ) => {
     const { epoch, revision } = attempt;
-    if (epoch === null) { commit(); return; }
+    if (epoch === null) {
+      if(archiveMigrationCandidate&&(document.hidden||lifecycleRevisionRef.current!==revision))throw Error('Sessione cambiata. Autenticati nuovamente.');
+      commit(); return;
+    }
     const assertCurrent = () => {
       const observed = nativeStateRef.current;
       if (lifecycleRevisionRef.current !== revision || !observed?.foreground || observed.epoch !== epoch) {
@@ -335,7 +343,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       await revokeAndroidSession(epoch).catch(() => {});
       throw error;
     }
-  }, [syncNativeSession]);
+  }, [syncNativeSession,archiveMigrationCandidate]);
 
   const resumeSuspendedSession = useCallback(async (password: string) => {
     const lease = suspendedRef.current;
@@ -574,15 +582,21 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         queue,isCurrent:current,
         readLocalCopy:async signal=>signal.aborted?null:copy,
         confirm:async signal=>!signal.aborted&&current()&&window.confirm('La copia è stata verificata. Aggiornare l’archivio locale? Dovrai autenticarti nuovamente.'),
-        retireDb1:async()=>{oldVault.lock();await oldStore.retireConnection();}
+        retireDb1:async()=>{
+          if(isAndroidSessionRuntime())await syncNativeSession();
+          if(!current())throw Error('Sessione non attuale.');
+          oldVault.lock();await oldStore.retireConnection();
+        }
       });
       archiveMigrationRef.current=boundary;
       closingRef.current=true;setClosing(true);setClosingDelayed(false);
       // run seals the actual App coordinator before its first await.
       return (async()=>{
         let result:MigrationSessionResult='inspect-reopen-required';
+        const deadline=window.setTimeout(()=>boundary.revoke(),120_000);
         try{result=await boundary.run(localPassword,copyPassword);return result;}
         finally{
+          window.clearTimeout(deadline);
           boundary.revoke();archiveMigrationRef.current=null;
           oldVault.lock();await oldStore.retireConnection();
           storeRef.current=null;vaultRef.current=null;storageRef.current=null;
@@ -598,11 +612,11 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         }
       })();
     })??Promise.resolve('not-started');
-  },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,revokeNativeAuthorization,inspectBootstrap]);
+  },[archiveMigrationCandidate,recoveryOwnerReady,stampCurrent,revokeNativeAuthorization,inspectBootstrap,syncNativeSession]);
 
   useEffect(()=>{
     if(!archiveMigrationCandidate)return;
-    const protect=()=>{if(document.hidden){archiveMigrationRef.current?.revoke();if(!isAndroidSessionRuntime())discardRecoveryCopy();}};
+    const protect=()=>{if(document.hidden){archiveMigrationRef.current?.revoke();if(!isAndroidSessionRuntime()){lifecycleRevisionRef.current++;discardRecoveryCopy();}}};
     const hide=()=>invalidateArchiveMigration();
     document.addEventListener('visibilitychange',protect);
     window.addEventListener('pagehide',hide);
