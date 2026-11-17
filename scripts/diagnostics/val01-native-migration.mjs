@@ -123,6 +123,26 @@ const marker='Collaudo migrazione VAL01';
 const vaultPassword='synthetic-archive-compatibility-only';
 const nativeApp=n=>n.pkg===pkg;
 const named=(n,label)=>nativeApp(n)&&(n.text===label||n.desc===label);
+// Exact, compound accessibility labels observed in all three original APKs.
+// Require both the post-commit header and the management heading; a prompt,
+// input field, toast, or substring alone must never count as creation.
+const originalClassCreated=view=>view.some(n=>named(n,'Classe '+marker)&&n.clazz==='android.widget.TextView')&&
+  view.some(n=>named(n,'Gestione Elenco Alunni: '+marker)&&n.clazz==='android.widget.TextView');
+function verifyOriginalUiRecognition(){
+  // Minimal non-identifying replay from failure artifacts 14302543378,
+  // 14302563471 and 14303066402. The three accessibility trees agree.
+  const observed=[
+    {pkg,text:'Gestione alunni',desc:'',clazz:'android.widget.TextView'},
+    {pkg,text:'Classe '+marker,desc:'',clazz:'android.widget.TextView'},
+    {pkg,text:'Gestione Elenco Alunni: '+marker,desc:'',clazz:'android.widget.TextView'},
+    {pkg,text:'Apri navigazione del Registro',desc:'',clazz:'android.widget.Button',enabled:true,clickable:true}
+  ];
+  assert.equal(originalClassCreated(observed),true);
+  assert.equal(originalClassCreated([{pkg,text:marker,desc:'',clazz:'android.widget.EditText'}]),false);
+  assert.equal(originalClassCreated(observed.slice(0,2)),false);
+  assert.equal(originalClassCreated(observed.map(n=>({...n,pkg:'unrelated.package'}))),false);
+  console.log('original-ui-recognition-replay PASS');
+}
 const appButton=label=>find(n=>named(n,label)&&n.enabled&&(n.clickable||n.clazz==='android.widget.Button'),label);
 const appText=label=>find(n=>nativeApp(n)&&(n.text.includes(label)||n.desc.includes(label)),label);
 const appEdit=(secret=false)=>find(n=>nativeApp(n)&&n.clazz==='android.widget.EditText'&&(!secret||n.password),'Native edit field');
@@ -145,7 +165,7 @@ async function findMarker(){
 }
 async function uiCheckpoint(label){
   // Only synthetic CI UI, never archive contents or passwords.
-  const safe=value=>!value?'':/Collaudo migrazione VAL01|^Classe creata$|^Le mie classi$|^Oggi$|^Torna a Oggi$|^Nuova Classe$|^OK$|^Annulla$|^Sblocca Registro$|^Configura archivio protetto$|^Inserisci la denominazione della nuova classe/.test(value)?value:'[redacted]';
+  const safe=value=>!value?'':/Collaudo migrazione VAL01|^Classe creata$|^Gestione alunni$|^Apri navigazione del Registro$|^Chiudi navigazione del Registro$|^Le mie classi$|^Oggi$|^Torna a Oggi$|^Nuova Classe$|^OK$|^Annulla$|^Sblocca Registro$|^Configura archivio protetto$|^Inserisci la denominazione della nuova classe/.test(value)?value:'[redacted]';
   const view=(await until(()=>{const n=nodes();return n.length?n:null;},'UI checkpoint unavailable',12000)).map(n=>({text:n.password?'[redacted]':safe(n.text),desc:n.password?'[redacted]':safe(n.desc),pkg:n.pkg,id:n.id,clazz:n.clazz,enabled:n.enabled,clickable:n.clickable,bounds:n.bounds}));
   writeFileSync('native-evidence/ui-'+label+'.json',JSON.stringify(view,null,2));
   console.log('original-ui',label);
@@ -154,8 +174,13 @@ async function ensureHome(){
   // handleAddClass navigates to 'dati' after durable commit in all 3 SHAs.
   const home=()=>{try{return nodes().some(n=>nativeApp(n)&&(n.text.includes('Le mie classi')||n.desc.includes('Le mie classi')));}catch{return false;}};
   if(!home()){
+    // Exact mobile header label from the three observed failure UI trees.
+    // Source Navbar.tsx exposes Oggi in the drawer, not the active class view.
+    tap(await appButton('Apri navigazione del Registro'));
+    await appButton('Oggi');
+    await uiCheckpoint('navigation-drawer');
     tap(await appButton('Oggi'));
-    // Some historical navigation routes request confirmation.
+    // Header01 requests explicit confirmation when leaving a class.
     await until(()=>home()||nodes().some(n=>named(n,'Torna a Oggi')&&n.enabled),'Return to Oggi not completed',20000);
     if(!home())tap(await appButton('Torna a Oggi'));
   }
@@ -172,7 +197,7 @@ async function seedOriginal(version){
   await until(()=>nodes().some(n=>nativeApp(n)&&n.clazz==='android.widget.EditText'&&n.text===marker),'Class prompt value not entered exactly',15000);
   hideKeyboard();tap(await appButton('OK'));
   // Verify that the app actually left the prompt and committed/navigated.
-  await until(()=>nodes().some(n=>nativeApp(n)&&(n.text===marker||n.desc===marker||n.text==='Classe creata'||n.desc==='Classe creata')),'Class creation not observed in original UI',30000);
+  await until(()=>originalClassCreated(nodes()),'Post-commit class management headings not observed in original UI',30000);
   await uiCheckpoint('class-created');
   await ensureHome();await uiCheckpoint('home-after-create');await findMarker();
   console.log('original-class-visible-before-restart');
@@ -181,6 +206,7 @@ async function seedOriginal(version){
   console.log('original-class-visible-after-restart');
 }
 try{
+  verifyOriginalUiRecognition();
   assert.equal(process.env.GITHUB_ACTIONS,'true');
   assert.ok(adb('shell','getprop','ro.kernel.qemu')==='1'||adb('shell','getprop','ro.boot.qemu')==='1');
   assert.equal(adb('shell','getprop','ro.build.version.sdk'),'36');
