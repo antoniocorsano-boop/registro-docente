@@ -577,6 +577,27 @@ async function armMigrationProcessCut(cut){
     stage('interruption-process-stopped',{forcedStop:true});
   };
 }
+// Failure-only, read-only evidence. Never reload, clear WebView storage,
+// change the expected version or mark the failed cold launch as successful.
+async function collectColdInterruptionDiagnostics(before){
+  const report={cut:interruptionCut,api,phase:'cold-gate-failed',expectedVersion:interruptionCut==='before-commit'?1:2};
+  const observe=async(name,fn)=>{try{report[name]=await fn();}catch(e){report[name]={failed:true,error:e.name||'Error'};}writeFileSync('native-evidence/cold-reopen-diagnostic.json',JSON.stringify(report,null,2));};
+  await observe('foreground',()=>foreground());
+  await observe('processes',()=>adb('shell','ps','-A').split('\n').filter(line=>line.includes(pkg)||line.includes('sandboxed_process')).map(line=>line.trim().split(/\s+/).filter((_,i,a)=>i<3||i===a.length-1)));
+  await observe('targetInventory',async()=>{
+    const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(3000)});
+    return (await res.json()).map(t=>({id:t.id,type:t.type,local:t.url?.startsWith('https://localhost')||t.url?.startsWith('http://localhost'),url:t.url?.split(/[?#]/)[0]}));
+  });
+  await observe('document',()=>evaluate('(()=>{const root=document.getElementById("root");return {href:location.origin+location.pathname,ready:document.readyState,visibility:document.visibilityState,boot:window.__val01Boot||null,rootChildren:root?.childElementCount??null,heading:[...document.querySelectorAll("h1")].map(h=>h.textContent).filter(t=>["Sblocca Registro","Configura archivio protetto","Sicurezza non disponibile","Protezione del Registro","Protezione dati in corso","Oggi"].includes(t)),passwordField:!!document.querySelector("#vault-password"),scripts:[...document.scripts].filter(s=>s.src).map(s=>new URL(s.src).pathname),resources:performance.getEntriesByType("resource").filter(r=>r.initiatorType==="script").map(r=>({path:new URL(r.name).pathname,duration:Math.round(r.duration),transferSize:r.transferSize})),indexedDB:typeof indexedDB,crypto:!!globalThis.crypto?.subtle}})()',5000));
+  await observe('archiveVersion',()=>evaluate('Promise.race([indexedDB.databases().then(d=>({status:"resolved",versions:d.filter(x=>x.name==="registro-docente-secure-vault").map(x=>x.version)})),new Promise(r=>setTimeout(()=>r({status:"timed-out"}),5000))])',8000));
+  // Direct readonly capture on the observed version, no page navigation and
+  // no crypto authorization. Abort on unexpected upgrade and close any handle.
+  await observe('physical',()=>evaluate('((async()=>{const name="registro-docente-secure-vault";const ds=await indexedDB.databases();const v=ds.find(d=>d.name===name)?.version;if(v!==1&&v!==2)return {status:"unknown-version"};return new Promise(resolve=>{let settled=false;const done=value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>done({status:"timed-out"}),6000);const r=indexedDB.open(name,v);r.onupgradeneeded=()=>r.transaction?.abort();r.onerror=()=>done({status:"open-error",name:r.error?.name});r.onblocked=()=>done({status:"blocked"});r.onsuccess=()=>{const db=r.result;if(settled){db.close();return;}try{const tx=db.transaction(["metadata","records"],"readonly"),m=tx.objectStore("metadata"),s=tx.objectStore("records");const mk=m.getAllKeys(),mv=m.getAll(),rk=s.getAllKeys(),rv=s.getAll();tx.oncomplete=async()=>{db.close();try{const json=JSON.stringify({metadataKeys:mk.result,metadata:mv.result,keys:rk.result,records:rv.result},(_k,v)=>v instanceof ArrayBuffer?Array.from(new Uint8Array(v)):v instanceof Uint8Array?Array.from(v):v);const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(json))),x=>x.toString(16).padStart(2,"0")).join("");done({status:"read",version:v,recordCount:rk.result.length,digest});}catch{done({status:"digest-error"});}};tx.onabort=tx.onerror=()=>{db.close();done({status:"transaction-error"});};}catch{db.close();done({status:"inventory-error"});}};});})())',12000));
+  if(report.physical?.status==='read')report.physical.matchesOriginal=report.physical.digest===before.digest;
+  // Capture only relevant, synthetic-emulator crash/renderer/IDB log lines.
+  await observe('nativeLogs',()=>adb('shell','logcat','-d','-t','1800','-v','brief').split('\n').filter(l=>/chromium|WebView|crash|IndexedDB|LevelDB|AndroidRuntime/i.test(l)).slice(-120).map(l=>l.slice(0,700)));
+  writeFileSync('native-evidence/cold-reopen-diagnostic.json',JSON.stringify(report,null,2));
+}
 async function migrationInterruptionSuite(oldVersion,initial){
   assert.equal(product,true);assert.equal(integral,true);assert.equal(oldVersion,10004);
   assert.ok(['before-commit','after-commit'].includes(interruptionCut));
@@ -600,8 +621,9 @@ async function migrationInterruptionSuite(oldVersion,initial){
   // Cold reopen through actual native authentication, before any diagnostic
   // read. Do not replay a grant, assume rollback or attempt automatic repair.
   assert.deepEqual(identity(10005),initial);
-  launchOriginal();await connect();
-  await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);
+  launchOriginal();
+  try{await connect();await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);}
+  catch(error){await collectColdInterruptionDiagnostics(before);throw error;}
   assert.equal(await visible('[data-testid="header01-topbar"]'),false);
   await gate('Sblocca Registro');await ensureHome();await findMarker();
   await diagnostic();const recovered=await inspectProduct();
