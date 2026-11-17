@@ -311,7 +311,8 @@ test('D1b.4b.2b product Root/App/Privacy approved migration reopens only through
   await unlockProduct(page);
   await privacyProduct(page);
   await expect(page.getByRole('region',{name:'Aggiornamento protetto archivio'})).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'Reset Totale Sicuro'})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Reset Totale Sicuro'})).toHaveCount(0);
+  await expect(page.getByRole('region',{name:'Ripristino protetto archivio'})).toBeVisible();
   await page.reload();await unlockProduct(page);
   await physicalAfterProduct(page,2,seed);
 });
@@ -472,4 +473,101 @@ test('D1b.5 unsupported v7, legacy and incomplete v6 restore candidates remain u
     expect(await candidate(page,'db2Lifecycle','restore',copy)).toEqual({result:'prepare-rejected',state:'active'});
     expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
   }
+});
+
+async function productDb2(page){
+  const seed=await seedProduct(page);
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  await candidate(page,'upgrade');
+  const changedCopy=await candidate(page,'db2ChangedCopy');
+  const before=await candidate(page,'preflightInventory',null,2);
+  await page.goto(productApp());await unlockProduct(page);await privacyProduct(page);
+  return {seed,changedCopy,before};
+}
+const restorePanel=page=>page.getByRole('region',{name:'Ripristino protetto archivio'});
+async function submitProductRestore(page,copy,copyPassword){
+  const panel=restorePanel(page);
+  await panel.locator('input[type=file]').setInputFiles({name:'synthetic.enc.json',mimeType:'application/json',buffer:Buffer.from(copy)});
+  await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await panel.getByLabel('Password della copia',{exact:true}).fill(copyPassword);
+  await panel.getByRole('button',{name:'Verifica e ripristina archivio'}).click();
+}
+async function submitProductErase(page){
+  const panel=restorePanel(page);
+  await panel.getByRole('button',{name:'Prepara cancellazione'}).click();
+  await panel.getByLabel('Password locale per cancellazione').fill('synthetic-archive-compatibility-only');
+  await expect(panel.getByRole('button',{name:'Verifica e cancella archivio locale'})).toBeDisabled();
+  await panel.getByLabel('Scrivi CANCELLA per proseguire').fill('CANCELLA');
+  await panel.getByRole('button',{name:'Verifica e cancella archivio locale'}).click();
+}
+async function readProductDb2(page,newPassword=false){
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  return candidate(page,'db2Read',newPassword);
+}
+
+test('D1b.5 actual UI restores DB2 only after approval and fresh authentication',async({page})=>{
+  test.setTimeout(120000);
+  const {changedCopy}=await productDb2(page);
+  let confirmed=0;
+  page.on('dialog',async d=>{if(d.message().includes('Sostituire tutti i dati attuali')){confirmed++;await d.accept();}else await d.dismiss();});
+  await submitProductRestore(page,changedCopy,'synthetic-archive-backup-only');
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  expect(confirmed).toBe(1);
+  await expect(page.getByText('Archivio ripristinato. Autenticati per riaprire il Registro.')).toBeVisible();
+  await unlockProduct(page);
+  await page.reload();await unlockProduct(page);
+  const snapshot=await readProductDb2(page);
+  expect(snapshot.appData.classes).toEqual([]);
+  expect(snapshot.meta).toEqual({changes:19,lastBackup:null});
+});
+
+for(const mode of ['refuse','wrong-copy','erase-refuse']){
+  test('D1b.5 actual UI '+mode+' preserves DB2 and returns to protected gate',async({page})=>{
+    test.setTimeout(120000);
+    const {changedCopy,before}=await productDb2(page);
+    let confirmations=0;
+    page.on('dialog',async d=>{confirmations++;await d.dismiss();});
+    if(mode==='erase-refuse')await submitProductErase(page);
+    else await submitProductRestore(page,changedCopy,mode==='wrong-copy'?'wrong':'synthetic-archive-backup-only');
+    await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+    expect(confirmations).toBe(mode==='wrong-copy'?0:1);
+    await unlockProduct(page);
+    await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+  });
+}
+
+test('D1b.5 actual erasure closes other authenticated UI, persists DB2, and new setup requires new authentication',async({page,context})=>{
+  test.setTimeout(120000);
+  await productDb2(page);
+  const other=await context.newPage();
+  await other.goto(productApp());await unlockProduct(other);
+  let confirmed=0;
+  page.on('dialog',async d=>{if(d.message().includes('Cancellare tutti i dati e la chiave')){confirmed++;await d.accept();}else await d.dismiss();});
+  await submitProductErase(page);
+  await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible({timeout:30000});
+  expect(confirmed).toBe(1);
+  await expect(page.getByText('Archivio locale cancellato. Configura un nuovo archivio. Le copie esterne non sono state cancellate.')).toBeVisible();
+  await expect(other.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible({timeout:30000});
+  await expect(other.getByTestId('header01-topbar')).toHaveCount(0);
+  await other.close();
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+  await page.getByRole('radio',{name:/Archivio professionale/}).check();
+  await page.getByLabel('Istituto',{exact:true}).fill('Synthetic school');
+  await page.getByLabel('Anno scolastico',{exact:true}).fill('2026/2027');
+  await page.getByLabel('Docente',{exact:true}).fill('Synthetic teacher');
+  await page.getByLabel('Disciplina',{exact:true}).fill('Tecnologia');
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-new-password');
+  await page.getByRole('button',{name:'Crea il mio registro'}).click();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  await expect(page.getByText('Nuovo archivio creato. Autenticati con la nuova password.')).toBeVisible();
+  await unlockProduct(page,'synthetic-new-password');
+  const fresh=await readProductDb2(page,true);
+  expect(fresh.appData.classes).toEqual([]);
+  expect(fresh.settings.archiveMode).toBe('professional');
+  expect(fresh.meta).toEqual({changes:0,lastBackup:null});
+  expect(await candidate(page,'version')).toBe(2);
+  await page.goto(productSeed());await page.addScriptTag({path:oldBundle});
+  expect(await historic(page,'initialize')).toBe('VersionError');
 });
