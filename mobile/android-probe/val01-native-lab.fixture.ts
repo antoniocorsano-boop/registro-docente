@@ -1,5 +1,12 @@
 // CI emulator only. This file is never imported by the product entrypoint.
 import '../../tests/browser/fixtures/val01-fence-candidate.fixture';
+import { IndexedDbVaultStore } from '../../src/security/vaultStore';
+import { SecureVault } from '../../src/security/secureVault';
+import { SecureAppStorage, type CompleteSecureAppSnapshot } from '../../src/security/secureAppStorage';
+import type { VaultRecordKey } from '../../src/security/vaultTypes';
+import { createBackupPayload } from '../../src/security/backupPayload';
+import { withoutLocalBackupVerification } from '../../src/persistence/backupCheckpoint';
+import { encryptDataWithPassword } from '../../src/cryptoUtils';
 import { createAuthorizedVaultMigration } from '../../src/security/authorizedVaultMigration';
 import { readEncryptedBackupOnAndroid, saveEncryptedBackupOnAndroid } from '../../src/security/androidBackupExport';
 import { readAndroidSessionState, authorizeAndroidSession, acknowledgeAndroidShield, registerAndroidFileAccess } from '../../src/security/androidSessionLifecycle';
@@ -29,7 +36,38 @@ async function access(active:()=>boolean){
   return false;
 }
 registerAndroidFileAccess(access);
+// In the integral-APK lab only, inspect DB1 actually created by the original
+// app UI. No writes or migration here; close the v1 connection before upgrading.
+async function inspectHistoricalArchive(){
+  const name='registro-docente-secure-vault';
+  if((await indexedDB.databases()).find(db=>db.name===name)?.version!==1)throw Error('Expected existing DB1');
+  const store=new class extends IndexedDbVaultStore{
+    async release(){(await this.openDatabase()).close();}
+  }();
+  const vault=new SecureVault(store);
+  const storage=new SecureAppStorage(vault);
+  const keys:VaultRecordKey[]=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'];
+  const digest=async(v:ArrayBuffer|Uint8Array)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array(v instanceof Uint8Array?v.slice().buffer:v))),x=>x.toString(16).padStart(2,'0')).join('');
+  try{
+    await vault.unlock(password);
+    const snapshot=await storage.loadSnapshot();
+    if(keys.some(k=>snapshot[k]===null||snapshot[k]===undefined)||!snapshot.appData?.classes.some(c=>c.name==='Collaudo migrazione VAL01'))throw Error('Missing synthetic archive marker or dataset');
+    const meta=await store.getMetadata();
+    if(!meta)throw Error('Missing metadata');
+    const records=await Promise.all(keys.map(async key=>{
+      const r=await store.getRecord(key);
+      if(!r)throw Error('Missing encrypted record');
+      return {key,version:r.schemaVersion,iv:await digest(r.iv),ciphertext:await digest(r.ciphertext)};
+    }));
+    const physical={version:meta.vaultVersion,state:meta.state,kdf:meta.kdf,createdAt:meta.createdAt,updatedAt:meta.updatedAt,
+      salt:await digest(meta.salt),wrappedDek:await digest(meta.wrappedDek),wrapIv:await digest(meta.wrapIv),records,keys:(await store.listRecordKeys()).sort()};
+    const complete=snapshot as CompleteSecureAppSnapshot;
+    const backup=await encryptDataWithPassword(createBackupPayload({...complete,meta:withoutLocalBackupVerification(complete.meta)},new Date().toISOString()),backupPassword);
+    return {snapshot,physical,backup};
+  }finally{vault.lock();await store.release();}
+}
 Object.assign(globalThis,{__val01NativeLab:{
+  inspectHistoricalArchive,
   async ready(){return access(()=>true);},
   async write(backup:string){const epoch=++generation;return saveEncryptedBackupOnAndroid(backup,filename,()=>epoch===generation);},
   readState(){return readState;},
