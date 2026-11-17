@@ -61,7 +61,7 @@ export class IndexedDbVaultStore implements VaultStore {
   private activeConnection: IDBDatabase | null = null;
   private abandonOpen: (() => void) | null = null;
 
-  constructor(factory: IDBFactory | undefined = globalThis.indexedDB) {
+  constructor(factory: IDBFactory | undefined = globalThis.indexedDB, private readonly existingOnly = false) {
     if (!factory) {
       throw new Error('IndexedDB non disponibile: impossibile usare il Secure Local Vault.');
     }
@@ -91,7 +91,7 @@ export class IndexedDbVaultStore implements VaultStore {
       this.abandonOpen = () => fail(new Error('Sessione archivio non più attuale.'));
 
       request.onupgradeneeded = () => {
-        if (abandoned || this.connectionRetired) { request.transaction?.abort(); return; }
+        if (abandoned || this.connectionRetired || this.existingOnly) { request.transaction?.abort(); return; }
         const db = request.result;
         if (!db.objectStoreNames.contains(METADATA_STORE)) {
           db.createObjectStore(METADATA_STORE);
