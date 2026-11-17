@@ -632,3 +632,76 @@ for(const signal of ['broadcast','durable-polling']){
     expect(await candidate(page,'version')).toBe(2);
   });
 }
+
+/** Test-only observation of the real guarded versionchange transaction.
+ * The authorization service registers its completion listener only after
+ * checking the complete physical inventory and arming abort on revocation.
+ * No application injection port, no fabricated migration result. */
+async function armOriginalMigrationInterruption(page,cut){
+  await page.evaluate(cut=>{
+    const original=IDBTransaction.prototype.addEventListener;
+    const trace={guardReached:0,aborted:0,completed:0,revoked:0};
+    window.__val01MigrationCut=trace;
+    IDBTransaction.prototype.addEventListener=function(type,listener,options){
+      const result=original.call(this,type,listener,options);
+      if(type==='complete'&&this.mode==='versionchange'&&this.db.name==='registro-docente-secure-vault'&&this.db.version===2&&!trace.guardReached){
+        trace.guardReached++;
+        // Observe the real transaction outcome before revoking.
+        original.call(this,'abort',()=>{trace.aborted++;},{once:true});
+        original.call(this,'complete',()=>{
+          trace.completed++;
+          if(cut==='after-commit'){trace.revoked++;window.dispatchEvent(new Event('pagehide'));}
+        },{once:true});
+        if(cut==='before-commit'){trace.revoked++;window.dispatchEvent(new Event('pagehide'));}
+      }
+      return result;
+    };
+  },cut);
+}
+async function confirmOriginalMigration(page,backup){
+  const panel=await selectProductCopy(page,backup);
+  await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await panel.getByLabel('Password della copia',{exact:true}).fill('synthetic-archive-backup-only');
+  await panel.getByRole('button',{name:'Verifica e aggiorna archivio'}).click();
+}
+for(const cut of ['before-commit','after-commit']){
+  test('D1b.6 real migration '+cut+' interruption requires protected durable reinspection',async({page})=>{
+    test.setTimeout(120000);
+    const seed=await seedProduct(page);
+    await unlockProduct(page);await privacyProduct(page);
+    await armOriginalMigrationInterruption(page,cut);
+    let confirmations=0;
+    page.on('dialog',async d=>{if(d.message().includes('La copia è stata verificata')){confirmations++;await d.accept();}else await d.dismiss();});
+    await confirmOriginalMigration(page,seed.backup);
+    await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+    expect(confirmations).toBe(1);
+    await expect(page.getByText('Operazione interrotta. Autenticati per verificare lo stato dell’archivio.')).toBeVisible();
+    await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+    expect(await page.evaluate(()=>window.__val01MigrationCut)).toEqual({
+      guardReached:1,aborted:cut==='before-commit'?1:0,completed:cut==='after-commit'?1:0,revoked:1
+    });
+    const expected=cut==='before-commit'?1:2;
+    // Cold document restart must not use the former grant, key or snapshot.
+    await page.reload();
+    await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+    await unlockProduct(page);await privacyProduct(page);
+    await expect(page.getByRole('region',{name:expected===1?'Aggiornamento protetto archivio':'Ripristino protetto archivio'})).toBeVisible();
+    await physicalAfterProduct(page,expected,seed);
+    await page.goto(productApp());await unlockProduct(page);await privacyProduct(page);
+    if(expected===1){
+      // The old authorization is gone. A fresh verified file and new explicit
+      // confirmation are required to finish the same migration.
+      await confirmOriginalMigration(page,seed.backup);
+      await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+      await expect(page.getByText('Archivio aggiornato. Autenticati per verificarlo e riaprire il Registro.')).toBeVisible();
+      expect(confirmations).toBe(2);
+      await unlockProduct(page);
+      await physicalAfterProduct(page,2,seed);
+    }else{
+      expect(confirmations).toBe(1);
+      await expect(page.getByRole('region',{name:'Aggiornamento protetto archivio'})).toHaveCount(0);
+    }
+    await page.goto(productSeed());await page.addScriptTag({path:oldBundle});
+    for(const operation of ['read','unlock','write','delete','clear','initialize'])expect(await historic(page,operation)).toBe('VersionError');
+  });
+}
