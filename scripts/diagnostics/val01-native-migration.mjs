@@ -552,8 +552,8 @@ async function armMigrationProcessCut(cut){
 }
 // Failure-only, read-only evidence. Never reload, clear WebView storage,
 // change the expected version or mark the failed cold launch as successful.
-async function collectColdInterruptionDiagnostics(before){
-  const report={cut:interruptionCut,api,phase:'cold-gate-failed',expectedVersion:interruptionCut==='before-commit'?1:2};
+async function collectColdInterruptionDiagnostics(before,phase='cold-gate-failed'){
+  const report={cut:interruptionCut,api,phase,expectedVersion:interruptionCut==='before-commit'?1:2};
   const observe=async(name,fn)=>{try{report[name]=await fn();}catch(e){report[name]={failed:true,error:e.name||'Error'};}writeFileSync('native-evidence/cold-reopen-diagnostic.json',JSON.stringify(report,null,2));};
   await observe('foreground',()=>foreground());
   await observe('processes',()=>adb('shell','ps','-A').split('\n').filter(line=>line.includes(pkg)||line.includes('sandboxed_process')).map(line=>line.trim().split(/\s+/).filter((_,i,a)=>i<3||i===a.length-1)));
@@ -582,7 +582,7 @@ async function migrationInterruptionSuite(oldVersion,initial){
   await diagnostic();const before=await inspectProduct(true);
   assert.equal(before.version,1);assert.equal(before.classification,'complete');assert.equal(before.keys.length,10);assert.equal(before.marker,true);
   assert.match(before.digest,/^[a-f0-9]{64}$/);
-  stage('interruption-original-preflight',{recordCount:10,classification:'complete'});
+  stage('interruption-original-preflight',{version:1,recordCount:10,classification:'complete',physicalSha256:before.digest});
   await writeSyntheticRestoreFile(before.backup);
   await productGate();await privacyProduct();await selectProductFile();
   stage('interruption-picker-reauthenticated');
@@ -595,37 +595,58 @@ async function migrationInterruptionSuite(oldVersion,initial){
   // read. Do not replay a grant, assume rollback or attempt automatic repair.
   assert.deepEqual(identity(10005),initial);
   launchOriginal();
-  try{await connect();await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);}
-  catch(error){await collectColdInterruptionDiagnostics(before);throw error;}
-  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
-  await gate('Sblocca Registro');await ensureHome();await findMarker();
+  let coldGate,phase='cold-gate-failed';
+  try{
+    await connect();
+    // Observe the actual protected Root before authentication; neither a
+    // password input on setup nor an error surface counts as recovered.
+    await until(async()=>foreground()&&await visibleText('Sblocca Registro')&&await visible('#vault-password'),'Cold interruption protected gate missing',45000);
+    assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+    const reopenedPids=packagePids();
+    assert.ok(reopenedPids.length>0,'Relaunched candidate process not observed');
+    const trace=await evaluate('JSON.parse(document.querySelector("[data-bootstrap-trace]")?.getAttribute("data-bootstrap-trace")||"null")');
+    assert.ok(Array.isArray(trace),'Protected bootstrap trace unavailable');
+    assert.ok(trace.every(e=>Number.isInteger(e.attempt)&&typeof e.phase==='string'&&typeof e.code==='string'),'Malformed protected bootstrap trace');
+    coldGate={foreground:true,protectedHeading:true,archiveHidden:true,reopenedPids,bootstrapTrace:trace};
+    writeFileSync('native-evidence/cold-reopen-gate.json',JSON.stringify(coldGate,null,2));
+    phase='cold-authentication-failed';
+    await gate('Sblocca Registro');
+    phase='cold-archive-ui-failed';
+    await ensureHome();await findMarker();
+  }catch(error){
+    await collectColdInterruptionDiagnostics(before,phase).catch(()=>{});
+    throw error;
+  }
+  // No diagnostics or new navigation until the actual cold Root has
+  // authenticated and displayed the retained synthetic class.
   await diagnostic();const recovered=await inspectProduct();
   const expected=interruptionCut==='before-commit'?1:2;
   assert.equal(recovered.version,expected);
   assert.equal(recovered.digest,before.digest);
   assert.deepEqual(recovered.keys,before.keys);assert.deepEqual(recovered.snapshot,before.snapshot);
-  stage('interruption-reopen-authenticated',{version:expected,recordCount:10,physicalSha256:recovered.digest});
+  assert.equal(recovered.marker,true);
+  stage('interruption-reopen-authenticated',{version:expected,recordCount:10,physicalSha256:recovered.digest,logicalSnapshotEqual:true,markerVisible:true,coldGate});
   if(expected===1){
     stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
     launchOriginal();await gate('Sblocca Registro');await ensureHome();await findMarker();
-    stage('interruption-original-reopened');
+    stage('interruption-original-reopened',{versionCode:oldVersion,markerVisible:true});
     stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
     launchOriginal();await connect();await gate('Sblocca Registro');await privacyProduct();
     // New local readback and explicit approval; old process grant is gone.
     await selectProductFile();await submitProduct('synthetic-archive-backup-only',true);
     await gate('Sblocca Registro');await diagnostic();const migrated=await inspectProduct();
-    assert.equal(migrated.version,2);assert.equal(migrated.digest,before.digest);assert.deepEqual(migrated.snapshot,before.snapshot);
-    stage('interruption-fresh-consent-migrated');
+    assert.equal(migrated.version,2);assert.equal(migrated.digest,before.digest);assert.deepEqual(migrated.keys,before.keys);assert.deepEqual(migrated.snapshot,before.snapshot);assert.equal(migrated.marker,true);
+    stage('interruption-fresh-consent-migrated',{version:2,recordCount:10,physicalSha256:migrated.digest,logicalSnapshotEqual:true,freshFileAndConsent:true});
   }
   stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
   launchOriginal();await appText('Sicurezza non disponibile');
   assert.ok(!nodes().some(n=>nativeApp(n)&&(/Sblocca Registro|Configura archivio protetto|Le mie classi|Proteggi i dati esistenti/.test(n.text)||n.password)));
-  stage('interruption-downgrade-refused');
+  stage('interruption-downgrade-refused',{versionCode:oldVersion,archiveHidden:true});
   stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
   launchOriginal();await connect();await gate('Sblocca Registro');await ensureHome();await findMarker();
   await diagnostic();const final=await inspectProduct();
-  assert.equal(final.version,2);assert.equal(final.digest,before.digest);assert.deepEqual(final.snapshot,before.snapshot);
-  stage('interruption-final-cold-reopen',{version:2,recordCount:10,physicalSha256:final.digest});
+  assert.equal(final.version,2);assert.equal(final.digest,before.digest);assert.deepEqual(final.keys,before.keys);assert.deepEqual(final.snapshot,before.snapshot);assert.equal(final.marker,true);
+  stage('interruption-final-cold-reopen',{version:2,recordCount:10,physicalSha256:final.digest,logicalSnapshotEqual:true,markerVisible:true});
 }
 async function productSuite(oldVersion,initial){
   assert.equal(integral,true);
