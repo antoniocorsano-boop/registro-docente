@@ -451,3 +451,25 @@ for(const action of ['restore','erase']){
     }
   });
 }
+
+test('D1b.5 an authenticated second tab cannot reintroduce erased or restored data',async({page,context})=>{
+  await seedDb2(page);
+  const second=await context.newPage();
+  await loadNew(second);
+  expect(await candidate(second,'db2HoldWriter')).toBe(true);
+  expect(await candidate(page,'db2Lifecycle','erase')).toMatchObject({result:'committed',state:'erased'});
+  expect(await candidate(page,'db2Lifecycle','setup')).toMatchObject({result:'committed',state:'active'});
+  expect(await candidate(second,'db2TryHeldWrite')).toBe('rejected');
+  expect((await candidate(page,'db2Read',true)).meta).toEqual({changes:0,lastBackup:null});
+  await second.close();
+});
+
+test('D1b.5 unsupported v7, legacy and incomplete v6 restore candidates remain unchanged',async({page})=>{
+  await seedDb2(page);
+  const before=await candidate(page,'preflightInventory',null,2);
+  for(const format of ['v7','legacy','partial']){
+    const copy=await candidate(page,'db2ChangedCopy',format);
+    expect(await candidate(page,'db2Lifecycle','restore',copy)).toEqual({result:'prepare-rejected',state:'active'});
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+  }
+});
