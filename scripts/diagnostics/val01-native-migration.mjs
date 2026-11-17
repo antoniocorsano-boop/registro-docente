@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
 const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
+const interruptionCut=process.env.VAL01_MIGRATION_CUT||'';
 const api=product?Number(process.env.VAL01_API):36;
 const pkg=integral?'it.trama.registrodocente':'it.trama.registrodocente.lab.val01';
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
@@ -16,7 +17,7 @@ const evidence=[];
 mkdirSync('native-evidence',{recursive:true});
 function stage(name,details={}){
   evidence.push({stage:name,status:'PASS',...details});
-  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api,scope:product?'original historical APK; actual candidate Root/App/Privacy; synthetic emulator only':integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,results:evidence},null,2));
+  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api,scope:product?'original historical APK; actual candidate Root/App/Privacy; synthetic emulator only':integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,cut:interruptionCut||undefined,results:evidence},null,2));
   console.log(name,'PASS');
 }
 async function until(fn,label,ms=30000){
@@ -40,13 +41,16 @@ async function connect(){
     return ws;
   },'WebView CDP not available',45000);
 }
-function evaluate(expression,timeout=15000){
+function cdp(method,params={},timeout=15000){
   const id=++seq;
   return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{pending.delete(id);reject(Error('WebView evaluation timeout'));},timeout);
-    pending.set(id,{timer,resolve:r=>resolve(r.result.value),reject});
-    socket.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));
+    const timer=setTimeout(()=>{pending.delete(id);reject(Error('WebView CDP timeout: '+method));},timeout);
+    pending.set(id,{timer,resolve,reject});
+    socket.send(JSON.stringify({id,method,params}));
   });
+}
+function evaluate(expression,timeout=15000){
+  return cdp('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},timeout).then(r=>r.result.value);
 }
 const call=(api,method,...args)=>evaluate('window['+JSON.stringify(api)+']['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')',method==='write'?90000:15000);
 const old=(m,...a)=>call('__beta2ArchiveCompatibility',m,...a);
@@ -541,6 +545,93 @@ async function productLifecycleSuite(oldVersion,initial,before){
   await navigateProduct('/index.html','!!document.querySelector("input[name=archive-mode]")');
   await setupFreshProduct();
 }
+// Separate, isolated hard-stop scenarios. The exact original APK is seeded
+// through its UI. A CI-only debugger checkpoint pauses the real guarded
+// versionchange callback, never a substitute transaction or migration grant.
+async function armMigrationProcessCut(cut){
+  let paused=null;
+  const observedSocket=socket;
+  const listener=e=>{
+    const m=JSON.parse(e.data);
+    if(m.method==='Debugger.paused')paused=m.params;
+  };
+  observedSocket.addEventListener('message',listener);
+  await cdp('Debugger.enable');
+  await evaluate('(()=>{const cut='+JSON.stringify(cut)+';const original=IDBTransaction.prototype.addEventListener;let armed=false;function migrationCutBefore(tx){debugger;}function migrationCutAfter(tx){debugger;}IDBTransaction.prototype.addEventListener=function(type,listener,options){const result=original.call(this,type,listener,options);if(!armed&&type==="complete"&&this.mode==="versionchange"&&this.db.name==="registro-docente-secure-vault"&&this.db.version===2){armed=true;const tx=this;if(cut==="before-commit")migrationCutBefore(tx);else original.call(tx,"complete",()=>migrationCutAfter(tx),{once:true});}return result;};return true})()');
+  return async()=>{
+    const info=await until(()=>paused,'Real guarded migration checkpoint was not reached',60000);
+    const frame=info.callFrames[0];
+    assert.equal(frame.functionName,cut==='before-commit'?'migrationCutBefore':'migrationCutAfter');
+    const observed=await cdp('Debugger.evaluateOnCallFrame',{callFrameId:frame.callFrameId,expression:'({mode:tx.mode,version:tx.db.version,name:tx.db.name})',returnByValue:true});
+    assert.deepEqual(observed.result.value,{mode:'versionchange',version:2,name:'registro-docente-secure-vault'});
+    stage(cut==='before-commit'?'interruption-guard-before-commit':'interruption-guard-after-commit',{realVersionchange:true});
+    // Do not disconnect or resume the debugger before killing the process:
+    // the before-commit callback must not be allowed to finish normally.
+    assert.ok(foreground());
+    adb('shell','am','force-stop',pkg);
+    await until(()=>!adb('shell','sh','-c','pidof '+pkg+' || true'),'Original candidate process survived force-stop',15000);
+    observedSocket.removeEventListener('message',listener);
+    observedSocket.close();socket=null;
+    for(const p of pending.values())clearTimeout(p.timer);pending.clear();
+    try{adb('forward','--remove','tcp:9222');}catch{}
+    stage('interruption-process-stopped',{forcedStop:true});
+  };
+}
+async function migrationInterruptionSuite(oldVersion,initial){
+  assert.equal(product,true);assert.equal(integral,true);assert.equal(oldVersion,10004);
+  assert.ok(['before-commit','after-commit'].includes(interruptionCut));
+  await seedOriginal(oldVersion);
+  stage('historical-seed-cold-reopen',{originalBinary:true});
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Candidate initial gate missing',45000);
+  await diagnostic();const before=await inspectProduct(true);
+  assert.equal(before.version,1);assert.equal(before.classification,'complete');assert.equal(before.keys.length,10);assert.equal(before.marker,true);
+  assert.match(before.digest,/^[a-f0-9]{64}$/);
+  stage('interruption-original-preflight',{recordCount:10,classification:'complete'});
+  await writeSyntheticRestoreFile(before.backup);
+  await productGate();await privacyProduct();await selectProductFile();
+  stage('interruption-picker-reauthenticated');
+  await fillMigrationPasswords('synthetic-archive-backup-only');
+  const cut=await armMigrationProcessCut(interruptionCut);
+  await clickDeferred(productPanel+' form button[type=submit]');
+  await nativeConfirm('La copia è stata verificata',true);
+  await cut();
+  // Cold reopen through actual native authentication, before any diagnostic
+  // read. Do not replay a grant, assume rollback or attempt automatic repair.
+  assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro');await ensureHome();await findMarker();
+  await diagnostic();const recovered=await inspectProduct();
+  const expected=interruptionCut==='before-commit'?1:2;
+  assert.equal(recovered.version,expected);
+  assert.equal(recovered.digest,before.digest);
+  assert.deepEqual(recovered.keys,before.keys);assert.deepEqual(recovered.snapshot,before.snapshot);
+  stage('interruption-reopen-authenticated',{version:expected,recordCount:10,physicalSha256:recovered.digest});
+  if(expected===1){
+    stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
+    launchOriginal();await gate('Sblocca Registro');await ensureHome();await findMarker();
+    stage('interruption-original-reopened');
+    stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+    launchOriginal();await connect();await gate('Sblocca Registro');await privacyProduct();
+    // New local readback and explicit approval; old process grant is gone.
+    await selectProductFile();await submitProduct('synthetic-archive-backup-only',true);
+    await gate('Sblocca Registro');await diagnostic();const migrated=await inspectProduct();
+    assert.equal(migrated.version,2);assert.equal(migrated.digest,before.digest);assert.deepEqual(migrated.snapshot,before.snapshot);
+    stage('interruption-fresh-consent-migrated');
+  }
+  stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
+  launchOriginal();await appText('Sicurezza non disponibile');
+  assert.ok(!nodes().some(n=>nativeApp(n)&&(/Sblocca Registro|Configura archivio protetto|Le mie classi|Proteggi i dati esistenti/.test(n.text)||n.password)));
+  stage('interruption-downgrade-refused');
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();await gate('Sblocca Registro');await ensureHome();await findMarker();
+  await diagnostic();const final=await inspectProduct();
+  assert.equal(final.version,2);assert.equal(final.digest,before.digest);assert.deepEqual(final.snapshot,before.snapshot);
+  stage('interruption-final-cold-reopen',{version:2,recordCount:10,physicalSha256:final.digest});
+}
 async function productSuite(oldVersion,initial){
   assert.equal(integral,true);
   await seedOriginal(oldVersion);
@@ -641,7 +732,7 @@ try{
   const oldVersion=Number(process.env.OLD_VERSION);
   install(process.env.OLD_APK);
   const initial=identity(oldVersion);
-  if(product){await productSuite(oldVersion,initial);}
+  if(product){if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
   else{
   let seed;
   if(integral){
