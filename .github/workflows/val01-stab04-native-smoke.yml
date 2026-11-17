@@ -22,7 +22,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           node --check scripts/diagnostics/val01-native-migration.mjs
           node --check scripts/diagnostics/native-ui-driver.mjs
-          node --test scripts/diagnostics/native-ui-driver.test.mjs
+          node --check scripts/diagnostics/native-process-probe.mjs
+          node --test scripts/diagnostics/native-ui-driver.test.mjs scripts/diagnostics/native-process-probe.test.mjs
   smoke:
     needs: driver
     strategy:
@@ -136,7 +137,7 @@ jobs:
             .predecessor==$old and .candidate==$new and .api==$api and .productionRelease==false and .smoke==true and .qualification=="historical-ui-smoke" and .cut==null and
             all(.results[];.status=="PASS") and
             [.results[].stage]==["smoke-explicit-demo-setup-authenticated","smoke-synthetic-class-created-visible","smoke-process-stopped","smoke-cold-protected-gate","smoke-class-reopened-after-authentication","smoke-original-installation-preserved"] and
-            .results[0].originalBinary==true and .results[1].durableSubmission==true and .results[2].forcedStop==true and .results[3].archiveHidden==true and .results[4].markerVisible==true and
+            .results[0].originalBinary==true and .results[1].durableSubmission==true and .results[2].forcedStop==true and (.results[2].beforePids|length)>0 and all(.results[2].beforePids[];type=="number" and .>0) and .results[2].afterPids==[] and .results[2].absenceSamples==2 and .results[2].observations>=2 and .results[3].archiveHidden==true and (.results[3].reopenedPids|length)>0 and all(.results[3].reopenedPids[];type=="number" and .>0) and .results[4].markerVisible==true and
             .results[5].sameUid==true and .results[5].sameFirstInstall==true and .results[5].versionCode==10004 and .results[5].noCandidateInstall==true
           ' native-evidence/result.json
           jq -e '
