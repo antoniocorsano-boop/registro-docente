@@ -429,3 +429,25 @@ test('D1b.5 explicit erasure retains version fence and removes records/key; fres
   await loadNew(page);
   expect(await candidate(page,'db2Read',true)).toEqual(fresh);
 });
+
+for(const action of ['restore','erase']){
+  test('D1b.5 '+action+' interrupted during transaction rolls back the complete physical image',async({page})=>{
+    const seed=await seedDb2(page);
+    const before=await candidate(page,'preflightInventory',null,2);
+    expect(await candidate(page,'db2Interrupt',action,seed.backup,'before-commit')).toEqual({triggered:true,rejected:true,state:'active',version:2});
+    expect(await candidate(page,'preflightInventory',null,2)).toBe(before);
+    expect(await candidate(page,'db2Read')).toEqual(seed.snapshot);
+  });
+  test('D1b.5 '+action+' revoked after commit is inspected without rolling back or resurrecting data',async({page})=>{
+    await seedDb2(page);
+    const before=await candidate(page,'preflightInventory',null,2);
+    const copy=await candidate(page,'db2ChangedCopy');
+    expect(await candidate(page,'db2Interrupt',action,copy,'after-commit')).toEqual({triggered:true,rejected:true,state:action==='erase'?'erased':'active',version:2});
+    await loadNew(page);
+    if(action==='erase')expect(await candidate(page,'db2State')).toBe('erased');
+    else{
+      expect(await candidate(page,'preflightInventory',null,2)).not.toBe(before);
+      expect((await candidate(page,'db2Read')).appData.classes).toEqual([]);
+    }
+  });
+}
