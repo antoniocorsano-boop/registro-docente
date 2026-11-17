@@ -3,14 +3,15 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync,writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-const pkg='it.trama.registrodocente.lab.val01';
+const integral=process.env.VAL01_INTEGRAL==='true';
+const pkg=integral?'it.trama.registrodocente':'it.trama.registrodocente.lab.val01';
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const evidence=[];
 mkdirSync('native-evidence',{recursive:true});
 function stage(name,details={}){
   evidence.push({stage:name,status:'PASS',...details});
-  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api:36,scope:'laboratory APKs, exact historical storage source, candidate native bridge',productionRelease:false,results:evidence},null,2));
+  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api:36,scope:integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',productionRelease:false,results:evidence},null,2));
   console.log(name,'PASS');
 }
 async function until(fn,label,ms=30000){
@@ -70,7 +71,7 @@ function nodes(){
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
   return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
     const s=m[0],get=k=>s.match(new RegExp('\\b'+k+'="([^"]*)"'))?.[1]||'';
-    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
+    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
   });
 }
 const doc=n=>/documentsui/i.test(n.pkg);
@@ -117,6 +118,40 @@ async function pickerRead(wrong=false){
   if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Open confirmation absent'));
   return readResult();
 }
+// Original release APK is non-debuggable: all actions on it use Android UI.
+const marker='Collaudo migrazione VAL01';
+const vaultPassword='synthetic-archive-compatibility-only';
+const nativeApp=n=>n.pkg===pkg;
+const named=(n,label)=>nativeApp(n)&&(n.text===label||n.desc===label);
+const appButton=label=>find(n=>named(n,label)&&n.enabled&&(n.clickable||n.clazz==='android.widget.Button'),label);
+const appText=label=>find(n=>nativeApp(n)&&(n.text.includes(label)||n.desc.includes(label)),label);
+const appEdit=(secret=false)=>find(n=>nativeApp(n)&&n.clazz==='android.widget.EditText'&&(!secret||n.password),'Native edit field');
+function inputText(value){adb('shell','input','text',value.replace(/ /g,'%s'));}
+function hideKeyboard(){if(/mInputShown=true|mIsInputViewShown=true/.test(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');}
+function launchOriginal(){adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');}
+async function gate(action){
+  tap(await appEdit(true));inputText(vaultPassword);hideKeyboard();tap(await appButton(action));
+}
+async function findMarker(){
+  for(let i=0;i<5;i++){
+    try{return await until(()=>nodes().find(n=>named(n,'Apri classe '+marker)&&n.bounds),'Synthetic class missing',8000);}
+    catch{
+      const size=adb('shell','wm','size').match(/(\d+)x(\d+)/g)?.at(-1)?.split('x').map(Number);
+      if(!size)throw Error('Missing screen size');
+      const [w,h]=size;adb('shell','input','swipe',String(w/2),String(Math.round(h*.75)),String(w/2),String(Math.round(h*.35)),'450');
+    }
+  }
+  throw Error('Synthetic class did not persist in original APK');
+}
+async function seedOriginal(version){
+  launchOriginal();await appText('Configura archivio protetto');
+  if(version!==10002){tap(await appText('Ambiente dimostrativo'));await gate('Avvia la prova');}
+  else await gate('Configura archivio protetto');
+  await appText('Le mie classi');
+  tap(await appButton('Nuova Classe'));tap(await appEdit());inputText(marker);hideKeyboard();tap(await appButton('OK'));
+  await findMarker();
+  stop();launchOriginal();await gate('Sblocca Registro');await appText('Le mie classi');await findMarker();
+}
 try{
   assert.equal(process.env.GITHUB_ACTIONS,'true');
   assert.ok(adb('shell','getprop','ro.kernel.qemu')==='1'||adb('shell','getprop','ro.boot.qemu')==='1');
@@ -125,14 +160,24 @@ try{
   const oldVersion=Number(process.env.OLD_VERSION);
   install(process.env.OLD_APK);
   const initial=identity(oldVersion);
-  await launch('__val01FenceHistorical');
-  const seed=await old('seed',false);
-  assert.equal(seed.physical.keys.length,10);
-  stop();await launch('__val01FenceHistorical');
-  assert.deepEqual(await old('open'),{snapshot:seed.snapshot,physical:seed.physical});
-  stage('historical-seed-cold-reopen');
-  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
-  await launch('__val01NativeLab');
+  let seed;
+  if(integral){
+    await seedOriginal(oldVersion);
+    stage('historical-seed-cold-reopen',{originalBinary:true});
+    stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+    await launch('__val01NativeLab');
+    seed=await lab('inspectHistoricalArchive');
+    assert.equal(seed.physical.keys.length,10);
+  }else{
+    await launch('__val01FenceHistorical');
+    seed=await old('seed',false);
+    assert.equal(seed.physical.keys.length,10);
+    stop();await launch('__val01FenceHistorical');
+    assert.deepEqual(await old('open'),{snapshot:seed.snapshot,physical:seed.physical});
+    stage('historical-seed-cold-reopen');
+    stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+    await launch('__val01NativeLab');
+  }
   assert.equal(await candidate('version'),1);
   assert.equal(await lab('ready'),true);
   const write=lab('write',seed.backup);write.catch(()=>{});
@@ -165,9 +210,18 @@ try{
   assert.deepEqual(await candidate('open'),{snapshot:seed.snapshot,physical:seed.physical});
   stage('native-v2-cold-reopen');
   stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
-  await launch('__val01FenceHistorical');
-  for(const m of ['read','unlock','write','delete','clear','initialize'])assert.equal(await hist(m),'VersionError',m);
-  stage('native-in-place-downgrade-all-six-operations-rejected');
+  if(integral){
+    launchOriginal();
+    await appText('Sicurezza non disponibile');
+    assert.ok(!nodes().some(n=>nativeApp(n)&&(/Sblocca Registro|Configura archivio protetto|Le mie classi|Proteggi i dati esistenti/.test(n.text)||n.password)));
+    tap(await appButton('Riprova controllo sicurezza'));
+    await appText('Sicurezza non disponibile');
+    stage('original-downgrade-ui-fail-closed');
+  }else{
+    await launch('__val01FenceHistorical');
+    for(const m of ['read','unlock','write','delete','clear','initialize'])assert.equal(await hist(m),'VersionError',m);
+    stage('native-in-place-downgrade-all-six-operations-rejected');
+  }
   stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
   await launch('__val01NativeLab');
   assert.deepEqual(await candidate('open'),{snapshot:seed.snapshot,physical:seed.physical});
