@@ -2549,7 +2549,7 @@
     {
       "id": "VAL-01-D1B3C-I02",
       "owner": "VAL-01/D1b.3c",
-      "statement": "Integral historical original unsigned APK verified against exact artifact manifest and all non-signature ZIP entries, installed only on fresh CI emulator with ephemeral key; genuine historical UI creates synthetic archive and refuses DB2 on downgrade. Candidate laboratory bundle remains nonproduction, no owner key or signed APK artifact.",
+      "statement": "Integral historical original unsigned APK verified against exact artifact manifest and all non-signature ZIP entries, installed only on fresh CI emulator with ephemeral key. Supported Beta1 RC3 and Beta2 RC2 complete archives require genuine historical UI seed, all nine migration stages and fail-closed downgrade. Retired Beta1 RC2 original sparse archive requires explicit negative-only rejection before the guard, unchanged DB1 physical fingerprint and genuine original reopen; it is never counted as a migrated archive. Candidate laboratory bundle remains nonproduction, no owner key or signed APK artifact.",
       "impactPaths": [
         ".github/workflows/val01-integral-android.yml",
         "mobile/android-probe/val01-native-lab.fixture.ts",
