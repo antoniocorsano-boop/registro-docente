@@ -91,3 +91,23 @@ test('failed submit is not retried and does not report success',async()=>{
   await assert.rejects(h.driver.submitGate('Avvia la prova',credential,heading.text));
   assert.equal(h.taps.length,1);assert.equal(h.events.some(e=>e.status==='SUBMITTED'),false);
 });
+
+test('class prompt requires focused exact input and one durable submit',async()=>{
+  const prompt={...heading,text:'Inserisci la denominazione della nuova classe:'};
+  const edit={...field,id:'',password:false};
+  const ok={...submit,text:'OK'};
+  const value='Collaudo migrazione VAL01';
+  let focused=false,text='',sent=0;
+  const h=lab({view:()=>[prompt,{...edit,focused,text},ok],
+    onTap:n=>{if(n.clazz==='android.widget.EditText')focused=true;else if(n.clazz==='android.widget.Button')sent++;},
+    onInput:s=>{assert.equal(focused,true);text=s;},onHide:()=>{focused=false;}});
+  await h.driver.enterClassName(value);
+  assert.equal(sent,0);await h.driver.submitClass(value);assert.equal(sent,1);
+  assert.equal(h.inputs.length,1);
+});
+test('class submit refuses absent prompt or nonmatching input',async()=>{
+  for(const view of [[heading,{...field,password:false,text:'Collaudo migrazione VAL01'},{...submit,text:'OK'}],[{...heading,text:'Inserisci la denominazione della nuova classe:'},{...field,password:false,text:'partial'},{...submit,text:'OK'}]]){
+    const h=lab({view:()=>view});await assert.rejects(h.driver.submitClass('Collaudo migrazione VAL01'),NativeUiFault);
+    assert.equal(h.taps.length,0);
+  }
+});
