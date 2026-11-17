@@ -6,6 +6,7 @@ on:
       - main
       - feat/val-01-d1b4b2-product-session
       - test/val-01-d1b5-native-product
+      - feat/val-01-d1b5-db2-lifecycle
   workflow_dispatch:
   workflow_call:
 
