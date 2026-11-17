@@ -22,7 +22,7 @@ import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
 import { ExistingSessionVaultStore } from '../security/existingSessionVaultStore';
 import { createDb2Lifecycle } from '../security/db2Lifecycle';
-import { captureDb2, type ErasedDb2 } from '../security/db2PhysicalLifecycle';
+import { captureDb2, sameDb2Physical, type ErasedDb2 } from '../security/db2PhysicalLifecycle';
 import { inspectArchiveVersion } from '../security/inspectArchiveVersion';
 import { createRecoveryCopyHandoff, type RecoverySessionStamp } from '../security/migrationRecoveryHandoff';
 import { createLocalMigrationSessionBoundary, type MigrationSessionResult } from '../security/migrationSessionBoundary';
@@ -86,6 +86,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
   const archiveMigrationRef=useRef<{revoke():void}|null>(null);
   const erasedDb2Ref=useRef<ErasedDb2|null>(null);
+  const db2UnlockBusyRef=useRef(false);
   const db2ChannelRef=useRef<BroadcastChannel|null>(null);
   const [migrationNotice,setMigrationNotice]=useState<string|null>(null);
   const discardRecoveryCopy=useCallback(()=>{handoffRef.current?.invalidate();handoffRef.current=null;},[]);
@@ -486,23 +487,36 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState]);
 
   const handleUnlock = useCallback(async (password: string) => {
-    const attempt = await getForegroundEpoch();
-    const { vault,store } = getRuntime();
-    try {
-      if(archiveMigrationCandidate&&store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
-      await vault.unlock(password);
-      if(!archiveMigrationCandidate||archiveVersionRef.current!==2)await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
-      await loadReadySnapshot(attempt);
-      setMigrationNotice(null);
-    } catch (error) {
-      vault.lock();
-      if(store instanceof ExistingSessionVaultStore){
-        await store.retireConnection();
-        if(storeRef.current===store){storeRef.current=null;vaultRef.current=null;storageRef.current=null;}
+    const track=archiveMigrationCandidate&&archiveVersionRef.current===2;
+    if(track&&(db2UnlockBusyRef.current||gateStateRef.current!=='LOCKED'||closingRef.current))throw Error('Sessione non attuale.');
+    if(track)db2UnlockBusyRef.current=true;
+    try{
+      const attempt = await getForegroundEpoch();
+      if(track&&(gateStateRef.current!=='LOCKED'||closingRef.current))throw Error('Sessione non attuale.');
+      const { vault,store } = getRuntime();
+      try {
+        if(archiveMigrationCandidate&&store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
+        await vault.unlock(password);
+        if(!archiveMigrationCandidate||archiveVersionRef.current!==2)await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
+        await loadReadySnapshot(attempt);
+        setMigrationNotice(null);
+      } catch (error) {
+        vault.lock();
+        if(store instanceof ExistingSessionVaultStore){
+          await store.retireConnection();
+          if(storeRef.current===store){
+            storeRef.current=null;vaultRef.current=null;storageRef.current=null;
+            // Concurrent erasure can look like a failed password. Inspect
+            // durable state rather than repeatedly opening the erased archive.
+            requireExistingRef.current=true;
+            revokeNativeAuthorization();setSnapshot(null);
+            await inspectBootstrap();
+          }
+        }
+        throw error;
       }
-      throw error;
-    }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate]);
+    }finally{if(track)db2UnlockBusyRef.current=false;}
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,revokeNativeAuthorization,inspectBootstrap]);
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -739,19 +753,33 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     if(!archiveMigrationCandidate)return;
     let disposed=false,checking=false;
     const probe=async()=>{
-      if(disposed||checking||closingRef.current||archiveVersionRef.current!==2||
-        gateStateRef.current!=='READY')return;
-      const store=storeRef.current;
-      if(!store)return;
+      const state=gateStateRef.current;
+      if(disposed||checking||closingRef.current||db2UnlockBusyRef.current||archiveVersionRef.current!==2||
+        (state!=='READY'&&state!=='LOCKED'&&state!=='SETUP_REQUIRED'))return;
+      const store=storeRef.current,marker=erasedDb2Ref.current;
       checking=true;
-      try{await store.getMetadata();}
-      catch{
-        if(disposed||storeRef.current!==store||closingRef.current)return;
+      try{
+        let changed=false;
+        try{
+          if(store&&state!=='SETUP_REQUIRED'){
+            // Metadata-only guarded read for active or manually locked owners.
+            await store.getMetadata();
+          }else{
+            // An erased setup gate has no handle. Verify its durable marker.
+            const physical=await captureDb2(globalThis.indexedDB);
+            changed=state==='SETUP_REQUIRED'
+              ?physical.state!=='erased'||!sameDb2Physical(physical.metadata,marker)
+              :physical.state!=='active'||state==='READY';
+          }
+        }catch{changed=true;}
+        if(!changed||disposed||storeRef.current!==store||erasedDb2Ref.current!==marker||
+          closingRef.current||db2UnlockBusyRef.current||gateStateRef.current!==state)return;
+        // Do not race an in-flight authentication or local setup.
         invalidateArchiveMigration();
         revokeNativeAuthorization();vaultRef.current?.lock();
         suspendedRef.current=null;setSuspensionPhase(null);setSuspensionDelayed(false);
         setSnapshot(null);setGateState('CHECKING');
-        await store.retireConnection();
+        await store?.retireConnection();
         if(storeRef.current===store){storeRef.current=null;vaultRef.current=null;storageRef.current=null;}
         requireExistingRef.current=true;
         setMigrationNotice('L’archivio è cambiato. Verifica lo stato e autenticati nuovamente.');
