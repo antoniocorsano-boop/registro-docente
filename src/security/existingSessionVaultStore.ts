@@ -131,17 +131,17 @@ export class ExistingSessionVaultStore extends IndexedDbVaultStore{
   }
   override getMetadata():Promise<VaultMetadataV1|null>{
     if(this.expectedVersion===1)return super.getMetadata();
-    return this.guarded('readonly',(_s,set)=>set(structuredClone(this.generation)));
+    return this.guarded<VaultMetadataV1|null>('readonly',(_s,set)=>set(structuredClone(this.generation)));
   }
   override getRecord(key:VaultRecordKey):Promise<EncryptedVaultRecord|null>{
     if(this.expectedVersion===1)return super.getRecord(key);
-    return this.guarded('readonly',({r},set)=>{
+    return this.guarded<EncryptedVaultRecord|null>('readonly',({r},set)=>{
       const req=r.get(key);req.onsuccess=()=>set(req.result??null);
     });
   }
   override listRecordKeys():Promise<VaultRecordKey[]>{
     if(this.expectedVersion===1)return super.listRecordKeys();
-    return this.guarded('readonly',({r},set)=>{
+    return this.guarded<VaultRecordKey[]>('readonly',({r},set)=>{
       const req=r.getAllKeys();req.onsuccess=()=>set(req.result as VaultRecordKey[]);
     });
   }
@@ -149,7 +149,7 @@ export class ExistingSessionVaultStore extends IndexedDbVaultStore{
     if(this.expectedVersion===1)return super.putRecords(records);
     const expected=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'];
     if(new Set(records.map(r=>r.recordKey)).size!==records.length||records.some(r=>!expected.includes(r.recordKey)||r.schemaVersion!==1||!(r.iv instanceof Uint8Array)||r.iv.byteLength!==12||!(r.ciphertext instanceof ArrayBuffer)||r.ciphertext.byteLength<16))return Promise.reject(refused());
-    return this.guarded('readwrite',({r},set)=>{for(const record of records)r.put(record);set(undefined);});
+    return this.guarded<void>('readwrite',({r},set)=>{for(const record of records)r.put(record);set(undefined);});
   }
   override putMetadata(metadata:VaultMetadataV1):Promise<void>{
     return this.expectedVersion===1?super.putMetadata(metadata):Promise.reject(refused());
