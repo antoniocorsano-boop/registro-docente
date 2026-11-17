@@ -541,16 +541,30 @@ test('D1b.5 actual erasure closes other authenticated UI, persists DB2, and new 
   test.setTimeout(120000);
   await productDb2(page);
   const other=await context.newPage();
+  // A new Playwright page has its own viewport. The primary page was set to
+  // 390px by seedProduct, but the second page defaults to desktop. Exercise
+  // the same actual mobile authentication surface, without relaxing checks.
+  await other.setViewportSize({width:390,height:844});
+  await other.bringToFront();
   await other.goto(productApp());await unlockProduct(other);
+  await expect(other.getByRole('heading',{name:'Oggi',exact:true})).toBeVisible();
+  // The operation must be authorized by the foreground owner, not a hidden tab.
+  await page.bringToFront();
+  await expect.poll(()=>page.evaluate(()=>document.visibilityState)).toBe('visible');
   let confirmed=0;
   page.on('dialog',async d=>{if(d.message().includes('Cancellare tutti i dati e la chiave')){confirmed++;await d.accept();}else await d.dismiss();});
   await submitProductErase(page);
   await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible({timeout:30000});
   expect(confirmed).toBe(1);
   await expect(page.getByText('Archivio locale cancellato. Configura un nuovo archivio. Le copie esterne non sono state cancellate.')).toBeVisible();
+  // On return to the second tab, a stale authenticated surface must not
+  // remain available; verify the protected gate before closing the tab.
+  await other.bringToFront();
   await expect(other.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible({timeout:30000});
   await expect(other.getByTestId('header01-topbar')).toHaveCount(0);
+  await expect(other.getByRole('heading',{name:'Oggi',exact:true})).toHaveCount(0);
   await other.close();
+  await page.bringToFront();
   await page.reload();
   await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
   await page.getByRole('radio',{name:/Archivio professionale/}).check();
