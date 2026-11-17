@@ -266,6 +266,14 @@ try{
     stage('historical-seed-cold-reopen',{originalBinary:true});
     stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
     await launch('__val01NativeLab');
+    const inventory=await lab('probeHistoricalArchive');
+    writeFileSync('native-evidence/original-db1-inventory.json',JSON.stringify(inventory,null,2));
+    console.log('original-db1-inventory',JSON.stringify(inventory));
+    assert.equal(inventory.version,1,'Historical database must remain DB1');
+    assert.equal(inventory.authentication,'accepted','Historical vault authentication failed');
+    assert.deepEqual(inventory.failed,[],'Encrypted record authentication failed');
+    assert.equal(inventory.marker,true,'Historical synthetic marker absent');
+    assert.equal(inventory.missing.length,0,'Historical DB1 has missing physical records; no migration allowed');
     seed=await lab('inspectHistoricalArchive');
     assert.equal(seed.physical.keys.length,10);
   }else{
