@@ -182,9 +182,21 @@ jobs:
           profile: pixel_6
           disable-animations: false
           script: timeout --signal=TERM --kill-after=10s 600s node scripts/diagnostics/val01-native-migration.mjs
-      - name: Require complete native laboratory evidence
+      - name: Require explicit support-scope native evidence
         run: |
-          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" '.predecessor==$old and .candidate==$new and .productionRelease==false and ([.results[].stage]==["historical-seed-cold-reopen","native-saf-write-readback","native-picker-cancel-no-migration","native-wrong-copy-password-no-migration","native-explicit-refusal-no-migration","native-authorized-migration-and-replay-rejection","native-v2-cold-reopen","original-downgrade-ui-fail-closed","native-reupgrade-archive-intact"]) and all(.results[];.status=="PASS")' native-evidence/result.json
+          set -euo pipefail
+          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" --argjson version "$OLD_VERSION" '
+            .predecessor==$old and .candidate==$new and .productionRelease==false and
+            all(.results[];.status=="PASS") and
+            (if $version==10002 then
+              .qualification=="negative-only" and
+              ([.results[].stage]==["historical-seed-cold-reopen","unsupported-sparse-archive-refused-without-mutation","unsupported-sparse-original-reopen"]) and
+              (.results[1].qualification=="negative-only" and .results[1].present==["appData","meta"] and (.results[1].missing|length)==8 and (.results[1].physicalSha256|test("^[a-f0-9]{64}$")))
+            elif $version==10003 or $version==10004 then
+              .qualification=="supported-migration" and
+              ([.results[].stage]==["historical-seed-cold-reopen","native-saf-write-readback","native-picker-cancel-no-migration","native-wrong-copy-password-no-migration","native-explicit-refusal-no-migration","native-authorized-migration-and-replay-rejection","native-v2-cold-reopen","original-downgrade-ui-fail-closed","native-reupgrade-archive-intact"])
+            else false end)
+          ' native-evidence/result.json
       - name: Destroy signed laboratory APKs and key
         if: always()
         run: rm -rf "$RUNNER_TEMP/val01"
