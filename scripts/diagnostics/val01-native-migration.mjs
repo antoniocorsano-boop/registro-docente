@@ -5,6 +5,7 @@ import { mkdirSync,writeFileSync,mkdtempSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import {createNativeUiDriver,parseNativeNodes,resumedActivity,NativeUiFault,demoRadio as strictDemoRadio,vaultField as strictVaultField} from './native-ui-driver.mjs';
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
 const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
@@ -21,8 +22,9 @@ function stage(name,details={}){
   console.log(name,'PASS');
 }
 async function until(fn,label,ms=30000){
-  const end=Date.now()+ms;
-  while(Date.now()<end){try{const v=await fn();if(v)return v;}catch{}await sleep(500);}
+  const end=Date.now()+ms;let observations=0,lastError=null;
+  while(Date.now()<end){try{observations++;const v=await fn();if(v)return v;}catch(e){lastError=e?.name||'Error';}await sleep(500);}
+  writeFileSync('native-evidence/last-wait.json',JSON.stringify({phase:label,observations,lastError},null,2));
   throw Error(label);
 }
 let socket,seq=0;
@@ -78,10 +80,7 @@ function nodes(){
   adb('shell','rm','-f','/sdcard/val01-ui.xml');
   adb('shell','uiautomator','dump','/sdcard/val01-ui.xml');
   const xml=adb('shell','cat','/sdcard/val01-ui.xml');
-  return [...xml.matchAll(/<node\b[^>]*>/g)].map(m=>{
-    const s=m[0],get=k=>s.match(new RegExp('\\b'+k+'="([^"]*)"'))?.[1]||'';
-    return {text:get('text'),desc:get('content-desc'),pkg:get('package'),id:get('resource-id'),clickable:get('clickable')==='true',enabled:get('enabled')==='true',focused:get('focused')==='true',checked:get('checked')==='true',clazz:get('class'),password:get('password')==='true',bounds:s.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)?.slice(1).map(Number)};
-  });
+  return parseNativeNodes(xml);
 }
 const doc=n=>/documentsui/i.test(n.pkg);
 const find=(predicate,label)=>until(()=>nodes().find(n=>n.bounds&&predicate(n)),label,45000);
@@ -95,7 +94,7 @@ async function downloads(){
   }
 }
 function foreground(){
-  return adb('shell','dumpsys','activity','activities').split('\n').some(s=>/topResumedActivity|mResumedActivity/.test(s)&&s.includes(pkg+'/'));
+  return resumedActivity(adb('shell','dumpsys','activity','activities'),pkg);
 }
 async function startRead(wrong=false){
   // Never hold a DevTools awaitPromise across a backgrounded WebView.
@@ -158,86 +157,37 @@ const appEdit=(secret=false)=>find(n=>nativeApp(n)&&n.clazz==='android.widget.Ed
 function inputText(value){adb('shell','input','text',value.replace(/ /g,'%s'));}
 function hideKeyboard(){if(/mInputShown=true|mIsInputViewShown=true/.test(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');}
 function launchOriginal(){adb('shell','am','start','-W','-n',pkg+'/it.trama.registrodocente.prova.MainActivity');}
-const vaultField=n=>nativeApp(n)&&n.id==='vault-password'&&n.clazz==='android.widget.EditText'&&n.password;
-// API32 failure artifact 14321827343 exposes both the actionable radio
-// and its non-clickable title. A substring match on either is insufficient.
-const demoRadio=n=>nativeApp(n)&&n.clazz==='android.widget.RadioButton'&&n.enabled&&n.clickable&&
-  [n.text,n.desc].some(label=>label==='Ambiente dimostrativo'||label==='Ambiente dimostrativo Esplora con dati di esempio, non reali.');
-const demoFormReady=view=>view.some(vaultField)&&view.some(n=>named(n,'Avvia la prova')&&n.enabled&&(n.clickable||n.clazz==='android.widget.Button'));
+const driverEvents=[];
+const uiDriver=createNativeUiDriver({
+  pkg,readNodes:nodes,isForeground:foreground,tap,input:inputText,
+  clear:()=>{adb('shell','input','keyevent','123');adb('shell','input','keyevent',...Array(96).fill('67'));},
+  hideKeyboard,pause:sleep,
+  report:event=>{
+    driverEvents.push(event);
+    writeFileSync('native-evidence/native-ui-driver.json',JSON.stringify(driverEvents,null,2));
+    console.log('native-ui-driver',event.phase,event.status,event.attempt??'',event.code??'',event.evidence??'');
+  }
+});
+const vaultField=n=>strictVaultField(n,pkg);
+const demoRadio=n=>strictDemoRadio(n,pkg);
 function verifyDemoSelectionRecognition(){
-  const radio={pkg,text:'Ambiente dimostrativo Esplora con dati di esempio, non reali.',desc:'',clazz:'android.widget.RadioButton',enabled:true,clickable:true};
-  const title={pkg,text:'Ambiente dimostrativo',desc:'',clazz:'android.widget.TextView',enabled:true,clickable:false};
-  assert.equal(demoRadio(radio),true);
-  assert.equal(demoRadio(title),false);
+  const radio={pkg,text:'Ambiente dimostrativo Esplora con dati di esempio, non reali.',desc:'',clazz:'android.widget.RadioButton',enabled:true,clickable:true,bounds:[1,1,3,3]};
+  const title={pkg,text:'Ambiente dimostrativo',desc:'',clazz:'android.widget.TextView',enabled:true,clickable:false,bounds:[1,1,3,3]};
+  assert.equal(demoRadio(radio),true);assert.equal(demoRadio(title),false);
   assert.equal(demoRadio({...radio,pkg:'unrelated.package'}),false);
-  assert.equal(demoRadio({...radio,text:'Archivio professionale Inizia con un registro vuoto.'}),false);
-  const password={pkg,id:'vault-password',clazz:'android.widget.EditText',password:true};
-  const submit={pkg,text:'Avvia la prova',clazz:'android.widget.Button',enabled:true,clickable:true};
-  assert.equal(demoFormReady([radio,title]),false);
-  assert.equal(demoFormReady([password]),false);
-  assert.equal(demoFormReady([password,submit]),true);
+  assert.equal(vaultField({pkg,id:'vault-password',clazz:'android.widget.EditText',password:true,enabled:true,bounds:[1,1,3,3]}),true);
   console.log('original-demo-selection-recognition-replay PASS');
 }
-async function selectOriginalDemo(){
-  for(let attempt=1;attempt<=3;attempt++){
-    // No authentication or setup submission in this retry loop.
-    const view=await until(()=>{const current=nodes();return current.some(demoRadio)||demoFormReady(current)?current:null;},'Original demonstration option not visible',15000);
-    if(demoFormReady(view))return;
-    if(!foreground()||!view.some(n=>named(n,'Configura archivio protetto')))throw Error('Original setup surface no longer active');
-    const radio=view.find(n=>demoRadio(n)&&n.bounds);
-    if(!radio)throw Error('Actionable demonstration radio missing');
-    tap(radio);
-    try{
-      const selected=await until(()=>{const current=nodes();return demoFormReady(current)?current:null;},'Demonstration form did not open',8000);
-      console.log('original-demo-form-verified',attempt,selected.some(n=>demoRadio(n)&&n.checked));
-      return;
-    }catch{console.log('original-demo-selection-retry',attempt);}
-  }
-  throw Error('Original demonstration form not attested; no setup submitted');
-}
-
+async function selectOriginalDemo(){await uiDriver.selectDemo();}
+async function enterSyntheticPassword(credential=vaultPassword,expected){await uiDriver.enterPassword(credential,expected);}
 const passwordRejected=view=>view.some(n=>nativeApp(n)&&n.text==='Password errata o metadata del vault manomesso.');
-// UIAutomator may mask password text on older WebView/Android releases.
-// Accept only an exact value or a full-length mask, and require the ordinary
-// vault authentication plus independent cold reopen with the same fixture
-// credential. Never submit an unverified, partial or empty field.
-const passwordEmpty=n=>!n.text||n.text==='Password locale';
-const passwordEvidence=(n,credential)=>n.text===credential?'exact':
-  /^[•●*]+$/u.test(n.text)&&[...n.text].length===credential.length?'masked-length':null;
-async function enterSyntheticPassword(credential=vaultPassword){
-  for(let attempt=1;attempt<=3;attempt++){
-    const field=await find(vaultField,'Original vault password field missing');
-    tap(field);
-    await until(()=>nodes().some(n=>vaultField(n)&&n.focused),'Password field not focused',15000);
-    let current=await find(n=>vaultField(n)&&n.focused,'Password field focus lost');
-    if(!passwordEmpty(current)){
-      // MOVE_END followed by bounded Delete events works on API32 and API36;
-      // avoid input keycombination, which is not portable to API32.
-      adb('shell','input','keyevent','123');
-      adb('shell','input','keyevent',...Array(96).fill('67'));
-      current=await find(n=>vaultField(n)&&n.focused&&passwordEmpty(n),'Password field not empty');
-    }
-    // Verify the focused field immediately before injection, not just the
-    // initially tapped element. Retry input only; no authentication retries.
-    if(!current.focused)continue;
-    inputText(credential);
-    let verified;
-    try{verified=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n,credential)),'Synthetic password input differs from expected',5000);}
-    catch{console.log('synthetic-password-entry-retry',attempt);continue;}
-    // Keyboard dismissal must not navigate or clear the password.
-    hideKeyboard();
-    try{
-      const final=await until(()=>nodes().find(n=>vaultField(n)&&passwordEvidence(n,credential)),'Synthetic password changed before submit',5000);
-      console.log('synthetic-password-evidence',passwordEvidence(final,credential));
-      return;
-    }catch{console.log('synthetic-password-focus-retry',attempt);}
-  }
-  throw Error('Synthetic password input could not be attested; no authentication submitted');
-}
 async function gate(action,credential=vaultPassword){
-  await enterSyntheticPassword(credential);
+  const expected=action==='Avvia la prova'||action==='Crea il mio registro'?'Configura archivio protetto':action;
+  await enterSyntheticPassword(credential,expected);
   console.log('original-gate-input-verified',action);
-  tap(await appButton(action));
+  // The driver verifies the exact field and button in one stable sample;
+  // never retry submission or authentication outcome.
+  await uiDriver.submitGate(action,credential,expected);
   const outcome=await until(()=>{
     const view=nodes();
     if(passwordRejected(view))return 'rejected';
@@ -288,9 +238,8 @@ async function seedOriginal(version){
   await appText('Le mie classi');await uiCheckpoint('initial-home');
   tap(await appButton('Nuova Classe'));
   await appText('Inserisci la denominazione della nuova classe');
-  tap(await appEdit());inputText(marker);
-  await until(()=>nodes().some(n=>nativeApp(n)&&n.clazz==='android.widget.EditText'&&n.text===marker),'Class prompt value not entered exactly',15000);
-  hideKeyboard();tap(await appButton('OK'));
+  await uiDriver.enterClassName(marker);
+  await uiDriver.submitClass(marker);
   // Verify that the app actually left the prompt and committed/navigated.
   await until(()=>originalClassCreated(nodes()),'Post-commit class management headings not observed in original UI',30000);
   await uiCheckpoint('class-created');
@@ -588,7 +537,7 @@ async function collectColdInterruptionDiagnostics(before){
     const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(3000)});
     return (await res.json()).map(t=>({id:t.id,type:t.type,local:t.url?.startsWith('https://localhost')||t.url?.startsWith('http://localhost'),url:t.url?.split(/[?#]/)[0]}));
   });
-  await observe('document',()=>evaluate('(()=>{const root=document.getElementById("root");return {href:location.origin+location.pathname,ready:document.readyState,visibility:document.visibilityState,boot:window.__val01Boot||null,rootChildren:root?.childElementCount??null,heading:[...document.querySelectorAll("h1")].map(h=>h.textContent).filter(t=>["Sblocca Registro","Configura archivio protetto","Sicurezza non disponibile","Protezione del Registro","Protezione dati in corso","Oggi"].includes(t)),passwordField:!!document.querySelector("#vault-password"),scripts:[...document.scripts].filter(s=>s.src).map(s=>new URL(s.src).pathname),resources:performance.getEntriesByType("resource").filter(r=>r.initiatorType==="script").map(r=>({path:new URL(r.name).pathname,duration:Math.round(r.duration),transferSize:r.transferSize})),indexedDB:typeof indexedDB,crypto:!!globalThis.crypto?.subtle}})()',5000));
+  await observe('document',()=>evaluate('(()=>{const root=document.getElementById("root");return {href:location.origin+location.pathname,ready:document.readyState,visibility:document.visibilityState,boot:window.__val01Boot||null,bootstrapTrace:(()=>{try{return JSON.parse(document.querySelector("[data-bootstrap-trace]")?.getAttribute("data-bootstrap-trace")||"null")}catch{return null}})(),rootChildren:root?.childElementCount??null,heading:[...document.querySelectorAll("h1")].map(h=>h.textContent).filter(t=>["Sblocca Registro","Configura archivio protetto","Sicurezza non disponibile","Protezione del Registro","Protezione dati in corso","Oggi"].includes(t)),passwordField:!!document.querySelector("#vault-password"),scripts:[...document.scripts].filter(s=>s.src).map(s=>new URL(s.src).pathname),resources:performance.getEntriesByType("resource").filter(r=>r.initiatorType==="script").map(r=>({path:new URL(r.name).pathname,duration:Math.round(r.duration),transferSize:r.transferSize})),indexedDB:typeof indexedDB,crypto:!!globalThis.crypto?.subtle}})()',5000));
   await observe('archiveVersion',()=>evaluate('Promise.race([indexedDB.databases().then(d=>({status:"resolved",versions:d.filter(x=>x.name==="registro-docente-secure-vault").map(x=>x.version)})),new Promise(r=>setTimeout(()=>r({status:"timed-out"}),5000))])',8000));
   // Direct readonly capture on the observed version, no page navigation and
   // no crypto authorization. Abort on unexpected upgrade and close any handle.
