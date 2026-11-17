@@ -9,6 +9,7 @@ on:
       - feat/val-01-d1b5-db2-lifecycle
       - feat/val-01-d1b5-db2-product
       - test/val-01-d1b5-db2-native
+      - test/val-01-stab04b-repeatability
   workflow_dispatch:
   workflow_call:
 
@@ -16,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  CANDIDATE_SHA: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.head.sha || github.sha }}
   PLAYWRIGHT_VERSION: '1.64.1'
   PORT: '4173'
 
