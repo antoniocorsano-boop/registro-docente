@@ -5,6 +5,7 @@ import { mkdirSync,writeFileSync,mkdtempSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import {probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
 import {createNativeUiDriver,parseNativeNodes,resumedActivity,NativeUiFault,demoRadio as strictDemoRadio,vaultField as strictVaultField} from './native-ui-driver.mjs';
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
@@ -14,6 +15,7 @@ const smoke=process.env.VAL01_HISTORICAL_SMOKE==='true';
 const api=product?Number(process.env.VAL01_API):36;
 const pkg=integral?'it.trama.registrodocente':'it.trama.registrodocente.lab.val01';
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
+const packagePids=()=>probePackagePids(adb,pkg);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const evidence=[];
 mkdirSync('native-evidence',{recursive:true});
@@ -33,8 +35,9 @@ const pending=new Map();
 async function connect(){
   assert.equal(smoke,false,'Historical smoke cannot use DevTools');
   socket=await until(async()=>{
-    const pid=adb('shell','pidof',pkg).split(/\s+/)[0];
-    if(!/^\d+$/.test(pid))return null;
+    const pids=packagePids();
+    if(pids.length!==1)return null;
+    const pid=String(pids[0]);
     adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+pid);
     const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(2000)});
     const target=(await res.json()).find(t=>t.type==='page'&&t.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(t.url));
@@ -249,11 +252,10 @@ async function seedOriginal(version){
   await ensureHome();await uiCheckpoint('home-after-create');await findMarker();
   console.log('original-class-visible-before-restart');
   if(smoke)stage('smoke-synthetic-class-created-visible',{durableSubmission:true});
-  stop();
   if(smoke){
-    await until(()=>!adb('shell','sh','-c','pidof '+pkg+' || true'),'Historical process still running after force-stop',15000);
-    stage('smoke-process-stopped',{forcedStop:true});
-  }
+    const proof=await verifiedProcessStop({probe:packagePids,forceStop:()=>adb('shell','am','force-stop',pkg),pause:sleep});
+    stage('smoke-process-stopped',proof);
+  }else stop();
   launchOriginal();
   if(smoke){
     // Verify the cold gate natively, before any credential is entered.
@@ -264,7 +266,9 @@ async function seedOriginal(version){
       return locked&&fields.length===1&&!visibleArchive?{key:'locked'}:null;
     },{ms:45000});
     await uiCheckpoint('cold-locked');
-    stage('smoke-cold-protected-gate',{archiveHidden:true});
+    const reopenedPids=packagePids();
+    assert.ok(reopenedPids.length>0,'Relaunched historical process not observed');
+    stage('smoke-cold-protected-gate',{archiveHidden:true,reopenedPids});
   }
   try{await gate('Sblocca Registro');}catch(e){
     // Preserve failed original UI before optional read-only diagnostic.
@@ -538,13 +542,12 @@ async function armMigrationProcessCut(cut){
     // Do not disconnect or resume the debugger before killing the process:
     // the before-commit callback must not be allowed to finish normally.
     assert.ok(foreground());
-    adb('shell','am','force-stop',pkg);
-    await until(()=>!adb('shell','sh','-c','pidof '+pkg+' || true'),'Original candidate process survived force-stop',15000);
+    const proof=await verifiedProcessStop({probe:packagePids,forceStop:()=>adb('shell','am','force-stop',pkg),pause:sleep});
     observedSocket.removeEventListener('message',listener);
     observedSocket.close();socket=null;
     for(const p of pending.values())clearTimeout(p.timer);pending.clear();
     try{adb('forward','--remove','tcp:9222');}catch{}
-    stage('interruption-process-stopped',{forcedStop:true});
+    stage('interruption-process-stopped',proof);
   };
 }
 // Failure-only, read-only evidence. Never reload, clear WebView storage,
