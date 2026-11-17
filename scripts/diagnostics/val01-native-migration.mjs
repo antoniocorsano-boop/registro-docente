@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
 const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
+const interruptionCut=process.env.VAL01_MIGRATION_CUT||'';
 const api=product?Number(process.env.VAL01_API):36;
 const pkg=integral?'it.trama.registrodocente':'it.trama.registrodocente.lab.val01';
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
@@ -16,7 +17,7 @@ const evidence=[];
 mkdirSync('native-evidence',{recursive:true});
 function stage(name,details={}){
   evidence.push({stage:name,status:'PASS',...details});
-  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api,scope:product?'original historical APK; actual candidate Root/App/Privacy; synthetic emulator only':integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,results:evidence},null,2));
+  writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,predecessor:process.env.HISTORICAL_SHA,api,scope:product?'original historical APK; actual candidate Root/App/Privacy; synthetic emulator only':integral?'original historical unsigned APK re-signed in CI, candidate laboratory APK':'laboratory APKs, exact historical storage source, candidate native bridge',qualification:integral?(Number(process.env.OLD_VERSION)===10002?'negative-only':'supported-migration'):'complete-storage-laboratory',productionRelease:false,cut:interruptionCut||undefined,results:evidence},null,2));
   console.log(name,'PASS');
 }
 async function until(fn,label,ms=30000){
@@ -40,13 +41,16 @@ async function connect(){
     return ws;
   },'WebView CDP not available',45000);
 }
-function evaluate(expression,timeout=15000){
+function cdp(method,params={},timeout=15000){
   const id=++seq;
   return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{pending.delete(id);reject(Error('WebView evaluation timeout'));},timeout);
-    pending.set(id,{timer,resolve:r=>resolve(r.result.value),reject});
-    socket.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));
+    const timer=setTimeout(()=>{pending.delete(id);reject(Error('WebView CDP timeout: '+method));},timeout);
+    pending.set(id,{timer,resolve,reject});
+    socket.send(JSON.stringify({id,method,params}));
   });
+}
+function evaluate(expression,timeout=15000){
+  return cdp('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},timeout).then(r=>r.result.value);
 }
 const call=(api,method,...args)=>evaluate('window['+JSON.stringify(api)+']['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')',method==='write'?90000:15000);
 const old=(m,...a)=>call('__beta2ArchiveCompatibility',m,...a);
@@ -541,6 +545,115 @@ async function productLifecycleSuite(oldVersion,initial,before){
   await navigateProduct('/index.html','!!document.querySelector("input[name=archive-mode]")');
   await setupFreshProduct();
 }
+// Separate, isolated hard-stop scenarios. The exact original APK is seeded
+// through its UI. A CI-only debugger checkpoint pauses the real guarded
+// versionchange callback, never a substitute transaction or migration grant.
+async function armMigrationProcessCut(cut){
+  let paused=null;
+  const observedSocket=socket;
+  const listener=e=>{
+    const m=JSON.parse(e.data);
+    if(m.method==='Debugger.paused')paused=m.params;
+  };
+  observedSocket.addEventListener('message',listener);
+  await cdp('Debugger.enable');
+  await evaluate('(()=>{const cut='+JSON.stringify(cut)+';const original=IDBTransaction.prototype.addEventListener;let armed=false;function migrationCutBefore(tx){debugger;}function migrationCutAfter(tx){debugger;}IDBTransaction.prototype.addEventListener=function(type,listener,options){const result=original.call(this,type,listener,options);if(!armed&&type==="complete"&&this.mode==="versionchange"&&this.db.name==="registro-docente-secure-vault"&&this.db.version===2){armed=true;const tx=this;if(cut==="before-commit")migrationCutBefore(tx);else original.call(tx,"complete",()=>migrationCutAfter(tx),{once:true});}return result;};return true})()');
+  return async()=>{
+    const info=await until(()=>paused,'Real guarded migration checkpoint was not reached',60000);
+    const frame=info.callFrames[0];
+    assert.equal(frame.functionName,cut==='before-commit'?'migrationCutBefore':'migrationCutAfter');
+    const observed=await cdp('Debugger.evaluateOnCallFrame',{callFrameId:frame.callFrameId,expression:'({mode:tx.mode,version:tx.db.version,name:tx.db.name})',returnByValue:true});
+    assert.deepEqual(observed.result.value,{mode:'versionchange',version:2,name:'registro-docente-secure-vault'});
+    stage(cut==='before-commit'?'interruption-guard-before-commit':'interruption-guard-after-commit',{realVersionchange:true});
+    // Do not disconnect or resume the debugger before killing the process:
+    // the before-commit callback must not be allowed to finish normally.
+    assert.ok(foreground());
+    adb('shell','am','force-stop',pkg);
+    await until(()=>!adb('shell','sh','-c','pidof '+pkg+' || true'),'Original candidate process survived force-stop',15000);
+    observedSocket.removeEventListener('message',listener);
+    observedSocket.close();socket=null;
+    for(const p of pending.values())clearTimeout(p.timer);pending.clear();
+    try{adb('forward','--remove','tcp:9222');}catch{}
+    stage('interruption-process-stopped',{forcedStop:true});
+  };
+}
+// Failure-only, read-only evidence. Never reload, clear WebView storage,
+// change the expected version or mark the failed cold launch as successful.
+async function collectColdInterruptionDiagnostics(before){
+  const report={cut:interruptionCut,api,phase:'cold-gate-failed',expectedVersion:interruptionCut==='before-commit'?1:2};
+  const observe=async(name,fn)=>{try{report[name]=await fn();}catch(e){report[name]={failed:true,error:e.name||'Error'};}writeFileSync('native-evidence/cold-reopen-diagnostic.json',JSON.stringify(report,null,2));};
+  await observe('foreground',()=>foreground());
+  await observe('processes',()=>adb('shell','ps','-A').split('\n').filter(line=>line.includes(pkg)||line.includes('sandboxed_process')).map(line=>line.trim().split(/\s+/).filter((_,i,a)=>i<3||i===a.length-1)));
+  await observe('targetInventory',async()=>{
+    const res=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(3000)});
+    return (await res.json()).map(t=>({id:t.id,type:t.type,local:t.url?.startsWith('https://localhost')||t.url?.startsWith('http://localhost'),url:t.url?.split(/[?#]/)[0]}));
+  });
+  await observe('document',()=>evaluate('(()=>{const root=document.getElementById("root");return {href:location.origin+location.pathname,ready:document.readyState,visibility:document.visibilityState,boot:window.__val01Boot||null,rootChildren:root?.childElementCount??null,heading:[...document.querySelectorAll("h1")].map(h=>h.textContent).filter(t=>["Sblocca Registro","Configura archivio protetto","Sicurezza non disponibile","Protezione del Registro","Protezione dati in corso","Oggi"].includes(t)),passwordField:!!document.querySelector("#vault-password"),scripts:[...document.scripts].filter(s=>s.src).map(s=>new URL(s.src).pathname),resources:performance.getEntriesByType("resource").filter(r=>r.initiatorType==="script").map(r=>({path:new URL(r.name).pathname,duration:Math.round(r.duration),transferSize:r.transferSize})),indexedDB:typeof indexedDB,crypto:!!globalThis.crypto?.subtle}})()',5000));
+  await observe('archiveVersion',()=>evaluate('Promise.race([indexedDB.databases().then(d=>({status:"resolved",versions:d.filter(x=>x.name==="registro-docente-secure-vault").map(x=>x.version)})),new Promise(r=>setTimeout(()=>r({status:"timed-out"}),5000))])',8000));
+  // Direct readonly capture on the observed version, no page navigation and
+  // no crypto authorization. Abort on unexpected upgrade and close any handle.
+  await observe('physical',()=>evaluate('((async()=>{const name="registro-docente-secure-vault";const ds=await indexedDB.databases();const v=ds.find(d=>d.name===name)?.version;if(v!==1&&v!==2)return {status:"unknown-version"};return new Promise(resolve=>{let settled=false;const done=value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>done({status:"timed-out"}),6000);const r=indexedDB.open(name,v);r.onupgradeneeded=()=>r.transaction?.abort();r.onerror=()=>done({status:"open-error",name:r.error?.name});r.onblocked=()=>done({status:"blocked"});r.onsuccess=()=>{const db=r.result;if(settled){db.close();return;}try{const tx=db.transaction(["metadata","records"],"readonly"),m=tx.objectStore("metadata"),s=tx.objectStore("records");const mk=m.getAllKeys(),mv=m.getAll(),rk=s.getAllKeys(),rv=s.getAll();tx.oncomplete=async()=>{db.close();try{const json=JSON.stringify({metadataKeys:mk.result,metadata:mv.result,keys:rk.result,records:rv.result},(_k,v)=>v instanceof ArrayBuffer?Array.from(new Uint8Array(v)):v instanceof Uint8Array?Array.from(v):v);const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(json))),x=>x.toString(16).padStart(2,"0")).join("");done({status:"read",version:v,recordCount:rk.result.length,digest});}catch{done({status:"digest-error"});}};tx.onabort=tx.onerror=()=>{db.close();done({status:"transaction-error"});};}catch{db.close();done({status:"inventory-error"});}};});})())',12000));
+  if(report.physical?.status==='read')report.physical.matchesOriginal=report.physical.digest===before.digest;
+  // Capture only relevant, synthetic-emulator crash/renderer/IDB log lines.
+  await observe('nativeLogs',()=>adb('shell','logcat','-d','-t','1800','-v','brief').split('\n').filter(l=>/chromium|WebView|crash|IndexedDB|LevelDB|AndroidRuntime/i.test(l)).slice(-120).map(l=>l.slice(0,700)));
+  writeFileSync('native-evidence/cold-reopen-diagnostic.json',JSON.stringify(report,null,2));
+}
+async function migrationInterruptionSuite(oldVersion,initial){
+  assert.equal(product,true);assert.equal(integral,true);assert.equal(oldVersion,10004);
+  assert.ok(['before-commit','after-commit'].includes(interruptionCut));
+  await seedOriginal(oldVersion);
+  stage('historical-seed-cold-reopen',{originalBinary:true});
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Candidate initial gate missing',45000);
+  await diagnostic();const before=await inspectProduct(true);
+  assert.equal(before.version,1);assert.equal(before.classification,'complete');assert.equal(before.keys.length,10);assert.equal(before.marker,true);
+  assert.match(before.digest,/^[a-f0-9]{64}$/);
+  stage('interruption-original-preflight',{recordCount:10,classification:'complete'});
+  await writeSyntheticRestoreFile(before.backup);
+  await productGate();await privacyProduct();await selectProductFile();
+  stage('interruption-picker-reauthenticated');
+  await fillMigrationPasswords('synthetic-archive-backup-only');
+  const cut=await armMigrationProcessCut(interruptionCut);
+  await clickDeferred(productPanel+' form button[type=submit]');
+  await nativeConfirm('La copia è stata verificata',true);
+  await cut();
+  // Cold reopen through actual native authentication, before any diagnostic
+  // read. Do not replay a grant, assume rollback or attempt automatic repair.
+  assert.deepEqual(identity(10005),initial);
+  launchOriginal();
+  try{await connect();await until(()=>visible('#vault-password'),'Cold interruption gate missing',45000);}
+  catch(error){await collectColdInterruptionDiagnostics(before);throw error;}
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro');await ensureHome();await findMarker();
+  await diagnostic();const recovered=await inspectProduct();
+  const expected=interruptionCut==='before-commit'?1:2;
+  assert.equal(recovered.version,expected);
+  assert.equal(recovered.digest,before.digest);
+  assert.deepEqual(recovered.keys,before.keys);assert.deepEqual(recovered.snapshot,before.snapshot);
+  stage('interruption-reopen-authenticated',{version:expected,recordCount:10,physicalSha256:recovered.digest});
+  if(expected===1){
+    stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
+    launchOriginal();await gate('Sblocca Registro');await ensureHome();await findMarker();
+    stage('interruption-original-reopened');
+    stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+    launchOriginal();await connect();await gate('Sblocca Registro');await privacyProduct();
+    // New local readback and explicit approval; old process grant is gone.
+    await selectProductFile();await submitProduct('synthetic-archive-backup-only',true);
+    await gate('Sblocca Registro');await diagnostic();const migrated=await inspectProduct();
+    assert.equal(migrated.version,2);assert.equal(migrated.digest,before.digest);assert.deepEqual(migrated.snapshot,before.snapshot);
+    stage('interruption-fresh-consent-migrated');
+  }
+  stop();install(process.env.OLD_APK,['-r','-d']);assert.deepEqual(identity(oldVersion),initial);
+  launchOriginal();await appText('Sicurezza non disponibile');
+  assert.ok(!nodes().some(n=>nativeApp(n)&&(/Sblocca Registro|Configura archivio protetto|Le mie classi|Proteggi i dati esistenti/.test(n.text)||n.password)));
+  stage('interruption-downgrade-refused');
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();await gate('Sblocca Registro');await ensureHome();await findMarker();
+  await diagnostic();const final=await inspectProduct();
+  assert.equal(final.version,2);assert.equal(final.digest,before.digest);assert.deepEqual(final.snapshot,before.snapshot);
+  stage('interruption-final-cold-reopen',{version:2,recordCount:10,physicalSha256:final.digest});
+}
 async function productSuite(oldVersion,initial){
   assert.equal(integral,true);
   await seedOriginal(oldVersion);
@@ -641,7 +754,7 @@ try{
   const oldVersion=Number(process.env.OLD_VERSION);
   install(process.env.OLD_APK);
   const initial=identity(oldVersion);
-  if(product){await productSuite(oldVersion,initial);}
+  if(product){if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
   else{
   let seed;
   if(integral){
