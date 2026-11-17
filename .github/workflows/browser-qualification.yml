@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/val-01-d1b4b2-product-session
   workflow_dispatch:
   workflow_call:
 
