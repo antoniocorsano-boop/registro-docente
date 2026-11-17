@@ -1,4 +1,6 @@
 // D1b.3a GREEN candidate adapter: isolated version-fenced store.
+import { createLocalMigrationSessionBoundary } from '../../../src/security/migrationSessionBoundary';
+import { createDurableMutationCoordinator } from '../../../src/persistence/durableMutationCoordinator';
 import { classifyArchivePreflight } from '../../../src/security/archivePreflight';
 import { createAuthorizedVaultMigration } from '../../../src/security/authorizedVaultMigration';
 import { VersionFencedVaultStore } from '../../../src/security/versionFencedVaultStore';
@@ -36,6 +38,22 @@ const migration=createAuthorizedVaultMigration();
 let grant:Awaited<ReturnType<typeof migration.prepare>>|null=null;
 Object.assign(globalThis,{__val01FenceCandidate:{
   version,
+  async runSessionMigration(backup:string,mode:'approve'|'refuse'|'revoke'|'wrong-copy'){
+    // Isolated browser fixture: no live App, no native file authority.
+    // The historical page was unloaded before this adapter is invoked.
+    const queue=createDurableMutationCoordinator();
+    let owner:ReturnType<typeof createLocalMigrationSessionBoundary>;
+    owner=createLocalMigrationSessionBoundary({
+      queue,isCurrent:()=>true,
+      readLocalCopy:async()=>new Blob([backup]),
+      confirm:async()=>{if(mode==='revoke')owner.revoke();return mode!=='refuse';},
+      retireDb1:async()=>{} // this fixture owns no open DB1 runtime handle
+    });
+    const result=await owner.run(password,mode==='wrong-copy'?'wrong':'synthetic-archive-backup-only');
+    let sealed=false;
+    try{await queue.enqueueTask(()=>1);}catch{sealed=true;}
+    return {result,sealed,version:await version()};
+  },
   async preflight(wrongPassword=false,revocation=false){
     const controller=new AbortController();
     const pending=classifyArchivePreflight(wrongPassword?'wrong':password,controller.signal);

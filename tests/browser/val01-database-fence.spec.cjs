@@ -190,3 +190,22 @@ test('D1b.4a already upgraded DB2 is not interpreted as an empty DB1',async({pag
   expect(await candidate(page,'version')).toBe(2);
   expect(await candidate(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
 });
+
+test('D1b.4b local session adapter uses the real fence and preserves all ciphertext',async({page})=>{
+  await loadOld(page);const seed=await old(page,'seed',false);
+  await loadNew(page);
+  expect(await candidate(page,'runSessionMigration',seed.backup,'approve')).toEqual({result:'migrated-reopen-required',sealed:true,version:2});
+  expect(await candidate(page,'open')).toEqual({snapshot:seed.snapshot,physical:seed.physical});
+});
+
+for(const mode of ['refuse','revoke','wrong-copy']){
+  test('D1b.4b '+mode+' leaves real DB1 byte-identical and admission sealed',async({page})=>{
+    await loadOld(page);const seed=await old(page,'seed',false);
+    await loadNew(page);
+    const before=await candidate(page,'preflightInventory');
+    expect(await candidate(page,'runSessionMigration',seed.backup,mode)).toEqual({
+      result:mode==='wrong-copy'?'blocked-reopen-required':'cancelled-reopen-required',sealed:true,version:1
+    });
+    expect(await candidate(page,'preflightInventory')).toBe(before);
+  });
+}
