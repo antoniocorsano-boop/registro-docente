@@ -550,8 +550,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         </div>
       </div>
 
-      {/* Right to be Forgotten / Factory Reset */}
-      <div className="neon-card p-5 border border-rose-950/60">
+      {/* Legacy reset is not a second path for DB2. */}
+      {archiveMigration?.mode!=='restore'&&<div className="neon-card p-5 border border-rose-950/60">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-rose-400 flex items-center gap-2">
@@ -578,7 +578,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Reset Totale Sicuro
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };
