@@ -1,7 +1,7 @@
 name: VAL-01 — native product and targeted STAB-04b recovery
 on:
   pull_request:
-    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native', 'test/val-01-stab04-native-smoke', 'test/val-01-stab04b-precommit-recovery']
+    branches: ['feat/val-01-d1b4b2-product-session', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native', 'test/val-01-stab04-native-smoke', 'test/val-01-stab04b-precommit-recovery', 'test/val-01-stab04b-repeatability']
 permissions:
   contents: read
   actions: read
@@ -9,13 +9,14 @@ jobs:
   native-product:
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
-        predecessor: ${{ fromJSON(github.event.pull_request.base.ref == 'test/val-01-stab04b-precommit-recovery' && '[{"name":"stab04b-api36-independent-2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"stab04b-api36-independent-3","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"}]' || github.event.pull_request.base.ref == 'test/val-01-stab04-native-smoke' && '[{"name":"stab04b-api36-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"}]' || github.event.pull_request.base.ref == 'test/val-01-d1b5-db2-native' && '[{"name":"beta2-rc2-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"},{"name":"beta2-rc2-android12-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-android12-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"}]' || '[{"name":"beta1-rc2","sha":"37c61d4c64993c986a3edcd2b421310adf20de92","api":36,"version":10002,"run":"43206101783","artifact":"13938285055"},{"name":"beta1-rc3","sha":"b726f4a6dc0eb90a066113bee7cceabf29c629a5","api":36,"version":10003,"run":"43233573213","artifact":"13950428737"},{"name":"beta2-rc2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"beta2-rc2-android12","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425"}]') }}
+        predecessor: ${{ fromJSON(github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && '[{"name":"stab05-beta1-rc2","sha":"37c61d4c64993c986a3edcd2b421310adf20de92","api":36,"version":10002,"run":"43206101783","artifact":"13938285055"},{"name":"stab05-beta1-rc3","sha":"b726f4a6dc0eb90a066113bee7cceabf29c629a5","api":36,"version":10003,"run":"43233573213","artifact":"13950428737"},{"name":"stab05-beta2-rc2-api36","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"stab05-beta2-rc2-api32","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"stab05-beta2-rc2-api36-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"},{"name":"stab05-beta2-rc2-api32-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"stab05-beta2-rc2-api32-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"}]' || github.event.pull_request.base.ref == 'test/val-01-stab04b-precommit-recovery' && '[{"name":"stab04b-api36-independent-2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"stab04b-api36-independent-3","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"}]' || github.event.pull_request.base.ref == 'test/val-01-stab04-native-smoke' && '[{"name":"stab04b-api36-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"}]' || github.event.pull_request.base.ref == 'test/val-01-d1b5-db2-native' && '[{"name":"beta2-rc2-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"},{"name":"beta2-rc2-android12-before-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"before-commit"},{"name":"beta2-rc2-android12-after-commit","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425","cut":"after-commit"}]' || '[{"name":"beta1-rc2","sha":"37c61d4c64993c986a3edcd2b421310adf20de92","api":36,"version":10002,"run":"43206101783","artifact":"13938285055"},{"name":"beta1-rc3","sha":"b726f4a6dc0eb90a066113bee7cceabf29c629a5","api":36,"version":10003,"run":"43233573213","artifact":"13950428737"},{"name":"beta2-rc2","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":36,"version":10004,"run":"43811185219","artifact":"14200343425"},{"name":"beta2-rc2-android12","sha":"ddbf60781514b866b09e1fa1e014e6a6fc3989d3","api":32,"version":10004,"run":"43811185219","artifact":"14200343425"}]') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
       HISTORICAL_SHA: ${{ matrix.predecessor.sha }}
-      CANDIDATE_SHA: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-precommit-recovery' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.head.sha }}
+      CANDIDATE_SHA: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.base.ref == 'test/val-01-stab04b-precommit-recovery' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.head.sha }}
       ORCHESTRATION_SHA: ${{ github.event.pull_request.head.sha }}
       PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
       CASE_NAME: ${{ matrix.predecessor.name }}
@@ -24,7 +25,7 @@ jobs:
       OLD_ARTIFACT: ${{ matrix.predecessor.artifact }}
       VAL01_INTEGRAL: 'true'
       VAL01_PRODUCT: 'true'
-      VAL01_DB2_LIFECYCLE: ${{ github.event.pull_request.base.ref == 'feat/val-01-d1b5-db2-product' && 'true' || 'false' }}
+      VAL01_DB2_LIFECYCLE: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && 'true' || github.event.pull_request.base.ref == 'feat/val-01-d1b5-db2-product' && 'true' || 'false' }}
       VAL01_MIGRATION_CUT: ${{ matrix.predecessor.cut || '' }}
       VAL01_API: ${{ matrix.predecessor.api }}
     steps:
@@ -40,6 +41,11 @@ jobs:
           mkdir -p native-evidence
           if [[ "$CASE_NAME" == stab04b-api36-independent-* ]]; then
             test "$PR_BASE_SHA" = "cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44"
+            test "$CANDIDATE_SHA" = "cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44"
+            test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          fi
+          if [[ "$CASE_NAME" == stab05-* ]]; then
+            test "$PR_BASE_SHA" = "b372e7986fd6a0a377325e2c1a864972002e85f5"
             test "$CANDIDATE_SHA" = "cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44"
             test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           fi
