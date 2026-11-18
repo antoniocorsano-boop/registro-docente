@@ -102,7 +102,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     const androidNative = isAndroidBackupRuntime();
     try {
       const checkpoint = await onPrepareEncryptedBackup();
-      const payload = createBackupPayload(checkpoint.snapshot);
+      const payload = createBackupPayload(checkpoint.snapshot, checkpoint.checkpointAt);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
       if (!mountedRef.current) return;
 
