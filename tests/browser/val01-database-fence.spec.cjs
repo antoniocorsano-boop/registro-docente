@@ -1004,11 +1004,25 @@ test('S-R02 live Root preserves committed ACTIVE and source on revocation, then 
   await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
   await page.getByRole('button',{name:'Sblocca Registro',exact:true}).click();
   await revokeHeldLegacyOperation(page);
-  await expect(page.getByText('Sessione cambiata. Autenticati nuovamente.')).toBeVisible({timeout:30000});
+  const revokedNotice=page.getByRole('status').filter({hasText:'Sessione cambiata. Autenticati nuovamente.'});
+  await expect(revokedNotice).toBeVisible({timeout:30000});
   await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Sblocca Registro',exact:true})).toBeEnabled();
   expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBe(raw);
   await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  // Durable metadata is checked without opening a writable connection or
+  // consuming the retained notice; the fresh authentication follows.
+  const durable=await page.evaluate(async()=>{
+    const {IndexedDbVaultStore}=await import('/src/security/vaultStore.ts');
+    const store=new IndexedDbVaultStore(indexedDB,true);
+    try{return {state:(await store.getMetadata())?.state,keys:await store.listRecordKeys()};}
+    finally{await store.retireConnection();}
+  });
+  expect(durable.state).toBe('ACTIVE');
+  expect(durable.keys).toContain('appData');
+  await expect(revokedNotice).toBeVisible();
   await unlockProduct(page);
+  await expect(revokedNotice).toHaveCount(0);
   expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
   await page.reload();await unlockProduct(page);
 });
