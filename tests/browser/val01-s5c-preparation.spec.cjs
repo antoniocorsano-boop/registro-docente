@@ -84,8 +84,8 @@ for(const [width,height,scale] of [[320,700,100],[390,844,100],[320,700,200]]){
       if(scale===200)await page.addStyleTag({content:'html { font-size: 200% !important; }'});
       await metadata(page);await choose(page);await review(page);
       await expect(page.getByRole('button',{name:'Conferma configurazione'})).toBeVisible();
-      const dimensions=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
-      expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client+1);expect(errors).toEqual([]);
+      const dimensions=await page.evaluate(()=>{const client=document.documentElement.clientWidth;return {scroll:document.documentElement.scrollWidth,client,overflow:Array.from(document.querySelectorAll('body *')).filter(e=>e.getBoundingClientRect().right>client+1).map(e=>({tag:e.tagName,classes:e.className,right:Math.round(e.getBoundingClientRect().right),width:Math.round(e.getBoundingClientRect().width)})).slice(0,20)};});
+      expect(dimensions.scroll,JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.client+1);expect(errors).toEqual([]);
       const root=process.env.HEADER01_EVIDENCE_DIR||'../browser-evidence';await fs.mkdir(path.join(root,'screenshots'),{recursive:true});
       await page.screenshot({path:path.join(root,'screenshots','val01-s5c-'+width+'-'+scale+'.png'),fullPage:true});
       await page.getByRole('button',{name:'Conferma configurazione'}).click();await expect(page.getByRole('status')).toContainText('Configurazione confermata');
