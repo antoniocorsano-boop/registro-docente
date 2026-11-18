@@ -25,6 +25,7 @@ export interface BalanceSource {
  readonly assessment:AssessmentDefinitionRevision;
  readonly criterion:CriterionRevision;
  readonly targets:readonly LearningReferenceRevision[];
+ readonly contextualReferences:readonly LearningReferenceRevision[];
  readonly rubric:RubricRevision|null;
 }
 export interface FormativeBalancePreview {
@@ -34,6 +35,7 @@ export interface FormativeBalancePreview {
  readonly sources:readonly BalanceSource[];
  readonly comparisons:readonly (FormativeComparison&{readonly status:'matching-recorded-context';readonly conclusion:'teacher-review-required'})[];
  readonly basisDigest:string;
+ readonly basisLatestConfirmedAt:string|null;
  readonly coverage:'undetermined';
 }
 type Issue='INVALID_DOCUMENT'|'INVALID_CONTEXT'|'INVALID_REQUEST'|'INVALID_SOURCE'|'INVALID_COMPARISON'|'NO_SOURCES'|'STALE_PREVIEW'|'INVALID_CONFIRMATION';
@@ -80,7 +82,7 @@ function source(d:AssessmentEvidenceV1,e:IndividualEvidenceRevision){
  const criterion=d.criteria.find(c=>c.revisionId===e.criterionRevisionId)!;
  const binding=assessment.criteria.find(c=>c.criterionRevisionId===criterion.revisionId)!;
  const rubric=d.rubrics.find(r=>r.revisionId===binding.rubricRevisionId)??null;
- return {evidence:e,assessment,criterion,targets:criterion.targetReferenceRevisionIds.map(id=>d.references.find(r=>r.revisionId===id)!),rubric};
+ return {evidence:e,assessment,criterion,targets:criterion.targetReferenceRevisionIds.map(id=>d.references.find(r=>r.revisionId===id)!),contextualReferences:criterion.contextualReferenceRevisionIds.map(id=>d.references.find(r=>r.revisionId===id)!),rubric};
 }
 /** Conservative technical eligibility only: same exact frozen criterion,
  * rubric, expected task, purpose and recorded observation modalities. Two
@@ -127,8 +129,9 @@ export async function prepareFormativeBalance(document:unknown,scope:unknown,con
   // and their frozen dependencies. Never return unselected facts or other
   // students' records; their changes do not invalidate this individual balance.
   const basis=d.evidence.filter(inPeriod).sort((a,b)=>cmp(a.revisionId,b.revisionId)).map(e=>source(d,e));
-  const basisDigest=await digest({context:c,basis});
-  return {valid:true,preview:{context:c,request:r,availableCount:available.length,sources,comparisons:pairs,basisDigest,coverage:'undetermined'}};
+  const basisLatestConfirmedAt=basis.map(s=>s.evidence.confirmedAt).sort(cmp).at(-1)??null;
+  const basisDigest=await digest({context:c,request:r,basis});
+  return {valid:true,preview:{context:c,request:r,availableCount:available.length,sources,comparisons:pairs,basisDigest,basisLatestConfirmedAt,coverage:'undetermined'}};
  }catch{return fail('INVALID_DOCUMENT');}
 }
 /** Recompute the review against the caller's current scope/recipient/period.
@@ -137,14 +140,14 @@ export async function prepareFormativeBalance(document:unknown,scope:unknown,con
 export async function confirmFormativeBalance(document:unknown,scope:unknown,context:unknown,reviewed:unknown,confirmation:unknown):Promise<FormativeBalanceConfirmation>{
  try{
   const r=snapshotAssessmentData(reviewed),c=snapshotAssessmentData(confirmation);
-  if(!exact(r,['context','request','availableCount','sources','comparisons','basisDigest','coverage']))return fail('STALE_PREVIEW');
+  if(!exact(r,['context','request','availableCount','sources','comparisons','basisDigest','basisLatestConfirmedAt','coverage']))return fail('STALE_PREVIEW');
   if(!exact(c,['confirmedByTeacher','confirmedAt'])||c.confirmedByTeacher!==true||!instant(c.confirmedAt))return fail('INVALID_CONFIRMATION');
   const fresh=await prepareFormativeBalance(document,scope,context,r.request);
   if(!fresh.valid)return fail('STALE_PREVIEW');
   if(canonical(r)!==canonical(fresh.preview))return fail('STALE_PREVIEW');
   if(!fresh.preview.sources.length)return fail('NO_SOURCES');
   const at=c.confirmedAt;
-  if(fresh.preview.sources.some(s=>s.evidence.confirmedAt>at))return fail('INVALID_CONFIRMATION');
+  if(fresh.preview.basisLatestConfirmedAt&&fresh.preview.basisLatestConfirmedAt>at)return fail('INVALID_CONFIRMATION');
   return {valid:true,balance:{...fresh.preview,confirmedByTeacher:true,confirmedAt:at}};
  }catch{return fail('INVALID_CONFIRMATION');}
 }
