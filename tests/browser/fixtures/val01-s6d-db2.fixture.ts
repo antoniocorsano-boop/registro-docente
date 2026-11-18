@@ -3,7 +3,7 @@ import {boardDocument,boardScope} from './val01-s6c-data';
 import {createInitialArchiveSnapshot} from '../../../src/security/initialArchiveSetup';
 import {IndexedDbVaultStore} from '../../../src/security/vaultStore';
 import {SecureVault} from '../../../src/security/secureVault';
-import {SecureAppStorage,type CompleteSecureAppSnapshot,type SecureMeta} from '../../../src/security/secureAppStorage';
+import {SecureAppStorage,type CompleteSecureAppSnapshot} from '../../../src/security/secureAppStorage';
 import {ExistingSessionVaultStore} from '../../../src/security/existingSessionVaultStore';
 import {createAuthorizedVaultMigration} from '../../../src/security/authorizedVaultMigration';
 import {captureDb2,sameDb2Physical} from '../../../src/security/db2PhysicalLifecycle';
@@ -55,11 +55,12 @@ async function seed(){
  const x=freshSnapshot(),store=new IndexedDbVaultStore(),vault=new SecureVault(store);
  const storage=new SecureAppStorage(vault);
  await vault.initializeActive(password);
- try{await storage.restoreSnapshotVerified(x);}
+ let exact:CompleteSecureAppSnapshot;
+ try{await storage.restoreSnapshotVerified(x);const loaded=await storage.loadExactBackupSnapshot();if(!loaded)throw Error('Incomplete synthetic seed');exact=loaded;}
  finally{vault.lock();await store.retireConnection();}
  const migration=createAuthorizedVaultMigration();
  try{
-  const encrypted=await encryptDataWithPassword(createBackupPayload(x,stamp),copyPassword);
+  const encrypted=await encryptDataWithPassword(createBackupPayload(exact,stamp),copyPassword);
   const grant=await migration.prepare(password,new Blob([encrypted]),copyPassword);
   await migration.migrate(grant,true);
  }finally{migration.invalidate();}
