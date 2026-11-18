@@ -1109,3 +1109,98 @@ for(const verified of [false,true]){
     expect(await readProductDb2(page)).toEqual(decoded.snapshot);
   });
 }
+
+
+// S-R04a: source and destination are different isolated browser contexts.
+// Only the bytes produced by the actual Privacy export cross that boundary.
+async function readRecoveryDb1(page,password){
+  await page.goto(productSeed());
+  return page.evaluate(async password=>{
+    const {IndexedDbVaultStore}=await import('/src/security/vaultStore.ts');
+    const {SecureVault}=await import('/src/security/secureVault.ts');
+    const {SecureAppStorage}=await import('/src/security/secureAppStorage.ts');
+    await import('/tests/browser/fixtures/val01-product-native-diagnostics.fixture.ts');
+    const before=await window.__val01ProductInspection.raw();
+    const store=new IndexedDbVaultStore(indexedDB,true);
+    const vault=new SecureVault(store);
+    try{
+      await vault.unlock(password);
+      const snapshot=await new SecureAppStorage(vault).loadExactBackupSnapshot();
+      if(!snapshot)throw Error('Incomplete synthetic archive');
+      return {...before,snapshot};
+    }finally{vault.lock();await store.retireConnection();}
+  },password);
+}
+async function submitFreshRecovery(page,bytes,password){
+  await page.locator('#restore-backup-file').setInputFiles({name:'actual-recovery.enc.json',mimeType:'application/json',buffer:bytes});
+  await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill(password);
+  const observed=page.waitForEvent('dialog').then(async d=>{
+    const message=d.message();
+    const type=d.type();
+    await d.accept();
+    return {message,type};
+  });
+  await page.getByRole('button',{name:'Decifra e Ripristina Registro'}).click();
+  return observed;
+}
+test('S-R04a real exported copy recovers a fresh isolated DB1 with a different local password; wrong copy password preserves destination',async({page,browser})=>{
+  test.setTimeout(120000);
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+  await noArchive(page);
+  await page.getByRole('radio',{name:/Ambiente dimostrativo/}).check();
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await page.getByRole('button',{name:'Avvia la prova'}).click();
+  await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+  const source=await readRecoveryDb1(page,'synthetic-archive-compatibility-only');
+  expect(source.version).toBe(1);
+  expect(source.keys).toHaveLength(10);
+  expect(source.snapshot.appData.classes.length).toBeGreaterThan(0);
+  expect(source.snapshot.settings.archiveMode).toBe('demo');
+  await page.goto(productApp());await unlockProduct(page);await privacyProduct(page);
+  const {bytes,decoded}=await downloadActualProductBackup(page);
+  expect(decoded.snapshot).toEqual({...source.snapshot,meta:decoded.snapshot.meta});
+  const context=await browser.newContext({viewport:{width:390,height:844}});
+  try{
+    const fresh=await context.newPage();
+    await fresh.goto(productApp());
+    await expect(fresh.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+    await noArchive(fresh);
+    expect(await fresh.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBeNull();
+    await fresh.getByRole('radio',{name:/Archivio professionale/}).check();
+    for(const [label,value] of Object.entries({'Istituto':'Synthetic recovery school','Anno scolastico':'2026/2027','Docente':'Synthetic recovery teacher','Disciplina':'Tecnologia'})){
+      await fresh.getByLabel(label,{exact:true}).fill(value);
+    }
+    await fresh.getByLabel('Password locale',{exact:true}).fill('synthetic-new-password');
+    await fresh.getByRole('button',{name:'Crea il mio registro'}).click();
+    await expect(fresh.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+    const empty=await readRecoveryDb1(fresh,'synthetic-new-password');
+    expect(empty.keys).toHaveLength(10);
+    expect(empty.snapshot.appData.classes).toEqual([]);
+    expect(empty.snapshot.settings.archiveMode).toBe('professional');
+    await fresh.goto(productApp());await unlockProduct(fresh,'synthetic-new-password');await privacyProduct(fresh);
+    const rejected=await submitFreshRecovery(fresh,bytes,'wrong-synthetic-copy-password');
+    expect(rejected.type).toBe('alert');
+    expect(rejected.message).not.toContain('ripristinato con successo');
+    await expect(fresh.getByRole('button',{name:'Decifra e Ripristina Registro'})).toBeEnabled();
+    expect(await readRecoveryDb1(fresh,'synthetic-new-password')).toEqual(empty);
+    await fresh.goto(productApp());await unlockProduct(fresh,'synthetic-new-password');await privacyProduct(fresh);
+    expect(await submitFreshRecovery(fresh,bytes,'synthetic-archive-backup-only')).toEqual({type:'alert',message:'Backup cifrato verificato e ripristinato con successo!'});
+    await expect(fresh.getByTestId('header01-topbar')).toBeVisible();
+    const restored=await readRecoveryDb1(fresh,'synthetic-new-password');
+    expect(restored.version).toBe(1);
+    expect(restored.keys).toHaveLength(10);
+    expect(restored.digest).not.toBe(empty.digest);
+    expect(restored.snapshot).toEqual(decoded.snapshot);
+    await fresh.goto(productApp());
+    await expect(fresh.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+    await expect(fresh.getByTestId('header01-topbar')).toHaveCount(0);
+    await unlockProduct(fresh,'synthetic-new-password');
+    expect(await readRecoveryDb1(fresh,'synthetic-new-password')).toEqual(restored);
+    expect(await fresh.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBe('1');
+    // A restore must not inherit a verification receipt from another installation.
+    expect(restored.snapshot.meta.verifiedBackupAt).toBeUndefined();
+    expect(restored.snapshot.meta.verifiedBackupEvidence).toBeUndefined();
+  }finally{await context.close();}
+});
