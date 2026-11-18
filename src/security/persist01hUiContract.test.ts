@@ -180,7 +180,12 @@ describe('PERSIST-01H truthful backup and restore integration', () => {
     expect(appSource).toContain('type PreparedBackupCheckpoint');
     const backup = sectionBetween('// Prepare encrypted backup checkpoint', '// Import Encrypted Backup');
     expect(backup).toContain('const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> =>');
-    expect(backup).toContain('return mutationCoordinator.enqueueTask(() =>');
+    expect(backup).toContain('return mutationCoordinator.enqueueTask(async () =>');
+    expect(backup).toContain('let snapshot = getCompleteCommittedSnapshot();');
+    expect(backup).toContain('await secureStorage.loadExactBackupSnapshot()');
+    expect(backup).toContain('if (!isSnapshotV6(durable)) throw');
+    expect(backup).toContain('snapshot = durable;');
+    expect(backup).toContain('prepareBackupCheckpoint(snapshot, new Date().toISOString())');
     expect(backup).toContain('appData: appDataRef.current');
     expect(backup).toContain('settings: settingsRef.current');
     expect(backup).toContain('udas: udasRef.current');
@@ -198,7 +203,7 @@ describe('PERSIST-01H truthful backup and restore integration', () => {
     expect(privacySource).toContain("onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;");
     const exportFlow = sourceSection(privacySource, 'const handleExportEncrypted', 'const handleImportEncrypted');
     expect(exportFlow).toContain('const checkpoint = await onPrepareEncryptedBackup();');
-    expect(exportFlow).toContain('createBackupPayload(checkpoint.snapshot)');
+    expect(exportFlow).toContain('createBackupPayload(checkpoint.snapshot, checkpoint.checkpointAt)');
     expect(exportFlow).toContain('await encryptDataWithPassword');
     expect(exportFlow).toContain('a.click();');
     expect(exportFlow).toContain('await onRecordBackupExport(checkpoint.receipt);');
