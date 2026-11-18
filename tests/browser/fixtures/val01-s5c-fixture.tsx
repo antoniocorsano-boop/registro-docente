@@ -1,7 +1,7 @@
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {AssessmentPreparationPanel} from '../../../src/components/AssessmentPreparationPanel';
-import type {AssessmentEvidenceV1,AssessmentScopeV1,LearningReferenceRevision,CriterionRevision,RubricRevision} from '../../../src/assessment/assessmentEvidence';
+import type {AssessmentEvidenceV1,AssessmentScopeV1,AssessmentDefinitionRevision,LearningReferenceRevision,CriterionRevision,RubricRevision} from '../../../src/assessment/assessmentEvidence';
 import '../../../src/index.css';
 
 const scope:AssessmentScopeV1={classId:'classe-sintetica',schoolYear:'2026/2027',subjectCode:'TECH',studentIds:['s1','s2']};
@@ -26,7 +26,8 @@ function Fixture(){
   const [activity,setActivity]=useState<keyof typeof activities>('normal');
   const [open,setOpen]=useState(false);
   const [stale,setStale]=useState(false);
-  const d:AssessmentEvidenceV1={...base,assessments:[existing],references:stale?[...references,{...references[0],revisionId:'o1r2',supersedesRevisionId:'o1r1'}]:references};
+  const [planned,setPlanned]=useState<AssessmentDefinitionRevision[]>([]);
+  const d:AssessmentEvidenceV1={...base,assessments:[existing,...planned],references:stale?[...references,{...references[0],revisionId:'o1r2',supersedesRevisionId:'o1r1'}]:references};
   const a=activities[activity];
   return <main className="mx-auto max-w-xl min-w-0 p-2 space-y-3">
     <div className="space-y-2 border border-[var(--border)] rounded-lg p-2">
@@ -36,7 +37,7 @@ function Fixture(){
       <button type="button" className="min-h-[48px] w-full rounded border" onClick={()=>setActivity('existing')}>Attività esistente</button>
       {!open?<button type="button" className="min-h-[48px] w-full rounded border" onClick={()=>setOpen(true)}>Apri configurazione</button>:<button type="button" className="min-h-[48px] w-full rounded border" onClick={()=>setStale(true)}>Aggiorna riferimento sintetico</button>}
     </div>
-    {open&&<AssessmentPreparationPanel document={d} scope={scope} classLabel="Classe dimostrativa" activityLabel={a.label} activityId={a.id} assessmentId={a.id+'-a'} revisionId={a.id+'-r'} onExit={()=>{setOpen(false);setStale(false);}} confirmationTime={()=> '2026-11-18T10:00:00.000Z'}/>}
+    {open&&<AssessmentPreparationPanel document={d} scope={scope} classLabel="Classe dimostrativa" activityLabel={a.label} activityId={a.id} assessmentId={a.id+'-a'} revisionId={a.id+'-r'} onExit={()=>{setOpen(false);setStale(false);}} confirmationTime={()=> '2026-11-18T10:00:00.000Z'} onConfirmed={definition=>setPlanned(old=>[...old,definition])}/>}
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture/>);
