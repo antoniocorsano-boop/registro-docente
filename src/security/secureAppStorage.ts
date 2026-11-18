@@ -190,6 +190,17 @@ export class SecureAppStorage {
     };
   }
 
+  /** Read the committed datasets without the UI's defaults, sorting or
+   * session-only projections. Missing datasets are not synthesized here.
+   * The protected export caller serializes this read with admitted writes. */
+  async loadExactBackupSnapshot(): Promise<CompleteSecureAppSnapshot | null> {
+    const entries = await Promise.all(SNAPSHOT_KEYS.map(async key =>
+      [key, await this.vault.get<unknown>(key)] as const
+    ));
+    if (entries.some(([, value]) => value === null || value === undefined)) return null;
+    return Object.fromEntries(entries) as unknown as CompleteSecureAppSnapshot;
+  }
+
   async saveAppData(value: AppData): Promise<void> {
     await assertCouncilSnapshotIntegrity(value);
     await this.vault.put('appData', value);
