@@ -931,3 +931,84 @@ test('S-R01 initial reservation refuses residual records without overwriting or 
   });
   expect(outcome).toEqual({rejected:true,locked:true,metadata:null,keys:['meta'],bytes:Array(24).fill(7)});
 });
+
+
+// S-R02: hold after a real vault operation, then revoke the live Root
+// authorization through the same visibility signal as the WebView lifecycle.
+async function holdLegacyVaultOperation(page, method) {
+  await page.evaluate(async name=>{
+    const {SecureVault}=await import('/src/security/secureVault.ts');
+    const original=SecureVault.prototype[name];
+    let intercepted=false;
+    window.__sr02Reached=false;
+    SecureVault.prototype[name]=async function(...args){
+      const result=await original.apply(this,args);
+      if(!intercepted){
+        intercepted=true;
+        window.__sr02Reached=true;
+        await new Promise(resolve=>{window.__sr02Release=resolve;});
+      }
+      return result;
+    };
+  },method);
+}
+async function revokeHeldLegacyOperation(page) {
+  await expect.poll(()=>page.evaluate(()=>window.__sr02Reached)).toBe(true);
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});
+    document.dispatchEvent(new Event('visibilitychange'));
+    delete document.hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.__sr02Release();
+  });
+}
+async function seedLegacyForRevocation(page) {
+  const raw=JSON.stringify({classes:[],currentClassId:null});
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(productSeed());
+  await page.evaluate(value=>localStorage.setItem('registro_docente_data_v35',value),raw);
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Proteggi i dati esistenti'})).toBeVisible();
+  return raw;
+}
+async function submitLegacyForRevocation(page) {
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await page.getByRole('button',{name:'Proteggi i dati esistenti',exact:true}).click();
+}
+test('S-R02 live Root revokes admitted legacy migration after first write, preserves source and requires fresh consent',async({page})=>{
+  const raw=await seedLegacyForRevocation(page);
+  await holdLegacyVaultOperation(page,'put');
+  await submitLegacyForRevocation(page);
+  await revokeHeldLegacyOperation(page);
+  await expect(page.getByRole('heading',{name:'Proteggi i dati esistenti'})).toBeVisible({timeout:30000});
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBe(raw);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBeNull();
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await submitLegacyForRevocation(page);
+  await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  await page.reload();await unlockProduct(page);
+});
+test('S-R02 live Root preserves committed ACTIVE and source on revocation, then requires fresh authorized cleanup',async({page})=>{
+  const raw=await seedLegacyForRevocation(page);
+  await holdLegacyVaultOperation(page,'activate');
+  await submitLegacyForRevocation(page);
+  await revokeHeldLegacyOperation(page);
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBe(raw);
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible({timeout:30000});
+  await holdLegacyVaultOperation(page,'get');
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await page.getByRole('button',{name:'Sblocca Registro',exact:true}).click();
+  await revokeHeldLegacyOperation(page);
+  await expect(page.getByText('Sessione cambiata. Autenticati nuovamente.')).toBeVisible({timeout:30000});
+  await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBe(raw);
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await unlockProduct(page);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  await page.reload();await unlockProduct(page);
+});
