@@ -1,6 +1,8 @@
 // Synthetic CI emulator only: no production APK, no data from a user device.
 import {execFileSync} from 'node:child_process';
 import {mkdirSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {parseNativeNodes,resumedActivity,hasArea} from './native-ui-driver.mjs';
 import assert from 'node:assert/strict';
 import {probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
 
@@ -78,6 +80,63 @@ async function forceRestart(expectedIdentity){
  await call('open');
  return proof;
 }
+
+const nativeRestore=(method,...args)=>evaluate('window.__val01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
+const fileNames={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
+const doc=n=>/documentsui/i.test(n.pkg);
+function nodes(){
+ adb('shell','rm','-f','/sdcard/val01-ui.xml');
+ adb('shell','uiautomator','dump','/sdcard/val01-ui.xml');
+ return parseNativeNodes(adb('shell','cat','/sdcard/val01-ui.xml'));
+}
+const find=(predicate,label)=>until(()=>nodes().find(n=>hasArea(n)&&predicate(n)),label,45000);
+function tap(n){assert.ok(hasArea(n));const [l,t,r,b]=n.bounds;adb('shell','input','tap',String(Math.round((l+r)/2)),String(Math.round((t+b)/2)));}
+const foreground=()=>resumedActivity(adb('shell','dumpsys','activity','activities'),pkg);
+async function downloads(){
+ await find(n=>doc(n)&&(/show roots|open navigation drawer|mostra radici/i.test(n.desc)||/^(Downloads|Download)$/i.test(n.text)||/^(save|salva)$/i.test(n.text)),'Native picker not visible');
+ if(!nodes().some(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text))){
+  tap(await find(n=>doc(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc),'Native picker roots missing'));
+  tap(await find(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text),'Downloads root missing'));
+ }
+}
+async function startPicker(operation,kind){
+ assert.equal(await nativeRestore(operation,kind),true);
+ await downloads();
+}
+async function pickerResult(kind,phase){
+ await until(foreground,'Picker did not return',30000);
+ const r=await until(async()=>{const s=await nativeRestore('status');return ['written','read','cancelled','error'].includes(s.phase)?s:null;},'Native picker operation did not settle',45000);
+ assert.equal(r.kind,kind);assert.equal(r.phase,phase);return r;
+}
+async function writeCopy(kind,expected){
+ await startPicker('write',kind);
+ tap(await find(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'Native Save missing'));
+ const written=await pickerResult(kind,'written');
+ const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+fileNames[kind]],{timeout:30000});
+ const actual={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+ assert.deepEqual(actual,expected);assert.equal(written.bytes,actual.bytes);assert.equal(written.sha256,actual.sha256);
+ return actual;
+}
+async function readCopy(kind,expected){
+ await startPicker('read',kind);
+ const row=await find(n=>doc(n)&&n.text===fileNames[kind]&&!/preview|anteprima/i.test(n.desc),'Exact encrypted filename missing');
+ tap(row);
+ await until(()=>foreground()||nodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),'File selection did not complete',20000);
+ if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Native Open missing'));
+ const read=await pickerResult(kind,'read');
+ assert.equal(read.bytes,expected.bytes);assert.equal(read.sha256,expected.sha256);
+ return {bytes:read.bytes,sha256:read.sha256};
+}
+async function cancelPicker(){
+ for(let attempt=0;attempt<4;attempt++){
+  if(foreground())return;
+  assert.ok((await until(()=>{const view=nodes();return view.some(doc)?view:null;},'DocumentsUI not active',10000)).some(doc));
+  adb('shell','input','keyevent','4');
+  try{await until(foreground,'Picker remains open',5000);return;}catch{}
+ }
+ throw Error('Picker did not return after bounded Back actions');
+}
+
 const start={changes:0,states:[],active:[],grades:['8'],records:4};
 const observed={changes:1,states:['observed'],active:['observed'],grades:['8'],records:5};
 const withdrawn={changes:3,states:['observed','not_observed','withdrawn'],active:[],grades:['8'],records:7};
@@ -122,5 +181,32 @@ try{
  assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
  assert.deepEqual(await call('physicalDigest'),last);
  stage('native-v7-inspection-and-v6-refusal');
+
+ // Reuse the very same DB2 state and native shell, without another emulator build.
+ const copies=await nativeRestore('createCopies');
+ const recovery=await writeCopy('recovery',copies.recovery),target=await writeCopy('target',copies.target);
+ assert.notEqual(recovery.sha256,target.sha256);
+ assert.deepEqual(await call('physicalDigest'),last);
+ stage('native-v7-saf-write-readback',{recovery,target});
+ await startPicker('read','target');await cancelPicker();await pickerResult('target','cancelled');
+ assert.equal(await nativeRestore('prepare'),'rejected');
+ assert.deepEqual(await call('physicalDigest'),last);
+ stage('native-v7-saf-cancellation');
+ const recoveryRead=await readCopy('recovery',recovery),targetRead=await readCopy('target',target);
+ assert.deepEqual(await call('physicalDigest'),last);
+ stage('native-v7-saf-selected-copies',{recovery:recoveryRead,target:targetRead});
+ assert.equal(await nativeRestore('prepare'),'prepared');
+ assert.deepEqual(await call('physicalDigest'),last);
+ assert.equal(await nativeRestore('commit',true),'committed');
+ assert.equal(await nativeRestore('commit',true),'rejected');
+ const restored=await call('physicalDigest');
+ assert.deepEqual(Object.keys(restored).sort(),Object.keys(last).sort());
+ assert.ok(Object.keys(restored).every(k=>restored[k]!==last[k]));
+ stage('native-v7-authorized-restore-and-replay-refusal');
+ const restoreStop=await forceRestart(installation);
+ assert.deepEqual(await nativeRestore('summary'),{...withdrawn,changes:4,records:8,extra:[{state:'not_observed',studentId:'s4',criterionRevisionId:'c2'}]});
+ assert.deepEqual(await call('physicalDigest'),restored);
+ assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
+ stage('native-v7-restored-cold-reopen',restoreStop);
  await call('close');
 }finally{disconnect();}
