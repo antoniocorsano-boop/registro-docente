@@ -18,8 +18,15 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     expect(appSource).toContain('const getCompleteCommittedSnapshot = (): CompleteSecureAppSnapshot =>');
 
     const prepare = sectionBetween(appSource, 'const prepareEncryptedBackup', 'const recordEncryptedBackupExport');
-    expect(prepare).toContain('mutationCoordinator.enqueueTask');
-    expect(prepare).toContain('prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString())');
+    expect(prepare).toContain('return mutationCoordinator.enqueueTask(async () =>');
+    expect(prepare).toContain('let snapshot = getCompleteCommittedSnapshot();');
+    expect(prepare).toContain('if (archiveMigration)');
+    expect(prepare).toContain('const durable = await secureStorage.loadExactBackupSnapshot();');
+    expect(prepare).toContain('if (!isSnapshotV6(durable)) throw');
+    expect(prepare).toContain('snapshot = durable;');
+    expect(prepare).toContain('backupReceiptAuthority.issue(prepareBackupCheckpoint(snapshot, new Date().toISOString()))');
+    expect(prepare.indexOf('mutationCoordinator.enqueueTask')).toBeLessThan(prepare.indexOf('getCompleteCommittedSnapshot()'));
+    expect(prepare.indexOf('await secureStorage.loadExactBackupSnapshot()')).toBeLessThan(prepare.indexOf('backupReceiptAuthority.issue('));
     expect(prepare).not.toContain('appData,');
   });
 
@@ -59,7 +66,7 @@ describe('PERSIST-01H serialized backup and restore contract', () => {
     const exportSection = sectionBetween(privacySource, 'const handleExportEncrypted', 'const handleImportEncrypted');
     expect(exportSection).toContain('let downloadInitiated = false;');
     expect(exportSection).toContain('const checkpoint = await onPrepareEncryptedBackup();');
-    expect(exportSection).toContain('createBackupPayload(checkpoint.snapshot)');
+    expect(exportSection).toContain('createBackupPayload(checkpoint.snapshot, checkpoint.checkpointAt)');
     expect(exportSection).toContain('a.click();');
     expect(exportSection).toContain('downloadInitiated = true;');
     expect(exportSection).toContain('await onRecordBackupExport(checkpoint.receipt);');
