@@ -2532,6 +2532,24 @@
       "browserSmoke": [
         "tests/browser/val01-s6c-evidence-board.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S6C-RUBRIC-I01",
+      "owner": "VAL-01/S6c.2",
+      "statement": "Interpretation options use only the exact frozen rubric linked to the completed assessment criterion. No automatic selection or grade inference. Pending is explicit; a level must belong to that revision, or a description may be entered only without a rubric. Edits invalidate review; correction preserves historical fact metadata and existing interpretation. Synthetic only; no runtime or persistence.",
+      "impactPaths": [
+        "src/assessment/evidenceInterpretationOptions.ts",
+        "src/security/val01EvidenceInterpretationOptions.test.ts",
+        "tests/browser/fixtures/val01-s6c-data.ts",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ],
+      "tests": [
+        "src/security/val01EvidenceInterpretationOptions.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
     }
   ]
 }
