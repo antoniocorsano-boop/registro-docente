@@ -2524,7 +2524,8 @@
         "tests/browser/fixtures/val01-s6c-fixture.tsx",
         "tests/browser/fixtures/val01-s6c.html",
         "tests/browser/val01-s6c-evidence-board.spec.cjs",
-        ".github/workflows/beta2-reference-qualification.yml"
+        ".github/workflows/beta2-reference-qualification.yml",
+        "tests/browser/fixtures/val01-s6c-board.tsx"
       ],
       "tests": [
         "src/security/val01IndividualEvidenceBoard.test.ts"
@@ -2542,13 +2543,36 @@
         "src/security/val01EvidenceInterpretationOptions.test.ts",
         "tests/browser/fixtures/val01-s6c-data.ts",
         "tests/browser/fixtures/val01-s6c-fixture.tsx",
-        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+        "tests/browser/val01-s6c-evidence-board.spec.cjs",
+        "tests/browser/fixtures/val01-s6c-board.tsx"
       ],
       "tests": [
         "src/security/val01EvidenceInterpretationOptions.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-INTEGRATION-I01",
+      "owner": "VAL-01/S6d.1",
+      "statement": "Existing production Tabellone uses the shared Oggi/Storico selector and original guarded transition only. Explicit laboratory host integrates those actual view components, synthetic evidence and actual student report; preserves proof/criterion/student on return, blocks navigation while a draft is open, projects only the explicitly selected student's active evidence, and leaves ordinary grade writes disabled. No production evidence entry, real data, storage, schema or release changes.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/MatrixSurfaceSelector.tsx",
+        "tests/browser/fixtures/val01-s6c-board.tsx",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d.html",
+        "tests/browser/val01-s6d-integration.spec.cjs",
+        "src/security/val01MatrixSurfaceIntegration.test.ts",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01MatrixSurfaceIntegration.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-integration.spec.cjs"
       ]
     }
   ]
