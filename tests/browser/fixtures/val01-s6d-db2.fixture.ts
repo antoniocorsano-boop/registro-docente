@@ -204,3 +204,39 @@ async function restoreAssessment(mode:'approve'|'refuse'|'revoke'|'old'|'bad-rec
 
 Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment}});
 document.getElementById('status')!.textContent='Laboratorio DB2 pronto';
+
+// Native synthetic adapter: the wrapper supplies actual SAF-selected copies.
+// No method is exposed through the product entrypoint or browser global.
+export async function nativeRestoreCopies(){
+ const o=requireOwner();
+ return o.coordinator.enqueueTask(async()=>{
+  const current=await o.storage.loadExactBackupSnapshot();if(!current)throw Error('Incomplete archive');
+  const r=previewIndividualObservation(section(current.appData).document,boardScope,{evidenceId:'native-extra',revisionId:'native-extra-r1',observationEventId:'native-extra-event',assessmentRevisionId:'a2',criterionRevisionId:'c2',studentId:'s4',observedOn:'2026-11-20',recordedAt:'2026-11-22T10:05:00.000Z',state:'not_observed'});
+  if(!r.valid)throw Error(r.issue);
+  const incoming={...current,appData:deriveConfirmedEvidenceMutation(current.appData,approved,boardScope,{kind:'new',preview:r.preview},{confirmedByTeacher:true,confirmedAt:'2026-11-22T10:05:30.000Z'}).appData,meta:incrementBackupChanges(current.meta)};
+  const recovery=await createAssessmentBackupPayloadV7(current,approved,stamp),target=await createAssessmentBackupPayloadV7(incoming,approved,stamp);
+  return {recovery:await encryptDataWithPassword(recovery,copyPassword),target:await encryptDataWithPassword(target,copyPassword)};
+ });
+}
+export async function nativePrepareSelectedRestore(recovery:Blob,target:Blob,signal:AbortSignal,wrong=false){
+ const o=requireOwner();
+ const generation=await o.store.getMetadata();
+ if(!generation||signal.aborted)throw Error('Synthetic session expired');
+ await close();
+ const service=createDb2Lifecycle();
+ const invalidate=()=>service.invalidate();
+ signal.addEventListener('abort',invalidate,{once:true});
+ try{
+  if(signal.aborted)throw Error('Synthetic session expired');
+  const grant=await service.prepareAssessmentRestore({operation:'restore-assessment',password,file:target,backupPassword:wrong?'wrong-synthetic':copyPassword,recoveryFile:recovery,recoveryPassword:copyPassword,currentScopes:approved,incomingScopes:approved},generation);
+  if(signal.aborted)throw Error('Synthetic session expired');
+  return {async commit(confirmed:boolean){
+   try{if(signal.aborted)throw Error('Synthetic session expired');await service.commit(grant,confirmed);}
+   finally{invalidate();signal.removeEventListener('abort',invalidate);}
+  }};
+ }catch(e){invalidate();signal.removeEventListener('abort',invalidate);throw e;}
+}
+export function nativeRestoredSummary(){
+ const o=requireOwner(),d=section(o.state.appData).document;
+ return {...summary(),extra:d.evidence.filter(e=>e.evidenceId==='native-extra').map(e=>({state:e.state,studentId:e.studentId,criterionRevisionId:e.criterionRevisionId}))};
+}
