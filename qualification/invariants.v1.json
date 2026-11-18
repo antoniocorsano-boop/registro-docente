@@ -2730,6 +2730,30 @@
         "src/security/val01NativeEvidenceBoundary.test.ts"
       ],
       "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S6D-OPERATIONAL-I01",
+      "owner": "VAL-01/S6d.3",
+      "statement": "Operational synthetic board uses the existing authenticated DB2 owner, canonical queue and exact approved scope. No optimistic receipt; save only after atomic appData+meta write and active session; failed write retains reviewed draft and requires explicit fresh authenticated reopen. Duplicate and stale context are rejected; actual committed data drives individual report with historical rubric, objective and evidence; no inferred grade or competence, full identity masked. Reload retains history and serial identity; mobile geometry remains valid. No production App/Root activation, real archive, or release authority.",
+      "impactPaths": [
+        "src/persistence/assessmentEvidenceCommit.ts",
+        "src/security/val01AssessmentEvidenceCommit.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6c-board.tsx",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-operational.html",
+        "tests/browser/val01-s6d-operational.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01AssessmentEvidenceCommit.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-operational.spec.cjs"
+      ]
     }
   ]
 }
