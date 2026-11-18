@@ -2672,6 +2672,24 @@
       "browserSmoke": [
         "tests/browser/val01-s6d-db2-persistence.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S6D-NATIVE-I01",
+      "owner": "VAL-01/S6d.2c.2",
+      "statement": "Synthetic Android API32/36 qualification builds the exact DB2 storage fixture in an isolated debug package with automatic backup disabled. Checks atomic abort and durable commit, three positively observed force-stops with two consecutive successful absence probes each, stable installation identity, absent in-memory owner and fresh authenticated reopen, intact encrypted records/history, V7 inspection and V6 refusal. Native workflow evidence is required; wiring and process-probe unit tests alone are not native qualification. No production UI, SAF, authorized V7 restore, release or real data.",
+      "impactPaths": [
+        ".github/workflows/val01-native-evidence.yml",
+        "scripts/diagnostics/val01-native-evidence.mjs",
+        "scripts/diagnostics/native-process-probe.mjs",
+        "scripts/diagnostics/native-process-probe.test.mjs",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "src/security/val01NativeEvidenceBoundary.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01NativeEvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
