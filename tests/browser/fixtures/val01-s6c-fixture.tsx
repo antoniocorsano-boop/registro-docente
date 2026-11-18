@@ -7,6 +7,7 @@ import type {IndividualObservationPreview} from '../../../src/assessment/individ
 import {previewEvidenceRevision,confirmEvidenceRevision} from '../../../src/assessment/individualEvidenceRevision';
 import type {EvidenceRevisionPreview} from '../../../src/assessment/individualEvidenceRevision';
 import type {IndividualEvidenceRevision,EvidenceKind} from '../../../src/assessment/assessmentEvidence';
+import {listEvidenceInterpretationOptions} from '../../../src/assessment/evidenceInterpretationOptions';
 import '../../../src/index.css';
 
 const labels={observed:'Osservato',not_observed:'Non osservato',not_applicable:'Non pertinente',withdrawn:'Ritirato'} as const;
@@ -26,6 +27,8 @@ function Fixture(){
  const [description,setDescription]=useState('');
  const [method,setMethod]=useState('');
  const [interpretation,setInterpretation]=useState('');
+ const [mode,setMode]=useState<''|'pending'|'level'|'description'>('');
+ const [levelId,setLevelId]=useState('');
  const [reason,setReason]=useState('');
  const [review,setReview]=useState<Review|null>(null);
  const [message,setMessage]=useState('');
@@ -33,6 +36,9 @@ function Fixture(){
  const active=document.assessments.filter(a=>a.status==='completed'&&!document.assessments.some(x=>x.supersedesRevisionId===a.revisionId));
  const selected=active.find(a=>a.revisionId===assessment);
  const result=assessment&&criterion?projectEvidenceBoard(document,boardScope,assessment,criterion):null;
+ const options=assessment&&criterion?listEvidenceInterpretationOptions(document,boardScope,assessment,criterion):null;
+ const levels=options?.valid&&options.mode==='rubric'?options.levels:[];
+ const level=levels.find(l=>l.levelId===levelId);
  const row=result?.valid?result.rows.find(r=>r.studentId===student):undefined;
  const name=(id:string)=>'Studente '+(boardScope.studentIds.indexOf(id)+1);
  function reset(){setEdit(null);setReview(null);setMessage('');}
@@ -43,14 +49,17 @@ function Fixture(){
    setDescription(previous?.state==='observed'?previous.fact.description:'');
    setMethod(previous?.state==='observed'?previous.fact.method:'');
    setInterpretation(previous?.state==='observed'&&previous.interpretation.kind==='description'?previous.interpretation.description:'');
+   setMode(previous?.state==='observed'?previous.interpretation.kind:'');
+   setLevelId(previous?.state==='observed'&&previous.interpretation.kind==='level'?previous.interpretation.levelId:'');
    setReason('');
  }
  function prepare(){
    if(!edit)return;
    const recordedAt=new Date(Date.UTC(2026,10,22,10,serial)).toISOString();
    const revisionId='board-revision-'+serial;
-   const observed=state==='observed'&&kind&&description.trim()&&method.trim()?
-     {state,fact:{kind,description:description.trim(),method:method.trim()},interpretation:interpretation.trim()?{kind:'description',description:interpretation.trim()}:{kind:'pending'}}:
+   const choice=options?.valid?(mode==='pending'?{kind:'pending'}:mode==='level'&&options.mode==='rubric'&&level?{kind:'level',levelId:level.levelId}:mode==='description'&&options.mode==='descriptive'&&interpretation.trim()?{kind:'description',description:interpretation.trim()}:null):null;
+   const observed=state==='observed'&&kind&&description.trim()&&method.trim()&&choice?
+     {state,fact:{...(edit.previous?.state==='observed'?edit.previous.fact:{}),kind,description:description.trim(),method:method.trim()},interpretation:choice}:
      state==='not_observed'||state==='not_applicable'?{state}:null;
    if(edit.action!=='withdraw'&&!observed){setMessage('Seleziona lo stato e completa i campi richiesti.');return;}
    if(edit.action==='new'){
@@ -87,7 +96,7 @@ function Fixture(){
     <button type="button" className={button} onClick={()=>begin('new')}>Nuova rilevazione</button>
     {row.entries.map(e=><div key={e.revisionId} className="border-t py-2 space-y-1">
       <p>{labels[e.state]} · {e.observedOn}</p>
-      {e.state==='observed'&&<><p>Fatto: {e.fact.description}</p><p>Interpretazione: {e.interpretation.kind==='pending'?'Da definire':e.interpretation.kind==='description'?e.interpretation.description:'Livello confermato'}</p></>}
+      {e.state==='observed'&&<><p>Fatto: {e.fact.description}</p><p>Interpretazione: {e.interpretation.kind==='pending'?'Da definire':e.interpretation.kind==='description'?e.interpretation.description:levels.find(l=>l.levelId===(e.interpretation.kind==='level'?e.interpretation.levelId:''))?.label??'Livello confermato'}</p></>}
       <div className="flex flex-wrap gap-2"><button type="button" className={button} onClick={()=>begin('correct',e)}>Correggi</button><button type="button" className={button} onClick={()=>begin('withdraw',e)}>Ritira</button></div>
     </div>)}
    </>}
@@ -99,12 +108,14 @@ function Fixture(){
       <label className="block">Tipo di evidenza<select className={control} value={kind} onChange={e=>{setKind(e.target.value as EvidenceKind|'');invalidate();}}><option value="">Seleziona tipo</option><option value="process">Processo</option><option value="product">Prodotto</option><option value="performance">Prestazione</option><option value="argumentation">Argomentazione</option></select></label>
       <label className="block">Fatto osservato<textarea className={control} value={description} onChange={e=>{setDescription(e.target.value);invalidate();}}/></label>
       <label className="block">Metodo<input className={control} value={method} onChange={e=>{setMethod(e.target.value);invalidate();}}/></label>
-      <label className="block">Interpretazione descrittiva (facoltativa)<textarea className={control} value={interpretation} onChange={e=>{setInterpretation(e.target.value);invalidate();}}/></label>
+      <label className="block">Interpretazione<select className={control} value={mode} onChange={e=>{setMode(e.target.value as typeof mode);setLevelId('');setInterpretation('');invalidate();}}><option value="">Seleziona interpretazione</option><option value="pending">Da definire</option>{options?.valid&&options.mode==='rubric'?<option value="level">Livello della rubrica</option>:options?.valid?<option value="description">Descrittiva</option>:null}</select></label>
+      {mode==='level'&&<><label className="block">Livello<select className={control} value={levelId} onChange={e=>{setLevelId(e.target.value);invalidate();}}><option value="">Seleziona livello</option>{levels.map(l=><option key={l.levelId} value={l.levelId}>{l.label}</option>)}</select></label>{level&&<p>{level.description}</p>}</>}
+      {mode==='description'&&<label className="block">Interpretazione descrittiva<textarea className={control} value={interpretation} onChange={e=>{setInterpretation(e.target.value);invalidate();}}/></label>}
      </>}
     </>}
     {!review?<button type="button" className={button} onClick={prepare}>Rivedi rilevazione</button>:<section aria-label="Riepilogo prima della conferma" className="border rounded p-2 space-y-1">
      <h3>Riepilogo prima della conferma</h3><p>{name(edit.studentId)} · {selected?.title} · {document.criteria.find(c=>c.revisionId===criterion)?.description}</p>
-     {edit.action==='withdraw'?<p>Ritiro: {reason}</p>:<><p>{state&&labels[state]}</p>{state==='observed'&&<><p>Fatto: {description}</p><p>Metodo: {method}</p><p>Interpretazione: {interpretation||'Da definire'}</p></>}</>}
+     {edit.action==='withdraw'?<p>Ritiro: {reason}</p>:<><p>{state&&labels[state]}</p>{state==='observed'&&<><p>Fatto: {description}</p><p>Metodo: {method}</p><p>Interpretazione: {mode==='level'?level?.label:mode==='description'?interpretation:'Da definire'}</p></>}</>}
      <button type="button" className={button} onClick={confirm}>Conferma rilevazione</button>
     </section>}
     <button type="button" className={button} onClick={reset}>Abbandona bozza</button>
