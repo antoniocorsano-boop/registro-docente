@@ -538,17 +538,41 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       setGateState('MIGRATING');
     }
     const { vault, store } = getRuntime();
+    if(archiveMigrationRef.current)throw Error('Configurazione non autorizzata.');
+    setMigrationNotice(null);
+    let revoked=false;
+    const owner={revoke:()=>{revoked=true;}};
+    const assertSetupAuthorized=()=>{
+      if(revoked||archiveMigrationRef.current!==owner||storeRef.current!==store||
+        gateStateRef.current!=='MIGRATING'||closingRef.current||
+        lifecycleRevisionRef.current!==attempt.revision||document.hidden||
+        (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch))||
+        LEGACY_DATA_KEYS.some(key=>window.localStorage.getItem(key)!==null))
+        throw Error('Sessione cambiata. Ripeti la configurazione in primo piano.');
+    };
+    archiveMigrationRef.current=owner;
     try{
+      assertSetupAuthorized();
       if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
         throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
       }
-      await initializeNewArchive(vault, password, setup);
-      if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
+      assertSetupAuthorized();
+      await initializeNewArchive(vault, password, setup, assertSetupAuthorized);
+      if(isAndroidSessionRuntime())await syncNativeSession();
+      assertSetupAuthorized();
+      markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);
       await loadReadySnapshot(attempt);
     }catch(error){
-      vault.lock();
+      const interrupted=revoked||lifecycleRevisionRef.current!==attempt.revision||document.hidden;
+      vault.lock();revokeNativeAuthorization();setSnapshot(null);
       await inspectBootstrap();
+      if(interrupted){
+        if(gateStateRef.current==='LOCKED')setMigrationNotice('Sessione cambiata. Autenticati nuovamente.');
+        else if(gateStateRef.current==='SETUP_REQUIRED')setMigrationNotice('Sessione cambiata. Ripeti la configurazione in primo piano.');
+      }
       throw error;
+    }finally{
+      if(archiveMigrationRef.current===owner){owner.revoke();archiveMigrationRef.current=null;}
     }
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,syncNativeSession,revokeNativeAuthorization,inspectBootstrap,setGateState,established,protectedBootstrap,markEstablished,assertInitialAdmission]);
 
