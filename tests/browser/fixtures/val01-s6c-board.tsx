@@ -59,15 +59,17 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
  }
  function prepare(){
    if(!edit||inFlight.current||recoveryRequired)return;
-   const recordedAt=new Date(Math.max(Date.UTC(2026,10,22,10,serial),edit.previous?Date.parse(edit.previous.confirmedAt)+1:0)).toISOString();
-   const revisionId='board-revision-'+serial;
+   const nextSerial=Math.max(serial,...document.evidence.map(e=>Number(/^board-revision-(\d+)$/.exec(e.revisionId)?.[1]??0)+1));
+   setSerial(nextSerial);
+   const recordedAt=new Date(Math.max(Date.UTC(2026,10,22,10,nextSerial),edit.previous?Date.parse(edit.previous.confirmedAt)+1:0)).toISOString();
+   const revisionId='board-revision-'+nextSerial;
    const choice=options?.valid?(mode==='pending'?{kind:'pending'}:mode==='level'&&options.mode==='rubric'&&level?{kind:'level',levelId:level.levelId}:mode==='description'&&options.mode==='descriptive'&&interpretation.trim()?{kind:'description',description:interpretation.trim()}:null):null;
    const observed=state==='observed'&&kind&&description.trim()&&method.trim()&&choice?
      {state,fact:{...(edit.previous?.state==='observed'?edit.previous.fact:{}),kind,description:description.trim(),method:method.trim()},interpretation:choice}:
      state==='not_observed'||state==='not_applicable'?{state}:null;
    if(edit.action!=='withdraw'&&!observed){setMessage('Seleziona lo stato e completa i campi richiesti.');return;}
    if(edit.action==='new'){
-     const r=previewIndividualObservation(document,boardScope,{...observed,evidenceId:'board-evidence-'+serial,revisionId,observationEventId:'board-event-'+serial,assessmentRevisionId:assessment,criterionRevisionId:criterion,studentId:edit.studentId,observedOn:'2026-11-20',recordedAt});
+     const r=previewIndividualObservation(document,boardScope,{...observed,evidenceId:'board-evidence-'+nextSerial,revisionId,observationEventId:'board-event-'+nextSerial,assessmentRevisionId:assessment,criterionRevisionId:criterion,studentId:edit.studentId,observedOn:'2026-11-20',recordedAt});
      if(!r.valid){setMessage('Rilevazione non valida: '+r.issue);return;}setReview({kind:'new',value:r.preview});
    }else{
      const r=previewEvidenceRevision(document,boardScope,{evidenceRevisionId:edit.previous?.revisionId,revisionId,recordedAt,...(edit.action==='withdraw'?{action:'withdraw',reason:reason.trim()}:{action:'correct',...observed})});
@@ -93,6 +95,7 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
    if(!r.valid){setReview(null);setMessage('Conferma rifiutata: '+r.issue);return;}
    const next={...document,evidence:[...document.evidence,r.evidence]};setDocument(next);onDocumentChange?.(next);setSerial(n=>n+1);reset();setMessage('Confermato nella dimostrazione. Nessun dato salvato.');
  }
+ const alreadyRecorded=!!onCommit&&!!review&&document.evidence.some(e=>e.revisionId===review.value.request.revisionId);
  const invalidate=()=>{if(inFlight.current)return;setReview(null);setMessage('');};
  async function recover(){
   if(!onRecover||inFlight.current)return;
@@ -140,7 +143,8 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
     {!review?<button type="button" className={button} onClick={prepare}>Rivedi rilevazione</button>:<section aria-label="Riepilogo prima della conferma" className="border rounded p-2 space-y-1">
      <h3>Riepilogo prima della conferma</h3><p>{name(edit.studentId)} · {selected?.title} · {document.criteria.find(c=>c.revisionId===criterion)?.description}</p>
      {edit.action==='withdraw'?<p>Ritiro: {reason}</p>:<><p>{state&&labels[state]}</p>{state==='observed'&&<><p>Fatto: {description}</p><p>Metodo: {method}</p><p>Interpretazione: {mode==='level'?level?.label:mode==='description'?interpretation:'Da definire'}</p></>}</>}
-     <button type="button" className={button} onClick={confirm}>Conferma rilevazione</button>
+     {alreadyRecorded&&<p role="alert">Identificativo già presente nello storico. Verifica la registrazione e abbandona la bozza; nessuna riscrittura.</p>}
+     <button type="button" disabled={alreadyRecorded} className={button} onClick={confirm}>Conferma rilevazione</button>
     </section>}
     <button type="button" className={button} onClick={reset}>Abbandona bozza</button>
    </fieldset>}
