@@ -1,4 +1,4 @@
-import React,{useRef,useState} from 'react';
+import React,{useCallback,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {MatrixSurfaceSelector,type MatrixSurface} from '../../../src/components/MatrixSurfaceSelector';
 import {DailyMatrixWorkspace} from '../../../src/components/DailyMatrixWorkspace';
@@ -25,6 +25,7 @@ function Laboratory(){
  const [blocked,setBlocked]=useState(false);
  const evidenceDirty=useRef(false);
  const dailyGuard=useRef<EvaluationDraftGuard|null>(null);
+ const registerDailyGuard=useCallback((guard:EvaluationDraftGuard|null)=>{dailyGuard.current=guard;},[]);
  const dirty=()=>evidenceDirty.current||!!dailyGuard.current?.hasUnsavedChanges();
  const request=(action:()=>void)=>{if(dirty()){setBlocked(true);return;}setBlocked(false);action();};
  const openReport=(id:string)=>request(()=>{if(boardScope.studentIds.includes(id))setReport(id);});
@@ -34,7 +35,7 @@ function Laboratory(){
   {!report&&<MatrixSurfaceSelector laboratory mode={surface} onChange={next=>{if(next!==surface)request(()=>setSurface(next));}}/>}
   {blocked&&<p role="alert">Completa o abbandona la bozza prima di cambiare vista.</p>}
   {!report&&surface==='daily'&&<DailyMatrixWorkspace data={data} currentClass={demoClass} udas={[]} isPrivacyShieldActive={true}
-    onRegisterDraftGuard={guard=>{dailyGuard.current=guard;}} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}/>}
+    onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}/>}
   {!report&&surface==='historical'&&<MatrixView currentClass={demoClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||surface!=='evidence'} className={report||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard onDraftChange={dirty=>{evidenceDirty.current=dirty;if(!dirty)setBlocked(false);}} onDocumentChange={setEvidence} onOpenStudentReport={openReport}/>
