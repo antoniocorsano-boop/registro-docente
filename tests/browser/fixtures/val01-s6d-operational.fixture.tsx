@@ -6,6 +6,9 @@ import {MatrixView} from '../../../src/components/MatrixView';
 import {StudentReportView} from '../../../src/components/StudentReportView';
 import type {EvaluationDraftGuard} from '../../../src/components/MatrixEvaluationEntry';
 import type {EvidenceCommitRequest} from '../../../src/assessment/assessmentEvidenceMutation';
+import {previewIndividualObservation} from '../../../src/assessment/individualObservation';
+import {previewEvidenceRevision} from '../../../src/assessment/individualEvidenceRevision';
+import {SyntheticFormativeBalance} from './val01-s7b-balance';
 import {projectIndividualAssessmentEvidence} from '../../../src/assessment/assessmentEvidenceProjection';
 import {boardScope} from './val01-s6c-data';
 import {SyntheticEvidenceBoard} from './val01-s6c-board';
@@ -20,6 +23,8 @@ function Laboratory(){
  const [opening,setOpening]=useState(false),[openError,setOpenError]=useState(false);
  const [surface,setSurface]=useState<MatrixSurface>('daily');
  const [report,setReport]=useState<string|null>(null);
+ const [reportView,setReportView]=useState<'essential'|'dossier'|'restitution'>('essential');
+ const balanceDirty=useRef(false);
  const [blocked,setBlocked]=useState(false);
  const [recoveryRequired,setRecoveryRequired]=useState(false);
  const evidenceDirty=useRef(false);
@@ -27,9 +32,29 @@ function Laboratory(){
  const openingRef=useRef(false);
  const registerDailyGuard=useCallback((guard:EvaluationDraftGuard|null)=>{dailyGuard.current=guard;},[]);
  useEffect(()=>{
-  const beforeUnload=(event:BeforeUnloadEvent)=>{if(evidenceDirty.current||dailyGuard.current?.hasUnsavedChanges()){event.preventDefault();event.returnValue='';}};
+  const beforeUnload=(event:BeforeUnloadEvent)=>{if(evidenceDirty.current||balanceDirty.current||dailyGuard.current?.hasUnsavedChanges()){event.preventDefault();event.returnValue='';}};
   window.addEventListener('beforeunload',beforeUnload);
   return ()=>window.removeEventListener('beforeunload',beforeUnload);
+ },[]);
+ // Explicit synthetic-only diagnostics exercise real commits while the panel is open.
+ useEffect(()=>{
+  const diagnostics={
+   async append(studentId:string){
+    const d=operationalState().document;
+    if(!['s1','s5'].includes(studentId))throw Error('Synthetic recipient only');
+    const id='s7b-'+studentId;
+    const r=previewIndividualObservation(d,boardScope,{evidenceId:id,revisionId:id+'-r',observationEventId:id+'-event',assessmentRevisionId:'a2',criterionRevisionId:'c1',studentId,observedOn:'2026-12-01',recordedAt:'2026-12-01T10:00:00.000Z',state:'observed',fact:{kind:'product',description:'Dettaglio interno sintetico',method:'Elaborato',productRef:'private-synthetic-product'},interpretation:{kind:'level',levelId:'l2'}});
+    if(!r.valid)throw Error(r.issue);
+    await commitOperationalEvidence({kind:'new',preview:r.preview},{confirmedByTeacher:true,confirmedAt:'2026-12-01T10:01:00.000Z'});setSnapshot(operationalState());
+   },
+   async correct(){
+    const d=operationalState().document,r=previewEvidenceRevision(d,boardScope,{action:'correct',evidenceRevisionId:'r-1',revisionId:'s7b-corrected-r',recordedAt:'2026-12-10T10:00:00.000Z',state:'not_observed'});
+    if(!r.valid)throw Error(r.issue);
+    await commitOperationalEvidence({kind:'revision',preview:r.preview},{confirmedByTeacher:true,confirmedAt:'2026-12-10T10:01:00.000Z'});setSnapshot(operationalState());
+   }
+  };
+  Object.assign(globalThis,{__val01BalanceDiagnostics:diagnostics});
+  return ()=>{delete (globalThis as Record<string,unknown>).__val01BalanceDiagnostics;};
  },[]);
  async function unlock(){
   if(openingRef.current)return;
@@ -46,9 +71,9 @@ function Laboratory(){
   {openError&&<p role="alert">Archivio non disponibile.</p>}
  </main>;
  const data=snapshot.appData,evidence=snapshot.document,currentClass=data.classes.find(c=>c.id===boardScope.classId)!;
- const dirty=()=>evidenceDirty.current||!!dailyGuard.current?.hasUnsavedChanges()||recoveryRequired;
+ const dirty=()=>evidenceDirty.current||balanceDirty.current||!!dailyGuard.current?.hasUnsavedChanges()||recoveryRequired;
  const request=(action:()=>void)=>{if(dirty()){setBlocked(true);return;}setBlocked(false);action();};
- const openReport=(id:string)=>request(()=>{if(boardScope.studentIds.includes(id))setReport(id);});
+ const openReport=(id:string)=>request(()=>{if(boardScope.studentIds.includes(id)){setReport(id);setReportView('essential');}});
  const projection=report?projectIndividualAssessmentEvidence(evidence,boardScope,report):null;
  async function commit(reviewed:EvidenceCommitRequest,confirmation:unknown){
   try{
@@ -69,9 +94,9 @@ function Laboratory(){
     onDraftChange={value=>{evidenceDirty.current=value;if(!value)setBlocked(false);}} onOpenStudentReport={openReport}/>
   </div>
   {report&&<section aria-label="Scheda alunno dimostrativa" className="space-y-3">
-   <button type="button" className="min-h-[48px] rounded border px-3" onClick={()=>{setReport(null);setBlocked(false);}}>Torna al Tabellone</button>
-   <StudentReportView currentClass={currentClass} selectedStudentId={report} onSelectStudent={id=>{if(boardScope.studentIds.includes(id))setReport(id);}} isPrivacyShieldActive={true} udas={[]}/>
-   <section aria-label="Evidenze individuali" className="rounded border p-2 space-y-2">
+   <button type="button" className="min-h-[48px] rounded border px-3" onClick={()=>request(()=>{setReport(null);setReportView('essential');})}>Torna al Tabellone</button>
+   <StudentReportView currentClass={currentClass} selectedStudentId={report} onSelectStudent={id=>{if(boardScope.studentIds.includes(id))setReport(id);}} isPrivacyShieldActive={true} udas={[]} laboratoryRestitution={{requestChange:request,onViewChange:setReportView,content:<SyntheticFormativeBalance key={report} scope={boardScope} studentId={report} document={evidence} version={snapshot.changes} getCurrent={operationalState} onDraftChange={value=>{balanceDirty.current=value;if(!value)setBlocked(false);}}/>}}/>
+   {reportView!=='restitution'&&<section aria-label="Evidenze individuali" className="rounded border p-2 space-y-2">
     <h2 className="font-semibold">Evidenze individuali — consultazione</h2>
     <p>Studente {boardScope.studentIds.indexOf(report)+1}</p>
     <p>Non costituiscono un voto, una sintesi di competenza o una certificazione.</p>
@@ -87,7 +112,7 @@ function Laboratory(){
        {row?.state==='observed'&&<><p>Fatto: {row.fact.description}</p><p>Metodo: {row.fact.method}</p><p>Interpretazione: {row.interpretation.kind==='pending'?'Da definire':row.interpretation.kind==='description'?row.interpretation.description:level?.label??'Livello confermato'}</p>{level&&<p>{level.description}</p>}</>}
       </div>;
     }):<p>Nessuna evidenza attiva registrata.</p>:<p role="alert">Evidenze non disponibili.</p>}
-   </section>
+   </section>}
   </section>}
  </main>;
 }
