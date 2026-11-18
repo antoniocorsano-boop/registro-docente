@@ -358,6 +358,28 @@ export class SecureAppStorage {
     }
   }
 
+  /** Only for a staging archive owned by the caller. It contains no previous
+   * user data. The owner handles disposal before activation, not rollback
+   * of an established archive. Never use for replacing ACTIVE records. */
+  async writeInitialSnapshotVerified(
+    candidate: CompleteSecureAppSnapshot,
+    assertAuthorized: () => void
+  ): Promise<void> {
+    assertAuthorized();
+    const canonical = canonicalizeCompleteSnapshot(candidate);
+    await assertCouncilSnapshotIntegrity(canonical.appData);
+    assertAuthorized();
+    await this.vault.putMany(SNAPSHOT_KEYS.map(key => ({key, value: canonical[key]})), assertAuthorized);
+    assertAuthorized();
+    const verified = requireCompleteSnapshot(await this.loadSnapshot());
+    assertAuthorized();
+    await assertCouncilSnapshotIntegrity(verified.appData);
+    assertAuthorized();
+    if (!snapshotEquals(verified, canonical)) {
+      throw new Error('Configurazione non verificabile: il readback non coincide.');
+    }
+  }
+
   async restoreSnapshotVerified(
     candidate: CompleteSecureAppSnapshot,
     previousLogical?: CompleteSecureAppSnapshot
