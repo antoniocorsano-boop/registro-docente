@@ -6,6 +6,9 @@ import {captureDb2,replaceDb2,createErasedDb2,db2Failure,type Db2Inventory,type 
 import {deriveKeyEncryptionKey,unwrapDataEncryptionKey,decryptJsonRecord,encryptJsonRecord,generateDataEncryptionKey,wrapDataEncryptionKey,KDF_ITERATIONS_V1} from './cryptoPrimitives';
 import {decryptDataWithPassword,BACKUP_VERSION_V2} from '../cryptoUtils';
 import {inspectAssessmentBackupPayload} from './assessmentBackupPayload';
+import {projectAssessmentRestoreV7} from './assessmentRestorePolicy';
+import {snapshotAssessmentData} from '../assessment/assessmentRevisionBindings';
+import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import {createInitialArchiveSnapshot,type NewArchiveSetup} from './initialArchiveSetup';
 import {sanitizePersistedSettings} from './dataClassification';
 import {assertCouncilSnapshotIntegrity} from '../council/councilEvidenceSnapshots';
@@ -13,11 +16,12 @@ import {withoutLocalBackupVerification} from '../persistence/backupCheckpoint';
 import type {CompleteSecureAppSnapshot} from './secureAppStorage';
 import type {VaultMetadataV1} from './vaultTypes';
 const KEYS=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'] as const;
-type Operation='restore'|'erase'|'setup';
+type Operation='restore'|'erase'|'setup'|'restore-assessment';
 type Grant=Readonly<{operation:Operation}>;
 type Active=Extract<Db2Inventory,{state:'active'}>;
 type Intent={operation:'restore';password:string;file:Blob;backupPassword:string}
   |{operation:'erase';password:string}|{operation:'setup';password:string;setup:NewArchiveSetup};
+type AssessmentRestoreIntent={readonly operation:'restore-assessment';readonly password:string;readonly file:Blob;readonly backupPassword:string;readonly recoveryFile:Blob;readonly recoveryPassword:string;readonly currentScopes:readonly ApprovedAssessmentScope[];readonly incomingScopes:readonly ApprovedAssessmentScope[]};
 const own=(x:object,k:string)=>Object.prototype.hasOwnProperty.call(x,k);
 function exact(value:unknown,keys:readonly string[]):boolean{
   return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(k=>own(value,k));
@@ -56,6 +60,14 @@ async function restoreSnapshot(intent:Extract<Intent,{operation:'restore'}>,curr
   if(inspected.sourceVersion!==6||inspected.replacementRequiresReview)throw db2Failure();
   return inspected.snapshot;
 }
+async function readEncryptedAssessmentCopy(file:Blob,password:string){
+  if(!(file instanceof Blob)||file.size<=0||file.size>32*1024*1024)throw db2Failure();
+  const bytes=await file.arrayBuffer();
+  if(bytes.byteLength!==file.size)throw db2Failure();
+  const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+  if(JSON.parse(text).version!==BACKUP_VERSION_V2)throw db2Failure();
+  return decryptDataWithPassword(text,password);
+}
 export async function inspectDb2LifecycleState(factory:IDBFactory=globalThis.indexedDB):Promise<'active'|'erased'|'unverifiable'>{
   try{return (await captureDb2(factory)).state;}catch{return 'unverifiable';}
 }
@@ -83,6 +95,33 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
         }
         if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
         const grant=Object.freeze({operation:intent.operation});
+        pending={grant,previous,next,controller:attempt};
+        return grant;
+      }catch{if(controller===attempt)invalidate();throw db2Failure();}
+    },
+    /** Opt-in laboratory-only V7 path. The owner must have sealed/drained and
+     * retired its connection; supply independently approved scopes and exact
+     * authenticated generation. Commit remains a separate one-use consent.
+     */
+    async prepareAssessmentRestore(intent:AssessmentRestoreIntent,expectedOwner:VaultMetadataV1):Promise<Grant>{
+      invalidate();
+      const attempt=new AbortController();controller=attempt;
+      try{
+        if(!expectedOwner||intent.operation!=='restore-assessment')throw db2Failure();
+        // Freeze caller inputs before first await. Blobs are immutable.
+        const owner=structuredClone(expectedOwner);
+        const {password,file,backupPassword,recoveryFile,recoveryPassword}=intent;
+        const currentScopes=snapshotAssessmentData(intent.currentScopes) as readonly ApprovedAssessmentScope[];
+        const incomingScopes=snapshotAssessmentData(intent.incomingScopes) as readonly ApprovedAssessmentScope[];
+        const previous=await captureDb2(factory,attempt.signal);
+        if(previous.state!=='active'||!sameDb2Physical(previous.metadata,owner))throw db2Failure();
+        const current=await authenticate(previous,password);
+        const [incoming,recovery]=await Promise.all([readEncryptedAssessmentCopy(file,backupPassword),readEncryptedAssessmentCopy(recoveryFile,recoveryPassword)]);
+        const projected=await projectAssessmentRestoreV7(current,incoming,recovery,currentScopes,incomingScopes);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const next=await buildActive(projected,password);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const grant=Object.freeze({operation:'restore-assessment' as const});
         pending={grant,previous,next,controller:attempt};
         return grant;
       }catch{if(controller===attempt)invalidate();throw db2Failure();}
