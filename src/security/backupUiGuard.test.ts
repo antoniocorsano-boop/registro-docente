@@ -16,7 +16,7 @@ describe('SEC-1 secure backup UI boundary', () => {
     expect(privacy).not.toContain('backupSnapshot');
     expect(privacy).toContain('onPrepareEncryptedBackup');
     expect(privacy).toContain('onRecordBackupExport');
-    expect(privacy).toContain('createBackupPayload(checkpoint.snapshot)');
+    expect(privacy).toContain('createBackupPayload(checkpoint.snapshot, checkpoint.checkpointAt)');
     expect(privacy).not.toContain('Zero-Cloud');
     expect(privacy).not.toContain('100% Archiviazione Locale');
     expect(privacy).not.toContain('Nessun dato personale o voto viene mai inviato a server esterni.');
