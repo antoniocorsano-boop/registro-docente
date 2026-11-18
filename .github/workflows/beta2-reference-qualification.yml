@@ -88,6 +88,7 @@ jobs:
           cp tests/browser/val01-s6d-integration.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s6d-db2-persistence.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s6d-operational.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s7b-formative-balance.spec.cjs .nav-context-browser-tools/
       - name: Start synthetic Vite app fixture
         shell: bash
         run: |
@@ -140,6 +141,7 @@ jobs:
             val01-s6d-integration.spec.cjs \
             val01-s6d-db2-persistence.spec.cjs \
             val01-s6d-operational.spec.cjs \
+            val01-s7b-formative-balance.spec.cjs \
             --workers=1 --reporter=line \
             --output=../browser-evidence/results
       - name: Verify exact-SHA browser evidence completeness
