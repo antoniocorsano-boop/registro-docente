@@ -28,6 +28,8 @@ describe('VAL-01/S7b — restitution projection and isolation',()=>{
   const panel=read('tests/browser/fixtures/val01-s7b-balance.tsx');
   expect(panel).toContain('review.version===version?projectFormativeRestitution');
   expect(panel).toContain('await confirmFormativeBalance(current.document');
+  // Explicit accessible name must not depend on the controlled textarea value.
+  expect(panel).toContain('<textarea aria-label={label}');
   expect(panel).not.toMatch(/localStorage|sessionStorage|indexedDB|fetch\(|window\.print|download|exportPdf/i);
  });
 });
