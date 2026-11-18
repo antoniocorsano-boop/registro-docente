@@ -2452,6 +2452,18 @@
       "tests": [
         "src/security/val01AssessmentCompletion.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S6B1-I01",
+      "owner": "VAL-01/S6b.1",
+      "statement": "A new individual observation requires explicit student, active completed assessment, frozen criterion, unique local event and revision identities, valid fact and separate explicit interpretation or missing-state declaration, exact review and teacher confirmation. Rechecks scope and graph; rejects stale review, duplicate events and invalid level or state; no inference from grades, shared products, support or absence, no persistence, runtime activation or real data.",
+      "impactPaths": [
+        "src/assessment/individualObservation.ts",
+        "src/security/val01IndividualObservation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualObservation.test.ts"
+      ]
     }
   ]
 }
