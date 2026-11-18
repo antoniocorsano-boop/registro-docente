@@ -3,7 +3,10 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const url=(process.env.NAV_CONTEXT_BASE_URL||'http://127.0.0.1:4173')+'/tests/browser/fixtures/val01-s6c.html';
 async function open(page){
- await page.goto(url);
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const response=await page.goto(url);expect(response?.ok()).toBe(true);
+ await expect(page.getByRole('heading',{name:'Tabellone Smart — evidenze'}), 'Fixture mount: '+errors.join('; ')).toBeVisible({timeout:10000});
+ expect(errors).toEqual([]);
  await page.getByLabel('Prova',{exact:true}).selectOption('a2');
  await page.getByLabel('Criterio',{exact:true}).selectOption('c1');
  await expect(page.getByRole('region',{name:'Righe studenti'})).toBeVisible();
