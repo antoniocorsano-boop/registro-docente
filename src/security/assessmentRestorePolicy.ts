@@ -6,6 +6,7 @@
 import type {AppData,ClassData} from '../types';
 import type {AssessmentArchiveV1,ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
+import {snapshotAssessmentData} from '../assessment/assessmentRevisionBindings';
 import {createAssessmentBackupPayloadV7,inspectAssessmentBackupPayload} from './assessmentBackupPayload';
 import {sameDb2Physical,db2Failure} from './db2PhysicalLifecycle';
 import {withoutLocalBackupVerification} from '../persistence/backupCheckpoint';
@@ -46,7 +47,8 @@ export async function projectAssessmentRestoreV7(
  currentScopes:readonly ApprovedAssessmentScope[],incomingScopes:readonly ApprovedAssessmentScope[]
 ):Promise<CompleteSecureAppSnapshot>{
  if(!incoming||typeof incoming!=='object'||!recovery||typeof recovery!=='object')throw db2Failure();
- const at=(recovery as {exportedAt?:unknown}).exportedAt;
+ const detached=snapshotAssessmentData(recovery) as {exportedAt?:unknown};
+ const at=detached.exportedAt;
  if(typeof at!=='string')throw db2Failure();
  const previous=await createAssessmentBackupPayloadV7(current,currentScopes,at);
  const recover=await inspectAssessmentBackupPayload(recovery,current,currentScopes);
