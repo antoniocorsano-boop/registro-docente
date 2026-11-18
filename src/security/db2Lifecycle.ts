@@ -79,6 +79,7 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
     invalidate,
     async prepare(intent:Intent,expectedOwner?:VaultMetadataV1|ErasedDb2):Promise<Grant>{
       invalidate();
+      if(!['restore','erase','setup'].includes(intent.operation))throw db2Failure();
       const attempt=new AbortController();controller=attempt;
       try{
         const previous=await captureDb2(factory,attempt.signal);
