@@ -146,7 +146,7 @@ export function decideVaultBootstrap(input: VaultBootstrapInput): VaultGateState
 export class SecureAppStorage {
   constructor(private readonly vault: SecureVault) {}
 
-  async loadSnapshot(): Promise<SecureAppSnapshot> {
+  async loadSnapshot(observeComplete?: (complete: boolean) => void): Promise<SecureAppSnapshot> {
     const [
       appData,
       settings,
@@ -171,6 +171,9 @@ export class SecureAppStorage {
       this.vault.get<SecureMeta>('meta')
     ]);
 
+    // Determine completeness before historical defaults are synthesized.
+    observeComplete?.([appData,settings,udas,customTests,submissions,storedPlanning,
+      library,professionalMemory,storedCopilotState,meta].every(value=>value!==null&&value!==undefined));
     const planning = storedPlanning === null ? null : normalizePlanningState(storedPlanning);
     const copilotState = isCopilotStateV1(storedCopilotState)
       ? normalizeLoadedCopilotState(storedCopilotState)

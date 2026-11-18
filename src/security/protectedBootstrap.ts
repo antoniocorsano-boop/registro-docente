@@ -6,7 +6,7 @@ import {validMeta,validRecords} from './versionFencedVaultStore';
 import type {ErasedDb2} from './db2PhysicalLifecycle';
 const NAME='registro-docente-secure-vault';
 export type BootPhase='capability'|'enumeration'|'open'|'inventory'|'classification'|'deadline';
-export type BootCode='unavailable'|'blocked'|'timeout'|'aborted-read'|'version-changed'|'connection-closed'|'missing-established'|'confirm-absence'|'unsupported'|'invalid-inventory'|'staging'|'unknown'|'cancelled';
+export type BootCode='unavailable'|'blocked'|'timeout'|'aborted-read'|'version-changed'|'connection-closed'|'missing-established'|'partial-established'|'confirm-absence'|'unsupported'|'invalid-inventory'|'staging'|'unknown'|'cancelled';
 export class BootFault extends Error{
   constructor(readonly phase:BootPhase,readonly code:BootCode){super(code);this.name='BootFault';}
 }
@@ -57,7 +57,7 @@ function listVersion(factory:IDBFactory,signal:AbortSignal):Promise<1|2|null>{
     }catch(e){finish(undefined,classifyError('enumeration',e));}
   });
 }
-function inspectExisting(factory:IDBFactory,version:1|2,signal:AbortSignal):Promise<BootObservation>{
+function inspectExisting(factory:IDBFactory,version:1|2,signal:AbortSignal,expectComplete:boolean):Promise<BootObservation>{
   return new Promise((resolve,reject)=>{
     if(signal.aborted){reject(fault('open','cancelled'));return;}
     let settled=false,db:IDBDatabase|undefined,tx:IDBTransaction|undefined;
@@ -91,7 +91,7 @@ function inspectExisting(factory:IDBFactory,version:1|2,signal:AbortSignal):Prom
           const mk=m.getAllKeys(),mv=m.get('current'),rk=r.getAllKeys();
           // DB1 can legitimately be sparse (historical RC2); only DB2 requires
           // complete physical ciphertext here. Migration preflight is separate.
-          const rv=version===2?r.getAll():null;
+          const rv=version===2||expectComplete?r.getAll():null;
           tx.onabort=()=>finish(undefined,classifyError('inventory',tx?.error??new DOMException('','AbortError')));
           tx.onerror=event=>finish(undefined,classifyError('inventory',(event.target as IDBRequest|null)?.error??tx?.error));
           tx.oncomplete=()=>{
@@ -106,6 +106,7 @@ function inspectExisting(factory:IDBFactory,version:1|2,signal:AbortSignal):Prom
               if(version===2&&erased(metadata)&&records.length===0&&rv?.result.length===0){finish({kind:'erased',version:2,marker:metadata});return;}
               if(!validMeta(metadata))throw fault(phase,'invalid-inventory');
               if(version===2&&(!rv||!validRecords(rv.result)||records.length!==rv.result.length||!records.every((key,i)=>key===rv.result[i].recordKey)))throw fault(phase,'invalid-inventory');
+              if(version===1&&expectComplete&&(!rv||!validRecords(rv.result)||records.length!==rv.result.length||!records.every((key,i)=>key===rv.result[i].recordKey)))throw fault(phase,'partial-established');
               finish({kind:'active',version});
             }catch(e){finish(undefined,classifyError(phase,e));}
           };
@@ -114,11 +115,11 @@ function inspectExisting(factory:IDBFactory,version:1|2,signal:AbortSignal):Prom
     }catch(e){finish(undefined,classifyError(phase,e));}
   });
 }
-export async function observeArchive(factory:IDBFactory,signal:AbortSignal):Promise<BootObservation>{
+export async function observeArchive(factory:IDBFactory,signal:AbortSignal,expectComplete=false):Promise<BootObservation>{
   const version=await listVersion(factory,signal);
   ensureCurrent(signal,'enumeration');
   if(version===null)return {kind:'absent'};
-  return inspectExisting(factory,version,signal);
+  return inspectExisting(factory,version,signal,expectComplete);
 }
 export interface BootstrapPorts{
   observe(signal:AbortSignal):Promise<BootObservation>;
@@ -198,7 +199,8 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
 }
 export function bootMessage(e:BootFault):string{
   if(e.code==='staging')return 'Configurazione interrotta. Nessun dato verrà cancellato automaticamente.';
-  if(e.code==='missing-established')return 'L’archivio esistente non è verificabile. Nessun nuovo archivio verrà creato.';
+  if(e.code==='missing-established')return 'L’archivio esistente non è verificabile. Nessun nuovo archivio verrà creato. Conserva le copie cifrate disponibili; non cancellare i dati dell’app.';
+  if(e.code==='partial-established')return 'L’archivio già verificato come completo presenta dati mancanti o non verificabili. Nessun dato verrà aperto o sostituito. Conserva le copie cifrate disponibili; non cancellare i dati dell’app.';
   if(retryable(e))return 'L’archivio non è momentaneamente disponibile. Riprova il controllo di sicurezza.';
   if(e.code==='invalid-inventory'||e.code==='unsupported')return 'L’archivio non è compatibile o verificabile. Nessun dato verrà modificato.';
   return 'Controllo di sicurezza non riuscito. Nessun dato verrà aperto senza protezione.';

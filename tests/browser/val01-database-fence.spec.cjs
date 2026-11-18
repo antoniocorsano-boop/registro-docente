@@ -1263,3 +1263,37 @@ for(const method of ['createStaging','putMany','activate']){
     expect(final.snapshot.meta).toEqual({changes:0,lastBackup:null});
   });
 }
+
+
+// S-R04c: authenticated completeness evidence distinguishes previously
+// complete DB1 from genuinely sparse historical predecessors. The fault is
+// introduced only in the isolated browser fixture, never in a user archive.
+test('S-R04c complete archive that later loses one encrypted dataset stays protected and Retry preserves all remaining bytes',async({page})=>{
+  await seedProduct(page);
+  await unlockProduct(page);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_archive_complete_v1'))).toBe('1');
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  const damaged=await candidate(page,'preflightInventory','sparse');
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  expect(await bootTrace(page)).toEqual([{attempt:1,phase:'classification',code:'partial-established'}]);
+  await expect(page.getByText(/L’archivio già verificato come completo presenta dati mancanti/)).toBeVisible();
+  await expect(page.getByRole('radio')).toHaveCount(0);
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await page.getByRole('button',{name:'Riprova controllo sicurezza'}).click();
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible();
+  await page.goto(productSeed());await page.addScriptTag({path:newBundle});
+  expect(await candidate(page,'version')).toBe(1);
+  expect(await candidate(page,'preflightInventory')).toBe(damaged);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_archive_complete_v1'))).toBe('1');
+});
+test('S-R04c completeness evidence alone prevents setup if established flag is absent',async({page})=>{
+  await page.addInitScript(()=>localStorage.setItem('registro_archive_complete_v1','1'));
+  await page.goto(productApp());
+  await expect(page.getByRole('heading',{name:'Sicurezza non disponibile'})).toBeVisible({timeout:20000});
+  expect((await bootTrace(page)).map(t=>t.code)).toEqual(['missing-established','missing-established','missing-established']);
+  await noArchive(page);
+  await expect(page.getByRole('radio')).toHaveCount(0);
+});

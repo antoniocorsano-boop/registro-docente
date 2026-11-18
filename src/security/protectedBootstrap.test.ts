@@ -24,7 +24,7 @@ describe('STAB-01 bootstrap coordinator',()=>{
     const result=await createProtectedBootstrap({observe:s.observe,established:()=>true,pause:noWait}).run();
     expect(result.kind).toBe('error');expect(result.trace).toHaveLength(3);expect(s.calls()).toBe(3);
   });
-  for(const code of ['invalid-inventory','unsupported','staging','unknown','unavailable'] as const){
+  for(const code of ['invalid-inventory','partial-established','unsupported','staging','unknown','unavailable'] as const){
     test(code+' never retries or converts to new setup',async()=>{
       const s=sequence(new BootFault('classification',code),active);
       const result=await createProtectedBootstrap({observe:s.observe,established:()=>true,pause:noWait}).run();

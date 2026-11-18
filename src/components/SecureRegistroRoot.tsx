@@ -45,6 +45,8 @@ const LEGACY_DATA_KEYS = [
 // Positive evidence only: absence of this local, non-identifying flag is
 // never proof that an archive has not existed. No credential or record data.
 const ESTABLISHED_ARCHIVE_KEY='registro_archive_established_v1';
+// Positive authenticated completeness evidence, not an absence or recovery proof.
+const COMPLETE_ARCHIVE_KEY='registro_archive_complete_v1';
 const AUTO_LOCK_STORAGE_KEY = 'registro_auto_lock_minutes';
 const DEFAULT_AUTO_LOCK_MS = 15 * 60_000;
 type AutoLockMinutes = 0 | 15 | 30 | 60;
@@ -94,13 +96,14 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     requireExistingRef.current=true;
     window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY,'1');
   },[]);
-  const established=useCallback(()=>requireExistingRef.current||window.localStorage.getItem(ESTABLISHED_ARCHIVE_KEY)==='1',[]);
+  const completeArchive=useCallback(()=>window.localStorage.getItem(COMPLETE_ARCHIVE_KEY)==='1',[]);
+  const established=useCallback(()=>requireExistingRef.current||window.localStorage.getItem(ESTABLISHED_ARCHIVE_KEY)==='1'||completeArchive(),[completeArchive]);
   const protectedBootstrap=useCallback(()=>{
     if(!bootstrapRef.current)bootstrapRef.current=createProtectedBootstrap({
-      observe:signal=>observeArchive(globalThis.indexedDB,signal),established
+      observe:signal=>observeArchive(globalThis.indexedDB,signal,completeArchive()),established
     });
     return bootstrapRef.current;
-  },[established]);
+  },[established,completeArchive]);
   const handoffRef=useRef<ReturnType<typeof createRecoveryCopyHandoff>|null>(null);
   const archiveMigrationRef=useRef<{revoke():void}|null>(null);
   const erasedDb2Ref=useRef<ErasedDb2|null>(null);
@@ -436,7 +439,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
 
   const loadReadySnapshot = useCallback(async (attempt: { epoch: number | null; revision: number }) => {
     const { storage } = getRuntime();
-    const nextSnapshot = await storage.loadSnapshot();
+    let complete=false;
+    const nextSnapshot = await storage.loadSnapshot(archiveMigrationCandidate ? value=>{complete=value;} : undefined);
+    if(archiveMigrationCandidate&&completeArchive()&&!complete)throw new BootFault('classification','partial-established');
 
     // Teacher navigation starts from a neutral Home on every vault bootstrap.
     // Replace, rather than push, the current entry so Back cannot restore a
@@ -469,10 +474,11 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     }
 
     await confirmForegroundEpoch(attempt, () => {
+      if(archiveMigrationCandidate&&complete)window.localStorage.setItem(COMPLETE_ARCHIVE_KEY,'1');
       setSnapshot(nextSnapshot);
       setGateState('READY');
     });
-  }, [getRuntime, confirmForegroundEpoch]);
+  }, [getRuntime, confirmForegroundEpoch,archiveMigrationCandidate,completeArchive]);
 
   // The readonly probe can outlive the foreground session. Use one
   // admission predicate for both explicit first setup and legacy migration.
@@ -623,6 +629,9 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
             requireExistingRef.current=true;
             revokeNativeAuthorization();setSnapshot(null);
             await inspectBootstrap();
+            if(error instanceof BootFault&&error.code==='partial-established'&&gateStateRef.current==='LOCKED'){
+              setErrorMessage(bootMessage(error));setGateState('ERROR');
+            }
             if(cleanupRevoked&&gateStateRef.current==='LOCKED'){
               setMigrationNotice('Sessione cambiata. Autenticati nuovamente.');
             }
@@ -633,7 +642,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
         if(guardedCleanup&&archiveMigrationRef.current===owner){owner.revoke();archiveMigrationRef.current=null;}
       }
     }finally{if(track)db2UnlockBusyRef.current=false;}
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,revokeNativeAuthorization,inspectBootstrap,syncNativeSession]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,revokeNativeAuthorization,inspectBootstrap,syncNativeSession,setGateState]);
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -705,7 +714,8 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
     }
     if(archiveMigrationCandidate){
       // Only the explicit legacy DB1 reset can remove the positive marker.
-      window.localStorage.removeItem(ESTABLISHED_ARCHIVE_KEY);requireExistingRef.current=false;
+      window.localStorage.removeItem(ESTABLISHED_ARCHIVE_KEY);
+      window.localStorage.removeItem(COMPLETE_ARCHIVE_KEY);requireExistingRef.current=false;
       await storeRef.current?.retireConnection();storeRef.current=null;vaultRef.current=null;storageRef.current=null;
     }
     revokeNativeAuthorization();
