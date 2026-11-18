@@ -2566,6 +2566,59 @@
       "tests": [
         "src/security/val01DatabaseFenceContract.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-STAB06-I01",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Protected startup uses bounded classified read-only observation; established missing or partially lost archives remain protected rather than being initialized automatically. Successful authenticated observation does not establish release readiness.",
+      "impactPaths": [
+        "src/security/protectedBootstrap.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        ".github/workflows/val01-stab-bootstrap.yml",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I02",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Candidate legacy migration respects session authorization and verified source consistency before invoking ACTIVE commit; a revoked or changed source is preserved. An already invoked commit requires protected observation, not assumed rollback. No claim of isolation against noncooperating historical clients.",
+      "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "tests/browser/val01-database-fence.spec.cjs"
+      ],
+      "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I03",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Native product qualification reports the candidate and historical source identities and requires provenance and evidence for the selected case. Laboratory evidence is not production release evidence; historical pinned runs cannot certify a later candidate.",
+      "impactPaths": [
+        ".github/workflows/val01-product-native.yml",
+        "src/security/val01Stab06InvariantEvidence.test.ts",
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ],
+      "tests": [
+        "src/security/val01Stab06InvariantEvidence.test.ts",
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ]
     }
   ]
 }
