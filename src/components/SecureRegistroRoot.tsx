@@ -560,10 +560,27 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       const attempt = await getForegroundEpoch();
       if(track&&(gateStateRef.current!=='LOCKED'||closingRef.current))throw Error('Sessione non attuale.');
       const { vault,store } = getRuntime();
+      const guardedCleanup=track&&archiveVersionRef.current!==2;
+      let revoked=false;
+      const owner={revoke:()=>{revoked=true;}};
+      const assertCleanupAuthorized=()=>{
+        if(revoked||archiveMigrationRef.current!==owner||storeRef.current!==store||
+          gateStateRef.current!=='LOCKED'||closingRef.current||document.hidden||
+          lifecycleRevisionRef.current!==attempt.revision||
+          (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch)))
+          throw Error('Sessione cambiata. Autenticati nuovamente.');
+      };
+      if(guardedCleanup){
+        if(archiveMigrationRef.current)throw Error('Sessione non attuale.');
+        archiveMigrationRef.current=owner;
+      }
       try {
         if(archiveMigrationCandidate&&store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
         await vault.unlock(password);
-        if(!archiveMigrationCandidate||archiveVersionRef.current!==2)await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
+        if(!archiveMigrationCandidate||archiveVersionRef.current!==2){
+          if(guardedCleanup&&isAndroidSessionRuntime())await syncNativeSession();
+          await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault, guardedCleanup?assertCleanupAuthorized:undefined);
+        }
         await loadReadySnapshot(attempt);
         setMigrationNotice(null);
       } catch (error) {
@@ -574,15 +591,25 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
             storeRef.current=null;vaultRef.current=null;storageRef.current=null;
             // Concurrent erasure can look like a failed password. Inspect
             // durable state rather than repeatedly opening the erased archive.
+            // Capture revocation before the readonly bootstrap changes runtime
+            // identity. Gate-local action errors may be cleared on transition
+            // through CHECKING; the Root owns the durable protected notice.
+            const cleanupRevoked=guardedCleanup&&(revoked||
+              lifecycleRevisionRef.current!==attempt.revision||document.hidden);
             requireExistingRef.current=true;
             revokeNativeAuthorization();setSnapshot(null);
             await inspectBootstrap();
+            if(cleanupRevoked&&gateStateRef.current==='LOCKED'){
+              setMigrationNotice('Sessione cambiata. Autenticati nuovamente.');
+            }
           }
         }
         throw error;
+      } finally {
+        if(guardedCleanup&&archiveMigrationRef.current===owner){owner.revoke();archiveMigrationRef.current=null;}
       }
     }finally{if(track)db2UnlockBusyRef.current=false;}
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,revokeNativeAuthorization,inspectBootstrap]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch,archiveMigrationCandidate,revokeNativeAuthorization,inspectBootstrap,syncNativeSession]);
 
   const handleMigrate = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -596,10 +623,21 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       assertInitialAdmission(attempt,'MIGRATION_REQUIRED');
       archiveVersionRef.current=inspected.observation.kind==='empty'?1:null;
     }
+    if(archiveMigrationCandidate&&archiveMigrationRef.current)throw Error('Migrazione non autorizzata.');
     setGateState('MIGRATING');
-    const { vault } = getRuntime();
+    const { vault,store } = getRuntime();
+    let revoked=false;
+    const owner={revoke:()=>{revoked=true;}};
+    const assertMigrationAuthorized=()=>{
+      if(revoked||archiveMigrationRef.current!==owner||storeRef.current!==store||
+        gateStateRef.current!=='MIGRATING'||closingRef.current||document.hidden||
+        lifecycleRevisionRef.current!==attempt.revision||
+        (attempt.epoch!==null&&(!nativeStateRef.current?.foreground||nativeStateRef.current.epoch!==attempt.epoch)))
+        throw Error('Sessione cambiata. Ripeti l’operazione in primo piano.');
+    };
+    if(archiveMigrationCandidate)archiveMigrationRef.current=owner;
     try {
-      await migrateLegacyToVault(window.localStorage, vault, password);
+      await migrateLegacyToVault(window.localStorage, vault, password, archiveMigrationCandidate?assertMigrationAuthorized:undefined);
       if(archiveMigrationCandidate){markEstablished();archiveVersionRef.current=1;setArchiveVersion(1);}
       await loadReadySnapshot(attempt);
     } catch (error) {
@@ -611,6 +649,8 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
       setSnapshot(null);
       await inspectBootstrap();
       throw error;
+    } finally {
+      if(archiveMigrationCandidate&&archiveMigrationRef.current===owner){owner.revoke();archiveMigrationRef.current=null;}
     }
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap,archiveMigrationCandidate,established,protectedBootstrap,markEstablished,syncNativeSession,assertInitialAdmission]);
 
@@ -823,7 +863,7 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
   useEffect(()=>{
     if(!archiveMigrationCandidate)return;
     const protect=()=>{if(document.hidden){archiveMigrationRef.current?.revoke();if(!isAndroidSessionRuntime()){lifecycleRevisionRef.current++;discardRecoveryCopy();}}};
-    const hide=()=>invalidateArchiveMigration();
+    const hide=()=>{lifecycleRevisionRef.current++;invalidateArchiveMigration();};
     document.addEventListener('visibilitychange',protect);
     window.addEventListener('pagehide',hide);
     return()=>{document.removeEventListener('visibilitychange',protect);window.removeEventListener('pagehide',hide);};

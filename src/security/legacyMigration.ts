@@ -192,10 +192,26 @@ export function sanitizeLegacySnapshot(snapshot: LegacySnapshot): LegacySnapshot
   };
 }
 
+/** Candidate authorization must be rechecked at every async boundary. */
+export type LegacyMigrationAuthorization = () => void;
+
+function captureLegacyBytes(storage: KeyValueStorage): Map<string, string | null> {
+  return new Map(LEGACY_ENTRIES.map(([key]) => [key, storage.getItem(key)]));
+}
+
+function assertLegacyBytesUnchanged(storage: KeyValueStorage, original: Map<string, string | null>): void {
+  for (const [key, value] of original) {
+    if (storage.getItem(key) !== value) throw new Error('Dati sorgente cambiati. Nessun residuo è stato eliminato.');
+  }
+}
+
 export async function cleanupVerifiedLegacyAfterActivation(
   storage: KeyValueStorage,
-  vault: SecureVault
+  vault: SecureVault,
+  assertAuthorized?: LegacyMigrationAuthorization
 ): Promise<string[]> {
+  assertAuthorized?.();
+  const original = assertAuthorized ? captureLegacyBytes(storage) : null;
   const source = collectLegacySnapshot(storage);
   if (source.presentKeys.length === 0) return [];
 
@@ -210,12 +226,16 @@ export async function cleanupVerifiedLegacyAfterActivation(
     const expected = sanitized[mapping.property];
     if (expected === undefined) continue;
 
+    assertAuthorized?.();
     const actual = await vault.get(mapping.recordKey);
+    assertAuthorized?.();
     if (!valuesMatch(expected, actual)) {
       throw new Error(`Residuo legacy non coerente con il vault ACTIVE per ${mapping.recordKey}.`);
     }
   }
 
+  assertAuthorized?.();
+  if (original) assertLegacyBytesUnchanged(storage, original);
   for (const legacyKey of source.presentKeys) {
     storage.removeItem(legacyKey);
   }
@@ -226,8 +246,11 @@ export async function cleanupVerifiedLegacyAfterActivation(
 export async function migrateLegacyToVault(
   storage: KeyValueStorage,
   vault: SecureVault,
-  password: string
+  password: string,
+  assertAuthorized?: LegacyMigrationAuthorization
 ): Promise<MigrationResult> {
+  assertAuthorized?.();
+  const original = assertAuthorized ? captureLegacyBytes(storage) : null;
   const source = collectLegacySnapshot(storage);
   const validation = validateLegacySnapshot(source);
   if (!validation.valid) {
@@ -240,13 +263,18 @@ export async function migrateLegacyToVault(
   const sanitized = sanitizeLegacySnapshot(source);
   const expectedInvariants = buildMigrationInvariants(sanitized);
 
+  assertAuthorized?.();
   await vault.createStaging(password);
+  let activationInvoked = false;
 
   try {
+    assertAuthorized?.();
     for (const mapping of MIGRATION_RECORDS) {
       const value = sanitized[mapping.property];
       if (value === undefined) continue;
+      assertAuthorized?.();
       await vault.put(mapping.recordKey, value);
+      assertAuthorized?.();
     }
 
     const readback: LegacySnapshot = { presentKeys: [...sanitized.presentKeys] };
@@ -254,7 +282,9 @@ export async function migrateLegacyToVault(
       const expected = sanitized[mapping.property];
       if (expected === undefined) continue;
 
+      assertAuthorized?.();
       const actual = await vault.get(mapping.recordKey);
+      assertAuthorized?.();
       if (!valuesMatch(expected, actual)) {
         throw new Error(`Readback/invarianti non coerenti per ${mapping.recordKey}.`);
       }
@@ -266,16 +296,26 @@ export async function migrateLegacyToVault(
       throw new Error('Verifica invarianti della migrazione non riuscita.');
     }
 
+    assertAuthorized?.();
+    if (original) assertLegacyBytesUnchanged(storage, original);
+    activationInvoked = true;
     await vault.activate();
+    assertAuthorized?.();
+    if (original) assertLegacyBytesUnchanged(storage, original);
   } catch (error) {
     try {
-      await vault.discardStaging();
+      // After activation is invoked its durable outcome can be uncertain.
+      // Preserve the candidate and inspect on a protected reopen.
+      if (!assertAuthorized || !activationInvoked) await vault.discardStaging();
     } catch {
-      // Preserve the original migration error; an ACTIVE vault cannot be discarded here.
+      // Preserve the original migration error.
+    } finally {
+      if (assertAuthorized) vault.lock();
     }
     throw error;
   }
 
+  // No await between the final authorization / source check and deletion.
   for (const legacyKey of source.presentKeys) {
     storage.removeItem(legacyKey);
   }
