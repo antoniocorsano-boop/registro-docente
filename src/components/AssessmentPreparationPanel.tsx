@@ -8,7 +8,7 @@ import type {AssessmentPreparationPreview} from '../assessment/assessmentDefinit
 interface Props{
   document:AssessmentEvidenceV1; scope:AssessmentScopeV1; classLabel:string; activityLabel:string;
   activityId:string;assessmentId:string;revisionId:string; onExit:()=>void;
-  confirmationTime:()=>string;
+  confirmationTime:()=>string; onConfirmed:(definition:AssessmentDefinitionRevision)=>void;
 }
 type Choice={rubric:string;kind:EvidenceKind|'';description:string;method:string};
 const emptyChoice=():Choice=>({rubric:'',kind:'',description:'',method:''});
@@ -40,7 +40,7 @@ export function AssessmentPreparationPanel(p:Props){
   const request=()=>({activityId:p.activityId,assessmentId:p.assessmentId,revisionId:p.revisionId,date,period,title,purpose,
     criteria:Object.entries(choices).map(([criterionRevisionId,c])=>({criterionRevisionId,...(c.rubric?{rubricRevisionId:c.rubric}:{}),expected:{kind:c.kind,description:c.description,method:c.method}}))});
   function preview(e:React.FormEvent){e.preventDefault();const result=previewAssessmentDefinition(p.document,p.scope,request());if(!result.valid){setError(issueText[result.issue]);setReview(null);return;}setReview(result.preview);setError('');}
-  function confirm(){if(!review||changed||confirmed)return;const result=confirmAssessmentDefinition(p.document,p.scope,review,{confirmedByTeacher:true,confirmedAt:p.confirmationTime()});if(!result.valid){setError(issueText[result.issue]);setReview(null);return;}setConfirmed(result.definition);setReview(null);setError('');}
+  function confirm(){if(!review||changed||confirmed)return;const result=confirmAssessmentDefinition(p.document,p.scope,review,{confirmedByTeacher:true,confirmedAt:p.confirmationTime()});if(!result.valid){setError(issueText[result.issue]);setReview(null);return;}setConfirmed(result.definition);setReview(null);setError('');p.onConfirmed(result.definition);}
   return <section aria-labelledby={prefix+'title'} className="mx-auto w-full max-w-xl min-w-0 space-y-4 break-words p-3 text-[var(--text-main)]">
     <header className="space-y-2">
       <button type="button" className={button} onClick={exit}>Indietro</button>
