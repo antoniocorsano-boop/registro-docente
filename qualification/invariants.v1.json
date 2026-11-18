@@ -2416,6 +2416,49 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5A-I01",
+      "owner": "VAL-01/S5a",
+      "statement": "The isolated preparation catalogue validates local scope, offers only active exact criterion and reference revisions with compatible active rubric revisions, detects an existing activity without duplication, rejects malformed input and never silently upgrades historical links or selects on behalf of the teacher. Outputs no student roster or individual evidence; no mutation, persistence, AI, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5B-I01",
+      "owner": "VAL-01/S5b",
+      "statement": "The isolated assessment preparation command accepts only explicit local selections and valid planned activity metadata, shows an unconfirmed review of the selected exact references, rejects existing activities, conflicting IDs, stale or incompatible revisions and cross-scope review, and revalidates the complete graph on explicit confirmation. Returns a planned definition only, without persistence, runtime activation, generated IDs, grades, student evidence, automatic selection or AI.",
+      "impactPaths": [
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5C-I01",
+      "owner": "VAL-01/S5c",
+      "statement": "The isolated synthetic assessment preparation interface uses the existing catalogue and preparation commands, requires explicit choices and confirmation, invalidates edited or changed-context previews, rejects duplicate activity and stale selections, preserves draft until explicit exit, and exposes no storage, remote calls or production entrypoint. The exam rehearsal is a planned synthetic activity, not an official exam result. Mobile browser evidence includes narrow screens and enlarged text.",
+      "impactPaths": [
+        "src/components/AssessmentPreparationPanel.tsx",
+        "src/security/val01AssessmentPreparationPanel.test.ts",
+        "tests/browser/fixtures/val01-s5c-fixture.tsx",
+        "tests/browser/fixtures/val01-s5c.html",
+        "tests/browser/val01-s5c-preparation.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationPanel.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s5c-preparation.spec.cjs"
+      ]
     }
   ]
 }
