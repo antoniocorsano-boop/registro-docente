@@ -11,6 +11,7 @@ const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
 const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
 const realBackup=process.env.VAL01_REAL_BACKUP==='true';
+const freshRecovery=process.env.VAL01_FRESH_RECOVERY==='true';
 const interruptionCut=process.env.VAL01_MIGRATION_CUT||'';
 const smoke=process.env.VAL01_HISTORICAL_SMOKE==='true';
 const api=product?Number(process.env.VAL01_API):36;
@@ -654,7 +655,7 @@ async function migrationInterruptionSuite(oldVersion,initial){
 // changed destination -> restore of the SAME file. No generated backup or
 // adb push in this suite, no native bridge grants issued by the driver.
 const backupSavedMessage='Copia di sicurezza salvata e verificata nella cartella scelta.';
-const exactProduct=()=>call('__val01ProductInspection','exactSnapshot');
+const exactProduct=(fresh=false)=>call('__val01ProductInspection','exactSnapshot',fresh);
 const localFileBytes=name=>execFileSync('adb',['exec-out','cat','/sdcard/Download/'+name],{timeout:30000});
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 async function exportActualNativeBackup(){
@@ -753,6 +754,127 @@ async function realBackupSuite(oldVersion,initial){
   stage('sr03b-restore-cold-reopen',{physicalSha256:final.digest,exactSnapshotEqual:true,reauthenticated:true});
   const finalFile=localFileBytes(file.name);assert.deepEqual(finalFile,file.bytes);
   stage('sr03b-external-file-preserved',{bytes:finalFile.length,sha256:sha256(finalFile)});
+}
+
+// S-R04b: isolated CI emulator only. Simulate a replacement installation
+// by uninstalling the test package and installing the same candidate anew.
+// External SAF bytes remain the only recovery input. The source snapshot is
+// retained only in the driver as a comparison oracle, never sent to the app.
+const recoveryCredential='synthetic-new-password';
+const restoreErrorMessage='Ripristino non completato. Controlla il file e la password.';
+const restoreSuccessMessage='Backup cifrato verificato e ripristinato con successo!';
+const restoreConsentMessage='Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?';
+async function setupRecoveryDb1(){
+  await waitText('Configura archivio protetto');
+  await domClick('input[name="archive-mode"][value="professional"]');
+  await until(()=>visible('#vault-password'),'Fresh professional form absent',15000);
+  const profile={'Istituto':'Synthetic recovery school','Anno scolastico':'2026/2027','Docente':'Synthetic recovery teacher','Disciplina':'Tecnologia'};
+  await evaluate('(()=>{const values='+JSON.stringify(profile)+';const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;for(const [label,value] of Object.entries(values)){const l=[...document.querySelectorAll("label")].find(e=>e.childNodes[0]?.textContent.trim()===label);const input=l?.querySelector("input");if(!input)throw Error("Profile field missing");set.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));}return true})()');
+  await evaluate('(()=>{document.querySelector("#vault-password").scrollIntoView({block:"center"});return true})()');
+  await gate('Crea il mio registro',recoveryCredential);
+}
+async function recoveryFromPrivacy(name,copyPassword,approve){
+  const form='form:has(input[placeholder="Inserisci la password impostata alla cifratura"])';
+  await until(()=>visible(form),'Ordinary native restore form missing',45000);
+  await evaluate('(()=>{const f='+query(form)+';const field=f.querySelector("input[type=password]");if(!field)throw Error("Restore password field missing");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(field,'+JSON.stringify(copyPassword)+');field.dispatchEvent(new Event("input",{bubbles:true}));return true})()');
+  await clickDeferred(form+' button[type=submit]');
+  await downloads();
+  tap(await find(n=>doc(n)&&n.text===name&&!/preview|anteprima/i.test(n.desc),'Actual recovery file title missing'));
+  await until(()=>foreground()||nodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),'Fresh recovery file selection did not return',20000);
+  if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Native Open confirmation absent'));
+  await until(foreground,'Fresh recovery picker did not return',30000);
+  await until(()=>visible('#vault-password'),'Fresh recovery picker did not require reauthentication',45000);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro',recoveryCredential,approve===null?restoreErrorMessage:restoreConsentMessage);
+  if(approve===null)await nativeConfirm(restoreErrorMessage,true);
+  else{
+    await nativeConfirm(restoreConsentMessage,approve);
+    if(approve)await nativeConfirm(restoreSuccessMessage,true);
+  }
+  await until(()=>evaluate('(()=>{const f='+query(form)+';const b=f?.querySelector("button[type=submit]");return !!b&&!b.disabled})()'),'Restore form did not settle',30000);
+}
+async function freshRecoverySuite(oldVersion,initial){
+  assert.equal(integral,true);assert.equal(product,true);assert.equal(oldVersion,10004);
+  assert.equal(process.env.GITHUB_ACTIONS,'true');
+  assert.ok(adb('shell','getprop','ro.kernel.qemu')==='1'||adb('shell','getprop','ro.boot.qemu')==='1');
+  await seedOriginal(oldVersion);
+  stage('historical-seed-cold-reopen',{originalBinary:true});
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Candidate initial gate missing',45000);
+  await diagnostic();
+  const source=await exactProduct();
+  assert.equal(source.version,1);assert.equal(source.keys.length,10);
+  assert.ok(source.snapshot.appData.classes.some(c=>c.name===marker));
+  await productGate();await privacyProduct();
+  const file=await exportActualNativeBackup();
+  await diagnostic();
+  const decoded=await call('__val01ProductInspection','decodeActualBackup',file.bytes.toString('utf8'));
+  assert.equal(decoded.app,'registro-docente');assert.equal(decoded.backupDataVersion,6);
+  assert.deepEqual(decoded.snapshot.meta,{changes:0,lastBackup:decoded.exportedAt});
+  assert.deepEqual(decoded.snapshot,{...source.snapshot,meta:decoded.snapshot.meta});
+  const exported=await exactProduct();
+  assert.deepEqual(exported.snapshot.meta.verifiedBackupEvidence,{bytes:file.bytes.length,sha256:file.digest,source:'android-readback',payloadVersion:6,checkpointAt:decoded.exportedAt});
+  stage('sr04b-source-export',{sha256:file.digest,bytes:file.bytes.length,payloadVersion:6,recordCount:10,exactSnapshotEqual:true,nativeReceiptEqual:true});
+  // Only the disposable emulator package is removed. No app data copied,
+  // no backup injected, no host restore, and no external file rewritten.
+  stop();
+  assert.equal(adb('uninstall',pkg),'Success');
+  assert.ok(!adb('shell','pm','list','packages').split('\n').includes('package:'+pkg));
+  assert.deepEqual(localFileBytes(file.name),file.bytes);
+  install(process.env.NEW_APK);identity(10005);
+  launchOriginal();await connect();
+  await waitText('Configura archivio protetto');
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  const absence=await evaluate('(async()=>({dbs:(await indexedDB.databases()).filter(d=>d.name==="registro-docente-secure-vault").length,marker:localStorage.getItem("registro_archive_established_v1")}))()');
+  assert.deepEqual(absence,{dbs:0,marker:null});
+  stage('sr04b-clean-installation',{archiveAbsent:true,markerAbsent:true,protectedGate:true,sha256:sha256(localFileBytes(file.name))});
+  await setupRecoveryDb1();
+  await diagnostic();
+  const empty=await exactProduct(true);
+  assert.equal(empty.version,1);assert.equal(empty.keys.length,10);
+  assert.deepEqual(empty.snapshot.appData.classes,[]);
+  assert.equal(empty.snapshot.settings.archiveMode,'professional');
+  assert.deepEqual(empty.snapshot.meta,{changes:0,lastBackup:null});
+  assert.notEqual(empty.digest,exported.digest);
+  stage('sr04b-new-local-archive',{version:1,recordCount:10,physicalSha256:empty.digest,emptyProfessional:true,newCredential:true});
+  // Navigate explicitly and authenticate using the new device credential.
+  const openFresh=async()=>{
+    await navigateProduct('/index.html','!!document.querySelector("#vault-password")');
+    await gate('Sblocca Registro',recoveryCredential);
+    await privacyProduct();
+  };
+  await openFresh();
+  await recoveryFromPrivacy(file.name,'wrong-synthetic-copy-password',null);
+  await diagnostic();
+  assert.deepEqual(await exactProduct(true),empty);
+  stage('sr04b-wrong-copy-rejected',{physicalSha256:empty.digest,unchanged:true,reauthenticated:true});
+  await openFresh();
+  await recoveryFromPrivacy(file.name,'synthetic-archive-backup-only',false);
+  await diagnostic();
+  assert.deepEqual(await exactProduct(true),empty);
+  stage('sr04b-refusal-preserves-destination',{physicalSha256:empty.digest,unchanged:true,reauthenticated:true});
+  await openFresh();
+  await recoveryFromPrivacy(file.name,'synthetic-archive-backup-only',true);
+  await diagnostic();
+  const restored=await exactProduct(true);
+  assert.equal(restored.version,1);assert.equal(restored.keys.length,10);
+  assert.notEqual(restored.digest,empty.digest);
+  assert.deepEqual(restored.snapshot,decoded.snapshot);
+  assert.ok(restored.snapshot.appData.classes.some(c=>c.name===marker));
+  assert.equal(restored.snapshot.meta.verifiedBackupAt,undefined);
+  assert.equal(restored.snapshot.meta.verifiedBackupEvidence,undefined);
+  stage('sr04b-same-file-restored',{version:1,recordCount:10,sha256:file.digest,physicalSha256:restored.digest,exactSnapshotEqual:true,localReceiptNotImported:true,newCredential:true});
+  stop();launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Fresh restored cold gate absent',45000);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro',recoveryCredential);await ensureHome();await findMarker();
+  await diagnostic();
+  assert.deepEqual(await exactProduct(true),restored);
+  stage('sr04b-restored-cold-reopen',{physicalSha256:restored.digest,exactSnapshotEqual:true,protectedGate:true,newCredential:true});
+  const external=localFileBytes(file.name);
+  assert.deepEqual(external,file.bytes);
+  stage('sr04b-external-file-preserved',{bytes:external.length,sha256:sha256(external)});
 }
 
 async function productSuite(oldVersion,initial){
@@ -862,7 +984,7 @@ try{
     assert.deepEqual(identity(oldVersion),initial);
     assert.ok(!socket,'Historical smoke must not use DevTools');
     stage('smoke-original-installation-preserved',{sameUid:true,sameFirstInstall:true,versionCode:oldVersion,noCandidateInstall:true});
-  }else if(product){if(realBackup)await realBackupSuite(oldVersion,initial);else if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
+  }else if(product){if(freshRecovery)await freshRecoverySuite(oldVersion,initial);else if(realBackup)await realBackupSuite(oldVersion,initial);else if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
   else{
   let seed;
   if(integral){
