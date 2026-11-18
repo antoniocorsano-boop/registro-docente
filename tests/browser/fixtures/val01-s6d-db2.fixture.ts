@@ -11,7 +11,7 @@ import {createDb2Lifecycle} from '../../../src/security/db2Lifecycle';
 import {createBackupPayload} from '../../../src/security/backupPayload';
 import {encryptDataWithPassword,decryptDataWithPassword} from '../../../src/cryptoUtils';
 import {createVersionedBackupReceiptAuthority} from '../../../src/persistence/versionedBackupReceipt';
-import {inspectAssessmentBackupPayload} from '../../../src/security/assessmentBackupPayload';
+import {inspectAssessmentBackupPayload,createAssessmentBackupPayloadV7} from '../../../src/security/assessmentBackupPayload';
 import {createDurableMutationCoordinator} from '../../../src/persistence/durableMutationCoordinator';
 import {incrementBackupChanges} from '../../../src/persistence/backupCheckpoint';
 import {validateAssessmentArchiveV1,type AssessmentArchiveV1} from '../../../src/assessment/assessmentArchive';
@@ -140,5 +140,67 @@ async function downgrade(){
  try{await s.getMetadata();}catch{rejected=true;}finally{await s.retireConnection();}
  return {rejected,version:await versions()};
 }
-Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions}});
+
+// Synthetic restore qualification. No production caller or file picker.
+async function restoreAssessment(mode:'approve'|'refuse'|'revoke'|'old'|'bad-recovery'|'wrong-scope'|'wrong-password'|'race'|'abort'|'after-commit'){
+ const o=requireOwner(),current=await o.storage.loadExactBackupSnapshot();
+ if(!current)throw Error('Incomplete synthetic archive');
+ const generation=await o.store.getMetadata();if(!generation)throw Error('Missing generation');
+ const recovery=await createAssessmentBackupPayloadV7(current,approved,stamp);
+ let incoming=current;
+ if(mode==='old'){
+  incoming={...current,appData:{...current.appData,classes:current.appData.classes.map(c=>({...c,assessmentEvidenceV1:{version:1,documents:[{document:structuredClone(boardDocument),bindings:[]}]}}))}};
+ }else{
+  const candidate=deriveConfirmedEvidenceMutation(current.appData,approved,boardScope,review('new'),{confirmedByTeacher:true,confirmedAt:'2026-11-22T10:01:30.000Z'});
+  incoming={...current,appData:candidate.appData,meta:incrementBackupChanges(current.meta)};
+ }
+ const target=await createAssessmentBackupPayloadV7(incoming,approved,stamp);
+ const targetText=await encryptDataWithPassword(target,copyPassword);
+ const recoveryText=await encryptDataWithPassword(mode==='bad-recovery'?target:recovery,copyPassword);
+ const service=createDb2Lifecycle();
+ const heldStore=new ExistingSessionVaultStore(2),held=new SecureVault(heldStore);
+ await held.unlock(password);
+ await close();
+ const before=await captureDb2(indexedDB);
+ let prepared=false,committed=false,replayRejected=false,oldOwnerRejected=false,triggered=false;
+ let baseline=before;
+ const oldPut=IDBObjectStore.prototype.put;
+ try{
+  let grant;
+  try{
+   grant=await service.prepareAssessmentRestore({operation:'restore-assessment',password:mode==='wrong-password'?'wrong':password,
+    file:new Blob([targetText]),backupPassword:copyPassword,recoveryFile:new Blob([recoveryText]),recoveryPassword:copyPassword,
+    currentScopes:approved,incomingScopes:mode==='wrong-scope'?[]:approved},generation);
+   prepared=true;
+  }catch{/* expected negative cases */}
+  if(grant){
+   if(mode==='race'){
+    await held.put('meta',{changes:99,lastBackup:null});baseline=await captureDb2(indexedDB);
+   }
+   if(mode==='revoke')service.invalidate();
+   if(mode==='abort'||mode==='after-commit')IDBObjectStore.prototype.put=function(value:any,key?:IDBValidKey){
+    const req=key===undefined?oldPut.call(this,value):oldPut.call(this,value,key);
+    if(!triggered&&this.name==='metadata'&&key==='current'&&this.transaction.mode==='readwrite'){
+     triggered=true;
+     if(mode==='abort')service.invalidate();
+     else this.transaction.addEventListener('complete',()=>service.invalidate(),{once:true});
+    }
+    return req;
+   };
+   try{await service.commit(grant,mode!=='refuse');committed=true;}catch{/* negative or uncertain */}
+   try{await service.commit(grant,true);}catch{replayRejected=true;}
+   if(mode==='approve'||mode==='after-commit'){
+    try{await held.put('meta',{changes:1000,lastBackup:null});}catch{oldOwnerRejected=true;}
+   }
+  }
+ }finally{IDBObjectStore.prototype.put=oldPut;service.invalidate();held.lock();await heldStore.retireConnection();}
+ const after=await captureDb2(indexedDB),unchanged=sameDb2Physical(baseline,after);
+ const rotated=!sameDb2Physical(before.metadata,after.metadata);
+ await open();
+ const reopened=requireOwner().state;
+ const exact=sameDb2Physical(reopened.appData,incoming.appData);
+ return {prepared,committed,replayRejected,oldOwnerRejected,triggered,unchanged,rotated,exact,summary:summary()};
+}
+
+Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment}});
 document.getElementById('status')!.textContent='Laboratorio DB2 pronto';
