@@ -2590,6 +2590,24 @@
         "src/security/val01AssessmentEvidenceMutation.test.ts"
       ],
       "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S6D-BACKUP-V7-I01",
+      "owner": "VAL-01/S6d.2b",
+      "statement": "The exact isolated V7 codec from the frozen protected candidate preserves the confirmed evidence history and frozen rubric graph with grades unchanged, uses independently approved scopes, rejects V7 in the historic reader and domain under older payload labels in V7 inspection, verifies encrypted roundtrip and flags replacement review. Inspection never grants restore or execution authority. No runtime, DB2 migration, backup export activation, production data or release.",
+      "impactPaths": [
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/val01EvidenceBackupRoundtrip.test.ts",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/val01EvidenceBackupRoundtrip.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
