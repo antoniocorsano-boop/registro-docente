@@ -2416,6 +2416,286 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1B-I02",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated v7 codec preserves all ten datasets and validated frozen assessment history; independently supplied scope is required, historic formats never carry or invent assessment evidence, old v6 readers reject v7, local verified-copy attestations are not portable, and replacement of a destination containing assessment evidence is flagged for explicit review. The v7 codec preserves historical Copilot statuses without conferring execution authority and requires canonical planning v2 instead of silently normalizing; legacy v6 restore behavior remains unchanged. The encrypted envelope remains v2. Inspection is not a restore authorization, and no runtime persistence is activated.",
+      "impactPaths": [
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B-I03",
+      "owner": "VAL-01/D1b",
+      "statement": "The historical compatibility browser gate pins and checks out exact Beta1 RC2, Beta1 RC3 and Beta2 RC2 source; each decrypts the candidate v7 with envelope v2, rejects unsupported application version through the old restore sequence, preserves all ten physical encrypted records and logical data after reopening, and proves legitimate v6 restore through a positive control. Wiring tests alone are not browser or native APK evidence.",
+      "impactPaths": [
+        "scripts/qualification/check-reference-browser-coverage.mjs",
+        ".github/workflows/val01-historical-v7-compatibility.yml",
+        "tests/browser/fixtures/val01-historical-reader.fixture.ts",
+        "tests/browser/fixtures/val01-v7-candidate.fixture.ts",
+        "tests/browser/val01-historical-v7-compatibility.spec.cjs",
+        "src/security/val01HistoricalBackupCompatibility.test.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/cryptoUtils.ts",
+        "src/security/vaultStore.ts",
+        "src/security/secureAppStorage.ts",
+        "tests/browser/fixtures/beta2-archive-compatibility.fixture.ts"
+      ],
+      "tests": [
+        "src/security/val01HistoricalBackupCompatibility.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-historical-v7-compatibility.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B-I04",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated version-bound backup receipt authority generates and encrypts its own checkpoint using the selected codec, derives version and exact bytes/digest from the encrypted payload, forbids v6 evidence archives and version mismatch at consumption, requires actual web readback or verified Android bridge, invalidates on cancellation, stale session, replay and supersession, preserves later changes, never transfers local receipts and does not activate runtime writes. A v6 receipt cannot attest v7 coverage.",
+      "impactPaths": [
+        "src/persistence/versionedBackupReceipt.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/webBackupVerification.ts",
+        "src/cryptoUtils.ts"
+      ],
+      "tests": [
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B-I05",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated database version fence is qualified using exact historical source and real Chromium IndexedDB in the same origin. Existing complete active v1 archives upgrade without changing encrypted records, key or metadata; historical read, unlock, write, deletion, clear and initialization fail with VersionError after v2. Blocked upgrade cannot run later after rejection, fresh retry works, and missing or incomplete archives cannot create or upgrade a database. No native APK or runtime activation is claimed.",
+      "impactPaths": [
+        ".github/workflows/val01-database-fence.yml",
+        "tests/browser/fixtures/val01-fence-historical.fixture.ts",
+        "tests/browser/fixtures/val01-fence-candidate.fixture.ts",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "scripts/qualification/check-reference-browser-coverage.mjs",
+        "src/security/vaultStore.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureAppStorage.ts"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B3B-I01",
+      "owner": "VAL-01/D1b.3b",
+      "statement": "Existing DB1 archive migration remains isolated and requires authentication of all ten records, matching recovered v6 backup and explicit one-use consent; a changed physical archive or revoked or abandoned request cannot upgrade DB1. No runtime, native or release claim.",
+      "impactPaths": [
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "tests/browser/fixtures/val01-fence-candidate.fixture.ts",
+        "tests/browser/val01-database-fence.spec.cjs",
+        ".github/workflows/val01-database-fence.yml",
+        "src/security/cryptoPrimitives.ts",
+        "src/cryptoUtils.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/persistence/backupCheckpoint.ts"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B3C-I01",
+      "owner": "VAL-01/D1b.3c",
+      "statement": "Native migration laboratory uses separate debug APK identity, exact historical storage sources, real Android local document picker and encrypted readback, explicit consent, preserved physical and logical snapshots through cold restart and downgrade/reupgrade. No production release or exact historical production APK attestation.",
+      "impactPaths": [
+        ".github/workflows/val01-native-migration.yml",
+        "mobile/android-probe/val01-native-lab.fixture.ts",
+        "scripts/diagnostics/val01-native-migration.mjs",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidSessionLifecycle.ts",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/native/RegistroSessionPlugin.java"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B3C-I02",
+      "owner": "VAL-01/D1b.3c",
+      "statement": "Integral historical original unsigned APK verified against exact artifact manifest and all non-signature ZIP entries, installed only on fresh CI emulator with ephemeral key. Supported Beta1 RC3 and Beta2 RC2 complete archives require genuine historical UI seed, all nine migration stages and fail-closed downgrade. Retired Beta1 RC2 original sparse archive requires explicit negative-only rejection before the guard, unchanged DB1 physical fingerprint and genuine original reopen; it is never counted as a migrated archive. Candidate laboratory bundle remains nonproduction, no owner key or signed APK artifact.",
+      "impactPaths": [
+        ".github/workflows/val01-integral-android.yml",
+        "mobile/android-probe/val01-native-lab.fixture.ts",
+        "scripts/diagnostics/val01-native-migration.mjs",
+        "src/security/val01DatabaseFenceContract.test.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/androidSessionLifecycle.ts",
+        "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
+        "mobile/android-probe/native/MainActivity.java",
+        "mobile/android-probe/native/RegistroSessionPlugin.java"
+      ],
+      "tests": [
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I01",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Protected startup uses bounded classified read-only observation; established missing or partially lost archives remain protected rather than being initialized automatically. Successful authenticated observation does not establish release readiness.",
+      "impactPaths": [
+        "src/security/protectedBootstrap.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        ".github/workflows/val01-stab-bootstrap.yml",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I02",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Candidate legacy migration respects session authorization and verified source consistency before invoking ACTIVE commit; a revoked or changed source is preserved. An already invoked commit requires protected observation, not assumed rollback. No claim of isolation against noncooperating historical clients.",
+      "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "tests/browser/val01-database-fence.spec.cjs"
+      ],
+      "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I03",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Native product qualification reports the candidate and historical source identities and requires provenance and evidence for the selected case. Laboratory evidence is not production release evidence; historical pinned runs cannot certify a later candidate.",
+      "impactPaths": [
+        ".github/workflows/val01-product-native.yml",
+        "src/security/val01Stab06InvariantEvidence.test.ts",
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ],
+      "tests": [
+        "src/security/val01Stab06InvariantEvidence.test.ts",
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I04",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Archive preflight classifies an existing archive without granting write authority; exact-version existing-only sessions refuse absent or incompatible databases. Authentication and retirement of the prior owner remain distinct from authorization of migration.",
+      "impactPaths": [
+        "src/security/archivePreflight.ts",
+        "src/security/existingSessionVaultStore.ts",
+        "src/security/inspectArchiveVersion.ts",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/val01Stab06InvariantEvidence.test.ts",
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I05",
+      "owner": "VAL-01/STAB-06",
+      "statement": "The recovery copy handoff binds local ciphertext to the current authenticated session and consumes it once. The migration session seals and drains writes, checks current authorization and requires explicit consent and a fresh protected session. UI evidence is distinct from Android acceptance.",
+      "impactPaths": [
+        "src/components/ArchiveMigrationPanel.tsx",
+        "src/security/migrationRecoveryHandoff.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I06",
+      "owner": "VAL-01/STAB-06",
+      "statement": "DB2 lifecycle requires current authenticated authorization and physical inventory consistency for replacement; the protected reopen and preserved database version remain required. No browser evidence is a production package or physical-device attestation.",
+      "impactPaths": [
+        "src/security/db2Lifecycle.ts",
+        "src/security/db2PhysicalLifecycle.ts",
+        "src/components/ArchiveMigrationPanel.tsx",
+        "tests/browser/val01-database-fence.spec.cjs",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/val01Stab06InvariantEvidence.test.ts",
+        "src/security/val01DatabaseFenceContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-database-fence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I07",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Deterministic native driver qualification and historical Android smoke report their exact source and remain laboratory evidence. The original binary provenance and the selected Android API are required for the smoke; a successful driver check alone does not establish native acceptance.",
+      "impactPaths": [
+        ".github/workflows/val01-stab03-driver.yml",
+        ".github/workflows/val01-stab04-native-smoke.yml",
+        "scripts/diagnostics/native-ui-driver.mjs",
+        "scripts/diagnostics/native-ui-driver.test.mjs",
+        "scripts/diagnostics/native-process-probe.mjs",
+        "scripts/diagnostics/native-process-probe.test.mjs",
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ],
+      "tests": [
+        "src/security/val01Stab06InvariantEvidence.test.ts"
+      ]
     }
   ]
 }

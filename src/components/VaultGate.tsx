@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BuildIdentity } from './BuildIdentity';
 import type { ArchiveProfile, NewArchiveSetup } from '../security/initialArchiveSetup';
+import type { BootTrace } from '../security/protectedBootstrap';
 import type { VaultGateState } from '../security/secureAppStorage';
 
 export interface VaultGateProps {
@@ -11,6 +12,8 @@ export interface VaultGateProps {
   onMigrate: (password: string) => Promise<void>;
   onRetry: () => void;
   errorMessage?: string | null;
+  notice?:string|null;
+  bootTrace?:BootTrace[];
 }
 
 export const VaultGate: React.FC<VaultGateProps> = ({
@@ -20,7 +23,9 @@ export const VaultGate: React.FC<VaultGateProps> = ({
   onUnlock,
   onMigrate,
   onRetry,
-  errorMessage
+  errorMessage,
+  notice,
+  bootTrace
 }) => {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'professional' | 'demo' | null>(null);
@@ -88,10 +93,11 @@ export const VaultGate: React.FC<VaultGateProps> = ({
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex items-center justify-center p-5">
-      <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/90 p-6 shadow-xl">
+      <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/90 p-6 shadow-xl" data-bootstrap-trace={bootTrace?JSON.stringify(bootTrace):undefined}>
         <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">Registro Docente</p>
         <h1 className="mt-2 text-2xl font-bold">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-slate-300">{description}</p>
+        {notice&&<p role="status" className="mt-3 text-sm text-slate-200">{notice}</p>}
 
         {state === 'SETUP_REQUIRED' && (
           <fieldset className="mt-5 space-y-3" disabled={submitting}>

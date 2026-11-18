@@ -2,13 +2,13 @@
 name: BETA2 Reference — Contracts and mobile browser qualification
 on:
   pull_request:
-    branches: ['main']
+    branches: ['main', 'feat/val-01-d1b4b2-product-session', 'test/val-01-d1b5-native-product', 'feat/val-01-d1b5-db2-lifecycle', 'feat/val-01-d1b5-db2-product', 'test/val-01-d1b5-db2-native', 'test/val-01-stab04b-repeatability', 'test/val-01-stab05-exact-cumulative', 'feat/val-01-stab06-sr01a-exact', 'feat/val-01-stab06-sr02-legacy-revocation', 'test/val-01-stab06-sr04a-fresh-recovery', 'feat/val-01-stab06-sr01b-setup-revocation', 'docs/val-01-stab06-sr05-assurance']
 
 permissions:
   contents: read
 
 env:
-  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  CANDIDATE_SHA: ${{ github.event.pull_request.base.ref == 'test/val-01-stab04b-repeatability' && 'cacd34eae92cfc46f4d4bdb7462d1eb5e4fa8e44' || github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   contracts:

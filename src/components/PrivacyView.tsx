@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {ArchiveMigrationPanel,type ArchiveMigrationControls} from './ArchiveMigrationPanel';
 import { isAndroidBackupRuntime, saveEncryptedBackupOnAndroid, readEncryptedBackupOnAndroid } from '../security/androidBackupExport';
 import { AppSettings, ClassData } from '../types';
 import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils';
@@ -32,6 +33,8 @@ interface PrivacyViewProps {
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
+  archiveMigration?:ArchiveMigrationControls;
+  archiveReplacementBlocked?:boolean;
 }
 
 export const PrivacyView: React.FC<PrivacyViewProps> = ({
@@ -43,7 +46,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
-  onFactoryReset
+  onFactoryReset,
+  archiveMigration,
+  archiveReplacementBlocked
 }) => {
   const [encryptPassword, setEncryptPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -97,7 +102,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     const androidNative = isAndroidBackupRuntime();
     try {
       const checkpoint = await onPrepareEncryptedBackup();
-      const payload = createBackupPayload(checkpoint.snapshot);
+      const payload = createBackupPayload(checkpoint.snapshot, checkpoint.checkpointAt);
       const encryptedString = await encryptDataWithPassword(payload, encryptPassword);
       if (!mountedRef.current) return;
 
@@ -163,6 +168,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
   const handleImportEncrypted = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(archiveReplacementBlocked)return;
     if (nativeBackupRuntime) {
       if (backupOperationPendingRef.current) return;
       if (!decryptPassword) {
@@ -453,7 +459,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           </form>
 
           {/* Import Encrypted Form */}
-          <form onSubmit={handleImportEncrypted} className="p-4 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
+          {archiveReplacementBlocked?<p role="status" className="text-sm text-slate-300">{archiveMigration?.mode==='restore'?'Per ripristinare o cancellare l’archivio aggiornato usa i comandi protetti qui sotto.':'Il ripristino e il reset non sono attivi nell’archivio aggiornato di collaudo.'}</p>:<form onSubmit={handleImportEncrypted} className="p-4 rounded-lg bg-[var(--surface-variant)] border border-[var(--border)] space-y-3">
             <h4 className="text-xs uppercase tracking-wider font-bold text-slate-200 flex items-center gap-1.5">
               <Upload className="w-3.5 h-3.5 text-cyan-400" /> {nativeBackupRuntime ? 'Ripristina backup cifrato' : 'Ripristina Backup Cifrato o Precedente'}
             </h4>
@@ -499,8 +505,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
               <Lock className="w-3.5 h-3.5" />
               <span>{isDecrypting ? 'Decifratura in corso...' : nativeBackupRuntime ? 'Scegli file e ripristina' : 'Decifra e Ripristina Registro'}</span>
             </button>
-          </form>
+          </form>}
         </div>
+        {archiveMigration&&<ArchiveMigrationPanel controls={archiveMigration} otherBusy={isEncrypting||isDecrypting||isVerifyingCopy}/>}
       </div>
 
       {/* GDPR Data Treatment Sheet (Art. 30 GDPR) */}
@@ -543,8 +550,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         </div>
       </div>
 
-      {/* Right to be Forgotten / Factory Reset */}
-      <div className="neon-card p-5 border border-rose-950/60">
+      {/* Legacy reset is not a second path for DB2. */}
+      {archiveMigration?.mode!=='restore'&&<div className="neon-card p-5 border border-rose-950/60">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-rose-400 flex items-center gap-2">
@@ -557,7 +564,9 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
           <button
             type="button"
+            disabled={archiveReplacementBlocked}
             onClick={() => {
+              if(archiveReplacementBlocked)return;
               if (confirm('ATTENZIONE: Stai per eliminare TUTTI i dati del registro (classi, alunni, voti, note e impostazioni). Questa azione è irreversibile!\n\nHai già scaricato una copia di backup?')) {
                 if (prompt('Scrivi "CANCELLA" per confermare l\'eliminazione definitiva:') === 'CANCELLA') {
                   onFactoryReset();
@@ -569,7 +578,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Reset Totale Sicuro
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

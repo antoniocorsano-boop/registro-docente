@@ -1,10 +1,10 @@
 // BETA2-QUAL-01: match actual explicit Playwright invocations, not copy/setup lines.
 // Fail if an invariant browser suite has no owning invocation or if a suite
-// is run twice across the three reference workflows. No external packages.
+// is run twice across the explicitly owned reference workflows. No external packages.
 import { readFileSync, existsSync } from 'node:fs';
 const registry = JSON.parse(readFileSync('qualification/invariants.v1.json','utf8'));
 const registered = new Set(registry.invariants.flatMap(i=>i.browserSmoke||[]));
-const workflows = ['.github/workflows/beta2-reference-qualification.yml','.github/workflows/browser-qualification.yml','.github/workflows/beta2-archive-compatibility.yml'];
+const workflows = ['.github/workflows/beta2-reference-qualification.yml','.github/workflows/browser-qualification.yml','.github/workflows/beta2-archive-compatibility.yml','.github/workflows/val01-historical-v7-compatibility.yml','.github/workflows/val01-database-fence.yml'];
 const seen = new Map();
 const coverage = [];
 for (const workflow of workflows) {

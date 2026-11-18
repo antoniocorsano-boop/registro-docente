@@ -1,0 +1,6 @@
+<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VAL-01 candidate UI — synthetic laboratory</title><div id="root"></div><script>
+// CI-only boot observations; no data, credentials, storage calls or authority.
+window.__val01Boot={html:true,module:false,renderRequested:false,rootCommitted:false,errors:[]};
+window.addEventListener("error",e=>{const b=window.__val01Boot;if(b.errors.length<12)b.errors.push({kind:e instanceof ErrorEvent?"script":"resource",name:e.error?.name||null});},true);
+window.addEventListener("unhandledrejection",e=>{const b=window.__val01Boot;if(b.errors.length<12)b.errors.push({kind:"promise",name:e.reason?.name||null});});
+</script><script type="module" src="./val01-product-session.fixture.tsx"></script></html>

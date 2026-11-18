@@ -1,0 +1,35 @@
+name: STAB-03 — native UI driver deterministic qualification
+on:
+  pull_request:
+    branches: ['feat/val-01-stab01-protected-bootstrap']
+permissions:
+  contents: read
+jobs:
+  driver:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact candidate and native script syntax
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          node --check scripts/diagnostics/native-ui-driver.mjs
+          node --check scripts/diagnostics/val01-native-migration.mjs
+      - name: Replay accessibility failures and qualify driver state transitions
+        run: |
+          set -o pipefail
+          mkdir -p driver-evidence
+          node --test scripts/diagnostics/native-ui-driver.test.mjs | tee driver-evidence/results.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stab03-driver-${{ github.event.pull_request.head.sha }}
+          path: driver-evidence/
+          if-no-files-found: warn
+          retention-days: 7

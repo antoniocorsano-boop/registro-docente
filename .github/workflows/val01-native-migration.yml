@@ -1,0 +1,135 @@
+name: VAL-01 D1b.3c — Android laboratory migration
+on:
+  pull_request:
+    branches: ['main', 'feat/val-01-d1b4b2-existing-store']
+    paths:
+      - 'src/security/authorizedVaultMigration.ts'
+      - 'src/security/versionFencedVaultStore.ts'
+      - 'src/security/androidBackupExport.ts'
+      - 'src/security/migrationRecoveryHandoff.ts'
+      - 'src/security/androidSessionLifecycle.ts'
+      - 'mobile/android-probe/**'
+      - 'tests/browser/fixtures/**'
+      - 'scripts/diagnostics/val01-native-migration.mjs'
+      - '.github/workflows/val01-native-migration.yml'
+      - 'qualification/invariants.v1.json'
+permissions:
+  contents: read
+jobs:
+  native-migration:
+    strategy:
+      fail-fast: false
+      matrix:
+        predecessor:
+          - { name: beta1-rc2, sha: 37c61d4c64993c986a3edcd2b421310adf20de92, version: 10002 }
+          - { name: beta1-rc3, sha: b726f4a6dc0eb90a066113bee7cceabf29c629a5, version: 10003 }
+          - { name: beta2-rc2, sha: ddbf60781514b866b09e1fa1e014e6a6fc3989d3, version: 10004 }
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      HISTORICAL_SHA: ${{ matrix.predecessor.sha }}
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      OLD_VERSION: ${{ matrix.predecessor.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HISTORICAL_SHA }}
+          path: .historical-exact
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Build exact historical storage fixture and isolated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C .historical-exact rev-parse HEAD)" = "$HISTORICAL_SHA"
+          mkdir -p "$RUNNER_TEMP/val01" native-evidence dist
+          mkdir -p .historical-exact/tests/browser/fixtures
+          cp tests/browser/fixtures/{beta2-archive-compatibility,val01-fence-historical}.fixture.ts .historical-exact/tests/browser/fixtures/
+          bun install --frozen-lockfile
+          bun run lint
+          bun build mobile/android-probe/val01-native-lab.fixture.ts --target browser --format iife --outfile "$RUNNER_TEMP/val01/candidate.js"
+          (cd .historical-exact; bun install --frozen-lockfile; bun build tests/browser/fixtures/val01-fence-historical.fixture.ts --target browser --format iife --outfile "$RUNNER_TEMP/val01/historical.js")
+          node --check scripts/diagnostics/val01-native-migration.mjs
+          printf 'candidate=%s\nhistorical=%s\nscope=historical storage source; candidate native shell; synthetic fixtures only\n' "$CANDIDATE_SHA" "$HISTORICAL_SHA" > native-evidence/provenance.txt
+          sha256sum "$RUNNER_TEMP/val01/"*.js >> native-evidence/provenance.txt
+          printf '<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VAL-01 Synthetic laboratory</title><body><h1>VAL-01 Synthetic laboratory only</h1><script src="fixture.js"></script></body></html>' > dist/index.html
+          cp "$RUNNER_TEMP/val01/historical.js" dist/fixture.js
+      - name: Generate isolated Android shell and two debug APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib, re, os
+          root=pathlib.Path('android/app')
+          def change(p, pattern, value):
+              f=root/p
+              text,n=re.subn(pattern,value,f.read_text())
+              assert n==1,(p,pattern,n)
+              f.write_text(text)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"','applicationId "it.trama.registrodocente.lab.val01"')
+          change('build.gradle',r'versionCode\s+1\b','versionCode '+os.environ['OLD_VERSION'])
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"','android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"','android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/val01/old.apk"
+          cp "$RUNNER_TEMP/val01/candidate.js" ../../dist/fixture.js
+          npx --no-install cap copy android
+          sed -i -E 's/versionCode[[:space:]]+[0-9]+/versionCode 10005/' android/app/build.gradle
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/val01/new.apk"
+          for apk in old new; do
+            file="$RUNNER_TEMP/val01/$apk.apk"
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$file" > "$RUNNER_TEMP/val01/$apk.cert"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$file" | grep -F "package: name='it.trama.registrodocente.lab.val01'"
+            sha256sum "$file" >> ../../native-evidence/provenance.txt
+          done
+          diff <(grep 'certificate SHA-256 digest:' "$RUNNER_TEMP/val01/old.cert") <(grep 'certificate SHA-256 digest:' "$RUNNER_TEMP/val01/new.cert")
+          unzip -p "$RUNNER_TEMP/val01/old.apk" assets/public/fixture.js | cmp - "$RUNNER_TEMP/val01/historical.js"
+          unzip -p "$RUNNER_TEMP/val01/new.apk" assets/public/fixture.js | cmp - "$RUNNER_TEMP/val01/candidate.js"
+          printf 'OLD_APK=%s\nNEW_APK=%s\n' "$RUNNER_TEMP/val01/old.apk" "$RUNNER_TEMP/val01/new.apk" >> "$GITHUB_ENV"
+      - name: Enable isolated emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Real Android SAF roundtrip, in-place migration and downgrade
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: timeout --signal=TERM --kill-after=10s 600s node scripts/diagnostics/val01-native-migration.mjs
+      - name: Require complete native laboratory evidence
+        run: |
+          jq -e --arg old "$HISTORICAL_SHA" --arg new "$CANDIDATE_SHA" '.predecessor==$old and .candidate==$new and .productionRelease==false and ([.results[].stage]==["historical-seed-cold-reopen","native-saf-write-readback","native-picker-cancel-no-migration","native-wrong-copy-password-no-migration","native-explicit-refusal-no-migration","native-authorized-migration-and-replay-rejection","native-v2-cold-reopen","native-in-place-downgrade-all-six-operations-rejected","native-reupgrade-archive-intact"]) and all(.results[];.status=="PASS")' native-evidence/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: val01-native-lab-${{ matrix.predecessor.name }}-${{ env.CANDIDATE_SHA }}
+          path: native-evidence/
+          retention-days: 7
+          if-no-files-found: error

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { SecureVault } from './secureVault';
+import { initializeNewArchive } from './initialArchiveSetup';
 import { createDurableMutationCoordinator } from '../persistence/durableMutationCoordinator';
 import { IndexedDbVaultStore, type VaultStore } from './vaultStore';
 import type { EncryptedVaultRecord, VaultMetadataV1, VaultRecordKey } from './vaultTypes';
@@ -89,6 +90,45 @@ class RejectOnceBatchStore extends MemoryVaultStore {
 }
 
 describe('SEC-1 vault storage boundary', () => {
+  test('S-R01 candidate reservation rejection never publishes a session key', async () => {
+    const store = new MemoryVaultStore();
+    let calls = 0;
+    const vault = new SecureVault(store, async () => {
+      calls++;
+      throw new Error('Archivio non vuoto.');
+    });
+    await expect(vault.createStaging('synthetic-reservation-only')).rejects.toThrow('Archivio non vuoto.');
+    expect(calls).toBe(1);
+    expect(vault.isUnlocked()).toBe(false);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+  });
+
+  test('S-R01 candidate reservation commits before the session key becomes available', async () => {
+    const store = new MemoryVaultStore();
+    let release!: () => void;
+    let entered!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const vault = new SecureVault(store, async metadata => {
+      entered();
+      await pending;
+      await store.putMetadata(metadata);
+    });
+    const setup = vault.createStaging('synthetic-reservation-only');
+    await started;
+    try {
+      expect(vault.isUnlocked()).toBe(false);
+      expect(await store.getMetadata()).toBeNull();
+    } finally {
+      release();
+      await setup;
+    }
+    expect(vault.isUnlocked()).toBe(true);
+    expect((await store.getMetadata())?.state).toBe('STAGING');
+    vault.lock();
+  });
+
   test('rejects an unavailable IndexedDB factory instead of falling back to plaintext storage', () => {
     expect(() => new IndexedDbVaultStore(undefined)).toThrow('IndexedDB');
   });
@@ -330,5 +370,83 @@ describe('SEC-1 SecureVault lifecycle', () => {
     await activeVault.initializeActive('password');
     await expect(activeVault.discardStaging()).rejects.toThrow('ACTIVE');
     expect((await activeStore.getMetadata())?.state).toBe('ACTIVE');
+  });
+});
+
+
+describe('S-R01b initial archive authorization boundaries', () => {
+  const setup = {mode:'professional',profile:{school:'Synthetic school',year:'2026/2027',teacher:'Synthetic teacher',subject:'Tecnologia'}} as const;
+  const password = 'synthetic-setup-only';
+  const guard = () => {
+    let revoked = false;
+    return { revoke: () => { revoked = true; }, check: () => { if (revoked) throw Error('Sessione cambiata.'); } };
+  };
+
+  test('revocation before reservation never writes metadata or publishes a key', async () => {
+    const auth = guard();
+    class RevokedReadStore extends MemoryVaultStore {
+      override async getMetadata() {
+        const result = await super.getMetadata();
+        auth.revoke();
+        return result;
+      }
+    }
+    const store = new RevokedReadStore();
+    const vault = new SecureVault(store);
+    await expect(initializeNewArchive(vault,password,setup,auth.check)).rejects.toThrow('Sessione cambiata.');
+    expect(vault.isUnlocked()).toBe(false);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+  });
+
+  test('revocation after reservation discards only the owned staging and locks', async () => {
+    const auth = guard();
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store,async metadata=>{
+      await store.putMetadata(metadata);
+      auth.revoke();
+    });
+    await expect(initializeNewArchive(vault,password,setup,auth.check)).rejects.toThrow('Sessione cambiata.');
+    expect(vault.isUnlocked()).toBe(false);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+  });
+
+  test('revocation while activation reads staging prevents the ACTIVE write', async () => {
+    const auth = guard();
+    class RevokedActivationRead extends MemoryVaultStore {
+      override async getMetadata(){
+        const value=await super.getMetadata();
+        if(value?.state==='STAGING')auth.revoke();
+        return value;
+      }
+    }
+    const store=new RevokedActivationRead();
+    const vault=new SecureVault(store);
+    await expect(initializeNewArchive(vault,password,setup,auth.check)).rejects.toThrow('Sessione cambiata.');
+    expect(vault.isUnlocked()).toBe(false);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+  });
+
+  test('revocation after ACTIVE commit preserves all ten records, requires fresh unlock', async () => {
+    const auth=guard();
+    class RevokedActiveStore extends MemoryVaultStore {
+      override async putMetadata(metadata:VaultMetadataV1){
+        await super.putMetadata(metadata);
+        if(metadata.state==='ACTIVE')auth.revoke();
+      }
+    }
+    const store=new RevokedActiveStore();
+    const vault=new SecureVault(store);
+    await expect(initializeNewArchive(vault,password,setup,auth.check)).rejects.toThrow('Sessione cambiata.');
+    expect(vault.isUnlocked()).toBe(false);
+    expect((await store.getMetadata())?.state).toBe('ACTIVE');
+    const keys=await store.listRecordKeys();
+    expect(keys).toHaveLength(10);
+    await vault.unlock(password);
+    expect((await Promise.all(keys.map(key=>vault.get(key)))).every(value=>value!==null)).toBe(true);
+    expect(await vault.get('meta')).toEqual({changes:0,lastBackup:null});
+    vault.lock();
   });
 });
