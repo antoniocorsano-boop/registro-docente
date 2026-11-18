@@ -1072,14 +1072,20 @@ for(const verified of [false,true]){
     await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
     await panel.getByLabel('Password della copia',{exact:true}).fill('synthetic-archive-backup-only');
     let migrationConsent=0,restoreConsent=0;
+    const unexpectedDialogs=[];
     page.on('dialog',async d=>{
-      if(d.message().includes('La copia è stata verificata')){migrationConsent++;await d.accept();}
-      else if(d.message().includes('Sostituire tutti i dati attuali')){restoreConsent++;await d.accept();}
-      else await d.dismiss();
+      const message=d.message();
+      if(d.type()==='confirm'&&message==='La copia è stata verificata. Aggiornare l’archivio locale? Dovrai autenticarti nuovamente.'){
+        migrationConsent++;await d.accept();
+      }else if(d.type()==='confirm'&&message==='La copia è stata verificata. Sostituire tutti i dati attuali con quelli della copia? Dovrai autenticarti nuovamente.'){
+        restoreConsent++;await d.accept();
+      }else{unexpectedDialogs.push({type:d.type(),message});await d.dismiss();}
     });
     await panel.getByRole('button',{name:'Verifica e aggiorna archivio'}).click();
     await expect(page.getByText('Archivio aggiornato. Autenticati per verificarlo e riaprire il Registro.')).toBeVisible({timeout:30000});
     expect(migrationConsent).toBe(1);
+    expect(restoreConsent).toBe(0);
+    expect(unexpectedDialogs).toEqual([]);
     await unlockProduct(page);
     const migrated=await readProductDb2(page);
     expect({...migrated,meta:seed.snapshot.meta}).toEqual(seed.snapshot);
@@ -1097,6 +1103,8 @@ for(const verified of [false,true]){
     await submitProductRestore(page,bytes,'synthetic-archive-backup-only');
     await expect(page.getByText('Archivio ripristinato. Autenticati per riaprire il Registro.')).toBeVisible({timeout:30000});
     expect(restoreConsent).toBe(1);
+    expect(migrationConsent).toBe(1);
+    expect(unexpectedDialogs).toEqual([]);
     await unlockProduct(page);await page.reload();await unlockProduct(page);
     expect(await readProductDb2(page)).toEqual(decoded.snapshot);
   });
