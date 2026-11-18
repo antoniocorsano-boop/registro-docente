@@ -2608,6 +2608,19 @@
         "src/security/val01EvidenceBackupRoundtrip.test.ts"
       ],
       "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-D1B-I02",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated v7 codec preserves all ten datasets and validated frozen assessment history; independently supplied scope is required, historic formats never carry or invent assessment evidence, old v6 readers reject v7, local verified-copy attestations are not portable, and replacement of a destination containing assessment evidence is flagged for explicit review. The v7 codec preserves historical Copilot statuses without conferring execution authority and requires canonical planning v2 instead of silently normalizing; legacy v6 restore behavior remains unchanged. The encrypted envelope remains v2. Inspection is not a restore authorization, and no runtime persistence is activated.",
+      "impactPaths": [
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
     }
   ]
 }
