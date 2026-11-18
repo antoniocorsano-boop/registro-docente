@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useRef,useState} from 'react';
 import {boardDocument,boardScope} from './val01-s6c-data';
 import {projectEvidenceBoard} from '../../../src/assessment/individualEvidenceBoard';
 import {previewIndividualObservation,confirmIndividualObservation} from '../../../src/assessment/individualObservation';
@@ -6,6 +6,8 @@ import type {IndividualObservationPreview} from '../../../src/assessment/individ
 import {previewEvidenceRevision,confirmEvidenceRevision} from '../../../src/assessment/individualEvidenceRevision';
 import type {EvidenceRevisionPreview} from '../../../src/assessment/individualEvidenceRevision';
 import type {IndividualEvidenceRevision,EvidenceKind,AssessmentEvidenceV1} from '../../../src/assessment/assessmentEvidence';
+import type {EvidenceCommitRequest} from '../../../src/assessment/assessmentEvidenceMutation';
+import type {EvidenceSaveReceipt} from '../../../src/persistence/assessmentEvidenceCommit';
 import {listEvidenceInterpretationOptions} from '../../../src/assessment/evidenceInterpretationOptions';
 
 const labels={observed:'Osservato',not_observed:'Non osservato',not_applicable:'Non pertinente',withdrawn:'Ritirato'} as const;
@@ -14,9 +16,12 @@ const button='min-h-[44px] max-w-full rounded border px-2 py-1 whitespace-normal
 type Edit={studentId:string; action:'new'|'correct'|'withdraw'; previous?:IndividualEvidenceRevision};
 type Review={kind:'new';value:IndividualObservationPreview}|{kind:'revision';value:EvidenceRevisionPreview};
 type State='observed'|'not_observed'|'not_applicable';
-interface Props{onDraftChange?:(dirty:boolean)=>void;onDocumentChange?:(document:AssessmentEvidenceV1)=>void;onOpenStudentReport?:(studentId:string)=>void;}
-export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStudentReport}:Props){
- const [document,setDocument]=useState(boardDocument);
+interface Props{onDraftChange?:(dirty:boolean)=>void;onDocumentChange?:(document:AssessmentEvidenceV1)=>void;onOpenStudentReport?:(studentId:string)=>void;committedDocument?:AssessmentEvidenceV1;onCommit?:(request:EvidenceCommitRequest,confirmation:unknown)=>Promise<EvidenceSaveReceipt>;onRecover?:()=>Promise<void>;recoveryRequired?:boolean;}
+export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStudentReport,committedDocument,onCommit,onRecover,recoveryRequired=false}:Props){
+ const [localDocument,setDocument]=useState(boardDocument);
+ const document=committedDocument??localDocument;
+ const [saving,setSaving]=useState(false);
+ const inFlight=useRef(false);
  const [assessment,setAssessment]=useState('');
  const [criterion,setCriterion]=useState('');
  const [student,setStudent]=useState('');
@@ -31,7 +36,7 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
  const [reason,setReason]=useState('');
  const [review,setReview]=useState<Review|null>(null);
  const [message,setMessage]=useState('');
- const [serial,setSerial]=useState(1);
+ const [serial,setSerial]=useState(()=>Math.max(1,...document.evidence.map(e=>Number(/^board-revision-(\d+)$/.exec(e.revisionId)?.[1]??0)+1)));
  const active=document.assessments.filter(a=>a.status==='completed'&&!document.assessments.some(x=>x.supersedesRevisionId===a.revisionId));
  const selected=active.find(a=>a.revisionId===assessment);
  const result=assessment&&criterion?projectEvidenceBoard(document,boardScope,assessment,criterion):null;
@@ -40,7 +45,7 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
  const level=levels.find(l=>l.levelId===levelId);
  const row=result?.valid?result.rows.find(r=>r.studentId===student):undefined;
  const name=(id:string)=>'Studente '+(boardScope.studentIds.indexOf(id)+1);
- function reset(){setEdit(null);setReview(null);setMessage('');onDraftChange?.(false);}
+ function reset(){if(inFlight.current)return;setEdit(null);setReview(null);setMessage('');onDraftChange?.(false);}
  function begin(action:Edit['action'],previous?:IndividualEvidenceRevision){
    setEdit({studentId:student,action,previous});setReview(null);setMessage('');onDraftChange?.(true);
    setState(previous&&previous.state!=='withdrawn'?previous.state:'');
@@ -53,8 +58,8 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
    setReason('');
  }
  function prepare(){
-   if(!edit)return;
-   const recordedAt=new Date(Date.UTC(2026,10,22,10,serial)).toISOString();
+   if(!edit||inFlight.current||recoveryRequired)return;
+   const recordedAt=new Date(Math.max(Date.UTC(2026,10,22,10,serial),edit.previous?Date.parse(edit.previous.confirmedAt)+1:0)).toISOString();
    const revisionId='board-revision-'+serial;
    const choice=options?.valid?(mode==='pending'?{kind:'pending'}:mode==='level'&&options.mode==='rubric'&&level?{kind:'level',levelId:level.levelId}:mode==='description'&&options.mode==='descriptive'&&interpretation.trim()?{kind:'description',description:interpretation.trim()}:null):null;
    const observed=state==='observed'&&kind&&description.trim()&&method.trim()&&choice?
@@ -69,17 +74,36 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
      if(!r.valid){setMessage('Revisione non valida: '+r.issue);return;}setReview({kind:'revision',value:r.preview});
    }setMessage('');
  }
- function confirm(){
-   if(!review||!edit)return;
-   const confirmation={confirmedByTeacher:true,confirmedAt:new Date(Date.UTC(2026,10,22,10,serial,30)).toISOString()};
+ async function confirm(){
+   if(!review||!edit||inFlight.current||recoveryRequired)return;
+   const confirmation={confirmedByTeacher:true,confirmedAt:new Date(Math.max(Date.UTC(2026,10,22,10,serial,30),Date.parse(review.value.request.recordedAt)+1)).toISOString()};
+   if(onCommit){
+    inFlight.current=true;setSaving(true);setMessage('');
+    try{
+     const request:EvidenceCommitRequest=review.kind==='new'?{kind:'new',preview:review.value}:{kind:'revision',preview:review.value};
+     const receipt=await onCommit(request,confirmation);
+     if(receipt.revisionId!==request.preview.request.revisionId||!receipt.document.evidence.some(e=>e.revisionId===receipt.revisionId))throw Error('Ricevuta non valida');
+     setDocument(receipt.document);onDocumentChange?.(receipt.document);setSerial(n=>n+1);
+     inFlight.current=false;reset();setMessage('Rilevazione salvata nell’archivio protetto.');
+    }catch{setMessage('Salvataggio non confermato. La bozza è conservata. Riapri l’archivio prima di riprovare.');}
+    finally{inFlight.current=false;setSaving(false);}
+    return;
+   }
    const r=review.kind==='new'?confirmIndividualObservation(document,boardScope,review.value,confirmation):confirmEvidenceRevision(document,boardScope,review.value,confirmation);
    if(!r.valid){setReview(null);setMessage('Conferma rifiutata: '+r.issue);return;}
    const next={...document,evidence:[...document.evidence,r.evidence]};setDocument(next);onDocumentChange?.(next);setSerial(n=>n+1);reset();setMessage('Confermato nella dimostrazione. Nessun dato salvato.');
  }
- const invalidate=()=>{setReview(null);setMessage('');};
+ const invalidate=()=>{if(inFlight.current)return;setReview(null);setMessage('');};
+ async function recover(){
+  if(!onRecover||inFlight.current)return;
+  inFlight.current=true;setSaving(true);setMessage('');
+  try{await onRecover();setMessage('Archivio riaperto. Verifica la bozza prima di confermare.');}
+  catch{setMessage('Riapertura non riuscita. La bozza è conservata.');}
+  finally{inFlight.current=false;setSaving(false);}
+ }
  return <main className="mx-auto w-full max-w-xl min-w-0 p-2 space-y-3 [overflow-wrap:anywhere]">
   <h1 className="text-xl font-semibold">Tabellone Smart — evidenze</h1>
-  <p className="text-sm">Dimostrazione sintetica · Nessun archivio reale · Voti ordinari indipendenti</p>
+  <p className="text-sm">{onCommit?'Laboratorio protetto · Dati sintetici · Voti ordinari indipendenti':'Dimostrazione sintetica · Nessun archivio reale · Voti ordinari indipendenti'}</p>
   <label className="block">Prova<select aria-label="Prova" className={control} value={assessment} disabled={!!edit} onChange={e=>{setAssessment(e.target.value);setCriterion('');setStudent('');reset();}}><option value="">Seleziona prova</option>{active.map(a=><option key={a.revisionId} value={a.revisionId}>{a.title}</option>)}</select></label>
   <label className="block">Criterio<select aria-label="Criterio" className={control} value={criterion} disabled={!selected||!!edit} onChange={e=>{setCriterion(e.target.value);setStudent('');reset();}}><option value="">Seleziona criterio</option>{selected?.criteria.map(c=><option key={c.criterionRevisionId} value={c.criterionRevisionId}>{document.criteria.find(x=>x.revisionId===c.criterionRevisionId)?.description}</option>)}</select></label>
   {result&&!result.valid&&<p role="alert">Contesto non valido.</p>}
@@ -100,7 +124,7 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
       <div className="flex flex-wrap gap-2"><button type="button" className={button} onClick={()=>begin('correct',e)}>Correggi</button><button type="button" className={button} onClick={()=>begin('withdraw',e)}>Ritira</button></div>
     </div>)}
    </>}
-   {edit&&<div className="space-y-2">
+   {edit&&<fieldset disabled={saving||recoveryRequired} className="space-y-2 min-w-0">
     <h3>{edit.action==='new'?'Nuova rilevazione':edit.action==='correct'?'Correzione':'Ritiro motivato'}</h3>
     {edit.action==='withdraw'?<label className="block">Motivo del ritiro<textarea aria-label="Motivo del ritiro" className={control} value={reason} onChange={e=>{setReason(e.target.value);invalidate();}}/></label>:<>
      <label className="block">Stato<select aria-label="Stato" className={control} value={state} onChange={e=>{setState(e.target.value as State|'');invalidate();}}><option value="">Seleziona stato</option><option value="observed">Osservato</option><option value="not_observed">Non osservato</option><option value="not_applicable">Non pertinente</option></select></label>
@@ -119,9 +143,11 @@ export function SyntheticEvidenceBoard({onDraftChange,onDocumentChange,onOpenStu
      <button type="button" className={button} onClick={confirm}>Conferma rilevazione</button>
     </section>}
     <button type="button" className={button} onClick={reset}>Abbandona bozza</button>
-   </div>}
+   </fieldset>}
+   {saving&&<p role="status">Operazione in corso…</p>}
+   {recoveryRequired&&onRecover&&<button type="button" className={button} disabled={saving} onClick={recover}>Riapri archivio dimostrativo</button>}
   </section>}
-  {message&&<p role={message.startsWith('Confermato')?'status':'alert'}>{message}</p>}
+  {message&&<p role={message.startsWith('Confermato')||message.startsWith('Rilevazione salvata')||message.startsWith('Archivio riaperto')?'status':'alert'}>{message}</p>}
  </main>;
 }
 
