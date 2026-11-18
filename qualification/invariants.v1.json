@@ -2440,6 +2440,25 @@
       "tests": [
         "src/security/val01AssessmentDefinitionPreparation.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5C-I01",
+      "owner": "VAL-01/S5c",
+      "statement": "The isolated synthetic assessment preparation interface uses the existing catalogue and preparation commands, requires explicit choices and confirmation, invalidates edited or changed-context previews, rejects duplicate activity and stale selections, preserves draft until explicit exit, and exposes no storage, remote calls or production entrypoint. The exam rehearsal is a planned synthetic activity, not an official exam result. Mobile browser evidence includes narrow screens and enlarged text.",
+      "impactPaths": [
+        "src/components/AssessmentPreparationPanel.tsx",
+        "src/security/val01AssessmentPreparationPanel.test.ts",
+        "tests/browser/fixtures/val01-s5c-fixture.tsx",
+        "tests/browser/fixtures/val01-s5c.html",
+        "tests/browser/val01-s5c-preparation.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationPanel.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s5c-preparation.spec.cjs"
+      ]
     }
   ]
 }
