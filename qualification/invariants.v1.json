@@ -2621,6 +2621,57 @@
       "tests": [
         "src/security/val01AssessmentBackupPayload.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-D1B-I04",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated version-bound backup receipt authority generates and encrypts its own checkpoint using the selected codec, derives version and exact bytes/digest from the encrypted payload, forbids v6 evidence archives and version mismatch at consumption, requires actual web readback or verified Android bridge, invalidates on cancellation, stale session, replay and supersession, preserves later changes, never transfers local receipts and does not activate runtime writes. A v6 receipt cannot attest v7 coverage.",
+      "impactPaths": [
+        "src/persistence/versionedBackupReceipt.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/webBackupVerification.ts",
+        "src/cryptoUtils.ts"
+      ],
+      "tests": [
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-DB2-I01",
+      "owner": "VAL-01/S6d.2c.1",
+      "statement": "Isolated synthetic DB2 laboratory reuses exact protected vault modules, authorizes a synthetic V6-backed DB1 fence migration before seeding evidence, authenticates all ten records on existing DB2 open, serializes confirmed evidence through the canonical durable coordinator and changes only encrypted appData and meta. Real IndexedDB abort preserves both physical records; fresh authenticated owner permits retry; cold document reopen preserves history and downgrade is rejected. V7 readback inspection uses committed data; V6 export and legacy replacement refused. No production activation, persistent V7 receipt, V7 restore authorization, native Android claim or real data.",
+      "impactPaths": [
+        "src/security/vaultStore.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/db2PhysicalLifecycle.ts",
+        "src/security/existingSessionVaultStore.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/db2Lifecycle.ts",
+        "src/persistence/versionedBackupReceipt.ts",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-db2.html",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "src/security/val01Db2EvidenceBoundary.test.ts",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01Db2EvidenceBoundary.test.ts",
+        "src/security/val01AssessmentEvidenceMutation.test.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
     }
   ]
 }
