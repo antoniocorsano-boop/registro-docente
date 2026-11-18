@@ -2459,6 +2459,59 @@
       "browserSmoke": [
         "tests/browser/val01-s5c-preparation.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S6A-I01",
+      "owner": "VAL-01/S6a",
+      "statement": "An isolated explicit completion preview and confirmation converts only an active planned assessment into a new completed revision with a separately confirmed actual date, preserving frozen historical criteria, references, rubric and planned metadata. Rejects stale or altered preview, foreign scope, non-planned or reopened assessment, duplicate revision identity and invalid date or chronology; no automatic completion, persistence, student evidence, grades, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentCompletion.ts",
+        "src/security/val01AssessmentCompletion.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentCompletion.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6B1-I01",
+      "owner": "VAL-01/S6b.1",
+      "statement": "A new individual observation requires explicit student, active completed assessment, frozen criterion, unique local event and revision identities, valid fact and separate explicit interpretation or missing-state declaration, exact review and teacher confirmation. Rechecks scope and graph; rejects stale review, duplicate events and invalid level or state; no inference from grades, shared products, support or absence, no persistence, runtime activation or real data.",
+      "impactPaths": [
+        "src/assessment/individualObservation.ts",
+        "src/security/val01IndividualObservation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualObservation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6B2-I01",
+      "owner": "VAL-01/S6b.2",
+      "statement": "Correction or motivated withdrawal of a confirmed individual evidence requires its current revision, new unique revision identity, explicit review and confirmation, monotonic chronology and frozen original assessment, criterion and student/event identity. Append-only history is preserved, active projection counts once or excludes withdrawn evidence; terminal withdrawal, stale review, invalid changes and no-op corrections are rejected. No persistence, deletion, grades, inference, real data or runtime activation.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-CONSOLIDATION-I01",
+      "owner": "VAL-01/S6-C",
+      "statement": "The consolidated local assessment lifecycle preserves distinct exact preparation, completion, observation, correction and withdrawal commands; explicit confirmations and frozen references are retained end-to-end. No inferred grade or official examination outcome, no duplicate active observation or storage activation; synthetic lifecycle tests verify distinct missing-state semantics and concurrent stale corrections.",
+      "impactPaths": [
+        "src/security/val01AssessmentLifecycleConsolidation.test.ts",
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/assessment/assessmentCompletion.ts",
+        "src/assessment/individualObservation.ts",
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/assessment/assessmentEvidenceProjection.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentLifecycleConsolidation.test.ts"
+      ]
     }
   ]
 }
