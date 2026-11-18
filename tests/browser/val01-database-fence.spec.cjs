@@ -1297,3 +1297,44 @@ test('S-R04c completeness evidence alone prevents setup if established flag is a
   await noArchive(page);
   await expect(page.getByRole('radio')).toHaveCount(0);
 });
+
+
+// Independent review #320: interrupt the real metadata read *inside*
+// activate, not the already committed operation. The fixture is isolated.
+test('S-R05 live legacy migration revoked during activation read cannot start ACTIVE commit',async({page})=>{
+  const raw=await seedLegacyForRevocation(page);
+  await page.evaluate(async()=>{
+    const {IndexedDbVaultStore}=await import('/src/security/vaultStore.ts');
+    const read=IndexedDbVaultStore.prototype.getMetadata;
+    const write=IndexedDbVaultStore.prototype.putMetadata;
+    let held=false;
+    window.__sr02Reached=false;
+    window.__sr05ActiveWrites=0;
+    IndexedDbVaultStore.prototype.getMetadata=async function(...args){
+      const result=await read.apply(this,args);
+      if(!held&&result?.state==='STAGING'){
+        held=true;
+        window.__sr02Reached=true;
+        await new Promise(resolve=>{window.__sr02Release=resolve;});
+      }
+      return result;
+    };
+    IndexedDbVaultStore.prototype.putMetadata=async function(metadata){
+      if(metadata.state==='ACTIVE')window.__sr05ActiveWrites++;
+      return write.call(this,metadata);
+    };
+  });
+  await submitLegacyForRevocation(page);
+  await revokeHeldLegacyOperation(page);
+  await expect(page.getByRole('heading',{name:'Proteggi i dati esistenti'})).toBeVisible({timeout:30000});
+  expect(await page.evaluate(()=>window.__sr05ActiveWrites)).toBe(0);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBe(raw);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBeNull();
+  expect(await inspectSetupInventory(page)).toEqual({state:null,keys:[]});
+  await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+  await submitLegacyForRevocation(page);
+  await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+  expect(await page.evaluate(()=>window.__sr05ActiveWrites)).toBe(1);
+  expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  await page.reload();await unlockProduct(page);
+});
