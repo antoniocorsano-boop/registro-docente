@@ -2428,6 +2428,18 @@
       "tests": [
         "src/security/val01AssessmentPreparationOptions.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5B-I01",
+      "owner": "VAL-01/S5b",
+      "statement": "The isolated assessment preparation command accepts only explicit local selections and valid planned activity metadata, shows an unconfirmed review of the selected exact references, rejects existing activities, conflicting IDs, stale or incompatible revisions and cross-scope review, and revalidates the complete graph on explicit confirmation. Returns a planned definition only, without persistence, runtime activation, generated IDs, grades, student evidence, automatic selection or AI.",
+      "impactPaths": [
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ]
     }
   ]
 }
