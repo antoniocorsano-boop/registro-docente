@@ -142,7 +142,7 @@ import type {
   SecureAppStorage,
   SecureMeta
 } from './security/secureAppStorage';
-import { normalizeBackupPayloadVerified } from './security/backupPayload';
+import { isSnapshotV6, normalizeBackupPayloadVerified } from './security/backupPayload';
 import { appendCouncilSession, assignCouncilValues, wouldLoseCouncilEntries } from './council/councilModel';
 import {
   appendConfirmedCouncilSnapshot,
@@ -3312,9 +3312,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   });
 
   const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> => {
-    return mutationCoordinator.enqueueTask(() =>
-      backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
-    );
+    return mutationCoordinator.enqueueTask(async () => {
+      let snapshot = getCompleteCommittedSnapshot();
+      // For the protected candidate, a complete durable archive is the
+      // recovery authority, not the UI projection (defaults, sorted students,
+      // session navigation, or built-in tests). Sparse DB1 still has the
+      // historical export path but is not eligible for the protected upgrade.
+      if (archiveMigration) {
+        const durable = await secureStorage.loadExactBackupSnapshot();
+        if (durable) {
+          if (!isSnapshotV6(durable)) throw Error('Archivio non verificabile per la copia protetta.');
+          snapshot = durable;
+        }
+      }
+      return backupReceiptAuthority.issue(prepareBackupCheckpoint(snapshot, new Date().toISOString()));
+    });
   };
 
   const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
