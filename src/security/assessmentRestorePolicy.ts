@@ -23,10 +23,12 @@ const includesExact=(candidate:readonly unknown[],previous:readonly unknown[])=>
  */
 export function preservesAssessmentHistory(previous:AppData,candidate:AppData,
  currentScopes:readonly ApprovedAssessmentScope[],incomingScopes:readonly ApprovedAssessmentScope[]):boolean{
- if(!validateAssessmentArchiveV1(previous,currentScopes).valid||!validateAssessmentArchiveV1(candidate,incomingScopes).valid)return false;
- for(const cls of previous.classes as EvidenceClass[]){
+ let oldData:AppData,newData:AppData;
+ try{oldData=snapshotAssessmentData(previous) as AppData;newData=snapshotAssessmentData(candidate) as AppData;}catch{return false;}
+ if(!validateAssessmentArchiveV1(oldData,currentScopes).valid||!validateAssessmentArchiveV1(newData,incomingScopes).valid)return false;
+ for(const cls of oldData.classes as EvidenceClass[]){
   const old=cls.assessmentEvidenceV1;if(!old)continue;
-  const next=(candidate.classes.find(c=>c.id===cls.id) as EvidenceClass|undefined)?.assessmentEvidenceV1;
+  const next=(newData.classes.find(c=>c.id===cls.id) as EvidenceClass|undefined)?.assessmentEvidenceV1;
   if(!next)return false;
   for(const section of old.documents){
    const d=section.document;
