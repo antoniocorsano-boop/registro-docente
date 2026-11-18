@@ -307,7 +307,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   };
   const requestReportChange=(action:()=>void)=>laboratoryRestitution?laboratoryRestitution.requestChange(action):action();
   const changeReportView=(view:'essential'|'dossier'|'restitution')=>{
-    if(view===mobileView)return;
+    if(laboratoryRestitution&&view===mobileView)return;
     requestReportChange(()=>{
       closeMobileDisclosures();
       setMobileMode({classId:currentClass.id,studentId:currentStudent.id,view});
@@ -590,7 +590,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
       </section>
       {mobileView === 'restitution' ? (
-        isPrivacyShieldActive ? (laboratoryRestitution ? laboratoryRestitution.content : <FormativeRestitutionView key={currentClass.id + ':' + currentStudent.id} currentClass={currentClass} studentId={currentStudent.id} settings={settings} udas={udas}/>) :
+        laboratoryRestitution && isPrivacyShieldActive ? laboratoryRestitution.content : isPrivacyShieldActive ? <FormativeRestitutionView key={currentClass.id + ':' + currentStudent.id} currentClass={currentClass} studentId={currentStudent.id} settings={settings} udas={udas}/> :
           <section role="alert" className="space-y-2"><h2 className="text-base font-semibold">Attiva la protezione dei nominativi</h2><p className="text-sm text-slate-300">La restituzione è disponibile soltanto con la protezione attiva. Usa il comando di riservatezza nell’intestazione.</p></section>
       ) : (
       <div ref={dossierRef} data-testid="student-report-dossier"
