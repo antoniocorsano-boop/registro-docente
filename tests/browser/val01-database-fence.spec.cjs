@@ -1204,3 +1204,62 @@ test('S-R04a real exported copy recovers a fresh isolated DB1 with a different l
     expect(restored.snapshot.meta.verifiedBackupEvidence).toBeUndefined();
   }finally{await context.close();}
 });
+
+
+// S-R01b: an actual first setup is interrupted after a durable staging
+// reservation, after the encrypted batch, and after activation. The
+// lifecycle owner is revoked even when visibility returns immediately.
+async function submitInitialSetupForRevocation(page){
+  await page.getByRole('radio',{name:/Archivio professionale/}).check();
+  for(const [label,value] of Object.entries({'Istituto':'Synthetic setup school','Anno scolastico':'2026/2027','Docente':'Synthetic setup teacher','Disciplina':'Tecnologia'})){
+    await page.getByLabel(label,{exact:true}).fill(value);
+  }
+  await page.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+  await page.getByRole('button',{name:'Crea il mio registro'}).click();
+}
+async function inspectSetupInventory(page){
+  return page.evaluate(async()=>{
+    const {IndexedDbVaultStore}=await import('/src/security/vaultStore.ts');
+    const store=new IndexedDbVaultStore(indexedDB,true);
+    try{return {state:(await store.getMetadata())?.state??null,keys:await store.listRecordKeys()};}
+    finally{await store.retireConnection();}
+  });
+}
+for(const method of ['createStaging','putMany','activate']){
+  test('S-R01b admitted setup revoked after '+method+' never opens a stale session',async({page})=>{
+    test.setTimeout(120000);
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(productApp());
+    await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+    await noArchive(page);
+    await holdLegacyVaultOperation(page,method);
+    await submitInitialSetupForRevocation(page);
+    await revokeHeldLegacyOperation(page);
+    const activated=method==='activate';
+    const notice=activated?'Sessione cambiata. Autenticati nuovamente.':'Sessione cambiata. Ripeti la configurazione in primo piano.';
+    await expect(page.getByRole('status').filter({hasText:notice})).toBeVisible({timeout:30000});
+    await expect(page.getByTestId('header01-topbar')).toHaveCount(0);
+    const inventory=await inspectSetupInventory(page);
+    if(activated){
+      expect(inventory.state).toBe('ACTIVE');
+      expect(inventory.keys).toHaveLength(10);
+      expect(await page.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBe('1');
+      await expect(page.getByRole('heading',{name:'Sblocca Registro'})).toBeVisible();
+      await unlockProduct(page);
+    }else{
+      expect(inventory).toEqual({state:null,keys:[]});
+      expect(await page.evaluate(()=>localStorage.getItem('registro_archive_established_v1'))).toBeNull();
+      await expect(page.getByRole('heading',{name:'Configura archivio protetto'})).toBeVisible();
+      await submitInitialSetupForRevocation(page);
+      await expect(page.getByTestId('header01-topbar')).toBeVisible({timeout:30000});
+    }
+    await expect(page.getByRole('status').filter({hasText:notice})).toHaveCount(0);
+    await page.reload();await unlockProduct(page);
+    const final=await readRecoveryDb1(page,'synthetic-archive-compatibility-only');
+    expect(final.keys).toHaveLength(10);
+    expect(final.snapshot.appData.classes).toEqual([]);
+    expect(final.snapshot.settings.archiveMode).toBe('professional');
+    expect(final.snapshot.settings.school).toBe('Synthetic setup school');
+    expect(final.snapshot.meta).toEqual({changes:0,lastBackup:null});
+  });
+}
