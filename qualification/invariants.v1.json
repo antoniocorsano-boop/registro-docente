@@ -2754,6 +2754,23 @@
       "browserSmoke": [
         "tests/browser/val01-s6d-operational.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-S7A-BALANCE-I01",
+      "owner": "VAL-01/S7a",
+      "statement": "Isolated formative balance uses the validated evidence graph and independently supplied exact recipient/scope, explicit Q1/Q2 and civil date range, selected active confirmed revision IDs and teacher-authored text only. Missing, not observed, not applicable and withdrawn never yield a level or judgement. Two explicitly selected distinct observed events on different dates with exact historical criterion/rubric and matching recorded expectation, purpose and observation modalities may be reviewed for comparability by the teacher; no computed progress or competence. Local deterministic digest binds the review, selected and unselected relevant historical evidence and frozen dependencies, rejects stale or edited previews, excludes other recipients and periods. Confirmation is a detached review, not a storage receipt, publication, certification or authority. No production integration, network, AI or real data.",
+      "impactPaths": [
+        "src/assessment/formativeBalance.ts",
+        "src/assessment/assessmentEvidence.ts",
+        "src/assessment/assessmentEvidenceProjection.ts",
+        "src/assessment/assessmentRevisionBindings.ts",
+        "src/security/val01FormativeBalance.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s7-formative-balance.md"
+      ],
+      "tests": [
+        "src/security/val01FormativeBalance.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
