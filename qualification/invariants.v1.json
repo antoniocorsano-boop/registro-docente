@@ -2416,6 +2416,42 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5A-I01",
+      "owner": "VAL-01/S5a",
+      "statement": "The isolated preparation catalogue validates local scope, offers only active exact criterion and reference revisions with compatible active rubric revisions, detects an existing activity without duplication, rejects malformed input and never silently upgrades historical links or selects on behalf of the teacher. Outputs no student roster or individual evidence; no mutation, persistence, AI, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5B-I01",
+      "owner": "VAL-01/S5b",
+      "statement": "The isolated assessment preparation command accepts only explicit local selections and valid planned activity metadata, shows an unconfirmed review of the selected exact references, rejects existing activities, conflicting IDs, stale or incompatible revisions and cross-scope review, and revalidates the complete graph on explicit confirmation. Returns a planned definition only, without persistence, runtime activation, generated IDs, grades, student evidence, automatic selection or AI.",
+      "impactPaths": [
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6A-I01",
+      "owner": "VAL-01/S6a",
+      "statement": "An isolated explicit completion preview and confirmation converts only an active planned assessment into a new completed revision with a separately confirmed actual date, preserving frozen historical criteria, references, rubric and planned metadata. Rejects stale or altered preview, foreign scope, non-planned or reopened assessment, duplicate revision identity and invalid date or chronology; no automatic completion, persistence, student evidence, grades, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentCompletion.ts",
+        "src/security/val01AssessmentCompletion.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentCompletion.test.ts"
+      ]
     }
   ]
 }
