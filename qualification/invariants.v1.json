@@ -2416,6 +2416,18 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5A-I01",
+      "owner": "VAL-01/S5a",
+      "statement": "The isolated preparation catalogue validates local scope, offers only active exact criterion and reference revisions with compatible active rubric revisions, detects an existing activity without duplication, rejects malformed input and never silently upgrades historical links or selects on behalf of the teacher. Outputs no student roster or individual evidence; no mutation, persistence, AI, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ]
     }
   ]
 }
