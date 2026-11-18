@@ -2452,6 +2452,18 @@
       "tests": [
         "src/security/val01AssessmentCompletion.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S6B2-I01",
+      "owner": "VAL-01/S6b.2",
+      "statement": "Correction or motivated withdrawal of a confirmed individual evidence requires its current revision, new unique revision identity, explicit review and confirmation, monotonic chronology and frozen original assessment, criterion and student/event identity. Append-only history is preserved, active projection counts once or excludes withdrawn evidence; terminal withdrawal, stale review, invalid changes and no-op corrections are rejected. No persistence, deletion, grades, inference, real data or runtime activation.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ]
     }
   ]
 }
