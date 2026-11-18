@@ -2440,6 +2440,18 @@
       "tests": [
         "src/security/val01AssessmentDefinitionPreparation.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S6A-I01",
+      "owner": "VAL-01/S6a",
+      "statement": "An isolated explicit completion preview and confirmation converts only an active planned assessment into a new completed revision with a separately confirmed actual date, preserving frozen historical criteria, references, rubric and planned metadata. Rejects stale or altered preview, foreign scope, non-planned or reopened assessment, duplicate revision identity and invalid date or chronology; no automatic completion, persistence, student evidence, grades, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentCompletion.ts",
+        "src/security/val01AssessmentCompletion.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentCompletion.test.ts"
+      ]
     }
   ]
 }
