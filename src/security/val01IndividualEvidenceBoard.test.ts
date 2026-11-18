@@ -18,11 +18,12 @@ describe('VAL-01/S6c.1 — individual evidence board',()=>{
  });
  test('keeps correction once, excludes withdrawn revision, source unchanged',()=>{
   const original=boardDocument.evidence[0];
-  const revised={...original,revisionId:'corrected',supersedesRevisionId:original.revisionId,recordedAt:'2026-11-21T09:00:00.000Z',confirmedAt:'2026-11-21T10:00:00.000Z'};
+  if(original.state!=='observed')throw Error('Invalid fixture');
+  const revised={...original,fact:{...original.fact,description:'Schema corretto'},revisionId:'corrected',supersedesRevisionId:original.revisionId,recordedAt:'2026-11-21T09:00:00.000Z',confirmedAt:'2026-11-21T10:00:00.000Z'};
   const d={...boardDocument,evidence:[...boardDocument.evidence,revised]};
   const before=JSON.stringify(d),p=project(d);if(!p.valid)throw Error(p.issue);
   expect(p.rows[0].entries.map(e=>e.revisionId)).toEqual(['corrected']);expect(JSON.stringify(d)).toBe(before);
-  const {state:unusedState,...identity}=revised;
+  const identity=revised;
   // Strip observed-only fields before creating the withdrawal.
   const withdrawal={...identity,revisionId:'withdrawn',supersedesRevisionId:'corrected',state:'withdrawn',reason:'Rilevazione ritirata',recordedAt:'2026-11-22T09:00:00.000Z',confirmedAt:'2026-11-22T10:00:00.000Z'};
   const clean=Object.fromEntries(Object.entries(withdrawal).filter(([k])=>k!=='fact'&&k!=='interpretation'));
