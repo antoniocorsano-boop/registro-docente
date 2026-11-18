@@ -1026,3 +1026,78 @@ test('S-R02 live Root preserves committed ACTIVE and source on revocation, then 
   expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
   await page.reload();await unlockProduct(page);
 });
+
+
+// S-R03a: the only recovery bytes used below come from the real Privacy
+// download. No fixture-generated copy is passed to the migration or restore.
+async function downloadActualProductBackup(page) {
+  const dialogs=[];
+  const accept=async d=>{dialogs.push(d.message());await d.accept();};
+  page.on('dialog',accept);
+  try{
+    await page.getByPlaceholder('Inserisci password sicura (min. 6 caratteri)').fill('synthetic-archive-backup-only');
+    await page.getByPlaceholder('Ripeti la password').fill('synthetic-archive-backup-only');
+    const [download]=await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button',{name:'Cifra e Scarica File'}).click()
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.enc\.json$/);
+    const fs=require('node:fs/promises');
+    const bytes=await fs.readFile(await download.path());
+    await expect(page.getByLabel('Verifica copia scaricata')).toBeVisible();
+    await expect(page.getByRole('button',{name:'Cifra e Scarica File'})).toBeEnabled();
+    expect(dialogs.some(message=>message.includes('Download avviato'))).toBe(true);
+    const decoded=await page.evaluate(async text=>{
+      const {decryptDataWithPassword}=await import('/src/cryptoUtils.ts');
+      return decryptDataWithPassword(text,'synthetic-archive-backup-only');
+    },bytes.toString('utf8'));
+    expect(decoded.backupDataVersion).toBe(6);
+    expect(decoded.app).toBe('registro-docente');
+    expect(decoded.snapshot.meta).toEqual({changes:0,lastBackup:decoded.exportedAt});
+    return {bytes,decoded};
+  }finally{page.off('dialog',accept);}
+}
+for(const verified of [false,true]){
+  test('S-R03a actual exported v6 '+(verified?'verified':'unverified')+' copy migrates DB1 and restores DB2 without substituting UI defaults',async({page})=>{
+    test.setTimeout(120000);
+    const seed=await seedProduct(page);
+    await unlockProduct(page);await privacyProduct(page);
+    const {bytes,decoded}=await downloadActualProductBackup(page);
+    expect(decoded.snapshot).toEqual({...seed.snapshot,meta:decoded.snapshot.meta});
+    if(verified){
+      await page.getByLabel('Verifica copia scaricata').setInputFiles({name:'actual.enc.json',mimeType:'application/json',buffer:bytes});
+      await expect(page.getByText('Copia verificata. Le registrazioni successive restano da includere.')).toBeVisible();
+    }
+    const panel=await selectProductCopy(page,bytes);
+    await panel.getByLabel('Password locale',{exact:true}).fill('synthetic-archive-compatibility-only');
+    await panel.getByLabel('Password della copia',{exact:true}).fill('synthetic-archive-backup-only');
+    let migrationConsent=0,restoreConsent=0;
+    page.on('dialog',async d=>{
+      if(d.message().includes('La copia è stata verificata')){migrationConsent++;await d.accept();}
+      else if(d.message().includes('Sostituire tutti i dati attuali')){restoreConsent++;await d.accept();}
+      else await d.dismiss();
+    });
+    await panel.getByRole('button',{name:'Verifica e aggiorna archivio'}).click();
+    await expect(page.getByText('Archivio aggiornato. Autenticati per verificarlo e riaprire il Registro.')).toBeVisible({timeout:30000});
+    expect(migrationConsent).toBe(1);
+    await unlockProduct(page);
+    const migrated=await readProductDb2(page);
+    expect({...migrated,meta:seed.snapshot.meta}).toEqual(seed.snapshot);
+    if(verified){
+      expect(migrated.meta.changes).toBe(0);
+      expect(migrated.meta.lastBackup).toBe(decoded.exportedAt);
+      expect(migrated.meta.verifiedBackupEvidence).toMatchObject({payloadVersion:6,source:'web-readback',bytes:bytes.length,checkpointAt:decoded.exportedAt});
+    }else expect(migrated.meta).toEqual(seed.snapshot.meta);
+    // Change the destination using a separate synthetic, authorized restore
+    // to prove the subsequent actual downloaded file replaces distinct data.
+    const changed=await candidate(page,'db2ChangedCopy');
+    expect(await candidate(page,'db2Lifecycle','restore',changed)).toMatchObject({result:'committed',state:'active'});
+    expect((await candidate(page,'db2Read')).appData.classes).toEqual([]);
+    await page.goto(productApp());await unlockProduct(page);await privacyProduct(page);
+    await submitProductRestore(page,bytes,'synthetic-archive-backup-only');
+    await expect(page.getByText('Archivio ripristinato. Autenticati per riaprire il Registro.')).toBeVisible({timeout:30000});
+    expect(restoreConsent).toBe(1);
+    await unlockProduct(page);await page.reload();await unlockProduct(page);
+    expect(await readProductDb2(page)).toEqual(decoded.snapshot);
+  });
+}
