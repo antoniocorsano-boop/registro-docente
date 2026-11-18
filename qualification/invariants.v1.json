@@ -2416,6 +2416,180 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5A-I01",
+      "owner": "VAL-01/S5a",
+      "statement": "The isolated preparation catalogue validates local scope, offers only active exact criterion and reference revisions with compatible active rubric revisions, detects an existing activity without duplication, rejects malformed input and never silently upgrades historical links or selects on behalf of the teacher. Outputs no student roster or individual evidence; no mutation, persistence, AI, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5B-I01",
+      "owner": "VAL-01/S5b",
+      "statement": "The isolated assessment preparation command accepts only explicit local selections and valid planned activity metadata, shows an unconfirmed review of the selected exact references, rejects existing activities, conflicting IDs, stale or incompatible revisions and cross-scope review, and revalidates the complete graph on explicit confirmation. Returns a planned definition only, without persistence, runtime activation, generated IDs, grades, student evidence, automatic selection or AI.",
+      "impactPaths": [
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5C-I01",
+      "owner": "VAL-01/S5c",
+      "statement": "The isolated synthetic assessment preparation interface uses the existing catalogue and preparation commands, requires explicit choices and confirmation, invalidates edited or changed-context previews, rejects duplicate activity and stale selections, preserves draft until explicit exit, and exposes no storage, remote calls or production entrypoint. The exam rehearsal is a planned synthetic activity, not an official exam result. Mobile browser evidence includes narrow screens and enlarged text.",
+      "impactPaths": [
+        "src/components/AssessmentPreparationPanel.tsx",
+        "src/security/val01AssessmentPreparationPanel.test.ts",
+        "tests/browser/fixtures/val01-s5c-fixture.tsx",
+        "tests/browser/fixtures/val01-s5c.html",
+        "tests/browser/val01-s5c-preparation.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationPanel.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s5c-preparation.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6A-I01",
+      "owner": "VAL-01/S6a",
+      "statement": "An isolated explicit completion preview and confirmation converts only an active planned assessment into a new completed revision with a separately confirmed actual date, preserving frozen historical criteria, references, rubric and planned metadata. Rejects stale or altered preview, foreign scope, non-planned or reopened assessment, duplicate revision identity and invalid date or chronology; no automatic completion, persistence, student evidence, grades, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentCompletion.ts",
+        "src/security/val01AssessmentCompletion.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentCompletion.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6B1-I01",
+      "owner": "VAL-01/S6b.1",
+      "statement": "A new individual observation requires explicit student, active completed assessment, frozen criterion, unique local event and revision identities, valid fact and separate explicit interpretation or missing-state declaration, exact review and teacher confirmation. Rechecks scope and graph; rejects stale review, duplicate events and invalid level or state; no inference from grades, shared products, support or absence, no persistence, runtime activation or real data.",
+      "impactPaths": [
+        "src/assessment/individualObservation.ts",
+        "src/security/val01IndividualObservation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualObservation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6B2-I01",
+      "owner": "VAL-01/S6b.2",
+      "statement": "Correction or motivated withdrawal of a confirmed individual evidence requires its current revision, new unique revision identity, explicit review and confirmation, monotonic chronology and frozen original assessment, criterion and student/event identity. Append-only history is preserved, active projection counts once or excludes withdrawn evidence; terminal withdrawal, stale review, invalid changes and no-op corrections are rejected. No persistence, deletion, grades, inference, real data or runtime activation.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-CONSOLIDATION-I01",
+      "owner": "VAL-01/S6-C",
+      "statement": "The consolidated local assessment lifecycle preserves distinct exact preparation, completion, observation, correction and withdrawal commands; explicit confirmations and frozen references are retained end-to-end. No inferred grade or official examination outcome, no duplicate active observation or storage activation; synthetic lifecycle tests verify distinct missing-state semantics and concurrent stale corrections.",
+      "impactPaths": [
+        "src/security/val01AssessmentLifecycleConsolidation.test.ts",
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/assessment/assessmentCompletion.ts",
+        "src/assessment/individualObservation.ts",
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/assessment/assessmentEvidenceProjection.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentLifecycleConsolidation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-BOARD-I01",
+      "owner": "VAL-01/S6c",
+      "statement": "The synthetic evidence board requires explicit selection of an active completed assessment and its exact frozen criterion. It preserves roster order, separates no active record, not observed, not applicable and observed, retains multiple distinct active events, and excludes withdrawn or superseded evidence. Individual actions require explicit review and confirmation using existing commands; context remains fixed during draft. No grades, inference, real data, persistence, runtime entrypoint or release. Mobile browser evidence includes 320/390 and enlarged text.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceBoard.ts",
+        "src/security/val01IndividualEvidenceBoard.test.ts",
+        "tests/browser/fixtures/val01-s6c-data.ts",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/fixtures/val01-s6c.html",
+        "tests/browser/val01-s6c-evidence-board.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "tests/browser/fixtures/val01-s6c-board.tsx"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceBoard.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-RUBRIC-I01",
+      "owner": "VAL-01/S6c.2",
+      "statement": "Interpretation options use only the exact frozen rubric linked to the completed assessment criterion. No automatic selection or grade inference. Pending is explicit; a level must belong to that revision, or a description may be entered only without a rubric. Edits invalidate review; correction preserves historical fact metadata and existing interpretation. Synthetic only; no runtime or persistence.",
+      "impactPaths": [
+        "src/assessment/evidenceInterpretationOptions.ts",
+        "src/security/val01EvidenceInterpretationOptions.test.ts",
+        "tests/browser/fixtures/val01-s6c-data.ts",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/val01-s6c-evidence-board.spec.cjs",
+        "tests/browser/fixtures/val01-s6c-board.tsx"
+      ],
+      "tests": [
+        "src/security/val01EvidenceInterpretationOptions.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-INTEGRATION-I01",
+      "owner": "VAL-01/S6d.1",
+      "statement": "Existing production Tabellone uses the shared Oggi/Storico selector and original guarded transition only. Explicit laboratory host integrates those actual view components, synthetic evidence and actual student report; preserves proof/criterion/student on return, blocks navigation while a draft is open, projects only the explicitly selected student's active evidence, and leaves ordinary grade writes disabled. No production evidence entry, real data, storage, schema or release changes.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/MatrixSurfaceSelector.tsx",
+        "tests/browser/fixtures/val01-s6c-board.tsx",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d.html",
+        "tests/browser/val01-s6d-integration.spec.cjs",
+        "src/security/val01MatrixSurfaceIntegration.test.ts",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01MatrixSurfaceIntegration.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-integration.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-DURABLE-I01",
+      "owner": "VAL-01/S6d.2a",
+      "statement": "An isolated evidence mutation derives against the latest committed existing archive and independent approved scopes with exact roster and selected class; rechecks the qualified observation/revision review, appends one confirmed revision and revalidates the entire archive. Existing grades, bindings and history remain intact. Synthetic real cryptography and canonical durable coordinator test atomic appData+meta write, publication after persistence, authenticated reopening, failure, retry and sealed-session rejection. No production activation, migration or backup authority.",
+      "impactPaths": [
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "src/security/val01AssessmentEvidenceMutation.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md",
+        "src/security/secureAppStorage.ts",
+        "src/persistence/durableMutationCoordinator.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentEvidenceMutation.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
