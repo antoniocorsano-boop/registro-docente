@@ -591,9 +591,17 @@ export const SecureRegistroRoot: React.FC<{archiveMigrationCandidate?:boolean}> 
             storeRef.current=null;vaultRef.current=null;storageRef.current=null;
             // Concurrent erasure can look like a failed password. Inspect
             // durable state rather than repeatedly opening the erased archive.
+            // Capture revocation before the readonly bootstrap changes runtime
+            // identity. Gate-local action errors may be cleared on transition
+            // through CHECKING; the Root owns the durable protected notice.
+            const cleanupRevoked=guardedCleanup&&(revoked||
+              lifecycleRevisionRef.current!==attempt.revision||document.hidden);
             requireExistingRef.current=true;
             revokeNativeAuthorization();setSnapshot(null);
             await inspectBootstrap();
+            if(cleanupRevoked&&gateStateRef.current==='LOCKED'){
+              setMigrationNotice('Sessione cambiata. Autenticati nuovamente.');
+            }
           }
         }
         throw error;
