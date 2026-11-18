@@ -57,8 +57,8 @@ export function AssessmentPreparationPanel(p:Props){
       <div className="neon-card space-y-3 p-3">
         <label className="block">Titolo<input className={field} value={title} onChange={e=>change(setTitle,e.target.value)}/></label>
         <label className="block">Data<input type="date" className={field} value={date} onChange={e=>change(setDate,e.target.value)}/></label>
-        <label className="block">Periodo<select className={field} value={period} onChange={e=>change(setPeriod,e.target.value)}><option value="">Seleziona</option><option value="Q1">Primo periodo</option><option value="Q2">Secondo periodo</option></select></label>
-        <label className="block">Finalità<select className={field} value={purpose} onChange={e=>change(setPurpose,e.target.value)}><option value="">Seleziona</option>{purposes.map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>
+        <div><label htmlFor={prefix+'period'} className="block">Periodo</label><select id={prefix+'period'} className={field} value={period} onChange={e=>change(setPeriod,e.target.value)}><option value="">Seleziona</option><option value="Q1">Primo periodo</option><option value="Q2">Secondo periodo</option></select></div>
+        <div><label htmlFor={prefix+'purpose'} className="block">Finalità</label><select id={prefix+'purpose'} className={field} value={purpose} onChange={e=>change(setPurpose,e.target.value)}><option value="">Seleziona</option>{purposes.map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></div>
       </div>
       <fieldset className="min-w-0 space-y-3"><legend className="mb-2 font-semibold">Criteri della prova</legend>
         {!options.criteria.length&&<p>Nessun criterio disponibile.</p>}
@@ -66,8 +66,8 @@ export function AssessmentPreparationPanel(p:Props){
           <label className="flex min-h-[48px] items-center gap-3"><input type="checkbox" className="h-5 w-5 shrink-0" checked={!!choice} onChange={e=>toggle(id,e.target.checked)}/><span>{c.description}</span></label>
           <div className="text-sm text-[var(--text-muted)]">{c.targets.map(t=><p key={t.revisionId}>{t.text} · Fonte locale {t.sourceVersion}</p>)}</div>
           {choice&&<div className="space-y-3">
-            <label className="block">Rubrica (facoltativa)<select className={field} value={choice.rubric} onChange={e=>edit(id,{rubric:e.target.value})}><option value="">Nessuna</option>{c.rubrics.map(r=><option key={r.rubricRevisionId} value={r.rubricRevisionId}>{r.levels.map(l=>l.label).join(' / ')}</option>)}</select></label>
-            <label className="block">Tipo di evidenza<select className={field} value={choice.kind} onChange={e=>edit(id,{kind:e.target.value as Choice['kind']})}><option value="">Seleziona</option>{kinds.map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>
+            <div><label htmlFor={prefix+id+'-rubric'} className="block">Rubrica (facoltativa)</label><select id={prefix+id+'-rubric'} className={field} value={choice.rubric} onChange={e=>edit(id,{rubric:e.target.value})}><option value="">Nessuna</option>{c.rubrics.map(r=><option key={r.rubricRevisionId} value={r.rubricRevisionId}>{r.levels.map(l=>l.label).join(' / ')}</option>)}</select></div>
+            <div><label htmlFor={prefix+id+'-kind'} className="block">Tipo di evidenza</label><select id={prefix+id+'-kind'} className={field} value={choice.kind} onChange={e=>edit(id,{kind:e.target.value as Choice['kind']})}><option value="">Seleziona</option>{kinds.map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></div>
             <label className="block">Evidenza attesa<textarea className={field} value={choice.description} onChange={e=>edit(id,{description:e.target.value})}/></label>
             <label className="block">Metodo<input className={field} value={choice.method} onChange={e=>edit(id,{method:e.target.value})}/></label>
           </div>}
