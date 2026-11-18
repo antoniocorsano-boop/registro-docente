@@ -122,6 +122,42 @@ export class IndexedDbVaultStore implements VaultStore {
     return (result as VaultMetadataV1 | undefined) ?? null;
   }
 
+  /** Candidate-only initial reservation. Both stores must be empty in the
+   * same readwrite transaction; add() must never replace an existing owner.
+   * Success means the reservation has committed, not just a request success. */
+  async claimInitialMetadata(metadata: VaultMetadataV1): Promise<void> {
+    if (metadata.state !== 'STAGING') throw new Error('Configurazione iniziale non valida.');
+    const db = await this.openDatabase();
+    if (db.version !== 1) throw new Error('Versione archivio non ammessa per la configurazione iniziale.');
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([METADATA_STORE, RECORDS_STORE], 'readwrite');
+      const refused = () => new Error('Archivio non vuoto. Nessun dato è stato sostituito.');
+      let failure: unknown = null;
+      const abort = (error: unknown) => {
+        failure = error;
+        try { tx.abort(); } catch { reject(error); }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(failure ?? tx.error ?? refused());
+      tx.onerror = () => { failure ??= tx.error ?? refused(); };
+      try {
+        const meta = tx.objectStore(METADATA_STORE);
+        const records = tx.objectStore(RECORDS_STORE);
+        const metaCount = meta.count();
+        const recordCount = records.count();
+        let remaining = 2;
+        const reserve = () => {
+          if (--remaining !== 0) return;
+          try {
+            if (metaCount.result !== 0 || recordCount.result !== 0) throw refused();
+            meta.add(metadata, CURRENT_METADATA_KEY);
+          } catch (error) { abort(error); }
+        };
+        metaCount.onsuccess = recordCount.onsuccess = reserve;
+      } catch (error) { abort(error); }
+    });
+  }
+
   async putMetadata(metadata: VaultMetadataV1): Promise<void> {
     const db = await this.openDatabase();
     const tx = db.transaction(METADATA_STORE, 'readwrite');

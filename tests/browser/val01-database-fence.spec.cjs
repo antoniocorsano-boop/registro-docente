@@ -859,3 +859,75 @@ test('STAB-02 legacy migration revocation during readonly probe preserves plaint
   expect(await page.evaluate(()=>localStorage.getItem('registro_docente_data_v35'))).toBeNull();
   await page.reload();await unlockProduct(page);
 });
+
+
+// S-R01: real IndexedDB, synthetic data, two independent connections.
+// Rendezvous before the durable claim: both initial reads saw absence.
+// This exercises the same reservation port wired into the candidate Root.
+test('S-R01 concurrent initial setup admits exactly one owner and preserves the full archive',async({page})=>{
+  await page.goto(productSeed());
+  const outcome=await page.evaluate(async()=>{
+    const {IndexedDbVaultStore}=await import('/src/security/vaultStore.ts');
+    const {SecureVault}=await import('/src/security/secureVault.ts');
+    const {initializeNewArchive}=await import('/src/security/initialArchiveSetup.ts');
+    const stores=[new IndexedDbVaultStore(),new IndexedDbVaultStore()];
+    let arrivals=0,release;
+    const rendezvous=new Promise(resolve=>{release=resolve;});
+    const vaults=stores.map(store=>new SecureVault(store,async metadata=>{
+      if(++arrivals===2)release();
+      await rendezvous;
+      return store.claimInitialMetadata(metadata);
+    }));
+    const credentials=['synthetic-initial-owner-one','synthetic-initial-owner-two'];
+    const setups=[{mode:'demo'},{mode:'professional',profile:{school:'Istituto sintetico',year:'2026/2027',teacher:'Docente sintetico',subject:'Tecnologia'}}];
+    const results=await Promise.allSettled(vaults.map((vault,i)=>initializeNewArchive(vault,credentials[i],setups[i])));
+    const winner=results.findIndex(result=>result.status==='fulfilled');
+    if(winner<0||results.filter(result=>result.status==='fulfilled').length!==1)
+      return {arrivals,statuses:results.map(result=>result.status)};
+    const loser=1-winner;
+    const loserLocked=!vaults[loser].isUnlocked();
+    vaults.forEach(vault=>vault.lock());
+    await Promise.all(stores.map(store=>store.retireConnection()));
+    const reopenedStore=new IndexedDbVaultStore(indexedDB,true);
+    const reopened=new SecureVault(reopenedStore);
+    try{
+      let loserRejected=false;
+      try{await reopened.unlock(credentials[loser]);}catch{loserRejected=true;}
+      await reopened.unlock(credentials[winner]);
+      const settings=await reopened.get('settings');
+      const keys=await reopenedStore.listRecordKeys();
+      const allAuthenticated=(await Promise.all(keys.map(key=>reopened.get(key)))).every(value=>value!==null);
+      return {arrivals,statuses:results.map(result=>result.status),loserLocked,loserRejected,
+        metadataState:(await reopenedStore.getMetadata()).state,
+        modeMatches:settings.archiveMode===setups[winner].mode,keys,allAuthenticated};
+    }finally{reopened.lock();await reopenedStore.retireConnection();}
+  });
+  expect(outcome.arrivals).toBe(2);
+  expect(outcome.statuses.sort()).toEqual(['fulfilled','rejected']);
+  expect(outcome.loserLocked).toBe(true);
+  expect(outcome.loserRejected).toBe(true);
+  expect(outcome.metadataState).toBe('ACTIVE');
+  expect(outcome.modeMatches).toBe(true);
+  expect(outcome.keys.sort()).toEqual(['appData','copilotState','customTests','library','meta','planning','professionalMemory','settings','submissions','udas']);
+  expect(outcome.allAuthenticated).toBe(true);
+});
+
+test('S-R01 initial reservation refuses residual records without overwriting or deleting them',async({page})=>{
+  await page.goto(productSeed());
+  const outcome=await page.evaluate(async()=>{
+    const {IndexedDbVaultStore}=await import('/src/security/vaultStore.ts');
+    const {SecureVault}=await import('/src/security/secureVault.ts');
+    const store=new IndexedDbVaultStore();
+    const vault=new SecureVault(store,metadata=>store.claimInitialMetadata(metadata));
+    const record={recordKey:'meta',schemaVersion:1,iv:new Uint8Array(12),ciphertext:new Uint8Array(24).fill(7).buffer};
+    try{
+      await store.putRecord(record);
+      let rejected=false;
+      try{await vault.createStaging('synthetic-reservation-only');}catch{rejected=true;}
+      const preserved=await store.getRecord('meta');
+      return {rejected,locked:!vault.isUnlocked(),metadata:await store.getMetadata(),
+        keys:await store.listRecordKeys(),bytes:Array.from(new Uint8Array(preserved.ciphertext))};
+    }finally{vault.lock();await store.retireConnection();}
+  });
+  expect(outcome).toEqual({rejected:true,locked:true,metadata:null,keys:['meta'],bytes:Array(24).fill(7)});
+});

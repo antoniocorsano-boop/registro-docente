@@ -20,7 +20,10 @@ export class SecureVault {
   private sessionDek: CryptoKey | null = null;
   private mutationTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly store: VaultStore) {}
+  constructor(
+    private readonly store: VaultStore,
+    private readonly reserveInitial?: (metadata: VaultMetadataV1) => Promise<void>
+  ) {}
 
   private enqueueMutation(operation: () => Promise<void>): Promise<void> {
     const run = this.mutationTail.then(operation, operation);
@@ -69,7 +72,8 @@ export class SecureVault {
       updatedAt: now
     };
 
-    await this.store.putMetadata(metadata);
+    if (this.reserveInitial) await this.reserveInitial(metadata);
+    else await this.store.putMetadata(metadata);
     this.sessionDek = dek;
   }
 
