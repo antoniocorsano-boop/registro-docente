@@ -2771,6 +2771,29 @@
         "src/security/val01FormativeBalance.test.ts"
       ],
       "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S7B-RESTITUTION-I01",
+      "owner": "VAL-01/S7b",
+      "statement": "Explicit laboratory-only slot in existing StudentReportView Restituzione uses committed individual evidence and S7a review/confirmation. Recipient and view changes are guarded while a draft is open; date/period changes clear source selections, never substitute historical revisions. Preview is allowlisted to masked recipient, period, dates, selected activity/criterion/objective/state and teacher-authored text; raw fact, method, support, product references, other student data, internal IDs and digests remain excluded. Committed source changes immediately hide stale preview and revalidate; related correction, withdrawal or addition invalidates confirmation, unrelated recipient change preserves valid review. Confirmation is in-session only, no write, print, export, transmission, AI or official judgment. The production App and Root do not activate the slot; legacy restitution remains unchanged by default. Browser cases use synthetic DB2 only, mobile geometry and no data disclosure authority.",
+      "impactPaths": [
+        "src/components/StudentReportView.tsx",
+        "src/assessment/formativeRestitutionProjection.ts",
+        "src/assessment/formativeBalance.ts",
+        "src/security/val01FormativeRestitutionBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/fixtures/val01-s7b-balance.tsx",
+        "tests/browser/val01-s7b-formative-balance.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-18-val-01-s7-formative-balance.md"
+      ],
+      "tests": [
+        "src/security/val01FormativeRestitutionBoundary.test.ts",
+        "src/security/val01FormativeBalance.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s7b-formative-balance.spec.cjs"
+      ]
     }
   ]
 }
