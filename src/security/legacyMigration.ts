@@ -298,8 +298,17 @@ export async function migrateLegacyToVault(
 
     assertAuthorized?.();
     if (original) assertLegacyBytesUnchanged(storage, original);
-    activationInvoked = true;
-    await vault.activate();
+    if (assertAuthorized) {
+      // Recheck immediately before invoking the durable ACTIVE write, not
+      // merely before the asynchronous metadata read inside activate().
+      await vault.activate(() => {
+        assertAuthorized();
+        if (original) assertLegacyBytesUnchanged(storage, original);
+      }, () => { activationInvoked = true; });
+    } else {
+      activationInvoked = true;
+      await vault.activate();
+    }
     assertAuthorized?.();
     if (original) assertLegacyBytesUnchanged(storage, original);
   } catch (error) {
