@@ -69,13 +69,14 @@ async function restoreCopy(){
 }
 // S-R03b read-only laboratory checks. No file generation, receipt or
 // migration authority: compare actual SAF bytes and all committed datasets.
-async function exactSnapshot(){
+async function exactSnapshot(fresh=false){
   const before=await raw();
   const store=before.version===2?new ExistingSessionVaultStore(2):new IndexedDbVaultStore(globalThis.indexedDB,true);
   const vault=new SecureVault(store);
   try{
-    await vault.unlock(password);
-    if(store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
+    const credential=fresh?'synthetic-new-password':password;
+    await vault.unlock(credential);
+    if(store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(credential);
     const snapshot=await new SecureAppStorage(vault).loadExactBackupSnapshot();
     if(!snapshot||before.keys.length!==10)throw Error('Complete synthetic archive required');
     return { ...before,snapshot };
