@@ -13,6 +13,7 @@ import {encryptDataWithPassword,decryptDataWithPassword} from '../../../src/cryp
 import {createVersionedBackupReceiptAuthority} from '../../../src/persistence/versionedBackupReceipt';
 import {inspectAssessmentBackupPayload,createAssessmentBackupPayloadV7} from '../../../src/security/assessmentBackupPayload';
 import {createDurableMutationCoordinator} from '../../../src/persistence/durableMutationCoordinator';
+import {commitAssessmentEvidence} from '../../../src/persistence/assessmentEvidenceCommit';
 import {incrementBackupChanges} from '../../../src/persistence/backupCheckpoint';
 import {validateAssessmentArchiveV1,type AssessmentArchiveV1} from '../../../src/assessment/assessmentArchive';
 import {deriveConfirmedEvidenceMutation,type EvidenceCommitRequest} from '../../../src/assessment/assessmentEvidenceMutation';
@@ -240,3 +241,54 @@ export function nativeRestoredSummary(){
  const o=requireOwner(),d=section(o.state.appData).document;
  return {...summary(),extra:d.evidence.filter(e=>e.evidenceId==='native-extra').map(e=>({state:e.state,studentId:e.studentId,criterionRevisionId:e.criterionRevisionId}))};
 }
+
+// S6d.3: same real DB2 owner and canonical queue, consumed by the operational
+// React fixture. Fault injection is limited to this synthetic adapter.
+let operationalFault:'none'|'abort'|'hold'='none';
+let releaseOperationalHold:(()=>void)|null=null;
+export function armOperationalFault(fault:'abort'|'hold'){
+ if(operationalFault!=='none'||releaseOperationalHold)throw Error('Synthetic fault already armed');
+ operationalFault=fault;
+}
+export function releaseOperationalWrite(){if(!releaseOperationalHold)throw Error('No held synthetic write');releaseOperationalHold();}
+function operationalState(){
+ const o=requireOwner();
+ return {appData:structuredClone(o.state.appData),document:structuredClone(section(o.state.appData).document),changes:o.state.meta.changes};
+}
+export async function openOperationalArchive(){
+ if(await versions()===0)await seed();else await open();
+ return operationalState();
+}
+export async function recoverOperationalArchive(){
+ await close();await open();return operationalState();
+}
+export async function commitOperationalEvidence(request:EvidenceCommitRequest,confirmation:unknown){
+ const o=requireOwner(),fault=operationalFault;
+ operationalFault='none';
+ return commitAssessmentEvidence({
+  coordinator:o.coordinator,isActive:()=>owner===o&&o.vault.isUnlocked(),
+  getCommitted:()=>({appData:o.state.appData,meta:o.state.meta}),
+  publish:next=>{o.state={...o.state,...next};},
+  storage:{async saveAppDataAndMeta(appData,meta){
+   if(fault==='hold'){
+    await new Promise<void>(resolve=>{releaseOperationalHold=()=>{releaseOperationalHold=null;resolve();};});
+    if(owner!==o)throw Error('Synthetic session expired');
+   }
+   const original=IDBObjectStore.prototype.put;
+   if(fault==='abort')IDBObjectStore.prototype.put=function(value:any,key?:IDBValidKey){
+    const r=key===undefined?original.call(this,value):original.call(this,value,key);
+    if(this.name==='records'&&value?.recordKey==='meta'&&this.transaction.mode==='readwrite')this.transaction.abort();
+    return r;
+   };
+   try{await o.storage.saveAppDataAndMeta(appData,meta);}
+   finally{IDBObjectStore.prototype.put=original;}
+  }}
+ },approved,boardScope,request,confirmation);
+}
+export const operationalDiagnostics={
+ arm:armOperationalFault,release:releaseOperationalWrite,held:()=>releaseOperationalHold!==null,
+ physicalDigest,committed:()=>{
+  const s=operationalState();
+  return {changes:s.changes,revisionIds:s.document.evidence.map(e=>e.revisionId),grades:s.appData.classes[0].grades.map(g=>g.value)};
+ }
+};
