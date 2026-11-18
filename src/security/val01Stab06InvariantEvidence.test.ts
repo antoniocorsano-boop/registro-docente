@@ -23,3 +23,30 @@ describe('VAL-01/STAB-06 qualification evidence scope',()=>{
     expect(workflow).toContain('github.event.pull_request.head.sha');
   });
 });
+
+describe('VAL-01 inherited evidence classification',()=>{
+  test('driver and historical smoke retain exact-source, deterministic prerequisite and isolated native scope',async()=>{
+    const driver=await read('.github/workflows/val01-stab03-driver.yml');
+    const smoke=await read('.github/workflows/val01-stab04-native-smoke.yml');
+    expect(driver).toContain('test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"');
+    expect(driver).toContain('node --test scripts/diagnostics/native-ui-driver.test.mjs');
+    expect(smoke).toContain('needs: driver');
+    expect(smoke).toContain('api: [32, 36]');
+    expect(smoke).toContain('Verify provenance of exact original APK');
+    expect(smoke).toContain('VAL01_HISTORICAL_SMOKE:');
+    expect(smoke).toContain('test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"');
+  });
+
+  test('preflight, protected session and DB2 lifecycle retain their owning browser evidence',async()=>{
+    const browser=await read('tests/browser/val01-database-fence.spec.cjs');
+    for(const title of [
+      'D1b.4a read-only preflight refuses an absent DB without creating it',
+      'D1b.4a full authenticated DB1 is classified without changing any byte or authorizing migration',
+      'D1b.4b.2 existing-only DB2 reader cannot upgrade a complete DB1',
+      'D1b.4b.2 retire actual DB1 owner before migration and authenticate fresh DB2 session',
+      'D1b.4b.2b product Root/App/Privacy approved migration reopens only through new authentication',
+      'D1b.5 actual UI restores DB2 only after approval and fresh authentication',
+      'D1b.5 actual erasure closes other authenticated UI, persists DB2, and new setup requires new authentication'
+    ])expect(browser).toContain(title);
+  });
+});
