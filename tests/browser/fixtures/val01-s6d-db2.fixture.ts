@@ -251,7 +251,7 @@ export function armOperationalFault(fault:'abort'|'hold'){
  operationalFault=fault;
 }
 export function releaseOperationalWrite(){if(!releaseOperationalHold)throw Error('No held synthetic write');releaseOperationalHold();}
-function operationalState(){
+export function operationalState(){
  const o=requireOwner();
  return {appData:structuredClone(o.state.appData),document:structuredClone(section(o.state.appData).document),changes:o.state.meta.changes};
 }
