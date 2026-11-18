@@ -202,6 +202,7 @@ import { ReviewMissionBanner } from './components/ReviewMissionBanner';
 import { EvaluationsView } from './components/EvaluationsView';
 import { MatrixEvaluationEntry, type EvaluationDraftGuard } from './components/MatrixEvaluationEntry';
 import { DailyMatrixWorkspace } from './components/DailyMatrixWorkspace';
+import { MatrixSurfaceSelector } from './components/MatrixSurfaceSelector';
 import { applyDailyGrade, applyDailyObservation, type DailyGradeWrite, type DailyObservationWrite } from './persistence/dailyMatrixWorkspace';
 import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellMutation';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
@@ -3677,7 +3678,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {/* TAB 6: Tabellone Classe */}
         {activeTab === 'tabellone' && currentClass && (
           <div className="space-y-3">
-            <div role="group" aria-label="Vista Tabellone" className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={dailyMatrixMode} onClick={()=>switchDailyMatrixMode(true)} className={'min-h-[48px] rounded-lg border '+(dailyMatrixMode?'neon-btn-primary':'border-[var(--border)]')}>Oggi</button><button type="button" aria-pressed={!dailyMatrixMode} onClick={()=>switchDailyMatrixMode(false)} className={'min-h-[48px] rounded-lg border '+(!dailyMatrixMode?'neon-btn-primary':'border-[var(--border)]')}>Storico</button></div>
+            <MatrixSurfaceSelector mode={dailyMatrixMode?'daily':'historical'} onChange={mode=>switchDailyMatrixMode(mode==='daily')}/>
             {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation}/> : <MatrixView
             onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
