@@ -120,7 +120,7 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
     <h3 className="font-semibold">Confronto facoltativo</h3><p className="text-sm">Seleziona due fatti osservati. Il confronto non determina automaticamente un progresso.</p>
     {([['Prima osservazione',earlier,setEarlier],['Seconda osservazione',later,setLater]] as const).map(([label,value,set])=><label className="block" key={label}>{label}<select className={field} value={value} onChange={e=>{dirty();set(e.target.value);}}><option value="">Nessun confronto</option>{selectedObserved.map(r=><option key={r.record.revisionId} value={r.record.revisionId}>{r.record.observedOn} · {r.criterion.description}</option>)}</select></label>)}
    </section>
-   {([['learning','Apprendimenti'],['progress','Progresso documentato'],['nextStep','Prossimo passo']] as const).map(([key,label])=><label className="block" key={key}>{label}<textarea maxLength={2000} rows={3} className={field} value={teacherText[key]} onChange={e=>{dirty();setTeacherText(t=>({...t,[key]:e.target.value}));}}/></label>)}
+   {([['learning','Apprendimenti'],['progress','Progresso documentato'],['nextStep','Prossimo passo']] as const).map(([key,label])=><label className="block" key={key}>{label}<textarea aria-label={label} maxLength={2000} rows={3} className={field} value={teacherText[key]} onChange={e=>{dirty();setTeacherText(t=>({...t,[key]:e.target.value}));}}/></label>)}
    <button className={button} type="button" onClick={prepare}>Rivedi bilancio</button>
   </fieldset>}
   {message&&<p role="alert">{message}</p>}
