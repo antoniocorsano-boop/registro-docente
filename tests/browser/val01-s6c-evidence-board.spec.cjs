@@ -25,6 +25,7 @@ test('explicit new observation, edited preview invalidation, correction and with
  await page.getByLabel('Stato',{exact:true}).selectOption('observed');
  await page.getByLabel('Tipo di evidenza').selectOption('product');await page.getByLabel('Fatto osservato').fill('Schema dimostrativo');
  await page.getByLabel('Metodo',{exact:true}).fill('Elaborato');
+ await page.getByLabel('Interpretazione',{exact:true}).selectOption('pending');
  await page.getByRole('button',{name:'Rivedi rilevazione'}).click();await expect(page.getByRole('region',{name:'Riepilogo prima della conferma'})).toBeVisible();
  await page.getByLabel('Fatto osservato').fill('Schema riveduto');await expect(page.getByRole('button',{name:'Conferma rilevazione'})).toHaveCount(0);
  await expect(row(page,4)).toContainText('Non registrato');
@@ -62,3 +63,28 @@ for(const [width,height,scale] of [[320,700,100],[390,844,100],[320,700,200]]){
   }finally{await context.close();}
  });
 }
+
+test('frozen rubric: explicit level, descriptor, preview invalidation and preserved correction',async({page})=>{
+ await open(page);await student(page,1).click();await page.getByRole('button',{name:'Correggi'}).click();
+ await page.getByLabel('Interpretazione',{exact:true}).selectOption('level');
+ const levels=page.getByLabel('Livello',{exact:true});
+ await expect(levels.locator('option')).toHaveText(['Seleziona livello','Parziale','Coerente']);
+ await page.getByRole('button',{name:'Rivedi rilevazione'}).click();await expect(page.getByRole('alert')).toContainText('completa i campi');
+ await levels.selectOption('l2');await expect(page.getByText('Motiva i collegamenti tra fasi',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Rivedi rilevazione'}).click();await expect(page.getByRole('region',{name:'Riepilogo prima della conferma'})).toContainText('Coerente');
+ await levels.selectOption('l1');await expect(page.getByRole('button',{name:'Conferma rilevazione'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Rivedi rilevazione'}).click();await page.getByRole('button',{name:'Conferma rilevazione'}).click();
+ await expect(page.getByRole('status')).toContainText('Nessun dato salvato');await expect(page.getByRole('region',{name:'Rilevazione individuale'})).toContainText('Interpretazione: Parziale');
+ await page.getByRole('button',{name:'Correggi'}).click();await expect(levels).toHaveValue('l1');
+});
+test('without rubric only pending or descriptive interpretation; no implicit choice',async({page})=>{
+ await open(page);await page.getByLabel('Criterio',{exact:true}).selectOption('c2');await student(page,4).click();
+ await page.getByRole('button',{name:'Nuova rilevazione'}).click();
+ await page.getByLabel('Stato',{exact:true}).selectOption('observed');await page.getByLabel('Tipo di evidenza').selectOption('product');
+ await page.getByLabel('Fatto osservato').fill('Scelta motivata');await page.getByLabel('Metodo',{exact:true}).fill('Elaborato');
+ const modes=page.getByLabel('Interpretazione',{exact:true});await expect(modes.locator('option')).toHaveText(['Seleziona interpretazione','Da definire','Descrittiva']);
+ await page.getByRole('button',{name:'Rivedi rilevazione'}).click();await expect(page.getByRole('alert')).toBeVisible();
+ await modes.selectOption('description');await page.getByLabel('Interpretazione descrittiva').fill('Motivazione pertinente');
+ await page.getByRole('button',{name:'Rivedi rilevazione'}).click();await page.getByRole('button',{name:'Conferma rilevazione'}).click();
+ await expect(page.getByRole('status')).toContainText('Nessun dato salvato');await expect(page.getByRole('region',{name:'Rilevazione individuale'})).toContainText('Motivazione pertinente');
+});
