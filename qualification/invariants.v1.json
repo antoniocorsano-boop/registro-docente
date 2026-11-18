@@ -2512,6 +2512,26 @@
       "tests": [
         "src/security/val01AssessmentLifecycleConsolidation.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S6C-BOARD-I01",
+      "owner": "VAL-01/S6c",
+      "statement": "The synthetic evidence board requires explicit selection of an active completed assessment and its exact frozen criterion. It preserves roster order, separates no active record, not observed, not applicable and observed, retains multiple distinct active events, and excludes withdrawn or superseded evidence. Individual actions require explicit review and confirmation using existing commands; context remains fixed during draft. No grades, inference, real data, persistence, runtime entrypoint or release. Mobile browser evidence includes 320/390 and enlarged text.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceBoard.ts",
+        "src/security/val01IndividualEvidenceBoard.test.ts",
+        "tests/browser/fixtures/val01-s6c-data.ts",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/fixtures/val01-s6c.html",
+        "tests/browser/val01-s6c-evidence-board.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceBoard.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
     }
   ]
 }
