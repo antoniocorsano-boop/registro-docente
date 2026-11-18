@@ -9,7 +9,7 @@ import {SecureAppStorage,type CompleteSecureAppSnapshot} from '../../../src/secu
 import {classifyArchivePreflight} from '../../../src/security/archivePreflight';
 import {createBackupPayload} from '../../../src/security/backupPayload';
 import {withoutLocalBackupVerification} from '../../../src/persistence/backupCheckpoint';
-import {encryptDataWithPassword} from '../../../src/cryptoUtils';
+import {decryptDataWithPassword,encryptDataWithPassword,BACKUP_VERSION_V2} from '../../../src/cryptoUtils';
 const name='registro-docente-secure-vault';
 const password='synthetic-archive-compatibility-only';
 const copyPassword='synthetic-archive-backup-only';
@@ -67,4 +67,22 @@ async function restoreCopy(){
   const next={...source,appData:{...source.appData,classes:[],currentClassId:null},meta:{changes:19,lastBackup:null}};
   return {expected:next,backup:await encryptDataWithPassword(createBackupPayload(next,new Date().toISOString()),copyPassword)};
 }
-Object.assign(globalThis,{__val01ProductInspection:{inspect,raw,restoreCopy,state:()=>inspectDb2LifecycleState()}});
+// S-R03b read-only laboratory checks. No file generation, receipt or
+// migration authority: compare actual SAF bytes and all committed datasets.
+async function exactSnapshot(){
+  const before=await raw();
+  const store=before.version===2?new ExistingSessionVaultStore(2):new IndexedDbVaultStore(globalThis.indexedDB,true);
+  const vault=new SecureVault(store);
+  try{
+    await vault.unlock(password);
+    if(store instanceof ExistingSessionVaultStore)await store.verifyAuthenticatedRecords(password);
+    const snapshot=await new SecureAppStorage(vault).loadExactBackupSnapshot();
+    if(!snapshot||before.keys.length!==10)throw Error('Complete synthetic archive required');
+    return { ...before,snapshot };
+  }finally{vault.lock();await store.retireConnection();}
+}
+async function decodeActualBackup(encryptedText:string){
+  if(JSON.parse(encryptedText).version!==BACKUP_VERSION_V2)throw Error('Unexpected backup envelope');
+  return decryptDataWithPassword(encryptedText,copyPassword);
+}
+Object.assign(globalThis,{__val01ProductInspection:{inspect,raw,restoreCopy,exactSnapshot,decodeActualBackup,state:()=>inspectDb2LifecycleState()}});

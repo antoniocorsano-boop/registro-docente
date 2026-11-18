@@ -10,6 +10,7 @@ import {createNativeUiDriver,parseNativeNodes,resumedActivity,NativeUiFault,demo
 const integral=process.env.VAL01_INTEGRAL==='true';
 const product=process.env.VAL01_PRODUCT==='true';
 const db2Lifecycle=process.env.VAL01_DB2_LIFECYCLE==='true';
+const realBackup=process.env.VAL01_REAL_BACKUP==='true';
 const interruptionCut=process.env.VAL01_MIGRATION_CUT||'';
 const smoke=process.env.VAL01_HISTORICAL_SMOKE==='true';
 const api=product?Number(process.env.VAL01_API):36;
@@ -186,7 +187,7 @@ function verifyDemoSelectionRecognition(){
 async function selectOriginalDemo(){await uiDriver.selectDemo();}
 async function enterSyntheticPassword(credential=vaultPassword,expected){await uiDriver.enterPassword(credential,expected);}
 const passwordRejected=view=>view.some(n=>nativeApp(n)&&n.text==='Password errata o metadata del vault manomesso.');
-async function gate(action,credential=vaultPassword){
+async function gate(action,credential=vaultPassword,expectedAlert=null){
   const expected=action==='Avvia la prova'||action==='Crea il mio registro'?'Configura archivio protetto':action;
   await enterSyntheticPassword(credential,expected);
   console.log('original-gate-input-verified',action);
@@ -196,6 +197,7 @@ async function gate(action,credential=vaultPassword){
   const outcome=await until(()=>{
     const view=nodes();
     if(passwordRejected(view))return 'rejected';
+    if(expectedAlert&&view.some(n=>nativeApp(n)&&n.text===expectedAlert))return 'opened';
     if(view.some(n=>nativeApp(n)&&n.text==='Le mie classi')||view.some(n=>named(n,'Apri navigazione del Registro')))return 'opened';
     return null;
   },'Original gate did not reach an explicit outcome: '+action,45000);
@@ -341,13 +343,13 @@ async function cancelProductPicker(){
   }
   throw Error('Native picker cancellation did not return after four verified Back actions');
 }
-async function selectProductFile(cancel=false){
+async function selectProductFile(cancel=false,selectedFilename=filename){
   // The click invokes the actual React handler, not a fixture API.
   await domClick(productPanel+' > button');
   await downloads();
   if(cancel)await cancelProductPicker();
   else{
-    const row=await find(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'Candidate encrypted file title absent');
+    const row=await find(n=>doc(n)&&n.text===selectedFilename&&!/preview|anteprima/i.test(n.desc),'Candidate encrypted file title absent');
     tap(row);
     await until(()=>foreground()||nodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),'File selection did not return',20000);
     if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Native Open confirmation absent'));
@@ -648,6 +650,111 @@ async function migrationInterruptionSuite(oldVersion,initial){
   assert.equal(final.version,2);assert.equal(final.digest,before.digest);assert.deepEqual(final.keys,before.keys);assert.deepEqual(final.snapshot,before.snapshot);assert.equal(final.marker,true);
   stage('interruption-final-cold-reopen',{version:2,recordCount:10,physicalSha256:final.digest,logicalSnapshotEqual:true,markerVisible:true});
 }
+// S-R03b: actual export -> local SAF file -> protected migration ->
+// changed destination -> restore of the SAME file. No generated backup or
+// adb push in this suite, no native bridge grants issued by the driver.
+const backupSavedMessage='Copia di sicurezza salvata e verificata nella cartella scelta.';
+const exactProduct=()=>call('__val01ProductInspection','exactSnapshot');
+const localFileBytes=name=>execFileSync('adb',['exec-out','cat','/sdcard/Download/'+name],{timeout:30000});
+const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
+async function exportActualNativeBackup(){
+  adb('shell','mkdir','-p','/sdcard/Download');
+  const previous=new Set(adb('shell','ls','-1','/sdcard/Download').split('\n').filter(Boolean));
+  const form='form:has(input[placeholder="Inserisci password sicura (min. 6 caratteri)"])';
+  await until(()=>visible(form),'Actual Privacy export form absent',45000);
+  await evaluate('(()=>{const f='+query(form)+';const fields=[...f.querySelectorAll("input[type=password]")];if(fields.length!==2)throw Error("Expected two export credentials");const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;for(const field of fields){set.call(field,"synthetic-archive-backup-only");field.dispatchEvent(new Event("input",{bubbles:true}));}return true})()');
+  await clickDeferred(form+' button[type=submit]');
+  await downloads();
+  tap(await find(n=>doc(n)&&n.enabled&&/^(save|salva)$/i.test(n.text),'Native export Save missing'));
+  await until(foreground,'SAF destination picker did not return',30000);
+  await until(()=>visible('#vault-password'),'Export chooser did not require reauthentication',45000);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro',vaultPassword,backupSavedMessage);
+  await nativeConfirm(backupSavedMessage,true);
+  const name=await until(()=>{
+    const files=adb('shell','ls','-1','/sdcard/Download').split('\n').filter(x=>!previous.has(x)&&/^Backup_Cifrato_GDPR_\d{4}-\d{2}-\d{2}\.enc\.json$/.test(x));
+    assert.ok(files.length<=1,'Ambiguous actual SAF output');
+    return files[0]||null;
+  },'Actual exported file not present in Downloads',30000);
+  const bytes=localFileBytes(name);
+  assert.ok(bytes.length>0&&bytes.length<=32*1024*1024);
+  return {name,bytes,digest:sha256(bytes)};
+}
+async function realBackupSuite(oldVersion,initial){
+  assert.equal(integral,true);assert.equal(product,true);assert.equal(oldVersion,10004);
+  await seedOriginal(oldVersion);
+  stage('historical-seed-cold-reopen',{originalBinary:true});
+  stop();install(process.env.NEW_APK,['-r']);assert.deepEqual(identity(10005),initial);
+  launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Candidate initial gate missing',45000);
+  await diagnostic();
+  const original=await exactProduct();
+  assert.equal(original.version,1);assert.equal(original.keys.length,10);
+  assert.ok(original.snapshot.appData.classes.some(c=>c.name===marker));
+  stage('sr03b-original-db1',{version:1,recordCount:10,physicalSha256:original.digest});
+  await productGate();await privacyProduct();
+  const file=await exportActualNativeBackup();
+  await diagnostic();
+  const decoded=await call('__val01ProductInspection','decodeActualBackup',file.bytes.toString('utf8'));
+  assert.equal(decoded.app,'registro-docente');assert.equal(decoded.backupDataVersion,6);
+  assert.deepEqual(decoded.snapshot.meta,{changes:0,lastBackup:decoded.exportedAt});
+  assert.deepEqual(decoded.snapshot,{...original.snapshot,meta:decoded.snapshot.meta});
+  const exported=await exactProduct();
+  const receipt=exported.snapshot.meta;
+  assert.equal(exported.version,1);assert.equal(exported.keys.length,10);
+  assert.deepEqual({...exported.snapshot,meta:original.snapshot.meta},original.snapshot);
+  assert.equal(receipt.changes,0);
+  assert.equal(receipt.lastBackup,decoded.exportedAt);
+  assert.equal(receipt.verifiedBackupAt,decoded.exportedAt);
+  assert.deepEqual(receipt.verifiedBackupEvidence,{bytes:file.bytes.length,sha256:file.digest,source:'android-readback',payloadVersion:6,checkpointAt:decoded.exportedAt});
+  stage('sr03b-actual-export-verified',{bytes:file.bytes.length,sha256:file.digest,payloadVersion:6,recordCount:10,exactSnapshotEqual:true,nativeReceiptEqual:true,reauthenticated:true});
+  await productGate();await privacyProduct();await selectProductFile(false,file.name);
+  await submitProduct('synthetic-archive-backup-only',true);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro');await diagnostic();
+  const migrated=await exactProduct();
+  assert.equal(migrated.version,2);assert.equal(migrated.digest,exported.digest);
+  assert.deepEqual(migrated.keys,exported.keys);assert.deepEqual(migrated.snapshot,exported.snapshot);
+  stage('sr03b-same-file-migrated',{version:2,recordCount:10,sha256:file.digest,physicalSha256:migrated.digest,exactSnapshotEqual:true,reauthenticated:true});
+  stop();launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Cold migration gate absent',45000);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro');await diagnostic();
+  const cold=await exactProduct();
+  assert.equal(cold.digest,migrated.digest);assert.deepEqual(cold.snapshot,migrated.snapshot);
+  stage('sr03b-migration-cold-reopen',{physicalSha256:cold.digest,exactSnapshotEqual:true,reauthenticated:true});
+  // Change real data via the product UI, not a fixture-created restore file.
+  await productGate();await ensureHome();
+  const changedName='Collaudo recupero SR03';
+  tap(await appButton('Nuova Classe'));
+  await appText('Inserisci la denominazione della nuova classe');
+  await uiDriver.enterClassName(changedName);await uiDriver.submitClass(changedName);
+  await until(()=>nodes().some(n=>named(n,'Gestione Elenco Alunni: '+changedName)),'New synthetic class was not committed',30000);
+  await diagnostic();
+  const changed=await exactProduct();
+  assert.equal(changed.version,2);assert.notEqual(changed.digest,migrated.digest);
+  assert.equal(changed.snapshot.appData.classes.length,decoded.snapshot.appData.classes.length+1);
+  assert.ok(changed.snapshot.appData.classes.some(c=>c.name===changedName));
+  stage('sr03b-destination-changed',{physicalSha256:changed.digest,distinctData:true});
+  productPanel='section[aria-label="Ripristino protetto archivio"]';
+  await productGate();await privacyProduct();await selectProductFile(false,file.name);
+  await submitRestore('synthetic-archive-backup-only',true);
+  await gate('Sblocca Registro');await diagnostic();
+  const restored=await exactProduct();
+  assert.equal(restored.version,2);assert.equal(restored.keys.length,10);
+  assert.notEqual(restored.digest,changed.digest);assert.deepEqual(restored.snapshot,decoded.snapshot);
+  stage('sr03b-same-file-restored',{version:2,recordCount:10,sha256:file.digest,physicalSha256:restored.digest,exactSnapshotEqual:true,reauthenticated:true,localReceiptNotImported:true});
+  stop();launchOriginal();await connect();
+  await until(()=>visible('#vault-password'),'Cold restore gate absent',45000);
+  assert.equal(await visible('[data-testid="header01-topbar"]'),false);
+  await gate('Sblocca Registro');await diagnostic();
+  const final=await exactProduct();
+  assert.equal(final.digest,restored.digest);assert.deepEqual(final.snapshot,decoded.snapshot);
+  stage('sr03b-restore-cold-reopen',{physicalSha256:final.digest,exactSnapshotEqual:true,reauthenticated:true});
+  const finalFile=localFileBytes(file.name);assert.deepEqual(finalFile,file.bytes);
+  stage('sr03b-external-file-preserved',{bytes:finalFile.length,sha256:sha256(finalFile)});
+}
+
 async function productSuite(oldVersion,initial){
   assert.equal(integral,true);
   await seedOriginal(oldVersion);
@@ -755,7 +862,7 @@ try{
     assert.deepEqual(identity(oldVersion),initial);
     assert.ok(!socket,'Historical smoke must not use DevTools');
     stage('smoke-original-installation-preserved',{sameUid:true,sameFirstInstall:true,versionCode:oldVersion,noCandidateInstall:true});
-  }else if(product){if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
+  }else if(product){if(realBackup)await realBackupSuite(oldVersion,initial);else if(interruptionCut)await migrationInterruptionSuite(oldVersion,initial);else await productSuite(oldVersion,initial);}
   else{
   let seed;
   if(integral){
