@@ -29,6 +29,8 @@ test('ordinary diagnostic activity: explicit selection, no rubric, review and lo
   await expect(page.getByText('Nessun dato salvato.',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Conferma configurazione'})).toHaveCount(0);
   expect(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length}))).toEqual({local:0,session:0});
+  await page.getByRole('button',{name:'Indietro',exact:true}).click();await page.getByRole('button',{name:'Apri configurazione'}).click();
+  await expect(page.getByRole('alert')).toContainText('già configurata');
 });
 test('exam rehearsal: two explicitly selected criteria and compatible rubrics; no official result',async({page})=>{
   await open(page,'Simulazione d’esame');await metadata(page,'Simulazione d’esame','summative');
