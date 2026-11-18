@@ -342,13 +342,66 @@ describe('S-R02 revocable candidate legacy migration', () => {
     expect(source.removed).toHaveLength(6);
   });
 
+  test('S-R05 revocation inside activation metadata read never invokes ACTIVE write', async () => {
+    const source = makeMigrationStorage();
+    const before = collectLegacySnapshot(source);
+    const auth = authorization();
+    class ActivationReadStore extends MemoryVaultStore {
+      activeWrites = 0;
+      override async getMetadata() {
+        const value = await super.getMetadata();
+        if (value?.state === 'STAGING') auth.revoke();
+        return value;
+      }
+      override async putMetadata(metadata: VaultMetadataV1) {
+        if (metadata.state === 'ACTIVE') this.activeWrites++;
+        await super.putMetadata(metadata);
+      }
+    }
+    const store = new ActivationReadStore();
+    const vault = new SecureVault(store);
+    await expect(migrateLegacyToVault(source, vault, password, auth.assert)).rejects.toThrow('Sessione revocata');
+    expect(store.activeWrites).toBe(0);
+    expect(collectLegacySnapshot(source)).toEqual(before);
+    expect(source.removed).toEqual([]);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+    expect(vault.isUnlocked()).toBe(false);
+  });
+
+  test('S-R05 changed source during activation metadata read refuses ACTIVE write', async () => {
+    const values = new Map([[STORAGE_KEY, JSON.stringify({classes: [], currentClassId: null})]]);
+    const source = new MemoryLegacyStorage(values);
+    class ChangedSourceStore extends MemoryVaultStore {
+      activeWrites = 0;
+      override async getMetadata() {
+        const value = await super.getMetadata();
+        if (value?.state === 'STAGING') values.set(STORAGE_KEY, JSON.stringify({classes: [], currentClassId: 'synthetic-change'}));
+        return value;
+      }
+      override async putMetadata(metadata: VaultMetadataV1) {
+        if (metadata.state === 'ACTIVE') this.activeWrites++;
+        await super.putMetadata(metadata);
+      }
+    }
+    const store = new ChangedSourceStore();
+    const vault = new SecureVault(store);
+    await expect(migrateLegacyToVault(source, vault, password, authorization().assert)).rejects.toThrow('Dati sorgente cambiati');
+    expect(store.activeWrites).toBe(0);
+    expect(source.removed).toEqual([]);
+    expect(JSON.parse(source.getItem(STORAGE_KEY)!).currentClassId).toBe('synthetic-change');
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+    expect(vault.isUnlocked()).toBe(false);
+  });
+
   test('revocation after durable activation preserves ACTIVE and source until new authenticated cleanup', async () => {
     const source = makeMigrationStorage();
     const store = new MemoryVaultStore();
     const auth = authorization();
     class RevokingVault extends SecureVault {
-      override async activate() {
-        await super.activate();
+      override async activate(assertAuthorized?: () => void, onCommitInvoked?: () => void) {
+        await super.activate(assertAuthorized, onCommitInvoked);
         auth.revoke();
       }
     }
