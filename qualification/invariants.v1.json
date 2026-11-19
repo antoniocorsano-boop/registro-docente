@@ -2484,6 +2484,18 @@
       "tests": [
         "src/security/doc01RecordedLessonSource.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1D4A-I01",
+      "owner": "DOC-01/D1d4a",
+      "statement": "Unified document review derives all source scopes from a single independently checked context and calls the existing Arena, Docente OS and recorded-lesson validators. Missing sources remain absent, invalid selected sources block confirmation, planned and recorded hours stay distinct, selected-only coverage is explicit, unfilled fields remain unfilled. Detached summaries reveal no internal source identifiers or texts; exact revalidation is required before a partial nonofficial confirmation. No persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/unifiedDocumentReview.ts",
+        "src/security/doc01UnifiedDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentReview.test.ts"
+      ]
     }
   ]
 }
