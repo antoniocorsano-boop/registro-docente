@@ -2416,6 +2416,695 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-S5A-I01",
+      "owner": "VAL-01/S5a",
+      "statement": "The isolated preparation catalogue validates local scope, offers only active exact criterion and reference revisions with compatible active rubric revisions, detects an existing activity without duplication, rejects malformed input and never silently upgrades historical links or selects on behalf of the teacher. Outputs no student roster or individual evidence; no mutation, persistence, AI, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationOptions.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5B-I01",
+      "owner": "VAL-01/S5b",
+      "statement": "The isolated assessment preparation command accepts only explicit local selections and valid planned activity metadata, shows an unconfirmed review of the selected exact references, rejects existing activities, conflicting IDs, stale or incompatible revisions and cross-scope review, and revalidates the complete graph on explicit confirmation. Returns a planned definition only, without persistence, runtime activation, generated IDs, grades, student evidence, automatic selection or AI.",
+      "impactPaths": [
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentDefinitionPreparation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S5C-I01",
+      "owner": "VAL-01/S5c",
+      "statement": "The isolated synthetic assessment preparation interface uses the existing catalogue and preparation commands, requires explicit choices and confirmation, invalidates edited or changed-context previews, rejects duplicate activity and stale selections, preserves draft until explicit exit, and exposes no storage, remote calls or production entrypoint. The exam rehearsal is a planned synthetic activity, not an official exam result. Mobile browser evidence includes narrow screens and enlarged text.",
+      "impactPaths": [
+        "src/components/AssessmentPreparationPanel.tsx",
+        "src/security/val01AssessmentPreparationPanel.test.ts",
+        "tests/browser/fixtures/val01-s5c-fixture.tsx",
+        "tests/browser/fixtures/val01-s5c.html",
+        "tests/browser/val01-s5c-preparation.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01AssessmentPreparationPanel.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s5c-preparation.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6A-I01",
+      "owner": "VAL-01/S6a",
+      "statement": "An isolated explicit completion preview and confirmation converts only an active planned assessment into a new completed revision with a separately confirmed actual date, preserving frozen historical criteria, references, rubric and planned metadata. Rejects stale or altered preview, foreign scope, non-planned or reopened assessment, duplicate revision identity and invalid date or chronology; no automatic completion, persistence, student evidence, grades, network or runtime activation.",
+      "impactPaths": [
+        "src/assessment/assessmentCompletion.ts",
+        "src/security/val01AssessmentCompletion.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentCompletion.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6B1-I01",
+      "owner": "VAL-01/S6b.1",
+      "statement": "A new individual observation requires explicit student, active completed assessment, frozen criterion, unique local event and revision identities, valid fact and separate explicit interpretation or missing-state declaration, exact review and teacher confirmation. Rechecks scope and graph; rejects stale review, duplicate events and invalid level or state; no inference from grades, shared products, support or absence, no persistence, runtime activation or real data.",
+      "impactPaths": [
+        "src/assessment/individualObservation.ts",
+        "src/security/val01IndividualObservation.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualObservation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6B2-I01",
+      "owner": "VAL-01/S6b.2",
+      "statement": "Correction or motivated withdrawal of a confirmed individual evidence requires its current revision, new unique revision identity, explicit review and confirmation, monotonic chronology and frozen original assessment, criterion and student/event identity. Append-only history is preserved, active projection counts once or excludes withdrawn evidence; terminal withdrawal, stale review, invalid changes and no-op corrections are rejected. No persistence, deletion, grades, inference, real data or runtime activation.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceRevision.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-CONSOLIDATION-I01",
+      "owner": "VAL-01/S6-C",
+      "statement": "The consolidated local assessment lifecycle preserves distinct exact preparation, completion, observation, correction and withdrawal commands; explicit confirmations and frozen references are retained end-to-end. No inferred grade or official examination outcome, no duplicate active observation or storage activation; synthetic lifecycle tests verify distinct missing-state semantics and concurrent stale corrections.",
+      "impactPaths": [
+        "src/security/val01AssessmentLifecycleConsolidation.test.ts",
+        "src/assessment/assessmentPreparationOptions.ts",
+        "src/assessment/assessmentDefinitionPreparation.ts",
+        "src/assessment/assessmentCompletion.ts",
+        "src/assessment/individualObservation.ts",
+        "src/assessment/individualEvidenceRevision.ts",
+        "src/assessment/assessmentEvidenceProjection.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentLifecycleConsolidation.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-BOARD-I01",
+      "owner": "VAL-01/S6c",
+      "statement": "The synthetic evidence board requires explicit selection of an active completed assessment and its exact frozen criterion. It preserves roster order, separates no active record, not observed, not applicable and observed, retains multiple distinct active events, and excludes withdrawn or superseded evidence. Individual actions require explicit review and confirmation using existing commands; context remains fixed during draft. No grades, inference, real data, persistence, runtime entrypoint or release. Mobile browser evidence includes 320/390 and enlarged text.",
+      "impactPaths": [
+        "src/assessment/individualEvidenceBoard.ts",
+        "src/security/val01IndividualEvidenceBoard.test.ts",
+        "tests/browser/fixtures/val01-s6c-data.ts",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/fixtures/val01-s6c.html",
+        "tests/browser/val01-s6c-evidence-board.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "tests/browser/fixtures/val01-s6c-board.tsx"
+      ],
+      "tests": [
+        "src/security/val01IndividualEvidenceBoard.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6C-RUBRIC-I01",
+      "owner": "VAL-01/S6c.2",
+      "statement": "Interpretation options use only the exact frozen rubric linked to the completed assessment criterion. No automatic selection or grade inference. Pending is explicit; a level must belong to that revision, or a description may be entered only without a rubric. Edits invalidate review; correction preserves historical fact metadata and existing interpretation. Synthetic only; no runtime or persistence.",
+      "impactPaths": [
+        "src/assessment/evidenceInterpretationOptions.ts",
+        "src/security/val01EvidenceInterpretationOptions.test.ts",
+        "tests/browser/fixtures/val01-s6c-data.ts",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/val01-s6c-evidence-board.spec.cjs",
+        "tests/browser/fixtures/val01-s6c-board.tsx"
+      ],
+      "tests": [
+        "src/security/val01EvidenceInterpretationOptions.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6c-evidence-board.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-INTEGRATION-I01",
+      "owner": "VAL-01/S6d.1",
+      "statement": "Existing production Tabellone uses the shared Oggi/Storico selector and original guarded transition only. Explicit laboratory host integrates those actual view components, synthetic evidence and actual student report; preserves proof/criterion/student on return, blocks navigation while a draft is open, projects only the explicitly selected student's active evidence, and leaves ordinary grade writes disabled. No production evidence entry, real data, storage, schema or release changes.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/MatrixSurfaceSelector.tsx",
+        "tests/browser/fixtures/val01-s6c-board.tsx",
+        "tests/browser/fixtures/val01-s6c-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d.html",
+        "tests/browser/val01-s6d-integration.spec.cjs",
+        "src/security/val01MatrixSurfaceIntegration.test.ts",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/val01MatrixSurfaceIntegration.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-integration.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-DURABLE-I01",
+      "owner": "VAL-01/S6d.2a",
+      "statement": "An isolated evidence mutation derives against the latest committed existing archive and independent approved scopes with exact roster and selected class; rechecks the qualified observation/revision review, appends one confirmed revision and revalidates the entire archive. Existing grades, bindings and history remain intact. Synthetic real cryptography and canonical durable coordinator test atomic appData+meta write, publication after persistence, authenticated reopening, failure, retry and sealed-session rejection. No production activation, migration or backup authority.",
+      "impactPaths": [
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "src/security/val01AssessmentEvidenceMutation.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md",
+        "src/security/secureAppStorage.ts",
+        "src/persistence/durableMutationCoordinator.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentEvidenceMutation.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S6D-BACKUP-V7-I01",
+      "owner": "VAL-01/S6d.2b",
+      "statement": "The exact isolated V7 codec from the frozen protected candidate preserves the confirmed evidence history and frozen rubric graph with grades unchanged, uses independently approved scopes, rejects V7 in the historic reader and domain under older payload labels in V7 inspection, verifies encrypted roundtrip and flags replacement review. Inspection never grants restore or execution authority. No runtime, DB2 migration, backup export activation, production data or release.",
+      "impactPaths": [
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/val01EvidenceBackupRoundtrip.test.ts",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/val01EvidenceBackupRoundtrip.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-D1B-I02",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated v7 codec preserves all ten datasets and validated frozen assessment history; independently supplied scope is required, historic formats never carry or invent assessment evidence, old v6 readers reject v7, local verified-copy attestations are not portable, and replacement of a destination containing assessment evidence is flagged for explicit review. The v7 codec preserves historical Copilot statuses without conferring execution authority and requires canonical planning v2 instead of silently normalizing; legacy v6 restore behavior remains unchanged. The encrypted envelope remains v2. Inspection is not a restore authorization, and no runtime persistence is activated.",
+      "impactPaths": [
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ],
+      "tests": [
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B-I04",
+      "owner": "VAL-01/D1b",
+      "statement": "The isolated version-bound backup receipt authority generates and encrypts its own checkpoint using the selected codec, derives version and exact bytes/digest from the encrypted payload, forbids v6 evidence archives and version mismatch at consumption, requires actual web readback or verified Android bridge, invalidates on cancellation, stale session, replay and supersession, preserves later changes, never transfers local receipts and does not activate runtime writes. A v6 receipt cannot attest v7 coverage.",
+      "impactPaths": [
+        "src/persistence/versionedBackupReceipt.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/persistence/backupCheckpoint.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/backupPayload.ts",
+        "src/security/androidBackupExport.ts",
+        "src/security/webBackupVerification.ts",
+        "src/cryptoUtils.ts"
+      ],
+      "tests": [
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-DB2-I01",
+      "owner": "VAL-01/S6d.2c.1",
+      "statement": "Isolated synthetic DB2 laboratory reuses exact protected vault modules, authorizes a synthetic V6-backed DB1 fence migration before seeding evidence, authenticates all ten records on existing DB2 open, serializes confirmed evidence through the canonical durable coordinator and changes only encrypted appData and meta. Real IndexedDB abort preserves both physical records; fresh authenticated owner permits retry; cold document reopen preserves history and downgrade is rejected. V7 readback inspection uses committed data; V6 export and legacy replacement refused. No production activation, persistent V7 receipt, V7 restore authorization, native Android claim or real data.",
+      "impactPaths": [
+        "src/security/vaultStore.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/db2PhysicalLifecycle.ts",
+        "src/security/existingSessionVaultStore.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/db2Lifecycle.ts",
+        "src/persistence/versionedBackupReceipt.ts",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-db2.html",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "src/security/val01Db2EvidenceBoundary.test.ts",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01Db2EvidenceBoundary.test.ts",
+        "src/security/val01AssessmentEvidenceMutation.test.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-NATIVE-I01",
+      "owner": "VAL-01/S6d.2c.2",
+      "statement": "Synthetic Android API32/36 qualification builds the exact DB2 storage fixture in an isolated debug package with automatic backup disabled. Checks atomic abort and durable commit, three positively observed force-stops with two consecutive successful absence probes each, stable installation identity, absent in-memory owner and fresh authenticated reopen, intact encrypted records/history, V7 inspection and V6 refusal. Native workflow evidence is required; wiring and process-probe unit tests alone are not native qualification. No production UI, SAF, authorized V7 restore, release or real data.",
+      "impactPaths": [
+        ".github/workflows/val01-native-evidence.yml",
+        "scripts/diagnostics/val01-native-evidence.mjs",
+        "scripts/diagnostics/native-process-probe.mjs",
+        "scripts/diagnostics/native-process-probe.test.mjs",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "src/security/val01NativeEvidenceBoundary.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01NativeEvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S6D-RESTORE-V7-I01",
+      "owner": "VAL-01/S6d.2c.3",
+      "statement": "Opt-in isolated DB2 V7 replacement requires independently approved scopes, authenticated expected owner, exact encrypted current recovery copy, complete V7 candidate and preservation of every existing confirmed assessment revision and frozen link. Existing V6 entry remains separate. A one-use explicit consent commits via existing full-inventory CAS and rotates key, rejects stale owner, replay, refusal, revocation, incorrect password/scope, incompatible or loss-inducing copy. Precommit abort preserves physical image; postcommit uncertainty never rolls it back. Reopen authenticates all records. No real archive, product UI, SAF or release authority.",
+      "impactPaths": [
+        "src/security/assessmentRestorePolicy.ts",
+        "src/security/db2Lifecycle.ts",
+        "src/security/val01AssessmentRestorePolicy.test.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "src/security/db2PhysicalLifecycle.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01AssessmentRestorePolicy.test.ts",
+        "src/security/val01Db2EvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S6D-NATIVE-RESTORE-I01",
+      "owner": "VAL-01/S6d.2c.4",
+      "statement": "Isolated synthetic Android API32/36 qualification extends the existing native DB2 workflow to actual SAF create/open document operations. Two distinct encrypted V7 copies are written, read back, selected by exact filename and independently hashed. Cancellation cannot authorize replacement. Only selected bytes, current recovery copy, authenticated generation and explicit single-use consent reach the existing V7 restore service. Session lifecycle revokes pending consent. The native driver checks unchanged ciphertext before commit, replacement of all ten encrypted records, refusal of replay and fourth verified process restart with authenticated history and new evidence intact. All twelve stages per API must pass on the exact candidate; static wiring is not native qualification. No production UI, release authority or real archive.",
+      "impactPaths": [
+        ".github/workflows/val01-native-evidence.yml",
+        "scripts/diagnostics/val01-native-evidence.mjs",
+        "scripts/diagnostics/native-ui-driver.mjs",
+        "scripts/diagnostics/native-ui-driver.test.mjs",
+        "mobile/android-probe/val01-native-restore.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "src/security/val01NativeEvidenceBoundary.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01NativeEvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S6D-OPERATIONAL-I01",
+      "owner": "VAL-01/S6d.3",
+      "statement": "Operational synthetic board uses the existing authenticated DB2 owner, canonical queue and exact approved scope. No optimistic receipt; save only after atomic appData+meta write and active session; failed write retains reviewed draft and requires explicit fresh authenticated reopen. Duplicate and stale context are rejected; actual committed data drives individual report with historical rubric, objective and evidence; no inferred grade or competence, full identity masked. Reload retains history and serial identity; mobile geometry remains valid. No production App/Root activation, real archive, or release authority.",
+      "impactPaths": [
+        "src/persistence/assessmentEvidenceCommit.ts",
+        "src/security/val01AssessmentEvidenceCommit.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6c-board.tsx",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-operational.html",
+        "tests/browser/val01-s6d-operational.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+      ],
+      "tests": [
+        "src/security/val01AssessmentEvidenceCommit.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-operational.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S7A-BALANCE-I01",
+      "owner": "VAL-01/S7a",
+      "statement": "Isolated formative balance uses the validated evidence graph and independently supplied exact recipient/scope, explicit Q1/Q2 and civil date range, selected active confirmed revision IDs and teacher-authored text only. Missing, not observed, not applicable and withdrawn never yield a level or judgement. Two explicitly selected distinct observed events on different dates with exact historical criterion/rubric and matching recorded expectation, purpose and observation modalities may be reviewed for comparability by the teacher; no computed progress or competence. Local deterministic digest binds the review, selected and unselected relevant historical evidence and frozen dependencies, rejects stale or edited previews, excludes other recipients and periods. Confirmation is a detached review, not a storage receipt, publication, certification or authority. No production integration, network, AI or real data.",
+      "impactPaths": [
+        "src/assessment/formativeBalance.ts",
+        "src/assessment/assessmentEvidence.ts",
+        "src/assessment/assessmentEvidenceProjection.ts",
+        "src/assessment/assessmentRevisionBindings.ts",
+        "src/security/val01FormativeBalance.test.ts",
+        "docs/superpowers/plans/2026-11-18-val-01-s7-formative-balance.md"
+      ],
+      "tests": [
+        "src/security/val01FormativeBalance.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "VAL-01-S7B-RESTITUTION-I01",
+      "owner": "VAL-01/S7b",
+      "statement": "Explicit laboratory-only slot in existing StudentReportView Restituzione uses committed individual evidence and S7a review/confirmation. Recipient and view changes are guarded while a draft is open; date/period changes clear source selections, never substitute historical revisions. Preview is allowlisted to masked recipient, period, dates, selected activity/criterion/objective/state and teacher-authored text; raw fact, method, support, product references, other student data, internal IDs and digests remain excluded. Committed source changes immediately hide stale preview and revalidate; related correction, withdrawal or addition invalidates confirmation, unrelated recipient change preserves valid review. Confirmation is in-session only, no write, print, export, transmission, AI or official judgment. The production App and Root do not activate the slot; legacy restitution remains unchanged by default. Browser cases use synthetic DB2 only, mobile geometry and no data disclosure authority.",
+      "impactPaths": [
+        "src/components/StudentReportView.tsx",
+        "src/assessment/formativeRestitutionProjection.ts",
+        "src/assessment/formativeBalance.ts",
+        "src/security/val01FormativeRestitutionBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/fixtures/val01-s7b-balance.tsx",
+        "tests/browser/val01-s7b-formative-balance.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-18-val-01-s7-formative-balance.md"
+      ],
+      "tests": [
+        "src/security/val01FormativeRestitutionBoundary.test.ts",
+        "src/security/val01FormativeBalance.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s7b-formative-balance.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-S8-COUNCIL-CONTRIBUTION-I01",
+      "owner": "VAL-01/S8",
+      "statement": "An isolated personal disciplinary contribution revalidates an explicitly confirmed S7 balance against current graph, independent scope and exact class roster and unique existing council-session identity, year and date. Period end cannot exceed session date; no inference of period from session kind or official outcome from a balance. The teacher explicitly selects nonblank text sections to reuse, with minimized selected source references only; no other student, raw fact, grade, level, admission, certification or collective decision. Separate exact review and confirmation; changed session, selected sections or relevant evidence invalidate the contribution, unrelated recipient changes preserve it. Synthetic UI slot in existing CouncilView, privacy shield required, guards session/class/year/exit changes; no production host activation, archive write, official document, external transmission or AI. Session fixtures and contributions are in memory only; no real data.",
+      "impactPaths": [
+        "src/council/councilDisciplinaryContribution.ts",
+        "src/council/councilModel.ts",
+        "src/assessment/formativeBalance.ts",
+        "src/assessment/formativeRestitutionProjection.ts",
+        "src/components/CouncilView.tsx",
+        "src/security/val01CouncilContribution.test.ts",
+        "tests/browser/fixtures/val01-s7b-balance.tsx",
+        "tests/browser/fixtures/val01-s8-contribution.tsx",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/val01-s8-council-contribution.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "docs/superpowers/plans/2026-11-19-val-01-s8-council-contribution.md"
+      ],
+      "tests": [
+        "src/security/val01CouncilContribution.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s8-council-contribution.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D3B-I01",
+      "owner": "DOC-01/D3b",
+      "statement": "Synthetic protected individual document review reuses current confirmed S7 balance or separately confirmed S8 contribution, requires privacy shield and explicit recipient/destination/period/selected text, and revalidates the current source, roster and exact council session before every on-demand read or distinct confirmation. Only minimized selected sources and explicitly selected teacher text are returned, with no raw facts, grades, levels, other recipients, internal identifiers or digest, no inferred outcome or council decision. Stale or unprotected reads expose no presentation. This is not runtime access control or revocation of already copied data, export permission, persistence, institutional authority or production activation; free text disclosure safety remains unverified.",
+      "impactPaths": [
+        "src/documents/privateDocumentReview.ts",
+        "src/security/doc01PrivateDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PrivateDocumentReview.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1B-I01",
+      "owner": "DOC-01/D1b",
+      "statement": "Synthetic disciplinary document preview projects only whitelisted field sources in an independently matched context; unconfirmed or missing sources never supply values, planned and completed remain distinct, exact canonical revalidation prevents stale confirmation. No personal payload, official status, persistence, runtime wiring or export.",
+      "impactPaths": [
+        "src/documents/documentProjection.ts",
+        "src/security/doc01DocumentProjection.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentProjection.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1C-I01",
+      "owner": "DOC-01/D1c",
+      "statement": "The isolated document preview presents only professional labels and available synthetic values; its opaque in-memory review checks the exact current sources, including withheld revisions, and invalidates stale confirmation. Missing information stays visible; confirmation is not saving or institutional approval. No production wiring, persistent receipt, personal source adapter or export. Mobile browser evidence is required.",
+      "impactPaths": [
+        "src/documents/documentPresentation.ts",
+        "src/components/documents/DocumentPlanningPreview.tsx",
+        "src/security/doc01DocumentPresentation.test.ts",
+        "tests/browser/fixtures/doc01-d1c-fixture.tsx",
+        "tests/browser/fixtures/doc01-d1c.html",
+        "tests/browser/doc01-d1c-preview.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01DocumentPresentation.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1c-preview.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D1-I01",
+      "owner": "DOC-01/D1d1",
+      "statement": "Document planning source review selects only an exact current accepted, confirmed Docente OS projection with a teacher-confirmed institution/cohort binding, current resolved class and explicitly selected UDA references. Canonical validation and fingerprint checks reject malformed, ambiguous or stale sources. Planned hours remain distinct from completed activity; no copied titles, focus, pack references, student payload, automatic authority, persistence or production wiring.",
+      "impactPaths": [
+        "src/documents/planningDocumentSource.ts",
+        "src/security/doc01PlanningDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningDocumentSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D2-I01",
+      "owner": "DOC-01/D1d2",
+      "statement": "Document curriculum source review uses the canonical planning frame and Arena V1 consumer to select only an accepted, approved and current annual disciplinary reference in the independently matched school, class, year, cohort, discipline and regime. Explicit selection and private exact-content revalidation reject stale review. Annual text never becomes inferred objectives or transversal objectives; no personal data, text export, persistence or runtime wiring.",
+      "impactPaths": [
+        "src/documents/arenaDocumentSource.ts",
+        "src/security/doc01ArenaDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01ArenaDocumentSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D3-I01",
+      "owner": "DOC-01/D1d3",
+      "statement": "Document recorded-lesson review uses only explicitly selected existing local lesson references, a separately teacher-confirmed institution/cohort/class/year/discipline/period, canonical current class identity, exact dates and hours, and unambiguous ownership. Missing selection does not become zero or annual completion; planned hours, imported UDA projections, free text, roster, persistence and runtime wiring remain excluded. Stale references invalidate the review.",
+      "impactPaths": [
+        "src/documents/recordedLessonSource.ts",
+        "src/security/doc01RecordedLessonSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01RecordedLessonSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D4A-I01",
+      "owner": "DOC-01/D1d4a",
+      "statement": "Unified document review derives all source scopes from a single independently checked context and calls the existing Arena, Docente OS and recorded-lesson validators. Missing sources remain absent, invalid selected sources block confirmation, planned and recorded hours stay distinct, selected-only coverage is explicit, unfilled fields remain unfilled. Detached summaries reveal no internal source identifiers or texts; exact revalidation is required before a partial nonofficial confirmation. No persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/unifiedDocumentReview.ts",
+        "src/security/doc01UnifiedDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentReview.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D4B-I01",
+      "owner": "DOC-01/D1d4b",
+      "statement": "The isolated unified preview uses the qualified composition and its revalidation for partial confirmation; three source summaries keep planned hours distinct from selected recorded hours, unavailable fields grouped, missing and invalid sources distinct, provenance on demand. Changed inputs invalidate confirmation; no internal identifiers, persistence, export or production wiring. Exact candidate mobile Chromium evidence is required.",
+      "impactPaths": [
+        "src/components/documents/UnifiedDocumentPreview.tsx",
+        "src/security/doc01UnifiedDocumentPreview.test.ts",
+        "tests/browser/fixtures/doc01-d1d4b-fixture.tsx",
+        "tests/browser/fixtures/doc01-d1d4b.html",
+        "tests/browser/doc01-d1d4b-unified.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentPreview.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1d4b-unified.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D4B-I02",
+      "owner": "DOC-01/D1d4b",
+      "statement": "The isolated unified preview must reflow at nominal mobile widths 320 and 390 CSS px, including actual 200% root text size at 320. Browser geometry measures against the requested viewport, not an inflated innerWidth, and checks visible element and text bounds, 44px controls, opened and closed disclosures, pre/post confirmation and actual PNG width. Product-only evidence excludes fixture controls; provenance is grouped and readable. No clipping or reduction of the requested text scale is used.",
+      "impactPaths": [
+        "src/components/documents/UnifiedDocumentPreview.tsx",
+        "src/components/documents/unifiedDocumentPreview.css",
+        "src/security/doc01UnifiedDocumentPreview.test.ts",
+        "tests/browser/fixtures/doc01-d1d4b-fixture.tsx",
+        "tests/browser/doc01-d1d4b-unified.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentPreview.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1d4b-unified.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D2A-I01",
+      "owner": "DOC-01/D2a",
+      "statement": "Institutional document reference mapping uses distinct annual first-grade and second/third-grade structures, plus disciplinary council contribution, with exact reviewed version, school-year, institution, site, cohort, grade and regime binding, canonical class identity and teacher confirmation. Unknown or ambiguous applicability is not automatically resolved. Expected descriptors, planned work, restricted profile information and collegial authority remain distinct. Mapping is metadata only, incomplete, nonofficial, not proof of adoption, and excludes historical final models, persistence and production wiring.",
+      "impactPaths": [
+        "src/documents/institutionalDocumentModel.ts",
+        "src/security/doc01InstitutionalDocumentModel.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01InstitutionalDocumentModel.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D2B1-I01",
+      "owner": "DOC-01/D2b1",
+      "statement": "Selected planned UDA content is derived only from the same canonically validated, explicitly accepted confirmed Docente OS projection and exact D2a reviewed context. It preserves literal title, focus, source period and planned hours; first-grade mapping treats the plan as supporting material, second/third and council use planned-uda. No inferred term, curriculum objectives, competence, activities performed, personal or collegial values, internal metadata in presentation, persistence or runtime wiring. Detached inputs and exact revision revalidation protect partial nonofficial confirmation.",
+      "impactPaths": [
+        "src/documents/plannedDocumentContent.ts",
+        "src/security/doc01PlannedDocumentContent.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlannedDocumentContent.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D2B2B-I01",
+      "owner": "DOC-01/D2b2b",
+      "statement": "Structured curriculum intake refuses Arena laboratory or synthetic markers and unsupported contracts, even with purported authority receipts and hashes. Existing V1 remains annual-reference-only through D1d2 and exact D2a review. Seven curriculum category placements are metadata, always unfilled, with objectives requiring specificity review, milestone separate, evidence expected not assessed, restricted and collegial fields excluded. No content acquisition, production authorization, storage or runtime wiring until a verified producer and governed consumer exist.",
+      "impactPaths": [
+        "src/documents/structuredCurriculumIntake.ts",
+        "src/security/doc01StructuredCurriculumIntake.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01StructuredCurriculumIntake.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D3A-I01",
+      "owner": "DOC-01/D3a",
+      "statement": "Class-level assessment document review accepts only a synthetic definition-only slice without roster or individual evidence, reuses the existing VAL graph validator with empty evidence and roster and requires the exact D2a reference context, explicit date range and teacher-selected active revisions. Expected criteria and planned date stay separate from explicitly completed assessment title and actual date; cancelled, stale, unselected or out-of-period definitions are not promoted. Frozen criterion, rubric and reference dependencies bind re-review; no individual outcomes, grades, coverage inference, institutional criteria approval, assumed lesson linkage, persistence, production wiring or official document. Text privacy and actual occurrence remain unverified by structural validation.",
+      "impactPaths": [
+        "src/documents/assessmentDocumentSource.ts",
+        "src/security/doc01AssessmentDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01AssessmentDocumentSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D3C-I01",
+      "owner": "DOC-01/D3c",
+      "statement": "Final disciplinary document laboratory review reuses the recorded lesson and assessment definition reviews with one exact class, institutional reference and explicit reporting period. Recorded selected hours and actual completed assessments stay separate; no planned assessment or inferred coverage is promoted. Missing sources are not zero. Topics and professional synthesis are explicitly selected by the teacher; only explicit same-day links to selected completed assessment revisions are allowed, with no double count. Source or selection drift invalidates partial confirmation. No individual evidence, official final template, personal data authority, runtime, persistence or export; synthetic text privacy and actual occurrence remain unverified.",
+      "impactPaths": [
+        "src/documents/finalDocumentReview.ts",
+        "src/security/doc01FinalDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01FinalDocumentReview.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4A-I01",
+      "owner": "DOC-01/D4a",
+      "statement": "Synthetic document revision identity binds a class-level professional document kind to the exact D2a reviewed institutional context, normalized year, explicit period and mapping version. Document and revision identifiers are synthetic, distinct, and stable within the supplied history. Append-only contiguous draft lineage requires the exact supplied head, unique revisions and explicit revision reason; malformed, cross-context, stale, private destination and approval-shaped input is rejected. Outputs are detached and frozen. No content binding, registry-wide uniqueness, authoritative concurrency, teacher confirmation, official template, persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/documentRevisionIdentity.ts",
+        "src/security/doc01DocumentRevisionIdentity.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentRevisionIdentity.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4B1-I01",
+      "owner": "DOC-01/D4b1",
+      "statement": "Synthetic final-report and recorded-only program revisions bind exact D4a draft lineage and D3c validated context, period and immutable presentation. A distinct explicit confirmation must match document, revision and reviewed content; changed sources (including hidden criterion dependencies), content or revision invalidate the review instance monotonically; explicit revision-specific revocation is terminal. A new revision does not inherit confirmation. Private and unsupported destinations, caller payloads, personal graph and production inputs are rejected. The confirmation is in-memory only, not a signature, persistent receipt, authenticated identity, authoritative head or official document; no export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/finalRevisionConfirmation.ts",
+        "src/security/doc01FinalRevisionConfirmation.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01FinalRevisionConfirmation.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4B2-I01",
+      "owner": "DOC-01/D4b2",
+      "statement": "Synthetic annual disciplinary plan and general council disciplinary contribution bind exact D4a draft lineage and D2b1 selected planned UDA content, with optional D1d2 annual Arena references (count only, never structured objectives). Scope, reviewed model, class and full school-year period must match; missing curriculum remains explicit, invalid selection blocks. Exact preview and explicit revision-specific confirmation are required; altered acceptance, hidden curriculum text, revision or source availability invalidate monotonically. Revocation is terminal for this in-memory instance. No collegiate authority, private destination, personal data, official template, authentication, persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/planningRevisionConfirmation.ts",
+        "src/security/doc01PlanningRevisionConfirmation.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningRevisionConfirmation.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4B3-I01",
+      "owner": "DOC-01/D4b3",
+      "statement": "Synthetic annual planning and disciplinary council revisions optionally bind D3a expected assessment definitions, their local target references and explicit teacher-declared links to selected D2b1 UDA. Missing and invalid sources remain distinct, selected-only coverage, no completed outcomes or individual graph. Local target text never becomes Arena authority; no inference of equivalence or coverage. Exact reviewed preview and hidden source dependencies are bound to revision confirmation; source or link changes invalidate monotonically. Legacy D4b2 input remains compatible. No storage, export, official authority or runtime wiring.",
+      "impactPaths": [
+        "src/documents/planningRevisionConfirmation.ts",
+        "src/security/doc01PlanningAssessmentLink.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningAssessmentLink.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4C1-I01",
+      "owner": "DOC-01/D4c1",
+      "statement": "A synthetic-only archive candidate is derived from an exact D4a identity and current D4b final or planning review with explicit revision-specific confirmation, not caller-supplied document contents. Stale source including hidden dependencies, invalid identity, time or decision fails closed. Freeze only reviewed projection, revision metadata and canonical SHA-256 content digest; no raw source graph, personal document, persistent state, authenticity claim, runtime, backup or export authority. Digest is integrity evidence, not a signature.",
+      "impactPaths": [
+        "src/documents/documentArchiveCandidate.ts",
+        "src/security/doc01DocumentArchiveCandidate.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentArchiveCandidate.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4C2A-I01",
+      "owner": "DOC-01/D4c2a",
+      "statement": "Historical synthetic document records must independently match the approved exact professional scope, closed versioned identity/revision and kind-specific projection, authority markers, date/index/count semantics and canonical digest. Verify without current sources, reject rehashed malformed or personal-shaped records, freeze a detached copy. Digest is not authenticity, source currency or persistence authorization. No archive append, restore, runtime or individual destinations.",
+      "impactPaths": [
+        "src/documents/documentHistoricalValidation.ts",
+        "src/security/doc01DocumentHistoricalValidation.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoricalValidation.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4C2B-I01",
+      "owner": "DOC-01/D4c2b",
+      "statement": "Synthetic append-only document event history revalidates each historical record against independently approved scopes, checks chain digests and exact expected archive head, enforces contiguous document revisions, unique IDs and stable identity, rejects forks, duplicates and backward timestamps. Exact operation retry is idempotent without resurrecting older state; explicit head-specific revocation preserves prior content, correction requires fresh revision. Immutable detached results, no authentication, retention policy, persistence, export or runtime authority.",
+      "impactPaths": [
+        "src/documents/documentHistoryTransitions.ts",
+        "src/security/doc01DocumentHistoryTransitions.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoryTransitions.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4C3A-I01",
+      "owner": "DOC-01/D4c3a",
+      "statement": "Synthetic-only guarded document history persists a fully validated append/revocation through the existing authenticated owner's durable mutation coordinator, validates authoritative committed head and independent scopes in queue, writes appData and meta atomically, verifies encrypted-vault readback and historical chain before publication and issues a receipt only afterward. Exact retries are read-only, conflicts and corruption fail closed, uncertain persistence or revoked sessions quarantine the owner. No activation, backup v6/v7 compatibility, restore, downgrade, signature, export, UI or runtime authority.",
+      "impactPaths": [
+        "src/persistence/documentHistoryCommit.ts",
+        "src/security/doc01DocumentHistoryCommit.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoryCommit.test.ts"
+      ]
     }
   ]
 }

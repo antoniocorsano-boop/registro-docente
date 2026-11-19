@@ -83,6 +83,15 @@ jobs:
           cp tests/browser/header-01-navbar-integration.spec.cjs .nav-context-browser-tools/
           cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .nav-context-browser-tools/
           cp tests/browser/nav-mobile-disclosure-back.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s5c-preparation.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s6c-evidence-board.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s6d-integration.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s6d-db2-persistence.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s6d-operational.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s7b-formative-balance.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-s8-council-contribution.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/doc01-d1c-preview.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/doc01-d1d4b-unified.spec.cjs .nav-context-browser-tools/
       - name: Start synthetic Vite app fixture
         shell: bash
         run: |
@@ -130,6 +139,15 @@ jobs:
             header-01-navbar-integration.spec.cjs \
             header-01-copilot-drawer-occlusion.spec.cjs \
             nav-mobile-disclosure-back.spec.cjs \
+            val01-s5c-preparation.spec.cjs \
+            val01-s6c-evidence-board.spec.cjs \
+            val01-s6d-integration.spec.cjs \
+            val01-s6d-db2-persistence.spec.cjs \
+            val01-s6d-operational.spec.cjs \
+            val01-s7b-formative-balance.spec.cjs \
+            val01-s8-council-contribution.spec.cjs \
+            doc01-d1c-preview.spec.cjs \
+            doc01-d1d4b-unified.spec.cjs \
             --workers=1 --reporter=line \
             --output=../browser-evidence/results
       - name: Verify exact-SHA browser evidence completeness
@@ -164,6 +182,65 @@ jobs:
             }
           }
           console.log('PASS: ten exact-SHA browser evidence JSON files and screenshots');
+          for (const caseId of ['review','invalidation','geometry-320-100','geometry-390-100','geometry-320-200']) {
+            const file = path.join(dir, 'doc01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.screenshot !== 'doc01-screenshots/' + caseId + '.png') {
+              throw new Error('Invalid DOC-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty DOC-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: five exact-SHA DOC-01 browser cases and screenshots');
+          for (const caseId of ['review','missing','blocked','invalidation','geometry-320-100','geometry-390-100','geometry-320-200']) {
+            const file = path.join(dir, 'doc01-unified-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.screenshot !== 'doc01-unified-screenshots/' + caseId + '.png') {
+              throw new Error('Invalid unified DOC-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty unified DOC-01 screenshot: ' + screenshot);
+            }
+            const width = caseId.startsWith('geometry-') ? Number(caseId.split('-')[1]) : (caseId === 'blocked' ? 320 : 390);
+            const png = fs.readFileSync(screenshot);
+            if (png.readUInt32BE(16) !== width) throw new Error('Unified screenshot exceeds nominal width: ' + screenshot);
+            if (caseId.startsWith('geometry-')) {
+              const scale = Number(caseId.split('-')[2]);
+              const g = evidence.geometry;
+              if (!g || g.nominalWidth !== width || g.scale !== scale ||
+                  g.screenshotWidth !== width || g.screenshotHeight !== png.readUInt32BE(20) ||
+                  g.preConfirmScreenshot !== 'doc01-unified-screenshots/before-confirm-' + width + '-' + scale + '.png') {
+                throw new Error('Missing nominal geometry evidence: ' + file);
+              }
+              for (const state of [g.before,g.expanded,g.after]) {
+                if (!state || !Array.isArray(state.issues) || state.issues.length ||
+                    !state.viewport || state.viewport.nominal !== width ||
+                    ['inner','client','scroll','bodyScroll'].some(key => !Number.isFinite(state.viewport[key]) || state.viewport[key] > width+1) ||
+                    !Number.isFinite(state.rootPx) || Math.abs(state.rootPx-16*scale/100)>1) {
+                  throw new Error('Invalid unified reflow evidence: ' + file);
+                }
+              }
+              if (!Number.isFinite(g.before.previewHeight) || g.before.previewHeight > (scale===200?2400:850)) {
+                throw new Error('Unified product view exceeds density bound: ' + file);
+              }
+              const pre = fs.readFileSync(path.join(dir,g.preConfirmScreenshot));
+              if (pre.readUInt32BE(16)!==width) throw new Error('Pre-confirmation screenshot exceeds nominal width: ' + file);
+            }
+          }
+          console.log('PASS: seven exact-SHA unified DOC-01 browser cases and screenshots');
           NODE
 
       - name: Preserve browser evidence
