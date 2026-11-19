@@ -54,8 +54,8 @@ function inspect(scope:unknown,classes:unknown,records:unknown,selection:unknown
   const byId=new Map<string,LocalRecord>();
   const lessonIds=new Set<string>();
   for(const row of records){
-   const hasLessons=exact(row,['id','className','lessons']);
-   if(!hasLessons&&!exact(row,['id','className']))return fail('INVALID_RECORD');
+   if(!exact(row,['id','className','lessons'])&&!exact(row,['id','className']))return fail('INVALID_RECORD');
+   const hasLessons=Object.prototype.hasOwnProperty.call(row,'lessons');
    if(!nonempty(row.id)||!nonempty(row.className)||isDocenteOsProjectedUdaId(row.id)||byId.has(row.id))return fail('INVALID_RECORD');
    const entries:Lesson[]=[];
    if(hasLessons){
