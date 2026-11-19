@@ -25,8 +25,9 @@ async function harness(){
       writes++;
       generation='demo-generation-'+writes;
       stored=value;
-      afterCas();
-      return {committed:true,generation} as const;
+      const committedGeneration=generation; // CAS receipt binds its actual commit.
+      afterCas(); // A different writer may advance the store before readback.
+      return {committed:true,generation:committedGeneration} as const;
     }
   };
   const owner:SyntheticDocumentHistoryOwner={
