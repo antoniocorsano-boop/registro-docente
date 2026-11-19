@@ -1,0 +1,18 @@
+# DOC-01/D1d3 — Raccordo con le attività registrate
+19 novembre 2026. Base esatta #351 7c925e799f7e2fbc93f468111693116d8f63f648, 7/7 controlli superati. Ramo di laboratorio, separato da VAL-01 #347 e candidato #325.
+
+## Ricognizione
+UdaRecord e UdaLesson (src/types.ts) sono il diario già disponibile. UdaGanttView.handleAddLesson aggiunge una lezione datata, con ore, all'UDA locale e notifica il completamento della registrazione dopo commit; handleRemoveLesson la rimuove. App.handleSaveUdas usa il coordinatore delle mutazioni. Non duplicare il diario. Il catalogo distingue UDA locali scrivibili e proiezioni Docente OS in sola lettura, senza lezioni registrate. Le ore UdaRecord.hours sono programmate, non consuntive.
+
+Limite: UdaLesson non contiene anno scolastico, disciplina, istituto o coorte autonomi; UdaRecord conserva il nome classe, non un legame storico immutabile. Una data o il nome classe non bastano per attestare il contesto. L'interfaccia del diario non garantisce che una registrazione datata dimostri da sola l'effettivo svolgimento. Nessuna conversione automatica di tutte le lezioni esistenti in attività svolte o completamento del programma.
+
+## Decisione
+reviewRecordedLessonSource è puro, in sola lettura, su riferimenti ridotti dei record locali (id UDA, nome classe, id lezione, data, ore). Non legge l'archivio, non importa UdaRecord completi, testi liberi, note, nominativi, voti, roster. Utilizza il risolutore canonico della classe e il normalizzatore dell'anno; esclude ID UDA proiettati da Docente OS. Richiede il contesto indipendente e una selezione esplicitamente confermata dal docente, esattamente legata a istituto, coorte, classe, disciplina, anno, grado, inizio e fine periodo. L'intervallo appartiene all'anno scolastico (1 settembre–31 agosto, limite tecnico non calendario lezioni). Date reali, ore positive a mezze ore fino a dieci per voce come nella UI; anomalie o valori legacy non conformi richiedono riesame, non correzione automatica.
+
+Ogni riferimento selezionato deve esistere univocamente, appartenere alla classe corrente, essere nel periodo e corrispondere a data e ore riviste. Duplicati e ambiguità respinti. Conteggio e somma ore soltanto delle registrazioni selezionate; coverage selected-only. Una selezione vuota/assente non equivale a zero. Nessuna percentuale di completamento, nessun confronto automatico con ore programmate. La conferma del contesto è prerequisito dell'interazione futura, non prova autonoma di autorità o svolgimento. Rilettura esatta su fonti mutate o rimosse, nessuna persistenza. Una nuova voce non selezionata non altera il consuntivo parziale; non esiste attestazione di copertura completa.
+
+## Evidenze
+Stub 9fb275c295beed5b71177cda19c1ce4896d0516a e implementazione con invariante 2ad08234a25091dd2cccce529d3146ceec8d54aa. Esecuzione diagnostica JS delle funzioni e degli otto scenari comportamentali estratti dai file remoti, con annotazioni TS rimosse e assert equivalenti: RED 5/8 (tre positivi falliscono sullo stub), GREEN 8/8. Non Bun, typecheck o Chromium; il nono test statico di isolamento resta alla CI. Invariante DOC-01-D1D3-I01; 98 complessive. Nessun merge/deploy, UI operativa, accesso a dati reali, IA o esportazione.
+
+## Prossima azione
+D1d4: convergenza delle tre famiglie di riferimenti in una vista di revisione, distinguendo obiettivi non strutturati, UDA previste e registrazioni selezionate. Contesto comune, provenienze su richiesta e lacune esplicite; mappatura modelli istituzionali e riduzione densità verticale prima del collegamento ai Consigli. Non trasformare la conferma di una fonte in approvazione del documento.
