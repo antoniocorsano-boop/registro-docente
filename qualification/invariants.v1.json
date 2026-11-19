@@ -2546,6 +2546,18 @@
       "tests": [
         "src/security/doc01InstitutionalDocumentModel.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D2B1-I01",
+      "owner": "DOC-01/D2b1",
+      "statement": "Selected planned UDA content is derived only from the same canonically validated, explicitly accepted confirmed Docente OS projection and exact D2a reviewed context. It preserves literal title, focus, source period and planned hours; first-grade mapping treats the plan as supporting material, second/third and council use planned-uda. No inferred term, curriculum objectives, competence, activities performed, personal or collegial values, internal metadata in presentation, persistence or runtime wiring. Detached inputs and exact revision revalidation protect partial nonofficial confirmation.",
+      "impactPaths": [
+        "src/documents/plannedDocumentContent.ts",
+        "src/security/doc01PlannedDocumentContent.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlannedDocumentContent.test.ts"
+      ]
     }
   ]
 }
