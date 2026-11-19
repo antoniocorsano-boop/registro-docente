@@ -3145,6 +3145,21 @@
       "tests": [
         "src/security/doc01DocumentBackupPayloadV8.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3D1-I01",
+      "owner": "DOC-01/D4c3d1",
+      "statement": "An isolated V8 DOC-01 DB2 physical replacement authenticates the current ten-record owner, decrypts two actual size-bounded V2 encrypted backup blobs, validates the current/recovery/incoming V8 chains against independent document and assessment scopes, refuses loss or fork of existing document events and assessment history, and constructs a new authenticated complete encrypted inventory. Explicit one-use consent uses the existing atomic physical compare-and-swap, rotates the wrapping key, verifies exact physical readback, rejects stale owner, replay, cancellation, abort and uncertain postcommit rollback. Fresh authenticated reopening must preserve all document events, assessment evidence and grades. Only synthetic isolated browser evidence qualifies this gate. No Android SAF readback, production activation, authenticity/anti-rollback, merge or release.",
+      "impactPaths": [
+        "src/security/db2Lifecycle.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/doc01-d4c3d1-db2-restore.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "src/security/doc01Db2DocumentRestoreBoundary.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01Db2DocumentRestoreBoundary.test.ts"
+      ]
     }
   ]
 }
