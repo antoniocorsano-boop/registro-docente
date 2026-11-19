@@ -5,6 +5,7 @@
 import {normalizeSchoolYear} from '../planning/planningFrameResolver';
 import {resolveCanonicalRegistroClass} from '../teaching/classIdentity';
 type Row=Record<string,unknown>;
+const REFERENCE_VERSION='2026-27-map-v1';
 type Model='council-contribution'|'disciplinary-first'|'disciplinary-second-third';
 type Nature='context'|'expected'|'planned'|'professional-choice'|'recorded'|'evaluated'|'collegial';
 type Origin='local-context'|'arena'|'docente-os'|'registro'|'val-01'|'teacher'|'institution'|'council'|'evidence-repertoire';
@@ -75,14 +76,14 @@ export function reviewInstitutionalDocumentModel(scope:unknown,classes:unknown,b
   const resolved=resolveCanonicalRegistroClass(cls.name,identities);
   if(resolved.status!=='resolved'||resolved.classId!==scope.classId||resolved.semanticKey.split(':')[0]!==String(scope.gradeLevel))return absent('invalid-context');
   const model:Model|null=scope.purpose==='council-contribution'?'council-contribution':scope.purpose==='disciplinary-plan'?(scope.gradeLevel===1?'disciplinary-first':'disciplinary-second-third'):null;
-  if(!model)return absent('unsupported');
+  if(!model||year!=='2026-2027')return absent('unsupported');
   if(!dense(bindings)||!bindings.every(b=>exact(b,bindingKeys)&&typeof b.gradeLevel==='number'&&[1,2,3].includes(b.gradeLevel)&&bindingKeys.filter(k=>k!=='gradeLevel').every(k=>nonempty(b[k]))&&
     ['unverified','reviewed-reference'].includes(b.referenceStatus as string)&&['council-contribution','disciplinary-first','disciplinary-second-third'].includes(b.model as string)))return absent('review-required');
   const rows=bindings as Row[];
   // Never infer the regime or institutional applicability from the grade alone.
   const matches=rows.filter(b=>b.model===model&&['institutionRef','siteRef','cohortRef','schoolOrder','gradeLevel','regimeRef'].every(k=>b[k]===scope[k])&&normalizeSchoolYear(b.schoolYear as string)===year);
   if(matches.length===0)return absent('missing');
-  if(matches.length!==1||matches[0].referenceStatus!=='reviewed-reference')return absent('review-required');
+  if(matches.length!==1||matches[0].referenceStatus!=='reviewed-reference'||matches[0].version!==REFERENCE_VERSION)return absent('review-required');
   const binding=matches[0];
   if(!exact(selection,selectionKeys)||selection.confirmedByTeacher!==true||!exact(selection.scope,scopeKeys))return absent('review-required');
   const reviewedScope=selection.scope;
