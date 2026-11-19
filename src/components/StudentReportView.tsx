@@ -54,6 +54,8 @@ interface StudentReportViewProps {
   settings?: AppSettings;
   udas?: UdaRecord[];
   isPrivacyShieldActive?: boolean;
+  /** Explicit synthetic host only; never passed by the production App. */
+  laboratoryRestitution?: {content:React.ReactNode;requestChange:(action:()=>void)=>void;onViewChange:(view:'essential'|'dossier'|'restitution')=>void};
 }
 
 // Custom Tooltip for Recharts Radar
@@ -266,7 +268,8 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
   onSelectStudent,
   settings,
   udas = [],
-  isPrivacyShieldActive = true
+  isPrivacyShieldActive = true,
+  laboratoryRestitution
 }) => {
   const [radarMode, setRadarMode] = useState<'competencies' | 'udas'>('competencies');
   const [mobileMode, setMobileMode] = useState<{ classId: string; studentId: string; view: 'essential' | 'dossier' | 'restitution' } | null>(null);
@@ -301,6 +304,15 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
     if (!window.matchMedia('(min-width: 768px)').matches) {
       dossierRef.current?.querySelectorAll<HTMLDetailsElement>(':scope > details[open]').forEach(el => { el.open = false; });
     }
+  };
+  const requestReportChange=(action:()=>void)=>laboratoryRestitution?laboratoryRestitution.requestChange(action):action();
+  const changeReportView=(view:'essential'|'dossier'|'restitution')=>{
+    if(laboratoryRestitution&&view===mobileView)return;
+    requestReportChange(()=>{
+      closeMobileDisclosures();
+      setMobileMode({classId:currentClass.id,studentId:currentStudent.id,view});
+      laboratoryRestitution?.onViewChange(view);
+    });
   };
   const onMobileDisclosureToggle = (event: React.SyntheticEvent<HTMLDetailsElement>) => {
     const opened = event.currentTarget;
@@ -459,9 +471,13 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
               value={currentStudent.id}
               aria-label="Seleziona alunno"
               onChange={e => {
-                closeMobileDisclosures();
-                setMobileMode(null);
-                onSelectStudent(e.target.value);
+                const id=e.target.value;
+                requestReportChange(()=>{
+                  closeMobileDisclosures();
+                  setMobileMode(null);
+                  laboratoryRestitution?.onViewChange('essential');
+                  onSelectStudent(id);
+                });
               }}
               className="w-full min-h-[48px] md:min-h-[44px] p-2 neon-input text-sm font-semibold text-white bg-slate-900 cursor-pointer"
             >
@@ -475,7 +491,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
 
         <div className="hidden md:flex justify-end mb-3">
-          <button type="button" className="min-h-[48px] px-3 py-2 rounded-lg border border-[var(--border)] text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300" aria-pressed={mobileView === 'restitution'} onClick={() => setMobileMode({ classId: currentClass.id, studentId: currentStudent.id, view: mobileView === 'restitution' ? 'essential' : 'restitution' })}>{mobileView === 'restitution' ? 'Torna alla scheda interna' : 'Restituzione'}</button>
+          <button type="button" className="min-h-[48px] px-3 py-2 rounded-lg border border-[var(--border)] text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300" aria-pressed={mobileView === 'restitution'} onClick={() => changeReportView(mobileView === 'restitution' ? 'essential' : 'restitution')}>{mobileView === 'restitution' ? 'Torna alla scheda interna' : 'Restituzione'}</button>
         </div>
         {mobileView !== 'restitution' && <>
         {/* Student KPIs */}
@@ -540,10 +556,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       <div role="group" aria-label="Viste scheda alunno" className="md:hidden grid grid-cols-2 border-b border-[var(--border)] student-report-mode">
         {([['essential', 'Essenziale'], ['dossier', 'Dossier'], ['restitution', 'Restituzione']] as const).map(([view, label]) => (
           <button key={view} type="button" aria-pressed={mobileView === view}
-            onClick={() => {
-              closeMobileDisclosures();
-              setMobileMode({ classId: currentClass.id, studentId: currentStudent.id, view });
-            }}
+            onClick={() => changeReportView(view)}
             className={`min-w-0 break-words min-h-[48px] py-2 px-1 border-b-2 text-sm font-semibold focus-visible:outline focus-visible:outline-cyan-300 ${mobileView === view ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400'}`}>
             {label}
           </button>
@@ -577,7 +590,7 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         </div>
       </section>
       {mobileView === 'restitution' ? (
-        isPrivacyShieldActive ? <FormativeRestitutionView key={currentClass.id + ':' + currentStudent.id} currentClass={currentClass} studentId={currentStudent.id} settings={settings} udas={udas}/> :
+        laboratoryRestitution && isPrivacyShieldActive ? laboratoryRestitution.content : isPrivacyShieldActive ? <FormativeRestitutionView key={currentClass.id + ':' + currentStudent.id} currentClass={currentClass} studentId={currentStudent.id} settings={settings} udas={udas}/> :
           <section role="alert" className="space-y-2"><h2 className="text-base font-semibold">Attiva la protezione dei nominativi</h2><p className="text-sm text-slate-300">La restituzione è disponibile soltanto con la protezione attiva. Usa il comando di riservatezza nell’intestazione.</p></section>
       ) : (
       <div ref={dossierRef} data-testid="student-report-dossier"
