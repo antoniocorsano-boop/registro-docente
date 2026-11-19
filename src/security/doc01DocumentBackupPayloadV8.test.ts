@@ -76,7 +76,7 @@ describe('DOC-01/D4c3c2 — v8 append-only document history backup and recovery'
   expect(Object.keys(p.snapshot).sort()).toEqual(['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'].sort());
   expect(p.snapshot).toEqual(before);expect(i.sourceVersion).toBe(8);expect(i.snapshot).toEqual(before);
   expect(i.replacementRequiresReview).toBe(true);expect(original).toEqual(before);
-  expect(p.snapshot.appData.classes[0].assessmentEvidenceV1).toEqual(before.appData.classes[0].assessmentEvidenceV1);
+  expect(p.snapshot.appData.classes[0].assessmentEvidenceV1).toEqual((before.appData.classes[0] as any).assessmentEvidenceV1);
  });
  test('encrypted envelope v2 roundtrip preserves v8 document history and assessment without silent normalization',async()=>{
   const original=await snapshot((await documentHistory()).updated),p=await generate(original);
@@ -85,7 +85,7 @@ describe('DOC-01/D4c3c2 — v8 append-only document history backup and recovery'
   const decoded=await decryptDataWithPassword(encrypted,'password-sintetica');
   const checked=await inspect(decoded,original);
   expect(checked.snapshot).toEqual(p.snapshot);expect(checked.snapshot.appData.documentHistoryV1.events).toHaveLength(2);
-  expect(checked.snapshot.appData.classes[0].assessmentEvidenceV1).toEqual(original.appData.classes[0].assessmentEvidenceV1);
+  expect(checked.snapshot.appData.classes[0].assessmentEvidenceV1).toEqual((original.appData.classes[0] as any).assessmentEvidenceV1);
  });
  test('existing historical v6/v7 readers remain closed to new v8 data and do not invent a downgrade',async()=>{
   const original=await snapshot(),p=await generate(original);
@@ -99,7 +99,7 @@ describe('DOC-01/D4c3c2 — v8 append-only document history backup and recovery'
   await reject(generate(missing));
   const changed=copy(s);(changed.appData as any).documentHistoryV1.events[0].eventDigest='0'.repeat(64);
   await reject(generate(changed));
-  const inbound=copy(p);inbound.snapshot.appData.documentHistoryV1.events[0].eventDigest='0'.repeat(64);
+  const inbound=copy(p);(inbound.snapshot.appData.documentHistoryV1.events[0] as any).eventDigest='0'.repeat(64);
   await reject(inspect(inbound,s));
  });
  test('approved document scope and assessment scope both remain independently mandatory',async()=>{
@@ -131,9 +131,9 @@ describe('DOC-01/D4c3c2 — v8 append-only document history backup and recovery'
   const h=await documentHistory(),current=await snapshot(h.initial),next=await snapshot(h.updated);
   const before=copy(current),incoming=await generate(next),recovery=await generate(current);
   const projected=await project(current,incoming,recovery);
-  expect(projected.appData.documentHistoryV1.events).toHaveLength(2);
-  expect(projected.appData.documentHistoryV1.events[0]).toEqual(h.initial.events[0]);
-  expect(projected.appData.classes[0].assessmentEvidenceV1).toEqual(current.appData.classes[0].assessmentEvidenceV1);
+  expect((projected.appData as any).documentHistoryV1.events).toHaveLength(2);
+  expect((projected.appData as any).documentHistoryV1.events[0]).toEqual(h.initial.events[0]);
+  expect((projected.appData.classes[0] as any).assessmentEvidenceV1).toEqual((current.appData.classes[0] as any).assessmentEvidenceV1);
   expect(current).toEqual(before);
  });
  test('recovery refuses omission of previously committed document events',async()=>{
