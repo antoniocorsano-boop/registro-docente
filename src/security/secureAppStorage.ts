@@ -20,6 +20,7 @@ import type { PlanningState } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
 import { SecureVault } from './secureVault';
+import { assertNoUnsupportedDocumentHistory } from './documentHistoryBackupFence';
 
 export type VaultGateState =
   | 'CHECKING'
@@ -369,6 +370,7 @@ export class SecureAppStorage {
     assertAuthorized: () => void
   ): Promise<void> {
     assertAuthorized();
+    assertNoUnsupportedDocumentHistory(candidate);
     const canonical = canonicalizeCompleteSnapshot(candidate);
     await assertCouncilSnapshotIntegrity(canonical.appData);
     assertAuthorized();
@@ -387,6 +389,12 @@ export class SecureAppStorage {
     candidate: CompleteSecureAppSnapshot,
     previousLogical?: CompleteSecureAppSnapshot
   ): Promise<CanonicalCompleteSecureAppSnapshot> {
+    assertNoUnsupportedDocumentHistory(candidate);
+    assertNoUnsupportedDocumentHistory(previousLogical);
+    // The physical archive cannot be trusted to match a caller-supplied
+    // previousLogical when an unsupported new domain may already be present.
+    const physicalAppData = await this.vault.get<AppData>('appData');
+    assertNoUnsupportedDocumentHistory(physicalAppData);
     const previousPhysical = previousLogical ? null : await this.loadSnapshot();
     const canonicalCandidate = canonicalizeCompleteSnapshot(candidate);
     // Reject malformed or tampered council snapshots before mutating the Vault.
