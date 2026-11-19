@@ -62,7 +62,7 @@ export function UnifiedDocumentPreview({input}:{input:unknown}){
  return <section aria-labelledby={titleId} className="doc-preview">
   <header className="doc-preview-header">
    <p className="doc-preview-muted">Dimostrazione con dati fittizi</p>
-   <h1 id={titleId} className="doc-preview-title">Documentazione didattica</h1>
+   <h1 id={titleId} className="doc-preview-title">Documenti didattici</h1>
    {p&&<p className="doc-preview-muted">Anno scolastico {p.schoolYear}</p>}
    {p&&<p className="doc-preview-muted">Consuntivo: {dateLabel(p.periodStart)} – {dateLabel(p.periodEnd)}</p>}
   </header>
@@ -70,7 +70,7 @@ export function UnifiedDocumentPreview({input}:{input:unknown}){
   {!p?<button type="button" className={primary} onClick={prepare}>Prepara anteprima</button>:<>
    <ul aria-label="Fonti documentali" className="doc-preview-sources">
     <SourceRow label="Curricolo" kind="curriculum" source={p.curriculum}/>
-    <SourceRow label="Programmazione" kind="planning" source={p.planning}/>
+    <SourceRow label="Piano didattico" kind="planning" source={p.planning}/>
     <SourceRow label="Consuntivo" kind="recorded" source={p.recorded}/>
    </ul>
    <div className="doc-preview-disclosures">
