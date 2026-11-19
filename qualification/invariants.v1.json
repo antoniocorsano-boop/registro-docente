@@ -2570,6 +2570,18 @@
       "tests": [
         "src/security/doc01StructuredCurriculumIntake.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D3A-I01",
+      "owner": "DOC-01/D3a",
+      "statement": "Class-level assessment document review accepts only a synthetic definition-only slice without roster or individual evidence, reuses the existing VAL graph validator with empty evidence and roster and requires the exact D2a reference context, explicit date range and teacher-selected active revisions. Expected criteria and planned date stay separate from explicitly completed assessment title and actual date; cancelled, stale, unselected or out-of-period definitions are not promoted. Frozen criterion, rubric and reference dependencies bind re-review; no individual outcomes, grades, coverage inference, institutional criteria approval, assumed lesson linkage, persistence, production wiring or official document. Text privacy and actual occurrence remain unverified by structural validation.",
+      "impactPaths": [
+        "src/documents/assessmentDocumentSource.ts",
+        "src/security/doc01AssessmentDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01AssessmentDocumentSource.test.ts"
+      ]
     }
   ]
 }
