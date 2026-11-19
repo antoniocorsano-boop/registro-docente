@@ -20,7 +20,10 @@ export class SecureVault {
   private sessionDek: CryptoKey | null = null;
   private mutationTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly store: VaultStore) {}
+  constructor(
+    private readonly store: VaultStore,
+    private readonly reserveInitial?: (metadata: VaultMetadataV1) => Promise<void>
+  ) {}
 
   private enqueueMutation(operation: () => Promise<void>): Promise<void> {
     const run = this.mutationTail.then(operation, operation);
@@ -42,16 +45,21 @@ export class SecureVault {
     return globalThis.crypto.getRandomValues(new Uint8Array(16));
   }
 
-  async createStaging(password: string): Promise<void> {
+  async createStaging(password: string, assertAuthorized?: () => void): Promise<void> {
+    assertAuthorized?.();
     const existing = await this.store.getMetadata();
     if (existing) {
       throw new Error(`Secure Local Vault già presente in stato ${existing.state}.`);
     }
 
+    assertAuthorized?.();
     const salt = this.createSalt();
     const dek = await generateDataEncryptionKey();
+    assertAuthorized?.();
     const kek = await deriveKeyEncryptionKey(password, salt);
+    assertAuthorized?.();
     const wrapped = await wrapDataEncryptionKey(dek, kek);
+    assertAuthorized?.();
     const now = new Date().toISOString();
 
     const metadata: VaultMetadataV1 = {
@@ -69,7 +77,9 @@ export class SecureVault {
       updatedAt: now
     };
 
-    await this.store.putMetadata(metadata);
+    assertAuthorized?.();
+    if (this.reserveInitial) await this.reserveInitial(metadata);
+    else await this.store.putMetadata(metadata);
     this.sessionDek = dek;
   }
 
@@ -119,13 +129,15 @@ export class SecureVault {
     await this.putMany([{ key, value, schemaVersion }]);
   }
 
-  async putMany(entries: readonly VaultWriteEntry[]): Promise<void> {
+  async putMany(entries: readonly VaultWriteEntry[], assertAuthorized?: () => void): Promise<void> {
     this.requireUnlocked();
     await this.enqueueMutation(async () => {
+      assertAuthorized?.();
       const dek = this.requireUnlocked();
       const records = await Promise.all(
         entries.map(entry => encryptJsonRecord(entry.key, entry.schemaVersion ?? 1, entry.value, dek))
       );
+      assertAuthorized?.();
       await this.store.putRecords(records);
     });
   }
@@ -143,7 +155,8 @@ export class SecureVault {
     await this.enqueueMutation(() => this.store.clearAll());
   }
 
-  async activate(): Promise<void> {
+  async activate(assertAuthorized?: () => void, onCommitInvoked?: () => void): Promise<void> {
+    assertAuthorized?.();
     this.requireUnlocked();
     const metadata = await this.store.getMetadata();
     if (!metadata) {
@@ -153,6 +166,8 @@ export class SecureVault {
       throw new Error(`Attivazione non ammessa per vault ${metadata.state}.`);
     }
 
+    assertAuthorized?.();
+    onCommitInvoked?.();
     await this.store.putMetadata({
       ...metadata,
       state: 'ACTIVE',
