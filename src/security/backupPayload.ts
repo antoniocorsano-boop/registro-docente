@@ -390,7 +390,8 @@ function isSnapshotV5(value: unknown): value is SecureBackupSnapshotV5 {
     && isProfessionalMemoryStateV1(value.professionalMemory);
 }
 
-function isSnapshotV6(value: unknown): value is SecureBackupSnapshotV6 {
+/** Structural validation only; no restore normalization or authority. */
+export function isSnapshotV6(value: unknown): value is SecureBackupSnapshotV6 {
   return hasPlanningAndLibrary(value)
     && isRecord(value)
     && isProfessionalMemoryStateV1(value.professionalMemory)
