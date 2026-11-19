@@ -61,6 +61,7 @@ export async function prepareCouncilContribution(document:unknown,scope:unknown,
   if(new Set(roster).size!==roster.length||new Set(s.studentIds).size!==s.studentIds.length||
    roster.length!==s.studentIds.length||roster.some(id=>!s.studentIds.includes(id))||
    typeof c.studentId!=='string'||!roster.includes(c.studentId))return fail('INVALID_CLASS');
+  if(!Array.isArray(cls.councilSessions)||new Set(cls.councilSessions.map(x=>x.id)).size!==cls.councilSessions.length)return fail('INVALID_SESSION');
   const matching=readCouncilSessions(cls,s.schoolYear).filter(x=>x.id===c.sessionId);
   if(matching.length!==1)return fail('INVALID_SESSION');
   const session=matching[0];
