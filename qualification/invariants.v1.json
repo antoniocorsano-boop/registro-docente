@@ -3132,6 +3132,18 @@
       "tests": [
         "src/security/doc01DocumentHistoryRecovery.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3C2-I01",
+      "owner": "DOC-01/D4c3c2",
+      "statement": "An isolated explicit V8 backup codec retains all ten existing datasets, independently validates DOC-01 immutable event history and V7 assessment provenance under separately approved scopes, and encrypts unchanged through the existing V2 AES-GCM envelope. Reject foreign placement, malformed chain, missing reserved domain, scope mismatch, lossy v6/v7 downgrade and malformed payload. Pre-restore pure policy demands exact current V8 recovery checkpoint, every existing document event as immutable prefix, and every confirmed assessment revision and frozen binding. Local-only verification receipts never travel. No physical DB2/Android restore, SAF, production export/activation, signature, release or merge.",
+      "impactPaths": [
+        "src/security/documentBackupPayloadV8.ts",
+        "src/security/doc01DocumentBackupPayloadV8.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentBackupPayloadV8.test.ts"
+      ]
     }
   ]
 }
