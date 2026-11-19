@@ -2582,6 +2582,18 @@
       "tests": [
         "src/security/doc01AssessmentDocumentSource.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D3C-I01",
+      "owner": "DOC-01/D3c",
+      "statement": "Final disciplinary document laboratory review reuses the recorded lesson and assessment definition reviews with one exact class, institutional reference and explicit reporting period. Recorded selected hours and actual completed assessments stay separate; no planned assessment or inferred coverage is promoted. Missing sources are not zero. Topics and professional synthesis are explicitly selected by the teacher; only explicit same-day links to selected completed assessment revisions are allowed, with no double count. Source or selection drift invalidates partial confirmation. No individual evidence, official final template, personal data authority, runtime, persistence or export; synthetic text privacy and actual occurrence remain unverified.",
+      "impactPaths": [
+        "src/documents/finalDocumentReview.ts",
+        "src/security/doc01FinalDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01FinalDocumentReview.test.ts"
+      ]
     }
   ]
 }
