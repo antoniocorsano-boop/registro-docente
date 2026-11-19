@@ -17,6 +17,7 @@ import { normalizePlanningState } from '../planning/normalizePlanningState';
 import type { PlanningStateV1, PlanningStateV2 } from '../planning/types';
 import type { CompleteSecureAppSnapshot, SecureMeta } from './secureAppStorage';
 import { withoutLocalBackupVerification } from '../persistence/backupCheckpoint';
+import { assertNoUnsupportedDocumentHistory } from './documentHistoryBackupFence';
 
 export const BACKUP_DATA_VERSION_V2 = 2;
 export const BACKUP_DATA_VERSION_V3 = 3;
@@ -402,6 +403,7 @@ export function createBackupPayload(
   snapshot: CompleteSecureAppSnapshot,
   exportedAt = new Date().toISOString()
 ): SecureBackupPayloadV6 {
+  assertNoUnsupportedDocumentHistory(snapshot);
   return {
     app: 'registro-docente',
     backupDataVersion: BACKUP_DATA_VERSION_V6,
@@ -544,6 +546,8 @@ export function normalizeBackupPayload(
   payload: unknown,
   current: CompleteSecureAppSnapshot
 ): ReturnType<typeof normalizeBackupPayloadInternal> {
+  assertNoUnsupportedDocumentHistory(payload);
+  assertNoUnsupportedDocumentHistory(current);
   const source = normalizeBackupPayloadInternal(payload, current);
   const restored = { ...source, meta: withoutLocalBackupVerification(source.meta) };
   const mode = restored.settings.archiveMode;
