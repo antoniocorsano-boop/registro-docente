@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState } from 'react';
 import { createUnifiedDocumentReview } from '../../documents/unifiedDocumentReview';
+import './unifiedDocumentPreview.css';
 
 type Result=ReturnType<typeof createUnifiedDocumentReview>;
 type Review=Extract<Result,{valid:true}>['review'];
@@ -8,29 +9,26 @@ const numberFormat=new Intl.NumberFormat('it-IT',{maximumFractionDigits:2});
 const dateLabel=(value:string)=>value.split('-').reverse().join('/');
 const stateLabels={available:'Disponibile',missing:'Non selezionata','review-required':'Da verificare'} as const;
 const fields:Record<string,string>={objectives:'Obiettivi disciplinari',transversalObjectives:'Obiettivi trasversali',assessmentMethods:'Modalità di verifica',strategies:'Strategie didattiche'};
-const primary='min-h-11 w-full rounded-xl bg-slate-100 px-4 py-3 font-semibold text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed';
-const secondary='min-h-11 w-full rounded-xl border border-slate-600 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400';
+const primary='doc-preview-action doc-preview-primary';
+const secondary='doc-preview-action doc-preview-secondary';
 
-function SourceRow({label,source,kind,origin}:{label:string;source:Presentation['curriculum'];kind:'curriculum'|'planning'|'recorded';origin:string}){
+function SourceRow({label,source,kind}:{label:string;source:Presentation['curriculum'];kind:'curriculum'|'planning'|'recorded'}){
  const available=source.status==='available';
  const quantity=source.count===null?'':numberFormat.format(source.count);
  const unit=kind==='curriculum'?(source.count===1?'riferimento':'riferimenti'):kind==='planning'?'UDA':source.count===1?'registrazione':'registrazioni';
  const hours=source.hours===null?'':numberFormat.format(source.hours);
- return <li className="min-w-0 space-y-1 px-3 py-3">
-  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-   <h2 className="font-semibold text-base break-words">{label}</h2>
-   <span className="text-sm font-medium text-slate-300">{stateLabels[source.status]}</span>
+ return <li className="doc-preview-source">
+  <div className="doc-preview-source-heading">
+   <h2 className="doc-preview-source-title">{label}</h2>
+   <span className="doc-preview-state">{stateLabels[source.status]}</span>
   </div>
-  {available&&<p className="text-lg font-semibold tabular-nums break-words">{quantity} {unit}{source.hours!==null?' · '+hours+' ore':''}</p>}
-  {available&&kind==='planning'&&<p className="text-sm text-slate-300">UDA selezionate · ore programmate</p>}
-  {available&&kind==='recorded'&&<p className="text-sm text-slate-300">Solo registrazioni selezionate</p>}
-  {available&&kind==='curriculum'&&<p className="text-sm text-slate-300">Riferimenti annuali selezionati</p>}
-  {source.status==='review-required'&&<p className="text-sm">Verifica la selezione prima di confermare.</p>}
-  {source.status==='missing'&&<p className="text-sm text-slate-300">Nessuna informazione acquisita.</p>}
-  {available&&<details className="text-sm text-slate-300">
-   <summary className="cursor-pointer min-h-11 flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-cyan-400"><span aria-hidden="true">▸</span> Provenienza</summary>
-   <p className="break-words pb-1">{origin}</p>
-  </details>}
+  {available&&<p className="doc-preview-value">{quantity} {unit}{source.hours!==null?' · '+hours+' ore':''}</p>}
+  {available&&kind==='planning'&&<p className="doc-preview-muted">UDA selezionate · ore programmate</p>}
+  {available&&kind==='recorded'&&<p className="doc-preview-muted">Solo registrazioni selezionate</p>}
+  {available&&kind==='curriculum'&&<p className="doc-preview-muted">Riferimenti annuali selezionati</p>}
+  {source.status==='review-required'&&<p className="doc-preview-muted">Verifica la selezione prima di confermare.</p>}
+  {source.status==='missing'&&<p className="doc-preview-muted">Nessuna informazione acquisita.</p>}
+
  </li>;
 }
 
@@ -61,26 +59,36 @@ export function UnifiedDocumentPreview({input}:{input:unknown}){
   setConfirmed(true);setNotice('Revisione confermata. Nessun documento salvato o approvato.');
  };
  const restart=()=>{setSnapshot(null);setConfirmed(false);setNotice('');};
- return <section aria-labelledby={titleId} className="mx-auto max-w-xl min-w-0 space-y-3 p-3 sm:p-5 break-words">
-  <header className="space-y-1">
-   <p className="text-sm text-slate-300">Dimostrazione con dati fittizi</p>
-   <h1 id={titleId} className="text-xl font-semibold">Documentazione didattica</h1>
-   {p&&<p className="text-sm text-slate-300">Anno scolastico {p.schoolYear}</p>}
-   {p&&<p className="text-sm text-slate-300">Consuntivo: {dateLabel(p.periodStart)} – {dateLabel(p.periodEnd)}</p>}
+ return <section aria-labelledby={titleId} className="doc-preview">
+  <header className="doc-preview-header">
+   <p className="doc-preview-muted">Dimostrazione con dati fittizi</p>
+   <h1 id={titleId} className="doc-preview-title">Documentazione didattica</h1>
+   {p&&<p className="doc-preview-muted">Anno scolastico {p.schoolYear}</p>}
+   {p&&<p className="doc-preview-muted">Consuntivo: {dateLabel(p.periodStart)} – {dateLabel(p.periodEnd)}</p>}
   </header>
-  {(stale||notice)&&<p role="status" className="rounded-xl border border-slate-600 p-3 text-sm">{stale?'Le informazioni sono cambiate. Prepara una nuova anteprima.':notice}</p>}
+  {(stale||notice)&&<p role="status" className="doc-preview-notice">{stale?'Le informazioni sono cambiate. Prepara una nuova anteprima.':notice}</p>}
   {!p?<button type="button" className={primary} onClick={prepare}>Prepara anteprima</button>:<>
-   <ul aria-label="Fonti documentali" className="divide-y divide-slate-700 rounded-xl border border-slate-700 bg-slate-900/40">
-    <SourceRow label="Curricolo" kind="curriculum" source={p.curriculum} origin="Arena · annualità disciplinari selezionate"/>
-    <SourceRow label="Programmazione" kind="planning" source={p.planning} origin="Docente OS · UDA confermate e selezionate"/>
-    <SourceRow label="Consuntivo" kind="recorded" source={p.recorded} origin="Registro Docente · diario delle attività selezionate"/>
+   <ul aria-label="Fonti documentali" className="doc-preview-sources">
+    <SourceRow label="Curricolo" kind="curriculum" source={p.curriculum}/>
+    <SourceRow label="Programmazione" kind="planning" source={p.planning}/>
+    <SourceRow label="Consuntivo" kind="recorded" source={p.recorded}/>
    </ul>
-   <details className="rounded-xl border border-slate-700 px-3 py-2">
-    <summary className="cursor-pointer min-h-11 flex flex-wrap items-center gap-x-2 font-semibold focus-visible:outline-2 focus-visible:outline-cyan-400"><span aria-hidden="true">▸</span> Informazioni da completare ({p.unfilled.length})</summary>
-    <ul className="list-disc pl-6 pb-2 space-y-1 text-sm">{p.unfilled.map(key=><li key={key}>{fields[key]}</li>)}</ul>
-   </details>
-   <p className="text-sm text-slate-300">Documento incompleto. La conferma riguarda solo le informazioni disponibili.</p>
-   {!p.canConfirm?<p className="text-sm font-medium">Seleziona o verifica le fonti prima di confermare.</p>:null}
+   <div className="doc-preview-disclosures">
+    {[p.curriculum,p.planning,p.recorded].some(source=>source.status==='available')&&<details>
+     <summary>Provenienza delle informazioni</summary>
+     <ul aria-label="Provenienza delle fonti">
+      {p.curriculum.status==='available'&&<li>Arena · annualità disciplinari selezionate</li>}
+      {p.planning.status==='available'&&<li>Docente OS · UDA confermate e selezionate</li>}
+      {p.recorded.status==='available'&&<li>Registro Docente · diario delle attività selezionate</li>}
+     </ul>
+    </details>}
+    <details>
+     <summary>Informazioni da completare ({p.unfilled.length})</summary>
+     <ul>{p.unfilled.map(key=><li key={key}>{fields[key]}</li>)}</ul>
+    </details>
+   </div>
+   <p className="doc-preview-muted">Documento incompleto. La conferma riguarda solo le informazioni disponibili.</p>
+   {!p.canConfirm?<p className="doc-preview-muted">Seleziona o verifica le fonti prima di confermare.</p>:null}
    {!confirmed&&<button type="button" className={primary} disabled={!p.canConfirm} onClick={confirm}>Conferma la revisione</button>}
    <button type="button" className={secondary} onClick={restart}>Ricomincia</button>
   </>}
