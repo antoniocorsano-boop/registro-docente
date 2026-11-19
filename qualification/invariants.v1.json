@@ -2515,6 +2515,25 @@
       "browserSmoke": [
         "tests/browser/doc01-d1d4b-unified.spec.cjs"
       ]
+    },
+    {
+      "id": "DOC-01-D1D4B-I02",
+      "owner": "DOC-01/D1d4b",
+      "statement": "The isolated unified preview must reflow at nominal mobile widths 320 and 390 CSS px, including actual 200% root text size at 320. Browser geometry measures against the requested viewport, not an inflated innerWidth, and checks visible element and text bounds, 44px controls, opened and closed disclosures, pre/post confirmation and actual PNG width. Product-only evidence excludes fixture controls; provenance is grouped and readable. No clipping or reduction of the requested text scale is used.",
+      "impactPaths": [
+        "src/components/documents/UnifiedDocumentPreview.tsx",
+        "src/components/documents/unifiedDocumentPreview.css",
+        "src/security/doc01UnifiedDocumentPreview.test.ts",
+        "tests/browser/fixtures/doc01-d1d4b-fixture.tsx",
+        "tests/browser/doc01-d1d4b-unified.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentPreview.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1d4b-unified.spec.cjs"
+      ]
     }
   ]
 }
