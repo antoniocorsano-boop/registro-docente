@@ -2496,6 +2496,25 @@
       "tests": [
         "src/security/doc01UnifiedDocumentReview.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1D4B-I01",
+      "owner": "DOC-01/D1d4b",
+      "statement": "The isolated unified preview uses the qualified composition and its revalidation for partial confirmation; three source summaries keep planned hours distinct from selected recorded hours, unavailable fields grouped, missing and invalid sources distinct, provenance on demand. Changed inputs invalidate confirmation; no internal identifiers, persistence, export or production wiring. Exact candidate mobile Chromium evidence is required.",
+      "impactPaths": [
+        "src/components/documents/UnifiedDocumentPreview.tsx",
+        "src/security/doc01UnifiedDocumentPreview.test.ts",
+        "tests/browser/fixtures/doc01-d1d4b-fixture.tsx",
+        "tests/browser/fixtures/doc01-d1d4b.html",
+        "tests/browser/doc01-d1d4b-unified.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentPreview.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1d4b-unified.spec.cjs"
+      ]
     }
   ]
 }
