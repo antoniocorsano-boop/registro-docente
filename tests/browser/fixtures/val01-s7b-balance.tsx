@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import type {AssessmentEvidenceV1,AssessmentScopeV1} from '../../../src/assessment/assessmentEvidence';
 import {projectIndividualAssessmentEvidence} from '../../../src/assessment/assessmentEvidenceProjection';
 import {prepareFormativeBalance,confirmFormativeBalance,type FormativeBalanceContext,type FormativeBalancePreview,type FormativeBalanceRequest} from '../../../src/assessment/formativeBalance';
+import type {ConfirmedFormativeBalance} from '../../../src/council/councilDisciplinaryContribution';
 import {projectFormativeRestitution} from '../../../src/assessment/formativeRestitutionProjection';
 
 const blank={learning:'',progress:'',nextStep:''};
@@ -9,7 +10,7 @@ const states={observed:'Osservato',not_observed:'Non osservato',not_applicable:'
 const field='block w-full min-w-0 max-w-full rounded border p-2 min-h-[44px]';
 const button='min-h-[44px] max-w-full rounded border px-3 py-2 whitespace-normal [overflow-wrap:anywhere]';
 type Current={document:AssessmentEvidenceV1;changes:number};
-type Props={scope:AssessmentScopeV1;studentId:string;document:AssessmentEvidenceV1;version:number;getCurrent:()=>Current;onDraftChange:(dirty:boolean)=>void};
+type Props={scope:AssessmentScopeV1;studentId:string;document:AssessmentEvidenceV1;version:number;getCurrent:()=>Current;onDraftChange:(dirty:boolean)=>void;onTransfer?:(balance:ConfirmedFormativeBalance)=>void};
 function available(document:AssessmentEvidenceV1,scope:AssessmentScopeV1,c:FormativeBalanceContext){
  const p=projectIndividualAssessmentEvidence(document,scope,c.studentId);
  if(!p.valid||!c.from||!c.to||c.from>c.to)return [];
@@ -21,11 +22,12 @@ function available(document:AssessmentEvidenceV1,scope:AssessmentScopeV1,c:Forma
    [{record,assessment,criterion}]:[];
  });
 }
-export function SyntheticFormativeBalance({scope,studentId,document,version,getCurrent,onDraftChange}:Props){
+export function SyntheticFormativeBalance({scope,studentId,document,version,getCurrent,onDraftChange,onTransfer}:Props){
  const [period,setPeriod]=useState<'Q1'|'Q2'>('Q1'),[from,setFrom]=useState(''),[to,setTo]=useState('');
  const [selected,setSelected]=useState<string[]>([]),[earlier,setEarlier]=useState(''),[later,setLater]=useState('');
  const [teacherText,setTeacherText]=useState(blank);
  const [review,setReview]=useState<{preview:FormativeBalancePreview;version:number}|null>(null);
+ const [confirmedBalance,setConfirmedBalance]=useState<ConfirmedFormativeBalance|null>(null);
  const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const alive=useRef(true),operation=useRef(false);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
@@ -34,7 +36,7 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
  const selectedObserved=rows.filter(r=>r.record.state==='observed'&&selected.includes(r.record.revisionId));
  const recipient='Studente '+(scope.studentIds.indexOf(studentId)+1);
  const request:FormativeBalanceRequest={evidenceRevisionIds:selected,comparisons:earlier&&later?[{earlierRevisionId:earlier,laterRevisionId:later}]:[],teacherText};
- function invalidate(){setReview(null);setConfirmed(false);setMessage('');}
+ function invalidate(){setReview(null);setConfirmed(false);setConfirmedBalance(null);setMessage('');}
  function dirty(){onDraftChange(true);invalidate();}
  function changeContext(action:()=>void){dirty();action();setSelected([]);setEarlier('');setLater('');}
  function reset(){
@@ -42,7 +44,7 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
   invalidate();setPeriod('Q1');setFrom('');setTo('');setSelected([]);setEarlier('');setLater('');setTeacherText(blank);onDraftChange(false);
  }
  function sourceChanged(next:Current){
-  setReview(null);setConfirmed(false);
+  setReview(null);setConfirmed(false);setConfirmedBalance(null);
   const allowed=new Set(available(next.document,scope,context).map(r=>r.record.revisionId));
   setSelected(ids=>ids.filter(id=>allowed.has(id)));setEarlier('');setLater('');
   setMessage('Le evidenze sono cambiate. Rivedi le fonti e il testo prima di confermare.');
@@ -59,7 +61,7 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
     if(cancelled||!alive.current||getCurrent().changes!==next.changes)return;
     if(fresh.valid&&fresh.preview.basisDigest===review.preview.basisDigest)setReview({preview:fresh.preview,version:next.changes});
     else sourceChanged(next);
-   }catch{if(!cancelled&&alive.current){setReview(null);setConfirmed(false);setMessage('Fonti non disponibili. Rivedi il bilancio.');}}
+   }catch{if(!cancelled&&alive.current){setReview(null);setConfirmed(false);setConfirmedBalance(null);setMessage('Fonti non disponibili. Rivedi il bilancio.');}}
   })();
   return()=>{cancelled=true;};
  },[version,review]);
@@ -87,8 +89,8 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
    const r=await confirmFormativeBalance(current.document,scope,context,review.preview,{confirmedByTeacher:true,confirmedAt:'2027-08-31T12:00:00.000Z'});
    if(!alive.current)return;
    if(getCurrent().changes!==current.changes||!r.valid){sourceChanged(getCurrent());return;}
-   setConfirmed(true);
-  }catch{if(alive.current){setConfirmed(false);setMessage('Conferma non disponibile.');}}
+   setConfirmedBalance(r.balance);setConfirmed(true);
+  }catch{if(alive.current){setConfirmed(false);setConfirmedBalance(null);setMessage('Conferma non disponibile.');}}
   finally{operation.current=false;if(alive.current)setBusy(false);}
  }
  const visibleReview=review&&review.version===version?projectFormativeRestitution(review.preview):null;
@@ -103,6 +105,7 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
    {([['learning','Apprendimenti'],['progress','Progresso documentato'],['nextStep','Prossimo passo']] as const).map(([key,label])=>visibleReview.teacherText[key].trim()?<div key={key} className="space-y-1"><h4 className="font-semibold">{label}</h4><p className="whitespace-pre-wrap">{visibleReview.teacherText[key]}</p></div>:null)}
    <p className="text-sm">Verifica che il testo non contenga informazioni riservate o riferite ad altri studenti.</p>
    {confirmed?<p role="status">Bilancio confermato nella dimostrazione. Non salvato né inviato.</p>:<button type="button" disabled={busy} className={button} onClick={confirm}>Conferma bilancio</button>}
+   {confirmed&&confirmedBalance&&onTransfer&&<button type="button" disabled={busy} className={button} onClick={()=>{if(!operation.current&&getCurrent().changes===review?.version)onTransfer(confirmedBalance);}}>Prepara contributo al Consiglio</button>}
    <button type="button" disabled={busy} className={button} onClick={invalidate}>Modifica bozza</button>
   </section>:<fieldset disabled={busy} className="space-y-3 min-w-0">
    <legend className="font-semibold">Periodo e fonti</legend>
