@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { createUnifiedDocumentReview } from '../../documents/unifiedDocumentReview';
 
 type Result=ReturnType<typeof createUnifiedDocumentReview>;
@@ -38,7 +38,6 @@ function SourceRow({label,source,kind,origin}:{label:string;source:Presentation[
 export function UnifiedDocumentPreview({input}:{input:unknown}){
  const titleId=useId();
  // A fresh input object signals replacement of the selection or context.
- // A keyed child in the fixture also remounts on explicit source changes.
  const [snapshot,setSnapshot]=useState<{input:unknown;review:Review}|null>(null);
  const [confirmed,setConfirmed]=useState(false);
  const [notice,setNotice]=useState('');
@@ -47,6 +46,9 @@ export function UnifiedDocumentPreview({input}:{input:unknown}){
  const replaced=!!snapshot&&snapshot.input!==input;
  const stale=!!snapshot&&(replaced||(snapshot.review.presentation.canConfirm&&!snapshot.review.isCurrent(input)));
  const p=!stale?snapshot?.review.presentation:undefined;
+ useEffect(()=>{
+  if(stale){setSnapshot(null);setConfirmed(false);setNotice('Le informazioni sono cambiate. Prepara una nuova anteprima.');}
+ },[stale]);
  const prepare=()=>{
   const result=createUnifiedDocumentReview(input);setConfirmed(false);
   if(!result.valid){setSnapshot(null);setNotice('Anteprima non disponibile. Verifica classe e periodo.');return;}
