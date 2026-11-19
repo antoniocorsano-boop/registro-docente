@@ -57,21 +57,41 @@ function isVaultRecordKey(value: IDBValidKey): value is VaultRecordKey {
 export class IndexedDbVaultStore implements VaultStore {
   private readonly factory: IDBFactory;
   private databasePromise: Promise<IDBDatabase> | null = null;
+  private connectionRetired = false;
+  private activeConnection: IDBDatabase | null = null;
+  private abandonOpen: (() => void) | null = null;
 
-  constructor(factory: IDBFactory | undefined = globalThis.indexedDB) {
+  constructor(factory: IDBFactory | undefined = globalThis.indexedDB, private readonly existingOnly = false) {
     if (!factory) {
       throw new Error('IndexedDB non disponibile: impossibile usare il Secure Local Vault.');
     }
     this.factory = factory;
   }
 
-  private openDatabase(): Promise<IDBDatabase> {
+  /** The owner must drain admitted work before retiring its runtime. */
+  async retireConnection(): Promise<void> {
+    this.connectionRetired = true;
+    this.abandonOpen?.();
+    this.activeConnection?.close();
+    this.activeConnection = null;
+  }
+
+  protected openDatabase(): Promise<IDBDatabase> {
+    if (this.connectionRetired) return Promise.reject(new Error('Sessione archivio non più attuale.'));
     if (this.databasePromise) return this.databasePromise;
 
     this.databasePromise = new Promise((resolve, reject) => {
       const request = this.factory.open(DB_NAME, DB_VERSION);
+      let abandoned = false;
+      const fail = (error: Error | DOMException) => {
+        abandoned = true;
+        this.abandonOpen = null;
+        reject(error);
+      };
+      this.abandonOpen = () => fail(new Error('Sessione archivio non più attuale.'));
 
       request.onupgradeneeded = () => {
+        if (abandoned || this.connectionRetired || this.existingOnly) { request.transaction?.abort(); return; }
         const db = request.result;
         if (!db.objectStoreNames.contains(METADATA_STORE)) {
           db.createObjectStore(METADATA_STORE);
@@ -81,9 +101,15 @@ export class IndexedDbVaultStore implements VaultStore {
         }
       };
 
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error ?? new Error('Apertura IndexedDB non riuscita.'));
-      request.onblocked = () => reject(new Error('Apertura IndexedDB bloccata da un’altra sessione.'));
+      request.onsuccess = () => {
+        const db = request.result;
+        if (abandoned || this.connectionRetired) { db.close(); return; }
+        this.abandonOpen = null;
+        this.activeConnection = db;
+        resolve(db);
+      };
+      request.onerror = () => fail(request.error ?? new Error('Apertura IndexedDB non riuscita.'));
+      request.onblocked = () => fail(new Error('Apertura IndexedDB bloccata da un’altra sessione.'));
     });
 
     return this.databasePromise;
@@ -94,6 +120,42 @@ export class IndexedDbVaultStore implements VaultStore {
     const tx = db.transaction(METADATA_STORE, 'readonly');
     const result = await requestToPromise(tx.objectStore(METADATA_STORE).get(CURRENT_METADATA_KEY));
     return (result as VaultMetadataV1 | undefined) ?? null;
+  }
+
+  /** Candidate-only initial reservation. Both stores must be empty in the
+   * same readwrite transaction; add() must never replace an existing owner.
+   * Success means the reservation has committed, not just a request success. */
+  async claimInitialMetadata(metadata: VaultMetadataV1): Promise<void> {
+    if (metadata.state !== 'STAGING') throw new Error('Configurazione iniziale non valida.');
+    const db = await this.openDatabase();
+    if (db.version !== 1) throw new Error('Versione archivio non ammessa per la configurazione iniziale.');
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([METADATA_STORE, RECORDS_STORE], 'readwrite');
+      const refused = () => new Error('Archivio non vuoto. Nessun dato è stato sostituito.');
+      let failure: unknown = null;
+      const abort = (error: unknown) => {
+        failure = error;
+        try { tx.abort(); } catch { reject(error); }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(failure ?? tx.error ?? refused());
+      tx.onerror = () => { failure ??= tx.error ?? refused(); };
+      try {
+        const meta = tx.objectStore(METADATA_STORE);
+        const records = tx.objectStore(RECORDS_STORE);
+        const metaCount = meta.count();
+        const recordCount = records.count();
+        let remaining = 2;
+        const reserve = () => {
+          if (--remaining !== 0) return;
+          try {
+            if (metaCount.result !== 0 || recordCount.result !== 0) throw refused();
+            meta.add(metadata, CURRENT_METADATA_KEY);
+          } catch (error) { abort(error); }
+        };
+        metaCount.onsuccess = recordCount.onsuccess = reserve;
+      } catch (error) { abort(error); }
+    });
   }
 
   async putMetadata(metadata: VaultMetadataV1): Promise<void> {
