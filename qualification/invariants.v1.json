@@ -2428,6 +2428,26 @@
       "tests": [
         "src/security/doc01DocumentProjection.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1C-I01",
+      "owner": "DOC-01/D1c",
+      "statement": "The isolated document preview presents only professional labels and available synthetic values; its opaque in-memory review checks the exact current sources, including withheld revisions, and invalidates stale confirmation. Missing information stays visible; confirmation is not saving or institutional approval. No production wiring, persistent receipt, personal source adapter or export. Mobile browser evidence is required.",
+      "impactPaths": [
+        "src/documents/documentPresentation.ts",
+        "src/components/documents/DocumentPlanningPreview.tsx",
+        "src/security/doc01DocumentPresentation.test.ts",
+        "tests/browser/fixtures/doc01-d1c-fixture.tsx",
+        "tests/browser/fixtures/doc01-d1c.html",
+        "tests/browser/doc01-d1c-preview.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01DocumentPresentation.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1c-preview.spec.cjs"
+      ]
     }
   ]
 }
