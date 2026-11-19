@@ -2558,6 +2558,18 @@
       "tests": [
         "src/security/doc01PlannedDocumentContent.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D2B2B-I01",
+      "owner": "DOC-01/D2b2b",
+      "statement": "Structured curriculum intake refuses Arena laboratory or synthetic markers and unsupported contracts, even with purported authority receipts and hashes. Existing V1 remains annual-reference-only through D1d2 and exact D2a review. Seven curriculum category placements are metadata, always unfilled, with objectives requiring specificity review, milestone separate, evidence expected not assessed, restricted and collegial fields excluded. No content acquisition, production authorization, storage or runtime wiring until a verified producer and governed consumer exist.",
+      "impactPaths": [
+        "src/documents/structuredCurriculumIntake.ts",
+        "src/security/doc01StructuredCurriculumIntake.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01StructuredCurriculumIntake.test.ts"
+      ]
     }
   ]
 }
