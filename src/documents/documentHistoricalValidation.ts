@@ -182,3 +182,6 @@ export async function validateHistoricalDocumentRecord(raw:unknown,approvedScope
   return {valid:true,record:freeze(r) as unknown as DocumentArchiveCandidateV1};
  }catch{return fail('INVALID_RECORD');}
 }
+
+// Shared V1 defensive boundary for the isolated historical event collection.
+export {detach as detachHistoricalDocumentData,canonical as canonicalHistoricalDocumentData,freeze as freezeHistoricalDocumentData,scope as isHistoricalDocumentScope};
