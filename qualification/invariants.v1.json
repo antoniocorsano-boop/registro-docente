@@ -2534,6 +2534,18 @@
       "browserSmoke": [
         "tests/browser/doc01-d1d4b-unified.spec.cjs"
       ]
+    },
+    {
+      "id": "DOC-01-D2A-I01",
+      "owner": "DOC-01/D2a",
+      "statement": "Institutional document reference mapping uses distinct annual first-grade and second/third-grade structures, plus disciplinary council contribution, with exact reviewed version, school-year, institution, site, cohort, grade and regime binding, canonical class identity and teacher confirmation. Unknown or ambiguous applicability is not automatically resolved. Expected descriptors, planned work, restricted profile information and collegial authority remain distinct. Mapping is metadata only, incomplete, nonofficial, not proof of adoption, and excludes historical final models, persistence and production wiring.",
+      "impactPaths": [
+        "src/documents/institutionalDocumentModel.ts",
+        "src/security/doc01InstitutionalDocumentModel.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01InstitutionalDocumentModel.test.ts"
+      ]
     }
   ]
 }
