@@ -11,10 +11,10 @@ const raw:Omit<DocenteOsTeachingProjectionV1,'projectionFingerprint'>={
 const wrap=(p:typeof raw=raw)=>({projection:{...p,projectionFingerprint:{algorithm:'SHA-256' as const,hash:computeDocenteOsTeachingProjectionFingerprint(p)}},acceptedAt:'2026-11-19T01:00:00.000Z',classReconciliation:[{sourceSectionId:'demo-section',status:'resolved' as const,registroClassId:'demo-class'}]});
 const current=wrap();
 const selection={confirmedByTeacher:true,institutionRef:scope.institutionRef,cohortRef:scope.cohortRef,projectionHash:current.projection.projectionFingerprint.hash,acceptedAt:current.acceptedAt,sourceSectionId:'demo-section',udaIds:[raw.classes[0].udas[0].projectedUdaId]};
-const review=(s=scope,c=classes,a=[current],r=selection)=>reviewPlanningDocumentSource(s,c,a,r);
+const review=(s:unknown=scope,c:unknown=classes,a:unknown=[current],r:unknown=selection)=>reviewPlanningDocumentSource(s,c,a,r);
 describe('DOC-01/D1d1 selected professional planning source',()=>{
  test('reuses exact accepted confirmed projection and returns only planned references',()=>{
-   const r=review();expect(r.valid).toBe(true);
+   const r=review();expect(r.valid).toBe(true);if(!r.valid)throw new Error(r.issue);
    expect(r.source).toMatchObject({kind:'planned-uda-references',count:1,official:false,completedActivities:null});
    expect(r.source.references[0]).toMatchObject({udaId:selection.udaIds[0],plannedHours:4});
    expect(JSON.stringify(r.source)).not.toMatch(/Titolo dimostrativo|Contenuto non riportato|demo-pack|sourceBranch|sourceCommit/);
