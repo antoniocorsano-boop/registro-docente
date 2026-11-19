@@ -1,5 +1,6 @@
 import {describe,expect,test} from 'bun:test';
 import {readFileSync} from 'node:fs';
+import {proposeDocumentRevision} from '../documents/documentRevisionIdentity';
 import {validateHistoricalDocumentRecord} from '../documents/documentHistoricalValidation';
 import {prepareDocumentArchiveCandidate} from '../documents/documentArchiveCandidate';
 import {createFinalRevisionReview} from '../documents/finalRevisionConfirmation';
@@ -148,5 +149,59 @@ describe('DOC-01/D4c2a historical validation of frozen document record',()=>{
   let accessed=false;const bad={...r};Object.defineProperty(bad,'preview',{enumerable:true,get(){accessed=true;return r.preview;}});
   expect((await check(bad,r.identity.scope)).valid).toBe(false);expect(accessed).toBe(false);
   for(const path of ['src/App.tsx','src/main.tsx','src/security/secureAppStorage.ts','src/security/backupPayload.ts'])expect(readFileSync(path,'utf8')).not.toContain('validateHistoricalDocumentRecord');
+ });
+});
+
+describe('DOC-01/D4c2a producer-to-history closure',()=>{
+ test('round-trips program completed as recorded-only content, rejects rehashed report fields',async()=>{
+  const x=finalDraft(),draft={...x,revision:{...x.revision,kind:'program-completed'},source:{...x.source,assessment:null,selection:{...x.source.selection,links:[],summary:[]}}};
+  const r=await prepare(request(draft)),scope=draft.revision.scope;
+  expect((await check(JSON.parse(JSON.stringify(r)),scope)).valid).toBe(true);
+  expect(r.preview.content).not.toHaveProperty('assessments');
+  expect(r.preview.content).not.toHaveProperty('summary');
+  expect((await check(await resign({...r,preview:{...r.preview,content:{...r.preview.content,summary:[]}}}),scope)).valid).toBe(false);
+ });
+ test('round-trips selected expected criteria and explicit UDA links; rejects rehashed group or link violations',async()=>{
+  const x=planningDraft(),a=make(),scope=x.source.scope,period=x.revision.period;
+  const assessment={graph:a.graph,selection:{...a.selection,scope,period,expectedRevisionIds:['demo-other'],completedRevisionIds:[]},links:{confirmedByTeacher:true,items:[{udaId:x.source.planning.selection.udaIds[0],assessmentRevisionId:'demo-other'}]}};
+  const draft={...x,source:{...x.source,assessment}};
+  const r=await prepare(request(draft));
+  expect((await check(JSON.parse(JSON.stringify(r)),scope)).valid).toBe(true);
+  const p=r.preview as Extract<RecordV1['preview'],{kind:'disciplinary-plan'|'council-disciplinary-contribution'}>;
+  const c=p.content,a1=c.assessment;
+  if(!a1||a1.status!=='selected')throw Error('selected assessment missing');
+  expect(a1.localTargets.length).toBeGreaterThan(0);
+  expect(a1.links).toEqual([{udaIndex:0,assessmentIndex:0}]);
+  for(const changed of [{...a1,localTargets:[]},{...a1,links:[...a1.links,...a1.links]},{...a1,localTargets:a1.localTargets.map(g=>({...g,targets:g.targets.map(t=>({...t,origin:'arena'}))}))}]){
+   expect((await check(await resign({...r,preview:{...p,content:{...c,assessment:changed}}}),scope)).valid).toBe(false);
+  }
+ });
+ test('round-trips explicit missing assessment and missing curriculum; does not mistake absence for zero',async()=>{
+  const x=planningDraft(),d={...x,source:{...x.source,arena:null,assessment:null}},r=await prepare(request(d)),scope=d.revision.scope;
+  expect((await check(JSON.parse(JSON.stringify(r)),scope)).valid).toBe(true);
+  const p=r.preview as Extract<RecordV1['preview'],{kind:'disciplinary-plan'|'council-disciplinary-contribution'}>;
+  const c=p.content;
+  expect(c.curriculum.annualReferenceCount).toBeNull();expect(c.assessment?.coverage).toBeNull();
+  expect((await check(await resign({...r,preview:{...p,content:{...c,curriculum:{...c.curriculum,annualReferenceCount:0}}}}),scope)).valid).toBe(false);
+ });
+ test('round-trips a subsequent revision without reconstructing the prior sources',async()=>{
+  const x=finalDraft(),lineage=proposeDocumentRevision(x.revision);
+  if(!lineage.valid)throw Error(lineage.issue);
+  const d={...x,revision:{...x.revision,history:lineage.history,request:{expectedHead:'demo-revision-one',revisionId:'demo-revision-two',reason:'correction'}}};
+  const r=await prepare(request(d)),scope=d.revision.scope;
+  expect(r.revision).toMatchObject({number:2,previousRevisionId:'demo-revision-one',revisionId:'demo-revision-two'});
+  expect((await check(JSON.parse(JSON.stringify(r)),scope)).valid).toBe(true);
+  // This is a record-level check only; continuity across stored records belongs to D4c2b.
+  expect((await check(await resign({...r,revision:{...r.revision,previousRevisionId:r.revision.revisionId}}),scope)).valid).toBe(false);
+ });
+ test('rejects non-canonical half-hour quantities and inconsistent sums even with valid recomputed digest',async()=>{
+  const x=finalDraft(),r=await prepare(request(x)),scope=x.revision.scope;
+  const p=r.preview as Extract<RecordV1['preview'],{kind:'final-report'|'program-completed'}>;
+  const c=p.content,recorded=c.recorded;
+  for(const hours of [0,0.25,1.25,10.5]){
+   const activities=recorded.activities.map((a,i)=>i===0?{...a,hours}:a);
+   const changed={...recorded,activities,hours:activities.reduce((sum,a)=>sum+a.hours,0)};
+   expect((await check(await resign({...r,preview:{...p,content:{...c,recorded:changed}}}),scope)).valid).toBe(false);
+  }
  });
 });
