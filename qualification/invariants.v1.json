@@ -3033,6 +3033,18 @@
       "tests": [
         "src/security/doc01FinalRevisionConfirmation.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4B2-I01",
+      "owner": "DOC-01/D4b2",
+      "statement": "Synthetic annual disciplinary plan and general council disciplinary contribution bind exact D4a draft lineage and D2b1 selected planned UDA content, with optional D1d2 annual Arena references (count only, never structured objectives). Scope, reviewed model, class and full school-year period must match; missing curriculum remains explicit, invalid selection blocks. Exact preview and explicit revision-specific confirmation are required; altered acceptance, hidden curriculum text, revision or source availability invalidate monotonically. Revocation is terminal for this in-memory instance. No collegiate authority, private destination, personal data, official template, authentication, persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/planningRevisionConfirmation.ts",
+        "src/security/doc01PlanningRevisionConfirmation.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningRevisionConfirmation.test.ts"
+      ]
     }
   ]
 }
