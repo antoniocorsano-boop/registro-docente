@@ -106,9 +106,9 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
    <button type="button" disabled={busy} className={button} onClick={invalidate}>Modifica bozza</button>
   </section>:<fieldset disabled={busy} className="space-y-3 min-w-0">
    <legend className="font-semibold">Periodo e fonti</legend>
-   <label className="block">Periodo<select className={field} value={period} onChange={e=>changeContext(()=>setPeriod(e.target.value as 'Q1'|'Q2'))}><option value="Q1">Primo periodo</option><option value="Q2">Secondo periodo</option></select></label>
-   <label className="block">Dal<input className={field} type="date" value={from} onChange={e=>changeContext(()=>setFrom(e.target.value))}/></label>
-   <label className="block">Al<input className={field} type="date" value={to} onChange={e=>changeContext(()=>setTo(e.target.value))}/></label>
+   <label className="block">Periodo<select aria-label="Periodo" className={field} value={period} onChange={e=>changeContext(()=>setPeriod(e.target.value as 'Q1'|'Q2'))}><option value="Q1">Primo periodo</option><option value="Q2">Secondo periodo</option></select></label>
+   <label className="block">Dal<input aria-label="Dal" className={field} type="date" value={from} onChange={e=>changeContext(()=>setFrom(e.target.value))}/></label>
+   <label className="block">Al<input aria-label="Al" className={field} type="date" value={to} onChange={e=>changeContext(()=>setTo(e.target.value))}/></label>
    <section aria-label="Fonti disponibili" className="space-y-2">
     <h3 className="font-semibold">Seleziona le evidenze</h3>
     {!from||!to?<p>Indica le date effettive del periodo.</p>:!rows.length?<p>Nessuna evidenza disponibile per il periodo selezionato.</p>:rows.map(r=><label className="flex items-start gap-2 border-b py-2 min-w-0" key={r.record.revisionId}>
@@ -118,7 +118,7 @@ export function SyntheticFormativeBalance({scope,studentId,document,version,getC
    </section>
    <section aria-label="Confronto delle osservazioni" className="space-y-2">
     <h3 className="font-semibold">Confronto facoltativo</h3><p className="text-sm">Seleziona due fatti osservati. Il confronto non determina automaticamente un progresso.</p>
-    {([['Prima osservazione',earlier,setEarlier],['Seconda osservazione',later,setLater]] as const).map(([label,value,set])=><label className="block" key={label}>{label}<select className={field} value={value} onChange={e=>{dirty();set(e.target.value);}}><option value="">Nessun confronto</option>{selectedObserved.map(r=><option key={r.record.revisionId} value={r.record.revisionId}>{r.record.observedOn} · {r.criterion.description}</option>)}</select></label>)}
+    {([['Prima osservazione',earlier,setEarlier],['Seconda osservazione',later,setLater]] as const).map(([label,value,set])=><label className="block" key={label}>{label}<select aria-label={label} className={field} value={value} onChange={e=>{dirty();set(e.target.value);}}><option value="">Nessun confronto</option>{selectedObserved.map(r=><option key={r.record.revisionId} value={r.record.revisionId}>{r.record.observedOn} · {r.criterion.description}</option>)}</select></label>)}
    </section>
    {([['learning','Apprendimenti'],['progress','Progresso documentato'],['nextStep','Prossimo passo']] as const).map(([key,label])=><label className="block" key={key}>{label}<textarea aria-label={label} maxLength={2000} rows={3} className={field} value={teacherText[key]} onChange={e=>{dirty();setTeacherText(t=>({...t,[key]:e.target.value}));}}/></label>)}
    <button className={button} type="button" onClick={prepare}>Rivedi bilancio</button>
