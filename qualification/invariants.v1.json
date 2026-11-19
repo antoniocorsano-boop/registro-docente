@@ -3009,6 +3009,18 @@
       "tests": [
         "src/security/doc01FinalDocumentReview.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4A-I01",
+      "owner": "DOC-01/D4a",
+      "statement": "Synthetic document revision identity binds a class-level professional document kind to the exact D2a reviewed institutional context, normalized year, explicit period and mapping version. Document and revision identifiers are synthetic, distinct, and stable within the supplied history. Append-only contiguous draft lineage requires the exact supplied head, unique revisions and explicit revision reason; malformed, cross-context, stale, private destination and approval-shaped input is rejected. Outputs are detached and frozen. No content binding, registry-wide uniqueness, authoritative concurrency, teacher confirmation, official template, persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/documentRevisionIdentity.ts",
+        "src/security/doc01DocumentRevisionIdentity.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentRevisionIdentity.test.ts"
+      ]
     }
   ]
 }
