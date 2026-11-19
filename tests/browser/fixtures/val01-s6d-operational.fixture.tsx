@@ -86,7 +86,7 @@ function Laboratory(){
   {openError&&<p role="alert">Archivio non disponibile.</p>}
  </main>;
  const data=snapshot.appData,evidence=snapshot.document,currentClass=data.classes.find(c=>c.id===boardScope.classId)!;
- const dirty=()=>evidenceDirty.current||balanceDirty.current||!!dailyGuard.current?.hasUnsavedChanges()||recoveryRequired;
+ const dirty=()=>evidenceDirty.current||balanceDirty.current||contributionDirty.current||!!dailyGuard.current?.hasUnsavedChanges()||recoveryRequired;
  const request=(action:()=>void)=>{if(dirty()){setBlocked(true);return;}setBlocked(false);action();};
  const openReport=(id:string)=>request(()=>{if(boardScope.studentIds.includes(id)){setReport(id);setReportView('essential');}});
  const projection=report?projectIndividualAssessmentEvidence(evidence,boardScope,report):null;
