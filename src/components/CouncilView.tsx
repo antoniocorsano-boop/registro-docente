@@ -28,11 +28,13 @@ interface CouncilViewProps {
   onPrepareSnapshot: (context: CouncilSnapshotContextV1) => Promise<CouncilSnapshotPreviewV1>;
   onConfirmSnapshot: (reviewed: CouncilSnapshotPreviewV1, snapshotId: string) => Promise<void>;
   onRegisterDraftGuard?: (guard: PlanningDraftGuard | null) => void;
+  /** Optional read-only synthetic contribution slot; not supplied by App/Root. */
+  laboratoryContribution?: {requestChange:(action:()=>void)=>void;render:(classData:ClassData,schoolYear:string,session:import('../types').CouncilSession)=>React.ReactNode};
 }
 
 export const CouncilView: React.FC<CouncilViewProps> = ({
   classes, settings, isPrivacyShieldActive, onSave, onCreateSession,
-  onPrepareSnapshot, onConfirmSnapshot, onRegisterDraftGuard
+  onPrepareSnapshot, onConfirmSnapshot, onRegisterDraftGuard, laboratoryContribution
 }) => {
   // Class choice is explicit. Do not infer one from the current navigation context.
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -175,13 +177,15 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
   const changeClass = (id: string) => {
     if (savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current) return;
     if (dirty && !window.confirm('Ci sono valutazioni di ingresso non salvate. Cambiare classe e scartarle?')) return;
-    setSelectedClassId(id);
+    if(laboratoryContribution)laboratoryContribution.requestChange(()=>setSelectedClassId(id));
+    else setSelectedClassId(id);
   };
 
   const changeYear = (year: string) => {
     if (savingRef.current || sessionSavingRef.current || snapshotWorkingRef.current) return;
     if (dirty && !window.confirm('Ci sono valutazioni non salvate. Cambiare anno e scartarle?')) return;
-    setSelectedYear(year);
+    if(laboratoryContribution)laboratoryContribution.requestChange(()=>setSelectedYear(year));
+    else setSelectedYear(year);
   };
 
   const createSession = async () => {
@@ -226,7 +230,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
         </h1>
         <p className="text-sm text-slate-300 mt-1">Archivio dei Consigli · anno scolastico {schoolYear}.</p>
         <p className="text-xs text-slate-400 mt-1">
-          La media è un riferimento matematico; il voto di ingresso è attribuito e confermato dal docente.
+          {laboratoryContribution?'Dimostrazione del contributo disciplinare personale, non deliberazione collegiale.':'La media è un riferimento matematico; il voto di ingresso è attribuito e confermato dal docente.'}
         </p>
         {!academicYearValid && (
           <p role="alert" className="text-sm text-amber-300 mt-2">
@@ -255,23 +259,23 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             {classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
-        <label className="text-sm text-slate-300 font-semibold">
+        {!laboratoryContribution&&<label className="text-sm text-slate-300 font-semibold">
           Prove considerate fino al
           <input aria-label="Data limite delle prove" type="date" value={cutoff}
             onChange={event => setCutoff(event.target.value)} max={today()}
             className="mt-1 w-full p-2.5 rounded-lg border border-[var(--border)] bg-slate-900 text-white" />
-        </label>
+        </label>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      {!laboratoryContribution&&<div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="rounded bg-[var(--surface-variant)] px-3 py-1.5 font-bold text-[var(--primary)]">Ingresso</span>
         <span className="px-3 py-1.5 text-slate-500">Intermedia · successivamente</span>
         <span className="px-3 py-1.5 text-slate-500">Finale · successivamente</span>
-      </div>
+      </div>}
 
       {!current ? (
         <p className="p-5 text-slate-300 bg-slate-900/50 rounded-lg">
-          Seleziona una classe per consultare le prove importate e attribuire i voti di ingresso.
+          {laboratoryContribution?'Seleziona la classe e la seduta del contributo disciplinare.':'Seleziona una classe per consultare le prove importate e attribuire i voti di ingresso.'}
         </p>
       ) : (
         <>
@@ -283,7 +287,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 Le sedute restano distinte dalle valutazioni di ingresso.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            {!laboratoryContribution&&<><div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               <label className="text-sm text-slate-300 font-semibold">
                 Tipo di seduta
                 <select aria-label="Tipo di nuova seduta" value={sessionKind}
@@ -316,7 +320,8 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
             </p>}
             {dirty && <p className="text-xs text-amber-300">Salva o annulla le modifiche ai voti prima di registrare una seduta.</p>}
             <p role="status" aria-live="polite" className="text-sm text-slate-300">{sessionStatus}</p>
-            <h3 className="font-semibold text-slate-100">Sedute archiviate ({sessions.length})</h3>
+            </>}
+            <h3 className="font-semibold text-slate-100">{laboratoryContribution?'Sedute dimostrative':'Sedute archiviate'} ({sessions.length})</h3>
             {sessions.length === 0 ? (
               <p className="text-sm text-slate-400">Nessuna seduta registrata per questa classe e questo anno.</p>
             ) : (
@@ -324,9 +329,9 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 {sessions.map(session => (
                   <li key={session.id}>
                     <button type="button" onClick={() => {
-                      setOpenedSessionId(session.id);
-                      setSessionViewState(createdDuringVisit.current.has(session.id) ? 'selected' : 'reopened');
-                      setSessionStatus('');
+                      if(session.id===openedSessionId&&laboratoryContribution)return;
+                      const open=()=>{setOpenedSessionId(session.id);setSessionViewState(createdDuringVisit.current.has(session.id) ? 'selected' : 'reopened');setSessionStatus('');};
+                      if(laboratoryContribution)laboratoryContribution.requestChange(open);else open();
                     }}
                       disabled={snapshotBusy}
                       aria-pressed={openedSessionId === session.id}
@@ -345,7 +350,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                 <p className="text-xs text-slate-400 mt-1">
                   Archivio personale della seduta. Ordine del giorno e note saranno disponibili nella fase CDC-02/S3.
                 </p>
-                <CouncilSnapshotSection
+                {laboratoryContribution ? (isPrivacyShieldActive ? laboratoryContribution.render(current,schoolYear,openedSession) : <p role="alert">Attiva la protezione dei nominativi.</p>) : <CouncilSnapshotSection
                   key={`${current.id}:${schoolYear}:${openedSession.id}`}
                   classData={current}
                   schoolYear={schoolYear}
@@ -358,10 +363,11 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
                     snapshotWorkingRef.current = working;
                     setSnapshotBusy(working);
                   }}
-                />
+                />}
               </div>
             )}
           </section>
+          {!laboratoryContribution&&<>
           <section className="rounded-lg border border-[var(--border)] p-4 space-y-3"
             aria-label="Quadro sintetico delle evidenze della classe">
             <h2 className="text-lg font-bold text-white">Quadro della classe</h2>
@@ -524,6 +530,7 @@ export const CouncilView: React.FC<CouncilViewProps> = ({
               <Save className="w-4 h-4" /> {saving ? 'Salvataggio…' : 'Salva valutazioni di ingresso'}
             </button>
           </div>
+          </>}
         </>
       )}
     </section>
