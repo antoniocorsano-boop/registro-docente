@@ -13,7 +13,7 @@ const fields = [
 const contextKeys=['institutionId','classId','schoolYear','subject','grade','cohort','purpose'];
 const templateKeys=['id','version','institutionId','grade','status'];
 const sourceKeys=['field','value','origin','sourceId','revision','context','state','authority','mapping'];
-const invalid=issue=>({valid:false as const,issue});
+const invalid=(issue: string)=>({valid:false as const,issue});
 function plain(value: unknown): value is Record<string, any> {
   if (value===null || typeof value!=='object' || Array.isArray(value)) return false;
   if (![Object.prototype,null].includes(Object.getPrototypeOf(value))) return false;
@@ -29,8 +29,8 @@ function dense(value: unknown): value is any[] {
   if (!Array.isArray(value) || value.length>100 || Reflect.ownKeys(value).length!==value.length+1) return false;
   return Array.from({length:value.length},(_,i)=>Object.getOwnPropertyDescriptor(value,String(i))).every(d=>!!d&&d.enumerable&&Object.prototype.hasOwnProperty.call(d,'value'));
 }
-const demoId=x=>typeof x==='string'&&/^demo-[a-z0-9-]{1,48}$/.test(x);
-const positive=x=>Number.isSafeInteger(x)&&x>0;
+const demoId=(x: unknown)=>typeof x==='string'&&/^demo-[a-z0-9-]{1,48}$/.test(x);
+const positive=(x: unknown)=>typeof x==='number'&&Number.isSafeInteger(x)&&x>0;
 function year(x: unknown): boolean {
   if(typeof x!=='string'||!/^20[0-9]{2}\/20[0-9]{2}$/.test(x))return false;
   return Number(x.slice(5))===Number(x.slice(0,4))+1;
