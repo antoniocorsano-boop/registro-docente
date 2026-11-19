@@ -44,6 +44,9 @@ test('source change after confirmation hides previous review; restart works',asy
  await prepare(page);await confirm(page).click();
  await page.getByRole('button',{name:'Modifica curricolo'}).click();await expect(page.getByRole('list',{name:'Fonti documentali'})).toHaveCount(0);
  await expect(page.getByRole('status')).toContainText('Le informazioni sono cambiate');
+ await page.getByRole('button',{name:'Fonte non selezionata'}).click();
+ await page.getByRole('button',{name:'Tre fonti'}).click();
+ await expect(page.getByRole('list',{name:'Fonti documentali'})).toHaveCount(0);
  await prepare(page);await expect(confirm(page)).toBeEnabled();
  await page.getByRole('button',{name:'Ricomincia'}).click();await expect(page.getByRole('list',{name:'Fonti documentali'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Prepara anteprima'})).toBeVisible();
 }));
