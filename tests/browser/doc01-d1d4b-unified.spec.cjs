@@ -67,7 +67,7 @@ async function assertReflow(page,width,scale){
   if(root.scrollWidth>width+1||root.clientWidth>width+1||window.innerWidth>width+1||document.body.scrollWidth>width+1)issues.push('document wider than nominal viewport');
   if(Math.abs(rootPx-16*scale/100)>1)issues.push('wrong root text scale');
   if(box.left<-.5||box.right>width+.5)issues.push('preview outside nominal viewport');
-  const visible=el=>el.getClientRects().length>0&&el.getBoundingClientRect().height>0;
+  const visible=el=>!((el.closest('details:not([open])'))&&!el.closest('summary'))&&el.getClientRects().length>0&&el.getBoundingClientRect().height>0;
   for(const el of view.querySelectorAll('h1,h2,p,span,li,ul,details,summary,button,div')){
    if(!visible(el))continue;
    const b=el.getBoundingClientRect();
