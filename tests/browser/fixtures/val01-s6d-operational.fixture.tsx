@@ -3,6 +3,11 @@ import {createRoot} from 'react-dom/client';
 import {MatrixSurfaceSelector,type MatrixSurface} from '../../../src/components/MatrixSurfaceSelector';
 import {DailyMatrixWorkspace} from '../../../src/components/DailyMatrixWorkspace';
 import {MatrixView} from '../../../src/components/MatrixView';
+import {CouncilView} from '../../../src/components/CouncilView';
+import {appendCouncilSession} from '../../../src/council/councilModel';
+import type {ConfirmedFormativeBalance} from '../../../src/council/councilDisciplinaryContribution';
+import {SyntheticCouncilContribution} from './val01-s8-contribution';
+import type {AppData,AppSettings} from '../../../src/types';
 import {StudentReportView} from '../../../src/components/StudentReportView';
 import type {EvaluationDraftGuard} from '../../../src/components/MatrixEvaluationEntry';
 import type {EvidenceCommitRequest} from '../../../src/assessment/assessmentEvidenceMutation';
@@ -16,7 +21,15 @@ import {openOperationalArchive,recoverOperationalArchive,commitOperationalEviden
 import '../../../src/index.css';
 type Snapshot=Awaited<ReturnType<typeof openOperationalArchive>>;
 const states={observed:'Osservato',not_observed:'Non osservato',not_applicable:'Non pertinente'};
-const noWrite=async():Promise<never>=>{throw Error('Laboratorio: voti ordinari non modificabili');};
+const noWrite=async():Promise<never>=>{throw Error('Laboratorio: nessuna scrittura da questa vista');};
+// Explicit in-memory session fixtures; never write to the DB2 archive.
+function councilDemo(data:AppData){
+ let d=appendCouncilSession(data,boardScope.classId,boardScope.schoolYear,'intermedia','2027-02-05','s8-first','2027-02-01T10:00:00.000Z');
+ d=appendCouncilSession(d,boardScope.classId,boardScope.schoolYear,'monitoraggio','2026-11-25','s8-early','2026-11-21T10:00:00.000Z');
+ return appendCouncilSession(d,boardScope.classId,boardScope.schoolYear,'monitoraggio','2027-02-08','s8-second','2027-02-06T10:00:00.000Z');
+}
+const councilSettings={year:'2026/2027',useWeightedAverage:false} as AppSettings;
+function currentCouncil(){const s=operationalState();return {...s,classData:councilDemo(s.appData).classes.find(c=>c.id===boardScope.classId)!};}
 
 function Laboratory(){
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
@@ -25,6 +38,8 @@ function Laboratory(){
  const [report,setReport]=useState<string|null>(null);
  const [reportView,setReportView]=useState<'essential'|'dossier'|'restitution'>('essential');
  const balanceDirty=useRef(false);
+ const contributionDirty=useRef(false);
+ const [councilBalance,setCouncilBalance]=useState<ConfirmedFormativeBalance|null>(null);
  const [blocked,setBlocked]=useState(false);
  const [recoveryRequired,setRecoveryRequired]=useState(false);
  const evidenceDirty=useRef(false);
@@ -32,7 +47,7 @@ function Laboratory(){
  const openingRef=useRef(false);
  const registerDailyGuard=useCallback((guard:EvaluationDraftGuard|null)=>{dailyGuard.current=guard;},[]);
  useEffect(()=>{
-  const beforeUnload=(event:BeforeUnloadEvent)=>{if(evidenceDirty.current||balanceDirty.current||dailyGuard.current?.hasUnsavedChanges()){event.preventDefault();event.returnValue='';}};
+  const beforeUnload=(event:BeforeUnloadEvent)=>{if(evidenceDirty.current||balanceDirty.current||contributionDirty.current||dailyGuard.current?.hasUnsavedChanges()){event.preventDefault();event.returnValue='';}};
   window.addEventListener('beforeunload',beforeUnload);
   return ()=>window.removeEventListener('beforeunload',beforeUnload);
  },[]);
@@ -84,18 +99,24 @@ function Laboratory(){
  async function recover(){const next=await recoverOperationalArchive();setSnapshot(next);setRecoveryRequired(false);setBlocked(false);}
  return <main className="mx-auto max-w-5xl min-w-0 p-[8px] space-y-3 [overflow-wrap:anywhere]">
   <p className="text-sm">Laboratorio operativo · Classe sintetica · Protezione identità attiva</p>
-  {!report&&<MatrixSurfaceSelector laboratory mode={surface} onChange={next=>{if(next!==surface)request(()=>setSurface(next));}}/>}
+  {!report&&!councilBalance&&<MatrixSurfaceSelector laboratory mode={surface} onChange={next=>{if(next!==surface)request(()=>setSurface(next));}}/>}
   {blocked&&<p role="alert">Completa o abbandona la bozza prima di cambiare vista.</p>}
-  {!report&&surface==='daily'&&<DailyMatrixWorkspace data={data} currentClass={currentClass} udas={[]} isPrivacyShieldActive={true}
+  {!report&&!councilBalance&&surface==='daily'&&<DailyMatrixWorkspace data={data} currentClass={currentClass} udas={[]} isPrivacyShieldActive={true}
     onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}/>}
-  {!report&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
-  <div hidden={!!report||surface!=='evidence'} className={report||surface!=='evidence'?'hidden':''}>
+  {!report&&!councilBalance&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
+  <div hidden={!!report||!!councilBalance||surface!=='evidence'} className={report||councilBalance||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard committedDocument={evidence} onCommit={commit} recoveryRequired={recoveryRequired} onRecover={recover}
     onDraftChange={value=>{evidenceDirty.current=value;if(!value)setBlocked(false);}} onOpenStudentReport={openReport}/>
   </div>
+  {councilBalance&&<section aria-label="Consiglio dimostrativo" className="min-w-0 space-y-3">
+   <button type="button" className="min-h-[48px] rounded border px-3" onClick={()=>request(()=>{setReport(councilBalance.context.studentId);setReportView('essential');setCouncilBalance(null);})}>Torna alla scheda individuale</button>
+   <p>Le sedute sono dimostrative e non appartengono all’archivio effettivo.</p>
+   <CouncilView classes={councilDemo(data).classes} settings={councilSettings} isPrivacyShieldActive={true} onSave={noWrite} onCreateSession={noWrite} onPrepareSnapshot={noWrite} onConfirmSnapshot={noWrite}
+    laboratoryContribution={{requestChange:request,render:(cls,year,session)=><SyntheticCouncilContribution key={cls.id+':'+year+':'+session.id} scope={boardScope} balance={councilBalance} classData={cls} schoolYear={year} session={session} version={snapshot.changes} getCurrent={currentCouncil} onDraftChange={value=>{contributionDirty.current=value;if(!value)setBlocked(false);}}/>}}/>
+  </section>}
   {report&&<section aria-label="Scheda alunno dimostrativa" className="space-y-3">
    <button type="button" className="min-h-[48px] rounded border px-3" onClick={()=>request(()=>{setReport(null);setReportView('essential');})}>Torna al Tabellone</button>
-   <StudentReportView currentClass={currentClass} selectedStudentId={report} onSelectStudent={id=>{if(boardScope.studentIds.includes(id))setReport(id);}} isPrivacyShieldActive={true} udas={[]} laboratoryRestitution={{requestChange:request,onViewChange:setReportView,content:<SyntheticFormativeBalance key={report} scope={boardScope} studentId={report} document={evidence} version={snapshot.changes} getCurrent={operationalState} onDraftChange={value=>{balanceDirty.current=value;if(!value)setBlocked(false);}}/>}}/>
+   <StudentReportView currentClass={currentClass} selectedStudentId={report} onSelectStudent={id=>{if(boardScope.studentIds.includes(id))setReport(id);}} isPrivacyShieldActive={true} udas={[]} laboratoryRestitution={{requestChange:request,onViewChange:setReportView,content:<SyntheticFormativeBalance key={report} scope={boardScope} studentId={report} document={evidence} version={snapshot.changes} getCurrent={operationalState} onTransfer={balance=>{balanceDirty.current=false;setBlocked(false);setCouncilBalance(balance);setReport(null);setReportView('essential');}} onDraftChange={value=>{balanceDirty.current=value;if(!value)setBlocked(false);}}/>}}/>
    {reportView!=='restitution'&&<section aria-label="Evidenze individuali" className="rounded border p-2 space-y-2">
     <h2 className="font-semibold">Evidenze individuali — consultazione</h2>
     <p>Studente {boardScope.studentIds.indexOf(report)+1}</p>
