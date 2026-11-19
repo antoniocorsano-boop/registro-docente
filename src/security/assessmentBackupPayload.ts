@@ -7,6 +7,7 @@ import { snapshotAssessmentData } from '../assessment/assessmentRevisionBindings
 import { normalizeBackupPayloadVerified, isSnapshotV6 } from './backupPayload';
 import { assertCouncilSnapshotIntegrity } from '../council/councilEvidenceSnapshots';
 import { withoutLocalBackupVerification } from '../persistence/backupCheckpoint';
+import { assertNoUnsupportedDocumentHistory } from './documentHistoryBackupFence';
 import type { AppSettings } from '../types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { CompleteSecureAppSnapshot } from './secureAppStorage';
@@ -140,6 +141,7 @@ async function validateV7(s:unknown,scopes:unknown):Promise<NormalizedSnapshot>{
 export async function createAssessmentBackupPayloadV7(
   snapshot:unknown,approvedScopes:unknown,exportedAt:string
 ):Promise<AssessmentBackupPayloadV7>{
+  assertNoUnsupportedDocumentHistory(snapshot);
   if(!timestamp(exportedAt))throw bad();
   const s=detach(snapshot),scopes=detach(approvedScopes);
   if(!exact(s,DATASETS)||!isV7Settings(s.settings))throw bad();
@@ -153,6 +155,8 @@ export async function createAssessmentBackupPayloadV7(
 export async function inspectAssessmentBackupPayload(
   payload:unknown,current:CompleteSecureAppSnapshot,approvedScopes:unknown
 ):Promise<AssessmentBackupInspection>{
+  assertNoUnsupportedDocumentHistory(payload);
+  assertNoUnsupportedDocumentHistory(current);
   const p=detach(payload),destination=detach(current),scopes=detach(approvedScopes);
   if(!row(p)||!row(destination)||!row(destination.appData)||!Array.isArray(destination.appData.classes))throw bad();
   const replacementRequiresReview=hasDomain(destination.appData);
