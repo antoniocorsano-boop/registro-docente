@@ -3093,6 +3093,18 @@
       "tests": [
         "src/security/doc01DocumentHistoryTransitions.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3A-I01",
+      "owner": "DOC-01/D4c3a",
+      "statement": "Synthetic-only guarded document history persists a fully validated append/revocation through the existing authenticated owner's durable mutation coordinator, validates authoritative committed head and independent scopes in queue, writes appData and meta atomically, verifies encrypted-vault readback and historical chain before publication and issues a receipt only afterward. Exact retries are read-only, conflicts and corruption fail closed, uncertain persistence or revoked sessions quarantine the owner. No activation, backup v6/v7 compatibility, restore, downgrade, signature, export, UI or runtime authority.",
+      "impactPaths": [
+        "src/persistence/documentHistoryCommit.ts",
+        "src/security/doc01DocumentHistoryCommit.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoryCommit.test.ts"
+      ]
     }
   ]
 }
