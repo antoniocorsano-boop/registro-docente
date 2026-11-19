@@ -2472,6 +2472,18 @@
       "tests": [
         "src/security/doc01ArenaDocumentSource.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1D3-I01",
+      "owner": "DOC-01/D1d3",
+      "statement": "Document recorded-lesson review uses only explicitly selected existing local lesson references, a separately teacher-confirmed institution/cohort/class/year/discipline/period, canonical current class identity, exact dates and hours, and unambiguous ownership. Missing selection does not become zero or annual completion; planned hours, imported UDA projections, free text, roster, persistence and runtime wiring remain excluded. Stale references invalidate the review.",
+      "impactPaths": [
+        "src/documents/recordedLessonSource.ts",
+        "src/security/doc01RecordedLessonSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01RecordedLessonSource.test.ts"
+      ]
     }
   ]
 }
