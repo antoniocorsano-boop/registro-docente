@@ -2416,6 +2416,172 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1B-I01",
+      "owner": "DOC-01/D1b",
+      "statement": "Synthetic disciplinary document preview projects only whitelisted field sources in an independently matched context; unconfirmed or missing sources never supply values, planned and completed remain distinct, exact canonical revalidation prevents stale confirmation. No personal payload, official status, persistence, runtime wiring or export.",
+      "impactPaths": [
+        "src/documents/documentProjection.ts",
+        "src/security/doc01DocumentProjection.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentProjection.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1C-I01",
+      "owner": "DOC-01/D1c",
+      "statement": "The isolated document preview presents only professional labels and available synthetic values; its opaque in-memory review checks the exact current sources, including withheld revisions, and invalidates stale confirmation. Missing information stays visible; confirmation is not saving or institutional approval. No production wiring, persistent receipt, personal source adapter or export. Mobile browser evidence is required.",
+      "impactPaths": [
+        "src/documents/documentPresentation.ts",
+        "src/components/documents/DocumentPlanningPreview.tsx",
+        "src/security/doc01DocumentPresentation.test.ts",
+        "tests/browser/fixtures/doc01-d1c-fixture.tsx",
+        "tests/browser/fixtures/doc01-d1c.html",
+        "tests/browser/doc01-d1c-preview.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01DocumentPresentation.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1c-preview.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D1-I01",
+      "owner": "DOC-01/D1d1",
+      "statement": "Document planning source review selects only an exact current accepted, confirmed Docente OS projection with a teacher-confirmed institution/cohort binding, current resolved class and explicitly selected UDA references. Canonical validation and fingerprint checks reject malformed, ambiguous or stale sources. Planned hours remain distinct from completed activity; no copied titles, focus, pack references, student payload, automatic authority, persistence or production wiring.",
+      "impactPaths": [
+        "src/documents/planningDocumentSource.ts",
+        "src/security/doc01PlanningDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningDocumentSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D2-I01",
+      "owner": "DOC-01/D1d2",
+      "statement": "Document curriculum source review uses the canonical planning frame and Arena V1 consumer to select only an accepted, approved and current annual disciplinary reference in the independently matched school, class, year, cohort, discipline and regime. Explicit selection and private exact-content revalidation reject stale review. Annual text never becomes inferred objectives or transversal objectives; no personal data, text export, persistence or runtime wiring.",
+      "impactPaths": [
+        "src/documents/arenaDocumentSource.ts",
+        "src/security/doc01ArenaDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01ArenaDocumentSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D3-I01",
+      "owner": "DOC-01/D1d3",
+      "statement": "Document recorded-lesson review uses only explicitly selected existing local lesson references, a separately teacher-confirmed institution/cohort/class/year/discipline/period, canonical current class identity, exact dates and hours, and unambiguous ownership. Missing selection does not become zero or annual completion; planned hours, imported UDA projections, free text, roster, persistence and runtime wiring remain excluded. Stale references invalidate the review.",
+      "impactPaths": [
+        "src/documents/recordedLessonSource.ts",
+        "src/security/doc01RecordedLessonSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01RecordedLessonSource.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D4A-I01",
+      "owner": "DOC-01/D1d4a",
+      "statement": "Unified document review derives all source scopes from a single independently checked context and calls the existing Arena, Docente OS and recorded-lesson validators. Missing sources remain absent, invalid selected sources block confirmation, planned and recorded hours stay distinct, selected-only coverage is explicit, unfilled fields remain unfilled. Detached summaries reveal no internal source identifiers or texts; exact revalidation is required before a partial nonofficial confirmation. No persistence, export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/unifiedDocumentReview.ts",
+        "src/security/doc01UnifiedDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentReview.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D4B-I01",
+      "owner": "DOC-01/D1d4b",
+      "statement": "The isolated unified preview uses the qualified composition and its revalidation for partial confirmation; three source summaries keep planned hours distinct from selected recorded hours, unavailable fields grouped, missing and invalid sources distinct, provenance on demand. Changed inputs invalidate confirmation; no internal identifiers, persistence, export or production wiring. Exact candidate mobile Chromium evidence is required.",
+      "impactPaths": [
+        "src/components/documents/UnifiedDocumentPreview.tsx",
+        "src/security/doc01UnifiedDocumentPreview.test.ts",
+        "tests/browser/fixtures/doc01-d1d4b-fixture.tsx",
+        "tests/browser/fixtures/doc01-d1d4b.html",
+        "tests/browser/doc01-d1d4b-unified.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentPreview.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1d4b-unified.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D1D4B-I02",
+      "owner": "DOC-01/D1d4b",
+      "statement": "The isolated unified preview must reflow at nominal mobile widths 320 and 390 CSS px, including actual 200% root text size at 320. Browser geometry measures against the requested viewport, not an inflated innerWidth, and checks visible element and text bounds, 44px controls, opened and closed disclosures, pre/post confirmation and actual PNG width. Product-only evidence excludes fixture controls; provenance is grouped and readable. No clipping or reduction of the requested text scale is used.",
+      "impactPaths": [
+        "src/components/documents/UnifiedDocumentPreview.tsx",
+        "src/components/documents/unifiedDocumentPreview.css",
+        "src/security/doc01UnifiedDocumentPreview.test.ts",
+        "tests/browser/fixtures/doc01-d1d4b-fixture.tsx",
+        "tests/browser/doc01-d1d4b-unified.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01UnifiedDocumentPreview.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d1d4b-unified.spec.cjs"
+      ]
+    },
+    {
+      "id": "DOC-01-D2A-I01",
+      "owner": "DOC-01/D2a",
+      "statement": "Institutional document reference mapping uses distinct annual first-grade and second/third-grade structures, plus disciplinary council contribution, with exact reviewed version, school-year, institution, site, cohort, grade and regime binding, canonical class identity and teacher confirmation. Unknown or ambiguous applicability is not automatically resolved. Expected descriptors, planned work, restricted profile information and collegial authority remain distinct. Mapping is metadata only, incomplete, nonofficial, not proof of adoption, and excludes historical final models, persistence and production wiring.",
+      "impactPaths": [
+        "src/documents/institutionalDocumentModel.ts",
+        "src/security/doc01InstitutionalDocumentModel.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01InstitutionalDocumentModel.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D2B1-I01",
+      "owner": "DOC-01/D2b1",
+      "statement": "Selected planned UDA content is derived only from the same canonically validated, explicitly accepted confirmed Docente OS projection and exact D2a reviewed context. It preserves literal title, focus, source period and planned hours; first-grade mapping treats the plan as supporting material, second/third and council use planned-uda. No inferred term, curriculum objectives, competence, activities performed, personal or collegial values, internal metadata in presentation, persistence or runtime wiring. Detached inputs and exact revision revalidation protect partial nonofficial confirmation.",
+      "impactPaths": [
+        "src/documents/plannedDocumentContent.ts",
+        "src/security/doc01PlannedDocumentContent.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlannedDocumentContent.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D2B2B-I01",
+      "owner": "DOC-01/D2b2b",
+      "statement": "Structured curriculum intake refuses Arena laboratory or synthetic markers and unsupported contracts, even with purported authority receipts and hashes. Existing V1 remains annual-reference-only through D1d2 and exact D2a review. Seven curriculum category placements are metadata, always unfilled, with objectives requiring specificity review, milestone separate, evidence expected not assessed, restricted and collegial fields excluded. No content acquisition, production authorization, storage or runtime wiring until a verified producer and governed consumer exist.",
+      "impactPaths": [
+        "src/documents/structuredCurriculumIntake.ts",
+        "src/security/doc01StructuredCurriculumIntake.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01StructuredCurriculumIntake.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D3A-I01",
+      "owner": "DOC-01/D3a",
+      "statement": "Class-level assessment document review accepts only a synthetic definition-only slice without roster or individual evidence, reuses the existing VAL graph validator with empty evidence and roster and requires the exact D2a reference context, explicit date range and teacher-selected active revisions. Expected criteria and planned date stay separate from explicitly completed assessment title and actual date; cancelled, stale, unselected or out-of-period definitions are not promoted. Frozen criterion, rubric and reference dependencies bind re-review; no individual outcomes, grades, coverage inference, institutional criteria approval, assumed lesson linkage, persistence, production wiring or official document. Text privacy and actual occurrence remain unverified by structural validation.",
+      "impactPaths": [
+        "src/documents/assessmentDocumentSource.ts",
+        "src/security/doc01AssessmentDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01AssessmentDocumentSource.test.ts"
+      ]
     }
   ]
 }
