@@ -3021,6 +3021,18 @@
       "tests": [
         "src/security/doc01DocumentRevisionIdentity.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4B1-I01",
+      "owner": "DOC-01/D4b1",
+      "statement": "Synthetic final-report and recorded-only program revisions bind exact D4a draft lineage and D3c validated context, period and immutable presentation. A distinct explicit confirmation must match document, revision and reviewed content; changed sources (including hidden criterion dependencies), content or revision invalidate the review instance monotonically; explicit revision-specific revocation is terminal. A new revision does not inherit confirmation. Private and unsupported destinations, caller payloads, personal graph and production inputs are rejected. The confirmation is in-memory only, not a signature, persistent receipt, authenticated identity, authoritative head or official document; no export or runtime wiring.",
+      "impactPaths": [
+        "src/documents/finalRevisionConfirmation.ts",
+        "src/security/doc01FinalRevisionConfirmation.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01FinalRevisionConfirmation.test.ts"
+      ]
     }
   ]
 }
