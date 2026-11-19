@@ -3045,6 +3045,18 @@
       "tests": [
         "src/security/doc01PlanningRevisionConfirmation.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4B3-I01",
+      "owner": "DOC-01/D4b3",
+      "statement": "Synthetic annual planning and disciplinary council revisions optionally bind D3a expected assessment definitions, their local target references and explicit teacher-declared links to selected D2b1 UDA. Missing and invalid sources remain distinct, selected-only coverage, no completed outcomes or individual graph. Local target text never becomes Arena authority; no inference of equivalence or coverage. Exact reviewed preview and hidden source dependencies are bound to revision confirmation; source or link changes invalidate monotonically. Legacy D4b2 input remains compatible. No storage, export, official authority or runtime wiring.",
+      "impactPaths": [
+        "src/documents/planningRevisionConfirmation.ts",
+        "src/security/doc01PlanningAssessmentLink.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningAssessmentLink.test.ts"
+      ]
     }
   ]
 }
