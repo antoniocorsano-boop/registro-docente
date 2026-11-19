@@ -2819,6 +2819,18 @@
       "browserSmoke": [
         "tests/browser/val01-s8-council-contribution.spec.cjs"
       ]
+    },
+    {
+      "id": "DOC-01-D3B-I01",
+      "owner": "DOC-01/D3b",
+      "statement": "Synthetic protected individual document review reuses current confirmed S7 balance or separately confirmed S8 contribution, requires privacy shield and explicit recipient/destination/period/selected text, and revalidates the current source, roster and exact council session before every on-demand read or distinct confirmation. Only minimized selected sources and explicitly selected teacher text are returned, with no raw facts, grades, levels, other recipients, internal identifiers or digest, no inferred outcome or council decision. Stale or unprotected reads expose no presentation. This is not runtime access control or revocation of already copied data, export permission, persistence, institutional authority or production activation; free text disclosure safety remains unverified.",
+      "impactPaths": [
+        "src/documents/privateDocumentReview.ts",
+        "src/security/doc01PrivateDocumentReview.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PrivateDocumentReview.test.ts"
+      ]
     }
   ]
 }
