@@ -16,12 +16,19 @@ import {withoutLocalBackupVerification} from '../persistence/backupCheckpoint';
 import type {CompleteSecureAppSnapshot} from './secureAppStorage';
 import type {VaultMetadataV1} from './vaultTypes';
 const KEYS=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'] as const;
-type Operation='restore'|'erase'|'setup'|'restore-assessment';
+type Operation='restore'|'erase'|'setup'|'restore-assessment'|'restore-document';
 type Grant=Readonly<{operation:Operation}>;
 type Active=Extract<Db2Inventory,{state:'active'}>;
 type Intent={operation:'restore';password:string;file:Blob;backupPassword:string}
   |{operation:'erase';password:string}|{operation:'setup';password:string;setup:NewArchiveSetup};
 type AssessmentRestoreIntent={readonly operation:'restore-assessment';readonly password:string;readonly file:Blob;readonly backupPassword:string;readonly recoveryFile:Blob;readonly recoveryPassword:string;readonly currentScopes:readonly ApprovedAssessmentScope[];readonly incomingScopes:readonly ApprovedAssessmentScope[]};
+/** DOC-01/D4c3d1 — lab-only full DB2 V8 restore with independently
+ * approved assessment and document scopes and exact physical owner.
+ */
+export type DocumentRestoreIntent={readonly operation:'restore-document';readonly password:string;
+ readonly file:Blob;readonly backupPassword:string;readonly recoveryFile:Blob;readonly recoveryPassword:string;
+ readonly currentAssessmentScopes:readonly unknown[];readonly incomingAssessmentScopes:readonly unknown[];
+ readonly documentScopes:readonly unknown[]};
 const own=(x:object,k:string)=>Object.prototype.hasOwnProperty.call(x,k);
 function exact(value:unknown,keys:readonly string[]):boolean{
   return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(k=>own(value,k));
@@ -126,6 +133,10 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
         pending={grant,previous,next,controller:attempt};
         return grant;
       }catch{if(controller===attempt)invalidate();throw db2Failure();}
+    },
+    /** Reserved GREEN implementation: RED must fail causally here. */
+    async prepareDocumentRestore(_intent:DocumentRestoreIntent,_expectedOwner:VaultMetadataV1):Promise<Grant>{
+      throw Error('DOC01_D4C3D1_NOT_IMPLEMENTED');
     },
     async commit(grant:Grant,confirmed:boolean):Promise<void>{
       if(!pending||pending.grant!==grant||confirmed!==true){invalidate();throw db2Failure();}
