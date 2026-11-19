@@ -3120,6 +3120,18 @@
       "tests": [
         "src/security/doc01DocumentHistoryBackupFence.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3C1-I01",
+      "owner": "DOC-01/D4c3c1",
+      "statement": "Synthetic, isolated document-history recovery preparation independently validates the complete current, incoming and recovery chains against authorized scopes; requires exact recovery representation of the current state and an immutable historical prefix in the proposed replacement; rejects loss, fork, tampering, missing authority or stale recovery without performing storage or issuing a success receipt. The result is detached and frozen. No versioned backup codec, DB2/Android restore, runtime authority, anti-rollback, merge or deploy.",
+      "impactPaths": [
+        "src/security/documentHistoryRecovery.ts",
+        "src/security/doc01DocumentHistoryRecovery.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoryRecovery.test.ts"
+      ]
     }
   ]
 }
