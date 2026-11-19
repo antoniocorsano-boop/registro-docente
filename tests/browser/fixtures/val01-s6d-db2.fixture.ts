@@ -21,6 +21,10 @@ import {previewIndividualObservation} from '../../../src/assessment/individualOb
 import {previewEvidenceRevision} from '../../../src/assessment/individualEvidenceRevision';
 import {projectEvidenceBoard} from '../../../src/assessment/individualEvidenceBoard';
 import type {AppData,ClassData} from '../../../src/types';
+import {commitDocumentHistoryOperation} from '../../../src/persistence/documentHistoryCommit';
+import {applyDocumentHistoryOperation,validateDocumentHistory} from '../../../src/documents/documentHistoryTransitions';
+import {createDocumentBackupPayloadV8} from '../../../src/security/documentBackupPayloadV8';
+
 
 const name='registro-docente-secure-vault',password='synthetic-db2-laboratory-only',copyPassword='synthetic-copy-laboratory-only';
 const stamp='2026-11-22T10:04:00.000Z';
@@ -292,3 +296,120 @@ export const operationalDiagnostics={
   return {changes:s.changes,revisionIds:s.document.evidence.map(e=>e.revisionId),grades:s.appData.classes[0].grades.map(g=>g.value)};
  }
 };
+
+
+/** DOC-01/D4c3d1 laboratory: v8 physical DB2 replacement, never a product
+ * surface. Real IndexedDB v2 and actual encryption are used on synthetic
+ * content; this fixture does not prove Android SAF or external copy readback.
+ */
+const docScope={institutionRef:'demo-school',siteRef:'demo-site',classId:'demo-synthetic-board',cohortRef:'demo-cohort',
+ schoolYear:'2026/2027',schoolOrder:'lower_secondary',gradeLevel:2,subjectCode:'tecnologia',regimeRef:'demo-regime',
+ purpose:'disciplinary-plan'};
+const docPeriod={from:'2026-09-01',to:'2027-08-31'};
+const docCanonical=(v:unknown):string=>Array.isArray(v)?'['+v.map(docCanonical).join(',')+']':
+ v!==null&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+docCanonical((v as Record<string,unknown>)[k])).join(',')+'}':JSON.stringify(v);
+async function docRecord(){
+ const unsigned={
+  schemaVersion:1,labOnly:true,official:false,complete:false,
+  identity:{documentId:'demo-document',kind:'program-completed',scope:docScope,period:docPeriod,
+   model:'disciplinary-second-third',mappingVersion:'2026-27-map-v1'},
+  revision:{revisionId:'demo-revision-one',number:1,previousRevisionId:null,reason:'initial',state:'draft'},
+  confirmedAt:'2026-11-19T16:00:00.000Z',confirmedByTeacher:true,
+  preview:{official:false,complete:false,labOnly:true,kind:'program-completed',documentId:'demo-document',
+   revisionId:'demo-revision-one',number:1,content:{official:false,complete:false,labOnly:true,
+    coverage:'selected-only',period:docPeriod,recorded:{status:'selected',count:1,hours:1,
+     activities:[{date:'2026-11-17',hours:1,title:'Attività dimostrativa'}]},
+    coverageAssessment:'not-established',institutionalModel:'reference-only'}}
+ };
+ const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(docCanonical(['DOC-01/archive-candidate/v1',unsigned])));
+ return {...unsigned,contentDigest:Array.from(new Uint8Array(h),b=>b.toString(16).padStart(2,'0')).join('')};
+}
+async function seedDocument(){
+ await seed();
+ const o=requireOwner(),record=await docRecord();
+ const receipt=await commitDocumentHistoryOperation({
+  coordinator:o.coordinator,storage:o.storage,
+  isActive:()=>owner===o&&o.vault.isUnlocked(),
+  getCommitted:()=>({appData:o.state.appData,meta:o.state.meta}),
+  publish:next=>{o.state={...o.state,...next};},
+  invalidate:()=>{o.vault.lock();}
+ },[docScope],{mode:'SYNTHETIC_ONLY',eventId:'demo-event-one',expectedHead:null,operation:{kind:'append',record}});
+ demand(receipt.verified&&receipt.changed);
+ return docSummary();
+}
+function docSummary(){
+ const o=requireOwner();
+ const h=(o.state.appData as AppData&{documentHistoryV1?:unknown}).documentHistoryV1 as {events:unknown[]}|undefined;
+ return {events:h?.events.length??0,changes:o.state.meta.changes,grades:o.state.appData.classes[0].grades.map(g=>g.value),
+  assessmentRevisions:section(o.state.appData).document.evidence.length};
+}
+async function restoreDocument(mode:'approve'|'old'|'bad-recovery'|'wrong-scope'|'wrong-password'|'refuse'|'revoke'|'race'|'abort'|'after-commit'){
+ const o=requireOwner(),current=await o.storage.loadExactBackupSnapshot();
+ if(!current)throw Error('Incomplete document lab archive');
+ const generation=await o.store.getMetadata();
+ if(!generation)throw Error('No DB2 owner generation');
+ const history=(current.appData as AppData&{documentHistoryV1?:any}).documentHistoryV1;
+ if(!history||history.events.length!==1)throw Error('Document baseline unavailable');
+ const record=await docRecord();
+ const q={mode:'SYNTHETIC_ONLY',eventId:'demo-event-two',expectedHead:history.events[0].eventDigest,
+  operation:{kind:'revoke',documentId:record.identity.documentId,revisionId:record.revision.revisionId,
+   contentDigest:record.contentDigest,revokedAt:'2026-11-19T16:02:00.000Z',
+   reason:'withdrawn',confirmedByTeacher:true}};
+ const nextHistory=await applyDocumentHistoryOperation(history,[docScope],q);
+ if(!nextHistory.valid)throw Error(nextHistory.issue);
+ const targetData={...current,appData:{...current.appData,documentHistoryV1:
+  mode==='old'?{schemaVersion:1,labOnly:true,events:[]}:nextHistory.archive},
+  meta:incrementBackupChanges(current.meta)};
+ const recoveryPayload=await createDocumentBackupPayloadV8(current,approved,[docScope],stamp);
+ const targetPayload=await createDocumentBackupPayloadV8(targetData,approved,[docScope],stamp);
+ const targetText=await encryptDataWithPassword(targetPayload,copyPassword);
+ const recoveryText=await encryptDataWithPassword(mode==='bad-recovery'?targetPayload:recoveryPayload,copyPassword);
+ const service=createDb2Lifecycle();
+ const heldStore=new ExistingSessionVaultStore(2),held=new SecureVault(heldStore);
+ await held.unlock(password);
+ await close();
+ const before=await captureDb2(indexedDB);
+ let prepared=false,committed=false,replayRejected=false,oldOwnerRejected=false,triggered=false;
+ let baseline=before;
+ const oldPut=IDBObjectStore.prototype.put;
+ try{
+  let grant;
+  try{
+   grant=await service.prepareDocumentRestore({operation:'restore-document',
+    password:mode==='wrong-password'?'incorrect':password,file:new Blob([targetText]),
+    backupPassword:copyPassword,recoveryFile:new Blob([recoveryText]),recoveryPassword:copyPassword,
+    currentAssessmentScopes:approved,incomingAssessmentScopes:approved,
+    documentScopes:mode==='wrong-scope'?[]:[docScope]},generation);
+   prepared=true;
+  }catch{/* all rejected cases must leave DB unchanged */}
+  if(grant){
+   if(mode==='race'){await held.put('meta',{changes:99,lastBackup:null});baseline=await captureDb2(indexedDB);}
+   if(mode==='revoke')service.invalidate();
+   if(mode==='abort'||mode==='after-commit')IDBObjectStore.prototype.put=function(value:any,key?:IDBValidKey){
+    const request=key===undefined?oldPut.call(this,value):oldPut.call(this,value,key);
+    if(!triggered&&this.name==='metadata'&&key==='current'&&this.transaction.mode==='readwrite'){
+     triggered=true;
+     if(mode==='abort')service.invalidate();
+     else this.transaction.addEventListener('complete',()=>service.invalidate(),{once:true});
+    }
+    return request;
+   };
+   try{await service.commit(grant,mode!=='refuse');committed=true;}catch{/* denied, aborted or uncertain */}
+   try{await service.commit(grant,true);}catch{replayRejected=true;}
+   if(mode==='approve'||mode==='after-commit'){
+    try{await held.put('meta',{changes:1000,lastBackup:null});}catch{oldOwnerRejected=true;}
+   }
+  }
+ }finally{IDBObjectStore.prototype.put=oldPut;service.invalidate();held.lock();await heldStore.retireConnection();}
+ const after=await captureDb2(indexedDB);
+ const unchanged=sameDb2Physical(baseline,after);
+ const rotated=!sameDb2Physical(before.metadata,after.metadata);
+ await open();
+ const reopened=requireOwner().state;
+ const check=await validateDocumentHistory((reopened.appData as AppData&{documentHistoryV1?:unknown}).documentHistoryV1,[docScope]);
+ const exact=sameDb2Physical(reopened.appData,targetData.appData);
+ const assessmentPreserved=sameDb2Physical(section(reopened.appData).document,section(current.appData).document);
+ return {prepared,committed,replayRejected,oldOwnerRejected,triggered,unchanged,rotated,exact,
+  assessmentPreserved,historyValid:check.valid,summary:docSummary()};
+}
+Object.assign(globalThis,{__doc01Db2Restore:{seed:seedDocument,restore:restoreDocument,summary:docSummary,close,open,physicalDigest}});
