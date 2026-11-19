@@ -167,7 +167,7 @@ export async function projectDocumentRestoreV8(
      oldAssessment as Parameters<typeof preservesAssessmentHistory>[2],
      nextAssessment as Parameters<typeof preservesAssessmentHistory>[3]))return invalid();
   return {...proposed.snapshot,
-   copilotState:normalizeLoadedCopilotState(proposed.snapshot.copilotState),
+   copilotState:normalizeLoadedCopilotState(proposed.snapshot.copilotState!),
    meta:withoutLocalBackupVerification(proposed.snapshot.meta)};
  }catch{return invalid();}
 }
