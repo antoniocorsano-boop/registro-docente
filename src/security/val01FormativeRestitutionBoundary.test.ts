@@ -30,6 +30,7 @@ describe('VAL-01/S7b — restitution projection and isolation',()=>{
   expect(panel).toContain('await confirmFormativeBalance(current.document');
   // Explicit accessible name must not depend on the controlled textarea value.
   expect(panel).toContain('<textarea aria-label={label}');
+  for(const control of ['<select aria-label="Periodo"','<input aria-label="Dal"','<input aria-label="Al"','<select aria-label={label}'])expect(panel).toContain(control);
   expect(panel).not.toMatch(/localStorage|sessionStorage|indexedDB|fetch\(|window\.print|download|exportPdf/i);
  });
 });
