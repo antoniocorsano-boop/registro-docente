@@ -30,14 +30,15 @@ function Fixture(){
    arena:{...input.arena,accepted:[{...arena,curricoloItems:[{...arena.curricoloItems[0],text:'Contenuto dimostrativo '+revision}]}]},
    planning:mode==='missing'?null:mode==='invalid'?{...input.planning,selection:{...planSelection,confirmedByTeacher:false}}:input.planning};
  },[mode,revision]);
- return <main className="min-h-screen">
-  <div aria-label="Comandi della dimostrazione" className="mx-auto max-w-xl flex flex-wrap gap-2 p-3 border-b border-slate-700 text-sm">
+ const previewOnly=new URLSearchParams(window.location.search).get('view')==='preview';
+ return <main className="min-h-screen w-full min-w-0">
+  {!previewOnly&&<div aria-label="Comandi della dimostrazione" className="mx-auto w-full min-w-0 max-w-[576px] flex flex-wrap gap-[6px] p-[8px] border-b border-slate-700 text-sm [&>button]:min-w-0 [&>button]:max-w-full [&>button]:whitespace-normal [&>button]:[overflow-wrap:anywhere]">
    <button className="min-h-11 rounded-lg border border-slate-600 px-2 py-1" onClick={()=>setMode('all')}>Tre fonti</button>
    <button className="min-h-11 rounded-lg border border-slate-600 px-2 py-1" onClick={()=>setMode('missing')}>Fonte non selezionata</button>
    <button className="min-h-11 rounded-lg border border-slate-600 px-2 py-1" onClick={()=>setMode('invalid')}>Fonte da verificare</button>
    <button className="min-h-11 rounded-lg border border-slate-600 px-2 py-1" onClick={()=>setMode('none')}>Nessuna fonte</button>
    <button className="min-h-11 rounded-lg border border-slate-600 px-2 py-1" onClick={()=>setRevision(r=>r+1)}>Modifica curricolo</button>
-  </div>
+  </div>}
   <UnifiedDocumentPreview input={selected}/>
  </main>;
 }
