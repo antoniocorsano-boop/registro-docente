@@ -83,6 +83,7 @@ jobs:
           cp tests/browser/header-01-navbar-integration.spec.cjs .nav-context-browser-tools/
           cp tests/browser/header-01-copilot-drawer-occlusion.spec.cjs .nav-context-browser-tools/
           cp tests/browser/nav-mobile-disclosure-back.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/doc01-d1c-preview.spec.cjs .nav-context-browser-tools/
       - name: Start synthetic Vite app fixture
         shell: bash
         run: |
@@ -130,6 +131,7 @@ jobs:
             header-01-navbar-integration.spec.cjs \
             header-01-copilot-drawer-occlusion.spec.cjs \
             nav-mobile-disclosure-back.spec.cjs \
+            doc01-d1c-preview.spec.cjs \
             --workers=1 --reporter=line \
             --output=../browser-evidence/results
       - name: Verify exact-SHA browser evidence completeness
@@ -164,6 +166,23 @@ jobs:
             }
           }
           console.log('PASS: ten exact-SHA browser evidence JSON files and screenshots');
+          for (const caseId of ['review','invalidation','geometry-320-100','geometry-390-100','geometry-320-200']) {
+            const file = path.join(dir, 'doc01-' + caseId + '.json');
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (evidence.caseId !== caseId ||
+                evidence.candidateSha !== process.env.CANDIDATE_SHA ||
+                evidence.result !== 'PASS' ||
+                !Array.isArray(evidence.pageErrors) || evidence.pageErrors.length ||
+                !Array.isArray(evidence.crashes) || evidence.crashes.length ||
+                evidence.screenshot !== 'doc01-screenshots/' + caseId + '.png') {
+              throw new Error('Invalid DOC-01 evidence: ' + file);
+            }
+            const screenshot = path.join(dir, evidence.screenshot);
+            if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
+              throw new Error('Missing/empty DOC-01 screenshot: ' + screenshot);
+            }
+          }
+          console.log('PASS: five exact-SHA DOC-01 browser cases and screenshots');
           NODE
 
       - name: Preserve browser evidence
