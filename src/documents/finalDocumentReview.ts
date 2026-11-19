@@ -90,7 +90,7 @@ function inspect(raw:unknown):Inspection{
   }
   if(!rec&&!completed.length&&!summary.length)return fail('INVALID_SELECTION');
   const presentation:Presentation=Object.freeze({official:false,complete:false,labOnly:true,coverage:'selected-only',period:Object.freeze({from,to}),recorded:Object.freeze({status:rec?'selected':'not-selected',count:rec?.review.source.count??null,hours:rec?.review.source.recordedHours??null,activities}),assessments:Object.freeze({status:completed.length?'selected':'not-selected',completed}),links:Object.freeze(links),summary:Object.freeze(summary),coverageAssessment:'not-established',institutionalModel:'reference-only'});
-  return {valid:true,presentation,basis:canonical([scope,model.review.model,model.review.version,period,selection,!!rec,!!ass]),recorded:rec,assessment:ass,recordedArgs,assessmentArgs};
+  return {valid:true,presentation,basis:canonical([scope,(classes as {id:string;name:string}[]).find(c=>c.id===scope.classId),model.review.model,model.review.version,period,selection,!!rec,!!ass]),recorded:rec,assessment:ass,recordedArgs,assessmentArgs};
  }catch{return fail('INVALID_INPUT');}
 }
 export function createFinalDocumentReview(input:unknown):Result{
