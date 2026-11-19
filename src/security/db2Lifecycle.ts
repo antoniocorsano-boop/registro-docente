@@ -7,6 +7,8 @@ import {deriveKeyEncryptionKey,unwrapDataEncryptionKey,decryptJsonRecord,encrypt
 import {decryptDataWithPassword,BACKUP_VERSION_V2} from '../cryptoUtils';
 import {inspectAssessmentBackupPayload} from './assessmentBackupPayload';
 import {projectAssessmentRestoreV7} from './assessmentRestorePolicy';
+import {projectDocumentRestoreV8} from './documentBackupPayloadV8';
+import {detachHistoricalDocumentData} from '../documents/documentHistoricalValidation';
 import {snapshotAssessmentData} from '../assessment/assessmentRevisionBindings';
 import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import {createInitialArchiveSnapshot,type NewArchiveSetup} from './initialArchiveSetup';
@@ -134,9 +136,40 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
         return grant;
       }catch{if(controller===attempt)invalidate();throw db2Failure();}
     },
-    /** Reserved GREEN implementation: RED must fail causally here. */
-    async prepareDocumentRestore(_intent:DocumentRestoreIntent,_expectedOwner:VaultMetadataV1):Promise<Grant>{
-      throw Error('DOC01_D4C3D1_NOT_IMPLEMENTED');
+    /** DOC-01/D4c3d1: V8-only synthetic physical DB2 restore.
+     * The owner must seal/drain, retire its existing DB2 connection and
+     * independently approve assessment and document scopes before calling.
+     * No production App/Root entrypoint supplies this intent.
+     */
+    async prepareDocumentRestore(intent:DocumentRestoreIntent,expectedOwner:VaultMetadataV1):Promise<Grant>{
+      invalidate();
+      const attempt=new AbortController();controller=attempt;
+      try{
+        if(!expectedOwner||intent.operation!=='restore-document')throw db2Failure();
+        // Bind all caller inputs before the first async operation, so changing
+        // an approval or expected metadata while unlocking cannot escalate it.
+        const owner=structuredClone(expectedOwner);
+        const {password,file,backupPassword,recoveryFile,recoveryPassword}=intent;
+        const currentScopes=snapshotAssessmentData(intent.currentAssessmentScopes) as readonly ApprovedAssessmentScope[];
+        const incomingScopes=snapshotAssessmentData(intent.incomingAssessmentScopes) as readonly ApprovedAssessmentScope[];
+        const documentScopes=detachHistoricalDocumentData(intent.documentScopes) as readonly unknown[];
+        const previous=await captureDb2(factory,attempt.signal);
+        if(previous.state!=='active'||!sameDb2Physical(previous.metadata,owner))throw db2Failure();
+        const current=await authenticate(previous,password);
+        const [incoming,recovery]=await Promise.all([
+          readEncryptedAssessmentCopy(file,backupPassword),
+          readEncryptedAssessmentCopy(recoveryFile,recoveryPassword)
+        ]);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const projected=await projectDocumentRestoreV8(current,incoming,recovery,
+          currentScopes,incomingScopes,documentScopes);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const next=await buildActive(projected,password);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const grant=Object.freeze({operation:'restore-document' as const});
+        pending={grant,previous,next,controller:attempt};
+        return grant;
+      }catch{if(controller===attempt)invalidate();throw db2Failure();}
     },
     async commit(grant:Grant,confirmed:boolean):Promise<void>{
       if(!pending||pending.grant!==grant||confirmed!==true){invalidate();throw db2Failure();}
