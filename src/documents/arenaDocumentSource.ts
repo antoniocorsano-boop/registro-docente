@@ -49,20 +49,30 @@ function inspect(scope:unknown,classes:unknown,profiles:unknown,accepted:unknown
     ||!dense(selection.itemIds)||!selection.itemIds.length||!selection.itemIds.every(nonempty)||new Set(selection.itemIds).size!==selection.itemIds.length)return fail('STALE_SELECTION');
   if(!dense(profiles)||!profiles.every(p=>record(p)&&nonempty(p.id)&&nonempty(p.schoolYear)&&nonempty(p.subjectCode)))return fail('INVALID_PROFILE');
   if(!dense(accepted)||!accepted.every(c=>exact(c,contextKeys)))return fail('INVALID_SOURCE');
+  // Reconstruct each accepted context through the existing consumer before
+  // passing typed data to the resolver. Never cast unvalidated contexts.
+  const typedProfiles=profiles as TeachingProfile[];
+  const validatedContexts:ArenaPlanningContext[]=[];
+  for(const candidate of accepted){
+    const owners=typedProfiles.filter(p=>p.id===candidate.profileId);
+    if(owners.length!==1||!instant(candidate.acceptedAt))return fail('INVALID_SOURCE');
+    const {id,acceptedAt,profileId,institutionRef,regimeRef,...wire}=candidate;
+    const parsed=previewArenaPlanningContext({...wire,instituteName:institutionRef,normativeRegime:regimeRef},owners[0]);
+    if(!parsed.ok||parsed.context.profileId!==profileId)return fail('INVALID_SOURCE');
+    const bound=bindAcceptedArenaPlanningContext([],parsed.context,{accepted:true,acceptedAt})[0];
+    if(bound.id!==id)return fail('INVALID_SOURCE');
+    validatedContexts.push(bound);
+  }
   // The existing resolver owns profile/context ambiguity and annual applicability.
-  const planning={schemaVersion:2 as const,profiles:profiles as TeachingProfile[],arenaContexts:accepted as ArenaPlanningContext[],resources:[],masterPrograms:[],classInstances:[],docenteOsProjections:[]};
+  const planning={schemaVersion:2 as const,profiles:typedProfiles,arenaContexts:validatedContexts,resources:[],masterPrograms:[],classInstances:[],docenteOsProjections:[]};
   const frame=resolvePlanningFrame({className:cls.name,planning,schoolYear:year,subjectCode:subject});
   if(frame.status!=='resolved')return fail('INVALID_PROFILE');
   const profile=frame.profile;
   if(profile.schoolOrder!=='lower_secondary'||profile.gradeLevel!==scope.gradeLevel||profile.cohortRef!==scope.cohortRef||profile.normativeRegime!==scope.regimeRef)return fail('INVALID_PROFILE');
   const a=frame.arenaContext;
   if(!a||a.institutionRef!==scope.institutionRef||!instant(a.acceptedAt)||!nonempty(a.authorityReceiptRef)||!normalizeSchoolYear(a.sourceSchoolYear))return fail('INVALID_SOURCE');
-  // Revalidate the existing imported context using its canonical V1 consumer.
-  const {id,acceptedAt,profileId,institutionRef,regimeRef,...wire}=a;
-  const preview=previewArenaPlanningContext({...wire,instituteName:institutionRef,normativeRegime:regimeRef},profile);
-  if(!preview.ok||profileId!==profile.id)return fail('INVALID_SOURCE');
-  const validated=bindAcceptedArenaPlanningContext([],preview.context,{accepted:true,acceptedAt})[0];
-  if(validated.id!==id)return fail('INVALID_SOURCE');
+  const validated=a;
+  const {id,acceptedAt}=validated;
   if(selection.contextId!==id||selection.acceptedAt!==acceptedAt||selection.masterVersion!==validated.masterVersion
      ||selection.sourceCommit!==validated.provenance.sourceCommit||selection.sourceRevisionId!==validated.provenance.sourceRevisionId
      ||selection.sourceSchoolYear!==validated.sourceSchoolYear||selection.fingerprint!==validated.structuralFingerprint.hash)return fail('STALE_SELECTION');
