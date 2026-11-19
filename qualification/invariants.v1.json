@@ -3069,6 +3069,18 @@
       "tests": [
         "src/security/doc01DocumentArchiveCandidate.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C2A-I01",
+      "owner": "DOC-01/D4c2a",
+      "statement": "Historical synthetic document records must independently match the approved exact professional scope, closed versioned identity/revision and kind-specific projection, authority markers, date/index/count semantics and canonical digest. Verify without current sources, reject rehashed malformed or personal-shaped records, freeze a detached copy. Digest is not authenticity, source currency or persistence authorization. No archive append, restore, runtime or individual destinations.",
+      "impactPaths": [
+        "src/documents/documentHistoricalValidation.ts",
+        "src/security/doc01DocumentHistoricalValidation.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoricalValidation.test.ts"
+      ]
     }
   ]
 }
