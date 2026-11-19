@@ -3105,6 +3105,21 @@
       "tests": [
         "src/security/doc01DocumentHistoryCommit.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3B-I01",
+      "owner": "DOC-01/D4c3b",
+      "statement": "Legacy v6 and isolated v7 backup export, inspection and restore reject any unversioned DOC-01 document-history domain, including nested smuggling and physical archive history hidden by caller-supplied logical state. The fail-closed guard does not execute getters, prevents silent loss on downgrade, and preserves compatibility for genuinely history-free backups. No new backup codec or recovery authority is inferred and no runtime activation, release or merge follows.",
+      "impactPaths": [
+        "src/security/documentHistoryBackupFence.ts",
+        "src/security/backupPayload.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "src/security/secureAppStorage.ts",
+        "src/security/doc01DocumentHistoryBackupFence.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentHistoryBackupFence.test.ts"
+      ]
     }
   ]
 }
