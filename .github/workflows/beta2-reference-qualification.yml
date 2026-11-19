@@ -87,6 +87,7 @@ jobs:
           cp tests/browser/val01-s6c-evidence-board.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s6d-integration.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s6d-db2-persistence.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/doc01-d4c3d1-db2-restore.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s6d-operational.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s7b-formative-balance.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s8-council-contribution.spec.cjs .nav-context-browser-tools/
@@ -143,6 +144,7 @@ jobs:
             val01-s6c-evidence-board.spec.cjs \
             val01-s6d-integration.spec.cjs \
             val01-s6d-db2-persistence.spec.cjs \
+            doc01-d4c3d1-db2-restore.spec.cjs \
             val01-s6d-operational.spec.cjs \
             val01-s7b-formative-balance.spec.cjs \
             val01-s8-council-contribution.spec.cjs \
