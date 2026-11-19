@@ -3093,6 +3093,19 @@
       "tests": [
         "src/security/doc01DocumentHistoryTransitions.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3A-I01",
+      "owner": "DOC-01/D4c3a",
+      "statement": "Synthetic-only history commits reuse the existing authenticated AES-GCM primitive, fully validate document history before write and after atomic compare-and-swap readback, refuse stale generations and invalid sessions, preserve retry idempotency, and do not activate production DB2, backup, export or UI.",
+      "impactPaths": [
+        "src/persistence/documentHistoryEncryptedCommit.ts",
+        "src/security/doc01D4c3Fixture.ts",
+        "src/security/doc01EncryptedDocumentHistoryCommit.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01EncryptedDocumentHistoryCommit.test.ts"
+      ]
     }
   ]
 }
