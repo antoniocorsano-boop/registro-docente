@@ -2416,6 +2416,18 @@
       "tests": [
         "src/security/val01AssessmentArchive.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1B-I01",
+      "owner": "DOC-01/D1b",
+      "statement": "Synthetic disciplinary document preview projects only whitelisted field sources in an independently matched context; unconfirmed or missing sources never supply values, planned and completed remain distinct, exact canonical revalidation prevents stale confirmation. No personal payload, official status, persistence, runtime wiring or export.",
+      "impactPaths": [
+        "src/documents/documentProjection.ts",
+        "src/security/doc01DocumentProjection.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentProjection.test.ts"
+      ]
     }
   ]
 }
