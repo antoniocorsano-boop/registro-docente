@@ -8,6 +8,7 @@ const labels=[['learning','Apprendimenti'],['progress','Progresso documentato'],
 const states={observed:'Osservato',not_observed:'Non osservato',not_applicable:'Non pertinente'};
 const button='min-h-[44px] rounded border px-3 py-2 max-w-full whitespace-normal';
 export function SyntheticCouncilContribution({scope,balance,session,classData,schoolYear,version,getCurrent,onDraftChange}:Props){
+ const [checkedVersion,setCheckedVersion]=useState<{version:number;valid:boolean;issue?:string}|null>(null);
  const [sections,setSections]=useState<CouncilContributionSelection['sections']>([]);
  const [review,setReview]=useState<{preview:CouncilContributionPreview;version:number}|null>(null);
  const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
@@ -16,9 +17,19 @@ export function SyntheticCouncilContribution({scope,balance,session,classData,sc
  const context={...balance.context,classId:classData.id,schoolYear,sessionId:session.id};
  const recipient='Studente '+(scope.studentIds.indexOf(balance.context.studentId)+1);
  const selection={sections};
- const visible=review?.version===version?review.preview:null;
+ const eligible=checkedVersion?.version===version&&checkedVersion.valid;
+ const visible=eligible&&review?.version===version?review.preview:null;
  function invalidate(){setReview(null);setConfirmed(false);setMessage('');}
  function discard(){if(operation.current)return;invalidate();setSections([]);onDraftChange(false);}
+ useEffect(()=>{
+  let cancelled=false;
+  void(async()=>{
+   try{
+    const current=getCurrent(),result=await prepareCouncilContribution(current.document,scope,current.classData,context,balance,{sections:[]});
+    if(!cancelled&&active.current&&getCurrent().changes===current.changes)setCheckedVersion({version:current.changes,valid:result.valid,...(!result.valid?{issue:result.issue}:{})});
+   }catch{if(!cancelled&&active.current)setCheckedVersion({version,valid:false,issue:'STALE_BALANCE'});}
+  })();return()=>{cancelled=true;};
+ },[version]);
  useEffect(()=>{
   if(!review||review.version===version)return;
   let cancelled=false;
@@ -34,7 +45,7 @@ export function SyntheticCouncilContribution({scope,balance,session,classData,sc
   return()=>{cancelled=true;};
  },[version,review]);
  async function prepare(){
-  if(operation.current)return;
+  if(operation.current||!eligible)return;
   operation.current=true;setBusy(true);setMessage('');onDraftChange(true);
   try{
    const current=getCurrent();
@@ -63,7 +74,7 @@ export function SyntheticCouncilContribution({scope,balance,session,classData,sc
   <p>{recipient} · Identità protetta · {scope.subjectCode==='TECH'?'Tecnologia':scope.subjectCode}</p>
   <p>Bilancio di periodo già confermato nella dimostrazione. Seleziona soltanto i testi pertinenti alla seduta.</p>
   <p>Non è un voto proposto, un verbale, una decisione di scrutinio o una certificazione delle competenze.</p>
-  {review&&!visible?<p role="status">Verifica delle fonti…</p>:visible?<section aria-label="Anteprima del contributo" className="space-y-2 min-w-0">
+  {checkedVersion?.version!==version?<p role="status">Verifica delle fonti…</p>:!eligible?<p role="alert">{checkedVersion.issue==='INVALID_SESSION'?'La seduta non corrisponde al periodo del bilancio.':'Bilancio non più valido o contesto non corrispondente. Torna alla scheda individuale.'}</p>:review&&!visible?<p role="status">Verifica delle fonti…</p>:visible?<section aria-label="Anteprima del contributo" className="space-y-2 min-w-0">
    <h4 className="font-semibold">Anteprima del contributo personale</h4>
    <p>{recipient} · {visible.context.period==='Q1'?'Primo periodo':'Secondo periodo'}</p>
    <p>Periodo dal {visible.context.from} al {visible.context.to} · Seduta {visible.session.date}</p>
@@ -79,7 +90,7 @@ export function SyntheticCouncilContribution({scope,balance,session,classData,sc
    <p>Le evidenze selezionate nel bilancio restano le fonti del contributo. Nessuna nuova valutazione automatica.</p>
    <button type="button" className={button} onClick={prepare}>Rivedi contributo</button>
   </fieldset>}
-  {message&&<p role="alert">{message}</p>}
+  {message&&eligible&&<p role="alert">{message}</p>}
   <button type="button" className={button} disabled={busy} onClick={discard}>Abbandona contributo</button>
  </section>;
 }
