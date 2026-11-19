@@ -200,6 +200,31 @@ jobs:
             if (!fs.statSync(screenshot).isFile() || fs.statSync(screenshot).size === 0) {
               throw new Error('Missing/empty unified DOC-01 screenshot: ' + screenshot);
             }
+            const width = caseId.startsWith('geometry-') ? Number(caseId.split('-')[1]) : (caseId === 'blocked' ? 320 : 390);
+            const png = fs.readFileSync(screenshot);
+            if (png.readUInt32BE(16) !== width) throw new Error('Unified screenshot exceeds nominal width: ' + screenshot);
+            if (caseId.startsWith('geometry-')) {
+              const scale = Number(caseId.split('-')[2]);
+              const g = evidence.geometry;
+              if (!g || g.nominalWidth !== width || g.scale !== scale ||
+                  g.screenshotWidth !== width || g.screenshotHeight !== png.readUInt32BE(20) ||
+                  g.preConfirmScreenshot !== 'doc01-unified-screenshots/before-confirm-' + width + '-' + scale + '.png') {
+                throw new Error('Missing nominal geometry evidence: ' + file);
+              }
+              for (const state of [g.before,g.expanded,g.after]) {
+                if (!state || !Array.isArray(state.issues) || state.issues.length ||
+                    !state.viewport || state.viewport.nominal !== width ||
+                    ['inner','client','scroll','bodyScroll'].some(key => !Number.isFinite(state.viewport[key]) || state.viewport[key] > width+1) ||
+                    !Number.isFinite(state.rootPx) || Math.abs(state.rootPx-16*scale/100)>1) {
+                  throw new Error('Invalid unified reflow evidence: ' + file);
+                }
+              }
+              if (!Number.isFinite(g.before.previewHeight) || g.before.previewHeight > (scale===200?2400:850)) {
+                throw new Error('Unified product view exceeds density bound: ' + file);
+              }
+              const pre = fs.readFileSync(path.join(dir,g.preConfirmScreenshot));
+              if (pre.readUInt32BE(16)!==width) throw new Error('Pre-confirmation screenshot exceeds nominal width: ' + file);
+            }
           }
           console.log('PASS: seven exact-SHA unified DOC-01 browser cases and screenshots');
           NODE
