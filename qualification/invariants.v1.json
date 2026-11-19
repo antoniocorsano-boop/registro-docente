@@ -2448,6 +2448,18 @@
       "browserSmoke": [
         "tests/browser/doc01-d1c-preview.spec.cjs"
       ]
+    },
+    {
+      "id": "DOC-01-D1D1-I01",
+      "owner": "DOC-01/D1d1",
+      "statement": "Document planning source review selects only an exact current accepted, confirmed Docente OS projection with a teacher-confirmed institution/cohort binding, current resolved class and explicitly selected UDA references. Canonical validation and fingerprint checks reject malformed, ambiguous or stale sources. Planned hours remain distinct from completed activity; no copied titles, focus, pack references, student payload, automatic authority, persistence or production wiring.",
+      "impactPaths": [
+        "src/documents/planningDocumentSource.ts",
+        "src/security/doc01PlanningDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01PlanningDocumentSource.test.ts"
+      ]
     }
   ]
 }
