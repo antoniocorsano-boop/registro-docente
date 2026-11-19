@@ -3057,6 +3057,18 @@
       "tests": [
         "src/security/doc01PlanningAssessmentLink.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C1-I01",
+      "owner": "DOC-01/D4c1",
+      "statement": "A synthetic-only archive candidate is derived from an exact D4a identity and current D4b final or planning review with explicit revision-specific confirmation, not caller-supplied document contents. Stale source including hidden dependencies, invalid identity, time or decision fails closed. Freeze only reviewed projection, revision metadata and canonical SHA-256 content digest; no raw source graph, personal document, persistent state, authenticity claim, runtime, backup or export authority. Digest is integrity evidence, not a signature.",
+      "impactPaths": [
+        "src/documents/documentArchiveCandidate.ts",
+        "src/security/doc01DocumentArchiveCandidate.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01DocumentArchiveCandidate.test.ts"
+      ]
     }
   ]
 }
