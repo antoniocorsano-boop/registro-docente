@@ -546,6 +546,12 @@ export function normalizeBackupPayload(
   payload: unknown,
   current: CompleteSecureAppSnapshot
 ): ReturnType<typeof normalizeBackupPayloadInternal> {
+  // V8 is an explicitly unsupported version here. Reject its version before
+  // the V6-domain fence so downgrade errors remain unambiguous; V6 and
+  // legacy DOC-01 smuggling remain forbidden by the unchanged recursive guard.
+  if (isRecord(payload) && payload.backupDataVersion === 8) {
+    throw new Error('Versione dati backup non supportata: 8.');
+  }
   assertNoUnsupportedDocumentHistory(payload);
   assertNoUnsupportedDocumentHistory(current);
   const source = normalizeBackupPayloadInternal(payload, current);
