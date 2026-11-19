@@ -2460,6 +2460,18 @@
       "tests": [
         "src/security/doc01PlanningDocumentSource.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D1D2-I01",
+      "owner": "DOC-01/D1d2",
+      "statement": "Document curriculum source review uses the canonical planning frame and Arena V1 consumer to select only an accepted, approved and current annual disciplinary reference in the independently matched school, class, year, cohort, discipline and regime. Explicit selection and private exact-content revalidation reject stale review. Annual text never becomes inferred objectives or transversal objectives; no personal data, text export, persistence or runtime wiring.",
+      "impactPaths": [
+        "src/documents/arenaDocumentSource.ts",
+        "src/security/doc01ArenaDocumentSource.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01ArenaDocumentSource.test.ts"
+      ]
     }
   ]
 }
