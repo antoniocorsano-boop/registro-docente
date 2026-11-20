@@ -108,3 +108,21 @@ test('M1-B3 real Chromium physical DB2 compare-and-swap rejects revoked authorit
  expect(await call(page,'physicalDigest')).toEqual(before);
  await call(page,'close');
 });
+
+
+for(const mode of ['commit','refuse','revoke']){
+ test('M1-B3.4 real Chromium supervised DB1-to-DB2 migration: '+mode,async({page})=>{
+  test.setTimeout(90000);
+  await attach(page);
+  const actual=await call(page,'m1B34SupervisedJourney',mode);
+  const success=mode==='commit';
+  expect(actual).toEqual({
+   selected:true,sealed:true,
+   outcome:success?'migrated-reopen-required':mode==='refuse'?'cancelled-reopen-required':'cancelled-reopen-required',
+   retired:success,
+   version:success?2:1,
+   intact:true,
+   records:success?10:0
+  });
+ });
+}
