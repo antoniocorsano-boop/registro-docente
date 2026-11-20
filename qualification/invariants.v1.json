@@ -3211,8 +3211,7 @@
         "qualification/invariants.v1.json"
       ],
       "tests": [
-        "src/security/doc01Db2RecoveryOwnerBoundary.test.ts",
-        "tests/browser/doc01-d4c3e2-real-db2-owner.spec.cjs"
+        "src/security/doc01Db2RecoveryOwnerBoundary.test.ts"
       ]
     }
   ]
