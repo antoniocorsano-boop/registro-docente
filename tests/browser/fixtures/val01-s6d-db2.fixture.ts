@@ -1,3 +1,8 @@
+import {createInstitutionalDocumentRecordV2,appendInstitutionalDocumentV2,
+ revokeInstitutionalDocumentV2,validateInstitutionalDocumentHistoryV2} from '../../../src/documents/institutionalDocumentHistoryV2';
+import {createInstitutionalBackupPayloadV9} from '../../../src/security/institutionalBackupPayloadV9';
+import {createInstitutionalDb2RecoveryDriver} from '../../../src/security/institutionalDb2RecoveryOwner';
+import {createInstitutionalRecoveryDecision} from '../../../src/security/institutionalRecoveryDecision';
 import {createDocumentDb2RecoveryDriver} from '../../../src/security/documentDb2RecoveryOwner';
 import {createDocumentRecoveryDecision} from '../../../src/security/documentRecoveryDecision';
 // Synthetic browser fixture only. Never imported by the product entrypoint.
@@ -557,4 +562,126 @@ Object.assign(globalThis,{__doc01D4c3e2Owner:{
   return check;
  },
  close
+}});
+
+
+/** DOC-01/D4c3e5 — separate institutional V9 physical DB2 laboratory.
+ * All names, dates, passwords, school identifiers and document contents are fabricated.
+ * Never imported by the live application or connected to a real Android backup.
+ */
+const v9School={
+ institutionCode:'ZZIC00000A',siteCode:'ZZMM000001',schoolYear:'2026/2027',
+ schoolOrder:'lower-secondary' as const,gradeLevel:2 as const,
+ classId:'2C',subjectCode:'TECH',purpose:'disciplinary-plan' as const
+};
+const v9At='2026-11-20T06:30:00.000Z';
+const v9Ids={
+ document:'11111111-1111-4111-8111-111111111111',
+ revision:'22222222-2222-4222-8222-222222222222',
+ event:'33333333-3333-4333-8333-333333333333',
+ revocation:'44444444-4444-4444-8444-444444444444'
+};
+let institutionalMode='actual-restore';
+let institutionalEpoch='institutional-epoch-1';
+let institutionalDecision:ReturnType<typeof createInstitutionalRecoveryDecision>|null=null;
+let institutionalOld:ReturnType<typeof requireOwner>|null=null;
+let institutionalCopies:{recovery:string;target:string}|null=null;
+const requireInstitutional=()=>{
+ if(!institutionalDecision)throw Error('Missing V9 recovery decision');
+ return institutionalDecision;
+};
+async function v9Seed(mode:string){
+ if(!['actual-restore','cancelled','stale-owner','wrong-recovery','same-epoch','wrong-scope','wrong-password'].includes(mode))
+  throw Error('Unknown institutional scenario');
+ institutionalMode=mode;institutionalEpoch='institutional-epoch-1';
+ await seed();
+ const o=requireOwner();
+ const current=await o.storage.loadExactBackupSnapshot();
+ if(!current)throw Error('Missing synthetic V9 source');
+ const record=await createInstitutionalDocumentRecordV2({
+  schemaVersion:2,labOnly:false,official:false,approval:'teacher-confirmed',
+  documentId:v9Ids.document,revisionId:v9Ids.revision,
+  revisionNumber:1,previousRevisionId:null,revisionReason:'initial',
+  kind:'disciplinary-plan',scope:v9School,confirmedAt:'2026-11-20T09:00:00.000Z',
+  title:'Programmazione sintetica',sections:[{field:'obiettivi',text:'Apprendere una procedura didattica sintetica.'}]
+ });
+ const first=await appendInstitutionalDocumentV2(
+  {schemaVersion:2,labOnly:false,events:[]},v9School,record,null,v9Ids.event
+ );
+ if(!first.valid)throw Error('Unverifiable V9 initial history');
+ await o.coordinator.enqueue({
+  getCommitted:()=>o.state,
+  derive:s=>({...s,appData:{...s.appData,documentHistoryV2:first.archive}}),
+  persist:s=>o.storage.saveAppDataAndMeta(s.appData,s.meta),
+  publish:s=>{o.state=s;}
+ });
+ const now=await o.storage.loadExactBackupSnapshot();
+ if(!now)throw Error('Incomplete V9 seed');
+ const second=await revokeInstitutionalDocumentV2(first.archive,v9School,{
+  documentId:v9Ids.document,revisionId:v9Ids.revision,
+  reason:'withdrawn',confirmedAt:'2026-11-20T11:00:00.000Z',confirmedByTeacher:true
+ },first.head,v9Ids.revocation);
+ if(!second.valid)throw Error('Unverifiable V9 target history');
+ const target={...now,appData:{...now.appData,documentHistoryV2:second.archive},
+  meta:incrementBackupChanges(now.meta)};
+ const recovery=await createInstitutionalBackupPayloadV9(now,approved,v9School,v9At);
+ const destination=await createInstitutionalBackupPayloadV9(target,approved,v9School,v9At);
+ institutionalCopies={
+  recovery:await encryptDataWithPassword(recovery,copyPassword),
+  target:await encryptDataWithPassword(destination,copyPassword)
+ };
+ institutionalOld=o;
+ const driver=createInstitutionalDb2RecoveryDriver({
+  owner:{store:o.store,vault:o.vault,storage:o.storage,coordinator:o.coordinator},
+  authority:{
+   currentToken:()=>institutionalEpoch,
+   isCurrent:async token=>token===institutionalEpoch,
+   onRetired:()=>{if(owner===o)owner=null;},
+   async freshAuthentication(previousToken){
+    if(institutionalMode==='same-epoch')return {token:previousToken,password};
+    institutionalEpoch='institutional-epoch-2';
+    return {token:institutionalEpoch,password};
+   }
+  },
+  vaultPassword:password,recoveryPassword:copyPassword,
+  targetPassword:institutionalMode==='wrong-password'?'invalid-synthetic-password':copyPassword,
+  approvedCurrentAssessmentScopes:approved,approvedIncomingAssessmentScopes:approved,
+  approvedInstitutionalScope:institutionalMode==='wrong-scope'?{...v9School,subjectCode:'MATH'}:v9School,
+  factory:indexedDB,
+  async selectCiphertext(kind,isActive){
+   if(!isActive())return null;
+   if(institutionalMode==='cancelled'&&kind==='target')return null;
+   if(institutionalMode==='stale-owner'&&kind==='recovery')institutionalEpoch='institutional-epoch-2';
+   if(institutionalMode==='wrong-recovery'&&kind==='recovery')return institutionalCopies!.target;
+   return institutionalCopies![kind];
+  }
+ });
+ institutionalDecision=createInstitutionalRecoveryDecision(driver);
+ return {events:1,grades:now.appData.classes[0].grades.map(g=>g.value)};
+}
+async function v9ReopenSummary(){
+ await open();
+ const o=requireOwner(),snapshot=await o.storage.loadExactBackupSnapshot();
+ if(!snapshot)throw Error('Missing V9 reopened data');
+ const h=(snapshot.appData as AppData&{documentHistoryV2?:unknown}).documentHistoryV2;
+ const result=await validateInstitutionalDocumentHistoryV2(h,v9School);
+ return {historyValid:result.valid,events:result.valid?result.archive.events.length:0,
+  grades:snapshot.appData.classes[0].grades.map(g=>g.value)};
+}
+async function v9OldRejected(){
+ const old=institutionalOld;
+ if(!old||old.vault.isUnlocked())return false;
+ try{await old.store.getMetadata();return false;}catch{return true;}
+}
+Object.assign(globalThis,{__doc01D4c3e5Owner:{
+ seed:v9Seed,
+ prepare:()=>requireInstitutional().prepare(),
+ confirm:async()=>{
+  await requireInstitutional().confirm({accepted:true,phrase:'RIPRISTINA'});
+  return requireInstitutional().phase();
+ },
+ verify:()=>requireInstitutional().verifyAfterReopen(),
+ phase:()=>requireInstitutional().phase(),
+ physicalDigest,oldOwnerRejected:v9OldRejected,
+ reopenSummary:v9ReopenSummary,close
 }});
