@@ -3,6 +3,7 @@ import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {DocumentRecoveryReview} from '../../../src/components/documents/DocumentRecoveryReview';
 import type {DocumentRecoveryDriver} from '../../../src/security/documentRecoveryDecision';
+import '../../../src/index.css';
 const args=new URLSearchParams(location.search);
 const scenario=args.get('scenario')??'success';
 const events:string[]=[];
