@@ -133,6 +133,35 @@ export async function inspectDocumentBackupPayloadV8(
  }catch{return invalid();}
 }
 
+/** The V7 assessment graph is independent from the grade list. Before
+ * allowing a V8 physical replacement, every existing grade must survive under
+ * its original class and grade identity, with its entire record unchanged.
+ * New grades are allowed, but duplicate identities cannot satisfy the fence.
+ */
+function preservesExistingGrades(previous:AppData,candidate:AppData):boolean{
+ const seenClasses=new Set<string>();
+ for(const existing of previous.classes){
+  if(seenClasses.has(existing.id)||!Array.isArray(existing.grades))return false;
+  seenClasses.add(existing.id);
+  if(existing.grades.length===0)continue;
+  const destinations=candidate.classes.filter(cls=>cls.id===existing.id);
+  if(destinations.length!==1||!Array.isArray(destinations[0].grades))return false;
+  const gradesById=new Map<string,typeof existing.grades[number]>();
+  for(const grade of destinations[0].grades){
+   if(typeof grade.id!=='string'||grade.id.length===0||gradesById.has(grade.id))return false;
+   gradesById.set(grade.id,grade);
+  }
+  const seenGrades=new Set<string>();
+  for(const grade of existing.grades){
+   if(typeof grade.id!=='string'||grade.id.length===0||seenGrades.has(grade.id))return false;
+   seenGrades.add(grade.id);
+   const retained=gradesById.get(grade.id);
+   if(!retained||!sameDb2Physical(grade,retained))return false;
+  }
+ }
+ return true;
+}
+
 /** Pure replacement preparation, not a restore grant. Preserve every
  * historical document event and confirmed assessment revision, require an
  * independently inspected exact V8 recovery copy of current logical state.
@@ -166,6 +195,7 @@ export async function projectDocumentRestoreV8(
   if(!preservesAssessmentHistory(previous.snapshot.appData,proposed.snapshot.appData,
      oldAssessment as Parameters<typeof preservesAssessmentHistory>[2],
      nextAssessment as Parameters<typeof preservesAssessmentHistory>[3]))return invalid();
+  if(!preservesExistingGrades(previous.snapshot.appData,proposed.snapshot.appData))return invalid();
   return {...proposed.snapshot,
    copilotState:normalizeLoadedCopilotState(proposed.snapshot.copilotState!),
    meta:withoutLocalBackupVerification(proposed.snapshot.meta)};
