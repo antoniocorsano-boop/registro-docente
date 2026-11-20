@@ -20,6 +20,7 @@ import type { PlanningState } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
 import { SecureVault } from './secureVault';
+import { assertNoUnsupportedDocumentHistory } from './documentHistoryBackupFence';
 
 export type VaultGateState =
   | 'CHECKING'
@@ -146,7 +147,7 @@ export function decideVaultBootstrap(input: VaultBootstrapInput): VaultGateState
 export class SecureAppStorage {
   constructor(private readonly vault: SecureVault) {}
 
-  async loadSnapshot(): Promise<SecureAppSnapshot> {
+  async loadSnapshot(observeComplete?: (complete: boolean) => void): Promise<SecureAppSnapshot> {
     const [
       appData,
       settings,
@@ -171,6 +172,9 @@ export class SecureAppStorage {
       this.vault.get<SecureMeta>('meta')
     ]);
 
+    // Determine completeness before historical defaults are synthesized.
+    observeComplete?.([appData,settings,udas,customTests,submissions,storedPlanning,
+      library,professionalMemory,storedCopilotState,meta].every(value=>value!==null&&value!==undefined));
     const planning = storedPlanning === null ? null : normalizePlanningState(storedPlanning);
     const copilotState = isCopilotStateV1(storedCopilotState)
       ? normalizeLoadedCopilotState(storedCopilotState)
@@ -188,6 +192,17 @@ export class SecureAppStorage {
       copilotState,
       meta
     };
+  }
+
+  /** Read the committed datasets without the UI's defaults, sorting or
+   * session-only projections. Missing datasets are not synthesized here.
+   * The protected export caller serializes this read with admitted writes. */
+  async loadExactBackupSnapshot(): Promise<CompleteSecureAppSnapshot | null> {
+    const entries = await Promise.all(SNAPSHOT_KEYS.map(async key =>
+      [key, await this.vault.get<unknown>(key)] as const
+    ));
+    if (entries.some(([, value]) => value === null || value === undefined)) return null;
+    return Object.fromEntries(entries) as unknown as CompleteSecureAppSnapshot;
   }
 
   async saveAppData(value: AppData): Promise<void> {
@@ -347,10 +362,39 @@ export class SecureAppStorage {
     }
   }
 
+  /** Only for a staging archive owned by the caller. It contains no previous
+   * user data. The owner handles disposal before activation, not rollback
+   * of an established archive. Never use for replacing ACTIVE records. */
+  async writeInitialSnapshotVerified(
+    candidate: CompleteSecureAppSnapshot,
+    assertAuthorized: () => void
+  ): Promise<void> {
+    assertAuthorized();
+    assertNoUnsupportedDocumentHistory(candidate);
+    const canonical = canonicalizeCompleteSnapshot(candidate);
+    await assertCouncilSnapshotIntegrity(canonical.appData);
+    assertAuthorized();
+    await this.vault.putMany(SNAPSHOT_KEYS.map(key => ({key, value: canonical[key]})), assertAuthorized);
+    assertAuthorized();
+    const verified = requireCompleteSnapshot(await this.loadSnapshot());
+    assertAuthorized();
+    await assertCouncilSnapshotIntegrity(verified.appData);
+    assertAuthorized();
+    if (!snapshotEquals(verified, canonical)) {
+      throw new Error('Configurazione non verificabile: il readback non coincide.');
+    }
+  }
+
   async restoreSnapshotVerified(
     candidate: CompleteSecureAppSnapshot,
     previousLogical?: CompleteSecureAppSnapshot
   ): Promise<CanonicalCompleteSecureAppSnapshot> {
+    assertNoUnsupportedDocumentHistory(candidate);
+    assertNoUnsupportedDocumentHistory(previousLogical);
+    // The physical archive cannot be trusted to match a caller-supplied
+    // previousLogical when an unsupported new domain may already be present.
+    const physicalAppData = await this.vault.get<AppData>('appData');
+    assertNoUnsupportedDocumentHistory(physicalAppData);
     const previousPhysical = previousLogical ? null : await this.loadSnapshot();
     const canonicalCandidate = canonicalizeCompleteSnapshot(candidate);
     // Reject malformed or tampered council snapshots before mutating the Vault.
