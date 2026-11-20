@@ -41,3 +41,49 @@ test('320px remount: disposal of a transient view neither replays grant nor show
  await expect(page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
  await context.close();
 });
+
+// Exercise the actual remount race, not merely reopening after settlement.
+test('pending preparation: a remounted view receives the prepared review when the driver resolves',async({page})=>{
+ await page.goto(url);
+ await page.evaluate(()=>window.__doc01Supervisor.hold('prepare'));
+ await page.getByRole('button',{name:'Esamina il recupero'}).click();
+ await expect(page.getByText('Verifica locale in corso…')).toBeVisible();
+ await page.getByRole('button',{name:'Disattiva vecchia vista'}).click();
+ await page.getByRole('button',{name:'Riapri nuova vista'}).click();
+ await expect(page.getByRole('button',{name:'Conferma recupero'})).toHaveCount(0);
+ await page.evaluate(()=>window.__doc01Supervisor.release('prepare'));
+ await expect(page.getByRole('button',{name:'Conferma recupero'})).toBeVisible();
+ expect(await page.evaluate(()=>window.__doc01Supervisor.phase())).toBe('prepared');
+ expect((await events(page)).filter(x=>x==='prepare')).toHaveLength(1);
+});
+test('pending commit: a remounted view receives the fresh-reopen verification action',async({page})=>{
+ await page.goto(url);
+ await page.getByRole('button',{name:'Esamina il recupero'}).click();
+ await page.getByRole('checkbox').check();
+ await page.locator('#doc01-v8-consent').fill('RIPRISTINA');
+ await page.evaluate(()=>window.__doc01Supervisor.hold('commit'));
+ await page.getByRole('button',{name:'Conferma recupero'}).click();
+ await page.getByRole('button',{name:'Disattiva vecchia vista'}).click();
+ await page.getByRole('button',{name:'Riapri nuova vista'}).click();
+ await expect(page.getByRole('button',{name:'Verifica dopo il nuovo accesso'})).toHaveCount(0);
+ await page.evaluate(()=>window.__doc01Supervisor.release('commit'));
+ await expect(page.getByRole('button',{name:'Verifica dopo il nuovo accesso'})).toBeVisible();
+ expect((await events(page)).filter(x=>x==='commit')).toHaveLength(1);
+ await expect(page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
+});
+test('pending verification: a remounted view receives only the actual readback result',async({page})=>{
+ await page.goto(url);
+ await page.getByRole('button',{name:'Esamina il recupero'}).click();
+ await page.getByRole('checkbox').check();
+ await page.locator('#doc01-v8-consent').fill('RIPRISTINA');
+ await page.getByRole('button',{name:'Conferma recupero'}).click();
+ await page.evaluate(()=>window.__doc01Supervisor.hold('verify'));
+ await page.getByRole('button',{name:'Verifica dopo il nuovo accesso'}).click();
+ await page.getByRole('button',{name:'Disattiva vecchia vista'}).click();
+ await page.getByRole('button',{name:'Riapri nuova vista'}).click();
+ await expect(page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
+ await page.evaluate(()=>window.__doc01Supervisor.release('verify'));
+ await expect(page.getByText('Archivio riaperto e verificato.')).toBeVisible();
+ expect((await events(page)).filter(x=>x==='commit')).toHaveLength(1);
+ expect((await events(page)).filter(x=>x==='verify')).toHaveLength(1);
+});
