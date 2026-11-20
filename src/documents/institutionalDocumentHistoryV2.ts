@@ -197,5 +197,15 @@ export async function appendInstitutionalDocumentV2(history:unknown,scope:unknow
  return transition(history,scope,{kind:'append',record},expectedHead,eventId);
 }
 export async function revokeInstitutionalDocumentV2(history:unknown,scope:unknown,revoke:unknown,expectedHead:string|null,eventId:string):Promise<InstitutionalDocumentInspectionV2>{
- return transition(history,scope,{kind:'revoke',...(row(revoke)?revoke:{})},expectedHead,eventId);
+ try{
+  // Never spread an untrusted object: that would execute accessors, and an
+  // attacker-supplied "kind" could override an explicit revoke with append.
+  const copied=detachHistoricalDocumentData(revoke);
+  if(!exact(copied,['documentId','revisionId','reason','confirmedAt','confirmedByTeacher']))
+   return failure('INVALID_REVOKE');
+  return transition(history,scope,{
+   kind:'revoke',documentId:copied.documentId,revisionId:copied.revisionId,
+   reason:copied.reason,confirmedAt:copied.confirmedAt,confirmedByTeacher:copied.confirmedByTeacher
+  },expectedHead,eventId);
+ }catch{return failure('INVALID_REVOKE');}
 }
