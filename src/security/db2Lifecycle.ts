@@ -214,11 +214,14 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
         return grant;
       }catch{if(controller===attempt)invalidate();throw db2Failure();}
     },
-    async commit(grant:Grant,confirmed:boolean):Promise<void>{
+    async commit(grant:Grant,confirmed:boolean,isAuthorized?:()=>boolean):Promise<void>{
       if(!pending||pending.grant!==grant||confirmed!==true){invalidate();throw db2Failure();}
       const {previous,next,controller:attempt}=pending;pending=null;
       try{
-        await replaceDb2(factory,previous,next,attempt.signal);
+        // Preserve the old V8/erasure contracts, while V9 supplies a live
+        // native epoch predicate all the way into the IDB transaction.
+        if(isAuthorized)await replaceDb2(factory,previous,next,attempt.signal,isAuthorized);
+        else await replaceDb2(factory,previous,next,attempt.signal);
         // Readback mismatch/revocation AFTER commit is not rollback. Never
         // write the previous image back; owner must inspect under lock.
         const verified=await captureDb2(factory,attempt.signal);
