@@ -413,3 +413,18 @@ async function restoreDocument(mode:'approve'|'old'|'bad-recovery'|'wrong-scope'
   assessmentPreserved,historyValid:check.valid,summary:docSummary()};
 }
 Object.assign(globalThis,{__doc01Db2Restore:{seed:seedDocument,restore:restoreDocument,summary:docSummary,close,open,physicalDigest}});
+
+// DOC-01/D4c3d2 — native SAF recovery entrypoint reserved for RED.
+// The V8 physical DB2 service exists (D4c3d1); only real Android-selected
+// encrypted bytes will be permitted to reach it after the GREEN phase.
+export async function nativeDocumentCopies():Promise<{recovery:string;target:string}>{
+ throw Error('DOC01_D4C3D2_NOT_IMPLEMENTED');
+}
+export async function nativePrepareSelectedDocumentRestore(
+ _recovery:Blob,_target:Blob,_signal:AbortSignal,_wrong=false
+):Promise<{commit(confirmed:boolean):Promise<void>}>{
+ throw Error('DOC01_D4C3D2_NOT_IMPLEMENTED');
+}
+export async function nativeRestoredDocumentSummary():Promise<unknown>{
+ throw Error('DOC01_D4C3D2_NOT_IMPLEMENTED');
+}
