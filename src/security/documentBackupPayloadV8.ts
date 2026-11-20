@@ -43,6 +43,9 @@ const exact=(v:unknown,keys:readonly string[]):v is Row=>row(v)&&Object.keys(v).
  * accommodates large existing library and planning datasets in a V8 snapshot.
  * V7 performs the final portable-settings/assessment/schema validation.
  */
+export function detachDocumentBackupJson(raw:unknown):unknown{
+ return detachJson(raw);
+}
 function detachJson(raw:unknown):unknown{
  const ancestors=new Set<object>();
  let budget=1000000;
