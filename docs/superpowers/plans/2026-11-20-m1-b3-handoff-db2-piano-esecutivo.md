@@ -89,3 +89,16 @@ La coda usa la stessa versione originale del coordinatore presente in main e #32
 **Qualificazione CI avviata sul commit esatto:** [Qualification Invariants #44790582623](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582623), [PREDEPLOY #44790582666](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582666), [Browser #44790582453](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582453), [Native DB2 #44790582351](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582351); altri quattro controlli automatici paralleli. Nessun PASS finale attribuito a questo candidato prima del riscontro del run.
 
 **Prossimo intervento B3-3 (in attesa del risultato dei test):** verificare `db2Lifecycle.ts` / `db2PhysicalLifecycle.ts` attuali con CAS, inventario e revoca e redigere matrice di non-regressione specifica dei recuperi V6, V7, V8, V9. Eventuali modifiche solo se dimostrate da test causali sullo SHA corrente. Non recuperare le implementazioni DB2 più vecchie da #325.
+
+
+## 9. Evidenza qualificazione B3 sul commit 14badd
+
+Il registro reale della [Qualification Invariants #44790582623](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582623) sul candidato `14badd2059bcc5c1a3b7985617b8471e5f6b990c` conferma:
+- **1010 test PASS, 0 fail** nell'esecuzione generale;
+- **6/6 PASS** nel gruppo `VAL-01 D1b.4b.2b recovery copy handoff`;
+- **7/7 PASS** nel gruppo `VAL-01 D1b.4b isolated migration session boundary`;
+- PREDEPLOY Security #44790582666, HEADER #44790582374, compatibilità Beta #44790582530 e FLOW-03 #44790582370: **PASS**.
+
+Al medesimo checkpoint **Browser #44790582453** e **BETA2 Reference #44790582511** sono ancora in esecuzione; **Native DB2 #44790582351** in coda. **5/8 controlli terminali PASS; nessun FAIL rilevato.** Mantenere lo stato B3-1/2 **parzialmente qualificato, non prodotto** finché le verifiche restanti non sono terminali.
+
+**Approfondimento B3-3 sul DB2 attuale già acquisito a livello sorgente:** `db2PhysicalLifecycle.ts` main (blob `ed92ad0a46c16da69983f4347484bf7753d977db`) controlla l'inventario all'interno della transazione, richiede due object store canonici, rifiuta upgrade e commit non autorizzati, confronta per CAS tutti i byte e supporta un callback `isAuthorized`. La versione #325 (blob `88eb8b52fabca24f065dd0a3f4fab31aa2f582bb`) **non aveva il callback opzionale di autorizzazione**: ricopiarla costituirebbe regressione. `db2Lifecycle.ts` main (blob `f7d1beaeb19946e79ffd83fb9e94dab41d690445`) include i percorsi di recupero documentale V8 e istituzionale V9, assenti nella versione #325 (blob `b511e8e31ea8a8b75c829738123dfffd0faa521a`). **Decisione di conservazione:** nessun trapianto dei due moduli DB2, nessuna attivazione in Root. Il passo successivo deve produrre **prove dinamiche di CAS e autorizzazione sul DB2 attuale**, non semplicemente un confronto testuale.
