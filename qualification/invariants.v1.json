@@ -2673,12 +2673,16 @@
         "tests/browser/val01-s6d-db2-persistence.spec.cjs",
         "src/security/val01Db2EvidenceBoundary.test.ts",
         ".github/workflows/beta2-reference-qualification.yml",
-        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md",
+        "src/security/archivePreflight.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts"
       ],
       "tests": [
         "src/security/val01Db2EvidenceBoundary.test.ts",
         "src/security/val01AssessmentEvidenceMutation.test.ts",
-        "src/security/val01VersionedBackupReceipt.test.ts"
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/val01-s6d-db2-persistence.spec.cjs"
