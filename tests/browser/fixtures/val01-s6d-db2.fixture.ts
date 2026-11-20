@@ -13,6 +13,8 @@ import {SecureVault} from '../../../src/security/secureVault';
 import {SecureAppStorage,type CompleteSecureAppSnapshot} from '../../../src/security/secureAppStorage';
 import {ExistingSessionVaultStore} from '../../../src/security/existingSessionVaultStore';
 import {createAuthorizedVaultMigration} from '../../../src/security/authorizedVaultMigration';
+import {createSupervisedMigrationHandoff} from '../../../src/security/m1SupervisedMigrationHandoff';
+import {classifyArchivePreflight} from '../../../src/security/archivePreflight';
 import {captureDb2,sameDb2Physical,replaceDb2,createErasedDb2} from '../../../src/security/db2PhysicalLifecycle';
 import {createDb2Lifecycle} from '../../../src/security/db2Lifecycle';
 import {createBackupPayload} from '../../../src/security/backupPayload';
@@ -238,7 +240,60 @@ async function m1B3PhysicalGuards(){
    staleRejected,staleUnchanged:sameDb2Physical(before,afterStale),version:await versions()};
 }
 
-Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards}});
+/** M1-B3.4: full physical DB1->DB2 journey on a completely fresh synthetic
+ * browser origin, through the actual migration/preflight/queue modules.
+ * No production entrypoint, SAF claim, real user file or personal records. */
+async function m1B34SupervisedJourney(mode:'commit'|'refuse'|'revoke'){
+ demand(await versions()===0);
+ const store=new IndexedDbVaultStore(),vault=new SecureVault(store),storage=new SecureAppStorage(vault);
+ const queue=createDurableMutationCoordinator(),migration=createAuthorizedVaultMigration(indexedDB);
+ let validOwner=true,retired=false;
+ const revision=1;
+ await vault.initializeActive(password);
+ try{
+  await storage.restoreSnapshotVerified(freshSnapshot());
+  const source=await storage.loadExactBackupSnapshot();
+  if(!source)throw Error('Missing synthetic original');
+  const encrypted=await encryptDataWithPassword(createBackupPayload(source,stamp),copyPassword);
+  const supervision=createSupervisedMigrationHandoff({
+   owner:{
+    isOwner:()=>validOwner,
+    observeAuthenticated:async()=>validOwner&&vault.isUnlocked()?{epoch:null,revision}:null,
+    isCurrent:s=>validOwner&&s.epoch===null&&s.revision===revision
+   },
+   queue,
+   classify:(pw,signal)=>classifyArchivePreflight(pw,signal,indexedDB),
+   confirm:async()=>{
+    if(mode==='revoke')validOwner=false;
+    return mode!=='refuse';
+   },
+   retireDb1:async()=>{retired=true;vault.lock();await store.retireConnection();},
+   migration
+  });
+  try{
+   const selected=await supervision.selectWeb(new Blob([encrypted]));
+   demand(selected);
+   const operation=supervision.begin(password,copyPassword);
+   const sealed=await queue.enqueueTask(()=>1).then(()=>false,()=>true);
+   const outcome=await operation;
+   const version=await versions();
+   let intact=false,records=0;
+   if(mode==='commit'){
+    const physical=await captureDb2(indexedDB);
+    records=physical.state==='active'?physical.records.length:0;
+    await open();
+    intact=sameDb2Physical(requireOwner().state,source);
+    await close();
+   }else{
+    const reread=await storage.loadExactBackupSnapshot();
+    intact=!!reread&&sameDb2Physical(reread,source);
+   }
+   return {selected,sealed,outcome,retired,version,intact,records};
+  }finally{supervision.revoke();}
+ }finally{migration.invalidate();vault.lock();await store.retireConnection();}
+}
+
+Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards,m1B34SupervisedJourney}});
 document.getElementById('status')!.textContent='Laboratorio DB2 pronto';
 
 // Native synthetic adapter: the wrapper supplies actual SAF-selected copies.
