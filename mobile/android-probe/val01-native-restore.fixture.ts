@@ -1,3 +1,6 @@
+import {nativeSeedInstitutionalHistory,nativeInstitutionalRestoreCopies,
+ nativePrepareSelectedInstitutionalRestore,nativeInstitutionalRestoredSummary}
+ from '../../tests/browser/fixtures/val01-s6d-db2.fixture';
 // Synthetic emulator only. No production Root or real archive. Reauthorize
 // only the isolated logical lab operation after the native chooser returns.
 import {nativeRestoreCopies,nativePrepareSelectedRestore,nativeRestoredSummary} from '../../tests/browser/fixtures/val01-s6d-db2.fixture';
@@ -183,4 +186,97 @@ Object.assign(globalThis,{__doc01NativeRestore:{
   finally{clearDocGrant();}
  },
  summary:nativeDocumentRestoredSummary
+}});
+
+
+/** DOC-01/D4c3e6 — independently selected real Android SAF V9 ciphertext.
+ * The driver never imports the production Root and does not invent consent.
+ * The actual cold process restart is verified by the outer ADB harness.
+ */
+const v9Names={recovery:'Backup_Cifrato_GDPR_2031-01-19.enc.json',
+ target:'Backup_Cifrato_GDPR_2031-01-20.enc.json'};
+let v9Copies:Record<Kind,string>|null=null;
+let v9Selected:Partial<Record<Kind,string>>={};
+let v9Generation=0,v9Busy=false;
+let v9Grant:Awaited<ReturnType<typeof nativePrepareSelectedInstitutionalRestore>>|null=null;
+let v9Abort:AbortController|null=null;
+let v9Status:{phase:string;kind?:Kind;bytes?:number;sha256?:string}={phase:'idle'};
+function clearV9Grant(){v9Abort?.abort();v9Abort=null;v9Grant=null;}
+document.addEventListener(ANDROID_SESSION_EVENT,()=>clearV9Grant());
+function v9Start(kind:Kind,operation:'write'|'read'){
+ assertKind(kind);
+ if(v9Busy||busy||docBusy||!v9Copies||v9Grant||v9Abort)
+  throw Error('Synthetic V9 file picker unavailable');
+ const expected=v9Copies[kind],next=++v9Generation;
+ const active=()=>next===v9Generation;
+ v9Busy=true;v9Status={phase:'picker',kind};
+ if(operation==='read')delete v9Selected[kind];
+ void(async()=>{
+  try{
+   if(operation==='write'){
+    const result=await saveEncryptedBackupOnAndroid(expected,v9Names[kind],active);
+    v9Status=result==='verified'&&active()?
+     {phase:'written',kind,...await digest(expected)}:{phase:'cancelled',kind};
+   }else{
+    const text=await readEncryptedBackupOnAndroid(active);
+    if(text===null||!active()){v9Status={phase:'cancelled',kind};return;}
+    const actual=await digest(text),wanted=await digest(expected);
+    if(!active()||actual.bytes!==wanted.bytes||actual.sha256!==wanted.sha256)
+     throw Error('Incorrect institutional V9 encrypted copy');
+    v9Selected[kind]=text;
+    v9Status={phase:'read',kind,...actual};
+   }
+  }catch{v9Status={phase:'error',kind};}
+  finally{v9Busy=false;}
+ })();
+ return true;
+}
+Object.assign(globalThis,{__doc01NativeV9Restore:{
+ async seedHistory(){
+  if(v9Busy||busy||docBusy||v9Abort||v9Grant)
+   throw Error('Synthetic institutional V9 session busy');
+  return nativeSeedInstitutionalHistory();
+ },
+ async createCopies(){
+  if(v9Busy||busy||docBusy||v9Abort||v9Grant)
+   throw Error('Synthetic institutional V9 session unavailable');
+  v9Selected={};v9Copies=await nativeInstitutionalRestoreCopies();
+  return {recovery:await digest(v9Copies.recovery),
+   target:await digest(v9Copies.target)};
+ },
+ write:(kind:Kind)=>v9Start(kind,'write'),
+ read:(kind:Kind)=>v9Start(kind,'read'),
+ status:()=>v9Status,
+ async prepare(wrong=false){
+  if(v9Busy||busy||docBusy||v9Grant||v9Abort||!v9Selected.recovery||!v9Selected.target)
+   return 'rejected';
+  const recovery=v9Selected.recovery,target=v9Selected.target;
+  v9Selected={};v9Copies=null;
+  const before=revision,state=await readAndroidSessionState();
+  if(!state?.foreground||authenticatedEpoch!==state.epoch||revision!==before)
+   return 'rejected';
+  const controller=new AbortController();v9Abort=controller;
+  try{
+   const prepared=await nativePrepareSelectedInstitutionalRestore(
+    new Blob([recovery]),new Blob([target]),controller.signal,wrong);
+   if(controller.signal.aborted||v9Abort!==controller||revision!==before)
+    throw Error('V9 authorization expired');
+   v9Grant=prepared;
+   return 'prepared';
+  }catch{clearV9Grant();return 'rejected';}
+ },
+ async commit(confirmed:boolean){
+  const pending=v9Grant,controller=v9Abort;
+  v9Grant=null;
+  if(!pending||!controller||controller.signal.aborted){clearV9Grant();return 'rejected';}
+  try{
+   const before=revision,state=await readAndroidSessionState();
+   if(!state?.foreground||authenticatedEpoch!==state.epoch||revision!==before||
+      v9Abort!==controller||controller.signal.aborted)
+    throw Error('V9 session expired');
+   await pending.commit(confirmed);return 'committed';
+  }catch{return 'rejected';}
+  finally{clearV9Grant();}
+ },
+ summary:nativeInstitutionalRestoredSummary
 }});
