@@ -22,7 +22,10 @@ test('actual-restore: sealed prior owner, physically guarded V8 commit and fresh
  await expect(op(page,'confirm')).rejects.toThrow();
  expect(await op(page,'verify')).toBe(true);
  expect(await op(page,'phase')).toBe('completed');
- expect(await op(page,'reopenSummary')).toMatchObject({events:2,historyValid:true,assessmentRevisions:8,grades:['8']});
+ const reopened=await op(page,'reopenSummary');
+ expect(reopened).toMatchObject({events:2,historyValid:true});
+ expect(reopened.assessmentRevisions).toBe(baseline.assessmentRevisions);
+ expect(reopened.grades).toEqual(baseline.grades);
  await op(page,'close');
 });
 test('cancelled: selected-file cancellation leaves DB2 current and grant unused',async({page})=>{
