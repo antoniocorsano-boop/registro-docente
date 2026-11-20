@@ -80,7 +80,11 @@ test('V9 native epoch expires while the physical CAS is blocked: old inventory s
  await op(page,'prepare');
  await op(page,'holdCas');
  await op(page,'startCommit');
- await expect.poll(()=>op(page,'phase')).toBe('committing');
+ // Do not accept a preflight denial as proof of cancellation inside physical
+ // CAS: wait for the actual metadata+records readwrite transaction to exist.
+ await expect.poll(()=>op(page,'casTransactionReached')).toBe(true);
+ expect(await op(page,'phase')).toBe('committing');
+ expect(await op(page,'commitResult')).toBe('pending');
  await op(page,'expireEpoch');
  await op(page,'releaseCas');
  await expect.poll(()=>op(page,'commitResult')).toBe('rejected');

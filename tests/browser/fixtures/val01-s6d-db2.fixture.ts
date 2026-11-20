@@ -589,6 +589,14 @@ const changeInstitutionalEpoch=(next:string)=>{
  for(const listener of [...institutionalEpochListeners])listener();
 };
 let institutionalBlocker:{db:IDBDatabase;released:boolean}|null=null;
+let institutionalCasTransactionEntered=false;
+let institutionalCasOriginalTransaction:typeof IDBDatabase.prototype.transaction|null=null;
+function restoreInstitutionalCasObserver(){
+ if(institutionalCasOriginalTransaction){
+  IDBDatabase.prototype.transaction=institutionalCasOriginalTransaction;
+  institutionalCasOriginalTransaction=null;
+ }
+}
 async function holdInstitutionalCas(){
  if(institutionalBlocker)throw Error('CAS already blocked');
  const db=await new Promise<IDBDatabase>((resolve,reject)=>{
@@ -605,10 +613,25 @@ async function holdInstitutionalCas(){
   req.onsuccess=()=>{if(!blocker.released)keepAlive();};
  };
  keepAlive();
+ // Only the synthetic test wraps the IDB API. Observe the actual CAS
+ // transaction creation while a separate readwrite transaction holds it.
+ institutionalCasTransactionEntered=false;
+ const original=IDBDatabase.prototype.transaction;
+ institutionalCasOriginalTransaction=original;
+ IDBDatabase.prototype.transaction=function(storeNames,mode,options){
+  const actual=original.call(this,storeNames,mode,options);
+  if(this.name==='registro-docente-secure-vault'&&mode==='readwrite'&&
+     Array.isArray(storeNames)&&storeNames.length===2&&
+     storeNames.includes('metadata')&&storeNames.includes('records')&&
+     institutionalBlocker!==null&&!institutionalBlocker.released)
+   institutionalCasTransactionEntered=true;
+  return actual;
+ };
 }
 const releaseInstitutionalCas=()=>{
  if(!institutionalBlocker)throw Error('No active CAS blocker');
  institutionalBlocker.released=true;
+ restoreInstitutionalCasObserver();
 };
 let institutionalCommitResult:'none'|'pending'|'accepted'|'rejected'='none';
 let institutionalDecision:ReturnType<typeof createInstitutionalRecoveryDecision>|null=null;
@@ -623,6 +646,7 @@ async function v9Seed(mode:string){
   throw Error('Unknown institutional scenario');
  institutionalMode=mode;institutionalEpoch='institutional-epoch-1';
  institutionalEpochListeners.clear();institutionalCommitResult='none';
+ restoreInstitutionalCasObserver();institutionalCasTransactionEntered=false;
  await seed();
  const o=requireOwner();
  const current=await o.storage.loadExactBackupSnapshot();
@@ -717,6 +741,7 @@ Object.assign(globalThis,{__doc01D4c3e5Owner:{
  verify:()=>requireInstitutional().verifyAfterReopen(),
  phase:()=>requireInstitutional().phase(),
  holdCas:holdInstitutionalCas,releaseCas:releaseInstitutionalCas,
+ casTransactionReached:()=>institutionalCasTransactionEntered,
  expireEpoch:()=>changeInstitutionalEpoch('institutional-epoch-expired'),
  startCommit:()=>{
   institutionalCommitResult='pending';
