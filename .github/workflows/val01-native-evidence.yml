@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/val01-native-evidence.yml'
       - 'scripts/diagnostics/val01-native-evidence.mjs'
+      - 'scripts/diagnostics/doc01-native-v9-evidence.mjs'
       - 'scripts/diagnostics/native-process-probe*'
       - 'scripts/diagnostics/native-ui-driver*'
       - 'tests/browser/fixtures/val01-s6d-db2.fixture.ts'
