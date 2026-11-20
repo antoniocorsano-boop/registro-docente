@@ -96,6 +96,24 @@ describe('DOC-01/D4c3e3 — institutional documents without V1 demo markers',()=
   await expect(createInstitutionalDocumentRecordV2(cycle)).rejects.toThrow();
   await expect(createInstitutionalDocumentRecordV2({...input(),__proto__:{unsafe:true}})).rejects.toThrow();
  });
+
+ test('revocation cannot be converted into an append, nor evaluate an untrusted accessor',async()=>{
+  const first=await appendInstitutionalDocumentV2(blank(),scope,await record(),null,ids.evt1);
+  if(!first.valid)throw Error('Invalid setup');
+  const next=await createInstitutionalDocumentRecordV2({...input(),revisionId:ids.rev2,
+   revisionNumber:2,previousRevisionId:ids.rev1,revisionReason:'correction',
+   confirmedAt:'2026-11-20T10:00:00.000Z'});
+  const smuggled={kind:'append',record:next};
+  const refused=await revokeInstitutionalDocumentV2(first.archive,scope,smuggled,first.head,ids.evt2);
+  expect(refused.valid).toBe(false);
+  expect((await validateInstitutionalDocumentHistoryV2(first.archive,scope)).valid).toBe(true);
+  let invoked=0;
+  const accessor={documentId:ids.doc,revisionId:ids.rev1,reason:'withdrawn',
+   confirmedAt:'2026-11-20T10:00:00.000Z',confirmedByTeacher:true};
+  Object.defineProperty(accessor,'reason',{enumerable:true,get(){invoked++;return 'withdrawn';}});
+  expect((await revokeInstitutionalDocumentV2(first.archive,scope,accessor,first.head,ids.evt2)).valid).toBe(false);
+  expect(invoked).toBe(0);
+ });
  test('old V1 lab-only histories never implicitly migrate to school-document V2',async()=>{
   const old={schemaVersion:1,labOnly:true,events:[]};
   expect((await validateInstitutionalDocumentHistoryV2(old,scope)).valid).toBe(false);
