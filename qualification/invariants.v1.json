@@ -3197,6 +3197,23 @@
         "src/security/doc01DocumentRecoveryDecision.test.ts",
         "src/security/doc01ControlledActivationBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3E2-I01",
+      "owner": "DOC-01/D4c3e2",
+      "statement": "The V8 teacher recovery driver must be attached exclusively to a genuine authenticated IndexedDB V2 ExistingSessionVaultStore owner with a permanently sealed and drained durable write queue; a native-foreground epoch and exact current 10-record physical metadata bound to independently approved assessment and document scopes are required. The two externally selected encrypted files must pass Android ciphertext SHA256 readback and V8 lossless history projection, with no authority inferred from file contents. Before preparing the physical DB2 grant, retire the previous session handle, lock its key, and remove its App state. The one-use grant is consumed by the explicit teacher decision; no reversal or automatic retry is permitted after a possibly committed write. A completely separate, freshly authenticated new-epoch DB2 owner must read back all ten records and revalidate full document and assessment histories before success is shown; absence or failure is uncertain. Synthetic approved `demo-` document history ONLY; existing DOC-01 schema requires `labOnly:true` and rejects non-demo identities, so no real-document activation is possible in this phase. Production V1 Root and Privacy remain unchanged/unwired, no merge/deploy or student data.",
+      "impactPaths": [
+        "src/security/documentDb2RecoveryOwner.ts",
+        "src/security/doc01Db2RecoveryOwnerBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/doc01-d4c3e2-real-db2-owner.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/doc01Db2RecoveryOwnerBoundary.test.ts",
+        "tests/browser/doc01-d4c3e2-real-db2-owner.spec.cjs"
+      ]
     }
   ]
 }
