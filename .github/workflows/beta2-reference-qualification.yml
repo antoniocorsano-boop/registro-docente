@@ -95,6 +95,7 @@ jobs:
           cp tests/browser/doc01-d1d4b-unified.spec.cjs .nav-context-browser-tools/
           cp tests/browser/doc01-d4c3e1-recovery-review.spec.cjs .nav-context-browser-tools/
           cp tests/browser/doc01-d4c3e2-real-db2-owner.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/doc01-d4c3e3-supervisor-remount.spec.cjs .nav-context-browser-tools/
       - name: Start synthetic Vite app fixture
         shell: bash
         run: |
@@ -154,6 +155,7 @@ jobs:
             doc01-d1d4b-unified.spec.cjs \
             doc01-d4c3e1-recovery-review.spec.cjs \
             doc01-d4c3e2-real-db2-owner.spec.cjs \
+            doc01-d4c3e3-supervisor-remount.spec.cjs \
             --workers=1 --reporter=line \
             --output=../browser-evidence/results
       - name: Verify exact-SHA browser evidence completeness
