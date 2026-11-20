@@ -1,0 +1,130 @@
+name: VAL-01 S6d.2c.2 — Native DB2 evidence laboratory
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/val01-native-evidence.yml'
+      - 'scripts/diagnostics/val01-native-evidence.mjs'
+      - 'scripts/diagnostics/native-process-probe*'
+      - 'scripts/diagnostics/native-ui-driver*'
+      - 'tests/browser/fixtures/val01-s6d-db2.fixture.ts'
+      - 'src/assessment/**'
+      - 'src/security/**'
+      - 'src/persistence/**'
+      - 'mobile/android-probe/**'
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Check exact synthetic driver and bundle
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          node --check scripts/diagnostics/val01-native-evidence.mjs
+          node --test scripts/diagnostics/native-process-probe.test.mjs scripts/diagnostics/native-ui-driver.test.mjs
+          bun install --frozen-lockfile
+          bun run lint
+          bun build mobile/android-probe/val01-native-restore.fixture.ts --target browser --format iife --outfile "$RUNNER_TEMP/fixture.js"
+          test -s "$RUNNER_TEMP/fixture.js"
+  native-evidence:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      VAL01_API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Build exact isolated synthetic fixture
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p dist native-evidence
+          bun install --frozen-lockfile
+          bun build mobile/android-probe/val01-native-restore.fixture.ts --target browser --format iife --outfile dist/fixture.js
+          printf '<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VAL-01 DB2 laboratory</title><body><h1>Laboratorio DB2 sintetico</h1><p id="status">Caricamento</p><script src="fixture.js"></script></body></html>' > dist/index.html
+          printf 'candidate=%s\napi=%s\nscope=synthetic storage only\n' "$CANDIDATE_SHA" "$VAL01_API" > native-evidence/provenance.txt
+          sha256sum dist/fixture.js >> native-evidence/provenance.txt
+      - name: Reuse isolated Capacitor Android shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib, re
+          root=pathlib.Path('android/app')
+          def change(p, pattern, value):
+              f=root/p
+              text,n=re.subn(pattern,value,f.read_text())
+              assert n==1,(p,pattern,n)
+              f.write_text(text)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"','applicationId "it.trama.registrodocente.lab.val01"')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"','android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"','android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          apk="$RUNNER_TEMP/val01-db2-lab.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/val01-db2-lab.cert"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.val01'"
+          unzip -p "$apk" assets/public/fixture.js | cmp - ../../dist/fixture.js
+          sha256sum "$apk" >> ../../native-evidence/provenance.txt
+          printf 'LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+      - name: Enable isolated emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Native DB2 atomic persistence and actual process restart
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/val01-native-evidence.mjs
+      - name: Require complete native evidence
+        run: |
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$VAL01_API" '.candidate==$sha and .api==$api and .package=="it.trama.registrodocente.lab.val01" and .productionRelease==false and ([.results[].stage]==["native-db2-seed","native-atomic-abort","native-abort-cold-reopen","native-evidence-atomic-commit","native-committed-cold-reopen","native-history-cold-reopen","native-v7-inspection-and-v6-refusal","native-v7-saf-write-readback","native-v7-saf-cancellation","native-v7-saf-selected-copies","native-v7-authorized-restore-and-replay-refusal","native-v7-restored-cold-reopen","native-v8-document-seeded","native-v8-saf-write-readback","native-v8-saf-cancellation","native-v8-saf-selected-copies","native-v8-authorized-restore-and-replay-refusal","native-v8-restored-cold-reopen"]) and all(.results[];.status=="PASS") and ([.results[]|select(.forcedStop==true)]|length)==5 and all(.results[]|select(.forcedStop==true);.absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0)' native-evidence/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: val01-native-evidence-api${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
+          path: native-evidence/
+          retention-days: 7
+          if-no-files-found: error
