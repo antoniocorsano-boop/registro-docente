@@ -110,8 +110,8 @@ Object.assign(globalThis,{__val01NativeRestore:{
  * All picker/file APIs are the same qualified Capacitor bridge as V7;
  * distinct names and a distinct grant prevent accidental cross-version reuse.
  */
-const docNames={recovery:'Backup_Cifrato_DOC01_V8_2031-01-15.enc.json',
- target:'Backup_Cifrato_DOC01_V8_2031-01-16.enc.json'};
+const docNames={recovery:'Backup_Cifrato_GDPR_2031-01-17.enc.json',
+ target:'Backup_Cifrato_GDPR_2031-01-18.enc.json'};
 let docCopies:Record<Kind,string>|null=null;
 let docSelected:Partial<Record<Kind,string>>={};
 let docGeneration=0,docBusy=false;
