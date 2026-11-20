@@ -99,6 +99,36 @@ export async function inspectInstitutionalBackupPayloadV9(
    replacementRequiresReview:true};
  }catch{return invalid();}
 }
+/** V9 adds a conservative fence not present in earlier assessment-only
+ * restore: none of the already stored classes, student identities, marks,
+ * behaviour or council records may disappear or be silently rewritten.
+ * New rows are permitted; existing rows must remain byte-for-byte identical.
+ */
+function preservesExistingClassRecords(previous:AppData,candidate:AppData):boolean{
+ if(!Array.isArray(previous.classes)||!Array.isArray(candidate.classes))return false;
+ const observed=new Set<string>();
+ for(const oldClass of previous.classes){
+  if(typeof oldClass.id!=='string'||observed.has(oldClass.id))return false;
+  observed.add(oldClass.id);
+  const matches=candidate.classes.filter(row=>row.id===oldClass.id);
+  if(matches.length!==1)return false;
+  const next=matches[0] as unknown as Row;
+  for(const [field,oldValue] of Object.entries(oldClass)){
+   if(field==='assessmentEvidenceV1')continue; // V7 independently validates it
+   const newValue=next[field];
+   if(Array.isArray(oldValue)){
+    if(!Array.isArray(newValue))return false;
+    const used=new Set<number>();
+    for(const saved of oldValue){
+     const index=newValue.findIndex((item,i)=>!used.has(i)&&sameDb2Physical(saved,item));
+     if(index<0)return false;
+     used.add(index);
+    }
+   }else if(!sameDb2Physical(oldValue,newValue))return false;
+  }
+ }
+ return true;
+}
 /** Pure pre-restore projection. Require an exact recovery copy of the
  * current V9 archive (allowing only device-local backup receipt adjustments).
  * All old V2 events and V7 assessment revisions must survive unchanged.
@@ -128,6 +158,7 @@ export async function projectInstitutionalRestoreV9(
   }};
   if(!sameDb2Physical(restoredCheck.snapshot,exactPrevious.snapshot)&&
      !sameDb2Physical(restoredCheck.snapshot,checkpointAdjusted))return invalid();
+  if(!preservesExistingClassRecords(prior.appData,next.snapshot.appData))return invalid();
   const oldHistory=await historyV2(peelV2(prior).history,docsScope);
   const recoveryHistory=restoredCheck.snapshot.appData.documentHistoryV2;
   const newHistory=next.snapshot.appData.documentHistoryV2;
