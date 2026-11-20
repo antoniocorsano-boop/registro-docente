@@ -1673,6 +1673,7 @@
       "owner": "BETA-1",
       "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced. Historical backups without an archive mode retain the explicit destination mode; confirmed reset permits a fresh empty archive.",
       "impactPaths": [
+        "src/security/legacyMigration.test.ts",
         "src/security/protectedBootstrap.test.ts",
         "src/security/protectedBootstrap.ts",
         "src/security/m1BootstrapAdmission.test.ts",
@@ -1739,6 +1740,7 @@
         "src/security/backupPayload.test.ts"
       ],
       "tests": [
+        "src/security/legacyMigration.test.ts",
         "src/security/protectedBootstrap.test.ts",
         "src/security/m1BootstrapAdmission.test.ts",
         "src/security/secureAppStorage.test.ts",
