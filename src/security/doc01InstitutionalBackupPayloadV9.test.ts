@@ -89,6 +89,24 @@ describe('DOC-01/D4c3e4 — versioned encrypted institutional V9 without V8 down
   await reject(inspect({...p,exportedAt:'not-a-date'},s));
   const loose=copy(p);delete (loose.snapshot.appData as any).documentHistoryV2;await reject(inspect(loose,s));
  });
+ test('V9 refuses demo and unclassified archives on export, inspection and recovery',async()=>{
+  const professional=await snapshot(),good=await create(professional);
+  for(const classification of ['demo','missing'] as const){
+   const other=copy(professional);
+   if(classification==='demo')other.settings.archiveMode='demo';
+   else delete other.settings.archiveMode;
+   const payload=copy(good);
+   payload.snapshot.settings=copy(other.settings);
+   await reject(create(other));
+   await reject(inspect(payload,professional));
+   await reject(inspect(good,other));
+   await reject(project(professional,payload,good));
+   await reject(project(other,good,payload));
+  }
+  const demo=createInitialArchiveSnapshot({mode:'demo'});
+  (demo.appData as typeof demo.appData&{documentHistoryV2:InstitutionalDocumentHistoryV2}).documentHistoryV2=empty();
+  await reject(create(demo));
+ });
  test('legacy V1 and V2 cannot coexist silently in the same V9 archive',async()=>{
   const s=await snapshot();
   (s.appData as any).documentHistoryV1={schemaVersion:1,labOnly:true,events:[]};
