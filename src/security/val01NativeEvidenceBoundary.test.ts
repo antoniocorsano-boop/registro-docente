@@ -19,7 +19,7 @@ describe('VAL-01/S6d.2c.2 — native evidence laboratory wiring',()=>{
   expect(s).toContain("assert.deepEqual(identity(),expectedIdentity)");
   expect(s).toContain("await assert.rejects(call('summary')");
   expect(s).toContain("await call('open')");
-  expect(s.match(/=await forceRestart\(installation\)/g)?.length).toBe(4);
+  expect(s.match(/=await forceRestart\(installation\)/g)?.length).toBe(5);
   expect(s).not.toContain("'pm','clear'");
   expect(s).not.toContain("'uninstall'");
   expect(s).toContain('productionRelease:false');
@@ -46,6 +46,6 @@ describe('VAL-01/S6d.2c.4 — native SAF restore isolation',()=>{
   expect(s).toContain("createHash('sha256').update(bytes)");
   expect(s).toContain("await nativeRestore('commit',true),'rejected'");
   expect(s).toContain('await forceRestart(installation)');
-  expect(w).toContain('length)==4');
+  expect(w).toContain('length)==5');
  });
 });
