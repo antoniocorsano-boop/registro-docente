@@ -152,3 +152,14 @@ Non cancellare le 149 invarianti attuali per ottenere un conteggio favorevole e 
 - **Ancora non completato al checkpoint:** [Browser Qualification 44766401458](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401458), [BETA2 Reference 44766401757](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401757) e qualificazione Android nativa; non sostituire i loro esiti con il GREEN unitario.
 
 **Decisione:** B1 NON dichiarato qualificato finché il browser fisico e le regressioni pertinenti non sono chiuse. Nessun merge/deploy/firma e nessuna attivazione V9; R1/R2/R3 restano aperti. Per riprendere, verificare per primo lo SHA della PR #385 e il risultato dei controlli aperti, quindi correggere solo i finding effettivi sul medesimo ramo prima di procedere con B2.
+
+
+## 11. Prossimo passo fissato — B2 (20 novembre 2026)
+
+Il [Piano esecutivo B2 — migrazioni e revoca](2026-11-20-m1-b2-migrazioni-revoca-piano-esecutivo.md) è ora la **fonte operativa del passo successivo**. Non aprire un nuovo ramo: usare **PR #385 / feat/m1-security-reconciliation**, tuttora in bozza; il piano generale resta nella PR #384.
+
+**B1 Web verificata sul candidato `6fbac1caad903987047a5db05303b503f7fa4239`:** [Browser Qualification 44766401458](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401458) PASS **71/71** e due nuovi scenari Chromium PASS. PREDEPLOY, Qualification Invariants, HEADER, BETA2 Reference/archivio e FLOW-03 PASS.
+
+**Rilievo B1 Android ancora da chiudere:** [VAL-01 Native DB2 44766402430](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766402430) ha 4/5 lavori superati al primo tentativo; API 36 legacy si è arrestata all'interfaccia selettore file dopo le prove atomiche PASS. È stata richiesta la **riesecuzione dello stesso job** senza modificare workflow o codice; nessun esito positivo è attribuito prima del risultato finale.
+
+**Sequenza vincolante:** (1) leggere esito della riesecuzione API 36 legacy; (2) se fallisce, classificare e risolvere su #385 con prove, senza aggirare S-R04b; (3) con B1 qualificato, creare la prima prova B2-R01 RED di revoca dopo staging, poi gli altri 11 scenari del documento B2; (4) passare a GREEN soltanto dopo RED causale. **R1/R2/R3 e decisione di rilascio separata restano condizioni non soddisfatte.**
