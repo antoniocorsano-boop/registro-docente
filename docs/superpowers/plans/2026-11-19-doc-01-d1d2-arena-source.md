@@ -1,0 +1,15 @@
+# DOC-01/D1d2 — Raccordo verificabile con Arena
+19 novembre 2026. Base esatta #350 e4c22650109dc6481f429bc838af5a97671b6bf9, sette procedure positive. Linea di laboratorio separata da VAL-01 #347 e candidato #325.
+
+## Decisione
+Il contratto ARENA_REGISTRO_PLANNING_CONTEXT_V1 consegna ANNUALITA_DISCIPLINARE, testo annuale, sezione sorgente e contesto normativo. Non consegna obiettivi disciplinari o trasversali strutturati, quindi non autorizza il riempimento automatico di quei campi. Il riferimento curricolare è distinto dall'obiettivo di apprendimento. Nessuna estrazione arbitraria né riassunto automatico.
+
+Il modulo arenaDocumentSource riutilizza resolvePlanningFrame (profilo e contesto univoci), resolveCanonicalRegistroClass (identità indipendente di classe), previewArenaPlanningContext e bindAcceptedArenaPlanningContext (validazione e identità dell'accettazione esistente). Verifica istituto, ordine, grado, coorte, disciplina, anno, regime, stato approvato/vigente, ricevuta, provenienza e identità dell'accettazione. Anno della fonte distinto dall'anno del contesto, esplicitamente selezionato, senza promuovere automaticamente il regime transitorio. Selezione volontaria e univoca degli elementi annuali; etichette di grado e ordine corrispondenti al contratto. Nessun roster: soltanto id/nome classe. Nessuna richiesta di rete, accesso a Vault, riscrittura della fonte o generazione documentale.
+
+La revisione restituisce riferimenti interni annuali e segnala obiettivi non disponibili, senza copiare testo, documenti o ricevute. Il contenuto validato è conservato soltanto come base privata di confronto in memoria; isCurrent ricalcola integralmente la base, invalida la revisione anche se il testo cambia a parità dei metadati. Il fingerprint master FNV non è una firma o una garanzia di integrità/autenticità del payload. Il modulo dipende da fonti già accettate dal chiamante; la verifica delle ricevute istituzionali e l'adozione dei modelli restano obbligatorie per uso ufficiale. Il codice non è collegato alla UI né ai flussi operativi.
+
+## Evidenze e perimetro
+Otto scenari contrattuali sintetici predisposti prima dell'implementazione; stub 700ba3c8ed4f9eb598065c832e6b6c001395fbc9, implementazione 6246732bc5996d67b82d92c3dd738f199c951759. Nessuna suite canonica eseguita sullo stub: non dichiarare RED/GREEN. Invariante DOC-01-D1D2-I01, 97 complessive attese. Qualificazione cumulativa sull'esatto candidato necessaria. Nessun merge, pubblicazione, IA, dati reali, export o costo.
+
+## Prossima priorità
+D1d3: ricognizione del consuntivo Registro e raccordo soltanto con attività effettivamente registrate, anno/classe/disciplina verificabili. Se il modello non documenta il contesto richiesto, esporre lacuna anziché inferire svolgimento. Poi convergenza dei riferimenti professionali e mappatura dei modelli istituzionali; D1c resta un'anteprima sintetica, non un documento precompilato da fonti reali. Rivedere la densità verticale e il percorso Consigli prima dell'integrazione. 
