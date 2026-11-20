@@ -62,3 +62,16 @@
 - **Non permesso:** merge, deploy, pubblicazione, modifica dati reali o copia dati dal telefono, firma, modifica dei flussi R2 sospesi, accensione DB2 in produzione.
 - **Sorgente canonica per il prossimo incontro:** questa scheda + [programma M1](2026-11-20-m1-programma-esecutivo-riallineamento.md) + [PR #385](https://github.com/antoniocorsano-boop/registro-docente/pull/385).
 - **Primo risultato da esigere:** B3-1 con le sei prove su SHA esatto e controllo invarianti, senza promuovere l'isolato a funzionalità installata. 
+
+
+## 7. Esito B3-1 — primo candidato, qualifica in corso
+
+**Prima esecuzione effettiva nel ramo tecnico della PR #385:** `feat/m1-security-reconciliation@30bad90795ae7c8ffea8d9c90e84ded2a86552ca` (non integrato, sempre Draft). Sono stati trasferiti **identici per contenuto** gli oggetti dall'exact #325:
+- `src/security/migrationRecoveryHandoff.ts`: blob originario `35e01d358da8ffd106d5ede1e7d23dc24407132a`;
+- `src/security/val01MigrationRecoveryHandoff.test.ts`: blob originario `c5282349205537c620fe1870ae5d031b37c2bcd8`, sei test su selezione locale/Web, Android picker, controllo hash, revoca, cambiamento epoch e consumo monouso.
+
+Entrambi i percorsi sono stati registrati **nell'invariante esistente** `MOBILE-01-M2B-NATIVE-RESTORE-I01`, coerente con la selezione di una copia cifrata da un'autorità Android esistente; il registro conserva **149 invarianti**. Nessuna nuova dipendenza, nessuna nuova procedura Android, nessuna importazione nell'entrypoint applicativo, nessuna modifica a `SecureRegistroRoot`, V8/V9, `db2Lifecycle` o `db2PhysicalLifecycle`.
+
+**Qualifica in corso sul commit esatto**: Qualification Invariants [#44790181507](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181507), PREDEPLOY [#44790181836](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181836), Browser [#44790181460](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181460), Native DB2 [#44790181593](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181593) e le altre quattro qualificazioni automatiche. **Non dichiarare B3-1 PASS finché test e check finali non sono verificati.** La PR #385 rimane Draft e il progetto installato non cambia.
+
+**Ripresa dopo il controllo:** leggere l'esito reale dei sei test originali in CI; se PASS, avviare B3-2 con test di coda/sigillo, revoca, ricontrollo della fonte e autorizzazione all'invocazione del commit; se FAIL, correggere il solo modulo sullo stesso ramo e risottoporre lo SHA aggiornato a verifica. Niente anticipo di B3-4, né assunzione che il laboratorio equivalga al ripristino Android operativo.
