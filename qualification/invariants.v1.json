@@ -3281,6 +3281,22 @@
       "browserSmoke": [
         "tests/browser/doc01-d4c3e5-institutional-v9-db2.spec.cjs"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3E6-I01",
+      "owner": "DOC-01/D4c3e6",
+      "statement": "Android V9 institutional document recoverability must be tested independently from the V7/V8 synthetic archives, on separately installed debug-only Android API 32 and 36 emulator sessions with only fictional data. Existing ciphertext-only Android SAF must write and verify actual V9 encrypted recovery and target copies by readback byte count and SHA256, refuse cancellation and mismatched selection without DB2 writes, require current native authenticated session and one-use explicit physical DB2 grant, reject replay, and conserve prior student grades, assessment evidence and institutional immutable V2 append/revoke sequence. After real PID-observed process stop, a distinct new authenticated JS/DB2 owner must revalidate all ten encrypted records and V2 history, preserve installed identity, reject legacy downgrade and prove physical inventory unchanged after reopening. No V1-to-V2 migration, pm clear, uninstall, production Root/Privacy activation, real user data, signing/release, merge or deployment. Evidence requires exact candidate SHA and independent six-stage native V9 artifact for each API level.",
+      "impactPaths": [
+        "mobile/android-probe/val01-native-restore.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "scripts/diagnostics/doc01-native-v9-evidence.mjs",
+        ".github/workflows/val01-native-evidence.yml",
+        "src/security/doc01NativeV9RecoveryBoundary.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/doc01NativeV9RecoveryBoundary.test.ts"
+      ]
     }
   ]
 }
