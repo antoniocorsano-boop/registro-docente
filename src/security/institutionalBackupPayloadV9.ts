@@ -142,7 +142,7 @@ export async function projectInstitutionalRestoreV9(
   const projected=await projectAssessmentRestoreV7(
    clean,v7form(candidate as Row,newV7),v7form(checkpoint,oldV7),oldScopes,nextScopes
   );
-  return {...projected,appData:{...projected.appData,documentHistoryV2:newHistory}};
+  return {...projected,appData:{...projected.appData,documentHistoryV2:newHistory} as AppData};
  }catch{return invalid();}
 }
 /** Same authenticated AES-GCM v2 envelope as earlier formats. No custom
