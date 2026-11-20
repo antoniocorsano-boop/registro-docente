@@ -24,9 +24,14 @@ describe('DOC-01/D4c3d2 — actual Android SAF V8 recovery boundary',()=>{
  test('native test driver requires actual selected bytes and new encrypted document file names',()=>{
   const f=read('mobile/android-probe/val01-native-restore.fixture.ts');
   const script=read('scripts/diagnostics/val01-native-evidence.mjs');
-  expect(f).toContain('Backup_Cifrato_DOC01_V8_2031-01-15.enc.json');
-  expect(f).toContain('Backup_Cifrato_DOC01_V8_2031-01-16.enc.json');
+  expect(f).toContain('Backup_Cifrato_GDPR_2031-01-17.enc.json');
+  expect(f).toContain('Backup_Cifrato_GDPR_2031-01-18.enc.json');
   expect(script).toContain('__doc01NativeRestore');
+  // The native Java plugin accepts only this strict existing GDPR name;
+  // the encrypted V8 schema is validated after decryption, never by filename.
+  const java=read('mobile/android-probe/native/RegistroBackupFilesPlugin.java');
+  expect(java).toContain('Backup_Cifrato_GDPR_');
+  expect(f).not.toContain('Backup_Cifrato_DOC01_V8_');
   expect(script).toContain("createHash('sha256').update(bytes)");
   expect(script).toContain("assert.deepEqual(await call('physicalDigest'),");
   expect(script).toContain("await docRestore('commit',true),'committed'");
