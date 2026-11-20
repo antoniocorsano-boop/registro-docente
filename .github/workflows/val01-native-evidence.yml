@@ -31,6 +31,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           node --check scripts/diagnostics/val01-native-evidence.mjs
+          node --check scripts/diagnostics/doc01-native-v9-evidence.mjs
           node --test scripts/diagnostics/native-process-probe.test.mjs scripts/diagnostics/native-ui-driver.test.mjs
           bun install --frozen-lockfile
           bun run lint
@@ -45,9 +46,11 @@ jobs:
       max-parallel: 2
       matrix:
         api: [32, 36]
+        mode: [legacy, v9]
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
       VAL01_API: ${{ matrix.api }}
+      VAL01_MODE: ${{ matrix.mode }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -72,7 +75,7 @@ jobs:
           bun install --frozen-lockfile
           bun build mobile/android-probe/val01-native-restore.fixture.ts --target browser --format iife --outfile dist/fixture.js
           printf '<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VAL-01 DB2 laboratory</title><body><h1>Laboratorio DB2 sintetico</h1><p id="status">Caricamento</p><script src="fixture.js"></script></body></html>' > dist/index.html
-          printf 'candidate=%s\napi=%s\nscope=synthetic storage only\n' "$CANDIDATE_SHA" "$VAL01_API" > native-evidence/provenance.txt
+          printf 'candidate=%s\napi=%s\nmode=%s\nscope=synthetic storage only\n' "$CANDIDATE_SHA" "$VAL01_API" "$VAL01_MODE" > native-evidence/provenance.txt
           sha256sum dist/fixture.js >> native-evidence/provenance.txt
       - name: Reuse isolated Capacitor Android shell
         shell: bash
@@ -117,14 +120,19 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: false
-          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/val01-native-evidence.mjs
+          script: |
+            if [ "$VAL01_MODE" = "v9" ]; then
+              timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/doc01-native-v9-evidence.mjs
+            else
+              timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/val01-native-evidence.mjs
+            fi
       - name: Require complete native evidence
         run: |
-          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$VAL01_API" '.candidate==$sha and .api==$api and .package=="it.trama.registrodocente.lab.val01" and .productionRelease==false and ([.results[].stage]==["native-db2-seed","native-atomic-abort","native-abort-cold-reopen","native-evidence-atomic-commit","native-committed-cold-reopen","native-history-cold-reopen","native-v7-inspection-and-v6-refusal","native-v7-saf-write-readback","native-v7-saf-cancellation","native-v7-saf-selected-copies","native-v7-authorized-restore-and-replay-refusal","native-v7-restored-cold-reopen","native-v8-document-history-commit","native-v8-saf-write-readback","native-v8-saf-cancellation","native-v8-saf-selected-copies","native-v8-authorized-restore-and-replay-refusal","native-v8-restored-cold-reopen"]) and all(.results[];.status=="PASS") and ([.results[]|select(.forcedStop==true)]|length)==5 and all(.results[]|select(.forcedStop==true);.absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0)' native-evidence/result.json
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$VAL01_API" --arg mode "$VAL01_MODE" '.candidate==$sha and .api==$api and .package=="it.trama.registrodocente.lab.val01" and .productionRelease==false and (if $mode=="v9" then .mode=="v9" and ([.results[].stage]==["native-v9-institutional-history-seed","native-v9-saf-write-readback","native-v9-saf-cancellation","native-v9-saf-selected-copies","native-v9-authorized-restore-and-replay-refusal","native-v9-authenticated-cold-reopen"]) and all(.results[];.status=="PASS") and ([.results[]|select(.forcedStop==true)]|length)==1 and all(.results[]|select(.forcedStop==true);.absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0) else ([.results[].stage]==["native-db2-seed","native-atomic-abort","native-abort-cold-reopen","native-evidence-atomic-commit","native-committed-cold-reopen","native-history-cold-reopen","native-v7-inspection-and-v6-refusal","native-v7-saf-write-readback","native-v7-saf-cancellation","native-v7-saf-selected-copies","native-v7-authorized-restore-and-replay-refusal","native-v7-restored-cold-reopen","native-v8-document-history-commit","native-v8-saf-write-readback","native-v8-saf-cancellation","native-v8-saf-selected-copies","native-v8-authorized-restore-and-replay-refusal","native-v8-restored-cold-reopen"]) and all(.results[];.status=="PASS") and ([.results[]|select(.forcedStop==true)]|length)==5 and all(.results[]|select(.forcedStop==true);.absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0) end)' native-evidence/result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: val01-native-evidence-api${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
+          name: val01-native-evidence-${{ matrix.mode }}-api${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
           path: native-evidence/
           retention-days: 7
           if-no-files-found: error
