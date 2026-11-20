@@ -38,12 +38,22 @@ describe('DOC-01/D4c3e5 institutional physical recovery',()=>{
   for(const phrase of [
    'await owner.coordinator.sealAndDrain()','await owner.store.retireConnection()',
    'owner.vault.lock()','await captureDb2(','await authority.isCurrent(',
-   'service.prepareInstitutionalRestore(','await service.commit(grant,true)',
+   'service.prepareInstitutionalRestore(','await service.commit(grant,true,stillAuthorized)',
    'freshAuthentication(','fresh.token===originalToken',
    'new ExistingSessionVaultStore(2,','await reopenedStore.verifyAuthenticatedRecords(',
    'await reopenedStorage.loadExactBackupSnapshot()','validateInstitutionalDocumentHistoryV2(',
    'validateAssessmentArchiveV1(','sameDb2Physical(','await reopenedStore.retireConnection()'
   ])expect(code).toContain(phrase);
+  // Epoch revocation must reach the live physical transaction, not merely
+  // change the result displayed after an already completed replacement.
+  expect(code).toContain('subscribeEpochChanges(token,');
+  expect(code).toContain('service.invalidate();');
+  expect(code).toContain('const stillAuthorized=()=>authority.currentToken()===token');
+  const physical=read('src/security/db2PhysicalLifecycle.ts');
+  expect(physical).toContain('if(!active()||!sameDb2Physical(actual,previous))throw db2Failure()');
+  expect(physical).toContain('const active=()=>');
+  expect(read('tests/browser/doc01-d4c3e5-institutional-v9-db2.spec.cjs'))
+   .toContain('old inventory survives unchanged');
   expect(code).not.toContain('projectDocumentRestoreV8(');
   expect(code).not.toContain('documentHistoryV1');
   expect(()=>createInstitutionalDb2RecoveryDriver({} as any)).toThrow();
