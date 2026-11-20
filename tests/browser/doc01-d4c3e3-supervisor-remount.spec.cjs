@@ -16,6 +16,7 @@ test('remount: old App view retires after review, new view continues one-use aut
  await page.getByRole('button',{name:'Conferma recupero'}).click();
  await expect(page.getByText('Non è ancora una conferma di recupero riuscito',{exact:false})).toBeVisible();
  await expect(page.getByRole('button',{name:'Verifica dopo il nuovo accesso'})).toBeVisible();
+ expect(await page.evaluate(()=>window.__doc01Supervisor.phase())).toBe('verification-required');
  expect((await events(page)).filter(x=>x==='commit')).toHaveLength(1);
  await page.getByRole('button',{name:'Disattiva vecchia vista'}).click();
  expect((await events(page)).filter(x=>x==='commit')).toHaveLength(1);
