@@ -115,3 +115,28 @@ Nessun dato personale, firma, copia di sicurezza reale, cancellazione dell'archi
 2. Se compare un fallimento, localizzare il caso nei log e correggere sullo **stesso ramo**; ripetere la qualifica per il nuovo exact SHA. Se la regressione è nativa, distinguere un problema del codice da quello dell'emulatore; non modificare i workflow sospesi S-R04b.
 3. Verificare che i sei RED siano ora GREEN sullo stesso SHA, che il Root chiami effettivamente le funzioni con callback di revoca e che la ripartenza dopo ACTIVE incerto non cancelli mai la fonte. Se necessario, aggiungere **prove di livello Root e Chromium** per revoca durante sessione/reload senza assumere sufficiente il test statico.
 4. **Solo con B2 integralmente PASS**, procedere al pacchetto B3 (handoff cifrato, DB2 e versioni V6–V9), sempre nella medesima PR #385 e senza merge.
+
+
+## 9. Collaudo nel browser reale — 3 casi M1-B2 (20 novembre 2026)
+
+**Candidato:** PR #385, SHA \`e080dca4806155c43485e7b307e0aac648c5b2d7\`. Nessun cambiamento di codice applicativo rispetto a \`cf10a7e896a1c968cf4fb3e09aa4ddeaa8439ce2\`: il commit aggiunge soltanto 3 test Playwright a \`tests/browser/sec-session-01-suspension.spec.cjs\`. Ambiente browser isolato e dati scolastici fittizi; nessun archivio o dispositivo del docente.
+
+### Prove effettivamente implementate
+
+| Caso | Punto esatto d'iniezione | Verifiche previste |
+|---|---|---|
+| **A: pre-ACTIVE migrazione** | \`oncomplete\` della prima transazione \`records\` cifrata | Evento nativo di sospensione/ritorno prima del callback, niente ACTIVE, fonte legacy identica, metadati e record STAGING rimossi, nuovo tentativo con autorizzazione esplicita riuscito |
+| **B: post-ACTIVE migrazione** | \`oncomplete\` della transazione \`metadata\` che scrive \`state: ACTIVE\` | Sessione revocata dopo vero commit, schermata di blocco, \`ACTIVE\` fisico e record conservati, fonte legacy non cancellata, nuova autenticazione con verifica prima della pulizia, sblocco successivo stabile |
+| **C: prima configurazione demo** | \`oncomplete\` della transazione \`records\` del primo archivio dimostrativo | Nessuna apertura indebita, STAGING effettivamente rimosso, nessuna falsa marcatura di archivio, secondo tentativo esplicito riuscito con 10 record ACTIVE |
+
+**Metodologia:** non si manipolano record cifrati per simulare il risultato; si intercetta esclusivamente il callback di conclusione della transazione reale \`IDBObjectStore.put\` e si notifica la revisione di sessione Android sintetica \`registro-session-change\`, rispettando l'effettivo flusso di \`SecureRegistroRoot\`. Gli assert rileggono i metadati/record da IndexedDB, controllano i byte sorgente \`localStorage\`, lo stato delle schermate e la capacità di ripetere l'operazione. Le prove ripristinano il proprio ambiente al nuovo browser isolato; nessun dato reale.
+
+### Qualificazione riferita esattamente allo SHA
+
+- [Browser Qualification #44784661473](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661473): **fase SEC-SESSION-01 manual lock and suspension regressions PASS**, comprende i 3 nuovi casi nella suite modificata; al checkpoint il resto della qualificazione generale è ancora in esecuzione.
+- [Qualification Invariants #44784661385](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661385): PASS, tutte le 149 invarianti mantenute.
+- [PREDEPLOY Security #44784661562](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661562): PASS.
+- [HEADER #44784661392](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661392), [BETA2-UPDATE #44784661360](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661360), [FLOW-03 #44784661355](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661355): PASS.
+- [Native DB2 #44784661584](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661584) e [BETA2 Reference #44784661307](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44784661307): non ancora qualificate al checkpoint.
+
+**Vincolo:** non dichiarare ancora B2 integralmente PASS finché tutti gli 8 controlli associati a \`e080dca...\` non sono terminati positivamente e finché non è stata confermata nei log la singola esecuzione dei casi A/B/C. Non modificare \`main\`, non integrare/firmare/distribuire, R1/R2/R3 invariati. Solo allora dichiarare il collaudo browser M1-B2 completato.
