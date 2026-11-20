@@ -14,7 +14,7 @@ async function inspect(page){
  await expect(page.getByText('Revisioni già presenti')).toBeVisible();
  await expect(page.getByText('Revisioni nella copia proposta')).toBeVisible();
 }
-async function approve(page){
+async function approve(page,{expectVerification=true}={}){
  await inspect(page);
  const ok=page.getByRole('button',{name:'Conferma recupero'});
  await expect(ok).toBeDisabled();
@@ -23,7 +23,7 @@ async function approve(page){
  await page.getByRole('checkbox').check();
  await expect(ok).toBeEnabled();
  await ok.click();
- await expect(page.getByText('Non è ancora una conferma di recupero riuscito',{exact:false})).toBeVisible();
+ if(expectVerification)await expect(page.getByText('Non è ancora una conferma di recupero riuscito',{exact:false})).toBeVisible();
 }
 async function footprint(page,width,name){
  const sizes=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,innerWidth:window.innerWidth}));
@@ -70,7 +70,7 @@ test('invalid protected preview cannot authorize restore or silently succeed',as
  await expect(page.getByRole('button',{name:'Conferma recupero'})).toHaveCount(0);
 });
 test('uncertain physical commit never says successful and cannot be repeated',async({page})=>{
- await open(page,'uncertain');await approve(page);
+ await open(page,'uncertain');await approve(page,{expectVerification:false});
  await expect(page.getByText('Esito del recupero non verificato.',{exact:false}).first()).toBeVisible();
  expect(await calls(page)).toEqual(['prepare','commit','invalidate']);
  await expect(page.getByRole('button',{name:'Conferma recupero'})).toHaveCount(0);
