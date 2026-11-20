@@ -17,7 +17,7 @@ describe('DOC-01/D4c3d2 — Android SAF V8 encrypted history restoration',()=>{
   expect(s).toContain('encryptDataWithPassword(target,copyPassword)');
   expect(s).toContain('service.prepareDocumentRestore(');
   expect(s).toContain("operation:'restore-document'");
-  expect(s).toContain('controller.signal.aborted');
+  expect(s).toContain('if(signal.aborted)');
  });
  test('V8 uses the real existing Android SAF picker, strict byte readback and foreground authorization',()=>{
   const s=read('mobile/android-probe/val01-native-restore.fixture.ts');
