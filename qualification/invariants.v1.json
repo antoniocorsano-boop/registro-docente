@@ -3160,6 +3160,23 @@
       "tests": [
         "src/security/doc01Db2DocumentRestoreBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3D2-I01",
+      "owner": "DOC-01/D4c3d2",
+      "statement": "Synthetic Android-only V8 documentary restore reuses the existing qualified native SAF picker and real encrypted file writer/readback. Two distinct V8 AES-GCM copies are persisted to and selected from the Android filesystem, with real byte length and SHA-256 verified against independently chosen bytes before any restore preparation. Existing authenticated DB2 owner commits the original DOC-01 event, derives and validates the immutable revocation target plus full V7 assessment archive, seals and retires before physical replacement. Exact approved scopes, foreground epoch and one-use explicit confirmation gate V8 DB2 preparation and commit; file cancellation, lifecycle revocation, wrong file or stale grants cannot write. Physical ciphertext readback and fifth forced process restart must preserve append/revoke event chain, assessments and grades. Tests run on API32 and API36 isolated synthetic debug APK without a production entrypoint. This is not release approval, real-user restore, signature or hardware anti-rollback.",
+      "impactPaths": [
+        "src/security/doc01NativeV8RecoveryBoundary.test.ts",
+        "src/security/val01NativeEvidenceBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "mobile/android-probe/val01-native-restore.fixture.ts",
+        "scripts/diagnostics/val01-native-evidence.mjs",
+        ".github/workflows/val01-native-evidence.yml"
+      ],
+      "tests": [
+        "src/security/doc01NativeV8RecoveryBoundary.test.ts",
+        "src/security/val01NativeEvidenceBoundary.test.ts"
+      ]
     }
   ]
 }
