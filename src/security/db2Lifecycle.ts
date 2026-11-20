@@ -8,6 +8,7 @@ import {decryptDataWithPassword,BACKUP_VERSION_V2} from '../cryptoUtils';
 import {inspectAssessmentBackupPayload} from './assessmentBackupPayload';
 import {projectAssessmentRestoreV7} from './assessmentRestorePolicy';
 import {projectDocumentRestoreV8} from './documentBackupPayloadV8';
+import {projectInstitutionalRestoreV9} from './institutionalBackupPayloadV9';
 import {detachHistoricalDocumentData} from '../documents/documentHistoricalValidation';
 import {snapshotAssessmentData} from '../assessment/assessmentRevisionBindings';
 import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
@@ -18,7 +19,7 @@ import {withoutLocalBackupVerification} from '../persistence/backupCheckpoint';
 import type {CompleteSecureAppSnapshot} from './secureAppStorage';
 import type {VaultMetadataV1} from './vaultTypes';
 const KEYS=['appData','settings','udas','customTests','submissions','planning','library','professionalMemory','copilotState','meta'] as const;
-type Operation='restore'|'erase'|'setup'|'restore-assessment'|'restore-document';
+type Operation='restore'|'erase'|'setup'|'restore-assessment'|'restore-document'|'restore-institutional';
 type Grant=Readonly<{operation:Operation}>;
 type Active=Extract<Db2Inventory,{state:'active'}>;
 type Intent={operation:'restore';password:string;file:Blob;backupPassword:string}
@@ -31,6 +32,13 @@ export type DocumentRestoreIntent={readonly operation:'restore-document';readonl
  readonly file:Blob;readonly backupPassword:string;readonly recoveryFile:Blob;readonly recoveryPassword:string;
  readonly currentAssessmentScopes:readonly unknown[];readonly incomingAssessmentScopes:readonly unknown[];
  readonly documentScopes:readonly unknown[]};
+/** DOC-01/D4c3e5 — independent institutional V9 recovery authority.
+ * This never authorizes the V8 laboratory history or an implicit V1 migration.
+ */
+export type InstitutionalRestoreIntent={readonly operation:'restore-institutional';readonly password:string;
+ readonly file:Blob;readonly backupPassword:string;readonly recoveryFile:Blob;readonly recoveryPassword:string;
+ readonly currentAssessmentScopes:readonly unknown[];readonly incomingAssessmentScopes:readonly unknown[];
+ readonly institutionalScope:unknown};
 const own=(x:object,k:string)=>Object.prototype.hasOwnProperty.call(x,k);
 function exact(value:unknown,keys:readonly string[]):boolean{
   return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(k=>own(value,k));
@@ -167,6 +175,41 @@ export function createDb2Lifecycle(factory:IDBFactory=globalThis.indexedDB){
         const next=await buildActive(projected,password);
         if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
         const grant=Object.freeze({operation:'restore-document' as const});
+        pending={grant,previous,next,controller:attempt};
+        return grant;
+      }catch{if(controller===attempt)invalidate();throw db2Failure();}
+    },
+    /** DOC-01/D4c3e5 — isolated V9 DB2 compare-and-swap.
+     * Both encrypted copies are independently authenticated and validated
+     * against externally approved school and assessment scopes. The exact
+     * pre-restore recovery copy is mandatory. Never connect to the V1 App.
+     */
+    async prepareInstitutionalRestore(intent:InstitutionalRestoreIntent,expectedOwner:VaultMetadataV1):Promise<Grant>{
+      invalidate();
+      const attempt=new AbortController();controller=attempt;
+      try{
+        if(!expectedOwner||intent.operation!=='restore-institutional')throw db2Failure();
+        const owner=structuredClone(expectedOwner);
+        const {password,file,backupPassword,recoveryFile,recoveryPassword}=intent;
+        const currentScopes=snapshotAssessmentData(intent.currentAssessmentScopes) as readonly ApprovedAssessmentScope[];
+        const incomingScopes=snapshotAssessmentData(intent.incomingAssessmentScopes) as readonly ApprovedAssessmentScope[];
+        // The institutional scope is approved outside both encrypted files.
+        // Detached copying rejects getters, aliases and incompatible objects.
+        const institutionalScope=detachHistoricalDocumentData(intent.institutionalScope);
+        const previous=await captureDb2(factory,attempt.signal);
+        if(previous.state!=='active'||!sameDb2Physical(previous.metadata,owner))throw db2Failure();
+        const current=await authenticate(previous,password);
+        const [incoming,recovery]=await Promise.all([
+          readEncryptedAssessmentCopy(file,backupPassword),
+          readEncryptedAssessmentCopy(recoveryFile,recoveryPassword)
+        ]);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const projected=await projectInstitutionalRestoreV9(current,incoming,recovery,
+          currentScopes,incomingScopes,institutionalScope);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const next=await buildActive(projected,password);
+        if(attempt.signal.aborted||controller!==attempt)throw db2Failure();
+        const grant=Object.freeze({operation:'restore-institutional' as const});
         pending={grant,previous,next,controller:attempt};
         return grant;
       }catch{if(controller===attempt)invalidate();throw db2Failure();}
