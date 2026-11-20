@@ -64,6 +64,12 @@ async function snapshot(hist?:DocumentHistoryV1):Promise<CompleteSecureAppSnapsh
  (s.appData as typeof s.appData&{documentHistoryV1:DocumentHistoryV1}).documentHistoryV1=hist??(await documentHistory()).initial;
  return s;
 }
+function withExistingGrade(source:CompleteSecureAppSnapshot):CompleteSecureAppSnapshot{
+ const snapshot=copy(source);
+ snapshot.appData.classes[0].grades=[{id:'g1',batchId:'batch-demo',studentId:'s1',date:'2026-11-16',
+  type:'disegno',period:'Q1',title:'Schema sintetico',value:'8'}];
+ return snapshot;
+}
 const generate=(s:unknown)=>createDocumentBackupPayloadV8(s,[assessmentScope],[scope],at);
 const inspect=(p:unknown,current:CompleteSecureAppSnapshot)=>inspectDocumentBackupPayloadV8(p,current,[assessmentScope],[scope]);
 const project=(current:CompleteSecureAppSnapshot,incoming:unknown,recovery:unknown)=>projectDocumentRestoreV8(current,incoming,recovery,[assessmentScope],[assessmentScope],[scope]);
@@ -143,6 +149,23 @@ describe('DOC-01/D4c3c2 — v8 append-only document history backup and recovery'
  test('recovery refuses a stale or unrelated recovery copy even if incoming is valid',async()=>{
   const h=await documentHistory(),current=await snapshot(h.updated),incoming=await generate(current);
   await reject(project(current,incoming,await generate(await snapshot(h.initial))));
+ });
+ test('recovery rejects deletion of existing grades while assessment and document histories are unchanged',async()=>{
+  const current=withExistingGrade(await snapshot()),incoming=copy(current);
+  incoming.appData.classes[0].grades=[];
+  await reject(project(current,await generate(incoming),await generate(current)));
+ });
+ test('recovery rejects rewritten grade values under the same grade identity',async()=>{
+  const current=withExistingGrade(await snapshot()),incoming=copy(current);
+  incoming.appData.classes[0].grades[0].value='6';
+  await reject(project(current,await generate(incoming),await generate(current)));
+ });
+ test('recovery retains identical existing grades and permits new grade records',async()=>{
+  const current=withExistingGrade(await snapshot()),incoming=copy(current);
+  incoming.appData.classes[0].grades.push({...incoming.appData.classes[0].grades[0],id:'g2',date:'2026-11-19',value:'9'});
+  const result=await project(current,await generate(incoming),await generate(current));
+  expect(result.appData.classes[0].grades).toEqual(incoming.appData.classes[0].grades);
+  expect(current.appData.classes[0].grades[0].value).toBe('8');
  });
  test('recovery refuses loss of previously confirmed assessment graph',async()=>{
   const s=await snapshot(),weaker=copy(s);
