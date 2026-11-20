@@ -479,7 +479,8 @@ export async function nativePrepareSelectedDocumentRestore(recovery:Blob,target:
  }catch(e){invalidate();signal.removeEventListener('abort',invalidate);throw e;}
 }
 
-export async function nativeDocumentRestoredSummary(){
+export function nativeDocumentRestoredSummary(){return inspectNativeDocumentRestoredSummary();}
+async function inspectNativeDocumentRestoredSummary(){
  const o=requireOwner();
  const history=(o.state.appData as AppData&{documentHistoryV1?:unknown}).documentHistoryV1;
  const inspected=await validateDocumentHistory(history,[docScope]);
