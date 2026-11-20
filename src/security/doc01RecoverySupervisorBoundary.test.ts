@@ -57,7 +57,7 @@ describe('DOC-01/D4c3e3 — recovery supervisor independent of retiring React Ap
  test('the injected component must outlive its old App, without cancelling on unmount',()=>{
   const ui=readFileSync('src/components/documents/DocumentRecoveryReview.tsx','utf8');
   const root=readFileSync('src/components/SecureRegistroRoot.tsx','utf8');
-  expect(ui).toContain('decision?:DocumentRecoveryDecision');
+  expect(ui).toContain('decision:DocumentRecoveryDecision;workflow?:never');
   expect(ui).toContain('!decision &&');
   expect(ui).toContain('controllerRef.current?.phase()');
   expect(root).not.toContain('createDocumentRecoverySupervisor(');
