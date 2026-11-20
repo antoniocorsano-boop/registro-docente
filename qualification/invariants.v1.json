@@ -3177,6 +3177,26 @@
         "src/security/doc01NativeV8RecoveryBoundary.test.ts",
         "src/security/val01NativeEvidenceBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3E1-I01",
+      "owner": "DOC-01/D4c3e1",
+      "statement": "A separate, opt-in document V8 recovery review surface must never route the V8 archive through the legacy V6 import or enable restoration in the teacher's production App by default. A teacher can inspect only a non-sensitive summary after owner-supplied verification, must type a deliberate confirmation and approve a one-use grant before any DB2 commit, may cancel without writes, and cannot replay or silently roll back a physically committed attempt. An uncertain postcommit outcome must be described as uncertain, not as success or unchanged. A successful physical commit requires fresh authenticated cold reopen verification before final success. The 320/390 pixel browser contract uses synthetic injected drivers, not production data. No merge, deployment, real data restore or feature activation.",
+      "impactPaths": [
+        "src/security/documentRecoveryDecision.ts",
+        "src/security/doc01DocumentRecoveryDecision.test.ts",
+        "src/security/doc01ControlledActivationBoundary.test.ts",
+        "src/components/documents/DocumentRecoveryReview.tsx",
+        "src/components/PrivacyView.tsx",
+        "tests/browser/fixtures/doc01-d4c3e1-fixture.tsx",
+        "tests/browser/fixtures/doc01-d4c3e1.html",
+        "tests/browser/doc01-d4c3e1-recovery-review.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml"
+      ],
+      "tests": [
+        "src/security/doc01DocumentRecoveryDecision.test.ts",
+        "src/security/doc01ControlledActivationBoundary.test.ts"
+      ]
     }
   ]
 }
