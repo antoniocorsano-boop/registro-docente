@@ -78,6 +78,9 @@ export const SecureRegistroRoot: React.FC = () => {
   const lifecycleRevisionRef = useRef(0);
   const [nativeState, setNativeState] = useState<AndroidSessionState | null>(null);
   const bootstrapGenerationRef = useRef(0);
+  // A transient, strictly local admission generation; never persisted.
+  const archiveAuthorityRevisionRef = useRef(0);
+  const archiveOperationPendingRef = useRef(false);
   const bootstrapRef = useRef<ReturnType<typeof createProtectedBootstrap> | null>(null);
   const establishedArchive = useCallback(() =>
     window.localStorage.getItem(ESTABLISHED_ARCHIVE_KEY) === '1' ||
@@ -161,11 +164,29 @@ export const SecureRegistroRoot: React.FC = () => {
     void inspectBootstrap();
     return () => {
       bootstrapGenerationRef.current++;
+      archiveAuthorityRevisionRef.current++;
       bootstrapRef.current?.cancel();
     };
   }, [inspectBootstrap]);
 
+  useEffect(() => {
+    // Leaving the page permanently revokes every in-flight archive mutation.
+    const onVisibility = () => {
+      if (document.hidden) archiveAuthorityRevisionRef.current++;
+    };
+    const onPageHide = () => { archiveAuthorityRevisionRef.current++; };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      archiveAuthorityRevisionRef.current++;
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, []);
+
   const revokeNativeAuthorization = useCallback(() => {
+    // Also revoke pending Web/Android setup and migration authorization.
+    archiveAuthorityRevisionRef.current++;
     const epoch = authenticatedEpochRef.current;
     authenticatedEpochRef.current = null;
     if (epoch !== null && isAndroidSessionRuntime()) {
@@ -304,6 +325,37 @@ export const SecureRegistroRoot: React.FC = () => {
     return { epoch: native.epoch, revision: lifecycleRevisionRef.current };
   }, [syncNativeSession]);
 
+  // A single owner for setup, authenticated residual cleanup and migration.
+  // The admission lease is checked inside every asynchronous vault boundary.
+  const beginArchiveOperation = useCallback(async () => {
+    if (archiveOperationPendingRef.current) {
+      throw new Error('Un’altra operazione sull’archivio è ancora in corso.');
+    }
+    archiveOperationPendingRef.current = true;
+    const authorityRevision = archiveAuthorityRevisionRef.current;
+    try {
+      const attempt = await getForegroundEpoch();
+      const assertAuthorized = () => {
+        if (archiveAuthorityRevisionRef.current !== authorityRevision ||
+            closingRef.current || suspendedRef.current !== null || document.hidden ||
+            lifecycleRevisionRef.current !== attempt.revision ||
+            (attempt.epoch !== null && (
+              !nativeStateRef.current?.foreground ||
+              nativeStateRef.current.epoch !== attempt.epoch))) {
+          throw new Error('Autorizzazione archivio revocata o sessione cambiata.');
+        }
+      };
+      assertAuthorized();
+      return {
+        attempt, assertAuthorized,
+        end: () => { archiveOperationPendingRef.current = false; }
+      };
+    } catch (error) {
+      archiveOperationPendingRef.current = false;
+      throw error;
+    }
+  }, [getForegroundEpoch]);
+
   // Only the synchronous commit callback may consume the admission lease or
   // reveal the App. No await between the last validation and that commit.
   const confirmForegroundEpoch = useCallback(async (
@@ -377,7 +429,9 @@ export const SecureRegistroRoot: React.FC = () => {
     });
   }, [syncNativeSession]);
 
-  const loadReadySnapshot = useCallback(async (attempt: { epoch: number | null; revision: number }) => {
+  const loadReadySnapshot = useCallback(async (
+    attempt: { epoch: number | null; revision: number }, assertAuthorized?: () => void
+  ) => {
     const { storage } = getRuntime();
     let physicallyComplete = false;
     const nextSnapshot = await storage.loadSnapshot(value => { physicallyComplete = value; });
@@ -416,6 +470,7 @@ export const SecureRegistroRoot: React.FC = () => {
     }
 
     await confirmForegroundEpoch(attempt, () => {
+      assertAuthorized?.();
       window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY, '1');
       if (physicallyComplete) window.localStorage.setItem(COMPLETE_ARCHIVE_KEY, '1');
       setSnapshot(nextSnapshot);
@@ -424,64 +479,73 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [getRuntime, confirmForegroundEpoch]);
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
-    const attempt = await getForegroundEpoch();
-    if (establishedArchive()) throw new Error('Archivio già stabilito: non è ammessa una nuova configurazione.');
-    const inspected = await protectedBootstrap().run();
-    if (inspected.kind !== 'ok' ||
-        (inspected.observation.kind !== 'absent' && inspected.observation.kind !== 'empty') ||
-        establishedArchive()) {
-      await inspectBootstrap();
-      throw new Error('Stato dell’archivio cambiato o non verificabile. Nessuna configurazione eseguita.');
-    }
-    const fresh = await getForegroundEpoch();
-    if (attempt.revision !== fresh.revision || attempt.epoch !== fresh.epoch || document.hidden) {
-      throw new Error('Sessione cambiata. Ripeti la configurazione in primo piano.');
-    }
-    const { vault, store } = getRuntime();
-    if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
-      throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
-    }
-    await initializeNewArchive(vault, password, setup);
+    const operation = await beginArchiveOperation();
+    const { attempt, assertAuthorized } = operation;
     try {
-      await loadReadySnapshot(attempt);
+      if (establishedArchive()) throw new Error('Archivio già stabilito: non è ammessa una nuova configurazione.');
+      const inspected = await protectedBootstrap().run();
+      assertAuthorized();
+      if (inspected.kind !== 'ok' ||
+          (inspected.observation.kind !== 'absent' && inspected.observation.kind !== 'empty') ||
+          establishedArchive()) {
+        await inspectBootstrap();
+        throw new Error('Stato dell’archivio cambiato o non verificabile. Nessuna configurazione eseguita.');
+      }
+      const { vault, store } = getRuntime();
+      if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
+        throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+      }
+      assertAuthorized();
+      await initializeNewArchive(vault, password, setup, assertAuthorized);
+      await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
-      vault.lock();
-      setGateState('LOCKED');
+      // ACTIVE may already be committed: inspect, do not claim a rollback.
+      vaultRef.current?.lock();
+      await inspectBootstrap();
       throw error;
+    } finally {
+      operation.end();
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, establishedArchive, protectedBootstrap, inspectBootstrap]);
+  }, [beginArchiveOperation, getRuntime, loadReadySnapshot, establishedArchive, protectedBootstrap, inspectBootstrap]);
 
   const handleUnlock = useCallback(async (password: string) => {
-    const attempt = await getForegroundEpoch();
-    const { vault } = getRuntime();
-    await vault.unlock(password);
+    const operation = await beginArchiveOperation();
+    const { attempt, assertAuthorized } = operation;
     try {
-      await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
-      await loadReadySnapshot(attempt);
+      const { vault } = getRuntime();
+      await vault.unlock(password);
+      assertAuthorized();
+      await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault, assertAuthorized);
+      await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
-      vault.lock();
+      vaultRef.current?.lock();
       throw error;
+    } finally {
+      operation.end();
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [beginArchiveOperation, getRuntime, loadReadySnapshot]);
 
   const handleMigrate = useCallback(async (password: string) => {
-    const attempt = await getForegroundEpoch();
+    const operation = await beginArchiveOperation();
+    const { attempt, assertAuthorized } = operation;
     const { vault } = getRuntime();
     setGateState('MIGRATING');
     try {
-      await migrateLegacyToVault(window.localStorage, vault, password);
-      await loadReadySnapshot(attempt);
+      assertAuthorized();
+      await migrateLegacyToVault(window.localStorage, vault, password, assertAuthorized);
+      await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
-      // Activation may already have committed before foreground authorization
-      // failed. Always revoke the in-memory key and inspect durable state;
-      // never ask to migrate an ACTIVE archive again.
+      // ACTIVE may already be committed. Always re-inspect; never assume
+      // cancellation means that an on-disk write was rolled back.
       vault.lock();
       authenticatedEpochRef.current = null;
       setSnapshot(null);
       await inspectBootstrap();
       throw error;
+    } finally {
+      operation.end();
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap]);
+  }, [beginArchiveOperation, getRuntime, loadReadySnapshot, inspectBootstrap]);
 
   const handleRetry = useCallback(() => {
     // Retry only inspects: never silently discard STAGING or residual data.
@@ -489,6 +553,10 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [inspectBootstrap]);
 
   const handleFactoryReset = useCallback(async () => {
+    archiveAuthorityRevisionRef.current++;
+    if (archiveOperationPendingRef.current) {
+      throw new Error('Operazione sull’archivio in corso: impossibile cancellare ora.');
+    }
     const { vault } = getRuntime();
     await vault.clearAll();
     for (const legacyKey of LEGACY_DATA_KEYS) {
