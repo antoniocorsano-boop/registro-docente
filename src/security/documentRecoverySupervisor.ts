@@ -6,6 +6,32 @@ export interface DocumentRecoverySupervisor {
  detachOldView():void;
  dispose():void;
 }
-export function createDocumentRecoverySupervisor(_driver:DocumentRecoveryDriver):DocumentRecoverySupervisor{
- throw Error('DOC01_D4C3E3_SUPERVISOR_NOT_IMPLEMENTED');
+/** Creates the decision before the old React App is mounted. The supervisor
+ * stays in a separate shell and never treats a view's unmount as consent revocation.
+ * No persistence across browser process death is claimed here.
+ */
+export function createDocumentRecoverySupervisor(driver:DocumentRecoveryDriver):DocumentRecoverySupervisor{
+ if(!driver||typeof driver.prepare!=='function'||typeof driver.commit!=='function'||
+    typeof driver.invalidate!=='function'||typeof driver.verifyAfterReopen!=='function')
+    throw Error('Supervisore del recupero non verificabile.');
+ const decision=createDocumentRecoveryDecision(driver);
+ let detached=false,disposed=false;
+ return {
+  decision,
+  isDetached:()=>detached,
+  detachOldView(){
+   if(disposed)throw Error('Supervisore già terminato.');
+   detached=true;
+   // The DB2 owner, not this UI, handles the physical lock and epoch.
+   // Never cancel a grant merely because React destroyed the old view.
+  },
+  dispose(){
+   if(disposed)return;
+   const phase=decision.phase();
+   if(!['idle','preparing','prepared','cancelled','completed','uncertain'].includes(phase))
+    throw Error('Il recupero deve essere verificato prima della chiusura.');
+   if(['idle','preparing','prepared'].includes(phase))decision.cancel();
+   disposed=true;detached=true;
+  }
+ };
 }
