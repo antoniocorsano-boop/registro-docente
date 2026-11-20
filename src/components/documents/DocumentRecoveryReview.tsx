@@ -6,11 +6,14 @@ import {createDocumentRecoveryDecision,type DocumentRecoveryDecision,type Docume
  * The privileged DB2 owner must supply the workflow. This component neither
  * opens native files nor decrypts, authorizes or writes a user archive.
  */
-export function DocumentRecoveryReview({workflow}:{workflow:DocumentRecoveryDriver}){
+type RecoveryReviewProps=
+ |{workflow:DocumentRecoveryDriver;decision?:never}
+ |{decision:DocumentRecoveryDecision;workflow?:never};
+export function DocumentRecoveryReview({workflow,decision}:RecoveryReviewProps){
  const controllerRef=useRef<DocumentRecoveryDecision|null>(null);
- if(controllerRef.current===null)controllerRef.current=createDocumentRecoveryDecision(workflow);
- const [phase,setPhase]=useState<DocumentRecoveryPhase>('idle');
- const [summary,setSummary]=useState<Review|null>(null);
+ if(controllerRef.current===null)controllerRef.current=decision??createDocumentRecoveryDecision(workflow!);
+ const [phase,setPhase]=useState<DocumentRecoveryPhase>(()=>controllerRef.current?.phase()??'idle');
+ const [summary,setSummary]=useState<Review|null>(()=>controllerRef.current?.review()??null);
  const [acknowledged,setAcknowledged]=useState(false);
  const [phrase,setPhrase]=useState('');
  const [message,setMessage]=useState('');
@@ -22,11 +25,11 @@ export function DocumentRecoveryReview({workflow}:{workflow:DocumentRecoveryDriv
   return ()=>{
    mounted.current=false;
    const controller=controllerRef.current;
-   if(controller&&['idle','preparing','prepared'].includes(controller.phase())){
+   if(!decision && controller&&['idle','preparing','prepared'].includes(controller.phase())){
     try{controller.cancel();}catch{/* a completed commit is not undone */}
    }
   };
- },[]);
+ },[decision]);
  const update=(next:DocumentRecoveryPhase,msg='')=>{
   if(!mounted.current)return;
   setPhase(next);setMessage(msg);
