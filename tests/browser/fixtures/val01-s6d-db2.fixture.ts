@@ -414,17 +414,96 @@ async function restoreDocument(mode:'approve'|'old'|'bad-recovery'|'wrong-scope'
 }
 Object.assign(globalThis,{__doc01Db2Restore:{seed:seedDocument,restore:restoreDocument,summary:docSummary,close,open,physicalDigest}});
 
-// DOC-01/D4c3d2 — native SAF recovery entrypoint reserved for RED.
-// The V8 physical DB2 service exists (D4c3d1); only real Android-selected
-// encrypted bytes will be permitted to reach it after the GREEN phase.
+// DOC-01/D4c3d2 — isolated Android SAF V8 adapter. Retain the existing
+// authenticated DB2 owner and native Android bridge; never activate on Root.
 export async function nativeDocumentCopies():Promise<{recovery:string;target:string}>{
- throw Error('DOC01_D4C3D2_NOT_IMPLEMENTED');
+ const o=requireOwner();
+ const record=await docRecord();
+ // Record the original teacher-confirmed synthetic event in the real Vault,
+ // with atomic appData/meta save and physical encrypted readback.
+ const receipt=await commitDocumentHistoryOperation({
+  coordinator:o.coordinator,storage:o.storage,
+  isActive:()=>owner===o&&o.vault.isUnlocked(),
+  getCommitted:()=>({appData:o.state.appData,meta:o.state.meta}),
+  publish:next=>{o.state={...o.state,...next};},
+  invalidate:()=>{o.vault.lock();}
+ },[docScope],{mode:'SYNTHETIC_ONLY',eventId:'demo-event-one',
+  expectedHead:null,operation:{kind:'append',record}});
+ if(!receipt.changed||receipt.verified!==true)throw Error('Synthetic DOC-01 event was not committed');
+
+ // Exact source is read from encrypted DB2 after commit, not from a preview.
+ return o.coordinator.enqueueTask(async()=>{
+  if(owner!==o||!o.vault.isUnlocked())throw Error('Synthetic owner expired');
+  const current=await o.storage.loadExactBackupSnapshot();
+  if(!current)throw Error('Incomplete encrypted V8 source');
+  const history=(current.appData as AppData&{documentHistoryV1?:any}).documentHistoryV1;
+  const original=await validateDocumentHistory(history,[docScope]);
+  if(!original.valid||original.archive.events.length!==1||original.archive.events[0].operation.kind!=='append')
+   throw Error('Synthetic DOC-01 history missing');
+  const updated=await applyDocumentHistoryOperation(original.archive,[docScope],{
+   mode:'SYNTHETIC_ONLY',eventId:'demo-event-two',
+   expectedHead:original.archive.events[0].eventDigest,
+   operation:{kind:'revoke',documentId:record.identity.documentId,
+    revisionId:record.revision.revisionId,contentDigest:record.contentDigest,
+    revokedAt:'2026-11-19T16:02:00.000Z',reason:'withdrawn',
+    confirmedByTeacher:true}
+  });
+  if(!updated.valid||updated.archive.events.length!==2)throw Error('Synthetic V8 revision failed');
+  const incoming={...current,appData:{...current.appData,documentHistoryV1:updated.archive},
+   meta:incrementBackupChanges(current.meta)};
+  const recovery=await createDocumentBackupPayloadV8(current,approved,[docScope],stamp);
+  const target=await createDocumentBackupPayloadV8(incoming,approved,[docScope],stamp);
+  const [recoveryText,targetText]=await Promise.all([
+   encryptDataWithPassword(recovery,copyPassword),
+   encryptDataWithPassword(target,copyPassword)
+  ]);
+  if(owner!==o||!o.vault.isUnlocked())throw Error('Synthetic owner expired');
+  return {recovery:recoveryText,target:targetText};
+ });
 }
+
+/** The native wrapper must supply two separately selected and hash-verified
+ * SAF blobs. The original owner has to retire its connection before DB2 CAS.
+ * A canceled chooser or a background/locked session invalidates the grant.
+ */
 export async function nativePrepareSelectedDocumentRestore(
- _recovery:Blob,_target:Blob,_signal:AbortSignal,_wrong=false
+ recovery:Blob,target:Blob,signal:AbortSignal,wrong=false
 ):Promise<{commit(confirmed:boolean):Promise<void>}>{
- throw Error('DOC01_D4C3D2_NOT_IMPLEMENTED');
+ const o=requireOwner();
+ const generation=await o.store.getMetadata();
+ if(!generation||signal.aborted)throw Error('Synthetic V8 session expired');
+ await close();
+ const service=createDb2Lifecycle();
+ const invalidate=()=>service.invalidate();
+ signal.addEventListener('abort',invalidate,{once:true});
+ try{
+  if(signal.aborted)throw Error('Synthetic V8 session expired');
+  const grant=await service.prepareDocumentRestore({
+   operation:'restore-document',
+   password,file:target,backupPassword:wrong?'invalid-synthetic-password':copyPassword,
+   recoveryFile:recovery,recoveryPassword:copyPassword,
+   currentAssessmentScopes:approved,incomingAssessmentScopes:approved,
+   documentScopes:[docScope]
+  },generation);
+  if(signal.aborted)throw Error('Synthetic V8 session expired');
+  return {async commit(confirmed:boolean){
+   try{
+    if(signal.aborted)throw Error('Synthetic V8 session expired');
+    await service.commit(grant,confirmed);
+   }finally{invalidate();signal.removeEventListener('abort',invalidate);}
+  }};
+ }catch(e){invalidate();signal.removeEventListener('abort',invalidate);throw e;}
 }
-export async function nativeRestoredDocumentSummary():Promise<unknown>{
- throw Error('DOC01_D4C3D2_NOT_IMPLEMENTED');
+
+/** Read only after fresh DB2 unlock following an actual process restart. */
+export async function nativeRestoredDocumentSummary(){
+ const o=requireOwner(),history=(o.state.appData as AppData&{documentHistoryV1?:any}).documentHistoryV1;
+ const result=await validateDocumentHistory(history,[docScope]);
+ if(!result.valid)throw Error('DOC-01 V8 history could not be authenticated');
+ return {events:result.archive.events.length,valid:true,
+  eventKinds:result.archive.events.map(e=>e.operation.kind),
+  eventDigests:result.archive.events.map(e=>e.eventDigest),
+  changes:o.state.meta.changes,
+  grades:o.state.appData.classes[0].grades.map(g=>g.value),
+  assessmentRevisions:section(o.state.appData).document.evidence.length};
 }
