@@ -1,10 +1,13 @@
 // Synthetic emulator only. No production Root or real archive. Reauthorize
 // only the isolated logical lab operation after the native chooser returns.
 import {nativeRestoreCopies,nativePrepareSelectedRestore,nativeRestoredSummary} from '../../tests/browser/fixtures/val01-s6d-db2.fixture';
+import {nativeDocumentCopies,nativePrepareSelectedDocumentRestore,nativeRestoredDocumentSummary} from '../../tests/browser/fixtures/val01-s6d-db2.fixture';
 import {saveEncryptedBackupOnAndroid,readEncryptedBackupOnAndroid} from '../../src/security/androidBackupExport';
 import {ANDROID_SESSION_EVENT,readAndroidSessionState,authorizeAndroidSession,acknowledgeAndroidShield,registerAndroidFileAccess} from '../../src/security/androidSessionLifecycle';
 type Kind='recovery'|'target';
-const names={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
+const namesV7={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
+const namesV8={recovery:'Backup_DOC01_V8_2031-01-17.enc.json',target:'Backup_DOC01_V8_2031-01-18.enc.json'};
+let names=namesV7;
 let copies:Record<Kind,string>|null=null;
 let selected:Partial<Record<Kind,string>>={};
 let generation=0,revision=0,authenticatedEpoch:number|null=null,busy=false;
@@ -71,7 +74,7 @@ function start(kind:Kind,operation:'write'|'read'){
 Object.assign(globalThis,{__val01NativeRestore:{
  async createCopies(){
   if(busy||grant||abort)throw Error('Synthetic operation unavailable');
-  selected={};copies=await nativeRestoreCopies();
+  selected={};names=namesV7;copies=await nativeRestoreCopies();
   return {recovery:await digest(copies.recovery),target:await digest(copies.target)};
  },
  write:(kind:Kind)=>start(kind,'write'),
@@ -102,4 +105,43 @@ Object.assign(globalThis,{__val01NativeRestore:{
   finally{clearGrant();}
  },
  summary:nativeRestoredSummary
+}});
+
+// DOC-01/D4c3d2 — same authenticated Android SAF bridge, separate V8
+// synthetic-only entrypoint. It reuses the existing chooser, byte digest,
+// foreground-epoch revocation and one-use grant lifecycle, not a second picker.
+Object.assign(globalThis,{__doc01NativeRestore:{
+ async createCopies(){
+  if(busy||grant||abort)throw Error('Synthetic operation unavailable');
+  selected={};names=namesV8;copies=await nativeDocumentCopies();
+  return {recovery:await digest(copies.recovery),target:await digest(copies.target)};
+ },
+ write:(kind:Kind)=>start(kind,'write'),
+ read:(kind:Kind)=>start(kind,'read'),
+ status:()=>status,
+ async prepare(wrong=false){
+  if(busy||grant||abort||!selected.recovery||!selected.target)return 'rejected';
+  const recovery=selected.recovery,target=selected.target;
+  selected={};copies=null;
+  const r=revision,s=await readAndroidSessionState();
+  if(!s?.foreground||authenticatedEpoch!==s.epoch||revision!==r)return 'rejected';
+  const controller=new AbortController();abort=controller;
+  try{
+   const next=await nativePrepareSelectedDocumentRestore(new Blob([recovery]),new Blob([target]),controller.signal,wrong);
+   if(controller.signal.aborted||abort!==controller||revision!==r)throw Error('Synthetic authorization expired');
+   grant=next;return 'prepared';
+  }catch{clearGrant();return 'rejected';}
+ },
+ async commit(confirmed:boolean){
+  const pending=grant,controller=abort;
+  grant=null;
+  if(!pending||!controller||controller.signal.aborted){clearGrant();return 'rejected';}
+  try{
+   const r=revision,s=await readAndroidSessionState();
+   if(!s?.foreground||authenticatedEpoch!==s.epoch||revision!==r||abort!==controller)throw Error('Synthetic authorization expired');
+   await pending.commit(confirmed);return 'committed';
+  }catch{return 'rejected';}
+  finally{clearGrant();}
+ },
+ summary:nativeRestoredDocumentSummary
 }});
