@@ -20,6 +20,8 @@ export interface InstitutionalRecoverySessionAuthority {
  currentToken():string|null;
  /** Must fail on suspension, lock or native epoch change. */
  isCurrent(token:string):Promise<boolean>;
+ /** Synchronous native epoch-change notification, required during physical CAS. */
+ subscribeEpochChanges(token:string,onRevoked:()=>void):()=>void;
  /** Hide and abandon all old App/React state before DB2 replacement. */
  onRetired():void;
  /** Must request a NEW authenticated epoch and password, not reuse the old one. */
@@ -72,6 +74,7 @@ export function createInstitutionalDb2RecoveryDriver(options:InstitutionalDb2Rec
    !options.owner.vault||!options.owner.storage||!options.owner.coordinator||
    typeof options.authority.currentToken!=='function'||
    typeof options.authority.isCurrent!=='function'||
+   typeof options.authority.subscribeEpochChanges!=='function'||
    typeof options.authority.onRetired!=='function'||
    typeof options.authority.freshAuthentication!=='function')throw rejected();
  const owner=options.owner,authority=options.authority;
@@ -198,16 +201,22 @@ export function createInstitutionalDb2RecoveryDriver(options:InstitutionalDb2Rec
    const token=originalToken;
    const grant=pendingGrant;
    pendingGrant=null;phase='committing'; // consume synchronously before await
+   let unsubscribe:()=>void=()=>{};
    try{
-    if(authority.currentToken()!==token||!await authority.isCurrent(token))throw rejected();
-    await service.commit(grant,true);
-    // A subsequent native epoch change cannot be represented as a certain
-    // commit failure: the atomic write may already have completed.
-    if(authority.currentToken()!==token||!await authority.isCurrent(token))throw rejected();
+    // Register BEFORE checking freshness. A change during IDB opening or a
+    // pending transaction aborts the actual service CAS, not just its UI.
+    unsubscribe=authority.subscribeEpochChanges(token,()=>{service.invalidate();});
+    if(typeof unsubscribe!=='function')throw rejected();
+    const stillAuthorized=()=>authority.currentToken()===token;
+    if(!stillAuthorized()||!await authority.isCurrent(token))throw rejected();
+    await service.commit(grant,true,stillAuthorized);
+    // If a change happened after the transaction completed, do not claim
+    // success or rollback. The result remains uncertain until fresh readback.
+    if(!stillAuthorized()||!await authority.isCurrent(token))throw rejected();
     phase='verification-required';
    }catch{
     phase='uncertain';abandon();throw rejected();
-   }
+   }finally{try{unsubscribe();}catch{/* fail-closed outcome already set */}}
   },
   async verifyAfterReopen(){
    if(phase!=='verification-required'||!originalToken||!expectedSnapshot)throw rejected();
