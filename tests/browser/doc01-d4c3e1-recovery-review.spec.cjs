@@ -83,3 +83,66 @@ test('reopen verification denied keeps uncertain result; physical commit occurs 
  expect((await calls(page)).filter(x=>x==='commit')).toHaveLength(1);
  expect(await page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
 });
+
+const release=async(page,stage)=>page.evaluate(stage=>globalThis.__doc01D4c3e1.release(stage),stage);
+async function remount(page,epoch){
+ await page.evaluate(()=>globalThis.__doc01D4c3e1.remount());
+ await expect(page.getByTestId('doc01-recovery-epoch')).toHaveAttribute('data-epoch',String(epoch));
+}
+async function beginDeferred(page,scenario='deferred'){
+ await open(page,scenario);
+ await page.getByRole('button',{name:'Esamina il recupero'}).click();
+ await expect(page.getByText('Verifica locale in corso…')).toBeVisible();
+}
+async function approveDeferred(page){
+ await release(page,'prepare');
+ await expect(page.getByRole('group',{name:'Riepilogo del recupero'})).toBeVisible();
+ await page.getByRole('checkbox').check();
+ await page.locator('#doc01-v8-consent').fill('RIPRISTINA');
+ await page.getByRole('button',{name:'Conferma recupero'}).click();
+ await expect(page.getByText('Sostituzione locale in corso…')).toBeVisible();
+}
+
+test('external decision remounts during deferred prepare and exposes consent after settlement',async({page})=>{
+ await beginDeferred(page);
+ await remount(page,1);
+ expect(await calls(page)).toEqual(['prepare']);
+ await release(page,'prepare');
+ await expect(page.getByRole('group',{name:'Riepilogo del recupero'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Conferma recupero'})).toBeDisabled();
+ expect(await calls(page)).toEqual(['prepare']);
+});
+test('external decision remounts during deferred commit and exposes required verification',async({page})=>{
+ await beginDeferred(page);
+ await approveDeferred(page);
+ await remount(page,1);
+ await expect(page.getByText('Sostituzione locale in corso…')).toBeVisible();
+ await release(page,'commit');
+ await expect(page.getByRole('button',{name:'Verifica dopo il nuovo accesso'})).toBeVisible();
+ expect(await calls(page)).toEqual(['prepare','commit']);
+ await expect(page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
+});
+test('external decision remounts during deferred verification and displays only verified result',async({page})=>{
+ await beginDeferred(page);
+ await approveDeferred(page);
+ await release(page,'commit');
+ await expect(page.getByRole('button',{name:'Verifica dopo il nuovo accesso'})).toBeVisible();
+ await page.getByRole('button',{name:'Verifica dopo il nuovo accesso'}).click();
+ await expect(page.getByText('Verifica dopo il nuovo accesso in corso…')).toBeVisible();
+ await remount(page,1);
+ await expect(page.getByText('Verifica dopo il nuovo accesso in corso…')).toBeVisible();
+ await expect(page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
+ await release(page,'verify');
+ await expect(page.getByText('Archivio riaperto e verificato.')).toBeVisible();
+ expect(await calls(page)).toEqual(['prepare','commit','reopen-verified','invalidate']);
+});
+test('external decision remount after uncertain physical outcome cannot retry or report success',async({page})=>{
+ await beginDeferred(page,'deferred-uncertain');
+ await approveDeferred(page);
+ await remount(page,1);
+ await release(page,'commit');
+ await expect(page.getByText('Non ripetere il ripristino automaticamente.',{exact:false}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:'Conferma recupero'})).toHaveCount(0);
+ await expect(page.getByText('Archivio riaperto e verificato.')).toHaveCount(0);
+ expect((await calls(page)).filter(x=>x==='commit')).toHaveLength(1);
+});
