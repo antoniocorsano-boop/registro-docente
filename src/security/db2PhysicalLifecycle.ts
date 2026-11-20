@@ -95,26 +95,28 @@ export async function captureDb2(factory:IDBFactory,signal?:AbortSignal){
 /** Atomic compare-and-swap of the entire physical image. All old ciphertext
  * and key metadata disappear together, or none does. Abort is effective only
  * before the transaction commits; callers must inspect after uncertainty. */
-export async function replaceDb2(factory:IDBFactory,previous:Db2Inventory,next:Db2Inventory,signal:AbortSignal){
+export async function replaceDb2(factory:IDBFactory,previous:Db2Inventory,next:Db2Inventory,signal:AbortSignal,isAuthorized:()=>boolean=()=>true){
+  const active=()=>{try{return !signal.aborted&&isAuthorized();}catch{return false;}};
+  if(!active())throw db2Failure();
   const db=await openDb2(factory,signal);
   try{
     await new Promise<void>((resolve,reject)=>{
-      if(signal.aborted){reject(db2Failure());return;}
+      if(!active()){reject(db2Failure());return;}
       try{
         const tx=db.transaction(['metadata','records'],'readwrite');
         const abort=()=>{try{tx.abort();}catch{}};
         signal.addEventListener('abort',abort,{once:true});
         const cleanup=()=>signal.removeEventListener('abort',abort);
-        tx.oncomplete=()=>{cleanup();resolve();};
+        tx.oncomplete=()=>{cleanup();active()?resolve():reject(db2Failure());};
         tx.onabort=tx.onerror=()=>{cleanup();reject(db2Failure());};
         try{
           const {m,r}=db2Stores(tx);
           readDb2InTransaction(tx,actual=>{
-            if(signal.aborted||!sameDb2Physical(actual,previous))throw db2Failure();
+            if(!active()||!sameDb2Physical(actual,previous))throw db2Failure();
             r.clear();m.clear();
             m.put(next.metadata,'current');
             for(const record of next.records)r.put(record);
-            if(signal.aborted)abort();
+            if(!active())abort();
           });
         }catch{abort();}
       }catch{reject(db2Failure());}
