@@ -583,6 +583,34 @@ const v9Ids={
 };
 let institutionalMode='actual-restore';
 let institutionalEpoch='institutional-epoch-1';
+const institutionalEpochListeners=new Set<()=>void>();
+const changeInstitutionalEpoch=(next:string)=>{
+ institutionalEpoch=next;
+ for(const listener of [...institutionalEpochListeners])listener();
+};
+let institutionalBlocker:{db:IDBDatabase;released:boolean}|null=null;
+async function holdInstitutionalCas(){
+ if(institutionalBlocker)throw Error('CAS already blocked');
+ const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+  const req=indexedDB.open('registro-docente-secure-vault',2);
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+  req.onupgradeneeded=()=>req.transaction?.abort();
+ });
+ const blocker={db,released:false};institutionalBlocker=blocker;
+ const tx=db.transaction(['records'],'readwrite');
+ const cleanup=()=>{db.close();if(institutionalBlocker===blocker)institutionalBlocker=null;};
+ tx.oncomplete=cleanup;tx.onabort=cleanup;tx.onerror=cleanup;
+ const keepAlive=()=>{
+  const req=tx.objectStore('records').get('__v9-transaction-barrier__');
+  req.onsuccess=()=>{if(!blocker.released)keepAlive();};
+ };
+ keepAlive();
+}
+const releaseInstitutionalCas=()=>{
+ if(!institutionalBlocker)throw Error('No active CAS blocker');
+ institutionalBlocker.released=true;
+};
+let institutionalCommitResult:'none'|'pending'|'accepted'|'rejected'='none';
 let institutionalDecision:ReturnType<typeof createInstitutionalRecoveryDecision>|null=null;
 let institutionalOld:ReturnType<typeof requireOwner>|null=null;
 let institutionalCopies:{recovery:string;target:string}|null=null;
@@ -594,6 +622,7 @@ async function v9Seed(mode:string){
  if(!['actual-restore','cancelled','stale-owner','wrong-recovery','same-epoch','wrong-scope','wrong-password'].includes(mode))
   throw Error('Unknown institutional scenario');
  institutionalMode=mode;institutionalEpoch='institutional-epoch-1';
+ institutionalEpochListeners.clear();institutionalCommitResult='none';
  await seed();
  const o=requireOwner();
  const current=await o.storage.loadExactBackupSnapshot();
@@ -636,10 +665,15 @@ async function v9Seed(mode:string){
   authority:{
    currentToken:()=>institutionalEpoch,
    isCurrent:async token=>token===institutionalEpoch,
+   subscribeEpochChanges(token,onRevoked){
+    const listener=()=>{if(institutionalEpoch!==token)onRevoked();};
+    institutionalEpochListeners.add(listener);listener();
+    return ()=>{institutionalEpochListeners.delete(listener);};
+   },
    onRetired:()=>{if(owner===o)owner=null;},
    async freshAuthentication(previousToken){
     if(institutionalMode==='same-epoch')return {token:previousToken,password};
-    institutionalEpoch='institutional-epoch-2';
+    changeInstitutionalEpoch('institutional-epoch-2');
     return {token:institutionalEpoch,password};
    }
   },
@@ -651,7 +685,7 @@ async function v9Seed(mode:string){
   async selectCiphertext(kind,isActive){
    if(!isActive())return null;
    if(institutionalMode==='cancelled'&&kind==='target')return null;
-   if(institutionalMode==='stale-owner'&&kind==='recovery')institutionalEpoch='institutional-epoch-2';
+   if(institutionalMode==='stale-owner'&&kind==='recovery')changeInstitutionalEpoch('institutional-epoch-2');
    if(institutionalMode==='wrong-recovery'&&kind==='recovery')return institutionalCopies!.target;
    return institutionalCopies![kind];
   }
@@ -682,6 +716,15 @@ Object.assign(globalThis,{__doc01D4c3e5Owner:{
  },
  verify:()=>requireInstitutional().verifyAfterReopen(),
  phase:()=>requireInstitutional().phase(),
+ holdCas:holdInstitutionalCas,releaseCas:releaseInstitutionalCas,
+ expireEpoch:()=>changeInstitutionalEpoch('institutional-epoch-expired'),
+ startCommit:()=>{
+  institutionalCommitResult='pending';
+  void requireInstitutional().confirm({accepted:true,phrase:'RIPRISTINA'})
+   .then(()=>{institutionalCommitResult='accepted';})
+   .catch(()=>{institutionalCommitResult='rejected';});
+ },
+ commitResult:()=>institutionalCommitResult,
  physicalDigest,oldOwnerRejected:v9OldRejected,
  reopenSummary:v9ReopenSummary,close
 }});

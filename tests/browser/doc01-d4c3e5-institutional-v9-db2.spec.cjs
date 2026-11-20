@@ -73,3 +73,19 @@ test('V9 same epoch after physical commit: no false success without fresh authen
  await expect(op(page,'confirm')).rejects.toThrow();
  await op(page,'close');
 });
+
+test('V9 native epoch expires while the physical CAS is blocked: old inventory survives unchanged',async({page})=>{
+ await start(page);
+ const baseline=await op(page,'physicalDigest');
+ await op(page,'prepare');
+ await op(page,'holdCas');
+ await op(page,'startCommit');
+ await expect.poll(()=>op(page,'phase')).toBe('committing');
+ await op(page,'expireEpoch');
+ await op(page,'releaseCas');
+ await expect.poll(()=>op(page,'commitResult')).toBe('rejected');
+ expect(await op(page,'physicalDigest')).toEqual(baseline);
+ expect(await op(page,'phase')).toBe('uncertain');
+ await expect(op(page,'confirm')).rejects.toThrow();
+ await op(page,'close');
+});
