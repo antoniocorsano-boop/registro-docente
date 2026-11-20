@@ -3259,6 +3259,28 @@
       "tests": [
         "src/security/doc01InstitutionalBackupPayloadV9.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3E5-I01",
+      "owner": "DOC-01/D4c3e5",
+      "statement": "Institutional encrypted V9 restore has a distinct opt-in physical DB2 CAS pathway bound to the exact active ten-record V2 vault owner. Two independently selected encrypted AES-GCM copies, an exact current recovery baseline, independently approved school scope and assessment contexts, preservation of all historic institutional V2 events, grades, student identities and prior assessments, and session epoch freshness are mandatory. Prepare seals and drains all admitted writes, retires the old owner and locks its key before granting one-use explicit teacher consent. Physical replacement is atomic and guarded against stale metadata and replay; subsequent fresh authenticated owner must reopen, decrypt and validate all ten records and immutable institutional V2 history before success. Cancellations, mismatches and uncertain postcommit states fail closed without automatic rollback. Retain V8/V1 fences and do not connect production App, Privacy, real student data, migration, automatic merge, deployment or release. All physical evidence in this increment is synthetic Chromium IndexedDB2.",
+      "impactPaths": [
+        "src/security/db2Lifecycle.ts",
+        "src/security/institutionalDb2RecoveryOwner.ts",
+        "src/security/institutionalRecoveryDecision.ts",
+        "src/security/institutionalRecoverySupervisor.ts",
+        "src/security/doc01InstitutionalDb2V9Boundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/doc01-d4c3e5-institutional-v9-db2.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/doc01InstitutionalDb2V9Boundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/doc01-d4c3e5-institutional-v9-db2.spec.cjs"
+      ]
     }
   ]
 }
