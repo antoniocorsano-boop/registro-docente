@@ -3160,6 +3160,23 @@
       "tests": [
         "src/security/doc01Db2DocumentRestoreBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3D2-I01",
+      "owner": "DOC-01/D4c3d2",
+      "statement": "Synthetic Android API32/36 SAF V8 document-history recovery must roundtrip separately selected actual encrypted recovery and target bytes with verified SHA-256, reject picker cancellation, require a fresh authenticated foreground session and independent document/assessment scope policy, use physically guarded one-use DB2 v8 commit, reject replay and preserve earlier historic document events and assessment evidence after a verified process stop and cold authenticated reopen; no real student data, no production entrypoint, no archive erasure or false success. Preserve all prior V7 Android safeguards and stages; extend rather than weaken restart evidence. No production activation, merge, deploy, authenticity or hardware anti-rollback.",
+      "impactPaths": [
+        "mobile/android-probe/val01-native-restore.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "scripts/diagnostics/val01-native-evidence.mjs",
+        ".github/workflows/val01-native-evidence.yml",
+        "src/security/val01NativeEvidenceBoundary.test.ts",
+        "src/security/doc01NativeV8RecoveryBoundary.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01NativeV8RecoveryBoundary.test.ts",
+        "src/security/val01NativeEvidenceBoundary.test.ts"
+      ]
     }
   ]
 }
