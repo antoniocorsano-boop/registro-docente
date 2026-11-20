@@ -123,6 +123,24 @@ describe('DOC-01/D4c3e4 — versioned encrypted institutional V9 without V8 down
   const forged=copy(await create(current));(forged.snapshot.appData as any).classes=[];
   await reject(project(current,forged,await create(current)));
  });
+ test('V9 never loses previously recorded class, student, grade, behavior or council rows',async()=>{
+  const current=await snapshot();
+  const cls=current.appData.classes[0];
+  cls.students=[{id:'s1',name:'Alunno sintetico'}];
+  cls.grades=[{id:'g1',studentId:'s1',date:'2026-11-20',type:'disegno',period:'Q1',title:'Prova sintetica',value:'8'}];
+  cls.behaviors=[{id:'b1',studentId:'s1',date:'2026-11-20',status:'Costruttivo 👍',note:'Osservazione sintetica'}];
+  cls.councilSessions=[{id:'c1',schoolYear:'2026/2027',kind:'intermedia',date:'2026-11-20',createdAt:at,updatedAt:at}];
+  const baseline=await create(current);
+  for(const field of ['students','grades','behaviors','councilSessions'] as const){
+   const stripped=copy(current);
+   (stripped.appData.classes[0] as any)[field]=[];
+   await reject(project(current,await create(stripped),baseline));
+  }
+  const omitted=copy(current);omitted.appData.classes=[];
+  await reject(project(current,await create(omitted),baseline));
+  const modified=copy(current);modified.appData.classes[0].grades[0].value='6';
+  await reject(project(current,await create(modified),baseline));
+ });
  test('V9 encryption excludes local-only backup verification but never silently removes professional data',async()=>{
   const s=await snapshot();s.meta={...s.meta,verifiedBackupAt:at,
    verifiedBackupEvidence:{bytes:150,sha256:'a'.repeat(64),source:'android-readback',payloadVersion:6,checkpointAt:at}};
