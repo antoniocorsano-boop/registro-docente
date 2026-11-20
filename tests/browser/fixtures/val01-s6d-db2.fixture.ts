@@ -413,3 +413,78 @@ async function restoreDocument(mode:'approve'|'old'|'bad-recovery'|'wrong-scope'
   assessmentPreserved,historyValid:check.valid,summary:docSummary()};
 }
 Object.assign(globalThis,{__doc01Db2Restore:{seed:seedDocument,restore:restoreDocument,summary:docSummary,close,open,physicalDigest}});
+
+
+/** DOC-01/D4c3d2 — real DB2 V8 Android SAF evidence, synthetic only.
+ * These exports are bundled exclusively into the isolated Android debug fixture.
+ */
+export async function nativeSeedDocumentHistory(){
+ const o=requireOwner();
+ if((o.state.appData as AppData&{documentHistoryV1?:unknown}).documentHistoryV1)throw Error('Synthetic history already exists');
+ const record=await docRecord();
+ const receipt=await commitDocumentHistoryOperation({
+  coordinator:o.coordinator,storage:o.storage,
+  isActive:()=>owner===o&&o.vault.isUnlocked(),
+  getCommitted:()=>({appData:o.state.appData,meta:o.state.meta}),
+  publish:next=>{o.state={...o.state,...next};},
+  invalidate:()=>{o.vault.lock();}
+ },[docScope],{mode:'SYNTHETIC_ONLY',eventId:'demo-event-one',expectedHead:null,operation:{kind:'append',record}});
+ demand(receipt.verified&&receipt.changed);
+ return nativeDocumentRestoredSummary();
+}
+
+export async function nativeDocumentRestoreCopies(){
+ const o=requireOwner();
+ return o.coordinator.enqueueTask(async()=>{
+  const current=await o.storage.loadExactBackupSnapshot();
+  if(!current)throw Error('Incomplete V8 archive');
+  const history=(current.appData as AppData&{documentHistoryV1?:any}).documentHistoryV1;
+  if(!history||history.events.length!==1)throw Error('Synthetic history is not ready');
+  const record=await docRecord();
+  const q={mode:'SYNTHETIC_ONLY',eventId:'demo-event-two',expectedHead:history.events[0].eventDigest,
+   operation:{kind:'revoke',documentId:record.identity.documentId,revisionId:record.revision.revisionId,
+    contentDigest:record.contentDigest,revokedAt:'2026-11-19T16:02:00.000Z',
+    reason:'withdrawn',confirmedByTeacher:true}};
+  const transition=await applyDocumentHistoryOperation(history,[docScope],q);
+  if(!transition.valid)throw Error(transition.issue);
+  const next={...current,appData:{...current.appData,documentHistoryV1:transition.archive},
+   meta:incrementBackupChanges(current.meta)};
+  const recovery=await createDocumentBackupPayloadV8(current,approved,[docScope],stamp);
+  const target=await createDocumentBackupPayloadV8(next,approved,[docScope],stamp);
+  // Only complete ciphertext leaves the synthetic preparation layer.
+  return {recovery:await encryptDataWithPassword(recovery,copyPassword),
+   target:await encryptDataWithPassword(target,copyPassword)};
+ });
+}
+
+export async function nativePrepareSelectedDocumentRestore(recovery:Blob,target:Blob,signal:AbortSignal,wrong=false){
+ const o=requireOwner();
+ const generation=await o.store.getMetadata();
+ if(!generation||signal.aborted)throw Error('Synthetic document session expired');
+ await close();
+ const service=createDb2Lifecycle();
+ const invalidate=()=>service.invalidate();
+ signal.addEventListener('abort',invalidate,{once:true});
+ try{
+  if(signal.aborted)throw Error('Synthetic document session expired');
+  const grant=await service.prepareDocumentRestore({operation:'restore-document',password,
+   file:target,backupPassword:wrong?'wrong-synthetic':copyPassword,
+   recoveryFile:recovery,recoveryPassword:copyPassword,
+   currentAssessmentScopes:approved,incomingAssessmentScopes:approved,documentScopes:[docScope]},generation);
+  if(signal.aborted)throw Error('Synthetic document session expired');
+  return {async commit(confirmed:boolean){
+   try{if(signal.aborted)throw Error('Synthetic document session expired');await service.commit(grant,confirmed);}
+   finally{invalidate();signal.removeEventListener('abort',invalidate);}
+  }};
+ }catch(e){invalidate();signal.removeEventListener('abort',invalidate);throw e;}
+}
+
+export async function nativeDocumentRestoredSummary(){
+ const o=requireOwner();
+ const history=(o.state.appData as AppData&{documentHistoryV1?:unknown}).documentHistoryV1;
+ const inspected=await validateDocumentHistory(history,[docScope]);
+ if(!inspected.valid)throw Error('DOC-01 historical integrity failure');
+ return {...docSummary(),historyValid:true,
+  eventKinds:inspected.archive.events.map(event=>event.operation.kind),
+  version:await versions()};
+}
