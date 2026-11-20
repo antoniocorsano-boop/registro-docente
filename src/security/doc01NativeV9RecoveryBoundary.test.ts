@@ -70,7 +70,7 @@ describe('DOC-01/D4c3e6 — institutional V9 Android native recoverability',()=>
   const workflow=read('.github/workflows/val01-native-evidence.yml');
   // Guard the trigger, not only the runner command: a change to this script alone must execute Android CI.
   const pullRequestTrigger=workflow.split('permissions:\n')[0];
-  expect(pullRequestTrigger).toMatch(/^      - 'scripts\\/diagnostics\\/doc01-native-v9-evidence\\.mjs'$/m);
+  expect(pullRequestTrigger.split('\n')).toContain("      - 'scripts/diagnostics/doc01-native-v9-evidence.mjs'");
   expect(workflow).toContain('api: [32, 36]');
   expect(workflow).toContain('mode: [legacy, v9]');
   expect(workflow).toContain('node --check scripts/diagnostics/doc01-native-v9-evidence.mjs');
