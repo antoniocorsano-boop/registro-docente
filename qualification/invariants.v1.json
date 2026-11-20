@@ -2676,13 +2676,16 @@
         "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md",
         "src/security/archivePreflight.ts",
         "src/security/migrationSessionBoundary.ts",
-        "src/security/val01MigrationSessionBoundary.test.ts"
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
       ],
       "tests": [
         "src/security/val01Db2EvidenceBoundary.test.ts",
         "src/security/val01AssessmentEvidenceMutation.test.ts",
         "src/security/val01VersionedBackupReceipt.test.ts",
-        "src/security/val01MigrationSessionBoundary.test.ts"
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/val01-s6d-db2-persistence.spec.cjs"
