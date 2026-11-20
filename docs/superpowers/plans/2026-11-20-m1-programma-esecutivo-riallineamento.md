@@ -116,3 +116,25 @@ Non cancellare le 149 invarianti attuali per ottenere un conteggio favorevole e 
 **Decisione guida:** prima ottenere sicurezza e continuità dei dati, poi due versioni veramente funzionanti, quindi semplicità della lezione, valutazione e documentazione, infine integrazioni TRAMA.
 
 **Ripresa univoca del lavoro:** aprire questo file; verificare main e #384; iniziare da **M1-B0**, non dalla creazione di nuove funzionalità. Aggiornare qui il registro di stato dopo ogni risultato verificato e mantenere immutato il dossier storico M1-A.
+
+
+## 9. Istruzioni pratiche per la ripresa M1-B0 e B1
+
+**Punto di partenza fisso:** in un ambiente effimero e isolato, usare la revisione esatta di main indicata nella sezione A. Non aprire il browser con un profilo o un archivio personale; usare esclusivamente fixture sintetiche. La copia della PR #325 serve come riferimento in sola lettura. Se main è cambiato, fermare la preparazione e rigenerare il confronto prima di assumere invarianti conservate.
+
+**Comandi già definiti dal package.json di main** (da eseguire nel clone locale, non eseguiti in questa fase documentale):
+- bun install --frozen-lockfile
+- bun run lint
+- bun run test:security
+- bun run build
+
+**Sequenza di qualificazione in laboratorio:**
+1. **B0 / acquisizione:** verificare lo SHA di main, lo SHA di #325, il conteggio e il contenuto delle invarianti; enumerare per ciascuno dei 12 ID il test e l'implementazione originari e il possibile equivalente su main. Scrivere una riga di decisione con evidenza tecnica; non segnare PASS in assenza di prova causale.
+2. **B1 / RED di avvio:** utilizzare come base i contratti di src/security/protectedBootstrap.test.ts su #325, confrontandoli con il ramo principale. Preparare sul nuovo ramo test per S01-S03 e verificare che i fallimenti siano riferibili a un comportamento insicuro, non alla semplice assenza del modulo originale o a errori di importazione.
+3. **B1 / GREEN minimo:** introdurre solo il controllo mancante, senza cancellare archivi, cambiare formato, modificare la firma o attivare V9; rieseguire gli stessi test RED, la suite sicurezza e il controllo di compilazione.
+4. **B1 / prova browser:** eseguire nel browser reale la sequenza avvio-errore-ripresa con archivio completamente sintetico. Confrontare il contenuto fisico prima e dopo la prova; il mancato completamento lascia B1 in NO-GO.
+5. **Proseguimento:** attivare B2 solo con B1 qualificato, mantenendo separati esiti su codice, browser, emulatore Android e telefono personale.
+
+**Semaforo di arresto:** qualsiasi indicazione di cancellazione o sovrascrittura non autorizzata, dubbio sulla provenienza della copia, password/firma reale necessaria, compatibilità non dimostrata o procedura S-R04b ancora bloccata ferma la promozione. Una prova fallita non va trasformata in successo cambiando il requisito o eliminando il test.
+
+**Regola conclusiva:** la registrazione documentale della PR #384 non è una PR di implementazione, non soddisfa R1/R2/R3 e non modifica il prodotto installato. La prossima azione tecnica non è un altro studio generale: è la classificazione misurata B0, seguita dai casi RED mirati B1.
