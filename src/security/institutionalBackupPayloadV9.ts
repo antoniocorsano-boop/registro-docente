@@ -46,6 +46,10 @@ function strict(v:unknown,keys:readonly string[]):v is Row{
 function peelV2(raw:unknown):{legacy:CompleteSecureAppSnapshot;history:unknown}{
  const copy=detachDocumentBackupJson(raw);
  if(!row(copy)||!row(copy.appData)||!own(copy.appData,'documentHistoryV2'))return invalid();
+ // V9 is a professional-only format: never infer authorization from contents.
+ // V7 also supports demo or legacy-unclassified archives, so this check must
+ // precede the delegated V7 validation for export, inspection and restore.
+ if(!row(copy.settings)||copy.settings.archiveMode!=='professional')return invalid();
  const history=copy.appData.documentHistoryV2;
  delete copy.appData.documentHistoryV2;
  assertNoUnsupportedDocumentHistory(copy);
