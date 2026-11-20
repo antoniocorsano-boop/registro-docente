@@ -685,3 +685,70 @@ Object.assign(globalThis,{__doc01D4c3e5Owner:{
  physicalDigest,oldOwnerRejected:v9OldRejected,
  reopenSummary:v9ReopenSummary,close
 }});
+
+
+/** DOC-01/D4c3e6 — opt-in native V9 test functions on a fresh V9-only
+ * synthetic vault. No V8 records are deleted or migrated: the CI matrix runs
+ * the V9 script in its own emulator installation and data directory.
+ */
+export async function nativeSeedInstitutionalHistory(){
+ await v9Seed('actual-restore');
+ return nativeInstitutionalRestoredSummary();
+}
+export async function nativeInstitutionalRestoreCopies(){
+ if(!institutionalCopies)throw Error('Synthetic V9 ciphertext missing');
+ return {...institutionalCopies};
+}
+export async function nativePrepareSelectedInstitutionalRestore(
+ recovery:Blob,target:Blob,signal:AbortSignal,wrong=false
+){
+ const o=requireOwner();
+ const generation=await o.store.getMetadata();
+ if(!generation||signal.aborted)throw Error('Synthetic V9 authorization expired');
+ await close();
+ const service=createDb2Lifecycle();
+ const invalidate=()=>service.invalidate();
+ signal.addEventListener('abort',invalidate,{once:true});
+ try{
+  if(signal.aborted)throw Error('Synthetic V9 authorization expired');
+  const grant=await service.prepareInstitutionalRestore({
+   operation:'restore-institutional',password,
+   file:target,backupPassword:wrong?'incorrect-synthetic-password':copyPassword,
+   recoveryFile:recovery,recoveryPassword:copyPassword,
+   currentAssessmentScopes:approved,incomingAssessmentScopes:approved,
+   institutionalScope:v9School
+  },generation);
+  if(signal.aborted)throw Error('Synthetic V9 authorization expired');
+  return {async commit(confirmed:boolean){
+   try{
+    if(signal.aborted)throw Error('Synthetic V9 authorization expired');
+    await service.commit(grant,confirmed);
+   }finally{
+    invalidate();
+    signal.removeEventListener('abort',invalidate);
+   }
+  }};
+ }catch(error){
+  invalidate();
+  signal.removeEventListener('abort',invalidate);
+  throw error;
+ }
+}
+export async function nativeInstitutionalRestoredSummary(){
+ const o=requireOwner();
+ const snapshot=await o.storage.loadExactBackupSnapshot();
+ if(!snapshot)throw Error('Missing V9 snapshot on authenticated readback');
+ const history=(snapshot.appData as AppData&{documentHistoryV2?:unknown}).documentHistoryV2;
+ const doc=await validateInstitutionalDocumentHistoryV2(history,v9School);
+ if(!doc.valid)throw Error('Invalid V9 institution-scoped document sequence');
+ if(!validateAssessmentArchiveV1(snapshot.appData,approved).valid)throw Error('Assessment history mismatch');
+ if((snapshot.appData as AppData&{documentHistoryV1?:unknown}).documentHistoryV1!==undefined)
+  throw Error('V8 history unexpectedly present in V9 archive');
+ return {
+  events:doc.archive.events.length,historyValid:true,
+  eventKinds:doc.archive.events.map(e=>e.operation.kind),
+  grades:snapshot.appData.classes[0].grades.map(g=>g.value),
+  assessmentRevisions:section(snapshot.appData).document.evidence.length,
+  changes:snapshot.meta.changes,version:await versions()
+ };
+}
