@@ -55,7 +55,7 @@ export function DocumentRecoveryReview({workflow}:{workflow:DocumentRecoveryDriv
   try{
    await controllerRef.current!.confirm({accepted:acknowledged,phrase});
    setSummary(null);setPhrase('');setAcknowledged(false);
-   update('verification-required','La sostituzione è stata richiesta. Non è ancora una conferma di recupero riuscito.');
+   update('verification-required','La richiesta di sostituzione è stata registrata.');
   }catch{
    update(controllerRef.current!.phase(),
     'Esito del recupero non verificato. Non ripetere il ripristino automaticamente. Blocca il Registro e verifica i dati.');
@@ -83,7 +83,7 @@ export function DocumentRecoveryReview({workflow}:{workflow:DocumentRecoveryDriv
     className="min-h-11 rounded-lg bg-cyan-700 px-4 font-semibold disabled:opacity-50">Esamina il recupero</button>}
   {(phase==='preparing'||busy)&&<p role="status" className="text-sm text-slate-300">Verifica locale in corso…</p>}
   {phase==='prepared'&&summary&&<div className="space-y-3">
-   <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2" aria-label="Riepilogo del recupero">
+   <dl role="group" className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2" aria-label="Riepilogo del recupero">
     <div className="rounded-lg border border-slate-700 p-3"><dt className="text-slate-400">Revisioni già presenti</dt><dd className="text-lg font-semibold">{summary.eventsBefore}</dd></div>
     <div className="rounded-lg border border-slate-700 p-3"><dt className="text-slate-400">Revisioni nella copia proposta</dt><dd className="text-lg font-semibold">{summary.eventsAfter}</dd></div>
     <div className="rounded-lg border border-slate-700 p-3"><dt className="text-slate-400">Valutazioni e voti</dt><dd className="font-semibold">Conservati</dd></div>
