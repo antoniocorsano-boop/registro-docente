@@ -71,8 +71,10 @@ describe('DOC-01/D4c3e6 — institutional V9 Android native recoverability',()=>
   expect(workflow).toContain('api: [32, 36]');
   expect(workflow).toContain('mode: [legacy, v9]');
   expect(workflow).toContain('node --check scripts/diagnostics/doc01-native-v9-evidence.mjs');
-  expect(workflow).toContain('node scripts/diagnostics/doc01-native-v9-evidence.mjs');
-  expect(workflow).toContain('node scripts/diagnostics/val01-native-evidence.mjs');
+  // The Android runner requires one command, not a multi-line shell condition.
+  expect(workflow).toContain('script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/');
+  expect(workflow).toContain("matrix.mode == 'v9' && 'doc01-native-v9-evidence.mjs' || 'val01-native-evidence.mjs'");
+  expect(workflow).not.toContain('script: |');
   expect(workflow).toContain('VAL01_MODE: ${{ matrix.mode }}');
   expect(workflow).toContain('val01-native-evidence-${{ matrix.mode }}-api');
   expect(workflow).toContain('(.beforePids|length)>0');
