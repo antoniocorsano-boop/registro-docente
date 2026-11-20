@@ -20,3 +20,9 @@ The teacher selects two encrypted V8 backup copies in Android's file picker: an 
 
 ## Non-authorities
 No production UI, real archive migration or Android deployment, no background work, no signature/hardware anti-rollback, no claims about origin/authenticity of external files. No clinical or personal student data.
+
+
+## Native picker compatibility evidence — 2026-11-20
+Exact candidate `c165aae421061e5c794da0154fa6ac4d85bd03d0` failed on **both Android API32 and API36**, after all 12 V7 stages and the synthetic DOC-01 history commit succeeded, but before any V8 encrypted file selection: `Native picker not visible`. Root cause verified in `mobile/android-probe/native/RegistroBackupFilesPlugin.java`: `chooseBackupDestination` permits **only** `Backup_Cifrato_GDPR_YYYY-MM-DD.enc.json` and rejects the invented `Backup_Cifrato_DOC01_V8_...` names. This is an allowlist, not a failure of history validation, encrypted restore or Android SAF itself.
+
+Corrective change: preserve the production plugin's strict allowlist without changing Java or broadening filenames. Use distinct synthetic V8 file names `Backup_Cifrato_GDPR_2031-01-17.enc.json` and `Backup_Cifrato_GDPR_2031-01-18.enc.json` (V7 had 15/16 January). Version V8 is enforced by the encrypted **payload schema and DB2 policy**, never inferred from the filename. The frozen tests preserve all safety requirements; only filename literals are corrected to the preexisting native contract. Rerun both real emulators on the new exact SHA; no claim of V8 native qualification before both pass.
