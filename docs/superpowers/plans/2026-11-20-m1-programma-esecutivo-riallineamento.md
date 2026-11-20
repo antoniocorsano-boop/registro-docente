@@ -138,3 +138,17 @@ Non cancellare le 149 invarianti attuali per ottenere un conteggio favorevole e 
 **Semaforo di arresto:** qualsiasi indicazione di cancellazione o sovrascrittura non autorizzata, dubbio sulla provenienza della copia, password/firma reale necessaria, compatibilità non dimostrata o procedura S-R04b ancora bloccata ferma la promozione. Una prova fallita non va trasformata in successo cambiando il requisito o eliminando il test.
 
 **Regola conclusiva:** la registrazione documentale della PR #384 non è una PR di implementazione, non soddisfa R1/R2/R3 e non modifica il prodotto installato. La prossima azione tecnica non è un altro studio generale: è la classificazione misurata B0, seguita dai casi RED mirati B1.
+
+
+## 10. Checkpoint esecutivo M1-B0/B1 — 20 novembre 2026
+
+**B0: completato sul codice.** Dossier 12/12 in [M1-B0](../audits/2026-11-20-m1-b0-classificazione-12-invarianti.md), con categorie A/B/C/D e prova assegnata; nessuna equivalenza dinamica dichiarata.
+
+**B1: avviato nel SOLO ramo applicativo** [PR #385](https://github.com/antoniocorsano-boop/registro-docente/pull/385) `feat/m1-security-reconciliation` da `main@8d3baab8`; la PR resta Draft.
+
+- **RED causale:** `3eddf1dddf8dac7a6d0665271b9117426f0feea0`, [Qualification Invariants run 44765078379](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44765078379): tre rifiuti attesi mostrano il difetto della decisione (`SETUP_REQUIRED` vs `ERROR`). Il controllo positivo del primo setup passa. Il primo precedente fallimento `1c93ba7` derivava invece da file non registrato ed è stato regolarmente risolto.
+- **GREEN preliminare:** `6fbac1caad903987047a5db05303b503f7fa4239`: ingressi di rifiuto in `decideVaultBootstrap`; riuso dell'osservatore in sola lettura e test STAB-01; integrazione del vero Root, marker positivi, rifiuto di archivi incompleti, setup preceduto da nuova osservazione, Retry privo di riparazioni implicite. Due test Chromium aggiunti alla qualifica browser esistente, inclusa conservazione fisica di dieci record sintetici dopo cancellazione dei metadata.
+- **Controlli già completati sul GREEN:** [PREDEPLOY 44766401700](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401700) PASS; [Qualification Invariants 44766401502](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401502) PASS; [HEADER 44766401679](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401679) PASS; [BETA2 archive 44766401989](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401989) PASS; [FLOW-03 44766401932](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401932) PASS.
+- **Ancora non completato al checkpoint:** [Browser Qualification 44766401458](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401458), [BETA2 Reference 44766401757](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401757) e qualificazione Android nativa; non sostituire i loro esiti con il GREEN unitario.
+
+**Decisione:** B1 NON dichiarato qualificato finché il browser fisico e le regressioni pertinenti non sono chiuse. Nessun merge/deploy/firma e nessuna attivazione V9; R1/R2/R3 restano aperti. Per riprendere, verificare per primo lo SHA della PR #385 e il risultato dei controlli aperti, quindi correggere solo i finding effettivi sul medesimo ramo prima di procedere con B2.
