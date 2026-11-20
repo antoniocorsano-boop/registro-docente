@@ -100,4 +100,52 @@ describe('DOC-01/D4c3e1 — explicit teacher authority and non-misleading result
    expect(decision.phase()).not.toBe('prepared');
   }
  });
+ test('remounted observers receive every settled controller transition without new grants',async()=>{
+  let releasePrepare:((value:{review:DocumentRecoveryReview;grant:object})=>void)|undefined;
+  let releaseCommit:(()=>void)|undefined;
+  let releaseVerify:((success:boolean)=>void)|undefined;
+  const preparing=new Promise<{review:DocumentRecoveryReview;grant:object}>(resolve=>{releasePrepare=resolve;});
+  const committing=new Promise<void>(resolve=>{releaseCommit=resolve;});
+  const verifying=new Promise<boolean>(resolve=>{releaseVerify=resolve;});
+  const events:string[]=[];
+  const decision=createDocumentRecoveryDecision({
+   async prepare(){events.push('prepare');return preparing;},
+   async commit(){events.push('commit');await committing;},
+   invalidate(){events.push('invalidate');},
+   async verifyAfterReopen(){events.push('verify');return verifying;}
+  });
+  const originalPhases:string[]=[];
+  const detachOld=decision.subscribe(()=>originalPhases.push(decision.phase()));
+  const p=decision.prepare();
+  expect(originalPhases).toEqual(['preparing']);
+  detachOld(); // Simulate the view unmounting before preparation settles.
+  const remounted:Array<{phase:string;ready:boolean}>=[];
+  const detachNew=decision.subscribe(()=>remounted.push({
+   phase:decision.phase(),ready:decision.review()!==null
+  }));
+  releasePrepare!({review,grant});await p;
+  expect(remounted).toEqual([{phase:'prepared',ready:true}]);
+  const c=decision.confirm({accepted:true,phrase:'RIPRISTINA'});
+  expect(remounted.at(-1)).toEqual({phase:'committing',ready:false});
+  releaseCommit!();await c;
+  expect(remounted.at(-1)).toEqual({phase:'verification-required',ready:false});
+  const v=decision.verifyAfterReopen();
+  expect(remounted.at(-1)).toEqual({phase:'verifying',ready:false});
+  releaseVerify!(true);expect(await v).toBe(true);
+  expect(remounted.at(-1)).toEqual({phase:'completed',ready:false});
+  expect(events.filter(x=>x==='commit')).toHaveLength(1);
+  detachNew();
+ });
+ test('unsubscribe and throwing observers cannot interrupt the teacher recovery decision',async()=>{
+  const {decision,calls}=lab();
+  const events:string[]=[];
+  const unsubscribe=decision.subscribe(()=>events.push(decision.phase()));
+  decision.subscribe(()=>{throw Error('Synthetic observer failure');});
+  unsubscribe();
+  await decision.prepare();
+  expect(decision.phase()).toBe('prepared');
+  expect(events).toEqual([]);
+  expect(calls).toEqual(['prepare']);
+ });
+
 });
