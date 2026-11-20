@@ -41,13 +41,15 @@ export function createDocumentRecoveryDecision(driver:DocumentRecoveryDriver):Do
   const keys=['version','eventsBefore','eventsAfter','gradesPreserved','assessmentsPreserved','recoveryCopyVerified','replacementRequiresConfirmation'];
   const fields=Object.getOwnPropertyDescriptors(raw);
   if(Reflect.ownKeys(raw).length!==keys.length||keys.some(k=>!Object.prototype.hasOwnProperty.call(fields,k)||!Object.prototype.hasOwnProperty.call(fields[k],'value')))return fail('Anteprima del recupero incompleta.');
-  if(fields.version.value!==8||!Number.isSafeInteger(fields.eventsBefore.value)||fields.eventsBefore.value<0||
-     !Number.isSafeInteger(fields.eventsAfter.value)||fields.eventsAfter.value<fields.eventsBefore.value||
+  const before=fields.eventsBefore.value;
+  const after=fields.eventsAfter.value;
+  if(fields.version.value!==8||typeof before!=='number'||!Number.isSafeInteger(before)||before<0||
+     typeof after!=='number'||!Number.isSafeInteger(after)||after<before||
      fields.gradesPreserved.value!==true||fields.assessmentsPreserved.value!==true||
      fields.recoveryCopyVerified.value!==true||fields.replacementRequiresConfirmation.value!==true)
     return fail('Anteprima del recupero non valida.');
   return Object.freeze({
-   version:8,eventsBefore:fields.eventsBefore.value,eventsAfter:fields.eventsAfter.value,
+   version:8,eventsBefore:before,eventsAfter:after,
    gradesPreserved:true,assessmentsPreserved:true,recoveryCopyVerified:true,
    replacementRequiresConfirmation:true
   });
