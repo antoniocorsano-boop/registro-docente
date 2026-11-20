@@ -120,12 +120,9 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: false
-          script: |
-            if [ "$VAL01_MODE" = "v9" ]; then
-              timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/doc01-native-v9-evidence.mjs
-            else
-              timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/val01-native-evidence.mjs
-            fi
+          # The emulator runner executes its script as one shell command.
+          # Resolve the mode at workflow expression time (not in a multi-line shell if).
+          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/${{ matrix.mode == 'v9' && 'doc01-native-v9-evidence.mjs' || 'val01-native-evidence.mjs' }}
       - name: Require complete native evidence
         run: |
           jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$VAL01_API" --arg mode "$VAL01_MODE" '.candidate==$sha and .api==$api and .package=="it.trama.registrodocente.lab.val01" and .productionRelease==false and (if $mode=="v9" then .mode=="v9" and ([.results[].stage]==["native-v9-institutional-history-seed","native-v9-saf-write-readback","native-v9-saf-cancellation","native-v9-saf-selected-copies","native-v9-authorized-restore-and-replay-refusal","native-v9-authenticated-cold-reopen"]) and all(.results[];.status=="PASS") and ([.results[]|select(.forcedStop==true)]|length)==1 and all(.results[]|select(.forcedStop==true);.absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0) else ([.results[].stage]==["native-db2-seed","native-atomic-abort","native-abort-cold-reopen","native-evidence-atomic-commit","native-committed-cold-reopen","native-history-cold-reopen","native-v7-inspection-and-v6-refusal","native-v7-saf-write-readback","native-v7-saf-cancellation","native-v7-saf-selected-copies","native-v7-authorized-restore-and-replay-refusal","native-v7-restored-cold-reopen","native-v8-document-history-commit","native-v8-saf-write-readback","native-v8-saf-cancellation","native-v8-saf-selected-copies","native-v8-authorized-restore-and-replay-refusal","native-v8-restored-cold-reopen"]) and all(.results[];.status=="PASS") and ([.results[]|select(.forcedStop==true)]|length)==5 and all(.results[]|select(.forcedStop==true);.absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0) end)' native-evidence/result.json
