@@ -18,3 +18,9 @@ A teacher can record locally confirmed, professional documents using institution
 
 ## Follow-on production prerequisites
 A separately reviewed, version-fenced **V9** (or new approved archival envelope) must explicitly support institutional history V2; determine migration rules for demo V1, retention/deletion/access policy, authentic school authority and secure native/session ownership at the app shell. Real student-level personal data are NOT approved by this phase. Production V1 Root remains untouched.
+
+
+## Security review — explicit revoke operation, 2026-11-20
+During review after the first green candidate, a new regression test intentionally showed that composing `{kind:'revoke',...untrustedInput}` could **execute accessors** or allow a supplied `kind:'append'` to replace the named operation. This is not merely a typing issue: it could cause an authorized revocation path to be interpreted as an append request. The [RED at SHA `d64e660788feec231e0db9c5add72898a7289e94`](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44686831477) produced **1,371 inherited/new passing contracts and exactly one failing security regression**. Correction at `425331572a43e7ff82ff7d41d57d64be4d472040` first detaches input through the existing descriptor-only bounded historical copier, then requires exactly the five revoke fields, then explicitly constructs a fixed `kind:'revoke'` operation. No getters, silent coercions, or caller-defined operation types are permitted. All V1 and V8 behavior is unchanged.
+
+The overall exact-SHA green qualification must be reacquired after this change; earlier 9/11 or browser 174/174 from the prior SHA are evidence of the earlier candidate, not final qualification of the new SHA.
