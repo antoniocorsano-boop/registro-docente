@@ -17,11 +17,11 @@ Nessun dato personale, firma, copia di sicurezza reale, cancellazione dell'archi
 
 **Non iniziare interventi applicativi B2** finché:
 1. [PR #385](https://github.com/antoniocorsano-boop/registro-docente/pull/385) è verificata sul proprio SHA esatto;
-2. la [qualificazione Browser #44766401458](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401458) ha esito terminale e le due prove Chromium B1 sono PASS, incluse assenza di creazione dopo sola osservazione e preservazione dei dieci record dopo perdita dei metadati;
+2. la [qualificazione Browser #44766401458](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401458) è **PASS (71/71)** e le due prove Chromium B1 sono PASS, incluse assenza di creazione dopo sola osservazione e preservazione dei dieci record dopo perdita dei metadati;
 3. la [matrice nativa DB2 #44766402430](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766402430) è triagiata: **un lavoro API su emulatore ha già restituito** `UiTestAutomationBridge: null root node` e un file `/sdcard/val01-ui.xml` non disponibile; questa è una **anomalia di qualificazione non attribuita** alla correzione B1, non un PASS né una perdita di dati dimostrata;
 4. non ci sono regressioni accertate che vadano corrette in B1.
 
-Al punto di fissazione: PREDEPLOY #44766401700 PASS, Invariants #44766401502 PASS, HEADER #44766401679 PASS, compatibilità archivio Beta2 #44766401989 PASS, FLOW-03 #44766401932 PASS, BETA2 Reference #44766401757 PASS; browser generale in esecuzione; qualificazione nativa generale in esecuzione con un lavoro fallito. **B1 = IN VERIFICA; B2 = PIANIFICATO.**
+**Aggiornamento successivo:** PREDEPLOY #44766401700 PASS, Invariants #44766401502 PASS, HEADER #44766401679 PASS, compatibilità archivio Beta2 #44766401989 PASS, FLOW-03 #44766401932 PASS, BETA2 Reference #44766401757 PASS. **Browser Qualification #44766401458 PASS, 71/71 prove**, incluse entrambe le prove fisiche M1-B1; verificato sui log del lavoro browser. La matrice nativa ha 4/5 lavori PASS: API 32 legacy e V9, API 36 V9 e preflight; il solo API 36 legacy è fallito dopo i PASS di persistenza per errore di acquisizione interfaccia Android, non ancora attribuito. **Riesecuzione mirata del solo job fallito #136392228468 richiesta e accettata da GitHub** sul run #44766402430, senza cambiare sorgenti/workflow. **B1 = browser qualificato, nativo da chiarire; B2 = PIANIFICATO.**
 
 ## 3. Differenze sorgenti verificate e interventi candidati (non automaticamente richiesti)
 
@@ -82,8 +82,8 @@ Al punto di fissazione: PREDEPLOY #44766401700 PASS, Invariants #44766401502 PAS
 
 | Fase | Stato alla fissazione | Prossimo artefatto |
 |---|---|---|
-| B1 browser e prova fisica | IN CORSO | Risultato terminale della Browser Qualification #44766401458 |
-| B1 anomalia emulatore | DA ATTRIBUIRE | Log e classificazione API/driver su Native DB2 #44766402430 |
+| B1 browser e prova fisica | **PASS — 71/71** | Risultato terminale della Browser Qualification #44766401458 acquisito |
+| B1 anomalia emulatore | DA ATTRIBUIRE — riesecuzione mirata API 36 legacy richiesta | Esito del secondo tentativo nel Native DB2 #44766402430; verificare eventuale riproducibilità |
 | B2 prerequisiti | PREPARATI | SHA PR #385 validato |
 | B2 test RED | NON AVVIATI | B2-R01…R12 con prove sui moduli reali |
 | B2 GREEN | NON AVVIATO | Commit minimo e regressioni |
