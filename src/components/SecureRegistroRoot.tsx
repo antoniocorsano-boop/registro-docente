@@ -20,6 +20,7 @@ import { SecureVault } from '../security/secureVault';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
+import { BootFault, bootMessage, createProtectedBootstrap, observeArchive } from '../security/protectedBootstrap';
 import type { SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
 import {
   ANDROID_SESSION_EVENT, isAndroidSessionRuntime, readAndroidSessionState,
@@ -36,6 +37,9 @@ const LEGACY_DATA_KEYS = [
   META_KEY
 ] as const;
 
+// Positive local evidence only: no credentials or personal records.
+const ESTABLISHED_ARCHIVE_KEY = 'registro_archive_established_v1';
+const COMPLETE_ARCHIVE_KEY = 'registro_archive_complete_v1';
 const AUTO_LOCK_STORAGE_KEY = 'registro_auto_lock_minutes';
 const DEFAULT_AUTO_LOCK_MS = 15 * 60_000;
 type AutoLockMinutes = 0 | 15 | 30 | 60;
@@ -73,6 +77,19 @@ export const SecureRegistroRoot: React.FC = () => {
   const authenticatedEpochRef = useRef<number | null>(null);
   const lifecycleRevisionRef = useRef(0);
   const [nativeState, setNativeState] = useState<AndroidSessionState | null>(null);
+  const bootstrapGenerationRef = useRef(0);
+  const bootstrapRef = useRef<ReturnType<typeof createProtectedBootstrap> | null>(null);
+  const establishedArchive = useCallback(() =>
+    window.localStorage.getItem(ESTABLISHED_ARCHIVE_KEY) === '1' ||
+    window.localStorage.getItem(COMPLETE_ARCHIVE_KEY) === '1', []);
+  const protectedBootstrap = useCallback(() => {
+    if (!bootstrapRef.current) bootstrapRef.current = createProtectedBootstrap({
+      observe: signal => observeArchive(globalThis.indexedDB, signal,
+        window.localStorage.getItem(COMPLETE_ARCHIVE_KEY) === '1'),
+      established: establishedArchive
+    });
+    return bootstrapRef.current;
+  }, [establishedArchive]);
   const registerSessionSuspension = useCallback((request: (() => SuspendedMutationLease) | null) => {
     suspendRequestRef.current = request;
   }, []);
@@ -95,40 +112,57 @@ export const SecureRegistroRoot: React.FC = () => {
   }, []);
 
   const inspectBootstrap = useCallback(async () => {
+    const generation = ++bootstrapGenerationRef.current;
+    const current = () => generation === bootstrapGenerationRef.current;
     setGateState('CHECKING');
     setErrorMessage(null);
 
-    const indexedDbAvailable = Boolean(globalThis.indexedDB);
-    const webCryptoAvailable = Boolean(globalThis.crypto?.subtle);
-    if (!indexedDbAvailable || !webCryptoAvailable) {
-      setErrorMessage('IndexedDB o Web Crypto non sono disponibili: il Registro non userà un fallback in chiaro.');
+    if (!globalThis.indexedDB || !globalThis.crypto?.subtle) {
+      setErrorMessage('IndexedDB o Web Crypto non sono disponibili: nessun archivio verrà creato.');
       setGateState('ERROR');
       return;
     }
-
     try {
-      const { store } = getRuntime();
-      const metadata = await store.getMetadata();
+      // Never construct the writable store before read-only classification.
+      const result = await protectedBootstrap().run();
+      if (!current()) return;
+      if (result.kind === 'error') throw result.fault;
+      const observation = result.observation;
+      if (observation.kind === 'active') {
+        // The regular product entrypoint owns DB1; DB2 remains laboratory-only.
+        if (observation.version !== 1) {
+          throw new Error('Versione archivio non attiva in questo Registro. I dati non verranno modificati.');
+        }
+        window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY, '1');
+        setGateState('LOCKED');
+        return;
+      }
+      if (observation.kind === 'erased') {
+        throw new Error('Archivio aggiornato da verificare: nessuna inizializzazione automatica.');
+      }
       const hasLegacyData = LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null);
       const nextState = decideVaultBootstrap({
-        metadataState: metadata?.state ?? null,
-        hasLegacyData,
-        indexedDbAvailable,
-        webCryptoAvailable
+        metadataState: null, hasLegacyData, indexedDbAvailable: true, webCryptoAvailable: true,
+        archivePreviouslyEstablished: establishedArchive(), physicalArchiveStatus: 'absent'
       });
-
-      if (nextState === 'ERROR' && metadata?.state === 'STAGING') {
-        setErrorMessage('È stata rilevata una configurazione o migrazione interrotta. Riprova: gli archivi già attivi non verranno cancellati.');
-      }
       setGateState(nextState);
+      if (nextState === 'ERROR') {
+        setErrorMessage('Archivio precedente non verificabile. Non cancellare i dati o le copie cifrate.');
+      }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Controllo del Secure Local Vault non riuscito.');
+      if (!current()) return;
+      setErrorMessage(error instanceof BootFault ? bootMessage(error) :
+        error instanceof Error ? error.message : 'Controllo di sicurezza non riuscito.');
       setGateState('ERROR');
     }
-  }, [getRuntime]);
+  }, [protectedBootstrap, establishedArchive]);
 
   useEffect(() => {
     void inspectBootstrap();
+    return () => {
+      bootstrapGenerationRef.current++;
+      bootstrapRef.current?.cancel();
+    };
   }, [inspectBootstrap]);
 
   const revokeNativeAuthorization = useCallback(() => {
@@ -345,7 +379,11 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const loadReadySnapshot = useCallback(async (attempt: { epoch: number | null; revision: number }) => {
     const { storage } = getRuntime();
-    const nextSnapshot = await storage.loadSnapshot();
+    let physicallyComplete = false;
+    const nextSnapshot = await storage.loadSnapshot(value => { physicallyComplete = value; });
+    if (window.localStorage.getItem(COMPLETE_ARCHIVE_KEY) === '1' && !physicallyComplete) {
+      throw new Error('Archivio precedentemente completo ora incompleto. Nessun dato verrà sovrascritto.');
+    }
 
     // Teacher navigation starts from a neutral Home on every vault bootstrap.
     // Replace, rather than push, the current entry so Back cannot restore a
@@ -378,6 +416,8 @@ export const SecureRegistroRoot: React.FC = () => {
     }
 
     await confirmForegroundEpoch(attempt, () => {
+      window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY, '1');
+      if (physicallyComplete) window.localStorage.setItem(COMPLETE_ARCHIVE_KEY, '1');
       setSnapshot(nextSnapshot);
       setGateState('READY');
     });
@@ -385,6 +425,18 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
     const attempt = await getForegroundEpoch();
+    if (establishedArchive()) throw new Error('Archivio già stabilito: non è ammessa una nuova configurazione.');
+    const inspected = await protectedBootstrap().run();
+    if (inspected.kind !== 'ok' ||
+        (inspected.observation.kind !== 'absent' && inspected.observation.kind !== 'empty') ||
+        establishedArchive()) {
+      await inspectBootstrap();
+      throw new Error('Stato dell’archivio cambiato o non verificabile. Nessuna configurazione eseguita.');
+    }
+    const fresh = await getForegroundEpoch();
+    if (attempt.revision !== fresh.revision || attempt.epoch !== fresh.epoch || document.hidden) {
+      throw new Error('Sessione cambiata. Ripeti la configurazione in primo piano.');
+    }
     const { vault, store } = getRuntime();
     if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
       throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
@@ -397,7 +449,7 @@ export const SecureRegistroRoot: React.FC = () => {
       setGateState('LOCKED');
       throw error;
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, establishedArchive, protectedBootstrap, inspectBootstrap]);
 
   const handleUnlock = useCallback(async (password: string) => {
     const attempt = await getForegroundEpoch();
@@ -432,20 +484,8 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap]);
 
   const handleRetry = useCallback(() => {
-    void (async () => {
-      try {
-        if (storeRef.current && vaultRef.current) {
-          const metadata = await storeRef.current.getMetadata();
-          if (metadata?.state === 'STAGING') {
-            await vaultRef.current.discardStaging();
-          }
-        }
-        await inspectBootstrap();
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : 'Ripristino del controllo di sicurezza non riuscito.');
-        setGateState('ERROR');
-      }
-    })();
+    // Retry only inspects: never silently discard STAGING or residual data.
+    void inspectBootstrap();
   }, [inspectBootstrap]);
 
   const handleFactoryReset = useCallback(async () => {
@@ -454,6 +494,9 @@ export const SecureRegistroRoot: React.FC = () => {
     for (const legacyKey of LEGACY_DATA_KEYS) {
       window.localStorage.removeItem(legacyKey);
     }
+    // Confirmed reset alone removes positive-history flags after clearAll commits.
+    window.localStorage.removeItem(ESTABLISHED_ARCHIVE_KEY);
+    window.localStorage.removeItem(COMPLETE_ARCHIVE_KEY);
     revokeNativeAuthorization();
     suspendedRef.current = null;
     setSuspensionPhase(null);
