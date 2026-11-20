@@ -6,6 +6,8 @@ import { createBackupPayload } from '../security/backupPayload';
 import { expectedBackupEvidence, matchesDownloadedBackup, type BackupByteEvidence } from '../security/webBackupVerification';
 import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint, ExpectedCopyEvidence } from '../persistence/backupCheckpoint';
 import { today } from '../utils';
+import {DocumentRecoveryReview} from './documents/DocumentRecoveryReview';
+import type {DocumentRecoveryDriver} from '../security/documentRecoveryDecision';
 import {
   ShieldCheck,
   Lock,
@@ -32,6 +34,8 @@ interface PrivacyViewProps {
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
   onFactoryReset: () => void;
+  /** Optional V8 owner authorization. Absent in the released App. */
+  documentRecoveryWorkflow?:DocumentRecoveryDriver;
 }
 
 export const PrivacyView: React.FC<PrivacyViewProps> = ({
@@ -43,7 +47,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
-  onFactoryReset
+  onFactoryReset,
+  documentRecoveryWorkflow
 }) => {
   const [encryptPassword, setEncryptPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -502,6 +507,12 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           </form>
         </div>
       </div>
+
+      {/* DOC-01/D4c3e1 — separate review. Never route v8 into legacy import.
+          The released App intentionally provides no privileged workflow. */}
+      {documentRecoveryWorkflow && (
+        <DocumentRecoveryReview workflow={documentRecoveryWorkflow}/>
+      )}
 
       {/* GDPR Data Treatment Sheet (Art. 30 GDPR) */}
       <div className="neon-card p-5">
