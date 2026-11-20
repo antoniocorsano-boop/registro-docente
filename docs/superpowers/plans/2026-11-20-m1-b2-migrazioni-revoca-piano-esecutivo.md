@@ -91,3 +91,27 @@ Nessun dato personale, firma, copia di sicurezza reale, cancellazione dell'archi
 | B3 recupero | SOSPESO FINO A B2 | Proseguire nel medesimo ramo/PR |
 
 **Prossima azione non ambigua:** verificare i due controlli B1 aperti, classificare l'anomalia nativa e, solo con B1 convalidato, realizzare **B2-R01** sul ramo già esistente della PR #385.
+
+## 8. Avanzamento esecutivo B2 — verificato il 20 novembre 2026
+
+**B1 concluso con successo per il perimetro di laboratorio in #385**, sul SHA `6fbac1caad903987047a5db05303b503f7fa4239`: tutte le 8 qualificazioni concluse PASS, incluse la Browser Qualification [#44766401458](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766401458) (71/71), e la [Native DB2 #44766402430](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44766402430) dopo riesecuzione del solo job API 36 legacy (esito 5/5 PASS). Si conserva il log del precedente tentativo fallito nell'interfaccia, senza attribuirgli una regressione non dimostrata. **R1/R2/R3 continuano a non essere soddisfatti.**
+
+**B2 test RED causali acquisiti:**
+- PR #385 `43c13f3c453c310a73c94b457d00236197185610`: recuperate dall'esatto #325 sei prove `S-R02/S-R05` in `src/security/legacyMigration.test.ts`. 
+- `d9101d62acf66d5c054976904991467c6dc1c4fb`: registrazione nelle invarianti corretta, [Qualification Invariants run #44774087781](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774087781): **6/6 fallimenti causali**. Gli esiti reali erano promesse risolte anziché rifiuti di autorizzazioni revocate o origine modificata; non errori di importazione. I normali test preesistenti sono rimasti eseguibili.
+- I sei test includono revoca dopo una scrittura, durante lettura prima di ACTIVE, dati d'origine alterati, revoca dopo ACTIVE, revoca nella pulizia e modifica dei byte sorgente.
+
+**B2 prima correzione GREEN applicata (ancora in qualifica):**
+- `872e2ec216b1bde0eb36f9e85f001397ebc68b46`: ripristinato `legacyMigration.ts` del candidato #325, con callback ai confini asincroni, confronto byte d'origine, distinzione commit invocato e conservazione fonte dopo revoca.
+- `83c3741291396e362939494d6b40268e0ef0c1b0`: `initialArchiveSetup.ts` revocabile, senza cambiare il modello archivio né il formato cifrato.
+- `8f0ffa2bc1ea0e93326c359b0857c2b374cd262b`: registrati tutti i file di implementazione/test nel sistema esistente di invarianti, **149 invarianti conservate**.
+- **SHA di controllo corrente:** `cf10a7e896a1c968cf4fb3e09aa4ddeaa8439ce2`, su [PR #385](https://github.com/antoniocorsano-boop/registro-docente/pull/385): integrazione nell'effettivo `SecureRegistroRoot` di un'autorità di sessione revocabile per nuova configurazione, sblocco/pulizia legacy e migrazione, con esclusività delle operazioni, invalidazione per perdita primo piano, lock, reset e revisione Android; controllo prima dell'ammissione e della pubblicazione dello stato READY.
+
+**Controlli sul commit `cf10a7e...` al momento del checkpoint:** [Qualification Invariants #44774831833](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774831833) PASS, [PREDEPLOY #44774831954](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774831954) PASS, [FLOW-03 #44774831957](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774831957) PASS, [compatibilità Beta2 #44774833060](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774833060) PASS. [Browser Qualification #44774831797](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774831797), [BETA2 Reference #44774831634](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774831634), [HEADER #44774832017](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774832017) e [Native DB2 #44774831847](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44774831847) erano ancora in corso/in coda. **B2 NON ANCORA qualificato.**
+
+### Unica istruzione per la prossima ripresa
+
+1. Verificare **esclusivamente** lo SHA HEAD della PR #385 e l'esito terminale degli otto controlli associati a `cf10a7e...`. Non trasferire risultati del precedente commit B1.
+2. Se compare un fallimento, localizzare il caso nei log e correggere sullo **stesso ramo**; ripetere la qualifica per il nuovo exact SHA. Se la regressione è nativa, distinguere un problema del codice da quello dell'emulatore; non modificare i workflow sospesi S-R04b.
+3. Verificare che i sei RED siano ora GREEN sullo stesso SHA, che il Root chiami effettivamente le funzioni con callback di revoca e che la ripartenza dopo ACTIVE incerto non cancelli mai la fonte. Se necessario, aggiungere **prove di livello Root e Chromium** per revoca durante sessione/reload senza assumere sufficiente il test statico.
+4. **Solo con B2 integralmente PASS**, procedere al pacchetto B3 (handoff cifrato, DB2 e versioni V6–V9), sempre nella medesima PR #385 e senza merge.
