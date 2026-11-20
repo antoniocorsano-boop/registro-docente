@@ -64,7 +64,7 @@ describe('DOC-01/D4c3e3 — institutional documents without V1 demo markers',()=
  test('reject unrelated school, class, year, purpose and unsupported school order',async()=>{
   const base=input();
   for(const edit of [
-   {...scope,institutionCode:'ZZIC99999A'}, {...scope,classId:'3C'},
+   {...scope,institutionCode:'ZZIC99999A'}, {...scope,gradeLevel:3,classId:'3C'},
    {...scope,schoolYear:'2024/2025'}, {...scope,purpose:'council-contribution'},
    {...scope,schoolOrder:'primary'}
   ]){
