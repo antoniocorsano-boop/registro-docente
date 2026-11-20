@@ -91,6 +91,7 @@ export function createDocumentDb2RecoveryDriver(options:DocumentDb2RecoveryOptio
  let originalToken:string|null=null;
  let expectedSnapshot:CompleteSecureAppSnapshot|null=null;
  let retired=false;
+ let sealed=false;
  const current=(token:string,generation:number)=>revision===generation&&
    phase==='preparing'&&authority.currentToken()===token;
  const assure=async(token:string,generation:number)=>{
@@ -140,6 +141,7 @@ export function createDocumentDb2RecoveryDriver(options:DocumentDb2RecoveryOptio
     const physical=await captureDb2(factory);
     if(physical.state!=='active')throw rejected();
     // All already-admitted writes settle before we capture the exact archive.
+    sealed=true;
     await owner.coordinator.sealAndDrain();
     await assure(token,generation);
     const previous=await owner.storage.loadExactBackupSnapshot();
@@ -183,10 +185,10 @@ export function createDocumentDb2RecoveryDriver(options:DocumentDb2RecoveryOptio
     return {review:preview,grant};
    }catch{
     abandon();
-    // The old owner must never reopen after its admission was sealed, even
-    // if parsing, grant preparation, cancellation or process state failed.
-    if(retired)phase='uncertain';
-    else phase='ended';
+    // Once write admission has closed, even a failed checkpoint must retire
+    // the old UI/Vault: it cannot be silently revived with a sealed queue.
+    if(sealed&&!retired){try{await retire();}catch{/* stay fail-closed */}}
+    phase=retired?'uncertain':'ended';
     throw rejected();
    }
   },
