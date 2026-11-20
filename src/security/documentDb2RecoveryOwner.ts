@@ -3,9 +3,9 @@
  * DocumentHistoryV1 itself is lab-only: real student documents remain forbidden.
  */
 import type {DocumentRecoveryDriver,DocumentRecoveryReview} from './documentRecoveryDecision';
-import type {ExistingSessionVaultStore} from './existingSessionVaultStore';
-import type {SecureVault} from './secureVault';
-import type {SecureAppStorage} from './secureAppStorage';
+
+
+
 import type {DurableMutationCoordinator} from '../persistence/durableMutationCoordinator';
 
 export type V8DocumentCopyKind='recovery'|'target';
@@ -87,7 +87,7 @@ export function createDocumentDb2RecoveryDriver(options:DocumentDb2RecoveryOptio
  const service=createDb2Lifecycle(factory);
  let phase:'idle'|'preparing'|'prepared'|'committing'|'verification-required'|'uncertain'|'ended'='idle';
  let revision=0;
- let pendingGrant:object|null=null;
+ let pendingGrant:Awaited<ReturnType<ReturnType<typeof createDb2Lifecycle>['prepareDocumentRestore']>>|null=null;
  let originalToken:string|null=null;
  let expectedSnapshot:CompleteSecureAppSnapshot|null=null;
  let retired=false;
@@ -192,10 +192,11 @@ export function createDocumentDb2RecoveryDriver(options:DocumentDb2RecoveryOptio
     throw rejected();
    }
   },
-  async commit(grant:object,consent:true){
-   if(phase!=='prepared'||!pendingGrant||grant!==pendingGrant||consent!==true||!originalToken)
+  async commit(candidate:object,consent:true){
+   if(phase!=='prepared'||!pendingGrant||candidate!==pendingGrant||consent!==true||!originalToken)
     throw rejected();
    const token=originalToken;
+   const grant=pendingGrant;
    pendingGrant=null;phase='committing'; // consume synchronously before await
    try{
     if(authority.currentToken()!==token||!await authority.isCurrent(token))throw rejected();
