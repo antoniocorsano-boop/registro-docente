@@ -25,6 +25,8 @@ export interface DocumentRecoveryDecision {
  confirm(authorization:{accepted:boolean;phrase:string}):Promise<void>;
  cancel():void;
  verifyAfterReopen():Promise<boolean>;
+ /** Observation only: never grants authority or replays an operation. */
+ subscribe(listener:()=>void):()=>void;
 }
 /** The DB2 service owns actual authorization and replacement; this controller
  * owns only the teacher's separate, one-use decision to consume its grant.
@@ -35,6 +37,8 @@ export function createDocumentRecoveryDecision(driver:DocumentRecoveryDriver):Do
  let displayed:DocumentRecoveryReview|null=null;
  let grant:object|null=null;
  let preparingGeneration=0;
+ const listeners=new Set<()=>void>();
+ const notify=()=>{for(const listener of listeners){try{listener();}catch{/* observers cannot interrupt recovery */}}};
  const fail=(message:string):never=>{throw Error(message);};
  const inspect=(raw:DocumentRecoveryReview):DocumentRecoveryReview=>{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))return fail('Anteprima del recupero non verificabile.');
@@ -58,19 +62,20 @@ export function createDocumentRecoveryDecision(driver:DocumentRecoveryDriver):Do
  return {
   phase:()=>current,
   review:()=>current==='prepared'?displayed:null,
+  subscribe(listener){listeners.add(listener);return()=>{listeners.delete(listener);};},
   async prepare(){
    if(current!=='idle')return fail('Operazione già avviata.');
-   current='preparing';const generation=++preparingGeneration;
+   current='preparing';notify();const generation=++preparingGeneration;
    try{
     const next=await driver.prepare();
     if(current!=='preparing'||generation!==preparingGeneration){invalidate();return fail('Preparazione annullata.');}
     if(!next||!next.grant||typeof next.grant!=='object')return fail('Conferma protetta non disponibile.');
     const safe=inspect(next.review);
-    grant=next.grant;displayed=safe;current='prepared';
+    grant=next.grant;displayed=safe;current='prepared';notify();
     return safe;
    }catch(error){
     if(current==='preparing')current='cancelled';
-    invalidate();
+    invalidate();notify();
     throw error;
    }
   },
@@ -79,31 +84,31 @@ export function createDocumentRecoveryDecision(driver:DocumentRecoveryDriver):Do
    if(!authorization||authorization.accepted!==true||authorization.phrase!=='RIPRISTINA')
     return fail('Per procedere occorre una conferma esplicita.');
    const token=grant;
-   grant=null;displayed=null;current='committing';
+   grant=null;displayed=null;current='committing';notify();
    try{
     // Consume before the await: neither repeated taps nor a second caller
     // can perform another physical replacement with the same grant.
     await driver.commit(token,true);
-    current='verification-required';
+    current='verification-required';notify();
    }catch(error){
-    current='uncertain';invalidate();
+    current='uncertain';invalidate();notify();
     throw error; // No rollback and no claim that the previous DB2 survived.
    }
   },
   cancel(){
    if(current!=='idle'&&current!=='preparing'&&current!=='prepared')
     return fail('Una sostituzione eseguita non può essere annullata.');
-   current='cancelled';++preparingGeneration;invalidate();
+   current='cancelled';++preparingGeneration;invalidate();notify();
   },
   async verifyAfterReopen(){
    if(current!=='verification-required')return fail('Prima occorre completare il recupero.');
-   current='verifying';
+   current='verifying';notify();
    try{
     const verified=await driver.verifyAfterReopen();
     current=verified===true?'completed':'uncertain';
-    invalidate();
+    invalidate();notify();
     return verified===true;
-   }catch(error){current='uncertain';invalidate();throw error;}
+   }catch(error){current='uncertain';invalidate();notify();throw error;}
   }
  };
 }
