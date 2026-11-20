@@ -3213,6 +3213,37 @@
       "tests": [
         "src/security/doc01Db2RecoveryOwnerBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3E3-I01",
+      "owner": "DOC-01/D4c3e3",
+      "statement": "Separately versioned V2 institutional document records are real-world school-scoped (not demo-only) and validate explicit institute, site, year, class, teacher consent and non-official status. Only whitelisted professional document fields may be stored; bounded detached records with SHA256 canonical digests form an immutable, teacher-confirmed append/revoke history with scope, revision lineage, duplicate/stale protection, and no fabricated institutional approval. Existing V1 lab-only document archive and encrypted V8 backup must remain unchanged; no automatic migration or personal student record support.",
+      "impactPaths": [
+        "src/documents/institutionalDocumentHistoryV2.ts",
+        "src/security/doc01InstitutionalDocumentHistoryV2.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/doc01InstitutionalDocumentHistoryV2.test.ts"
+      ]
+    },
+    {
+      "id": "DOC-01-D4C3E3-I02",
+      "owner": "DOC-01/D4c3e3",
+      "statement": "The one-use V8 recovery decision survives the destruction and recreation of its old React view. It is owned by a separately instantiated supervisor independent of the retiring App, and a newly mounted view derives phase and preview from the original controller. Unmounting the view cannot cancel a granted or committed recovery; voluntary disposal before authorization must invalidate the grant, and disposal after an attempted commit must never claim rollback. UI cannot declare success prior to fresh authenticated readback and cannot duplicate a physical DB2 write. Synthetic 320/390 Chromium fixture only; no production binding.",
+      "impactPaths": [
+        "src/security/documentRecoverySupervisor.ts",
+        "src/security/doc01RecoverySupervisorBoundary.test.ts",
+        "src/components/documents/DocumentRecoveryReview.tsx",
+        "tests/browser/fixtures/doc01-d4c3e3-supervisor-fixture.tsx",
+        "tests/browser/fixtures/doc01-d4c3e3-supervisor.html",
+        "tests/browser/doc01-d4c3e3-supervisor-remount.spec.cjs",
+        ".github/workflows/beta2-reference-qualification.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/doc01RecoverySupervisorBoundary.test.ts"
+      ]
     }
   ]
 }
