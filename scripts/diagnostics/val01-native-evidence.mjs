@@ -82,6 +82,8 @@ async function forceRestart(expectedIdentity){
 }
 
 const nativeRestore=(method,...args)=>evaluate('window.__val01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
+const docRestore=(method,...args)=>evaluate('window.__doc01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
+const docFileNames={recovery:'Backup_Cifrato_DOC01_V8_2031-01-15.enc.json',target:'Backup_Cifrato_DOC01_V8_2031-01-16.enc.json'};
 const fileNames={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
 const doc=n=>/documentsui/i.test(n.pkg);
 function nodes(){
@@ -125,6 +127,38 @@ async function readCopy(kind,expected){
  if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Native Open missing'));
  const read=await pickerResult(kind,'read');
  assert.equal(read.bytes,expected.bytes);assert.equal(read.sha256,expected.sha256);
+ return {bytes:read.bytes,sha256:read.sha256};
+}
+async function docPickerResult(kind,phase){
+ await until(foreground,'V8 picker did not return',30000);
+ const status=await until(async()=>{
+  const s=await docRestore('status');
+  return ['written','read','cancelled','error'].includes(s.phase)?s:null;
+ },'V8 picker did not settle',45000);
+ assert.equal(status.kind,kind);assert.equal(status.phase,phase);
+ return status;
+}
+async function startDocPicker(operation,kind){
+ assert.equal(await docRestore(operation,kind),true);
+ await downloads();
+}
+async function writeDocCopy(kind,expected){
+ await startDocPicker('write',kind);
+ tap(await find(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'Native V8 Save missing'));
+ const written=await docPickerResult(kind,'written');
+ const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+docFileNames[kind]],{timeout:30000});
+ const actual={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+ assert.deepEqual(actual,expected);
+ assert.equal(written.bytes,actual.bytes);assert.equal(written.sha256,actual.sha256);
+ return actual;
+}
+async function readDocCopy(kind,expected){
+ await startDocPicker('read',kind);
+ tap(await find(n=>doc(n)&&n.text===docFileNames[kind]&&!/preview|anteprima/i.test(n.desc),'Native V8 file missing'));
+ await until(()=>foreground()||nodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),'Native V8 selected file did not return',20000);
+ if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Native V8 Open missing'));
+ const read=await docPickerResult(kind,'read');
+ assert.deepEqual({bytes:read.bytes,sha256:read.sha256},expected);
  return {bytes:read.bytes,sha256:read.sha256};
 }
 async function cancelPicker(){
@@ -208,5 +242,49 @@ try{
  assert.deepEqual(await call('physicalDigest'),restored);
  assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
  stage('native-v7-restored-cold-reopen',restoreStop);
+
+ // DOC-01/D4c3d2: same isolated native APK, same physical DB2 archive.
+ // Existing twelve VAL-01 V7 stages must all have passed before entering V8.
+ const seededHistory=await docRestore('seedHistory');
+ assert.deepEqual(seededHistory,{events:1,changes:5,grades:['8'],assessmentRevisions:8,
+  historyValid:true,eventKinds:['append'],version:2});
+ const documentBefore=await call('physicalDigest');
+ assert.deepEqual(Object.keys(documentBefore).sort(),Object.keys(restored).sort());
+ assert.deepEqual(Object.keys(documentBefore).filter(k=>documentBefore[k]!==restored[k]).sort(),['appData','meta']);
+ stage('native-v8-document-history-commit');
+
+ const v8Copies=await docRestore('createCopies');
+ const v8Recovery=await writeDocCopy('recovery',v8Copies.recovery);
+ const v8Target=await writeDocCopy('target',v8Copies.target);
+ assert.notEqual(v8Recovery.sha256,v8Target.sha256);
+ assert.deepEqual(await call('physicalDigest'),documentBefore);
+ stage('native-v8-saf-write-readback',{recovery:v8Recovery,target:v8Target});
+
+ await startDocPicker('read','target');await cancelPicker();await docPickerResult('target','cancelled');
+ assert.equal(await docRestore('prepare'),'rejected');
+ assert.deepEqual(await call('physicalDigest'),documentBefore);
+ stage('native-v8-saf-cancellation');
+
+ const v8RecoveryRead=await readDocCopy('recovery',v8Recovery);
+ const v8TargetRead=await readDocCopy('target',v8Target);
+ assert.deepEqual(await call('physicalDigest'),documentBefore);
+ stage('native-v8-saf-selected-copies',{recovery:v8RecoveryRead,target:v8TargetRead});
+
+ assert.equal(await docRestore('prepare'),'prepared');
+ assert.deepEqual(await call('physicalDigest'),documentBefore);
+ assert.equal(await docRestore('commit',true),'committed');
+ assert.equal(await docRestore('commit',true),'rejected');
+ const documentAfter=await call('physicalDigest');
+ assert.deepEqual(Object.keys(documentAfter).sort(),Object.keys(documentBefore).sort());
+ assert.equal(Object.keys(documentAfter).length,10);
+ assert.ok(Object.keys(documentAfter).every(k=>documentAfter[k]!==documentBefore[k]));
+ stage('native-v8-authorized-restore-and-replay-refusal');
+
+ const documentStop=await forceRestart(installation);
+ assert.deepEqual(await docRestore('summary'),{events:2,changes:6,grades:['8'],assessmentRevisions:8,
+  historyValid:true,eventKinds:['append','revoke'],version:2});
+ assert.deepEqual(await call('physicalDigest'),documentAfter);
+ assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
+ stage('native-v8-restored-cold-reopen',documentStop);
  await call('close');
 }finally{disconnect();}
