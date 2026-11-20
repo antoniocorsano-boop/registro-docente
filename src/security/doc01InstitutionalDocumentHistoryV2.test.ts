@@ -69,7 +69,7 @@ describe('DOC-01/D4c3e3 — institutional documents without V1 demo markers',()=
    {...scope,schoolOrder:'primary'}
   ]){
    const candidate={...base,scope:edit};
-   if(edit.schoolYear==='2024/2025'||edit.schoolOrder==='primary')
+   if(edit.schoolYear==='2024/2025'||edit.schoolOrder==='primary'||edit.purpose==='council-contribution')
     await expect(createInstitutionalDocumentRecordV2(candidate)).rejects.toThrow();
    else{
     const created=await createInstitutionalDocumentRecordV2(candidate);
