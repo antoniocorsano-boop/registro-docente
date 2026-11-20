@@ -13,7 +13,7 @@ import {SecureVault} from '../../../src/security/secureVault';
 import {SecureAppStorage,type CompleteSecureAppSnapshot} from '../../../src/security/secureAppStorage';
 import {ExistingSessionVaultStore} from '../../../src/security/existingSessionVaultStore';
 import {createAuthorizedVaultMigration} from '../../../src/security/authorizedVaultMigration';
-import {captureDb2,sameDb2Physical} from '../../../src/security/db2PhysicalLifecycle';
+import {captureDb2,sameDb2Physical,replaceDb2,createErasedDb2} from '../../../src/security/db2PhysicalLifecycle';
 import {createDb2Lifecycle} from '../../../src/security/db2Lifecycle';
 import {createBackupPayload} from '../../../src/security/backupPayload';
 import {encryptDataWithPassword,decryptDataWithPassword} from '../../../src/cryptoUtils';
@@ -214,7 +214,31 @@ async function restoreAssessment(mode:'approve'|'refuse'|'revoke'|'old'|'bad-rec
  return {prepared,committed,replayRejected,oldOwnerRejected,triggered,unchanged,rotated,exact,summary:summary()};
 }
 
-Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment}});
+/** M1-B3/B3-3 — actual synthetic IndexedDB CAS + revocable owner guard.
+ * Intentionally tries to replace the fixture with an ERASED_DB2 marker,
+ * but both operations MUST reject before commit and preserve the ten ciphertexts.
+ * This fixture is never imported by the production app. */
+async function m1B3PhysicalGuards(){
+ const before=await captureDb2(indexedDB);
+ if(before.state!=='active'||before.records.length!==10)throw Error('B3 requires ten synthetic ciphertexts');
+ const next={state:'erased' as const,metadata:createErasedDb2(),records:[] as []};
+ let checks=0,revokedRejected=false,staleRejected=false;
+ const revoked=()=>++checks<3;
+ try{await replaceDb2(indexedDB,before,next,new AbortController().signal,revoked);}
+ catch{revokedRejected=true;}
+ const afterRevocation=await captureDb2(indexedDB);
+ const revocationUnchanged=sameDb2Physical(before,afterRevocation);
+ const stale=structuredClone(before);
+ const bytes=new Uint8Array(stale.records[0].ciphertext);
+ bytes[0]^=1; // Only mutate the in-memory expected image, never the durable DB2.
+ try{await replaceDb2(indexedDB,stale,next,new AbortController().signal,()=>true);}
+ catch{staleRejected=true;}
+ const afterStale=await captureDb2(indexedDB);
+ return {revokedRejected,revocationReachedTransaction:checks>=3,revocationUnchanged,
+   staleRejected,staleUnchanged:sameDb2Physical(before,afterStale),version:await versions()};
+}
+
+Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards}});
 document.getElementById('status')!.textContent='Laboratorio DB2 pronto';
 
 // Native synthetic adapter: the wrapper supplies actual SAF-selected copies.
