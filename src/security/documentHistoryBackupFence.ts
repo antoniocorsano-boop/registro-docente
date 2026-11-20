@@ -19,7 +19,7 @@ export function assertNoUnsupportedDocumentHistory(value:unknown):void{
    const proto=Object.getPrototypeOf(current);
    if(proto!==null&&proto!==Object.prototype&&proto!==Array.prototype)throw unsupported();
    for(const key of Reflect.ownKeys(current)){
-    if(typeof key!=='string'||key==='documentHistoryV1')throw unsupported();
+    if(typeof key!=='string'||(key==='documentHistoryV1'||key==='documentHistoryV2'))throw unsupported();
     const descriptor=Object.getOwnPropertyDescriptor(current,key);
     if(!descriptor||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw unsupported();
     visit(descriptor.value,depth+1);
