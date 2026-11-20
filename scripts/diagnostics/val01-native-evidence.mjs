@@ -82,7 +82,11 @@ async function forceRestart(expectedIdentity){
 }
 
 const nativeRestore=(method,...args)=>evaluate('window.__val01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
+const nativeDocumentRestore=(method,...args)=>evaluate('window.__doc01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
 const fileNames={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
+const documentFileNames={recovery:'Backup_DOC01_V8_2031-01-17.enc.json',target:'Backup_DOC01_V8_2031-01-18.enc.json'};
+const restoreApi=(version)=>version==='v8'?nativeDocumentRestore:nativeRestore;
+const selectedName=(kind,version)=>version==='v8'?documentFileNames[kind]:fileNames[kind];
 const doc=n=>/documentsui/i.test(n.pkg);
 function nodes(){
  adb('shell','rm','-f','/sdcard/val01-ui.xml');
@@ -99,31 +103,31 @@ async function downloads(){
   tap(await find(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text),'Downloads root missing'));
  }
 }
-async function startPicker(operation,kind){
- assert.equal(await nativeRestore(operation,kind),true);
+async function startPicker(operation,kind,version='v7'){
+ assert.equal(await restoreApi(version)(operation,kind),true);
  await downloads();
 }
-async function pickerResult(kind,phase){
+async function pickerResult(kind,phase,version='v7'){
  await until(foreground,'Picker did not return',30000);
- const r=await until(async()=>{const s=await nativeRestore('status');return ['written','read','cancelled','error'].includes(s.phase)?s:null;},'Native picker operation did not settle',45000);
+ const r=await until(async()=>{const s=await restoreApi(version)('status');return ['written','read','cancelled','error'].includes(s.phase)?s:null;},'Native picker operation did not settle',45000);
  assert.equal(r.kind,kind);assert.equal(r.phase,phase);return r;
 }
-async function writeCopy(kind,expected){
- await startPicker('write',kind);
+async function writeCopy(kind,expected,version='v7'){
+ await startPicker('write',kind,version);
  tap(await find(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'Native Save missing'));
- const written=await pickerResult(kind,'written');
- const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+fileNames[kind]],{timeout:30000});
+ const written=await pickerResult(kind,'written',version);
+ const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+selectedName(kind,version)],{timeout:30000});
  const actual={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
  assert.deepEqual(actual,expected);assert.equal(written.bytes,actual.bytes);assert.equal(written.sha256,actual.sha256);
  return actual;
 }
-async function readCopy(kind,expected){
- await startPicker('read',kind);
- const row=await find(n=>doc(n)&&n.text===fileNames[kind]&&!/preview|anteprima/i.test(n.desc),'Exact encrypted filename missing');
+async function readCopy(kind,expected,version='v7'){
+ await startPicker('read',kind,version);
+ const row=await find(n=>doc(n)&&n.text===selectedName(kind,version)&&!/preview|anteprima/i.test(n.desc),'Exact encrypted filename missing');
  tap(row);
  await until(()=>foreground()||nodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),'File selection did not complete',20000);
  if(!foreground())tap(await find(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'Native Open missing'));
- const read=await pickerResult(kind,'read');
+ const read=await pickerResult(kind,'read',version);
  assert.equal(read.bytes,expected.bytes);assert.equal(read.sha256,expected.sha256);
  return {bytes:read.bytes,sha256:read.sha256};
 }
@@ -208,5 +212,58 @@ try{
  assert.deepEqual(await call('physicalDigest'),restored);
  assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
  stage('native-v7-restored-cold-reopen',restoreStop);
+
+ // DOC-01 V8: the same authenticated DB2 archive after V7 recovery.
+ // Save two *different* V8 encrypted files through actual Android SAF, read
+ // the exact external bytes via adb and through the native file picker, and
+ // authorize a one-use physical replacement before a fifth cold restart.
+ const beforeDocument=await call('physicalDigest');
+ const documentCopies=await nativeDocumentRestore('createCopies');
+ const docSeed=await nativeDocumentRestore('summary');
+ assert.deepEqual(docSeed,{events:1,valid:true,eventKinds:['append'],changes:5,grades:['8'],assessmentRevisions:8,
+  eventDigests:[docSeed.eventDigests[0]]});
+ assert.match(docSeed.eventDigests[0],/^[a-f0-9]{64}$/);
+ const docPhysical=await call('physicalDigest');
+ assert.deepEqual(Object.keys(docPhysical).filter(k=>docPhysical[k]!==beforeDocument[k]).sort(),['appData','meta']);
+ stage('native-v8-document-seeded',{eventDigest:docSeed.eventDigests[0]});
+
+ const documentRecovery=await writeCopy('recovery',documentCopies.recovery,'v8');
+ const documentTarget=await writeCopy('target',documentCopies.target,'v8');
+ assert.notEqual(documentRecovery.sha256,documentTarget.sha256);
+ assert.deepEqual(await call('physicalDigest'),docPhysical);
+ stage('native-v8-saf-write-readback',{recovery:documentRecovery,target:documentTarget});
+ await startPicker('read','target','v8');await cancelPicker();await pickerResult('target','cancelled','v8');
+ assert.equal(await nativeDocumentRestore('prepare'),'rejected');
+ assert.deepEqual(await call('physicalDigest'),docPhysical);
+ stage('native-v8-saf-cancellation');
+
+ const selectedRecovery=await readCopy('recovery',documentRecovery,'v8');
+ const selectedTarget=await readCopy('target',documentTarget,'v8');
+ assert.deepEqual(await call('physicalDigest'),docPhysical);
+ stage('native-v8-saf-selected-copies',{recovery:selectedRecovery,target:selectedTarget});
+ assert.equal(await nativeDocumentRestore('prepare'),'prepared');
+ assert.deepEqual(await call('physicalDigest'),docPhysical);
+ assert.equal(await nativeDocumentRestore('commit',true),'committed');
+ assert.equal(await nativeDocumentRestore('commit',true),'rejected');
+ const documentRestored=await call('physicalDigest');
+ assert.deepEqual(Object.keys(documentRestored).sort(),Object.keys(docPhysical).sort());
+ assert.ok(Object.keys(documentRestored).every(k=>documentRestored[k]!==docPhysical[k]));
+ stage('native-v8-authorized-restore-and-replay-refusal');
+
+ const documentStop=await forceRestart(installation);
+ const finalDocument=await nativeDocumentRestore('summary');
+ assert.equal(finalDocument.valid,true);
+ assert.deepEqual(finalDocument.eventKinds,['append','revoke']);
+ assert.equal(finalDocument.events,2);
+ assert.equal(finalDocument.changes,6);
+ assert.deepEqual(finalDocument.grades,['8']);
+ assert.equal(finalDocument.assessmentRevisions,8);
+ assert.equal(finalDocument.eventDigests[0],docSeed.eventDigests[0]);
+ assert.match(finalDocument.eventDigests[1],/^[a-f0-9]{64}$/);
+ assert.notEqual(finalDocument.eventDigests[1],docSeed.eventDigests[0]);
+ assert.deepEqual(await call('physicalDigest'),documentRestored);
+ assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
+ stage('native-v8-restored-cold-reopen',{...documentStop,events:finalDocument.events,
+  firstEventDigest:finalDocument.eventDigests[0],headDigest:finalDocument.eventDigests[1]});
  await call('close');
 }finally{disconnect();}
