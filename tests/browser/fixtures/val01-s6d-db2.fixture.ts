@@ -1,3 +1,5 @@
+import {createDocumentDb2RecoveryDriver} from '../../../src/security/documentDb2RecoveryOwner';
+import {createDocumentRecoveryDecision} from '../../../src/security/documentRecoveryDecision';
 // Synthetic browser fixture only. Never imported by the product entrypoint.
 import {boardDocument,boardScope} from './val01-s6c-data';
 import {createInitialArchiveSnapshot} from '../../../src/security/initialArchiveSetup';
@@ -489,3 +491,70 @@ async function inspectNativeDocumentRestoredSummary(){
   eventKinds:inspected.archive.events.map(event=>event.operation.kind),
   version:await versions()};
 }
+
+
+/** DOC-01/D4c3e2: isolated real DB2 owner adapter, no production binding.
+ * This fixture executes actual IndexedDB2, the V8 cipher and one-use commit.
+ * The native Android picker was separately qualified in DOC-01/D4c3d2.
+ */
+let docOwnerScenario='actual-restore';
+let docOwnerToken='synthetic-epoch-1';
+let docOwnerDriver:ReturnType<typeof createDocumentRecoveryDecision>|null=null;
+let docOwnerOld:ReturnType<typeof requireOwner>|null=null;
+let docOwnerCopies:Awaited<ReturnType<typeof nativeDocumentRestoreCopies>>|null=null;
+const ownerDecision=()=>{if(!docOwnerDriver)throw Error('DOC-01 owner not initialized');return docOwnerDriver;};
+async function docOwnerSeed(mode:string){
+ if(!['actual-restore','stale-owner','cancelled','wrong-recovery','same-epoch'].includes(mode))throw Error('Unknown scenario');
+ docOwnerScenario=mode;docOwnerToken='synthetic-epoch-1';
+ await seedDocument();
+ docOwnerOld=requireOwner();
+ docOwnerCopies=await nativeDocumentRestoreCopies();
+ const original=docOwnerOld;
+ const driver=createDocumentDb2RecoveryDriver({
+  owner:{store:original.store,vault:original.vault,storage:original.storage,coordinator:original.coordinator},
+  authority:{
+   currentToken:()=>docOwnerToken,
+   isCurrent:async token=>token===docOwnerToken,
+   onRetired:()=>{if(owner===original)owner=null;},
+   async freshAuthentication(previousToken){
+    if(docOwnerScenario==='same-epoch')return {token:previousToken,password};
+    docOwnerToken='synthetic-epoch-2';
+    return {token:docOwnerToken,password};
+   }
+  },
+  vaultPassword:password,recoveryPassword:copyPassword,targetPassword:copyPassword,
+  approvedCurrentAssessmentScopes:approved,approvedIncomingAssessmentScopes:approved,
+  approvedDocumentScopes:[docScope],factory:indexedDB,
+  async selectCiphertext(kind,isActive){
+   if(!isActive())return null;
+   if(docOwnerScenario==='cancelled'&&kind==='target')return null;
+   const copy=docOwnerCopies![kind];
+   if(docOwnerScenario==='stale-owner'&&kind==='recovery')
+    docOwnerToken='synthetic-epoch-2';
+   if(docOwnerScenario==='wrong-recovery'&&kind==='recovery')
+    return docOwnerCopies!.target;
+   return copy;
+  }
+ });
+ docOwnerDriver=createDocumentRecoveryDecision(driver);
+ return docSummary();
+}
+async function docOwnerOldRejected(){
+ const old=docOwnerOld;if(!old)return false;
+ if(old.vault.isUnlocked())return false;
+ try{await old.store.getMetadata();return false;}catch{return true;}
+}
+Object.assign(globalThis,{__doc01D4c3e2Owner:{
+ seed:docOwnerSeed,
+ prepare:()=>ownerDecision().prepare(),
+ confirm:async()=>{await ownerDecision().confirm({accepted:true,phrase:'RIPRISTINA'});return ownerDecision().phase();},
+ verify:()=>ownerDecision().verifyAfterReopen(),
+ phase:()=>ownerDecision().phase(),
+ physicalDigest,oldOwnerRejected:docOwnerOldRejected,
+ reopenSummary:async()=>{
+  await open();
+  const check=await nativeDocumentRestoredSummary();
+  return check;
+ },
+ close
+}});
