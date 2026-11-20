@@ -16,3 +16,9 @@ A teacher needs to understand whether recovery would preserve prior document rev
 
 ## Out of scope
 No privileged production provider, real personal documents, Android publishing, real backup export V8 UX, real-world restore, merging, release or signing. A further specifically approved phase must qualify real owner/scope derivation, protected session teardown and re-authentication with no stale App mutation after DB2 owner rotation.
+
+
+## Browser test correction — 2026-11-20
+Exact candidate `8acdc0121f6635ee8388ec16ec05b790a33e505b` produced **166 passing real Chromium tests, 1 failing** in the *intentionally uncertain physical-commit* scenario; all four other newly added UI tests and the inherited browser tests passed. The general `approve(page)` helper incorrectly required a `verification-required` message for every test after the click, including a path where the simulated DB2 commit throws and the correct state is `uncertain`. This is an internally inconsistent test expectation, not a physical restore bug.
+
+Corrected the helper to require `verification-required` only in scenarios where the simulated commit succeeds, while retaining full explicit checks that an uncertain result is shown, no success is displayed, the grant is invalidated and the operation cannot be repeated. The frozen one-use decision contracts, product activation fence and genuine browser assertions remain unchanged; this prevents a false gate without disguising data risk.
