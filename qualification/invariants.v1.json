@@ -3244,6 +3244,21 @@
       "tests": [
         "src/security/doc01RecoverySupervisorBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3E4-I01",
+      "owner": "DOC-01/D4c3e4",
+      "statement": "A distinct encrypted V9 archival codec must preserve complete ten-record professional snapshots and institutional DocumentHistoryV2 with approved school scope, immutable event digests, prior assessment history, exact recovery baseline and no silent loss. V1 lab-only and V2 institutional document histories must never be conflated or automatically migrated. Legacy V6/V7/V8 backup writers/readers must fail closed when institutional V2 data is present, including nested aliases and getter-bearing inputs. Only explicit V9 readers/writers can serialize the new document domain, using the existing verified AES-GCM/PBKDF2 encrypted envelope, retaining passwords and local attestation exclusions. No physical DB2 restore or product activation in this phase.",
+      "impactPaths": [
+        "src/security/institutionalBackupPayloadV9.ts",
+        "src/security/doc01InstitutionalBackupPayloadV9.test.ts",
+        "src/security/documentHistoryBackupFence.ts",
+        "src/security/documentBackupPayloadV8.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/doc01InstitutionalBackupPayloadV9.test.ts"
+      ]
     }
   ]
 }
