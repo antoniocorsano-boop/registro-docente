@@ -73,7 +73,7 @@ describe('DOC-01/D4c3e5 institutional physical recovery',()=>{
   const {driver}=mocked(),s=createInstitutionalRecoverySupervisor(driver);
   await s.decision.prepare();s.detachOldView();expect(s.isDetached()).toBe(true);
   await s.decision.confirm({accepted:true,phrase:'RIPRISTINA'});
-  await expect(async()=>s.dispose()).toThrow();
+  expect(()=>s.dispose()).toThrow();
   expect(await s.decision.verifyAfterReopen()).toBe(true);
   s.dispose();
  });
