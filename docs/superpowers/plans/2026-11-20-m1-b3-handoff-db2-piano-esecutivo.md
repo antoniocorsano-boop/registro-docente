@@ -75,3 +75,17 @@ Entrambi i percorsi sono stati registrati **nell'invariante esistente** `MOBILE-
 **Qualifica in corso sul commit esatto**: Qualification Invariants [#44790181507](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181507), PREDEPLOY [#44790181836](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181836), Browser [#44790181460](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181460), Native DB2 [#44790181593](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790181593) e le altre quattro qualificazioni automatiche. **Non dichiarare B3-1 PASS finché test e check finali non sono verificati.** La PR #385 rimane Draft e il progetto installato non cambia.
 
 **Ripresa dopo il controllo:** leggere l'esito reale dei sei test originali in CI; se PASS, avviare B3-2 con test di coda/sigillo, revoca, ricontrollo della fonte e autorizzazione all'invocazione del commit; se FAIL, correggere il solo modulo sullo stesso ramo e risottoporre lo SHA aggiornato a verifica. Niente anticipo di B3-4, né assunzione che il laboratorio equivalga al ripristino Android operativo.
+
+
+## 8. Primo reintegro isolato B3-2 — qualifica del candidato
+
+**SHA corrente della PR #385 da qualificare:** `14badd2059bcc5c1a3b7985617b8471e5f6b990c` (**Draft, non integrata**). È stato completato il recupero *isolato e senza chiamante produttivo* di due sottosistemi B3, ciascuno ricondotto ai blob esatti di #325:
+
+- **B3-1 / recovery handoff:** `migrationRecoveryHandoff.ts` (`35e01d3...`) e `val01MigrationRecoveryHandoff.test.ts` (`c528234...`), 6 prove.
+- **B3-2 / classificazione e sigillo:** `archivePreflight.ts` (`39ff8f17aee34ba967c324e1458e95ac2f04d433`), `migrationSessionBoundary.ts` (`a7a4cc0890d2ca75098deafde866aca77ac58220`) e `val01MigrationSessionBoundary.test.ts` (`5bad8598916fa7fbb7135b04a44856c298ca4412`), 7 prove.
+
+La coda usa la stessa versione originale del coordinatore presente in main e #325 (`src/persistence/durableMutationCoordinator.ts`, blob `6399a385774d65395ccc227c2f7e053b990174f4`), e il servizio di migrazione DB1 è già comune ai due rami. I due gruppi di test sono registrati **nelle invarianti già esistenti** `MOBILE-01-M2B-NATIVE-RESTORE-I01` e `VAL-01-S6D-DB2-I01`, **totale invarianti ancora 149**. Un test isolato PASS dimostra il proprio contratto, **non** l'integrazione nella Root, l'equivalenza V8/V9, la riapertura DB2 o il ripristino della app installata. Il percorso storico `VAL-01-STAB06-I05` non è ancora dichiarato ripristinato integralmente.
+
+**Qualificazione CI avviata sul commit esatto:** [Qualification Invariants #44790582623](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582623), [PREDEPLOY #44790582666](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582666), [Browser #44790582453](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582453), [Native DB2 #44790582351](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/44790582351); altri quattro controlli automatici paralleli. Nessun PASS finale attribuito a questo candidato prima del riscontro del run.
+
+**Prossimo intervento B3-3 (in attesa del risultato dei test):** verificare `db2Lifecycle.ts` / `db2PhysicalLifecycle.ts` attuali con CAS, inventario e revoca e redigere matrice di non-regressione specifica dei recuperi V6, V7, V8, V9. Eventuali modifiche solo se dimostrate da test causali sullo SHA corrente. Non recuperare le implementazioni DB2 più vecchie da #325.
