@@ -89,3 +89,22 @@ test('V7 restore revocation after commit reports uncertainty but does not undo c
  expect(r).toMatchObject({prepared:true,committed:false,replayRejected:true,oldOwnerRejected:true,triggered:true,unchanged:false,rotated:true,exact:true,summary:{changes:1,states:['observed'],active:['observed'],grades:['8'],records:5}});
  await call(page,'close');
 });
+
+
+test('M1-B3 real Chromium physical DB2 compare-and-swap rejects revoked authority and altered ciphertext without loss',async({page})=>{
+ test.setTimeout(60000);
+ await attach(page);
+ await call(page,'seed'); // Ten encrypted records on a fresh isolated IndexedDB origin.
+ const before=await call(page,'physicalDigest');
+ const outcome=await call(page,'m1B3PhysicalGuards');
+ expect(outcome).toEqual({
+  revokedRejected:true,
+  revocationReachedTransaction:true,
+  revocationUnchanged:true,
+  staleRejected:true,
+  staleUnchanged:true,
+  version:2
+ });
+ expect(await call(page,'physicalDigest')).toEqual(before);
+ await call(page,'close');
+});
