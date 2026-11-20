@@ -1673,6 +1673,7 @@
       "owner": "BETA-1",
       "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced. Historical backups without an archive mode retain the explicit destination mode; confirmed reset permits a fresh empty archive.",
       "impactPaths": [
+        "src/security/m1BootstrapAdmission.test.ts",
         "src/security/initialArchiveSetup.ts",
         "src/security/secureAppStorage.test.ts",
         "src/components/VaultGate.tsx",
@@ -1736,6 +1737,7 @@
         "src/security/backupPayload.test.ts"
       ],
       "tests": [
+        "src/security/m1BootstrapAdmission.test.ts",
         "src/security/secureAppStorage.test.ts",
         "src/security/vaultGate.test.ts",
         "src/security/backupPayload.test.ts"
