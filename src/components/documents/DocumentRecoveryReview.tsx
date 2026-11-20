@@ -22,8 +22,18 @@ export function DocumentRecoveryReview({workflow,decision}:RecoveryReviewProps){
  const mounted=useRef(true);
  useEffect(()=>{
   mounted.current=true;
+  const observed=controllerRef.current!;
+  const synchronize=()=>{
+   if(!mounted.current)return;
+   setPhase(observed.phase());
+   setSummary(observed.review());
+  };
+  const unsubscribe=observed.subscribe(synchronize);
+  // Close the render-to-subscription race when a pending operation settles.
+  synchronize();
   return ()=>{
    mounted.current=false;
+   unsubscribe();
    const controller=controllerRef.current;
    if(!decision && controller&&['idle','preparing','prepared'].includes(controller.phase())){
     try{controller.cancel();}catch{/* a completed commit is not undone */}
@@ -84,7 +94,8 @@ export function DocumentRecoveryReview({workflow,decision}:RecoveryReviewProps){
   {phase==='idle'&&
    <button type="button" disabled={busy} onClick={()=>void prepare()}
     className="min-h-11 rounded-lg bg-cyan-700 px-4 font-semibold disabled:opacity-50">Esamina il recupero</button>}
-  {(phase==='preparing'||busy)&&<p role="status" className="text-sm text-slate-300">Verifica locale in corso…</p>}
+  {(phase==='preparing'||phase==='committing'||phase==='verifying'||busy)&&
+   <p role="status" className="text-sm text-slate-300">{phase==='committing'?'Sostituzione locale in corso…':phase==='verifying'?'Verifica dopo il nuovo accesso in corso…':'Verifica locale in corso…'}</p>}
   {phase==='prepared'&&summary&&<div className="space-y-3">
    <dl role="group" className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2" aria-label="Riepilogo del recupero">
     <div className="rounded-lg border border-slate-700 p-3"><dt className="text-slate-400">Revisioni già presenti</dt><dd className="text-lg font-semibold">{summary.eventsBefore}</dd></div>
