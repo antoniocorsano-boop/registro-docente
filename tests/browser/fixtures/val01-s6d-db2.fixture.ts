@@ -26,6 +26,7 @@ import {commitAssessmentEvidence} from '../../../src/persistence/assessmentEvide
 import {incrementBackupChanges} from '../../../src/persistence/backupCheckpoint';
 import {validateAssessmentArchiveV1,type AssessmentArchiveV1} from '../../../src/assessment/assessmentArchive';
 import {deriveConfirmedEvidenceMutation,type EvidenceCommitRequest} from '../../../src/assessment/assessmentEvidenceMutation';
+import {deriveConfirmedDailyAssessmentSetup,type AssessmentSetupReview} from '../../../src/assessment/dailyAssessmentSetup';
 import {previewIndividualObservation} from '../../../src/assessment/individualObservation';
 import {previewEvidenceRevision} from '../../../src/assessment/individualEvidenceRevision';
 import {projectEvidenceBoard} from '../../../src/assessment/individualEvidenceBoard';
@@ -484,6 +485,26 @@ export async function commitOperationalEvidence(request:EvidenceCommitRequest,co
    finally{IDBObjectStore.prototype.put=original;}
   }}
  },approved,boardScope,request,confirmation);
+}
+/** PRODUCT-03 browser-only integration: real encrypted DB2 and exactly the
+ * same coordinator/meta checkpoint as the live App. No product import.
+ */
+export async function commitOperationalAssessmentSetup(
+ reviewed:AssessmentSetupReview,confirmation:{readonly confirmedByTeacher:true;readonly confirmedAt:string}
+){
+ const o=requireOwner();
+ const candidate=await o.coordinator.enqueue({
+  getCommitted:()=>({appData:o.state.appData,meta:o.state.meta}),
+  derive:committed=>({appData:deriveConfirmedDailyAssessmentSetup(committed.appData,approved,reviewed,confirmation),
+   meta:incrementBackupChanges(committed.meta)}),
+  persist:next=>o.storage.saveAppDataAndMeta(next.appData,next.meta),
+  publish:next=>{o.state={...o.state,...next};}
+ });
+ const revisionId=reviewed.request.completedRevisionId;
+ const exists=candidate.appData.classes[0].assessmentEvidenceV1?.documents[0].document.assessments
+  .some(a=>a.revisionId===revisionId&&a.status==='completed');
+ if(!exists)throw Error('Synthetic proof receipt not verified');
+ return {revisionId};
 }
 export const operationalDiagnostics={
  arm:armOperationalFault,release:releaseOperationalWrite,held:()=>releaseOperationalHold!==null,

@@ -17,12 +17,12 @@ import {SyntheticFormativeBalance} from './val01-s7b-balance';
 import {projectIndividualAssessmentEvidence} from '../../../src/assessment/assessmentEvidenceProjection';
 import {boardScope} from './val01-s6c-data';
 import {SyntheticEvidenceBoard} from './val01-s6c-board';
-import {openOperationalArchive,recoverOperationalArchive,commitOperationalEvidence,operationalState,operationalDiagnostics} from './val01-s6d-db2.fixture';
+import {openOperationalArchive,recoverOperationalArchive,commitOperationalEvidence,commitOperationalAssessmentSetup,operationalState,operationalDiagnostics} from './val01-s6d-db2.fixture';
 import '../../../src/index.css';
 type Snapshot=Awaited<ReturnType<typeof openOperationalArchive>>;
 const states={observed:'Osservato',not_observed:'Non osservato',not_applicable:'Non pertinente'};
 const noWrite=async():Promise<never>=>{throw Error('Laboratorio: nessuna scrittura da questa vista');};
-// Explicit in-memory session fixtures; never write to the DB2 archive.
+// Synthetic-only fixtures: live encrypted DB2 writes are limited to explicitly reviewed events.
 function councilDemo(data:AppData){
  let d=appendCouncilSession(data,boardScope.classId,boardScope.schoolYear,'intermedia','2027-02-05','s8-first','2027-02-01T10:00:00.000Z');
  d=appendCouncilSession(d,boardScope.classId,boardScope.schoolYear,'monitoraggio','2026-11-25','s8-early','2026-11-21T10:00:00.000Z');
@@ -109,6 +109,9 @@ function Laboratory(){
          scope.studentIds.length!==boardScope.studentIds.length||
          !scope.studentIds.every((id,i)=>id===boardScope.studentIds[i]))throw Error('Synthetic scope mismatch');
       const receipt=await commit(reviewed,confirmation);return {revisionId:receipt.revisionId};
+    }} onSaveAssessmentSetup={async(reviewed,confirmation)=>{
+      const receipt=await commitOperationalAssessmentSetup(reviewed,confirmation);
+      setSnapshot(operationalState());return receipt;
     }}/>}
   {!report&&!councilBalance&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||!!councilBalance||surface!=='evidence'} className={report||councilBalance||surface!=='evidence'?'hidden':''}>
