@@ -112,7 +112,7 @@ function Laboratory(){
     }} onSaveAssessmentSetup={async(reviewed,confirmation)=>{
       const receipt=await commitOperationalAssessmentSetup(reviewed,confirmation);
       setSnapshot(operationalState());return receipt;
-    }}/>}
+    }} onCompletePlannedAssessment={noWrite}/>}
   {!report&&!councilBalance&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||!!councilBalance||surface!=='evidence'} className={report||councilBalance||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard committedDocument={evidence} onCommit={commit} recoveryRequired={recoveryRequired} onRecover={recover}
