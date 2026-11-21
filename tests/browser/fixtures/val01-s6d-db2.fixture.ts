@@ -240,6 +240,47 @@ async function m1B3PhysicalGuards(){
    staleRejected,staleUnchanged:sameDb2Physical(before,afterStale),version:await versions()};
 }
 
+/** M1-B4-1 — the current DB1 reader exercises the historical v1 API on a
+ * genuine, synthetic v2 database. This is NOT yet an exact historical binary
+ * checkout: the three pinned predecessor bundles remain a separate B4 gate.
+ * Each rejected operation must leave all ten durable ciphertexts unchanged. */
+async function m1B4LegacyVersionFence(){
+ const before=await captureDb2(indexedDB);
+ if(before.state!=='active'||before.records.length!==10)throw Error('B4 requires complete synthetic DB2');
+ const actions=['read','list','write','delete','clear','unlock','initialize'] as const;
+ const refused:Record<string,boolean>={};
+ for(const action of actions){
+  const store=new IndexedDbVaultStore(indexedDB),vault=new SecureVault(store);
+  try{
+   if(action==='read')await store.getMetadata();
+   else if(action==='list')await store.listRecordKeys();
+   else if(action==='write')await store.putRecords([]);
+   else if(action==='delete')await store.deleteRecord('appData');
+   else if(action==='clear')await store.clearAll();
+   else if(action==='unlock')await vault.unlock(password);
+   else await vault.initializeActive(password);
+   refused[action]=false;
+  }catch{refused[action]=true;}
+  finally{vault.lock();await store.retireConnection();}
+ }
+ const after=await captureDb2(indexedDB);
+ return {refused,version:await versions(),unchanged:sameDb2Physical(before,after)};
+}
+
+/** Existing-only readers must refuse absence at both supported versions.
+ * An aborted opening request may never create a delayed database. */
+async function m1B4MissingArchiveFence(){
+ if(await versions()!==0)throw Error('B4 absence requires fresh isolated origin');
+ const refused:Record<string,boolean>={};
+ for(const version of [1,2] as const){
+  const store=new ExistingSessionVaultStore(version,indexedDB);
+  try{await store.getMetadata();refused[String(version)]=false;}
+  catch{refused[String(version)]=true;}
+  finally{await store.retireConnection();}
+ }
+ return {refused,version:await versions()};
+}
+
 /** M1-B3.4: full physical DB1->DB2 journey on a completely fresh synthetic
  * browser origin, through the actual migration/preflight/queue modules.
  * No production entrypoint, SAF claim, real user file or personal records. */
@@ -293,7 +334,7 @@ async function m1B34SupervisedJourney(mode:'commit'|'refuse'|'revoke'){
  }finally{migration.invalidate();vault.lock();await store.retireConnection();}
 }
 
-Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards,m1B34SupervisedJourney}});
+Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards,m1B34SupervisedJourney,m1B4LegacyVersionFence,m1B4MissingArchiveFence}});
 document.getElementById('status')!.textContent='Laboratorio DB2 pronto';
 
 // Native synthetic adapter: the wrapper supplies actual SAF-selected copies.

@@ -126,3 +126,24 @@ for(const mode of ['commit','refuse','revoke']){
   });
  });
 }
+
+test('M1-B4 Chromium v1 API refuses every operation against v2 and preserves the exact encrypted inventory',async({page})=>{
+ test.setTimeout(90000);
+ await attach(page);
+ await call(page,'seed');
+ const before=await call(page,'physicalDigest');
+ const result=await call(page,'m1B4LegacyVersionFence');
+ expect(result).toEqual({refused:{
+  read:true,list:true,write:true,delete:true,clear:true,unlock:true,initialize:true
+ },version:2,unchanged:true});
+ expect(await call(page,'physicalDigest')).toEqual(before);
+ await call(page,'close');
+});
+
+test('M1-B4 Chromium existing-only v1/v2 readers never initialize an absent database',async({page})=>{
+ test.setTimeout(60000);
+ await attach(page);
+ expect(await call(page,'m1B4MissingArchiveFence')).toEqual({
+  refused:{'1':true,'2':true},version:0
+ });
+});
