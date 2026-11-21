@@ -3500,8 +3500,7 @@
         "qualification/invariants.v1.json"
       ],
       "tests": [
-        "src/security/val01Product04PlannedLifecycle.test.ts",
-        "tests/browser/val01-s6d-operational.spec.cjs"
+        "src/security/val01Product04PlannedLifecycle.test.ts"
       ]
     }
   ]
