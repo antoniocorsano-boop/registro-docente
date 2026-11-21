@@ -208,7 +208,8 @@ import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellM
 import { deriveConfirmedEvidenceMutation, type EvidenceCommitRequest } from './assessment/assessmentEvidenceMutation';
 import type { AssessmentScopeV1 } from './assessment/assessmentEvidence';
 import type { CriterionSave } from './components/DailyCriterionRecorder';
-import type { AssessmentSetupSave } from './components/DailyAssessmentSetupPanel';
+import type { AssessmentSetupSave,PlannedCompletionSave } from './components/DailyAssessmentSetupPanel';
+import {deriveConfirmedDailyPlannedCompletion} from './assessment/dailyPlannedAssessmentCompletion';
 import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmentSetup';
 import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
@@ -2973,12 +2974,48 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           .map(c=>({classId:c.id,schoolYear:approvedSettings.year,subjectCode:subjectCode!}));
         return deriveConfirmedDailyAssessmentSetup(current,approved,reviewed,confirmation);
       },{showBackupModal:false,successMessage:'',inlineFailure:true});
-      const completed=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
+      const wanted=reviewed.mode==='planned'?reviewed.request.plannedRevisionId:reviewed.request.completedRevisionId;
+      const expectedStatus=reviewed.mode==='planned'?'planned':'completed';
+      const saved=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
         .find(d=>d.document.classId===scope.classId&&d.document.schoolYear===scope.schoolYear&&
           d.document.subjectCode===scope.subjectCode)?.document.assessments
-        .find(a=>a.revisionId===reviewed.request.completedRevisionId&&a.status==='completed');
-      if(!completed)throw Error('Ricevuta prova non verificabile.');
-      return {revisionId:completed.revisionId};
+        .find(a=>a.revisionId===wanted&&a.status===expectedStatus);
+      if(!saved)throw Error('Ricevuta prova non verificabile.');
+      return {revisionId:saved.revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+  // VAL-01/PRODUCT-04 — separate S6a confirmation of a previously
+  // scheduled proof, always through canonical encrypted App commit.
+  const handleCompletePlannedAssessment:PlannedCompletionSave=async(reviewed,confirmation)=>{
+    const classId=currentClassIdRef.current,scope=reviewed.scope,approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+      evaluationSavePendingRef.current||!isPrivacyShieldActive||
+      scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+    const selected=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
+      throw Error('Elenco classe cambiato.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+          !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+          settingsRef.current.year!==approvedSettings.year||
+          settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
+        const approved=current.classes.filter(c=>
+          Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1'))
+          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,subjectCode:subjectCode!}));
+        return deriveConfirmedDailyPlannedCompletion(current,approved,reviewed,confirmation);
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const revisionId=reviewed.preview.request.revisionId;
+      const saved=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
+       .find(d=>d.document.classId===scope.classId&&d.document.schoolYear===scope.schoolYear&&
+        d.document.subjectCode===scope.subjectCode)?.document.assessments
+       .find(a=>a.revisionId===revisionId&&a.status==='completed'&&
+         a.supersedesRevisionId===reviewed.preview.request.assessmentRevisionId);
+      if(!saved)throw Error('Ricevuta conclusione non verificabile.');
+      return {revisionId};
     }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
   };
   // VAL-01/PRODUCT-02 — confirmed criterion observation through the SAME
@@ -3761,7 +3798,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {activeTab === 'tabellone' && currentClass && (
           <div className="space-y-3">
             <MatrixSurfaceSelector mode={dailyMatrixMode?'daily':'historical'} onChange={mode=>switchDailyMatrixMode(mode==='daily')}/>
-            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} settings={settings} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation} onSaveCriterionEvidence={handleSaveCriterionEvidence} onSaveAssessmentSetup={handleSaveAssessmentSetup}/> : <MatrixView
+            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} settings={settings} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation} onSaveCriterionEvidence={handleSaveCriterionEvidence} onSaveAssessmentSetup={handleSaveAssessmentSetup}
+ onCompletePlannedAssessment={handleCompletePlannedAssessment}/> : <MatrixView
             onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
             currentClass={currentClass}

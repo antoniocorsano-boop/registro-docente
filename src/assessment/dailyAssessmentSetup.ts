@@ -30,6 +30,8 @@ export interface AssessmentSetupReview{
  /** The exact frozen baseline (null denotes an absent, not malformed, archive). */
  readonly baseDocument:AssessmentEvidenceV1|null;
  readonly request:AssessmentSetupRequest;
+ /** Omitted in historical PRODUCT-03 reviews: already completed. */
+ readonly mode?:'planned';
 }
 export type AssessmentSetupResult=
  | {readonly valid:false;readonly issue:'INVALID_CONTEXT'|'INVALID_PROOF'}
@@ -75,7 +77,7 @@ function validateRequest(r:AssessmentSetupRequest,s:AssessmentScopeV1){
  */
 function build(
  base:AssessmentEvidenceV1,scope:AssessmentScopeV1,
- request:AssessmentSetupRequest,confirmedAt:string
+ request:AssessmentSetupRequest,confirmedAt:string,mode:'planned'|'completed'='completed'
 ):AssessmentEvidenceV1{
  if(!validateRequest(request,scope)||!validInstant(confirmedAt)||confirmedAt<request.preparedAt)
   throw Error('Invalid request');
@@ -100,6 +102,10 @@ function build(
  const planned=confirmAssessmentDefinition(withSources,scope,preparation.preview,common);
  if(!planned.valid)throw Error('Invalid planned proof');
  const withPlanned:AssessmentEvidenceV1={...withSources,assessments:[...withSources.assessments,planned.definition]};
+ if(mode==='planned'){
+  if(!validateAssessmentEvidenceV1(withPlanned,scope).valid)throw Error('Invalid planned proof');
+  return withPlanned;
+ }
  const completion=previewAssessmentCompletion(withPlanned,scope,{
   assessmentRevisionId:planned.definition.revisionId,revisionId:request.completedRevisionId,
   completedOn:request.date
@@ -112,7 +118,8 @@ function build(
  return final;
 }
 export function previewDailyAssessmentSetup(c:ClassData,
- settings:Pick<AppSettings,'year'|'subject'>|undefined,raw:AssessmentSetupRequest
+ settings:Pick<AppSettings,'year'|'subject'>|undefined,raw:AssessmentSetupRequest,
+ mode:'planned'|'completed'='completed'
 ):AssessmentSetupResult{
  try{
   if(!settings?.year||!settings?.subject)return {valid:false,issue:'INVALID_CONTEXT'};
@@ -125,8 +132,9 @@ export function previewDailyAssessmentSetup(c:ClassData,
    return {valid:false,issue:'INVALID_CONTEXT'};
   const base=extract(c,scope);
   const request=snapshotAssessmentData(raw) as AssessmentSetupRequest;
-  build(base??emptyDocument(scope),scope,request,request.preparedAt);
-  return {valid:true,review:{scope,baseDocument:base,request}};
+  if(mode!=='planned'&&mode!=='completed')return fail();
+  build(base??emptyDocument(scope),scope,request,request.preparedAt,mode);
+  return {valid:true,review:{scope,baseDocument:base,request,...(mode==='planned'?{mode:'planned' as const}:{})}};
  }catch{return fail();}
 }
 /** Reruns validation inside the durable queue on the latest committed state.
@@ -153,8 +161,10 @@ export function deriveConfirmedDailyAssessmentSetup(
    throw reject();
   const original=extract(c,review.scope);
   if(JSON.stringify(original)!==JSON.stringify(review.baseDocument))throw reject();
+  const mode=review.mode??'completed';
+  if(mode!=='planned'&&mode!=='completed')throw reject();
   const output=build(original??emptyDocument(review.scope),review.scope,
-   review.request,confirmed.confirmedAt);
+   review.request,confirmed.confirmedAt,mode);
   const previous=c.assessmentEvidenceV1;
   const nextArchive:AssessmentArchiveV1=previous?{
    ...previous,documents:previous.documents.map(section=>

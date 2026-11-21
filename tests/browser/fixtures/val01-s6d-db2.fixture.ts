@@ -27,6 +27,7 @@ import {incrementBackupChanges} from '../../../src/persistence/backupCheckpoint'
 import {validateAssessmentArchiveV1,type AssessmentArchiveV1} from '../../../src/assessment/assessmentArchive';
 import {deriveConfirmedEvidenceMutation,type EvidenceCommitRequest} from '../../../src/assessment/assessmentEvidenceMutation';
 import {deriveConfirmedDailyAssessmentSetup,type AssessmentSetupReview} from '../../../src/assessment/dailyAssessmentSetup';
+import {deriveConfirmedDailyPlannedCompletion,type PlannedCompletionReview} from '../../../src/assessment/dailyPlannedAssessmentCompletion';
 import {previewIndividualObservation} from '../../../src/assessment/individualObservation';
 import {previewEvidenceRevision} from '../../../src/assessment/individualEvidenceRevision';
 import {projectEvidenceBoard} from '../../../src/assessment/individualEvidenceBoard';
@@ -500,10 +501,33 @@ export async function commitOperationalAssessmentSetup(
   persist:next=>o.storage.saveAppDataAndMeta(next.appData,next.meta),
   publish:next=>{o.state={...o.state,...next};}
  });
- const revisionId=reviewed.request.completedRevisionId;
+ const planned=reviewed.mode==='planned';
+ const revisionId=planned?reviewed.request.plannedRevisionId:reviewed.request.completedRevisionId;
  const exists=candidate.appData.classes[0].assessmentEvidenceV1?.documents[0].document.assessments
-  .some(a=>a.revisionId===revisionId&&a.status==='completed');
+  .some(a=>a.revisionId===revisionId&&a.status===(planned?'planned':'completed'));
  if(!exists)throw Error('Synthetic proof receipt not verified');
+ return {revisionId};
+}
+/** PRODUCT-04: same isolated physical DB2 authority, with explicit S6a
+ * transition and no early receipt or second persistence channel.
+ */
+export async function commitOperationalPlannedCompletion(
+ reviewed:PlannedCompletionReview,
+ confirmation:{readonly confirmedByTeacher:true;readonly confirmedAt:string}
+){
+ const o=requireOwner();
+ const candidate=await o.coordinator.enqueue({
+  getCommitted:()=>({appData:o.state.appData,meta:o.state.meta}),
+  derive:state=>({appData:deriveConfirmedDailyPlannedCompletion(state.appData,approved,reviewed,confirmation),
+   meta:incrementBackupChanges(state.meta)}),
+  persist:state=>o.storage.saveAppDataAndMeta(state.appData,state.meta),
+  publish:next=>{o.state={...o.state,...next};}
+ });
+ const revisionId=reviewed.preview.request.revisionId;
+ const exists=candidate.appData.classes[0].assessmentEvidenceV1?.documents[0].document.assessments
+  .some(a=>a.revisionId===revisionId&&a.status==='completed'&&
+   a.supersedesRevisionId===reviewed.preview.request.assessmentRevisionId);
+ if(!exists)throw Error('Synthetic completion receipt not verified');
  return {revisionId};
 }
 export const operationalDiagnostics={

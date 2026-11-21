@@ -190,7 +190,8 @@ describe('VAL-01/PRODUCT-03 — initial proof with explicit objective and criter
   expect(appCode).toContain('onSaveAssessmentSetup={handleSaveAssessmentSetup}');
   expect(daily).toContain('setupDraftGuardRef.current?.hasUnsavedChanges()');
   expect(daily).toContain('<DailyAssessmentSetupPanel');
-  expect(ui).toContain('previewDailyAssessmentSetup(currentClass,settings,request)');
+  expect(ui).toContain('previewDailyAssessmentSetup(currentClass,settings,request,draft.intention)');
+  expect(ui).toContain("value={draft.intention}");
   expect(ui).toContain('const receipt=await onSave(reviewed');
   expect(ui).not.toContain('localStorage');
   expect(ui).not.toContain('fetch(');

@@ -17,7 +17,7 @@ import {SyntheticFormativeBalance} from './val01-s7b-balance';
 import {projectIndividualAssessmentEvidence} from '../../../src/assessment/assessmentEvidenceProjection';
 import {boardScope} from './val01-s6c-data';
 import {SyntheticEvidenceBoard} from './val01-s6c-board';
-import {openOperationalArchive,recoverOperationalArchive,commitOperationalEvidence,commitOperationalAssessmentSetup,operationalState,operationalDiagnostics} from './val01-s6d-db2.fixture';
+import {openOperationalArchive,recoverOperationalArchive,commitOperationalEvidence,commitOperationalAssessmentSetup,commitOperationalPlannedCompletion,operationalState,operationalDiagnostics} from './val01-s6d-db2.fixture';
 import '../../../src/index.css';
 type Snapshot=Awaited<ReturnType<typeof openOperationalArchive>>;
 const states={observed:'Osservato',not_observed:'Non osservato',not_applicable:'Non pertinente'};
@@ -111,6 +111,9 @@ function Laboratory(){
       const receipt=await commit(reviewed,confirmation);return {revisionId:receipt.revisionId};
     }} onSaveAssessmentSetup={async(reviewed,confirmation)=>{
       const receipt=await commitOperationalAssessmentSetup(reviewed,confirmation);
+      setSnapshot(operationalState());return receipt;
+    }} onCompletePlannedAssessment={async(reviewed,confirmation)=>{
+      const receipt=await commitOperationalPlannedCompletion(reviewed,confirmation);
       setSnapshot(operationalState());return receipt;
     }}/>}
   {!report&&!councilBalance&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
