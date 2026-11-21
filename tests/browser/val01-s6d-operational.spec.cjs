@@ -115,3 +115,54 @@ for(const [width,height,scale] of [[320,700,100],[390,844,100],[320,700,200]]){
   }finally{await context.close();}
  });
 }
+
+async function prepareDailyCriterion(page){
+ const entry=page.getByTestId('daily-criterion-recorder');
+ await entry.locator('summary').click();
+ await entry.getByLabel('Prova svolta con criteri').selectOption('a2');
+ await entry.getByLabel('Criterio della prova').selectOption('c1');
+ await entry.getByLabel('Alunno per rilevazione').selectOption('s4');
+ await entry.getByLabel('Stato della rilevazione').selectOption('observed');
+ await entry.getByLabel('Tipo di evidenza').selectOption('product');
+ await entry.getByLabel('Metodo della rilevazione').fill('Elaborato sintetico');
+ await entry.getByLabel('Fatto osservato').fill('Schema sintetico delle relazioni');
+ await entry.getByRole('button',{name:'Esamina rilevazione'}).click();
+ await expect(entry.getByTestId('criterion-confirmation')).toBeVisible();
+ return entry;
+}
+test('VAL-01/PRODUCT-02 real daily criterion writes only after encrypted DB2 commit and updates evidence',async({page})=>{
+ test.setTimeout(120000);await open(page);
+ const entry=await prepareDailyCriterion(page);
+ const before=await diag(page,'physicalDigest'),original=await diag(page,'committed');
+ await diag(page,'arm','hold');
+ await entry.getByRole('button',{name:'Conferma e salva'}).click();
+ await expect.poll(()=>diag(page,'held')).toBe(true);
+ await expect(entry.getByRole('button',{name:'Salvataggio…'})).toBeDisabled();
+ await expect(entry.getByText('Rilevazione salvata e verificata nell’archivio protetto.')).toHaveCount(0);
+ expect(await diag(page,'physicalDigest')).toEqual(before);
+ expect(await diag(page,'committed')).toEqual(original);
+ await diag(page,'release');
+ await expect(entry.getByText('Rilevazione salvata e verificata nell’archivio protetto.')).toBeVisible();
+ const after=await diag(page,'physicalDigest'),committed=await diag(page,'committed');
+ expect(Object.keys(after).filter(k=>before[k]!==after[k]).sort()).toEqual(['appData','meta']);
+ expect(committed.changes).toBe(original.changes+1);
+ expect(committed.grades).toEqual(original.grades);
+ expect(committed.revisionIds).toHaveLength(original.revisionIds.length+1);
+ await selector(page).getByRole('button',{name:'Evidenze',exact:true}).click();
+ await page.getByLabel('Prova',{exact:true}).selectOption('a2');
+ await page.getByLabel('Criterio',{exact:true}).selectOption('c1');
+ await expect(row(page,4)).toContainText('Osservato');
+});
+for(const [width,height,scale] of [[320,700,200],[390,844,100]]){
+ test('VAL-01/PRODUCT-02 daily criterion is usable without horizontal scrolling '+width+' / '+scale+'%',async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true});
+  try{
+   const page=await context.newPage();await open(page);
+   if(scale===200)await page.addStyleTag({content:'html {font-size:200% !important;}'});
+   const entry=await prepareDailyCriterion(page);
+   await expect(entry.getByRole('button',{name:'Conferma e salva'})).toBeVisible();
+   const geometry=await page.evaluate(()=>({client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
+   expect(geometry.scroll).toBeLessThanOrEqual(geometry.client+1);
+  }finally{await context.close();}
+ });
+}

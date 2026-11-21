@@ -2,13 +2,18 @@ import {describe,expect,test} from 'bun:test';
 import {readFileSync} from 'node:fs';
 const read=(p:string)=>readFileSync(p,'utf8');
 describe('VAL-01/S6d.3 — operational evidence laboratory boundary',()=>{
- test('production App and Root remain unactivated; existing two-mode surface preserved',()=>{
-  for(const p of ['src/App.tsx','src/components/SecureRegistroRoot.tsx']){
-   const s=read(p);
-   expect(s).not.toContain('commitAssessmentEvidence');
+ test('production only activates the reviewed existing-proof path through its canonical coordinator, never the lab host',()=>{
+  const app=read('src/App.tsx');
+  const root=read('src/components/SecureRegistroRoot.tsx');
+  expect(app).toContain('deriveConfirmedEvidenceMutation(current,scopes,scope,reviewed,confirmation).appData');
+  expect(app).toContain('onSaveCriterionEvidence={handleSaveCriterionEvidence}');
+  expect(app).toContain('await commitAppDataMutation(current=>');
+  expect(app).not.toContain('commitAssessmentEvidence');
+  for(const s of [app,root]){
    expect(s).not.toContain('val01-s6d-operational.fixture');
    expect(s).not.toContain('__val01OperationalDiagnostics');
   }
+  expect(app).toContain("<MatrixSurfaceSelector mode={dailyMatrixMode?'daily':'historical'}");
  });
  test('operational host uses real DB2 owner, protects identity and guards navigation until confirmed',()=>{
   const host=read('tests/browser/fixtures/val01-s6d-operational.fixture.tsx');

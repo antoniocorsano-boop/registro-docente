@@ -102,7 +102,14 @@ function Laboratory(){
   {!report&&!councilBalance&&<MatrixSurfaceSelector laboratory mode={surface} onChange={next=>{if(next!==surface)request(()=>setSurface(next));}}/>}
   {blocked&&<p role="alert">Completa o abbandona la bozza prima di cambiare vista.</p>}
   {!report&&!councilBalance&&surface==='daily'&&<DailyMatrixWorkspace data={data} currentClass={currentClass} udas={[]} isPrivacyShieldActive={true}
-    onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}/>}
+    onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}
+    settings={{...councilSettings,subject:boardScope.subjectCode}} onSaveCriterionEvidence={async(scope,reviewed,confirmation)=>{
+      if(scope.classId!==boardScope.classId||scope.schoolYear!==boardScope.schoolYear||
+         scope.subjectCode!==boardScope.subjectCode||
+         scope.studentIds.length!==boardScope.studentIds.length||
+         !scope.studentIds.every((id,i)=>id===boardScope.studentIds[i]))throw Error('Synthetic scope mismatch');
+      const receipt=await commit(reviewed,confirmation);return {revisionId:receipt.revisionId};
+    }}/>}
   {!report&&!councilBalance&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||!!councilBalance||surface!=='evidence'} className={report||councilBalance||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard committedDocument={evidence} onCommit={commit} recoveryRequired={recoveryRequired} onRecover={recover}
