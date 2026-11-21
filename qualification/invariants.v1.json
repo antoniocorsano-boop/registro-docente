@@ -55,6 +55,28 @@
       ]
     },
     {
+      "id": "VAL-01-STAB06-I05",
+      "owner": "VAL-01/STAB-06",
+      "statement": "The recovery copy handoff binds local ciphertext to the current authenticated session and consumes it once. The migration session seals and drains writes, checks current authorization and requires explicit consent and a fresh protected session. UI evidence is distinct from Android acceptance.",
+      "impactPaths": [
+        "src/security/migrationRecoveryHandoff.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/androidBackupExport.ts",
+        "src/persistence/durableMutationCoordinator.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
+      ]
+    },
+    {
       "id": "MOBILE-01-S0-I01",
       "owner": "MOBILE-01/S0",
       "statement": "Android packaging experiments remain isolated from the canonical app and distribution: a distinct test appId, static Vite webDir, no runtime server URL or production secrets, read-only exact-SHA GitHub pull-request build, debug-only APK with checksum and no release/deployment event.",
