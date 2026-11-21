@@ -98,7 +98,7 @@ export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyS
      <label className="min-w-0">Periodo
       <select aria-label="Periodo prova con criteri" className={input} value={draft.period}
        onChange={e=>update({period:e.target.value as 'Q1'|'Q2'})}>
-       <option value="Q1">Primo periodo</option><option value="Q2">Secondo periodo</option>
+       <option value="Q1">Primo periodo della prova</option><option value="Q2">Secondo periodo della prova</option>
       </select>
      </label>
      <label className="min-w-0">Finalità
