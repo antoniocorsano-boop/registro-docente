@@ -468,4 +468,48 @@ describe('S-R02 revocable candidate legacy migration', () => {
     expect(vault.isUnlocked()).toBe(false);
     expect(JSON.parse(source.getItem(STORAGE_KEY)!).currentClassId).toBe('changed');
   });
+  test('M1-C/2 ambiguous ACTIVE acknowledgement preserves the committed ciphertext and legacy source', async () => {
+    const source = makeMigrationStorage();
+    class LostAcknowledgementStore extends MemoryVaultStore {
+      override async putMetadata(metadata: VaultMetadataV1) {
+        await super.putMetadata(metadata);
+        if (metadata.state === 'ACTIVE') throw new Error('Synthetic ACTIVE acknowledgement lost.');
+      }
+    }
+    const store = new LostAcknowledgementStore();
+    const vault = new SecureVault(store);
+    await expect(migrateRevocable(source, vault, password, authorization().assert))
+      .rejects.toThrow('Synthetic ACTIVE acknowledgement lost.');
+    expect(source.removed).toEqual([]);
+    expect(collectLegacySnapshot(source).presentKeys).toHaveLength(6);
+    expect((await store.getMetadata())?.state).toBe('ACTIVE');
+    expect(await store.listRecordKeys()).toHaveLength(6);
+    expect(vault.isUnlocked()).toBe(false);
+
+    // Reauthentication + verified readback is the only permitted cleanup path.
+    const fresh = new SecureVault(store);
+    await fresh.unlock(password);
+    expect(await cleanupRevocable(source, fresh, authorization().assert)).toHaveLength(6);
+    expect(source.removed).toHaveLength(6);
+  });
+
+  test('M1-C/2 rejected ACTIVE write preserves STAGING for protected re-observation', async () => {
+    const source = makeMigrationStorage();
+    class RejectedCommitStore extends MemoryVaultStore {
+      override async putMetadata(metadata: VaultMetadataV1) {
+        if (metadata.state === 'ACTIVE') throw new Error('Synthetic ACTIVE write refused.');
+        await super.putMetadata(metadata);
+      }
+    }
+    const store = new RejectedCommitStore();
+    const vault = new SecureVault(store);
+    await expect(migrateRevocable(source, vault, password, authorization().assert))
+      .rejects.toThrow('Synthetic ACTIVE write refused.');
+    expect(source.removed).toEqual([]);
+    expect(collectLegacySnapshot(source).presentKeys).toHaveLength(6);
+    expect((await store.getMetadata())?.state).toBe('STAGING');
+    expect(await store.listRecordKeys()).toHaveLength(6);
+    expect(vault.isUnlocked()).toBe(false);
+  });
+
 });
