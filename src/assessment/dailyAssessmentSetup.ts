@@ -10,6 +10,7 @@ import {validateAssessmentArchiveV1,type ApprovedAssessmentScope,type Assessment
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {previewAssessmentDefinition,confirmAssessmentDefinition} from './assessmentDefinitionPreparation';
 import {previewAssessmentCompletion,confirmAssessmentCompletion} from './assessmentCompletion';
+import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
 
 export interface AssessmentSetupCriterion{
  readonly criterionId:string;readonly revisionId:string;
@@ -115,8 +116,10 @@ export function previewDailyAssessmentSetup(c:ClassData,
 ):AssessmentSetupResult{
  try{
   if(!settings?.year||!settings?.subject)return {valid:false,issue:'INVALID_CONTEXT'};
+  const subjectCode=resolveAssessmentSubjectCode(settings.subject);
+  if(!subjectCode)return {valid:false,issue:'INVALID_CONTEXT'};
   const scope:AssessmentScopeV1={classId:c.id,schoolYear:settings.year,
-   subjectCode:settings.subject,studentIds:c.students.map(s=>s.id)};
+   subjectCode,studentIds:c.students.map(s=>s.id)};
   const approved={classId:scope.classId,schoolYear:scope.schoolYear,subjectCode:scope.subjectCode};
   if(!unique(scope.studentIds)||!validateAssessmentArchiveV1({classes:[c]},[approved]).valid)
    return {valid:false,issue:'INVALID_CONTEXT'};
