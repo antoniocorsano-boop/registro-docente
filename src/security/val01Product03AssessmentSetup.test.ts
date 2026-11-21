@@ -9,6 +9,9 @@ import {resolveDailyCriterionRecordingContext} from '../assessment/dailyCriterio
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
 import {validateAssessmentEvidenceV1} from '../assessment/assessmentEvidence';
 import {DailyAssessmentSetupPanel} from '../components/DailyAssessmentSetupPanel';
+import {readStudentCriterionEvidence} from '../assessment/studentCriterionReadModel';
+import {resolveAssessmentSubjectCode} from '../assessment/assessmentSubjectScope';
+import {DEFAULT_SETTINGS} from '../utils';
 import {createDurableMutationCoordinator} from '../persistence/durableMutationCoordinator';
 import {boardScope,boardDocument} from '../../tests/browser/fixtures/val01-s6c-data';
 
@@ -45,6 +48,27 @@ function reviewed(c:ClassData,req=request()){
 }
 
 describe('VAL-01/PRODUCT-03 — initial proof with explicit objective and criteria',()=>{
+ test('actual Registro discipline label resolves to valid local scope across setup, recorder and student dossier',()=>{
+  expect(DEFAULT_SETTINGS.subject).toBe('Tecnologia & Disegno Tecnico');
+  const subjectCode=resolveAssessmentSubjectCode(DEFAULT_SETTINGS.subject);
+  expect(subjectCode).toBe('tecnologia');
+  expect(resolveAssessmentSubjectCode('TECH')).toBe('TECH');
+  expect(resolveAssessmentSubjectCode('Disciplina non riconosciuta')).toBeNull();
+  const c=classroom();
+  const p=previewDailyAssessmentSetup(c,DEFAULT_SETTINGS,request());
+  expect(p.valid).toBe(true);
+  if(!p.valid)throw Error('Default local setup denied');
+  expect(p.review.scope.subjectCode).toBe(subjectCode);
+  const current=app();
+  const approved=[{classId:boardScope.classId,schoolYear:DEFAULT_SETTINGS.year,subjectCode:subjectCode!}];
+  const next=deriveConfirmedDailyAssessmentSetup(current,approved,p.review,confirmation);
+  const record=next.classes[0];
+  const result=resolveDailyCriterionRecordingContext(record,DEFAULT_SETTINGS);
+  expect(result.status).toBe('ready');
+  const dossier=readStudentCriterionEvidence(record,DEFAULT_SETTINGS,'s1');
+  expect(dossier.status).toBe('ready');
+  if(dossier.status==='ready')expect(dossier.rows).toHaveLength(0);
+ });
  test('first-run preview is detached and never invents evidence from existing grades',()=>{
   const c=classroom(),prior=JSON.stringify(c);
   const review=reviewed(c);
