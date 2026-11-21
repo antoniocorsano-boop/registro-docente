@@ -6,6 +6,7 @@ import type {AppSettings,ClassData} from '../types';
 import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence';
 import {validateAssessmentArchiveV1} from './assessmentArchive';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
+import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
 
 export interface CriterionRecordingOption {
  readonly assessmentRevisionId:string;
@@ -25,7 +26,9 @@ export function resolveDailyCriterionRecordingContext(
   const field=Object.getOwnPropertyDescriptor(currentClass,'assessmentEvidenceV1');
   if(!field)return {status:'absent'};
   if(!('value' in field)||!settings?.year||!settings?.subject)return {status:'unverified'};
-  const approved={classId:currentClass.id,schoolYear:settings.year,subjectCode:settings.subject};
+  const subjectCode=resolveAssessmentSubjectCode(settings.subject);
+  if(!subjectCode)return {status:'unverified'};
+  const approved={classId:currentClass.id,schoolYear:settings.year,subjectCode};
   const result=validateAssessmentArchiveV1({classes:[currentClass]},[approved]);
   if(!result.valid||result.state!=='present')return {status:'unverified'};
   const cls=snapshotAssessmentData(currentClass) as ClassData;
