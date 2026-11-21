@@ -224,3 +224,69 @@ for(const [width,height,scale] of [[320,700,200],[390,844,100]]){
   }finally{await context.close();}
  });
 }
+
+async function preparePlannedProof(page){
+ const panel=page.getByTestId('daily-assessment-setup');
+ await panel.locator('summary').click();
+ await panel.getByLabel('Stato iniziale della prova').selectOption('planned');
+ const today=await page.getByTestId('daily-date').inputValue();
+ await panel.getByLabel('Data prevista o svolta').fill(today);
+ await panel.getByLabel('Titolo prova con criteri').fill('Attività sintetica programmata');
+ await panel.getByLabel('Obiettivo dichiarato dal docente').fill('Comprendere le fasi di un processo tecnologico');
+ await panel.getByLabel('Criterio 1',{exact:true}).fill('Ordine delle fasi');
+ await panel.getByLabel('Tipo evidenza attesa 1').selectOption('process');
+ await panel.getByLabel('Evidenza attesa 1',{exact:true}).fill('Sequenza ordinata delle fasi');
+ await panel.getByLabel('Metodo atteso 1').fill('Osservazione durante il lavoro');
+ await panel.getByRole('button',{name:'Esamina prova e criteri'}).click();
+ await expect(panel.getByTestId('assessment-setup-confirmation')).toContainText('Conferma programmazione');
+ return {panel,today};
+}
+test('VAL-01/PRODUCT-04 planned proof stays unavailable for individual records until distinct encrypted S6a completion',async({page})=>{
+ test.setTimeout(120000);await open(page);
+ const before=await diag(page,'physicalDigest'),meta=await diag(page,'committed');
+ const {panel,today}=await preparePlannedProof(page);
+ await panel.getByRole('button',{name:'Conferma e registra'}).click();
+ await expect(panel.getByText('Prova programmata e criteri salvati nell’archivio protetto.')).toBeVisible();
+ const afterPlan=await diag(page,'physicalDigest');
+ expect(Object.keys(afterPlan).filter(k=>before[k]!==afterPlan[k]).sort()).toEqual(['appData','meta']);
+ expect((await diag(page,'committed')).changes).toBe(meta.changes+1);
+ const recorder=page.getByTestId('daily-criterion-recorder');
+ await recorder.locator('summary').click();
+ await expect(recorder.getByLabel('Prova svolta con criteri').locator('option').filter({hasText:'Attività sintetica programmata'})).toHaveCount(0);
+ const completion=panel.getByTestId('planned-assessment-completion');
+ await expect(completion).toBeVisible();
+ const selector=completion.getByLabel('Prova programmata da concludere');
+ const option=selector.locator('option').filter({hasText:'Attività sintetica programmata'});
+ await expect(option).toHaveCount(1);
+ await selector.selectOption(await option.getAttribute('value'));
+ await completion.getByLabel('Data effettiva di svolgimento').fill(today);
+ await completion.getByRole('button',{name:'Esamina conclusione della prova'}).click();
+ await expect(completion.getByTestId('planned-completion-confirmation')).toBeVisible();
+ await completion.getByRole('button',{name:'Conferma svolgimento'}).click();
+ await expect(panel.getByText('Prova conclusa e verificata nell’archivio protetto. Ora puoi registrare le evidenze.')).toBeVisible();
+ expect((await diag(page,'committed')).changes).toBe(meta.changes+2);
+ await expect(completion).toHaveCount(0);
+ const active=recorder.getByLabel('Prova svolta con criteri').locator('option').filter({hasText:'Attività sintetica programmata'});
+ await expect(active).toHaveCount(1);
+ await recorder.getByLabel('Prova svolta con criteri').selectOption(await active.getAttribute('value'));
+ await recorder.getByLabel('Criterio della prova').selectOption(await recorder.getByLabel('Criterio della prova').locator('option').filter({hasText:'Ordine delle fasi'}).getAttribute('value'));
+ await recorder.getByLabel('Alunno per rilevazione').selectOption('s4');
+ await recorder.getByLabel('Stato della rilevazione').selectOption('not_observed');
+ await recorder.getByRole('button',{name:'Esamina rilevazione'}).click();
+ await recorder.getByRole('button',{name:'Conferma e salva'}).click();
+ await expect(recorder.getByText('Rilevazione salvata e verificata nell’archivio protetto.')).toBeVisible();
+ expect((await diag(page,'committed')).changes).toBe(meta.changes+3);
+});
+for(const [width,height,scale] of [[320,700,200],[390,844,100]]){
+ test('VAL-01/PRODUCT-04 scheduled proof and completion UI remain narrow '+width+' / '+scale+'%',async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true});
+  try{
+   const page=await context.newPage();await open(page);
+   if(scale===200)await page.addStyleTag({content:'html {font-size:200% !important;}'});
+   const {panel}=await preparePlannedProof(page);
+   const overflow=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
+   expect(overflow.scroll).toBeLessThanOrEqual(overflow.client+1);
+   await expect(panel.getByRole('button',{name:'Conferma e registra'})).toBeVisible();
+  }finally{await context.close();}
+ });
+}
