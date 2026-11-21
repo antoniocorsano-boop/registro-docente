@@ -3377,6 +3377,50 @@
       "tests": [
         "src/security/doc01NativeV9RecoveryBoundary.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-STAB06-I04",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Archive preflight classifies an existing archive without granting write authority; exact-version existing-only sessions refuse absent or incompatible databases. Authentication and retirement of the prior owner remain distinct from authorization of migration.",
+      "impactPaths": [
+        "src/security/archivePreflight.ts",
+        "src/security/existingSessionVaultStore.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01MigrationSessionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B3B-I01",
+      "owner": "VAL-01/D1b.3b",
+      "statement": "Existing DB1 archive migration remains isolated and requires authentication of all ten records, matching recovered v6 backup and explicit one-use consent; a changed physical archive or revoked or abandoned request cannot upgrade DB1. No runtime, native or release claim.",
+      "impactPaths": [
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/cryptoPrimitives.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
     }
   ]
 }
