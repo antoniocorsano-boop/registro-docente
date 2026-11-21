@@ -339,3 +339,167 @@ test('SEC-SESSION-01: recover a queued first grade after key revocation without 
   await expect(page.getByTestId('daily-proof-panel')).toHaveCount(0);
   expect(dialogs).toEqual([]);
 });
+
+
+// M1-B2 browser revocation — real Root and physical IndexedDB, synthetic data only.
+// Interception happens at the *real transaction-complete callback*, after the
+// durable commit but before the application can publish the resulting state.
+async function installM1ArchiveRevocation(page, target) {
+  await page.evaluate(kind => {
+    if (typeof window.__transitionSession !== 'function') throw Error('Native session double missing');
+    const original = IDBObjectStore.prototype.put;
+    const intercepted = new WeakSet();
+    let armed = true;
+    window.__m1B2CommitRevokeCount = 0;
+    window.__m1B2RevocationPoint = null;
+    IDBObjectStore.prototype.put = function (value, key) {
+      const result = original.apply(this, arguments);
+      const isTarget = kind === 'active'
+        ? this.name === 'metadata' && value?.state === 'ACTIVE'
+        : this.name === 'records';
+      if (armed && isTarget && !intercepted.has(this.transaction)) {
+        const tx = this.transaction;
+        const complete = tx.oncomplete;
+        if (typeof complete !== 'function') throw Error('Missing real IndexedDB commit callback');
+        armed = false;
+        intercepted.add(tx);
+        tx.oncomplete = function (event) {
+          window.__m1B2RevocationPoint = kind;
+          window.__m1B2CommitRevokeCount += 1;
+          window.__transitionSession(false);
+          window.__transitionSession(true);
+          complete.call(this, event);
+        };
+      }
+      return result;
+    };
+  }, target);
+}
+
+async function m1PhysicalVault(page) {
+  return page.evaluate(async () => {
+    const name = 'registro-docente-secure-vault';
+    if (!(await indexedDB.databases()).some(db => db.name === name)) {
+      return {exists: false, state: null, recordKeys: []};
+    }
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onupgradeneeded = () => request.transaction?.abort();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const tx = db.transaction(['metadata', 'records'], 'readonly');
+      const metadata = tx.objectStore('metadata').get('current');
+      const records = tx.objectStore('records').getAllKeys();
+      const result = await Promise.all([
+        new Promise((resolve, reject) => {
+          metadata.onsuccess = () => resolve(metadata.result ?? null);
+          metadata.onerror = () => reject(metadata.error);
+        }),
+        new Promise((resolve, reject) => {
+          records.onsuccess = () => resolve(records.result);
+          records.onerror = () => reject(records.error);
+        })
+      ]);
+      return {
+        exists: true, state: result[0]?.state ?? null,
+        recordKeys: result[1].slice().sort()
+      };
+    } finally {
+      db.close();
+    }
+  });
+}
+
+async function m1SyntheticLegacy(page) {
+  await installNativeDouble(page);
+  await page.goto(baseURL, {waitUntil: 'domcontentloaded'});
+  await expect(page.getByRole('heading', {name: 'Configura archivio protetto'})).toBeVisible();
+  await page.evaluate(() => {
+    // These are entirely fictional, empty school records; never use an existing vault.
+    localStorage.setItem('registro_docente_data_v35', JSON.stringify({
+      classes: [], currentClassId: null
+    }));
+  });
+  await page.reload({waitUntil: 'domcontentloaded'});
+  await expect(page.getByRole('heading', {name: 'Proteggi i dati esistenti'})).toBeVisible();
+}
+
+test('M1-B2 browser revocation A: first encrypted legacy record commit cannot activate or delete source', async ({page}) => {
+  await m1SyntheticLegacy(page);
+  const source = await page.evaluate(() => localStorage.getItem('registro_docente_data_v35'));
+  await installM1ArchiveRevocation(page, 'records');
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button', {name: 'Proteggi i dati esistenti'}).click();
+
+  await expect.poll(() => page.evaluate(() => window.__m1B2CommitRevokeCount)).toBe(1);
+  await expect(page.getByRole('heading', {name: 'Proteggi i dati esistenti'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Le mie classi'})).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('registro_docente_data_v35'))).toBe(source);
+  const physical = await m1PhysicalVault(page);
+  expect(physical.state).toBeNull();
+  expect(physical.recordKeys).toEqual([]);
+
+  // A new explicit authorization can migrate without losing the original data.
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button', {name: 'Proteggi i dati esistenti'}).click();
+  await expect(page.getByRole('heading', {name: 'Le mie classi'})).toBeVisible();
+  expect((await m1PhysicalVault(page)).state).toBe('ACTIVE');
+  expect(await page.evaluate(() => localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  expect(await page.evaluate(() => window.__m1B2CommitRevokeCount)).toBe(1);
+});
+
+test('M1-B2 browser revocation B: ACTIVE commit followed by session loss preserves legacy until fresh authentication', async ({page}) => {
+  await m1SyntheticLegacy(page);
+  const source = await page.evaluate(() => localStorage.getItem('registro_docente_data_v35'));
+  await installM1ArchiveRevocation(page, 'active');
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button', {name: 'Proteggi i dati esistenti'}).click();
+
+  await expect.poll(() => page.evaluate(() => window.__m1B2CommitRevokeCount)).toBe(1);
+  await expect(page.getByRole('heading', {name: 'Sblocca Registro'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Le mie classi'})).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('registro_docente_data_v35'))).toBe(source);
+  const physical = await m1PhysicalVault(page);
+  expect(physical.state).toBe('ACTIVE');
+  expect(physical.recordKeys).toEqual(['appData']);
+
+  // The preexisting plaintext is cleaned only on the authenticated recovery.
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button', {name: 'Sblocca Registro'}).click();
+  await expect(page.getByRole('heading', {name: 'Le mie classi'})).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('registro_docente_data_v35'))).toBeNull();
+  expect((await m1PhysicalVault(page)).recordKeys).toEqual(['appData']);
+  await page.reload({waitUntil: 'domcontentloaded'});
+  await expect(page.getByRole('heading', {name: 'Sblocca Registro'})).toBeVisible();
+});
+
+test('M1-B2 browser revocation C: initial demo configuration revoked after record commit never publishes success', async ({page}) => {
+  await installNativeDouble(page);
+  await page.goto(baseURL, {waitUntil: 'domcontentloaded'});
+  await expect(page.getByRole('heading', {name: 'Configura archivio protetto'})).toBeVisible();
+  await installM1ArchiveRevocation(page, 'records');
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button', {name: 'Avvia la prova'}).click();
+
+  await expect.poll(() => page.evaluate(() => window.__m1B2CommitRevokeCount)).toBe(1);
+  await expect(page.getByRole('heading', {name: 'Configura archivio protetto'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Le mie classi'})).toHaveCount(0);
+  const physical = await m1PhysicalVault(page);
+  expect(physical.state).toBeNull();
+  expect(physical.recordKeys).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem('registro_archive_established_v1'))).toBeNull();
+
+  // A second explicit setup is allowed only when the previous attempt was
+  // conclusively aborted, with an empty physical archive.
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
+  await page.locator('#vault-password').fill(password);
+  await page.getByRole('button', {name: 'Avvia la prova'}).click();
+  await expect(page.getByRole('heading', {name: 'Le mie classi'})).toBeVisible();
+  const after = await m1PhysicalVault(page);
+  expect(after.state).toBe('ACTIVE');
+  expect(after.recordKeys).toHaveLength(10);
+  expect(await page.evaluate(() => window.__m1B2CommitRevokeCount)).toBe(1);
+});

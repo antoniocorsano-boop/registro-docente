@@ -164,3 +164,72 @@ test('BETA-1 historical restore and confirmed reset preserve the empty professio
   await openDrawerItem(page, 'Impostazioni');
   await expect(page.getByPlaceholder('es. I.C. Vittorio De Sanctis')).toHaveValue('Istituto sintetico nuovo');
 });
+
+
+test('M1-B1 readonly initial observation does not create an IndexedDB archive', async ({ page }) => {
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  const databases = await page.evaluate(async () => (await indexedDB.databases())
+    .filter(db => db.name === 'registro-docente-secure-vault'));
+  expect(databases).toHaveLength(0);
+});
+
+test('M1-B1 previously established synthetic archive with deleted metadata fails closed without record loss', async ({ page }) => {
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
+  await page.locator('#vault-password').fill(vaultPassword);
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  const before = await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('registro-docente-secure-vault', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      request.onupgradeneeded = () => request.transaction?.abort();
+    });
+    try {
+      const records = await new Promise((resolve, reject) => {
+        const tx = db.transaction('records', 'readonly');
+        const request = tx.objectStore('records').getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('metadata', 'readwrite');
+        tx.objectStore('metadata').delete('current');
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error);
+        tx.onerror = () => reject(tx.error);
+      });
+      return records.map(r => r.recordKey).sort();
+    } finally {
+      db.close();
+    }
+  });
+  expect(before).toHaveLength(10);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: 'Riprova controllo sicurezza' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toHaveCount(0);
+
+  const after = await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('registro-docente-secure-vault', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      request.onupgradeneeded = () => request.transaction?.abort();
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction('records', 'readonly');
+        const request = tx.objectStore('records').getAllKeys();
+        request.onsuccess = () => resolve(request.result.sort());
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      db.close();
+    }
+  });
+  expect(after).toEqual(before);
+});

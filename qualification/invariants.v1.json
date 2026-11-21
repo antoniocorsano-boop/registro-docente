@@ -17,6 +17,66 @@
   ],
   "invariants": [
     {
+      "id": "VAL-01-STAB06-I01",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Protected startup uses bounded classified read-only observation; established missing or partially lost archives remain protected rather than being initialized automatically. Successful authenticated observation does not establish release readiness.",
+      "impactPaths": [
+        "src/security/protectedBootstrap.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/m1BootstrapAdmission.test.ts",
+        "src/security/secureAppStorage.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/m1BootstrapAdmission.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I02",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Candidate legacy migration respects session authorization and verified source consistency before invoking ACTIVE commit; a revoked or changed source is preserved. An already invoked commit requires protected observation, not assumed rollback. No claim of isolation against noncooperating historical clients.",
+      "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureVault.test.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I05",
+      "owner": "VAL-01/STAB-06",
+      "statement": "The recovery copy handoff binds local ciphertext to the current authenticated session and consumes it once. The migration session seals and drains writes, checks current authorization and requires explicit consent and a fresh protected session. UI evidence is distinct from Android acceptance.",
+      "impactPaths": [
+        "src/security/migrationRecoveryHandoff.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/androidBackupExport.ts",
+        "src/persistence/durableMutationCoordinator.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
+      ]
+    },
+    {
       "id": "MOBILE-01-S0-I01",
       "owner": "MOBILE-01/S0",
       "statement": "Android packaging experiments remain isolated from the canonical app and distribution: a distinct test appId, static Vite webDir, no runtime server URL or production secrets, read-only exact-SHA GitHub pull-request build, debug-only APK with checksum and no release/deployment event.",
@@ -1605,12 +1665,15 @@
         "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
         ".github/workflows/mobile-01-android-probe.yml",
         ".github/workflows/browser-qualification.yml",
-        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs",
+        "src/security/migrationRecoveryHandoff.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts"
       ],
       "tests": [
         "src/security/androidBackupRestore.test.ts",
         "src/security/mobile01M2bNativeRestoreContract.test.ts",
-        "src/security/persist01hBackupRestoreContract.test.ts"
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
@@ -1673,6 +1736,11 @@
       "owner": "BETA-1",
       "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced. Historical backups without an archive mode retain the explicit destination mode; confirmed reset permits a fresh empty archive.",
       "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/protectedBootstrap.ts",
+        "src/security/m1BootstrapAdmission.test.ts",
         "src/security/initialArchiveSetup.ts",
         "src/security/secureAppStorage.test.ts",
         "src/components/VaultGate.tsx",
@@ -1736,6 +1804,9 @@
         "src/security/backupPayload.test.ts"
       ],
       "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/m1BootstrapAdmission.test.ts",
         "src/security/secureAppStorage.test.ts",
         "src/security/vaultGate.test.ts",
         "src/security/backupPayload.test.ts"
@@ -2616,10 +2687,12 @@
       "impactPaths": [
         "src/security/assessmentBackupPayload.ts",
         "src/security/backupPayload.ts",
-        "src/security/val01AssessmentBackupPayload.test.ts"
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/m1B4ExactBeta2Rc2V7Contract.test.ts"
       ],
       "tests": [
-        "src/security/val01AssessmentBackupPayload.test.ts"
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/m1B4ExactBeta2Rc2V7Contract.test.ts"
       ]
     },
     {
@@ -2662,12 +2735,19 @@
         "tests/browser/val01-s6d-db2-persistence.spec.cjs",
         "src/security/val01Db2EvidenceBoundary.test.ts",
         ".github/workflows/beta2-reference-qualification.yml",
-        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md",
+        "src/security/archivePreflight.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
       ],
       "tests": [
         "src/security/val01Db2EvidenceBoundary.test.ts",
         "src/security/val01AssessmentEvidenceMutation.test.ts",
-        "src/security/val01VersionedBackupReceipt.test.ts"
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/val01-s6d-db2-persistence.spec.cjs"
@@ -3296,6 +3376,50 @@
       ],
       "tests": [
         "src/security/doc01NativeV9RecoveryBoundary.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I04",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Archive preflight classifies an existing archive without granting write authority; exact-version existing-only sessions refuse absent or incompatible databases. Authentication and retirement of the prior owner remain distinct from authorization of migration.",
+      "impactPaths": [
+        "src/security/archivePreflight.ts",
+        "src/security/existingSessionVaultStore.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01MigrationSessionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B3B-I01",
+      "owner": "VAL-01/D1b.3b",
+      "statement": "Existing DB1 archive migration remains isolated and requires authentication of all ten records, matching recovered v6 backup and explicit one-use consent; a changed physical archive or revoked or abandoned request cannot upgrade DB1. No runtime, native or release claim.",
+      "impactPaths": [
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/cryptoPrimitives.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
       ]
     }
   ]
