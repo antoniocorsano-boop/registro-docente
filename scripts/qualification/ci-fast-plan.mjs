@@ -42,6 +42,7 @@ export function buildFastPlan(manifest, available = existsSync) {
   }
   const changedPaths = sortedUnique(manifest.changedPaths.map(p => checkPath(p, 'CHANGED')));
   const inheritedTests = sortedUnique(manifest.testFiles.map(p => checkPath(p, 'INHERITED_TEST')));
+  const browserSmokeFiles = sortedUnique(manifest.browserSmokeFiles.map(p => checkPath(p, 'BROWSER_SMOKE')));
   const changedTests = changedPaths.filter(p => BUN_TEST.test(p) && !p.startsWith('tests/browser/'));
   const testFiles = sortedUnique([...inheritedTests, ...changedTests]);
   for (const p of testFiles) {
@@ -81,6 +82,7 @@ export function buildFastPlan(manifest, available = existsSync) {
       requiresCompleteExactShaGateBeforeIntegration: true,
       highRiskPaths,
       browserRelatedPaths,
+      browserSmokeFiles,
       nativeOrEncryptionRelated: changedPaths.some(p =>
         /^(?:mobile\/|src\/(?:security|persistence)\/|scripts\/diagnostics\/)/.test(p))
     },
