@@ -31,7 +31,7 @@ export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyS
  const [error,setError]=useState(''),[success,setSuccess]=useState('');
  const dirty=()=>{
   const d=ref.current;
-  return pendingRef.current||Boolean(d.title||d.objective||d.review||
+  return pendingRef.current||Boolean(d.title||d.objective||d.review||d.period!=='Q1'||d.purpose!=='formative'||
    d.criteria.length!==1||d.criteria.some(c=>c.description||c.expectedDescription||c.method||c.kind));
  };
  const discard=()=>{if(pendingRef.current)return;setDraft(fresh());setError('');setSuccess('');};
