@@ -166,3 +166,61 @@ for(const [width,height,scale] of [[320,700,200],[390,844,100]]){
   }finally{await context.close();}
  });
 }
+
+async function prepareAssessmentSetup(page){
+ const panel=page.getByTestId('daily-assessment-setup');
+ await panel.locator('summary').click();
+ await panel.getByLabel('Titolo prova con criteri').fill('Prova sintetica PR388');
+ await panel.getByLabel('Obiettivo dichiarato dal docente').fill('Rappresentare un sistema tecnologico');
+ await panel.getByLabel('Criterio 1',{exact:true}).fill('Descrive le fasi del sistema');
+ await panel.getByLabel('Tipo evidenza attesa 1').selectOption('product');
+ await panel.getByLabel('Evidenza attesa 1').fill('Schema di sistema');
+ await panel.getByLabel('Metodo atteso 1').fill('Elaborato disegnato');
+ await panel.getByRole('button',{name:'Esamina prova e criteri'}).click();
+ await expect(panel.getByTestId('assessment-setup-confirmation')).toBeVisible();
+ return panel;
+}
+test('VAL-01/PRODUCT-03 teacher-confirmed proof is committed in encrypted DB2, then selectable for criterion recording',async({page})=>{
+ test.setTimeout(120000);
+ await open(page);
+ const before=await diag(page,'physicalDigest'),committedBefore=await diag(page,'committed');
+ const panel=await prepareAssessmentSetup(page);
+ await expect(panel.getByText('Prova svolta e criteri salvati nell’archivio protetto.')).toHaveCount(0);
+ await panel.getByRole('button',{name:'Conferma e registra'}).click();
+ await expect(panel.getByText('Prova svolta e criteri salvati nell’archivio protetto.')).toBeVisible();
+ const after=await diag(page,'physicalDigest'),committedAfter=await diag(page,'committed');
+ expect(Object.keys(after).filter(k=>before[k]!==after[k]).sort()).toEqual(['appData','meta']);
+ expect(committedAfter.changes).toBe(committedBefore.changes+1);
+ expect(committedAfter.grades).toEqual(committedBefore.grades);
+ expect(committedAfter.revisionIds).toEqual(committedBefore.revisionIds);
+ const entry=page.getByTestId('daily-criterion-recorder');
+ await entry.locator('summary').click();
+ const select=entry.getByLabel('Prova svolta con criteri');
+ const option=select.locator('option').filter({hasText:'Prova sintetica PR388'});
+ await expect(option).toHaveCount(1);
+ await select.selectOption(await option.getAttribute('value'));
+ const criterion=entry.getByLabel('Criterio della prova');
+ const target=criterion.locator('option').filter({hasText:'Descrive le fasi del sistema'});
+ await expect(target).toHaveCount(1);
+ await criterion.selectOption(await target.getAttribute('value'));
+ await entry.getByLabel('Alunno per rilevazione').selectOption('s4');
+ await entry.getByLabel('Stato della rilevazione').selectOption('not_observed');
+ await entry.getByRole('button',{name:'Esamina rilevazione'}).click();
+ await expect(entry.getByTestId('criterion-confirmation')).toBeVisible();
+ await entry.getByRole('button',{name:'Conferma e salva'}).click();
+ await expect(entry.getByText('Rilevazione salvata e verificata nell’archivio protetto.')).toBeVisible();
+ expect((await diag(page,'committed')).changes).toBe(committedBefore.changes+2);
+});
+for(const [width,height,scale] of [[320,700,200],[390,844,100]]){
+ test('VAL-01/PRODUCT-03 initial proof setup has no horizontal overflow '+width+' / '+scale+'%',async({browser})=>{
+  const context=await browser.newContext({viewport:{width,height},isMobile:true,hasTouch:true});
+  try{
+   const page=await context.newPage();await open(page);
+   if(scale===200)await page.addStyleTag({content:'html {font-size:200% !important;}'});
+   const panel=await prepareAssessmentSetup(page);
+   const dimensions=await page.evaluate(()=>({client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
+   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client+1);
+   await expect(panel.getByRole('button',{name:'Conferma e registra'})).toBeVisible();
+  }finally{await context.close();}
+ });
+}
