@@ -3482,6 +3482,27 @@
       "tests": [
         "src/security/val01Product03AssessmentSetup.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT04-I01",
+      "owner": "VAL-01/PRODUCT-04",
+      "statement": "The daily Tabellone permits a teacher to explicitly schedule a proof with dated, individually declared objective and criteria, keeping its planned V1 revision separate from a later teacher-confirmed actual completion in S6a. A planned proof is never offered for individual criterion recording or treated as a missing/failed student observation. Subsequent completion preserves the original planned revision, frozen references/criteria and all existing grades, behaviors and student evidence, rejecting stale graphs, wrong roster/year/subject, duplicate completions and invalid confirmations. Both actions use the same encrypted atomic App mutation queue with independently validated scope, navigation and pending guards and a success receipt only after durable write; failed persistence never publishes. The existing immediate-completed PRODUCT-03 flow remains unchanged. No historical rewrite, AI-generated evaluations, remote student transfer, APK publication or early R1/R2/R3 release requirement is activated.",
+      "impactPaths": [
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/assessment/dailyPlannedAssessmentCompletion.ts",
+        "src/components/DailyAssessmentSetupPanel.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/App.tsx",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/val01-s6d-operational.spec.cjs",
+        "src/security/val01Product04PlannedLifecycle.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product04PlannedLifecycle.test.ts",
+        "tests/browser/val01-s6d-operational.spec.cjs"
+      ]
     }
   ]
 }
