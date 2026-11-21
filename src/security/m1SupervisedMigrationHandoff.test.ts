@@ -159,6 +159,32 @@ describe('M1-B3.4 isolated supervised migration handoff',()=>{
     expect(await pass(next)).toBe('migrated-reopen-required');
   });
 
+  test('M1-C/3 selection loses authority on lock or owner retirement before consuming ciphertext',async()=>{
+    for(const lost of ['lock','retire'] as const){
+      const f=fixture(),s=createSupervisedMigrationHandoff(f.ports);
+      expect(await s.selectWeb(new Blob(['protected-ciphertext']))).toBe(true);
+      if(lost==='lock')f.lock();else f.endOwner();
+      expect(await pass(s)).toBe('not-started');
+      expect(await f.queue.enqueueTask(()=>17)).toBe(17);
+      expect(f.events).toEqual([]);
+      f.renew();
+      expect(await pass(s)).toBe('not-started');
+      expect(f.events).toEqual([]);
+    }
+  });
+
+  test('M1-C/3 consent refusal consumes the selected copy and permanently seals the actual mutation queue',async()=>{
+    const f=fixture();
+    f.ports.confirm=async()=>{f.events.push('confirm');return false;};
+    const s=createSupervisedMigrationHandoff(f.ports);
+    expect(await s.selectWeb(new Blob(['local-encrypted-copy']))).toBe(true);
+    expect(await pass(s)).toBe('cancelled-reopen-required');
+    expect(f.events).toEqual(['classify','prepare:local-encrypted-copy','confirm','invalidate']);
+    expect(await pass(s)).toBe('not-started');
+    expect(await s.selectWeb(new Blob(['new-copy']))).toBe(false);
+    await expect(f.queue.enqueueTask(()=>18)).rejects.toThrow();
+  });
+
   test('revocation or exception after migration invocation requires inspection, never assumed rollback',async()=>{
     for(const revoke of [true,false]){
       const f=fixture(),entered=deferred<void>(),release=deferred<void>();
