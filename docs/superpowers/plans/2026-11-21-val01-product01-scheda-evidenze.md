@@ -30,9 +30,9 @@ Rendere effettivamente consultabile nella Scheda alunno parte delle evidenze **g
 
 ## Qualificazione proposta
 
-Prove in `src/security/val01StudentCriterionReadModel.test.ts`: isolamento studente, corrispondenza del contesto, stati distinti, assenza senza inferenza da voti, rifiuto per archivio discordante, ritiro, collegamento della vista e sicurezza della riservatezza.
+Nove prove in `src/security/val01StudentCriterionReadModel.test.ts`, incluse due di rendering React sul pannello effettivo: isolamento studente, corrispondenza del contesto, stati distinti, assenza senza inferenza da voti, rifiuto per archivio discordante, ritiro, collegamento della vista e sicurezza della riservatezza.
 
-**Candidato attuale:** la qualifica appartiene all'ultimo commit della PR di prodotto, non viene ereditata dagli 8/8 PASS di M1-C. Esito completo da registrare dopo GitHub Actions.
+**Candidato attuale:** prova automatica da eseguire sul commit finale, comprendendo controllo dei tipi, rendering React, regressioni del navigatore e dati sintetici. La qualifica appartiene all'ultimo commit della PR di prodotto, non viene ereditata dagli 8/8 PASS di M1-C. Esito completo da registrare dopo GitHub Actions.
 
 ## Separazione sviluppo / rilascio
 
