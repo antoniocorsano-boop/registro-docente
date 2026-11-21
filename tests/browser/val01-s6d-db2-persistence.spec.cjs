@@ -147,3 +147,16 @@ test('M1-B4 Chromium existing-only v1/v2 readers never initialize an absent data
   refused:{'1':true,'2':true},version:0
  });
 });
+
+for(const mode of ['bad-copy','revoked','changed']){
+ test('M1-C consolidated DB1 admission, v6 authorization and fail-closed: '+mode,async({page})=>{
+  test.setTimeout(90000);
+  await attach(page);
+  const result=await call(page,'m1CConsolidatedDb1Guards',mode);
+  expect(result).toEqual({
+   absent:'unverifiable',absentVersion:0,complete:'complete',wrong:'unverifiable',
+   existingVerified:true,incompatibleRefused:true,denied:true,
+   records:10,physicalPreserved:true,version:1
+  });
+ });
+}
