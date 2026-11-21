@@ -1,6 +1,6 @@
 # Registro Docente — M1-C: convergenza delle invarianti di sicurezza Web/Android
 
-**Data:** 21 novembre 2026. **Stato:** M1-C/1 avviata; riconciliazione parziale con revisione dei controlli sul nuovo SHA ancora obbligatoria.
+**Data:** 21 novembre 2026. **Stato:** M1-C/1 qualificata (8/8 sul commit `25a2fbf4593c28c0caac88defdb9a6b15a94e32c`); M1-C/2 candidata, qualificazione del nuovo SHA obbligatoria.
 **Unico ramo tecnico:** [PR #385](https://github.com/antoniocorsano-boop/registro-docente/pull/385), `feat/m1-security-reconciliation`, in bozza e non integrata.
 **Base esatta già qualificata:** `a2d8fa8107ba8a53ab8b0eb84dbe0ec9f71df1d5` — 8/8 procedure concluse PASS.
 **Riferimento storico congelato:** PR #325, `6063fc0ff2809584c266b3161dafea9ffba92a8d`.
@@ -11,12 +11,22 @@ Il codice applicativo già integrato nel ramo dispone del coordinatore `createPr
 
 **Decisione M1-C/1:** riprendere l'ID storico `VAL-01-STAB06-I01` con il suo enunciato originario e con percorsi di prova *esistenti sul candidato moderno*. L'ID non viene reinterpretato come permesso di distribuire o usare archivi reali. Il registro passa da 149 a **150 voci proposte**, da qualificare tutte sul commit risultante. Nessuna delle altre undici voci storiche viene inserita a scopo numerico.
 
+## 1-b. Intervento M1-C/2 — migrazione legacy revocabile e scrittura ACTIVE incerta
+
+**Origine della prova:** ramo di prodotto #385, `src/components/SecureRegistroRoot.tsx` (`beginArchiveOperation`, `handleMigrate`, `handleUnlock`), `src/security/legacyMigration.ts`, `src/security/secureVault.ts`, `src/security/legacyMigration.test.ts`. Il chiamante reale trasferisce alla migrazione l'autorizzazione revocabile di sessione; all'errore dopo tentativo di attivazione blocca il vault e richiama l'ispezione protetta senza considerare annullata una scrittura potenzialmente definitiva.
+
+**Intervento 1 — commit `72026784abca3da151e03576862124d5b1330629`:** due prove causali aggiuntive nella suite `legacyMigration.test.ts` simulano (a) metadati già salvati come ACTIVE ma conferma fallita e (b) rifiuto della scrittura ACTIVE con STAGING ancora presente. In entrambi i casi si richiedono conservazione dei sei dati legacy, conservazione dei sei record cifrati e sessione bloccata; solo nel caso ACTIVE confermabile dopo nuova autenticazione è consentita la pulizia verificata. Sono prove sintetiche; non sono migrazioni Android di prodotto.
+
+**Intervento 2 — commit `f1e3765302d63ce12b5bc5c43850af861b3fd58e`:** l'ID storico `VAL-01-STAB06-I02` viene ripristinato con enunciato originale e superfici effettivamente presenti. Il registro contiene 151 invarianti: le 150 preesistenti rimangono invariate. Non viene ereditata come prova `tests/browser/val01-database-fence.spec.cjs`, non presente nel candidato e relativa al vecchio perimetro; resta distinta la copertura del fence fisico e dei client storici.
+
+**Decisione:** M1-C/2 candidato ammissibile alla nuova qualificazione, **non ancora PASS** finché tutti i controlli sul commit conclusivo non terminano con successo. Restano dieci invarianti storiche da riconciliare. La prova non implica isolamento da client storici non cooperanti, né una distribuzione Android qualificata.
+
 ## 2. Matrice puntuale delle dodici invarianti
 | Invariante originaria | Stato M1-C | Evidenza o lacuna decisiva | Prossimo requisito |
 |---|---|---|---|
-| `VAL-01-STAB06-I01` | **REINTEGRATA NEL REGISTRO / CI DEL NUOVO SHA DA VERIFICARE** | Coordinatore, Root, unità e due prove browser M1-B1 con dati sintetici | Controllare build e invarianti sul nuovo commit |
+| `VAL-01-STAB06-I01` | **REINTEGRATA E QUALIFICATA SULLO SHA M1-C/1 (8/8)** | Coordinatore, Root, unità e due prove browser M1-B1 con dati sintetici | Controllare build e invarianti sul nuovo commit |
 | `VAL-01-STAB06-I04` | PARZIALE | Preflight existing-only isolato; versione fisica e consenso distinti; originale `inspectArchiveVersion.ts` assente | Qualificare intera superficie di ammissione, senza creare archivi |
-| `VAL-01-STAB06-I02` | PARZIALE | `legacyMigration` / `initialArchiveSetup` e autorizzazione revocabile nel Root; test interruzione B2 | Confrontare il contratto originario al chiamante e al commit irreversibile |
+| `VAL-01-STAB06-I02` | **REINTEGRATA NEL REGISTRO M1-C/2 / CI DEL NUOVO SHA DA VERIFICARE** | `legacyMigration` collegata al Root; revoca e fonte rilette; nuove prove di mancato riscontro del commit e di fallimento ACTIVE, senza cancellazione della sorgente | Qualificazione automatica sul commit finale; mantenere separata la protezione da client storici non cooperanti |
 | `VAL-01-D1B3B-I01` | LABORATORIO POSITIVO | Migrazione DB1, copia V6, CAS e scenari Chromium B3.4 | Dimostrare collegamento al proprietario reale prima dell'attivazione |
 | `VAL-01-STAB06-I05` | LABORATORIO POSITIVO | Handoff monouso, sigillo coda e revoca; `m1SupervisedMigrationHandoff` senza chiamante di prodotto | Superficie reale, autorità e ripartenza dopo interruzione |
 | `VAL-01-STAB06-I06` | LABORATORIO POSITIVO / V8-V9 DA PRESERVARE | DB2 moderno differente da #325, prove CAS e riapertura isolate | Qualificare proprietario prodotto senza retrocedere V8/V9 |
