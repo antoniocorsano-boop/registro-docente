@@ -99,8 +99,9 @@ export function DailyCriterionRecorder({currentClass,settings,date,isPrivacyShie
   <div className="space-y-3 px-3 pb-3 text-sm min-w-0">
    <p className="text-xs text-slate-400">Operazione distinta dal voto e dal comportamento. Solo prove già svolte e criteri confermati.</p>
    {!isPrivacyShieldActive?<p role="status">Attiva la protezione dei nominativi per registrare evidenze.</p>:
-    context.status==='absent'?<p role="status">Nessuna prova con criteri predisposta per questa classe. Non vengono create evidenze dai voti.</p>:
-    context.status==='unverified'?<p role="alert">Archivio o contesto della prova non verificabile. Registrazione disabilitata.</p>:
+    context.status!=='ready'?(context.status==='absent'?
+      <p role="status">Nessuna prova con criteri predisposta per questa classe. Non vengono create evidenze dai voti.</p>:
+      <p role="alert">Archivio o contesto della prova non verificabile. Registrazione disabilitata.</p>):
     context.assessments.length===0?<p role="status">Nessuna prova con criteri risulta confermata come svolta.</p>:
     <>
      <fieldset disabled={blocked||Boolean(draft.reviewed)} className="grid gap-2 sm:grid-cols-2 min-w-0">
