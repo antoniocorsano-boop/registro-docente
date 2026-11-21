@@ -3451,12 +3451,18 @@
         "src/security/val01Product02DailyCriterionRecording.test.ts",
         "src/security/val01OperationalEvidenceBoundary.test.ts",
         "qualification/invariants.v1.json",
-        "src/security/val01Db2EvidenceBoundary.test.ts"
+        "src/security/val01Db2EvidenceBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/val01-s6d-operational.spec.cjs"
       ],
       "tests": [
         "src/security/val01Product02DailyCriterionRecording.test.ts",
         "src/security/val01OperationalEvidenceBoundary.test.ts",
         "src/security/val01Db2EvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-operational.spec.cjs"
       ]
     }
   ]
