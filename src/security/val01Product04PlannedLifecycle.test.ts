@@ -10,7 +10,7 @@ import {readStudentCriterionEvidence} from '../assessment/studentCriterionReadMo
 import {DailyAssessmentSetupPanel} from '../components/DailyAssessmentSetupPanel';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
 import {createDurableMutationCoordinator} from '../persistence/durableMutationCoordinator';
-import {boardScope} from '../../tests/browser/fixtures/val01-s6c-data';
+import {boardScope,boardDocument} from '../../tests/browser/fixtures/val01-s6c-data';
 
 const settings={year:boardScope.schoolYear,subject:boardScope.subjectCode};
 const scopes=[{classId:boardScope.classId,schoolYear:boardScope.schoolYear,subjectCode:boardScope.subjectCode}];
@@ -63,6 +63,28 @@ describe('VAL-01/PRODUCT-04 — teacher-scheduled proof and separate S6a complet
   expect(doc.assessments).toHaveLength(1);
   expect(doc.assessments[0].status).toBe('planned');
   expect(doc.evidence).toEqual([]);
+ });
+ test('adding and concluding a planned proof preserves prior completed proofs and personal evidence',()=>{
+  const initial=app();
+  initial.classes[0].assessmentEvidenceV1={version:1,documents:[{document:boardDocument,bindings:[]}]};
+  const oldDocument=structuredClone(boardDocument),oldMarks=structuredClone(initial.classes[0].grades);
+  const preview=previewDailyAssessmentSetup(initial.classes[0],settings,request(),'planned');
+  expect(preview.valid).toBe(true);
+  if(!preview.valid)throw Error('Existing archive denies planning');
+  const scheduled=deriveConfirmedDailyAssessmentSetup(initial,scopes,preview.review,planning);
+  const beforeCompletion=resolveDailyCriterionRecordingContext(scheduled.classes[0],settings);
+  expect(beforeCompletion.status).toBe('ready');
+  if(beforeCompletion.status==='ready')expect(beforeCompletion.assessments.map(a=>a.assessmentRevisionId)).toEqual(['a2']);
+  const completed=deriveConfirmedDailyPlannedCompletion(scheduled,scopes,completion(scheduled),performed);
+  const source=completed.classes[0].assessmentEvidenceV1!.documents[0].document;
+  expect(source.evidence).toEqual(oldDocument.evidence);
+  expect(source.assessments.slice(0,oldDocument.assessments.length)).toEqual(oldDocument.assessments);
+  expect(source.references.slice(0,oldDocument.references.length)).toEqual(oldDocument.references);
+  expect(source.criteria.slice(0,oldDocument.criteria.length)).toEqual(oldDocument.criteria);
+  expect(completed.classes[0].grades).toEqual(oldMarks);
+  const now=resolveDailyCriterionRecordingContext(completed.classes[0],settings);
+  expect(now.status).toBe('ready');
+  if(now.status==='ready')expect(now.assessments.map(a=>a.assessmentRevisionId)).toEqual(['a2','plan04-completed']);
  });
  test('planned proof cannot be used to register evidence until explicitly concluded',()=>{
   const initial=schedule();
