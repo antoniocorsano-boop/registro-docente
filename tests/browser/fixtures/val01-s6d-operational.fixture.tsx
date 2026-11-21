@@ -109,7 +109,7 @@ function Laboratory(){
          scope.studentIds.length!==boardScope.studentIds.length||
          !scope.studentIds.every((id,i)=>id===boardScope.studentIds[i]))throw Error('Synthetic scope mismatch');
       const receipt=await commit(reviewed,confirmation);return {revisionId:receipt.revisionId};
-    }}/>}
+    }} onSaveAssessmentSetup={noWrite}/>}
   {!report&&!councilBalance&&surface==='historical'&&<MatrixView currentClass={currentClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||!!councilBalance||surface!=='evidence'} className={report||councilBalance||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard committedDocument={evidence} onCommit={commit} recoveryRequired={recoveryRequired} onRecover={recover}
