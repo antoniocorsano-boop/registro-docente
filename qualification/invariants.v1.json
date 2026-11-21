@@ -3450,11 +3450,13 @@
         "src/assessment/assessmentEvidenceMutation.ts",
         "src/security/val01Product02DailyCriterionRecording.test.ts",
         "src/security/val01OperationalEvidenceBoundary.test.ts",
-        "qualification/invariants.v1.json"
+        "qualification/invariants.v1.json",
+        "src/security/val01Db2EvidenceBoundary.test.ts"
       ],
       "tests": [
         "src/security/val01Product02DailyCriterionRecording.test.ts",
-        "src/security/val01OperationalEvidenceBoundary.test.ts"
+        "src/security/val01OperationalEvidenceBoundary.test.ts",
+        "src/security/val01Db2EvidenceBoundary.test.ts"
       ]
     }
   ]
