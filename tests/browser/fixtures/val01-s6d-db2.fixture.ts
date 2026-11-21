@@ -334,7 +334,76 @@ async function m1B34SupervisedJourney(mode:'commit'|'refuse'|'revoke'){
  }finally{migration.invalidate();vault.lock();await store.retireConnection();}
 }
 
-Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards,m1B34SupervisedJourney,m1B4LegacyVersionFence,m1B4MissingArchiveFence}});
+/** M1-C consolidated development: no original APK or production UI.
+ * Validate classified DB1 read-only admission, exact-version existing-only
+ * session and the one-use v6 migration grant against a real Chromium origin.
+ * Faults are synthetic and must never silently upgrade or erase ciphertext.
+ */
+async function m1CConsolidatedDb1Guards(mode:'bad-copy'|'revoked'|'changed'){
+ demand(await versions()===0);
+ const absent=await classifyArchivePreflight(password,undefined,indexedDB);
+ const absentVersion=await versions();
+ demand(absent==='unverifiable'&&absentVersion===0);
+ const store=new IndexedDbVaultStore(indexedDB),vault=new SecureVault(store),storage=new SecureAppStorage(vault);
+ await vault.initializeActive(password);
+ let synthetic!:CompleteSecureAppSnapshot;
+ try{
+  await storage.restoreSnapshotVerified(freshSnapshot());
+  const value=await storage.loadExactBackupSnapshot();
+  if(!value)throw Error('Incomplete synthetic DB1 seed');
+  synthetic=value;
+ }finally{vault.lock();await store.retireConnection();}
+ const complete=await classifyArchivePreflight(password,undefined,indexedDB);
+ const wrong=await classifyArchivePreflight('wrong-synthetic-password',undefined,indexedDB);
+ const correct=new ExistingSessionVaultStore(1,indexedDB);
+ let existingVerified=false;
+ try{
+  await correct.getMetadata();
+  await correct.verifyAuthenticatedRecords(password);
+  existingVerified=(await correct.listRecordKeys()).length===10;
+ }finally{await correct.retireConnection();}
+ const incompatible=new ExistingSessionVaultStore(2,indexedDB);
+ let incompatibleRefused=false;
+ try{await incompatible.getMetadata();}catch{incompatibleRefused=true;}
+ finally{await incompatible.retireConnection();}
+ demand(complete==='complete'&&wrong==='unverifiable'&&existingVerified&&incompatibleRefused);
+ demand(await versions()===1);
+ const recovery=await encryptDataWithPassword(createBackupPayload(synthetic,stamp),copyPassword);
+ const migration=createAuthorizedVaultMigration(indexedDB);
+ const physical=new IndexedDbVaultStore(indexedDB);
+ let originalRecord:Awaited<ReturnType<typeof physical.getRecord>>=null;
+ try{originalRecord=await physical.getRecord('meta');}
+ finally{await physical.retireConnection();}
+ if(!originalRecord)throw Error('Missing original encrypted meta');
+ let expectedRecord=originalRecord;
+ let denied=false;
+ try{
+  if(mode==='bad-copy'){
+   try{await migration.prepare(password,new Blob(['not-an-encrypted-v6-copy']),copyPassword);}
+   catch{denied=true;}
+  }else{
+   const grant=await migration.prepare(password,new Blob([recovery]),copyPassword);
+   if(mode==='changed'){
+    const modified=structuredClone(originalRecord);
+    new Uint8Array(modified.ciphertext)[0]^=1;
+    const changedStore=new IndexedDbVaultStore(indexedDB);
+    try{await changedStore.putRecords([modified]);}
+    finally{await changedStore.retireConnection();}
+    expectedRecord=modified;
+   }else migration.invalidate();
+   try{await migration.migrate(grant,true);}catch{denied=true;}
+  }
+ }finally{migration.invalidate();}
+ const inspect=new IndexedDbVaultStore(indexedDB);
+ let records=0,physicalPreserved=false;
+ try{
+  records=(await inspect.listRecordKeys()).length;
+  physicalPreserved=sameDb2Physical(await inspect.getRecord('meta'),expectedRecord);
+ }finally{await inspect.retireConnection();}
+ return {absent,absentVersion,complete,wrong,existingVerified,incompatibleRefused,denied,
+  records,physicalPreserved,version:await versions()};
+}
+Object.assign(globalThis,{__val01Db2Evidence:{seed,open,close,summary,commit,backup,rejectLegacy,physicalDigest,downgrade,versions,restoreAssessment,m1B3PhysicalGuards,m1B34SupervisedJourney,m1B4LegacyVersionFence,m1B4MissingArchiveFence,m1CConsolidatedDb1Guards}});
 document.getElementById('status')!.textContent='Laboratorio DB2 pronto';
 
 // Native synthetic adapter: the wrapper supplies actual SAF-selected copies.
