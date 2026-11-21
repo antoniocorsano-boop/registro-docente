@@ -1,3 +1,4 @@
+import type { AssessmentArchiveV1 } from './assessment/assessmentArchive';
 import type { AiBudgetProfile } from './copilot/aiBudgetGovernor';
 import type { CopilotProactivityProfile } from './copilot/proactivity';
 
@@ -105,6 +106,8 @@ export interface ClassData {
   councilSessions?: CouncilSession[];
   /** Optional append-only teacher-confirmed aggregate photographs (CDC-02/S2b). */
   councilEvidenceSnapshots?: CouncilEvidenceSnapshotV1[];
+  /** Optional validated local assessment evidence, independent of marks. */
+  assessmentEvidenceV1?: AssessmentArchiveV1;
 }
 
 export type UdaActivityType = 'teoria' | 'laboratorio' | 'compito_realta' | 'digitale' | 'civica';
