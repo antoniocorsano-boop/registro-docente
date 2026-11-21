@@ -81,3 +81,62 @@ A manifest belongs only to the candidate SHA recorded inside it. It cannot quali
 ## Completion rule
 
 A task is not `QUALIFIED` merely because its new tests pass. The applicable inherited invariants, PREDEPLOY, browser gates and any other governed gates must all be green on the same exact candidate SHA. Open review findings or candidate drift invalidate completion.
+
+
+## CI-FAST-01 — development checks, separate from full qualification (2026-11-21)
+
+**Why:** daily PR updates must not launch the 200+ Chromium journey suite and
+four Android emulator combinations for every intermediate adjustment. The
+exact-SHA qualification rule above **still applies to final candidates**.
+
+### Two clearly separated workflows
+
+1. **Incremental development on stacked PRs whose base is not `main`:**
+   `.github/workflows/ci-fast-development.yml` checks the exact head SHA,
+   validates the invariant registry, computes impact against the actual PR
+   base, selects only inherited and changed Bun contracts, and runs TypeScript
+   and build only if corresponding source files changed. It cancels superseded
+   runs of the same PR. No native emulator, broad Chromium sweep, deployment or
+   secrets are used. A documentation-only change can finish without installing
+   application dependencies. A new head SHA always gets a new result.
+2. **Integration or release candidate targeting `main`:** all existing
+   `main`-targeted workflows, qualification manifests, security checks,
+   reference Chromium journeys and applicable native persistence/restore
+   checks **remain unchanged and mandatory**. R1/R2/R3 and hardware acceptance
+   remain separate release conditions. A fast PASS cannot be cited as
+   `QUALIFIED` or as evidence for another SHA.
+
+### Stop repeating the full suite mid-development
+
+- Do not temporarily retarget a stacked PR to `main` merely to run the
+  full suite after changing a label, test selector or local component.
+- Keep the PR based on its intended immediately preceding feature branch.
+  Finish related corrections and the selected contract tests first; run
+  **focused** interactive Chromium checks at the end of a changed user
+  journey, before freezing the candidate.
+- Once the exact candidate is ready to be integrated, invoke the existing
+  full `main` gate **once on that exact head**. Any changed SHA after that
+  invalidates its full qualification.
+- For modifications to encryption, storage, backups, restore contracts,
+  native Android or schema, treat the fast result only as preliminary.
+  Escalate to the existing relevant full/native gate before integration,
+  even if no user interface changed.
+- The fast plan and impact manifest are saved as inspectable CI artifacts.
+  Both identify the base and candidate SHA, affected invariants and risk
+  categories. They do **not** contain personal student records.
+- The workflow cannot override branch protection, required status checks or
+  repository release procedures. Before making CI-FAST an organizational
+  convention, verify required check names on `main` in repository settings;
+  no required full check may be replaced by a fast check.
+
+### Security boundary
+
+Only same-repository PRs run this fast job; `contents: read`, checkout of
+the exact commit with credentials disabled, no cloud secrets or external
+student data. Path and SHA inputs are validated; unclassified guarded paths,
+missing inherited tests and browser specifications erroneously sent to the
+Bun runner all fail closed.
+
+**Status:** CI-FAST-01 implementation is proposed on a dedicated infrastructure
+PR. Do not claim that the new policy is enabled in `main` until it has been
+reviewed, fully qualified and integrated.
