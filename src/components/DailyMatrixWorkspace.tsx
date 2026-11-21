@@ -105,7 +105,7 @@ export function DailyMatrixWorkspace({data,currentClass,udas,settings,isPrivacyS
     setFirstCell(id);setError(null);requestAnimationFrame(()=>{proofPanel.current?.scrollIntoView({block:'center'});proofPanel.current?.querySelector('select')?.focus();});
   };
   const firstSave=()=>{
-    if(criterionBusyRef.current)return;
+    if(criterionBusyRef.current||setupBusyRef.current)return;
     if(!first||selection.kind!=='new'||!type||!title.trim()){setError({message:'Scegli la tipologia e indica l’argomento.'});return;}
     if(!draftsRef.current[first]||!normalizeGrade(draftsRef.current[first].raw)){setError({message:'Inserisci un voto valido nella riga da registrare.'});return;}
     void saveGrade(first,{batchId:selection.batchId,date,type,period,title:title.trim(),...(udaId?{udaId}:{})},false,selection.explicit,true);
