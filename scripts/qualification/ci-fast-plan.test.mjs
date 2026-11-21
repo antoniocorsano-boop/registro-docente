@@ -26,6 +26,15 @@ describe('CI-FAST-01 risk-proportional development gate',()=>{
   expect(plan.checks.build).toBe(true);
   expect(plan.escalation.browserRelatedPaths).toEqual(['src/components/DailyMatrixWorkspace.tsx']);
   expect(plan.escalation.nativeOrEncryptionRelated).toBe(false);
+  expect(plan.escalation.browserSmokeFiles).toEqual([]);
+ });
+ test('inherited browser-smoke files remain visible as deferred obligations for feature acceptance',()=>{
+  const manifest={...fixture(['src/components/Example.tsx'],
+   ['src/security/exampleContract.test.ts']),browserSmokeFiles:['tests/browser/example-smoke.spec.cjs']};
+  const plan=buildFastPlan(manifest,exists);
+  expect(plan.escalation.browserSmokeFiles).toEqual(['tests/browser/example-smoke.spec.cjs']);
+  expect(plan.testFiles).toEqual(['src/security/exampleContract.test.ts']);
+  expect(plan.status).toBe('DEVELOPMENT_ONLY_NOT_QUALIFIED');
  });
  test('sensitive changes are prominently escalated but remain fast for interim development',()=>{
   const plan=buildFastPlan(fixture(['src/security/secureVault.ts','src/persistence/commit.ts'],
