@@ -3,6 +3,10 @@ import type {ClassData} from '../types';
 import {readStudentCriterionEvidence} from '../assessment/studentCriterionReadModel';
 import {boardDocument,boardScope} from '../../tests/browser/fixtures/val01-s6c-data';
 import {readFileSync} from 'node:fs';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {StudentCriterionEvidencePanel} from '../components/StudentCriterionEvidencePanel';
+import type {AppSettings} from '../types';
 
 const settings={year:boardScope.schoolYear,subject:boardScope.subjectCode};
 const roster=boardScope.studentIds.map(id=>({id,name:'Alunno sintetico '+id}));
@@ -72,6 +76,26 @@ describe('VAL-01/PRODUCT-01 — validated student criterion consultation',()=>{
     const result=readStudentCriterionEvidence(c,settings,'s1');
     expect(result.status).toBe('ready');
     if(result.status==='ready')expect(result.rows).toEqual([]);
+  });
+  test('rendered panel shows only confirmed selected-student criterion when privacy is active',()=>{
+    const html=renderToStaticMarkup(React.createElement(StudentCriterionEvidencePanel,{
+      currentClass:schoolClass(),studentId:'s1',settings:settings as AppSettings,isPrivacyShieldActive:true
+    }));
+    expect(html).toContain('Evidenze confermate per criterio');
+    expect(html).toContain('Relazioni tra fasi');
+    expect(html).toContain('Filiera sintetica');
+    expect(html).toContain('1 osservate');
+    expect(html).not.toContain('Motivazione tecnica');
+    expect(html).not.toContain('Alunno sintetico s2');
+  });
+  test('privacy disabled renders no observations or counts in the document',()=>{
+    const html=renderToStaticMarkup(React.createElement(StudentCriterionEvidencePanel,{
+      currentClass:schoolClass(),studentId:'s1',settings:settings as AppSettings,isPrivacyShieldActive:false
+    }));
+    expect(html).toContain('Attiva la protezione dei nominativi');
+    expect(html).not.toContain('Filiera sintetica');
+    expect(html).not.toContain('Relazioni tra fasi');
+    expect(html).not.toContain('1 osservate');
   });
   test('UI remains read-only, respects privacy and uses the production dossier',()=>{
     const ui=readFileSync('src/components/StudentCriterionEvidencePanel.tsx','utf8');
