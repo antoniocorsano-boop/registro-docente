@@ -174,7 +174,7 @@ async function prepareAssessmentSetup(page){
  await panel.getByLabel('Obiettivo dichiarato dal docente').fill('Rappresentare un sistema tecnologico');
  await panel.getByLabel('Criterio 1',{exact:true}).fill('Descrive le fasi del sistema');
  await panel.getByLabel('Tipo evidenza attesa 1').selectOption('product');
- await panel.getByLabel('Evidenza attesa 1').fill('Schema di sistema');
+ await panel.getByLabel('Evidenza attesa 1',{exact:true}).fill('Schema di sistema');
  await panel.getByLabel('Metodo atteso 1').fill('Elaborato disegnato');
  await panel.getByRole('button',{name:'Esamina prova e criteri'}).click();
  await expect(panel.getByTestId('assessment-setup-confirmation')).toBeVisible();
