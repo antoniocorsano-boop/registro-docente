@@ -13,9 +13,9 @@ export type CriterionSave=(
 )=>Promise<{readonly revisionId:string}>;
 
 type EvidenceState=''|'observed'|'not_observed'|'not_applicable';
-type EvidenceKind='process'|'product'|'performance'|'argumentation';
+type EvidenceKind=''|'process'|'product'|'performance'|'argumentation';
 const initial=()=>({proof:'',criterion:'',student:'',state:'' as EvidenceState,
- kind:'product' as EvidenceKind,description:'',method:'',reviewed:null as IndividualObservationPreview|null});
+ kind:'' as EvidenceKind,description:'',method:'',reviewed:null as IndividualObservationPreview|null});
 type Draft=ReturnType<typeof initial>;
 
 /** Explicit opt-in; completed qualified proof required, no grade inference.
@@ -54,7 +54,8 @@ export function DailyCriterionRecorder({currentClass,settings,date,isPrivacyShie
  const selectedStudent=currentClass.students.find(s=>s.id===draft.student);
  const blocked=pending||externalBusy||!isPrivacyShieldActive;
  const makePreview=()=>{
-  if(!ready||blocked||!selected||!criterion||!selectedStudent||!draft.state){
+  if(!ready||blocked||!selected||!criterion||!selectedStudent||!draft.state||
+    (draft.state==='observed'&&(!draft.kind||!draft.description.trim()||!draft.method.trim()))){
    setError('Scegli la prova svolta, il criterio, l’alunno e lo stato della rilevazione.');return;
   }
   const identity={evidenceId:crypto.randomUUID(),revisionId:crypto.randomUUID(),
@@ -138,7 +139,7 @@ export function DailyCriterionRecorder({currentClass,settings,date,isPrivacyShie
        <label className="min-w-0">Tipo di evidenza
         <select aria-label="Tipo di evidenza" value={draft.kind}
          onChange={e=>update({kind:e.target.value as EvidenceKind})} className="block w-full min-h-[48px] neon-input px-2">
-         <option value="product">Prodotto</option><option value="process">Processo</option>
+         <option value="">Scegli il tipo</option><option value="product">Prodotto</option><option value="process">Processo</option>
          <option value="performance">Prestazione</option><option value="argumentation">Argomentazione</option>
         </select>
        </label>
