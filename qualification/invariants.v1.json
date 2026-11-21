@@ -3464,6 +3464,24 @@
       "browserSmoke": [
         "tests/browser/val01-s6d-operational.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT03-I01",
+      "owner": "VAL-01/PRODUCT-03",
+      "statement": "A teacher can explicitly create a first completed assessment with an independently approved local class/year/subject roster, an original learning objective and one to four observable criteria, expected evidence and methods, or append a subsequent assessment without changing history. The real daily Tabellone requires a review and a separate teacher confirmation. It reuses the canonical S5b preparation and S6a completion validators, checks the exact initial or current V1 archive graph inside the existing atomic encrypted mutation queue, preserves grades, student observations, rubric/revision links and backups, and shows success only after a verified durable commit receipt. It refuses invalid dates, duplicate identities, stale reviews, incompatible archives, wrong scope, revoked context and failed writes. No result or competency level is inferred from existing marks, no auto-created personal observations or second data store, and no remote publication or release gate is activated.",
+      "impactPaths": [
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/components/DailyAssessmentSetupPanel.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/App.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "src/security/val01Product03AssessmentSetup.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product03AssessmentSetup.test.ts"
+      ]
     }
   ]
 }
