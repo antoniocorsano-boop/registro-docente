@@ -2946,6 +2946,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // VAL-01/PRODUCT-02 — confirmed criterion observation through the SAME
   // encrypted durable coordinator as votes. No new archive/grade or inference.
   const handleSaveCriterionEvidence:CriterionSave=async(scope,reviewed,confirmation)=>{
+    if(reviewed.kind!=='new')throw new Error('Solo nuove rilevazioni confermate dal docente.');
     const classId=currentClassIdRef.current;
     const approvedSettings=settingsRef.current;
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
