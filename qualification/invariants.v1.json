@@ -38,6 +38,23 @@
       ]
     },
     {
+      "id": "VAL-01-STAB06-I02",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Candidate legacy migration respects session authorization and verified source consistency before invoking ACTIVE commit; a revoked or changed source is preserved. An already invoked commit requires protected observation, not assumed rollback. No claim of isolation against noncooperating historical clients.",
+      "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureVault.test.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.test.ts"
+      ]
+    },
+    {
       "id": "MOBILE-01-S0-I01",
       "owner": "MOBILE-01/S0",
       "statement": "Android packaging experiments remain isolated from the canonical app and distribution: a distinct test appId, static Vite webDir, no runtime server URL or production secrets, read-only exact-SHA GitHub pull-request build, debug-only APK with checksum and no release/deployment event.",
