@@ -3421,6 +3421,22 @@
       "browserSmoke": [
         "tests/browser/val01-s6d-db2-persistence.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT01-I01",
+      "owner": "VAL-01/PRODUCT-01",
+      "statement": "The student dossier displays only validated, teacher-confirmed, individual criterion evidence from the local optional assessment archive, under an independently supplied exact class, year, subject and roster and with the privacy shield active. It distinguishes observed, not observed, not applicable and missing records, excludes withdrawn/superseded revisions and never infers competency levels or evidence from grades. Invalid or foreign archives fail closed without exposing records, modifying data or initiating network/export. This is read-only development integration, not release acceptance.",
+      "impactPaths": [
+        "src/assessment/studentCriterionReadModel.ts",
+        "src/components/StudentCriterionEvidencePanel.tsx",
+        "src/components/StudentReportView.tsx",
+        "src/types.ts",
+        "src/security/val01StudentCriterionReadModel.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01StudentCriterionReadModel.test.ts"
+      ]
     }
   ]
 }
