@@ -2627,10 +2627,12 @@
       "impactPaths": [
         "src/security/assessmentBackupPayload.ts",
         "src/security/backupPayload.ts",
-        "src/security/val01AssessmentBackupPayload.test.ts"
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/m1B4ExactBeta2Rc2V7Contract.test.ts"
       ],
       "tests": [
-        "src/security/val01AssessmentBackupPayload.test.ts"
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/m1B4ExactBeta2Rc2V7Contract.test.ts"
       ]
     },
     {
