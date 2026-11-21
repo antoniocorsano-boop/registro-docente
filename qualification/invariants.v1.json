@@ -3502,6 +3502,21 @@
       "tests": [
         "src/security/val01Product04PlannedLifecycle.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-I01",
+      "owner": "VAL-01/PRODUCT-05",
+      "statement": "The actual Student Dossier offers a protected, read-only inventory of validated, active, teacher-confirmed individual evidence for explicit Q1/Q2 and teacher-chosen real dates. Independent class/year/subject/roster and canonical archive validation fail closed. Observed, not observed, not applicable and no evidence stay distinct, withdrawn/superseded history is excluded, and grades do not generate criterion records. Only date, assessment title, criterion label and state are visible; raw facts, other students, level/progress interpretations, network and export are excluded. Sources are not automatically selected for a balance; no approval, persistence, publication, Android acceptance or release is claimed.",
+      "impactPaths": [
+        "src/assessment/studentFormativeSourceReadModel.ts",
+        "src/components/StudentFormativeSourcesPanel.tsx",
+        "src/components/StudentReportView.tsx",
+        "src/security/val01Product05FormativeSources.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05FormativeSources.test.ts"
+      ]
     }
   ]
 }
