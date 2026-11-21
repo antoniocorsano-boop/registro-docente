@@ -3437,6 +3437,25 @@
       "tests": [
         "src/security/val01StudentCriterionReadModel.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT02-I01",
+      "owner": "VAL-01/PRODUCT-02",
+      "statement": "The teacher's actual daily Tabellone permits an explicit two-stage preview and confirmation of one individual criterion observation only for an independently validated, already completed and teacher-confirmed assessment document in the current local class/year/subject and roster. Status, pupil, criterion, event identity and factual description/method must be selected by the teacher; a vote or behavior observation cannot create evidence or competence levels. The App must recheck the latest committed snapshot and current session, use the existing durable encrypted mutation coordinator, show success only after a verified persisted receipt, block concurrent writes and protected navigation while pending, reject stale/conflicting/replayed confirmations, and preserve all original marks, historical observations and backup semantics. An absent or incompatible archive remains read-only and cannot be fabricated or migrated. No real-data network, external provider, automatic publication or release claim.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/components/DailyCriterionRecorder.tsx",
+        "src/assessment/dailyCriterionRecordingContext.ts",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts"
+      ]
     }
   ]
 }
