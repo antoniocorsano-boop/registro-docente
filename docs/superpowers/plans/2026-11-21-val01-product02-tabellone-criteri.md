@@ -39,7 +39,8 @@ Per contesti di archivio errati, sconosciuti o non corrispondenti, rifiutare con
 - Nove prove di dominio e collegamento nel file `src/security/val01Product02DailyCriterionRecording.test.ts` coprono contesto, assenza, rifiuti, scrittura confermata, replay, preservazione dei voti e rollback di un persist fallito.
 - Il contratto `val01OperationalEvidenceBoundary.test.ts` viene aggiornato affinché distingua l'attivazione del nuovo percorso reale dal vecchio laboratorio isolato, **senza** permettere l'ingresso in produzione delle fixture e delle diagnostiche.
 - Nuova invariante `VAL-01-PRODUCT02-I01`, registro 155→156, enunciati precedenti intatti.
-- Qualificazione CI e regressioni Chromium / Android da attribuire al solo exact SHA finale di questo incremento. Il successo dei test di dominio non sostituisce un collaudo di UI 320/390px e testo 200% con un archivio già qualificato.
+- La fixture `val01-s6d-operational.fixture.tsx` collega il nuovo pannello al **proprietario DB2 sintetico esistente** con la stessa autorizzazione e restituzione di una ricevuta reale; voti e comportamento nella fixture restano disabilitati. Tre nuove prove Chromium in `val01-s6d-operational.spec.cjs` verificano il salvataggio trattenuto, l'integrità fisica prima del commit, il salvataggio durevole e la rilettura della proiezione, più geometria 320 px/testo 200% e 390 px/testo 100%.
+- Qualificazione CI e regressioni Chromium / Android da attribuire al solo exact SHA finale di questo incremento. Le prove Chromium della fixture sintetica sono distinte dal collaudo fisico di un APK installato.
 - Nessun merge, firma, installazione, rilascio, dati reali di studenti, rete o servizio a pagamento.
 
 **Prossimo passaggio di prodotto dopo la qualificazione:** rendere disponibile dal Tabellone la predisposizione manuale e confermata di prova, obiettivi e criteri, riutilizzando UDA/curricolo senza estrarre livelli dai voti.
