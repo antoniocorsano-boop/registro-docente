@@ -36,7 +36,8 @@ function Laboratory(){
   {blocked&&<p role="alert">Completa o abbandona la bozza prima di cambiare vista.</p>}
   {!report&&surface==='daily'&&<DailyMatrixWorkspace data={data} currentClass={demoClass} udas={[]} isPrivacyShieldActive={true}
     onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}
-    settings={{year:boardScope.schoolYear,subject:boardScope.subjectCode} as AppSettings} onSaveCriterionEvidence={noWrite} onSaveAssessmentSetup={noWrite}/>}
+    settings={{year:boardScope.schoolYear,subject:boardScope.subjectCode} as AppSettings} onSaveCriterionEvidence={noWrite} onSaveAssessmentSetup={noWrite}
+ onCompletePlannedAssessment={noWrite}/>}
   {!report&&surface==='historical'&&<MatrixView currentClass={demoClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||surface!=='evidence'} className={report||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard onDraftChange={dirty=>{evidenceDirty.current=dirty;if(!dirty)setBlocked(false);}} onDocumentChange={setEvidence} onOpenStudentReport={openReport}/>
