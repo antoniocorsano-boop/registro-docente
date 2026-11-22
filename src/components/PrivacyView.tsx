@@ -184,6 +184,63 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     }
   };
 
+  // AP-02: an independent, validated V7 export. The authority retains only
+  // version-bound receipt metadata after the ciphertext is produced.
+  const handleExportAssessmentV7 = async () => {
+    if (!onPrepareAssessmentV7Backup || !onVerifyAssessmentV7WebBackup ||
+        !onVerifyAssessmentV7AndroidBackup || !onRecordAssessmentV7Backup) return;
+    if (!encryptPassword || encryptPassword.length < 6 || encryptPassword !== confirmPassword) {
+      alert('Inserisci e conferma una password di almeno 6 caratteri.');
+      return;
+    }
+    if (backupOperationPendingRef.current) return;
+    backupOperationPendingRef.current = true;
+    setIsEncrypting(true);
+    webVerificationRef.current = null;
+    v7VerificationRef.current = null;
+    setWebVerificationAvailable(false);
+    setWebVerificationMessage('');
+    try {
+      const { receipt, encryptedText } = await onPrepareAssessmentV7Backup(encryptPassword);
+      if (!mountedRef.current) return;
+      const filename = `Backup_Valutazioni_V7_${today()}.enc.json`;
+      if (nativeBackupRuntime) {
+        const result = await onVerifyAssessmentV7AndroidBackup(
+          receipt, encryptedText, filename, () => mountedRef.current
+        );
+        if (result !== 'verified' || !mountedRef.current) return;
+        await onRecordAssessmentV7Backup(receipt);
+        if (mountedRef.current) alert('Copia completa V7 salvata, riletta e verificata.');
+      } else {
+        const blob = new Blob([encryptedText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        try {
+          link.click();
+          v7VerificationRef.current = receipt;
+          setWebVerificationAvailable(true);
+        } finally {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+        alert('Copia V7 generata. Seleziona il file scaricato per verificarne i byte prima di considerare la copia aggiornata.');
+      }
+      if (mountedRef.current) {
+        setEncryptPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error) {
+      console.error('Copia valutativa V7 non qualificata:', error instanceof Error ? error.message : 'errore');
+      if (mountedRef.current) alert('Copia V7 non completata o non verificata. I dati locali non sono stati modificati.');
+    } finally {
+      backupOperationPendingRef.current = false;
+      if (mountedRef.current) setIsEncrypting(false);
+    }
+  };
+
   const handleImportEncrypted = async (e: React.FormEvent) => {
     e.preventDefault();
     if (nativeBackupRuntime) {
@@ -311,12 +368,26 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   // Explicit readback of the exact web export, never an import or a restore.
   const handleVerifyDownloadedCopy = async (file: File | null) => {
     const pending = webVerificationRef.current;
-    if (!file || nativeBackupRuntime || !pending || backupOperationPendingRef.current) return;
+    if (!file || nativeBackupRuntime || (!pending && !v7VerificationRef.current) || backupOperationPendingRef.current) return;
     backupOperationPendingRef.current = true;
     setIsVerifyingCopy(true);
     setWebVerificationMessage('');
     let recording = false;
     try {
+      const v7Pending = v7VerificationRef.current;
+      if (v7Pending) {
+        if (!onVerifyAssessmentV7WebBackup || !onRecordAssessmentV7Backup) throw new Error('Procedura V7 non disponibile.');
+        // The versioned authority checks the actual encrypted byte count and SHA-256.
+        // Failed or stale verifications consume the one-use grant; re-export.
+        v7VerificationRef.current = null;
+        setWebVerificationAvailable(false);
+        const result = await onVerifyAssessmentV7WebBackup(v7Pending, file, () => mountedRef.current);
+        if (result !== 'verified' || !mountedRef.current) return;
+        recording = true;
+        await onRecordAssessmentV7Backup(v7Pending);
+        if (mountedRef.current) setWebVerificationMessage('Copia V7 verificata. Le registrazioni successive richiedono un nuovo backup.');
+        return;
+      }
       const matches = await matchesDownloadedBackup(file, pending.evidence);
       if (!mountedRef.current || webVerificationRef.current !== pending) return;
       if (!matches) {
@@ -332,7 +403,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     } catch {
       if (mountedRef.current) setWebVerificationMessage(recording
         ? 'Il file corrisponde, ma lo stato della copia non è stato aggiornato. Esporta una nuova copia.'
-        : 'Impossibile leggere la copia. Riprova con il file appena scaricato.');
+        : 'Copia non verificata. Per V7 genera una nuova copia; per V6 controlla il file scelto.');
     } finally {
       backupOperationPendingRef.current = false;
       if (mountedRef.current) setIsVerifyingCopy(false);
