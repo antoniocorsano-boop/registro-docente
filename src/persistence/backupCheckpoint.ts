@@ -116,8 +116,16 @@ export function createBackupReceiptAuthority() {
 export function verifiedBackupDate(meta: SecureMeta): string | null {
   const at = meta.verifiedBackupAt;
   const evidence = meta.verifiedBackupEvidence;
+  // The legacy V6 receipt authority still accepts V6 alone. The Home read
+  // model must also recognize V7 receipts issued by the separate version-bound
+  // authority, without treating a timestamp or malformed evidence as verified.
+  const validV7 = evidence?.payloadVersion === 7
+    && Number.isSafeInteger(evidence.bytes) && evidence.bytes > 0
+    && evidence.bytes <= 32 * 1024 * 1024
+    && typeof evidence.sha256 === 'string' && /^[0-9a-f]{64}$/.test(evidence.sha256)
+    && (evidence.source === 'android-readback' || evidence.source === 'web-readback');
   return typeof at === 'string' && at === meta.lastBackup && Number.isFinite(Date.parse(at))
-    && evidence?.checkpointAt === at && validEvidence(evidence) ? at : null;
+    && evidence?.checkpointAt === at && (validEvidence(evidence) || validV7) ? at : null;
 }
 
 export function withoutLocalBackupVerification(meta: SecureMeta): SecureMeta {
