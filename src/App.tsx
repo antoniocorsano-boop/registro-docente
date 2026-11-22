@@ -174,7 +174,9 @@ import {
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
-import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed } from './security/ap02LegacyBackupBoundary';
+import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed, containsAssessmentEvidenceV7 } from './security/ap02LegacyBackupBoundary';
+import { createVersionedBackupReceiptAuthority, verifiedBackupDateForVersion, type VersionedBackupReceipt } from './persistence/versionedBackupReceipt';
+import { projectAssessmentRestoreV7 } from './security/assessmentRestorePolicy';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
 import {
@@ -755,6 +757,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const backupReceiptAuthorityRef = useRef<ReturnType<typeof createBackupReceiptAuthority> | null>(null);
   const backupReceiptAuthority = backupReceiptAuthorityRef.current ?? (
     backupReceiptAuthorityRef.current = createBackupReceiptAuthority()
+  );
+  // AP-02: V7 has its own session-scoped, version-bound authority.
+  const assessmentBackupAuthorityRef = useRef<ReturnType<typeof createVersionedBackupReceiptAuthority> | null>(null);
+  const assessmentBackupAuthority = assessmentBackupAuthorityRef.current ?? (
+    assessmentBackupAuthorityRef.current = createVersionedBackupReceiptAuthority(7)
   );
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
@@ -3432,6 +3439,33 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     });
   };
 
+  const prepareAssessmentV7Backup = (password: string) =>
+    mutationCoordinator.enqueueTask(async () => {
+      const snapshot = getCompleteCommittedSnapshot();
+      const scopes = resolveApprovedAssessmentScopes(snapshot.appData, snapshot.planning, snapshot.settings);
+      return assessmentBackupAuthority.prepare(snapshot, scopes, password, new Date().toISOString());
+    });
+
+  const verifyAssessmentV7WebBackup = (receipt: VersionedBackupReceipt, file: Blob, active: () => boolean) =>
+    mutationCoordinator.enqueueTask(() => assessmentBackupAuthority.verifyWeb(receipt, file, active));
+
+  const verifyAssessmentV7AndroidBackup = (
+    receipt: VersionedBackupReceipt, encryptedText: string, filename: string, active: () => boolean
+  ) => mutationCoordinator.enqueueTask(() =>
+    assessmentBackupAuthority.verifyAndroid(receipt, encryptedText, filename, active)
+  );
+
+  const recordAssessmentV7Backup = (receipt: VersionedBackupReceipt): Promise<void> =>
+    mutationCoordinator.enqueue<SecureMeta>({
+      getCommitted: () => metaRef.current,
+      derive: current => assessmentBackupAuthority.consume(current, receipt, 7),
+      persist: candidate => secureStorage.saveMeta(candidate),
+      publish: candidate => {
+        metaRef.current = candidate;
+        setMeta(candidate);
+      }
+    }).then(() => undefined);
+
   const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
     return mutationCoordinator.enqueueTask(() => backupReceiptAuthority.bindEvidence(receipt, evidence));
   };
@@ -3507,17 +3541,28 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   };
 
   // Import Encrypted Backup
-  const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
+  const handleImportEncryptedBackup = (decryptedData: unknown, recoveryData?: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
-      // AP-02: this historical path is not authorized to overwrite or admit V7 evidence.
-      assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData);
-      const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
+      let candidate: CompleteSecureAppSnapshot;
+      if (recoveryData !== undefined) {
+        // Recovery scopes come from the current teacher's approved/adopted planning,
+        // never from untrusted documents or labels inside either imported file.
+        const scopes = resolveApprovedAssessmentScopes(
+          previousLogical.appData, previousLogical.planning, previousLogical.settings
+        );
+        candidate = await projectAssessmentRestoreV7(previousLogical, decryptedData, recoveryData, scopes, scopes);
+      } else {
+        // AP-02: the historical V6 route can neither import nor erase V7 evidence.
+        assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData);
+        candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
+      }
       if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
       }
       backupReceiptAuthority.invalidate();
+      assessmentBackupAuthority.invalidate();
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
@@ -3578,9 +3623,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
     backupReceiptAuthority.invalidate();
+    assessmentBackupAuthority.invalidate();
     try {
       await mutationCoordinator.enqueueTask(async () => {
       backupReceiptAuthority.invalidate();
+      assessmentBackupAuthority.invalidate();
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
@@ -3697,7 +3744,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteClass={handleDeleteClass}
             onExportBackup={handleExportBackup}
             lastBackupDate={meta.lastBackup}
-            verifiedBackupDate={verifiedBackupDate(meta)}
+            verifiedBackupDate={containsAssessmentEvidenceV7(appData)
+              ? verifiedBackupDateForVersion(meta, 7)
+              : verifiedBackupDate(meta)}
             unsavedChangesCount={meta.changes || 0}
             onStartTodayAction={handleStartTodayAction}
             pendingTodayAction={todayAction}
@@ -4043,6 +4092,10 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onPrepareAssessmentV7Backup={prepareAssessmentV7Backup}
+            onVerifyAssessmentV7WebBackup={verifyAssessmentV7WebBackup}
+            onVerifyAssessmentV7AndroidBackup={verifyAssessmentV7AndroidBackup}
+            onRecordAssessmentV7Backup={recordAssessmentV7Backup}
             onBindBackupEvidence={bindBackupEvidence}
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
