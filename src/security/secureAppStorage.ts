@@ -46,7 +46,8 @@ export interface BackupVerificationEvidence {
   readonly bytes: number;
   readonly sha256: string;
   readonly source: 'android-readback' | 'web-readback';
-  readonly payloadVersion: 6;
+  /** 6: historical archive; 7: validated assessment evidence archive. */
+  readonly payloadVersion: 6 | 7;
   readonly checkpointAt: string;
 }
 
