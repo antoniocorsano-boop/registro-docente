@@ -158,7 +158,7 @@ jobs:
           body=entry.read_text()
           needle='registerPlugin(RegistroSessionPlugin.class);'
           assert body.count(needle)==1, 'MainActivity plugin registration changed'
-          entry.write_text(body.replace(needle,needle+'\\n        registerPlugin(Val01V10WitnessPlugin.class);'))
+          entry.write_text(body.replace(needle,needle+'\n        registerPlugin(Val01V10WitnessPlugin.class);'))
           PY
           (cd android; bash ./gradlew --no-daemon assembleDebug)
           apk="$RUNNER_TEMP/val01-v10-synthetic.apk"
