@@ -100,6 +100,7 @@ async function main(){
  await launch();
  const status=await call('status');
  assert.equal(status.syntheticOnly,true);
+ assert.equal(status.witnessStore,'android-sharedpreferences');
  assert.match(status.storage,/NOT genuine anti-rollback/);
  stage('android-v10-synthetic-boot',{origin:status.origin});
  assert.equal(await call('reset'),'pristine-synthetic-lab');
