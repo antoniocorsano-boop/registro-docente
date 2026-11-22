@@ -33,3 +33,25 @@ Non si definisce «PASS completo» sulla base delle sole prove fisiche sopra des
 
 ## Evidenze da registrare
 SHA esatto, esecuzione GitHub Actions, numero delle prove, esiti Chromium, Android API32/API36, eventuali guasti e mancanze, anomalie del protocollo, verifica degli artefatti sintetici senza dati personali, scelta conservativa sulla futura integrazione. PR in bozza e nessuna fusione in `main`.
+
+## Rilievo fisico confermato — Android API 32 e 36 (22 novembre 2026)
+
+La prima esecuzione [GitHub Actions #45028137336](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/45028137336) ha restituito Chromium PASS e **Android API 32 FAIL / API 36 FAIL**. Entrambe le prove native arrestano realmente il processo emulato dopo un primo commit sintetico e, alla riapertura, rilevano lo stato `quarantined` anziché `consistent-synthetic-lab`.
+
+La seconda esecuzione di diagnosi [#45028611201](https://github.com/antoniocorsano-boop/registro-docente/actions/runs/45028611201) ha confermato su ENTRAMBE le versioni:
+- origine WebView: `https://localhost`;
+- coppia registro/ricevuta cifrata **presente** in IndexedDB, con un record (`recordCount:1`);
+- IV e testo cifrato ancora rappresentati correttamente come `Uint8Array` e `ArrayBuffer`;
+- testimone sperimentale in `localStorage` **non verificabile** dopo riavvio (`witness:unverifiable`, nessuna versione autorevole disponibile);
+- esito applicativo: **quarantena corretta**, nessun falso riconoscimento di backup ufficiale.
+
+**Decisione:** stato tecnico S7d.3d = `BLOCKED_NATIVE_DURABLE_WITNESS`, non PASS complessivo. Non si modifica il protocollo per accettare un archivio senza intestazione fidata; non si qualifica la V10 professionale.
+
+### Lavoro correttivo richiesto prima di S7d.3e
+1. Definire un testimone di avanzamento su Android che sia realmente durevole **anche dopo arresto immediato del processo**, con rilettura indipendente prima di attestare il commit. Verificare se una conservazione nativa con conferma esplicita e recupero conservativo sia praticabile; non assumere che `localStorage` sia sufficiente.
+2. Conservare la distinzione tra **durabilità locale** e **protezione anti-rollback**. Una seconda base IndexedDB, SharedPreferences o un file nativo possono essere durevoli, ma non per questo non riportabili indietro insieme ai dati. Servono evidenze ulteriori per una radice di fiducia realmente indipendente.
+3. Ripetere i collaudi reali API 32/36 con guasto subito dopo ogni scrittura, arresto dell'app e ripartenza, includendo verifica dell'assenza del testimone, impatto sui dati e divieto di retry implicito.
+4. Confrontare i limiti reali del dispositivo con Android Keystore / StrongBox senza presumerne disponibilità o protezione della cronologia applicativa. Fonti: https://developer.android.com/privacy-and-security/keystore ; https://source.android.com/docs/security/features/keystore/implementer-ref .
+5. Solo dopo PASS nativo motivato, svolgere selezione fisica SAF V10, revisione indipendente e qualificazione cumulativa. Nessuna fusione di questa PR nello stato corrente.
+
+Le prove Chromium 9/9 e i 42 contratti V10 superati restano valide **solo nei rispettivi perimetri**. I due FAIL Android sono evidenze negative canoniche, non successi da ignorare.
