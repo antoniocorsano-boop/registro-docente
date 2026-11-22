@@ -64,7 +64,7 @@ export function validateFormativeBalanceHistory(value:unknown):value is Formativ
   if(!exact(h,historyKeys)||h.schemaVersion!==1||!Array.isArray(h.entries)||h.entries.length>10000)return false;
   const ids=new Set<string>(),last=new Map<string,{id:string;revision:number;recordedAt:string}>();
   for(const e of h.entries){
-   if(!exact(e,entryKeys)||!identifier(e.id)||ids.has(e.id)||!Number.isSafeInteger(e.revision)||
+   if(!exact(e,entryKeys)||!identifier(e.id)||ids.has(e.id)||typeof e.revision!=='number'||!Number.isSafeInteger(e.revision)||
       e.revision<1||!instant(e.recordedAt)||!candidateValid(e.candidate)||
       e.recordedAt<e.candidate.sessionConfirmationAt)return false;
    const key=JSON.stringify(e.candidate.context),prev=last.get(key);
