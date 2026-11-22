@@ -61,6 +61,9 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(persistence).toBeGreaterThan(projection);
     expect(restore).toContain('resolveApprovedAssessmentScopes(');
     expect(restore).toContain('assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData)');
+    expect(restore).toContain('const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> =>');
+    expect(restore).toContain('const handleImportAssessmentV7Backup = (decryptedData: unknown, recoveryData: unknown): Promise<void> =>');
+    expect(restore).toContain('const restoreVerifiedCandidate = async (');
     expect(restore).toContain('assessmentBackupAuthority.invalidate()');
     expect(restore).toContain('wouldLoseCouncilEntries(');
   });
@@ -73,11 +76,13 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(privacy).toContain('onRecordAssessmentV7Backup(');
     expect(privacy).toContain('selectedV7RecoveryFile');
     expect(privacy).toContain('JSON.parse(recoveryText).version !== 2');
-    expect(privacy).toContain('onImportEncryptedBackup(decryptedData, recoveryData)');
+    expect(privacy).toContain('onImportAssessmentV7Backup(decryptedData, recoveryData)');
+    expect(privacy).toContain('onImportEncryptedBackup(decryptedData)');
     const webExport = privacy.slice(privacy.indexOf('const handleExportAssessmentV7 ='), privacy.indexOf('const handleImportEncrypted ='));
     expect(webExport).toContain('v7VerificationRef.current = receipt');
     expect(webExport.indexOf('v7VerificationRef.current = receipt')).toBeGreaterThan(webExport.indexOf('link.click()'));
     expect(webExport).not.toContain('onRecordAssessmentV7Backup(receipt);\n      } else');
     expect(privacy).toContain('const payload = createBackupPayload(checkpoint.snapshot)');
+    expect(privacy).toContain('onImportAssessmentV7Backup?: (decryptedData: unknown, recoveryData: unknown) => Promise<void>;');
   });
 });
