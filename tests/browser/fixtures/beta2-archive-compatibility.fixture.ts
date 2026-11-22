@@ -100,6 +100,29 @@ const api={
     await vault.unlock(password);
     return {snapshot:complete(await storage.loadSnapshot()),physical:await physical()};
   },
+  /** M1-B4/2: same portable harness executes the actual locked historical
+   * IndexedDB v1 implementation from each exact predecessor checkout. */
+  async probeHistoricalV1(action:'read'|'list'|'write'|'delete'|'clear'|'unlock'|'initialize'){
+    const operations={
+      read:()=>store.getMetadata(),
+      list:()=>store.listRecordKeys(),
+      write:()=>store.putRecords([]),
+      delete:()=>store.deleteRecord('appData'),
+      clear:()=>store.clearAll(),
+      unlock:()=>vault.unlock(password),
+      initialize:()=>vault.initializeActive(password)
+    };
+    try{await operations[action]();return 'ACCEPTED';}
+    catch(error){return error instanceof Error||error instanceof DOMException?error.name:'UNKNOWN_ERROR';}
+  },
+  /** V7-version canary only, encrypted using the exact predecessor's own
+   * cryptography. This is NOT proof that the full canonical V7 writer runs
+   * on an historical build, and does not claim a valid assessment domain. */
+  async makeFutureV7Canary(){
+    const snapshot=complete(await storage.loadSnapshot());
+    const v7Marker={...createBackupPayload(snapshot,stamp),backupDataVersion:7};
+    return encryptDataWithPassword(v7Marker,backupPassword);
+  },
   lock(){vault.lock();}
 };
 Object.assign(globalThis,{__beta2ArchiveCompatibility:api});

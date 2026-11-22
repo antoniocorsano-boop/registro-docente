@@ -1,0 +1,115 @@
+# Cumulative M1→VAL-01 compatibility rehearsal; no deploy, no merges.
+name: INT-REHEARSAL VAL-01 cumulative / local-only
+on:
+  push:
+    branches: ['integration/val01-product05-rehearsal-20261122']
+permissions:
+  contents: read
+env:
+  EXPECT_MAIN: 1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1
+  EXPECT_SOURCE: 8dc8d8fc6903ac67806118c05875b9ca5097db51
+jobs:
+  contracts:
+    name: "160 invariants / existing S7 / typecheck / security / build"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout actual synthetic integration tree
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify two explicit ancestry parents
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^1)" = "$EXPECT_MAIN"
+          test "$(git rev-parse HEAD^2)" = "$EXPECT_SOURCE"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install pinned dependencies
+        run: bun install --frozen-lockfile
+      - name: Check canonical invariant registry
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Check S7a S7b and PRODUCT-05 contracts
+        run: bun test src/security/val01Product05FormativeSources.test.ts src/security/val01FormativeBalance.test.ts src/security/val01FormativeRestitutionBoundary.test.ts
+      - name: Verify CI-FAST-01 developer-check plan
+        run: bun scripts/qualification/ci-fast-plan.test.mjs
+      - name: Typecheck
+        run: bun run lint
+      - name: Full security and memory contracts
+        run: bun run test:security
+      - name: Build only — prohibit deployment
+        run: bun run build
+  browser:
+    name: "Synthetic mobile / navigation / privacy Chromium"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout synthetic integration tree
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify integration ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^1)" = "$EXPECT_MAIN"
+          test "$(git rev-parse HEAD^2)" = "$EXPECT_SOURCE"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install lockfile
+        run: bun install --frozen-lockfile
+      - name: Prepare isolated Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .nav-context-browser-tools browser-evidence
+          echo '{"name":"integration-rehearsal-tools","private":true}' > .nav-context-browser-tools/package.json
+          npm --prefix .nav-context-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.nav-context-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/mobile-density-01-tabellone.spec.cjs .nav-context-browser-tools/
+      - name: Serve synthetic Vite fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for n in $(seq 1 45); do
+            if curl --silent --fail http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Install PDF inspection tools when missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null || ! command -v pdftoppm >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+      - name: Real Chromium regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .nav-context-browser-tools
+          NAV_CONTEXT_BASE_URL='http://127.0.0.1:4173' NAV_BACK_BASE_URL='http://127.0.0.1:4173' DENSITY01_BASE_URL='http://127.0.0.1:4173'             ./node_modules/.bin/playwright test nav-context-01-return-origin.spec.cjs nav-back-01-student-report.spec.cjs mobile-density-01-tabellone.spec.cjs               --workers=1 --reporter=line --output=../browser-evidence/results
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: int-rehearsal-val01-20261122
+          path: browser-evidence/
+          retention-days: 14
+          if-no-files-found: warn

@@ -12,6 +12,8 @@ import {
 } from '../utils';
 import { Sparkline } from './Sparkline';
 import { FormativeRestitutionView } from './FormativeRestitutionView';
+import { StudentCriterionEvidencePanel } from './StudentCriterionEvidencePanel';
+import { StudentFormativeSourcesPanel } from './StudentFormativeSourcesPanel';
 import {
   UserCheck,
   Award,
@@ -595,6 +597,10 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
       ) : (
       <div ref={dossierRef} data-testid="student-report-dossier"
         className={`min-w-0 space-y-3 md:space-y-4 md:block ${mobileView === 'dossier' ? 'block' : 'hidden'}`}>
+      <StudentCriterionEvidencePanel currentClass={currentClass} studentId={currentStudent.id} settings={settings}
+        isPrivacyShieldActive={isPrivacyShieldActive}/>
+      <StudentFormativeSourcesPanel currentClass={currentClass} studentId={currentStudent.id} settings={settings}
+        isPrivacyShieldActive={isPrivacyShieldActive}/>
       <details className="group" onToggle={onMobileDisclosureToggle}>
         <summary className="neon-card student-report-disclosure min-h-[56px] cursor-pointer list-none py-3 md:p-4 flex items-center justify-between gap-3">
           <div className="min-w-0 break-words">
