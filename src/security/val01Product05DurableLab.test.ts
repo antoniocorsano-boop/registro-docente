@@ -136,7 +136,7 @@ describe('VAL-01/PRODUCT-05/S7d.2a isolated durable laboratory',()=>{
   expect(h.counters().writeCount).toBe(0);
   const other=fake(),s=await sourceCandidate(other.get());
   await expect(commitFormativeHistoryLaboratory(other.owner,settings,{...s,context:{...s.context,studentId:'other'}},request))
-   .rejects.toThrow('STALE_EVIDENCE');
+   .rejects.toThrow('INVALID_SCOPE');
   expect(other.counters().writeCount).toBe(0);
  });
  test('modified latest committed source rejects inside mutation queue',async()=>{
