@@ -658,7 +658,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
                   <label htmlFor="restore-v7-recovery" className="block text-xs text-slate-300">
                     Copia cifrata V7 dello stato corrente
                   </label>
-                  <input id="restore-v7-recovery" type="file" accept=".json"
+                  <input id="restore-v7-recovery" type="file" accept=".enc.json,application/json"
                     onChange={e => setSelectedV7RecoveryFile(e.target.files?.[0] ?? null)}
                     className="w-full min-h-[44px] text-xs neon-input p-1.5" />
                 </div>
