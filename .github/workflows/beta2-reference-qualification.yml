@@ -90,6 +90,7 @@ jobs:
           cp tests/browser/doc01-d4c3d1-db2-restore.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s6d-operational.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s7b-formative-balance.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/val01-product05-s7-review.spec.cjs .nav-context-browser-tools/
           cp tests/browser/val01-s8-council-contribution.spec.cjs .nav-context-browser-tools/
           cp tests/browser/doc01-d1c-preview.spec.cjs .nav-context-browser-tools/
           cp tests/browser/doc01-d1d4b-unified.spec.cjs .nav-context-browser-tools/
@@ -134,6 +135,7 @@ jobs:
           HEADER01_BASE_URL='http://127.0.0.1:4173' \
           HEADER01_DRAWER_BASE_URL='http://127.0.0.1:4173' \
           NAV_MOBILE_DISCLOSURE_BASE_URL='http://127.0.0.1:4173' \
+          PRODUCT05_EVIDENCE_DIR='../browser-evidence' \
           HEADER01_EVIDENCE_DIR='../browser-evidence' \
             ./node_modules/.bin/playwright test \
             nav-context-01-return-origin.spec.cjs \
@@ -151,6 +153,7 @@ jobs:
             doc01-d4c3d1-db2-restore.spec.cjs \
             val01-s6d-operational.spec.cjs \
             val01-s7b-formative-balance.spec.cjs \
+            val01-product05-s7-review.spec.cjs \
             val01-s8-council-contribution.spec.cjs \
             doc01-d1c-preview.spec.cjs \
             doc01-d1d4b-unified.spec.cjs \
