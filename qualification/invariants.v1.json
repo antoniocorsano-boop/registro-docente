@@ -3566,6 +3566,20 @@
         "src/security/val01Product05CommitPreflight.test.ts",
         "src/security/val01FormativeBalance.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D1-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.1",
+      "statement": "Formative balance history is only a detached append-only proposal, never a durable write. Every entry has a unique id, contiguous per-context revision and exact supersedes link, canonical timestamp and minimal S7c candidate. New proposals recheck the current independently scoped source and reject stale or conflicting expected heads. No mutation of AppData, Vault, backup, export or official council and family flows.",
+      "impactPaths": [
+        "src/assessment/formativeBalanceHistory.ts",
+        "src/security/val01Product05History.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05History.test.ts",
+        "src/security/val01Product05CommitPreflight.test.ts"
+      ]
     }
   ]
 }
