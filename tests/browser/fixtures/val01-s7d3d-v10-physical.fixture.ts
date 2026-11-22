@@ -8,6 +8,7 @@ import {createFormativeV10LabTransaction,
  type FormativeV10LabPairV1,type FormativeV10LabTrustedReadV1,
  type FormativeV10LabTrustedHeadV1} from '../../../src/security/formativeV10LabTransaction';
 import {createDurableMutationCoordinator} from '../../../src/persistence/durableMutationCoordinator';
+import {openFormativeV10StagedMetadata} from '../../../src/security/formativeV10StagedMetadata';
 import {sameDb2Physical} from '../../../src/security/db2PhysicalLifecycle';
 const DB='val01-s7d3d-v10-synthetic-evidence';
 const TRUST='val01-s7d3d-v10-localstorage-witness';
@@ -190,7 +191,6 @@ async function diagnose(){
   }
   if(p&&w.kind==='established'){
    const key=await keyPromise;
-   const {openFormativeV10StagedMetadata}=await import('../../../src/security/formativeV10StagedMetadata');
    await openFormativeV10StagedMetadata(p.encrypted,p.journal,{
     trustedHeadDigest:w.head.headDigest,trustedSessionBinding:w.head.sessionBinding,
     trustedSnapshotDigest:w.head.snapshotDigest
