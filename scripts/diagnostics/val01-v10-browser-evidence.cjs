@@ -32,6 +32,7 @@ function stage(name,details={}){
   assert.match(await page.locator('#status').textContent(),/sintetico disponibile/);
   const state=await page.evaluate(()=>window.__val01V10Physical.status());
   assert.equal(state.syntheticOnly,true);
+  assert.equal(state.witnessStore,'web-localstorage');
   assert.match(state.storage,/NOT genuine anti-rollback/);
   stage('chromium-fixture-loaded',{origin:state.origin});
   assert.equal(await call('reset'),'pristine-synthetic-lab');
