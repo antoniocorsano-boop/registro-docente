@@ -68,7 +68,7 @@ public class Val01V10SafPlugin extends Plugin {
         byte[] bytes = raw.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_BYTES) throw new IllegalArgumentException("Invalid size");
         JSONObject obj = new JSONObject(raw);
-        if (obj.length() != 5 || !"val01-v10-saf-synthetic".equals(obj.optString("kind"))
+        if (obj.length() != 6 || !"val01-v10-saf-synthetic".equals(obj.optString("kind"))
                 || !obj.optBoolean("syntheticOnly", false)
                 || obj.optInt("version", -1) != 10
                 || !"lab-only-not-official".equals(obj.optString("state"))) {
