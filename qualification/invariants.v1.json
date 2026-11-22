@@ -3548,6 +3548,9 @@
         "src/security/val01Product05BalanceDraft.test.ts",
         "src/security/val01FormativeBalance.test.ts",
         "src/security/val01FormativeRestitutionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-product05-s7-review.spec.cjs"
       ]
     }
   ]

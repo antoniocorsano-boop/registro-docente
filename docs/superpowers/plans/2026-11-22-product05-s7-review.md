@@ -12,3 +12,6 @@
 - Qualificazione minima: contratto S7a/S7b, sintesi sicura, privacy fail-closed, CI-FAST, typecheck, build, Chromium 320/390/200%; collaudo generale per eventuale futura integrazione.
 
 **Escluso:** conferma durevole, collegamento contributo Consiglio di classe, invio, PDF, nuova tabella IndexedDB, nuovo formato backup, inferenza sulle competenze, valutazione automatica.
+
+## Verifica browser riproducibile incorporata
+La suite autonoma S7 (6 scenari Chromium già superati sul commit 8c3aa82b) è ora conservata in `tests/browser/val01-product05-s7-review.spec.cjs`, con fixture solo sintetica, registrata nell'invariante S7 e invocata dal gate generale `beta2-reference-qualification.yml`. Non dipende dal ramo temporaneo di qualificazione.
