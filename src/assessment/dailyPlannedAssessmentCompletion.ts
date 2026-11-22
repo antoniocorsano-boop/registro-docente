@@ -44,7 +44,8 @@ export function listDailyPlannedProofs(c:ClassData,settings:Settings,
   if(!authorized.some(s=>same(s,approvedScope(scope))))return {status:'unverified'};
   const verified=validateAssessmentArchiveV1({classes:[c]},authorized);
   if(!verified.valid)return {status:'unverified'};
-  if(verified.state==='absent')return {status:'absent'};
+  if(verified.state==='absent'||!c.assessmentEvidenceV1?.documents.some(section=>
+   same(section.document,scope)))return {status:'absent'};
   const document=lookup(c,scope);
   const proofs=document.assessments.filter(a=>a.status==='planned'&&
    !document.assessments.some(next=>next.supersedesRevisionId===a.revisionId))
