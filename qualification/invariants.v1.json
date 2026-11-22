@@ -3569,8 +3569,22 @@
     },
     {
       "id": "VAL-01-PRODUCT05-S7D1-I01",
-      "owner": "VAL-01/PRODUCT-05/S7d1",
-      "statement": "The proposed formative balance history is append-only, strictly tied to an independently approved class/year/discipline/roster and exactly confirmed teacher-authored S7c candidate, with unique revision IDs, sequential revisions per pupil and period, predecessor ID and digest, strict civil dates and immutable content digests. Validation and conservative restore preservation must reject altered, dropped, reordered, duplicated or foreign records. Neither SHA-256 nor session confirmation is teacher authentication, storage permission, official competence judgement or release approval. Until an independently qualified backup version implements this domain, V6-V9 backup/export/restore and ordinary Vault AppData writes must fail closed upon encountering formativeBalanceHistoryV1, while legitimate DOC-01 V2 data remain supported. No new ClassData field or UI save is added.",
+      "owner": "VAL-01/PRODUCT-05/S7d.1",
+      "statement": "Formative balance history is only a detached append-only proposal, never a durable write. Every entry has a unique id, contiguous per-context revision and exact supersedes link, canonical timestamp and minimal S7c candidate. New proposals recheck the current independently scoped source and reject stale or conflicting expected heads. No mutation of AppData, Vault, backup, export or official council and family flows.",
+      "impactPaths": [
+        "src/assessment/formativeBalanceHistory.ts",
+        "src/security/val01Product05History.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05History.test.ts",
+        "src/security/val01Product05CommitPreflight.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D1B-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.1b",
+      "statement": "The enhanced S7d history requires an independently approved class/year/subject/student roster, explicit period/date validity, append-only revisions with source and predecessor SHA-256 content digests, immutable teacher-authored text, unique confirmation and record IDs, and refusal of deleted, altered or reordered historical records on future restoration. While backup V6-V9 have no codec for formativeBalanceHistoryV1, exports and restore attempts must fail closed; ordinary SecureAppStorage appData writes must reject the reserved domain without forbidding legitimate DOC-01 V2. These gates do not authenticate a teacher, authorize a durable commit or upgrade backup formats; the history remains detached and no UI save is active.",
       "impactPaths": [
         "src/assessment/formativeBalanceHistory.ts",
         "src/security/val01Product05History.test.ts",
