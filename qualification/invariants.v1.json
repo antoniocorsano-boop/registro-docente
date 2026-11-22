@@ -3628,6 +3628,22 @@
         "src/security/doc01InstitutionalBackupPayloadV9.test.ts",
         "src/security/val01Product05History.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D2C-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.2c",
+      "statement": "A V10 physical-copy laboratory may prepare encrypted backup bytes only with a separately approved synthetic owner, perform exact authenticated readback of the V10 codec, verify an actually reselected Web Blob or the existing Android native plugin's byte/digest receipt, and consume proof exactly once only when the original committed change count remains unchanged. No file-picker success, incomplete download, cancelled native write, stale session, tampered ciphertext, altered source, or repeated proof may create success. The separate physical recovery projection requires two authenticated encrypted V10 files and exact lossless V10/V9 recovery validation; no Vault, SecureMeta, official backup receipt, restore, production screen or Android release is modified.",
+      "impactPaths": [
+        "src/persistence/formativeV10CopyLaboratory.ts",
+        "src/security/val01Product05V10PhysicalCopy.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10PhysicalCopy.test.ts",
+        "src/security/val01Product05V10Backup.test.ts",
+        "src/security/androidBackupExport.test.ts",
+        "src/security/webBackupVerification.test.ts"
+      ]
     }
   ]
 }
