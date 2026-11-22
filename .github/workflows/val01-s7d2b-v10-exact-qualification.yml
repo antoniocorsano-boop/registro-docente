@@ -1,0 +1,54 @@
+# Synthetic, isolated, exact-SHA V10 qualification. Not a production deployment.
+name: VAL-01 PRODUCT-05/S7d.2b — V10 exact-head full security
+on:
+  push:
+    branches: ['qual/product05-s7d2b-754c-v10-exact']
+permissions:
+  contents: read
+env:
+  EXACT_SOURCE: 754c0c6ee5c01fd34f53157bcf22f5da0a6e8c36
+jobs:
+  v10:
+    name: "166 invariants / V10 AES-GCM / V9 downgrade / full security / Android contracts"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exactly the source candidate, never the harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.EXACT_SOURCE }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify candidate exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_SOURCE"
+          git diff --quiet
+      - name: Setup locked Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Locked dependency install
+        run: bun install --frozen-lockfile
+      - name: Canonical 166 invariants
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Permanent browser suite mappings
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: V10, institutional V9, formative history and restore contracts
+        run: bun test src/security/val01Product05V10Backup.test.ts src/security/val01Product05History.test.ts src/security/val01Product05DurableLab.test.ts src/security/doc01InstitutionalBackupPayloadV9.test.ts src/security/val01EvidenceBackupRoundtrip.test.ts src/security/val01AssessmentRestorePolicy.test.ts
+      - name: Native Android encrypted copy boundary contracts
+        run: bun test src/security/androidBackupExport.test.ts src/security/androidBackupRestore.test.ts src/security/mobile01M2aNativeBackupContract.test.ts src/security/mobile01M2bNativeRestoreContract.test.ts
+      - name: Entire security and memory suite
+        run: bun run test:security
+      - name: TypeScript
+        run: bun run lint
+      - name: Production compilation only, no deployment
+        run: bun run build
+      - name: Confirm exact source unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_SOURCE"
+          git diff --quiet
+          echo 'V10_EXACT_HEAD_FULL_SECURITY_PASS_NOT_ANDROID_DEVICE_NOT_MAIN_RELEASE'
