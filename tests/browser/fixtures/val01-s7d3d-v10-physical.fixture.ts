@@ -249,3 +249,137 @@ Object.assign(globalThis,{__val01V10Physical:{
   storage:'IndexedDB pair + mutable witness; NOT genuine anti-rollback'})
 }});
 document.getElementById('status')!.textContent='Laboratorio V10 sintetico disponibile';
+
+/** S7d.3f — PHYSICAL SAF FILE LAB. No real data, app restore, or official V10 grant.
+ * The outer AES-GCM synthetic fixture key is deliberately fixed and public.
+ * Its ciphertext authenticates only synthetic bytes, NOT a professional backup.
+ * A trusted anti-rollback head is not supplied by the file itself.
+ */
+type SafBridge={
+ chooseDestination():Promise<{status:string;token?:string}>;
+ writeFile(x:{token:string;encryptedText:string}):Promise<{status:string;bytes:number;sha256:string}>;
+ chooseSource():Promise<{status:string;token?:string}>;
+ readFile(x:{token:string}):Promise<{status:string;encryptedText:string;bytes:number;sha256:string}>;
+};
+function requireSaf():SafBridge{
+ const cap=(globalThis as unknown as {Capacitor?:{
+  isNativePlatform?:()=>boolean;Plugins?:{Val01V10Saf?:SafBridge};
+ }}).Capacitor;
+ if(cap?.isNativePlatform?.()!==true||!cap.Plugins?.Val01V10Saf)
+  throw Error('Synthetic SAF exclusively available in Android debug fixture');
+ return cap.Plugins.Val01V10Saf;
+}
+const b64=(bytes:Uint8Array):string=>btoa(Array.from(bytes,x=>String.fromCharCode(x)).join(''));
+function decodeB64(value:unknown):Uint8Array{
+ if(typeof value!=='string'||value.length>350000||value.length%4===1||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(value))throw Error('Invalid synthetic base64');
+ const bytes=Uint8Array.from(atob(value),x=>x.charCodeAt(0));
+ if(b64(bytes)!==value)throw Error('Noncanonical synthetic base64');
+ return bytes;
+}
+const hexDigest=async(raw:Uint8Array)=>Array.from(
+ new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array(raw).buffer)),
+ x=>x.toString(16).padStart(2,'0')).join('');
+async function syntheticSafEnvelope():Promise<string>{
+ const inspection=await inspect(),current=await physicalRead('current'),head=await witness();
+ if(inspection.state!=='consistent-synthetic-lab'||!current||
+    head.kind!=='established'||head.head.epoch!==inspection.epoch)
+   throw Error('Synthetic V10 source not committed and verified');
+ await openFormativeV10StagedMetadata(current.encrypted,current.journal,{
+  trustedHeadDigest:head.head.headDigest,
+  trustedSessionBinding:head.head.sessionBinding,
+  trustedSnapshotDigest:head.head.snapshotDigest
+ },await keyPromise);
+ const data={
+  pair:{journal:current.journal,encrypted:{
+   recordKey:current.encrypted.recordKey,
+   schemaVersion:current.encrypted.schemaVersion,
+   iv:Array.from(current.encrypted.iv),
+   ciphertext:Array.from(new Uint8Array(current.encrypted.ciphertext))
+  }},
+  head
+ };
+ const iv=crypto.getRandomValues(new Uint8Array(12));
+ const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},
+  await keyPromise,new TextEncoder().encode(JSON.stringify(data)));
+ return JSON.stringify({kind:'val01-v10-saf-synthetic',syntheticOnly:true,version:10,
+  state:'lab-only-not-official',iv:b64(iv),ciphertext:b64(new Uint8Array(cipher))});
+}
+async function safBeginWrite(){return requireSaf().chooseDestination();}
+async function safCompleteWrite(token:string){
+ if(typeof token!=='string'||!token)throw Error('Missing one-use SAF token');
+ const text=await syntheticSafEnvelope();
+ const bytes=new TextEncoder().encode(text);
+ const expected=await hexDigest(bytes);
+ const receipt=await requireSaf().writeFile({token,encryptedText:text});
+ if(receipt.status!=='lab-file-readback-verified-not-official'||
+    receipt.bytes!==bytes.length||receipt.sha256!==expected)
+  throw Error('Synthetic physical SAF receipt mismatch');
+ return {status:'lab-file-readback-verified-not-official',bytes:receipt.bytes,
+  sha256:receipt.sha256};
+}
+async function safBeginRead(){return requireSaf().chooseSource();}
+async function safCompleteRead(token:string,explicitRestore=false){
+ if(typeof token!=='string'||!token||typeof explicitRestore!=='boolean')
+  throw Error('Invalid SAF read request');
+ const read=await requireSaf().readFile({token});
+ if(read.status!=='lab-file-read-not-official')throw Error('Native synthetic read rejected');
+ const rawBytes=new TextEncoder().encode(read.encryptedText);
+ if(read.bytes!==rawBytes.byteLength||read.sha256!==await hexDigest(rawBytes))
+  throw Error('Synthetic SAF hash mismatch');
+ const envelope=JSON.parse(read.encryptedText) as Record<string,unknown>;
+ if(!envelope||Object.keys(envelope).sort().join(',')!==
+    ['kind','syntheticOnly','version','state','iv','ciphertext'].sort().join(',')||
+   envelope.kind!=='val01-v10-saf-synthetic'||envelope.syntheticOnly!==true||
+   envelope.version!==10||envelope.state!=='lab-only-not-official')
+  throw Error('Invalid V10 laboratory envelope');
+ const iv=decodeB64(envelope.iv),ciphertext=decodeB64(envelope.ciphertext);
+ if(iv.byteLength!==12||ciphertext.byteLength<16)throw Error('Invalid cipher size');
+ const plaintext=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(iv).buffer},
+  await keyPromise,new Uint8Array(ciphertext).buffer);
+ const body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(plaintext)) as {
+  pair:{journal:Pair['journal'];encrypted:{
+   recordKey:string;schemaVersion:number;iv:number[];ciphertext:number[]}};
+  head:FormativeV10LabTrustedReadV1;
+ };
+ if(!body||Object.keys(body).sort().join(',')!=='head,pair'||
+    !body.pair||!body.pair.encrypted||body.head?.kind!=='established')
+  throw Error('Missing authenticated synthetic fields');
+ const enc=body.pair.encrypted;
+ if(!Array.isArray(enc.iv)||enc.iv.length!==12||
+    !Array.isArray(enc.ciphertext)||enc.ciphertext.length<16||
+    enc.ciphertext.length>131072||
+    ![...enc.iv,...enc.ciphertext].every(x=>Number.isInteger(x)&&x>=0&&x<=255))
+  throw Error('Invalid serialized synthetic ciphertext');
+ const pair:Pair={journal:body.pair.journal,encrypted:{
+  recordKey:enc.recordKey,schemaVersion:enc.schemaVersion,
+  iv:new Uint8Array(enc.iv),ciphertext:new Uint8Array(enc.ciphertext).buffer
+ }};
+ const head=body.head.head;
+ const opened=await openFormativeV10StagedMetadata(pair.encrypted,pair.journal,{
+  trustedHeadDigest:head.headDigest,
+  trustedSessionBinding:head.sessionBinding,
+  trustedSnapshotDigest:head.snapshotDigest
+ },await keyPromise);
+ if(opened.recordCount!==head.epoch||head.sessionBinding!==session||
+    head.snapshotDigest!==snapshot)
+  throw Error('Synthetic SAF source is inconsistent');
+ if(!explicitRestore)
+  return {status:'lab-file-authenticated-not-restored',epoch:head.epoch,
+   bytes:read.bytes,sha256:read.sha256};
+ // EXPLICIT laboratory reset/restore only: never silently discard a current state.
+ if((await inspect()).state!=='pristine-synthetic-lab'||await physicalRead('current')!==null||
+    (await witness()).kind!=='confirmed-absent')
+  throw Error('Synthetic restore needs a freshly reset empty laboratory');
+ // The file carries only a synthetic head; NEVER treat it as a genuine
+ // independent anti-rollback authority. Any torn store causes quarantine.
+ if(!await physicalCAS(null,pair))throw Error('Synthetic restore CAS refused');
+ await seedWitness(JSON.stringify(body.head));
+ const recovered=await inspect();
+ if(recovered.state!=='consistent-synthetic-lab'||recovered.epoch!==head.epoch)
+  throw Error('Synthetic SAF restore quarantined');
+ return {status:'lab-restored-not-official',epoch:recovered.epoch,
+  bytes:read.bytes,sha256:read.sha256};
+}
+Object.assign((globalThis as unknown as {__val01V10Physical:Record<string,unknown>})
+ .__val01V10Physical,{safBeginWrite,safCompleteWrite,safBeginRead,safCompleteRead});
