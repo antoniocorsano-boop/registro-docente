@@ -25,6 +25,22 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+/** Keep the historical Android restore handler free from direct envelope parsing.
+ * Only an authenticated AES-GCM v2 envelope may carry the V7 archive.
+ */
+function isV7EncryptedEnvelope(encryptedText: string): boolean {
+  try {
+    const data: unknown = JSON.parse(encryptedText);
+    return data !== null && typeof data === 'object' && !Array.isArray(data)
+      && (data as { version?: unknown }).version === 2
+      && typeof (data as { ciphertext?: unknown }).ciphertext === 'string'
+      && typeof (data as { salt?: unknown }).salt === 'string'
+      && typeof (data as { iv?: unknown }).iv === 'string';
+  } catch {
+    return false;
+  }
+}
+
 interface PrivacyViewProps {
   settings: AppSettings;
   classes: ClassData[];
@@ -261,7 +277,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         // A V7 restore is allowed only from a current authenticated envelope.
         if (decryptedData !== null && typeof decryptedData === 'object'
           && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7
-          && JSON.parse(encryptedText).version !== 2) {
+          && !isV7EncryptedEnvelope(encryptedText)) {
           throw new Error('Copia V7 senza cifratura V2.');
         }
         if (!mountedRef.current) return;
@@ -272,7 +288,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           if (!window.confirm('Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?')) return;
           const recoveryText = await readEncryptedBackupOnAndroid(() => mountedRef.current);
           if (!recoveryText || !mountedRef.current) return;
-          if (JSON.parse(recoveryText).version !== 2) throw new Error('Copia V7 di recupero non cifrata con protocollo V2.');
+          if (!isV7EncryptedEnvelope(recoveryText)) throw new Error('Copia V7 di recupero non cifrata con protocollo V2.');
           const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
           if (!mountedRef.current) return;
           if (!onImportAssessmentV7Backup) throw new Error('Procedura di recupero V7 non disponibile.');
@@ -343,7 +359,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
             throw new Error('Dimensione della copia V7 di recupero non valida.');
           }
           const recoveryText = await selectedV7RecoveryFile.text();
-          if (JSON.parse(recoveryText).version !== 2) {
+          if (!isV7EncryptedEnvelope(recoveryText)) {
             throw new Error('La copia di recupero deve essere cifrata con protocollo V2.');
           }
           const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
@@ -588,7 +604,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
                 <button
                   type="button"
                   onClick={() => { void handleExportAssessmentV7(); }}
-                  disabled={isEncrypting || isDecrypting || isVerifyingCopy}
+                  disabled={isEncrypting || isDecrypting || isVerifyingCopy || backupOperationPendingRef.current}
                   className="w-full py-2.5 rounded-lg bg-slate-800 border border-slate-600 text-xs font-semibold text-emerald-300"
                 >
                   <FileCheck2 className="inline w-3.5 h-3.5 mr-1" /> Esporta copia completa V7
