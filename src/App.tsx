@@ -205,6 +205,13 @@ import { DailyMatrixWorkspace } from './components/DailyMatrixWorkspace';
 import { MatrixSurfaceSelector } from './components/MatrixSurfaceSelector';
 import { applyDailyGrade, applyDailyObservation, type DailyGradeWrite, type DailyObservationWrite } from './persistence/dailyMatrixWorkspace';
 import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellMutation';
+import { deriveConfirmedEvidenceMutation, type EvidenceCommitRequest } from './assessment/assessmentEvidenceMutation';
+import type { AssessmentScopeV1 } from './assessment/assessmentEvidence';
+import type { CriterionSave } from './components/DailyCriterionRecorder';
+import type { AssessmentSetupSave,PlannedCompletionSave } from './components/DailyAssessmentSetupPanel';
+import {deriveConfirmedDailyPlannedCompletion} from './assessment/dailyPlannedAssessmentCompletion';
+import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmentSetup';
+import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -2940,6 +2947,118 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if(!record)throw Error('Ricevuta non disponibile.');return record;
     }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
   };
+  // VAL-01/PRODUCT-03 — explicit proof and criteria from an empty or
+  // previously confirmed local assessment archive. Reuse the same mutation
+  // coordinator, atomic encrypted save and backup metadata as every grade.
+  const handleSaveAssessmentSetup:AssessmentSetupSave=async(reviewed,confirmation)=>{
+    const classId=currentClassIdRef.current;
+    const approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    const scope=reviewed.scope;
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+      evaluationSavePendingRef.current||!isPrivacyShieldActive||
+      scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+    const selected=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
+      throw Error('Elenco classe cambiato.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+          !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+          settingsRef.current.year!==approvedSettings.year||
+          settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
+        const approved=current.classes.filter(c=>
+          Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1')||c.id===classId)
+          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,subjectCode:subjectCode!}));
+        return deriveConfirmedDailyAssessmentSetup(current,approved,reviewed,confirmation);
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const wanted=reviewed.mode==='planned'?reviewed.request.plannedRevisionId:reviewed.request.completedRevisionId;
+      const expectedStatus=reviewed.mode==='planned'?'planned':'completed';
+      const saved=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
+        .find(d=>d.document.classId===scope.classId&&d.document.schoolYear===scope.schoolYear&&
+          d.document.subjectCode===scope.subjectCode)?.document.assessments
+        .find(a=>a.revisionId===wanted&&a.status===expectedStatus);
+      if(!saved)throw Error('Ricevuta prova non verificabile.');
+      return {revisionId:saved.revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+  // VAL-01/PRODUCT-04 — separate S6a confirmation of a previously
+  // scheduled proof, always through canonical encrypted App commit.
+  const handleCompletePlannedAssessment:PlannedCompletionSave=async(reviewed,confirmation)=>{
+    const classId=currentClassIdRef.current,scope=reviewed.scope,approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+      evaluationSavePendingRef.current||!isPrivacyShieldActive||
+      scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+    const selected=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
+      throw Error('Elenco classe cambiato.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+          !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+          settingsRef.current.year!==approvedSettings.year||
+          settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
+        const approved=current.classes.filter(c=>
+          Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1'))
+          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,subjectCode:subjectCode!}));
+        return deriveConfirmedDailyPlannedCompletion(current,approved,reviewed,confirmation);
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const revisionId=reviewed.preview.request.revisionId;
+      const saved=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
+       .find(d=>d.document.classId===scope.classId&&d.document.schoolYear===scope.schoolYear&&
+        d.document.subjectCode===scope.subjectCode)?.document.assessments
+       .find(a=>a.revisionId===revisionId&&a.status==='completed'&&
+         a.supersedesRevisionId===reviewed.preview.request.assessmentRevisionId);
+      if(!saved)throw Error('Ricevuta conclusione non verificabile.');
+      return {revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+  // VAL-01/PRODUCT-02 — confirmed criterion observation through the SAME
+  // encrypted durable coordinator as votes. No new archive/grade or inference.
+  const handleSaveCriterionEvidence:CriterionSave=async(scope,reviewed,confirmation)=>{
+    if(reviewed.kind!=='new')throw new Error('Solo nuove rilevazioni confermate dal docente.');
+    const classId=currentClassIdRef.current;
+    const approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+       evaluationSavePendingRef.current||!isPrivacyShieldActive||
+       scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+       !subjectCode||scope.subjectCode!==subjectCode)throw new Error('Contesto di rilevazione non attuale.');
+    const activeClass=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!activeClass||scope.studentIds.length!==activeClass.students.length||
+       !scope.studentIds.every((id,i)=>id===activeClass.students[i].id))throw new Error('Elenco alunni non più attuale.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+           !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+           settingsRef.current.year!==approvedSettings.year||
+           settingsRef.current.subject!==approvedSettings.subject)throw new Error('Contesto modificato.');
+        // Scopes come from currently approved teacher settings and physical
+        // class identities, never the untrusted document's self-declared scope.
+        const scopes=current.classes
+          .filter(c=>Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1'))
+          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,
+            subjectCode:subjectCode!}));
+        return deriveConfirmedEvidenceMutation(current,scopes,scope,reviewed,confirmation).appData;
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const revisionId=reviewed.preview.request.revisionId;
+      const cls=result.classes.find(c=>c.id===classId);
+      const saved=cls?.assessmentEvidenceV1?.documents
+        .find(section=>section.document.classId===scope.classId&&
+          section.document.schoolYear===scope.schoolYear&&
+          section.document.subjectCode===scope.subjectCode)
+        ?.document.evidence.find(e=>e.revisionId===revisionId);
+      if(!saved||saved.studentId!==reviewed.preview.request.studentId)
+        throw new Error('Ricevuta da verificare sul dato già salvato.');
+      return {revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
   const handleSaveMatrixCell = async (request:MatrixCellWrite):Promise<Grade> => {
     const classId=currentClassIdRef.current;
     if(!classId||!matrixEvaluationModeRef.current||activeTabRef.current!=='voti'||evaluationSavePendingRef.current)throw Error('Contesto valutazione non disponibile.');
@@ -3679,7 +3798,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {activeTab === 'tabellone' && currentClass && (
           <div className="space-y-3">
             <MatrixSurfaceSelector mode={dailyMatrixMode?'daily':'historical'} onChange={mode=>switchDailyMatrixMode(mode==='daily')}/>
-            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation}/> : <MatrixView
+            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} settings={settings} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation} onSaveCriterionEvidence={handleSaveCriterionEvidence} onSaveAssessmentSetup={handleSaveAssessmentSetup}
+ onCompletePlannedAssessment={handleCompletePlannedAssessment}/> : <MatrixView
             onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
             currentClass={currentClass}

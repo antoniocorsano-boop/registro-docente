@@ -5,7 +5,7 @@ import {DailyMatrixWorkspace} from '../../../src/components/DailyMatrixWorkspace
 import {MatrixView} from '../../../src/components/MatrixView';
 import {StudentReportView} from '../../../src/components/StudentReportView';
 import type {EvaluationDraftGuard} from '../../../src/components/MatrixEvaluationEntry';
-import type {AppData,ClassData} from '../../../src/types';
+import type {AppData,AppSettings,ClassData} from '../../../src/types';
 import {projectIndividualAssessmentEvidence} from '../../../src/assessment/assessmentEvidenceProjection';
 import {boardDocument,boardScope} from './val01-s6c-data';
 import {SyntheticEvidenceBoard} from './val01-s6c-board';
@@ -35,7 +35,9 @@ function Laboratory(){
   {!report&&<MatrixSurfaceSelector laboratory mode={surface} onChange={next=>{if(next!==surface)request(()=>setSurface(next));}}/>}
   {blocked&&<p role="alert">Completa o abbandona la bozza prima di cambiare vista.</p>}
   {!report&&surface==='daily'&&<DailyMatrixWorkspace data={data} currentClass={demoClass} udas={[]} isPrivacyShieldActive={true}
-    onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}/>}
+    onRegisterDraftGuard={registerDailyGuard} requestChange={request} onSaveGrade={noWrite} onSaveObservation={noWrite}
+    settings={{year:boardScope.schoolYear,subject:boardScope.subjectCode} as AppSettings} onSaveCriterionEvidence={noWrite} onSaveAssessmentSetup={noWrite}
+ onCompletePlannedAssessment={noWrite}/>}
   {!report&&surface==='historical'&&<MatrixView currentClass={demoClass} isPrivacyShieldActive={true} onOpenStudentReport={openReport}/>}
   <div hidden={!!report||surface!=='evidence'} className={report||surface!=='evidence'?'hidden':''}>
    <SyntheticEvidenceBoard onDraftChange={dirty=>{evidenceDirty.current=dirty;if(!dirty)setBlocked(false);}} onDocumentChange={setEvidence} onOpenStudentReport={openReport}/>
