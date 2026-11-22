@@ -84,7 +84,7 @@ async function forceRestart(expectedIdentity){
 const nativeRestore=(method,...args)=>evaluate('window.__val01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
 const docRestore=(method,...args)=>evaluate('window.__doc01NativeRestore['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
 const docFileNames={recovery:'Backup_Cifrato_GDPR_2031-01-17.enc.json',target:'Backup_Cifrato_GDPR_2031-01-18.enc.json'};
-const fileNames={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
+const fileNames={recovery:'Backup_Valutazioni_V7_2031-01-15.enc.json',target:'Backup_Valutazioni_V7_2031-01-16.enc.json'};
 const doc=n=>/documentsui/i.test(n.pkg);
 function nodes(){
  adb('shell','rm','-f','/sdcard/val01-ui.xml');
