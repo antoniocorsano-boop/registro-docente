@@ -5,7 +5,7 @@
  */
 import type {AppSettings,ClassData} from '../types';
 import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence';
-import type {AssessmentArchiveV1} from './assessmentArchive';
+import type {AssessmentArchiveV1,ApprovedAssessmentScope} from './assessmentArchive';
 import {validateAssessmentArchiveV1} from './assessmentArchive';
 import {projectIndividualAssessmentEvidence} from './assessmentEvidenceProjection';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
@@ -29,7 +29,8 @@ const unverified=():CriterionEvidenceReadModel=>({status:'unverified'});
 
 /** A missing archive is not a negative observation. Any mismatch fails closed. */
 export function readStudentCriterionEvidence(
-  currentClass:ClassData,settings:Pick<AppSettings,'year'|'subject'>|undefined,studentId:string
+  currentClass:ClassData,settings:Pick<AppSettings,'year'|'subject'>|undefined,studentId:string,
+  approvedScopes?:readonly ApprovedAssessmentScope[]
 ):CriterionEvidenceReadModel{
   try{
     const descriptor=Object.getOwnPropertyDescriptor(currentClass,'assessmentEvidenceV1');
@@ -39,13 +40,17 @@ export function readStudentCriterionEvidence(
     if(!scope.schoolYear||!scope.subjectCode||
        !currentClass.students.some(student=>student.id===studentId))return unverified();
     // The official local scope and roster are supplied independently.
-    const verified=validateAssessmentArchiveV1({classes:[currentClass]},[scope]);
+    const authorized=approvedScopes??[scope];
+    if(!authorized.some(s=>s.classId===scope.classId&&s.schoolYear===scope.schoolYear&&
+      s.subjectCode===scope.subjectCode))return unverified();
+    const verified=validateAssessmentArchiveV1({classes:[currentClass]},authorized);
     if(!verified.valid||verified.state!=='present')return unverified();
     const archive=snapshotAssessmentData(descriptor.value) as AssessmentArchiveV1;
     const matching=archive.documents.filter(section=>
       section.document.classId===scope.classId&&
       section.document.schoolYear===scope.schoolYear&&
       section.document.subjectCode===scope.subjectCode);
+    if(matching.length===0)return {status:'absent'};
     if(matching.length!==1)return unverified();
     const document=matching[0].document as AssessmentEvidenceV1;
     const context:AssessmentScopeV1={classId:scope.classId,schoolYear:scope.schoolYear,
