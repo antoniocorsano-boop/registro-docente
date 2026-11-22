@@ -9,6 +9,7 @@ import {previewDailyAssessmentSetup,deriveConfirmedDailyAssessmentSetup,type Ass
  from '../assessment/dailyAssessmentSetup';
 import {listDailyPlannedProofs} from '../assessment/dailyPlannedAssessmentCompletion';
 import {resolveDailyCriterionRecordingContext} from '../assessment/dailyCriterionRecordingContext';
+import {readStudentCriterionEvidence} from '../assessment/studentCriterionReadModel';
 
 const older={classId:boardScope.classId,schoolYear:boardScope.schoolYear,subjectCode:boardScope.subjectCode};
 const current={classId:boardScope.classId,schoolYear:'2027/2028',subjectCode:'TECH'};
@@ -53,8 +54,10 @@ describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',(
   const badClass=resolveApprovedAssessmentScopes(data,planning('approved','foreign'),settings);
   const badAdoption=resolveApprovedAssessmentScopes(data,planning('approved',boardScope.classId,'wrong-version'),settings);
   const wrongDiscipline=resolveApprovedAssessmentScopes(data,planning('approved',boardScope.classId,'version-h','MATH'),settings);
+  expect(badClass).toEqual([current]);
+  expect(badAdoption).toEqual([current]);
+  expect(wrongDiscipline).toEqual([current,{...older,subjectCode:'MATH'}]);
   for(const scopes of [badClass,badAdoption,wrongDiscipline]){
-   expect(scopes).toEqual([current]);
    expect(validateAssessmentArchiveV1(data,scopes).valid).toBe(false);
   }
  });
@@ -74,12 +77,14 @@ describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',(
   expect(validateAssessmentArchiveV1(next,approved)).toEqual({valid:true,state:'present'});
   expect(listDailyPlannedProofs(next.classes[0],settings,approved).status).toBe('ready');
   expect(resolveDailyCriterionRecordingContext(next.classes[0],settings,approved).status).toBe('ready');
+  expect(readStudentCriterionEvidence(next.classes[0],settings,'s1',approved).status).toBe('ready');
   expect(JSON.stringify(data.classes[0].assessmentEvidenceV1)).toBe(oldSnapshot);
  });
  test('current read surfaces treat fully authorized historical-only archives as absent, not damaged',()=>{
   const c=classroom(),authorized=resolveApprovedAssessmentScopes({classes:[c]},planning(),settings);
   expect(listDailyPlannedProofs(c,settings,authorized)).toEqual({status:'absent'});
   expect(resolveDailyCriterionRecordingContext(c,settings,authorized)).toEqual({status:'absent'});
+  expect(readStudentCriterionEvidence(c,settings,'s1',authorized)).toEqual({status:'absent'});
   expect(listDailyPlannedProofs(c,settings,[current]).status).toBe('unverified');
   expect(resolveDailyCriterionRecordingContext(c,settings,[current]).status).toBe('unverified');
  });
