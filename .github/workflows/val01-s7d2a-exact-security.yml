@@ -1,0 +1,52 @@
+# Exact source candidate is checked out separately. This is not a main integration gate.
+name: VAL-01 S7d.2a — Exact-head security and backup qualification
+on:
+  push:
+    branches: ['qual/product05-s7d2a-dc4f-exact']
+permissions:
+  contents: read
+env:
+  EXACT_HEAD: dc4f9251bf8ccf3ffffd4da28f43413f6add79b7
+jobs:
+  full-contracts:
+    name: "164 invariants / full security / synthetic Vault / old-backup fence"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout immutable application candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.EXACT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact-SHA assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git diff --quiet
+      - name: Set up pinned Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install locked source dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate canonical invariants
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Preserve browser reference coverage map
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: Specific S7d2, evidence history and backup guard tests
+        run: bun test src/security/val01Product05DurableLab.test.ts src/security/val01Product05History.test.ts src/security/val01Product05CommitPreflight.test.ts src/security/val01EvidenceBackupRoundtrip.test.ts src/security/val01AssessmentRestorePolicy.test.ts src/security/doc01InstitutionalBackupPayloadV9.test.ts src/security/doc01DocumentHistoryBackupFence.test.ts
+      - name: Full security and memory tests
+        run: bun run test:security
+      - name: Typecheck
+        run: bun run lint
+      - name: Build without deployment
+        run: bun run build
+      - name: Confirm unchanged application SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_HEAD"
+          git diff --quiet
+          echo 'S7D2A_EXACT_SHA_CONTRACTS_PASS_NOT_RELEASE_GATE'
