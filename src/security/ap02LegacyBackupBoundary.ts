@@ -7,11 +7,11 @@
 const DOMAIN = 'assessmentEvidenceV1';
 
 export function containsAssessmentEvidenceV7(value: unknown): boolean {
-  const visited = new WeakSet<object>();
+  const visiting = new WeakSet<object>();
   const visit = (candidate: unknown): boolean => {
     if (candidate === null || typeof candidate !== 'object') return false;
-    if (visited.has(candidate)) return true; // Malformed/cyclic input: refuse.
-    visited.add(candidate);
+    if (visiting.has(candidate)) return true; // Actual cycle: refuse.
+    visiting.add(candidate);
     let descriptors: PropertyDescriptorMap;
     try {
       descriptors = Object.getOwnPropertyDescriptors(candidate);
@@ -22,6 +22,7 @@ export function containsAssessmentEvidenceV7(value: unknown): boolean {
       if (key === DOMAIN || !Object.hasOwn(descriptor, 'value')) return true;
       if (visit(descriptor.value)) return true;
     }
+    visiting.delete(candidate);
     return false;
   };
   return visit(value);
