@@ -3575,6 +3575,21 @@
         "tests/browser/lib01-private-library-qualification.spec.cjs",
         "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
       ]
+    },
+    {
+      "id": "CI-FAST-01-I01",
+      "owner": "CI-FAST-01",
+      "statement": "Development-only CI checks on non-main stacked pull requests must validate exact head and base SHAs, enforce the canonical invariant registry and fail-closed impacted test coverage, run only changed or inherited Bun contracts plus source-relevant typecheck/build, and cancel superseded runs without using write credentials or student data. They must explicitly report NOT_FULL_QUALIFICATION and preserve unchanged every existing main-targeted full security, Chromium, native Android, backup/restore, independent review and release gate. Unrecognized, missing, forged or incompatible test paths cannot be treated as a successful fast qualification.",
+      "impactPaths": [
+        ".github/workflows/ci-fast-development.yml",
+        "scripts/qualification/ci-fast-plan.mjs",
+        "scripts/qualification/ci-fast-plan.test.mjs",
+        "docs/qualification/OPERATING_PROTOCOL.md",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/qualification/ci-fast-plan.test.mjs"
+      ]
     }
   ]
 }
