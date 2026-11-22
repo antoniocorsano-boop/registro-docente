@@ -335,7 +335,7 @@ async function safCompleteRead(token:string,explicitRestore=false){
   throw Error('Invalid V10 laboratory envelope');
  const iv=decodeB64(envelope.iv),ciphertext=decodeB64(envelope.ciphertext);
  if(iv.byteLength!==12||ciphertext.byteLength<16)throw Error('Invalid cipher size');
- const plaintext=await crypto.subtle.decrypt({name:'AES-GCM',iv},
+ const plaintext=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(iv).buffer},
   await keyPromise,new Uint8Array(ciphertext).buffer);
  const body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(plaintext)) as {
   pair:{journal:Pair['journal'];encrypted:{
