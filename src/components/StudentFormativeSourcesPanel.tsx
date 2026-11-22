@@ -1,6 +1,7 @@
 import React,{useMemo,useState} from 'react';
 import type {AppSettings,ClassData} from '../types';
 import {readStudentFormativeSources} from '../assessment/studentFormativeSourceReadModel';
+import {StudentFormativeBalanceDraft} from './StudentFormativeBalanceDraft';
 
 /** Read-only S7 source inventory. No balance is created, confirmed or saved. */
 export function StudentFormativeSourcesPanel({currentClass,studentId,settings,isPrivacyShieldActive}:{
@@ -9,6 +10,7 @@ export function StudentFormativeSourcesPanel({currentClass,studentId,settings,is
   const [period,setPeriod]=useState<'Q1'|'Q2'>('Q1');
   const [from,setFrom]=useState('');
   const [to,setTo]=useState('');
+  const [editing,setEditing]=useState(false);
   const model=useMemo(()=>isPrivacyShieldActive&&from&&to?
     readStudentFormativeSources(currentClass,settings,studentId,period,from,to):null,
     [currentClass,settings?.year,settings?.subject,studentId,period,from,to,isPrivacyShieldActive]);
@@ -58,7 +60,13 @@ export function StudentFormativeSourcesPanel({currentClass,studentId,settings,is
                 </li>)}
               </ul>}
             {model.rows.length>10&&<p className="text-xs text-slate-400">Mostrate le prime 10 fonti su {model.rows.length}.</p>}
-            <p className="text-xs text-slate-400">Copertura da determinare. L'eventuale bilancio richiede scelta delle fonti, testo del docente, riesame e conferma separati. Questa vista non salva o esporta un bilancio.</p>
+            <p className="text-xs text-slate-400">Copertura da determinare. Solo il docente sceglie le evidenze e scrive il bilancio; il riesame locale non salva, certifica o invia nulla.</p>
+            {model.rows.length>0&&<div className="space-y-2 min-w-0">
+              <button data-testid="student-formative-start" type="button" className="min-h-[44px] max-w-full break-words rounded-lg border border-[var(--border)] px-3 py-2 font-medium"
+                onClick={()=>setEditing(value=>!value)}>{editing?'Chiudi bozza':'Prepara bilancio'}</button>
+              {editing&&<StudentFormativeBalanceDraft key={JSON.stringify([studentId,period,from,to])}
+                currentClass={currentClass} settings={settings} studentId={studentId} period={period} from={from} to={to} rows={model.rows}/>}
+            </div>}
           </>:null}
       </>}
     </div>

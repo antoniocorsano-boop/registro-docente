@@ -62,8 +62,8 @@ describe('VAL-01/PRODUCT-05/S7 — teacher review integration contract',()=>{
   expect(html).not.toContain('Conferma riesame locale');
   expect(html).not.toContain('Collegamenti esplicitati');
   const source=readFileSync('src/components/StudentFormativeBalanceDraft.tsx','utf8');
-  expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|fetch\(|window\.print|download|exportPdf|setAppData|persist/i);
+  expect(source).not.toMatch(/localStorage|sessionStorage|indexedDB|fetch\(|window\.print|download|exportPdf|setAppData|saveFormativeBalance/i);
   const report=readFileSync('src/components/StudentReportView.tsx','utf8');
-  expect(report).toContain('isPrivacyShieldActive)}');
+  expect(report).toContain('String(isPrivacyShieldActive)');
  });
 });

@@ -599,7 +599,8 @@ export const StudentReportView: React.FC<StudentReportViewProps> = ({
         className={`min-w-0 space-y-3 md:space-y-4 md:block ${mobileView === 'dossier' ? 'block' : 'hidden'}`}>
       <StudentCriterionEvidencePanel currentClass={currentClass} studentId={currentStudent.id} settings={settings}
         isPrivacyShieldActive={isPrivacyShieldActive}/>
-      <StudentFormativeSourcesPanel currentClass={currentClass} studentId={currentStudent.id} settings={settings}
+      <StudentFormativeSourcesPanel key={[currentClass.id,currentStudent.id,settings?.year,settings?.subject,String(isPrivacyShieldActive)].join(':')}
+        currentClass={currentClass} studentId={currentStudent.id} settings={settings}
         isPrivacyShieldActive={isPrivacyShieldActive}/>
       <details className="group" onToggle={onMobileDisclosureToggle}>
         <summary className="neon-card student-report-disclosure min-h-[56px] cursor-pointer list-none py-3 md:p-4 flex items-center justify-between gap-3">

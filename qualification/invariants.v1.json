@@ -3532,6 +3532,23 @@
       "tests": [
         "scripts/qualification/ci-fast-plan.test.mjs"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7-I01",
+      "owner": "VAL-01/PRODUCT-05/S7",
+      "statement": "The real Student Dossier integrates the existing deterministic S7a review and S7b allowlisted recipient preview using only an independently approved and detached local archive scope. The teacher must explicitly select active confirmed evidence, choose any technically comparable observation pair, author every narrative field and approve only a session-local review after fresh revalidation. Changes of student, class, discipline, period, dates or privacy must not leak or confirm a stale preview. No grade inference, auto-generated judgement, network, exported document, durable approval, new storage or new backup schema is permitted.",
+      "impactPaths": [
+        "src/assessment/studentFormativeReviewSource.ts",
+        "src/components/StudentFormativeBalanceDraft.tsx",
+        "src/components/StudentFormativeSourcesPanel.tsx",
+        "src/components/StudentReportView.tsx",
+        "src/security/val01Product05BalanceDraft.test.ts"
+      ],
+      "tests": [
+        "src/security/val01Product05BalanceDraft.test.ts",
+        "src/security/val01FormativeBalance.test.ts",
+        "src/security/val01FormativeRestitutionBoundary.test.ts"
+      ]
     }
   ]
 }
