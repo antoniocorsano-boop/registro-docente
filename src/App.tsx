@@ -176,7 +176,7 @@ import {
 import { applySettingsPatch } from './persistence/settingsMutation';
 import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed } from './security/ap02LegacyBackupBoundary';
 import { createVersionedBackupReceiptAuthority, type VersionedBackupReceipt } from './persistence/versionedBackupReceipt';
-import { projectAssessmentRestoreV7 } from './security/assessmentRestorePolicy';
+import { projectAssessmentRestoreV7, selectApprovedScopesForIncomingV7Backup } from './security/assessmentRestorePolicy';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
 import {
@@ -3559,8 +3559,13 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       const scopes = resolveApprovedAssessmentScopes(
         previousLogical.appData, previousLogical.planning, previousLogical.settings
       );
+      // AP-02: a valid older copy may not contain classes created later.
+      // Only the current teacher-approved scopes may authorize an imported
+      // document; intersect them with candidate class IDs, never trust the
+      // imported file to supply its own scopes.
+      const incomingScopes = selectApprovedScopesForIncomingV7Backup(decryptedData, scopes);
       const candidate = await projectAssessmentRestoreV7(
-        previousLogical, decryptedData, recoveryData, scopes, scopes
+        previousLogical, decryptedData, recoveryData, scopes, incomingScopes
       );
       await restoreVerifiedCandidate(candidate, previousLogical);
     });
