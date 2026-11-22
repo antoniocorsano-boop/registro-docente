@@ -135,7 +135,7 @@ export function createFormativeV10LabTransaction(
  trusted:FormativeV10LabTrustedHeadStore,key:CryptoKey
 ){
  if(owner?.syntheticOnly!==true||store?.syntheticOnly!==true||
-    trusted?.syntheticOnly!==true||store===trusted||!isHex(owner.sessionBinding))
+    trusted?.syntheticOnly!==true||Object.is(store,trusted)||!isHex(owner.sessionBinding))
     return fail('PRODUCTION_OR_UNTRUSTED_STORE');
  let quarantined=false;
  let pending:Pending|null=null;
@@ -175,10 +175,11 @@ export function createFormativeV10LabTransaction(
   try{
    return await owner.coordinator.enqueueTask(async()=>{
     const x=await preflight();
-    return x.anchor.kind==='confirmed-absent'?
-     {state:'pristine-synthetic-lab'}:
-     {state:'consistent-synthetic-lab',epoch:x.anchor.head.epoch,
-      headDigest:x.anchor.head.headDigest};
+    if(x.anchor.kind==='confirmed-absent')
+     return {state:'pristine-synthetic-lab'} as const;
+    if(x.anchor.kind!=='established')return fail('ANCHOR_UNVERIFIABLE');
+    return {state:'consistent-synthetic-lab',epoch:x.anchor.head.epoch,
+     headDigest:x.anchor.head.headDigest} as const;
    });
   }catch{
    quarantine();
