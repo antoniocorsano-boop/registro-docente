@@ -388,6 +388,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         if (mountedRef.current) setWebVerificationMessage('Copia V7 verificata. Le registrazioni successive richiedono un nuovo backup.');
         return;
       }
+      if (!pending) return;
       const matches = await matchesDownloadedBackup(file, pending.evidence);
       if (!mountedRef.current || webVerificationRef.current !== pending) return;
       if (!matches) {
@@ -566,6 +567,23 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
               <KeyRound className="w-3.5 h-3.5" />
               <span>{isEncrypting ? 'Cifratura in corso...' : 'Cifra e Scarica File'}</span>
             </button>
+            {onPrepareAssessmentV7Backup && onVerifyAssessmentV7WebBackup &&
+              onVerifyAssessmentV7AndroidBackup && onRecordAssessmentV7Backup && (
+              <div className="pt-2 border-t border-[var(--border)] space-y-2">
+                <p className="text-xs text-slate-300">
+                  Per conservare anche le evidenze valutative e le revisioni storiche usa la copia completa V7.
+                  Il formato V6 non può attestare un archivio con tali evidenze.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { void handleExportAssessmentV7(); }}
+                  disabled={isEncrypting || isDecrypting || isVerifyingCopy}
+                  className="w-full py-2.5 rounded-lg bg-slate-800 border border-slate-600 text-xs font-semibold text-emerald-300"
+                >
+                  <FileCheck2 className="inline w-3.5 h-3.5 mr-1" /> Esporta copia completa V7
+                </button>
+              </div>
+            )}
             {!nativeBackupRuntime && (webVerificationAvailable || webVerificationMessage || isVerifyingCopy) && (
               <div className="border-t border-[var(--border)] pt-3 space-y-2">
                 {webVerificationAvailable && (
@@ -617,10 +635,39 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
               />
             </div>
 
+            <div className="space-y-2 rounded-lg border border-[var(--border)] p-3">
+              <p className="text-xs font-semibold text-slate-200">Ripristino V7: copia di recupero obbligatoria</p>
+              <p className="text-xs text-slate-400">
+                Prima di ripristinare una copia V7, salva e conserva separatamente una copia completa V7
+                dell'archivio corrente. Deve corrispondere esattamente allo stato attuale:
+                il controllo avviene prima di sostituire i dati.
+              </p>
+              {!nativeBackupRuntime && (
+                <div>
+                  <label htmlFor="restore-v7-recovery" className="block text-xs text-slate-300">
+                    Copia cifrata V7 dello stato corrente
+                  </label>
+                  <input id="restore-v7-recovery" type="file" accept=".json"
+                    onChange={e => setSelectedV7RecoveryFile(e.target.files?.[0] ?? null)}
+                    className="w-full min-h-[44px] text-xs neon-input p-1.5" />
+                </div>
+              )}
+              <label htmlFor="restore-v7-recovery-password" className="block text-xs text-slate-300">
+                Password della copia V7 di recupero
+              </label>
+              <input id="restore-v7-recovery-password" type="password" value={recoveryPassword}
+                onChange={e => setRecoveryPassword(e.target.value)}
+                placeholder="Solo per il ripristino V7"
+                className="w-full p-2 neon-input text-xs text-white" />
+              {nativeBackupRuntime && <p className="text-xs text-slate-400">
+                Su Android il file di recupero viene selezionato dopo la copia da ripristinare.
+              </p>}
+            </div>
+
             <p className="text-xs text-slate-400">
               {nativeBackupRuntime
-                ? 'Inserisci la password, scegli il file cifrato da Download o Documenti e conferma il ripristino.'
-                : 'I backup precedenti non cifrati vengono letti esclusivamente in locale, previa conferma. Il nuovo backup esportato sarà sempre cifrato.'}
+                ? 'Inserisci la password e scegli il file cifrato. Per V7 sarà richiesta anche la copia corrente di recupero.'
+                : 'I backup precedenti non cifrati restano leggibili solo in locale. Per V7 serve una copia cifrata esatta dello stato attuale.'}
             </p>
 
             <button
