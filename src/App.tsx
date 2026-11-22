@@ -174,6 +174,7 @@ import {
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
+import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed } from './security/ap02LegacyBackupBoundary';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
 import {
@@ -3424,9 +3425,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   });
 
   const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> => {
-    return mutationCoordinator.enqueueTask(() =>
-      backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
-    );
+    return mutationCoordinator.enqueueTask(() => {
+      // AP-02: never issue a V6 receipt for an archive containing V7 evidence.
+      assertV6AssessmentExportAllowed(appDataRef.current);
+      return backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()));
+    });
   };
 
   const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
@@ -3507,6 +3510,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
+      // AP-02: this historical path is not authorized to overwrite or admit V7 evidence.
+      assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData);
       const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
       if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
