@@ -136,9 +136,16 @@ describe('VAL-01/PRODUCT-05/S7d.2c — V10 actual-byte laboratory and non-restor
  test('Android cancellation, wrong digest and altered encrypted bytes cannot confirm save',async()=>{
   const o=owner(),lab=createFormativeV10CopyLaboratory(o.authority),s=await historical();
   const a=await lab.prepare(s,pass,req);
-  const cancel=androidRuntime(()=>{},async()=>({status:'cancelled'}));
+  const cancel:AndroidBackupRuntime={androidBridge:{},sessionAccess:async active=>active(),Capacitor:{
+   getPlatform:()=> 'android',Plugins:{RegistroBackupFiles:{
+    chooseBackupDestination:async()=>({status:'cancelled'}),
+    writeEncryptedBackup:async()=>{throw Error('Cancelled picker must not write');}
+   }}}};
   expect(await lab.verifyAndroid(a.receipt,a.encryptedText,'synthetic.enc.json',cancel)).toBe('cancelled');
   expect(()=>lab.consume(a.receipt,s.meta)).toThrow();
+  const refused=await lab.prepare(s,pass,req);
+  await expect(lab.verifyAndroid(refused.receipt,refused.encryptedText,'synthetic.enc.json',
+   androidRuntime(()=>{},async()=>({status:'cancelled'})))).rejects.toThrow();
   const b=await lab.prepare(s,pass,req);
   await expect(lab.verifyAndroid(b.receipt,b.encryptedText,'synthetic.enc.json',
    androidRuntime(()=>{},async()=>({status:'verified',bytes:4,sha256:'bad'})))).rejects.toThrow();
