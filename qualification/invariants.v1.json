@@ -3675,6 +3675,21 @@
         "src/security/val01Product05V10Backup.test.ts",
         "src/security/secureAppStorage.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D3B-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.3b",
+      "statement": "V10 receipt metadata is only a lab-authenticated-not-official candidate, encrypted and authenticated with a separately supplied synthetic AES-GCM key and dedicated AAD. Opening requires a complete hash-verified journal and independently sourced head, committed-snapshot digest, and session binding; missing, tampered, mismatched, stale, truncated or substituted evidence is rejected. Authenticated ciphertext alone does not prevent rollback of both metadata and its external anchor. No SecureMeta, production vault, application, Android, DB2, V6-V9 backup, or restore behavior changes; V10 is never an official backup grant.",
+      "impactPaths": [
+        "src/security/formativeV10StagedMetadata.ts",
+        "src/security/val01Product05V10StagedMetadata.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10StagedMetadata.test.ts",
+        "src/security/val01Product05V10ReceiptJournal.test.ts",
+        "src/security/secureAppStorage.test.ts"
+      ]
     }
   ]
 }
