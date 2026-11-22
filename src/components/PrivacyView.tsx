@@ -148,6 +148,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         ? 'Copia di sicurezza salvata e verificata nella cartella scelta.'
         : 'Download avviato. La copia non è ancora verificata; il contatore delle modifiche resta invariato. Seleziona il file appena scaricato prima di uscire da Privacy.');
     } catch (err) {
+      if (err instanceof Error && err.message.includes('evidenze valutative V7')) {
+        if (mountedRef.current) alert('Copia V6 sospesa: questo archivio contiene evidenze valutative che richiedono la procedura V7 protetta. I dati locali rimangono invariati.');
+        return;
+      }
       if (androidNative) {
         if (mountedRef.current) alert(downloadInitiated
           ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le registrazioni locali restano salvate; la copia non è registrata come aggiornata.'
