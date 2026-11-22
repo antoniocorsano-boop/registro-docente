@@ -39,7 +39,20 @@ export async function driveSafPicker(adb,mode,filename){
  // The document activity must actually be present.
  await find(ns=>ns.some(n=>/com\.google\.android\.documentsui|com\.android\.documentsui/.test(n.package||'')));
  if(mode==='cancel'){
-  adb('shell','input','keyevent','KEYCODE_BACK');
+  // DocumentsUI can open with the filename editor/keyboard focused: the
+  // first Android Back dismisses the IME, not the document activity.
+  // Repeat ONLY while the system DocumentsUI is still the foreground activity.
+  const active=()=>{
+   const activities=adb('shell','dumpsys','activity','activities');
+   const focused=activities.split('\n').filter(line=>
+    /topResumedActivity|mResumedActivity|ResumedActivity/.test(line)).join('\n');
+   return /(?:com\.google\.android|com\.android)\.documentsui/i.test(focused);
+  };
+  for(let i=0;i<3;i++){
+   adb('shell','input','keyevent','KEYCODE_BACK');
+   await pause(1200);
+   if(!active())break;
+  }
   return 'cancelled-by-android-picker';
  }
  let elements=dump();
