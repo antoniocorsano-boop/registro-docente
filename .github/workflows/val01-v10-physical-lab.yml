@@ -6,11 +6,14 @@ on:
   pull_request:
     branches:
       - 'feat/val01-product05-s7d3c-v10-lab-transaction'
+      - 'feat/val01-product05-s7d3d-physical-v10-evidence'
     paths:
       - '.github/workflows/val01-v10-physical-lab.yml'
       - 'tests/browser/fixtures/val01-s7d3d-v10-physical.fixture.ts'
       - 'scripts/diagnostics/val01-v10-browser-evidence.cjs'
       - 'scripts/diagnostics/val01-v10-native-evidence.mjs'
+      - 'scripts/diagnostics/v10-native/Val01V10WitnessPlugin.java'
+      - 'scripts/diagnostics/val01-v10-native-witness-contract.test.mjs'
       - 'src/security/formativeV10LabTransaction.ts'
       - 'src/security/formativeV10StagedMetadata.ts'
       - 'src/security/formativeV10ReceiptJournal.ts'
@@ -46,6 +49,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           node --check scripts/diagnostics/val01-v10-browser-evidence.cjs
           node --check scripts/diagnostics/val01-v10-native-evidence.mjs
+          node --test scripts/diagnostics/val01-v10-native-witness-contract.test.mjs
           node scripts/qualification/check-invariants.mjs
           bun install --frozen-lockfile
           bun run lint
@@ -138,6 +142,7 @@ jobs:
           node prepare-native-back.mjs
           native=android/app/src/main/java/it/trama/registrodocente/prova
           cp native/*.java "$native/"
+          cp ../../scripts/diagnostics/v10-native/Val01V10WitnessPlugin.java "$native/"
           python3 - <<'PY'
           import pathlib,re
           root=pathlib.Path('android/app')
@@ -149,6 +154,11 @@ jobs:
           change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"','applicationId "it.trama.registrodocente.lab.v10"')
           change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"','android:name="it.trama.registrodocente.prova.MainActivity"')
           change('src/main/AndroidManifest.xml',r'android:allowBackup="true"','android:allowBackup="false" android:fullBackupContent="false"')
+          entry=root/'src/main/java/it/trama/registrodocente/prova/MainActivity.java'
+          body=entry.read_text()
+          needle='registerPlugin(RegistroSessionPlugin.class);'
+          assert body.count(needle)==1, 'MainActivity plugin registration changed'
+          entry.write_text(body.replace(needle,needle+'\n        registerPlugin(Val01V10WitnessPlugin.class);'))
           PY
           (cd android; bash ./gradlew --no-daemon assembleDebug)
           apk="$RUNNER_TEMP/val01-v10-synthetic.apk"

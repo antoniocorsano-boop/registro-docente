@@ -3727,6 +3727,29 @@
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D3D1-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.3d.1",
+      "statement": "The V10 synthetic Android witness MUST be confined to the distinct debug-only package it.trama.registrodocente.lab.v10 and compiled only by the physical laboratory workflow. A native plugin using synchronous SharedPreferences commit with immediate exact readback and conditional monotonic epoch advance must survive a real Android process force-stop and cold reopen on API 32 and API 36; missing plugins, missing states, interrupted writes, failed readback or stale heads fail closed without localStorage fallback. SharedPreferences and IndexedDB remain mutable and simultaneously rollback-able: no genuine nonrollback trust root is provided and no professional V10 backup/restore is granted. Browser Chromium fixture remains isolated and unchanged in its localStorage behavior; no main, SecureMeta, AppData, DB2, beta application, production Java plugin, V6-V9, or personal data modification.",
+      "impactPaths": [
+        "scripts/diagnostics/v10-native/Val01V10WitnessPlugin.java",
+        "scripts/diagnostics/val01-v10-native-witness-contract.test.mjs",
+        "scripts/diagnostics/val01-v10-native-evidence.mjs",
+        "scripts/diagnostics/val01-v10-browser-evidence.cjs",
+        "tests/browser/fixtures/val01-s7d3d-v10-physical.fixture.ts",
+        ".github/workflows/val01-v10-physical-lab.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/val01-v10-native-witness-contract.test.mjs",
+        "src/security/val01Product05V10LabTransaction.test.ts",
+        "src/security/val01Product05V10StagedMetadata.test.ts",
+        "src/security/val01Product05V10ReceiptJournal.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
     }
   ]
 }
