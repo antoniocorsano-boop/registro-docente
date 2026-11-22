@@ -91,7 +91,7 @@ async function split(raw:unknown,approved:unknown):Promise<{
   histories.set(cls.id,checked.history);
   delete cls.formativeBalanceHistoryV1;
  }
- return {legacy:snap as CompleteSecureAppSnapshot,histories,scopes};
+ return {legacy:snap as unknown as CompleteSecureAppSnapshot,histories,scopes};
 }
 function attach(snapshot:CompleteSecureAppSnapshot,history:Map<string,FormativeBalanceHistoryV1>):FormativeSnapshotV10{
  const detachedSnapshot=detached(snapshot) as FormativeSnapshotV10;
