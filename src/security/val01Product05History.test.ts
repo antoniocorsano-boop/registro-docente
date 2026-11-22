@@ -67,7 +67,9 @@ describe('VAL-01/PRODUCT-05/S7d.1 — append-only schema proposal',()=>{
  });
  test('source change and absent archive invalidate future append',async()=>{
   const c=cls(),v=await candidate(c);
-  c.assessmentEvidenceV1!.documents[0].document.assessments[0].title='Revised';
+  const selected=c.assessmentEvidenceV1!.documents[0].document.assessments.find(a=>a.revisionId==='a2');
+  if(!selected)throw Error('Missing selected assessment');
+  selected.title='Revised';
   expect((await proposeFormativeBalanceHistoryAppend(c,settings,empty(),v,req)).valid).toBe(false);
   delete c.assessmentEvidenceV1;
   expect((await proposeFormativeBalanceHistoryAppend(c,settings,empty(),v,req)).valid).toBe(false);
