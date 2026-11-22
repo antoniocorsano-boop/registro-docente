@@ -3758,7 +3758,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             lastBackupDate={meta.lastBackup}
             verifiedBackupDate={containsAssessmentEvidenceV7(appData)
               ? verifiedBackupDateForVersion(meta, 7)
-              : verifiedBackupDate(meta)}
+              : (verifiedBackupDateForVersion(meta, 7) ?? verifiedBackupDate(meta))}
             unsavedChangesCount={meta.changes || 0}
             onStartTodayAction={handleStartTodayAction}
             pendingTodayAction={todayAction}
