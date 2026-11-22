@@ -17,7 +17,7 @@ const at='2027-02-01T10:10:00.000Z',password='synthetic v10 laboratory password'
 const approved=[{classId:boardScope.classId,schoolYear:boardScope.schoolYear,subjectCode:boardScope.subjectCode}];
 const docs={institutionCode:'ZZIC00000A',siteCode:'ZZMM000001',schoolYear:'2026/2027',
  schoolOrder:'lower-secondary' as const,gradeLevel:2 as const,
- classId:boardScope.classId,subjectCode:boardScope.subjectCode,purpose:'disciplinary-plan' as const};
+ classId:'2C',subjectCode:boardScope.subjectCode,purpose:'disciplinary-plan' as const};
 const scope=[boardScope],copy=<T>(v:T):T=>structuredClone(v);
 const klass=(s:CompleteSecureAppSnapshot)=>s.appData.classes[0] as ClassData&{formativeBalanceHistoryV1?:any};
 function basic():CompleteSecureAppSnapshot{
