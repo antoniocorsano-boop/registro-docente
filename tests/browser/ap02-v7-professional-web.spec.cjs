@@ -101,7 +101,7 @@ test('AP-02 V7 actual Privacy web UI: physical file verification and exact recov
   await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill(backupPassword);
   await page.locator('#restore-v7-recovery-password').fill(backupPassword);
   await page.getByRole('button', { name: 'Decifra e Ripristina Registro', exact: true }).click();
-  await expect.poll(() => dialogs.some(d => /non verificat|non valido|errore|non corrispond|Password errata/i.test(d.message)))
+  await expect.poll(() => dialogs.some(d => /non verificab|non verificat|non valido|errore|non corrispond|Password errata/i.test(d.message)))
     .toBe(true);
   await nav('Oggi');
   await expect(page.getByRole('button', { name: 'Apri classe ' + secondClass, exact: true })).toBeVisible();
