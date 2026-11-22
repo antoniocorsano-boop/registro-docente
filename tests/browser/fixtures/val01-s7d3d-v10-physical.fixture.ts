@@ -170,8 +170,38 @@ async function rollbackBoth(){
  localStorage.setItem(TRUST,head);
  return inspect();
 }
+async function diagnose(){
+ const result:{
+  origin:string;witness:string;epoch:number|null;pairPresent:boolean;
+  recordCount:number|null;ivType:string|null;cipherType:string|null;
+  metadataAuthenticates:boolean;error:string|null
+ }={origin:location.origin,witness:'unknown',epoch:null,pairPresent:false,
+  recordCount:null,ivType:null,cipherType:null,metadataAuthenticates:false,error:null};
+ try{
+  const w=witness();
+  result.witness=w.kind;
+  if(w.kind==='established')result.epoch=w.head.epoch;
+  const p=await physicalRead('current');
+  result.pairPresent=p!==null;
+  if(p){
+   result.recordCount=p.journal.records.length;
+   result.ivType=Object.prototype.toString.call(p.encrypted.iv);
+   result.cipherType=Object.prototype.toString.call(p.encrypted.ciphertext);
+  }
+  if(p&&w.kind==='established'){
+   const key=await keyPromise;
+   const {openFormativeV10StagedMetadata}=await import('../../../src/security/formativeV10StagedMetadata');
+   await openFormativeV10StagedMetadata(p.encrypted,p.journal,{
+    trustedHeadDigest:w.head.headDigest,trustedSessionBinding:w.head.sessionBinding,
+    trustedSnapshotDigest:w.head.snapshotDigest
+   },key);
+   result.metadataAuthenticates=true;
+  }
+ }catch(e){result.error=e instanceof Error?e.message:'unknown';}
+ return result;
+}
 Object.assign(globalThis,{__val01V10Physical:{
- reset,inspect,first,second,faultAfterPair,corruptHead,removePair,rollbackPair,rollbackBoth,
+ reset,inspect,diagnose,first,second,faultAfterPair,corruptHead,removePair,rollbackPair,rollbackBoth,
  status:()=>({origin:location.origin,syntheticOnly:true,
   storage:'IndexedDB pair + localStorage witness; NOT genuine anti-rollback'})
 }});
