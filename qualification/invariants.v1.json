@@ -3559,6 +3559,7 @@
         "src/security/secureAppStorage.ts",
         "src/security/ap02V7OperationalBackup.test.ts",
         "src/security/ap02F1HistoricalRestore.test.ts",
+        "tests/browser/ap02-f2-android-v7-ui.spec.cjs",
         "src/security/ap02LegacyBackupBoundary.ts",
         "src/security/ap02LegacyBackupBoundary.test.ts",
         "qualification/invariants.v1.json"
