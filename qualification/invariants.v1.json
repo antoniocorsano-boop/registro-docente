@@ -3548,6 +3548,33 @@
         "src/security/backupPayload.test.ts"
       ],
       "browserSmoke": []
+    },
+    {
+      "id": "AUDIT-PRE01-AP02-V7-OP-I01",
+      "owner": "AUDIT-PRE-01/AP-02",
+      "statement": "The existing Privacy surface offers an opt-in full V7 encrypted copy with session-scoped version-bound receipt; the App derives current and historical class/year/subject authority solely from approved and adopted planning, serializes V7 payload preparation, verifies the actual ciphertext roundtrip, and commits metadata only after explicit Web byte readback or native Android verified write/readback. V6 export and historical restore remain separately gated. V7 restore is a distinct authenticated two-file operation requiring an exact encrypted recovery copy of the current archive, independently approved scopes and an append-only assessment revision graph; it shares the existing atomic Vault persistence, readback, rollback and post-commit navigation without bypassing Council replacement warnings. Invalidation on restore/reset prevents receipt reuse; timestamps or download clicks alone never certify safe copies. No remote transfer, real student data, automatic merge, APK publication or production-release qualification is inferred from static source or unexecuted tests.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/PrivacyView.tsx",
+        "src/security/secureAppStorage.ts",
+        "src/security/ap02V7OperationalBackup.test.ts",
+        "src/security/ap02LegacyBackupBoundary.ts",
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap02V7OperationalBackup.test.ts",
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/val01AssessmentRestorePolicy.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/persist01hUiContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+      ]
     }
   ]
 }
