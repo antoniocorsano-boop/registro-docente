@@ -174,8 +174,8 @@ import {
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
-import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed, containsAssessmentEvidenceV7 } from './security/ap02LegacyBackupBoundary';
-import { createVersionedBackupReceiptAuthority, verifiedBackupDateForVersion, type VersionedBackupReceipt } from './persistence/versionedBackupReceipt';
+import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed } from './security/ap02LegacyBackupBoundary';
+import { createVersionedBackupReceiptAuthority, type VersionedBackupReceipt } from './persistence/versionedBackupReceipt';
 import { projectAssessmentRestoreV7 } from './security/assessmentRestorePolicy';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
@@ -3756,9 +3756,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onDeleteClass={handleDeleteClass}
             onExportBackup={handleExportBackup}
             lastBackupDate={meta.lastBackup}
-            verifiedBackupDate={containsAssessmentEvidenceV7(appData)
-              ? verifiedBackupDateForVersion(meta, 7)
-              : (verifiedBackupDateForVersion(meta, 7) ?? verifiedBackupDate(meta))}
+            verifiedBackupDate={verifiedBackupDate(meta)}
             unsavedChangesCount={meta.changes || 0}
             onStartTodayAction={handleStartTodayAction}
             pendingTodayAction={todayAction}
