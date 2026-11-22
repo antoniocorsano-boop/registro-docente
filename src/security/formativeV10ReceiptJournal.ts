@@ -52,8 +52,8 @@ function instant(v:unknown):v is string{
  return Number.isFinite(parsed)&&new Date(parsed).toISOString()===v;
 }
 const digest=(v:unknown):v is string=>typeof v==='string'&&sha.test(v);
-const count=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
-const positive=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0&&v<=32*1024*1024;
+const count=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
+const positive=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0&&v<=32*1024*1024;
 function detached<T>(v:unknown):T{
  try{return detachDocumentBackupJson(v) as T;}catch{throw failure();}
 }
