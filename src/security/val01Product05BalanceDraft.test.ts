@@ -21,7 +21,8 @@ describe('VAL-01/PRODUCT-05/S7 — teacher review integration contract',()=>{
   const c=cls(),before=JSON.stringify(c),r=load(c);
   expect(r.status).toBe('ready');if(r.status!=='ready')throw Error('fixture invalid');
   expect(r.scope).toEqual(boardScope);expect(r.document).not.toBe(c.assessmentEvidenceV1?.documents[0].document);
-  const context={...boardScope,studentId:'s1',period:'Q1' as const,from:'2026-09-01',to:'2027-01-31'};
+  const context={classId:boardScope.classId,schoolYear:boardScope.schoolYear,subjectCode:boardScope.subjectCode,
+    studentId:'s1',period:'Q1' as const,from:'2026-09-01',to:'2027-01-31'};
   const review=await prepareFormativeBalance(r.document,r.scope,context,
    {evidenceRevisionIds:['r-1'],comparisons:[],teacherText:{learning:'Testo del docente',progress:'',nextStep:'Preparare la spiegazione'}});
   expect(review.valid).toBe(true);if(!review.valid)throw Error(review.issue);
