@@ -76,7 +76,7 @@ test('privacy and student selection invalidate access to previous records',async
 });
 test('foreign date window and second period produce no fabricated results',async({page})=>{
  const errors=await open(page);
- await dates(page,'2026-11-31','2027-01-31');
+ await dates(page,'2025-11-30','2027-01-31');
  await expect(panel(page)).toContainText('Periodo, contesto o archivio non verificabile');
  await expect(panel(page)).not.toContainText('Filiera sintetica');
  await dates(page);
