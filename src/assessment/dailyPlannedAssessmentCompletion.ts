@@ -31,7 +31,8 @@ function lookup(c:ClassData,scope:AssessmentScopeV1):AssessmentEvidenceV1{
  if(!sections||sections.length!==1)throw Error('Nonunique document');
  return snapshotAssessmentData(sections[0].document) as AssessmentEvidenceV1;
 }
-export function listDailyPlannedProofs(c:ClassData,settings:Settings):PlannedProofs{
+export function listDailyPlannedProofs(c:ClassData,settings:Settings,
+ approvedScopes?:readonly ApprovedAssessmentScope[]):PlannedProofs{
  try{
   if(!settings?.year||!settings.subject)return {status:'unverified'};
   const subjectCode=resolveAssessmentSubjectCode(settings.subject);
@@ -39,7 +40,9 @@ export function listDailyPlannedProofs(c:ClassData,settings:Settings):PlannedPro
   const scope:AssessmentScopeV1={classId:c.id,schoolYear:settings.year,subjectCode,
    studentIds:c.students.map(s=>s.id)};
   if(new Set(scope.studentIds).size!==scope.studentIds.length)return {status:'unverified'};
-  const verified=validateAssessmentArchiveV1({classes:[c]},[approvedScope(scope)]);
+  const authorized=approvedScopes??[approvedScope(scope)];
+  if(!authorized.some(s=>same(s,approvedScope(scope))))return {status:'unverified'};
+  const verified=validateAssessmentArchiveV1({classes:[c]},authorized);
   if(!verified.valid)return {status:'unverified'};
   if(verified.state==='absent')return {status:'absent'};
   const document=lookup(c,scope);
@@ -51,8 +54,8 @@ export function listDailyPlannedProofs(c:ClassData,settings:Settings):PlannedPro
 }
 export function previewDailyPlannedCompletion(c:ClassData,settings:Settings,request:{
  readonly assessmentRevisionId:string;readonly revisionId:string;readonly completedOn:string
-}):PlannedCompletionResult{
- const result=listDailyPlannedProofs(c,settings);
+},approvedScopes?:readonly ApprovedAssessmentScope[]):PlannedCompletionResult{
+ const result=listDailyPlannedProofs(c,settings,approvedScopes);
  if(result.status!=='ready'||!result.proofs.some(p=>p.revisionId===request.assessmentRevisionId))return status();
  const preview=previewAssessmentCompletion(result.document,result.scope,request);
  if(!preview.valid)return status();
