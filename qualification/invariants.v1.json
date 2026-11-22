@@ -3598,6 +3598,21 @@
         "src/security/backupPayload.test.ts",
         "src/security/secureAppStorage.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D2A-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.2a",
+      "statement": "A laboratory-only S7d2 adapter must revalidate the current S7c source and the S7d1b digest chain with an exact expected head inside the authenticated shared mutation queue. The synthetic writer must atomically persist appData+meta, then verify exact readback before issuing a laboratory-only receipt; failures quarantine the owner. Production SecureAppStorage must still refuse formativeBalanceHistoryV1 and V6-V9 backup/restore must remain fenced until a separately qualified new version. No production UI, real-data write, new Vault key, release or merge permission arises from this laboratory.",
+      "impactPaths": [
+        "src/persistence/formativeHistoryLaboratoryCommit.ts",
+        "src/security/val01Product05DurableLab.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05DurableLab.test.ts",
+        "src/security/val01Product05History.test.ts",
+        "src/security/backupPayload.test.ts"
+      ]
     }
   ]
 }
