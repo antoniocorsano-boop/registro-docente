@@ -3590,6 +3590,21 @@
       "tests": [
         "scripts/qualification/ci-fast-plan.test.mjs"
       ]
+    },
+    {
+      "id": "AUDIT-PRE01-AP01-I01",
+      "owner": "AUDIT-PRE-01/AP-01",
+      "statement": "First activation of a locally encrypted Registro archive must reserve initially absent physical metadata in one atomic IndexedDB transaction before staging any records. Two concurrent creators that read the same empty state may not both acquire a valid owner; a pre-existing record without metadata cannot be overwritten or treated as an empty archive. The actual Root must supply the SecureVault atomic claimInitialMetadata port, and failed or competing claims cannot unlock or publish a second archive. The source contract and synthetic concurrent fixture never establish physical device readiness or authorize migration, student-data writes, release or merge.",
+      "impactPaths": [
+        "src/components/SecureRegistroRoot.tsx",
+        "src/security/secureVault.ts",
+        "src/security/ap01AtomicBootstrap.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap01AtomicBootstrap.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
