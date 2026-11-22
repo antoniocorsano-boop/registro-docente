@@ -1,0 +1,118 @@
+# Exact PR SHA is checked out without write credentials.
+# Qualification lab only: no main merge, production release or real school data.
+name: VAL-01 S7d1b — Exact-SHA security, backups and Chromium
+on:
+  push:
+    branches: ['qual/val01-s7d1b-9c922-exact']
+permissions:
+  contents: read
+env:
+  CANDIDATE_SHA: 9c922eb221e32563426526071efb5f1aa07395b1
+jobs:
+  security:
+    name: "164 invariants / security / V6–V9 backup / typecheck"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact PR #398 candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify commit identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git diff --quiet
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Canonical registry and reference tests
+        run: |
+          node scripts/qualification/check-invariants.mjs
+          bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: S7d1b, S7c and S7a contracts
+        run: bun test src/security/val01Product05History.test.ts src/security/val01Product05CommitPreflight.test.ts src/security/val01FormativeBalance.test.ts
+      - name: Backup and conservative restore contracts
+        run: bun test src/security/val01EvidenceBackupRoundtrip.test.ts src/security/val01AssessmentBackupPayload.test.ts src/security/val01AssessmentRestorePolicy.test.ts src/security/doc01InstitutionalBackupPayloadV9.test.ts src/security/secureAppStorage.test.ts
+      - name: Full security, encrypted storage and memory suite
+        run: bun run test:security
+      - name: TypeScript and production build without deployment
+        run: |
+          bun run lint
+          bun run build
+      - name: Verify unchanged candidate at end
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git diff --quiet
+          echo "S7D1B_EXACT_SECURITY_PASS"
+  chromium:
+    name: "Synthetic mobile navigation, 320/390, privacy"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify source SHA
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Install isolated browser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .nav-context-browser-tools browser-evidence
+          echo '{"name":"s7d1b-qualification","private":true}' > .nav-context-browser-tools/package.json
+          npm --prefix .nav-context-browser-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.nav-context-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp tests/browser/nav-context-01-return-origin.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/nav-back-01-student-report.spec.cjs .nav-context-browser-tools/
+          cp tests/browser/mobile-density-01-tabellone.spec.cjs .nav-context-browser-tools/
+      - name: Run synthetic Vite fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > browser-evidence/vite.log 2>&1 &
+          echo $! > browser-evidence/vite.pid
+          for i in $(seq 1 45); do
+            if curl --silent --fail http://127.0.0.1:4173/tests/browser/fixtures/nav-back-01-app.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: PDF review tools for qualified browser fixture
+        shell: bash
+        run: |
+          if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null || ! command -v pdftoppm >/dev/null; then
+            timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=15 install -y poppler-utils
+          fi
+      - name: Browser regression on exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .nav-context-browser-tools
+          NAV_CONTEXT_BASE_URL=http://127.0.0.1:4173 NAV_BACK_BASE_URL=http://127.0.0.1:4173 DENSITY01_BASE_URL=http://127.0.0.1:4173 \
+            ./node_modules/.bin/playwright test nav-context-01-return-origin.spec.cjs nav-back-01-student-report.spec.cjs mobile-density-01-tabellone.spec.cjs \
+            --workers=1 --reporter=line --output=../browser-evidence/results
+      - name: Upload evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: val01-s7d1b-chromium-9c922
+          path: browser-evidence/
+          retention-days: 14
+          if-no-files-found: warn
