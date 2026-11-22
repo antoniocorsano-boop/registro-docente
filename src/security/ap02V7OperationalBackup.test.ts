@@ -2,8 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { createInitialArchiveSnapshot } from './initialArchiveSetup';
 import { createVersionedBackupReceiptAuthority, verifiedBackupDateForVersion } from '../persistence/versionedBackupReceipt';
 import { decryptDataWithPassword } from '../cryptoUtils';
-import { projectAssessmentRestoreV7 } from './assessmentRestorePolicy';
+import { projectAssessmentRestoreV7, selectApprovedScopesForIncomingV7Backup } from './assessmentRestorePolicy';
 import { verifiedBackupDate } from '../persistence/backupCheckpoint';
+import { createAssessmentBackupPayloadV7 } from './assessmentBackupPayload';
 
 const stamp = '2026-11-22T20:00:00.000Z';
 const password = 'ap02-synthetic-only';
@@ -55,6 +56,41 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     await expect(projectAssessmentRestoreV7(archive, copy, forgedRecovery, [], [])).rejects.toThrow();
   });
 
+  test('a prior V7 copy excludes classes added later without granting any new scope', async () => {
+    const initial = empty();
+    const earlierClass = { id: 'synthetic-A', name: 'Classe A', students: [], grades: [], behaviors: [] };
+    const laterClass = { id: 'synthetic-B', name: 'Classe B', students: [], grades: [], behaviors: [] };
+    const earlier = { ...initial, appData: { ...initial.appData, classes: [earlierClass] } };
+    const current = { ...initial, appData: { ...initial.appData, classes: [earlierClass, laterClass] } };
+    const approved = [
+      { classId: earlierClass.id, schoolYear: '2026/2027', subjectCode: 'tecnologia' },
+      { classId: laterClass.id, schoolYear: '2026/2027', subjectCode: 'tecnologia' }
+    ];
+    const imported = await createAssessmentBackupPayloadV7(earlier, [approved[0]], stamp);
+    const recovery = await createAssessmentBackupPayloadV7(current, approved, stamp);
+
+    // This was the functional AP-02 false rejection: approved scope B is
+    // absent from the older import and validateAssessmentArchiveV1 rejects it.
+    await expect(projectAssessmentRestoreV7(current, imported, recovery, approved, approved))
+      .rejects.toThrow('Copia di sicurezza valutativa non valida');
+
+    const inbound = selectApprovedScopesForIncomingV7Backup(imported, approved);
+    expect(inbound).toEqual([approved[0]]);
+    const result = await projectAssessmentRestoreV7(current, imported, recovery, approved, inbound);
+    expect(result.appData.classes.map(c => c.id)).toEqual([earlierClass.id]);
+
+    // A file cannot invent an approved class by declaring it in its own data.
+    const unrelated = { ...imported, snapshot: {
+      ...imported.snapshot, appData: { ...imported.snapshot.appData, classes: [
+        { id: 'untrusted', name: 'Untrusted', students: [], grades: [], behaviors: [] }
+      ] }
+    } };
+    expect(selectApprovedScopesForIncomingV7Backup(unrelated, approved)).toEqual([]);
+    expect(() => selectApprovedScopesForIncomingV7Backup({ backupDataVersion: 7, snapshot: {
+      appData: { classes: [{ id: earlierClass.id }, { id: earlierClass.id }] }
+    } }, approved)).toThrow();
+  });
+
   test('production App serializes V7 authority and restoration before persistent writing', async () => {
     const app = await Bun.file('src/App.tsx').text();
     const v7Export = app.slice(app.indexOf('const prepareAssessmentV7Backup ='), app.indexOf('// CDC-01: teacher-assigned council entry'));
@@ -71,6 +107,7 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(projection).toBeGreaterThan(0);
     expect(persistence).toBeGreaterThan(projection);
     expect(restore).toContain('resolveApprovedAssessmentScopes(');
+    expect(restore).toContain('selectApprovedScopesForIncomingV7Backup(decryptedData, scopes)');
     expect(restore).toContain('assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData)');
     expect(restore).toContain('const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> =>');
     expect(restore).toContain('const handleImportAssessmentV7Backup = (decryptedData: unknown, recoveryData: unknown): Promise<void> =>');
