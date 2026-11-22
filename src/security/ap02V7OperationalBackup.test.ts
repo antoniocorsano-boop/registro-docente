@@ -116,6 +116,23 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(restore).toContain('wouldLoseCouncilEntries(');
   });
 
+  test('native Android SAF accepts the exact V7 filename without relaxing the legacy V6 allowlist', async () => {
+    const native = await Bun.file('mobile/android-probe/native/RegistroBackupFilesPlugin.java').text();
+    const privacy = await Bun.file('src/components/PrivacyView.tsx').text();
+    const fixture = await Bun.file('mobile/android-probe/val01-native-restore.fixture.ts').text();
+    const diagnostic = await Bun.file('scripts/diagnostics/val01-native-evidence.mjs').text();
+    expect(privacy).toContain('Backup_Valutazioni_V7_${today()}.enc.json');
+    expect(native).toContain('filename.matches("(?:Backup_Cifrato_GDPR_|Backup_Valutazioni_V7_)');
+    expect(native).toContain('[0-9]{4}-[0-9]{2}-[0-9]{2}');
+    expect(native).toContain('INVALID_FILENAME');
+    for (const source of [fixture, diagnostic]) {
+      expect(source).toContain('Backup_Valutazioni_V7_2031-01-15.enc.json');
+      expect(source).toContain('Backup_Valutazioni_V7_2031-01-16.enc.json');
+    }
+    expect(native).toContain('validateEnvelope(encrypted)');
+    expect(native).toContain('MessageDigest.getInstance("SHA-256")');
+  });
+
   test('Privacy V7 requires a separate recovery copy, protects legacy UI and never grants a web receipt on download', async () => {
     const privacy = await Bun.file('src/components/PrivacyView.tsx').text();
     expect(privacy).toContain('onPrepareAssessmentV7Backup(encryptPassword)');
