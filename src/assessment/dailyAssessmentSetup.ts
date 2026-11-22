@@ -58,7 +58,8 @@ function extract(c:ClassData,s:AssessmentScopeV1):AssessmentEvidenceV1|null{
  if(!('value' in field))throw Error('Invalid archive');
  const envelope=field.value as AssessmentArchiveV1;
  const matches=envelope.documents.filter(d=>sameScope(d.document,s));
- if(matches.length!==1)throw Error('No unique document');
+ if(matches.length>1)throw Error('No unique document');
+ if(matches.length===0)return null; // Existing history may belong to another independently approved scope.
  return snapshotAssessmentData(matches[0].document) as AssessmentEvidenceV1;
 }
 function validateRequest(r:AssessmentSetupRequest,s:AssessmentScopeV1){
@@ -119,7 +120,8 @@ function build(
 }
 export function previewDailyAssessmentSetup(c:ClassData,
  settings:Pick<AppSettings,'year'|'subject'>|undefined,raw:AssessmentSetupRequest,
- mode:'planned'|'completed'='completed'
+ mode:'planned'|'completed'='completed',
+ approvedScopes?:readonly ApprovedAssessmentScope[]
 ):AssessmentSetupResult{
  try{
   if(!settings?.year||!settings?.subject)return {valid:false,issue:'INVALID_CONTEXT'};
@@ -128,7 +130,9 @@ export function previewDailyAssessmentSetup(c:ClassData,
   const scope:AssessmentScopeV1={classId:c.id,schoolYear:settings.year,
    subjectCode,studentIds:c.students.map(s=>s.id)};
   const approved={classId:scope.classId,schoolYear:scope.schoolYear,subjectCode:scope.subjectCode};
-  if(!unique(scope.studentIds)||!validateAssessmentArchiveV1({classes:[c]},[approved]).valid)
+  const authorized=approvedScopes??[approved];
+  if(!authorized.some(s=>sameScope(s,approved))||!unique(scope.studentIds)||
+     !validateAssessmentArchiveV1({classes:[c]},authorized).valid)
    return {valid:false,issue:'INVALID_CONTEXT'};
   const base=extract(c,scope);
   const request=snapshotAssessmentData(raw) as AssessmentSetupRequest;
@@ -167,8 +171,10 @@ export function deriveConfirmedDailyAssessmentSetup(
    review.request,confirmed.confirmedAt,mode);
   const previous=c.assessmentEvidenceV1;
   const nextArchive:AssessmentArchiveV1=previous?{
-   ...previous,documents:previous.documents.map(section=>
-     sameScope(section.document,review.scope)?{...section,document:output}:section)
+   ...previous,documents:original?
+    previous.documents.map(section=>sameScope(section.document,review.scope)?
+      {...section,document:output}:section):
+    [...previous.documents,{document:output,bindings:[]}]
   }:{version:1,documents:[{document:output,bindings:[]}]};
   const next:AppData={...app,classes:app.classes.map(one=>one.id===c.id?
    {...one,assessmentEvidenceV1:nextArchive}:one)};
