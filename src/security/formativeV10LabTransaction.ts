@@ -210,8 +210,10 @@ export function createFormativeV10LabTransaction(
      expected:x.anchor,recordedAt,sealedAt,revision};
     return ticket;
    }catch{
-    pending=null;
-    throw fail('PREPARE_REJECTED');
+    // A failed preflight may mean the pair or trusted head has been torn.
+    // Conservatively retire this laboratory session; no silent re-admission.
+    quarantine();
+    throw fail('PREPARE_REJECTED_QUARANTINED');
    }
   });
  }
@@ -270,9 +272,10 @@ export function createFormativeV10LabTransaction(
      return fail('SOURCE_CHANGED_AFTER_ANCHOR');
     return {state:'lab-anchored-not-official',epoch:next.epoch,headDigest:next.headDigest};
    }catch{
-    // No hidden retry or rollback: uncertainty can concern either store.
-    if(touched)quarantine();
-    throw fail(touched?'UNCERTAIN_QUARANTINED':'COMMIT_REJECTED');
+    // No hidden retry or rollback: even a failed preflight may reveal
+    // torn storage. Never re-admit the same session on a later attempt.
+    quarantine();
+    throw fail(touched?'UNCERTAIN_QUARANTINED':'COMMIT_REJECTED_QUARANTINED');
    }
   });
  }
