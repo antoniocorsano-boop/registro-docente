@@ -41,6 +41,7 @@ export function resolveDailyCriterionRecordingContext(
     section.document.classId===approved.classId&&
     section.document.schoolYear===approved.schoolYear&&
     section.document.subjectCode===approved.subjectCode);
+  if(sections?.length===0)return {status:'absent'};
   if(!sections||sections.length!==1)return {status:'unverified'};
   const document=sections[0].document;
   const scope:AssessmentScopeV1={...approved,studentIds:cls.students.map(s=>s.id)};
