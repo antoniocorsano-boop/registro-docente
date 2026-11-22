@@ -20,7 +20,7 @@ import type { PlanningState } from '../planning/types';
 import { sanitizePersistedSettings } from './dataClassification';
 import type { VaultActivationState, VaultRecordKey } from './vaultTypes';
 import { SecureVault } from './secureVault';
-import { assertNoUnsupportedDocumentHistory } from './documentHistoryBackupFence';
+import { assertNoUnsupportedDocumentHistory,assertNoUnsupportedFormativeHistory } from './documentHistoryBackupFence';
 
 export type VaultGateState =
   | 'CHECKING'
@@ -219,11 +219,13 @@ export class SecureAppStorage {
   }
 
   async saveAppData(value: AppData): Promise<void> {
+    assertNoUnsupportedFormativeHistory(value);
     await assertCouncilSnapshotIntegrity(value);
     await this.vault.put('appData', value);
   }
 
   async saveAppDataAndMeta(appData: AppData, meta: SecureMeta): Promise<void> {
+    assertNoUnsupportedFormativeHistory(appData);
     await assertCouncilSnapshotIntegrity(appData);
     await this.vault.putMany([
       { key: 'appData', value: appData },
