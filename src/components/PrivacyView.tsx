@@ -5,6 +5,7 @@ import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils
 import { createBackupPayload } from '../security/backupPayload';
 import { expectedBackupEvidence, matchesDownloadedBackup, type BackupByteEvidence } from '../security/webBackupVerification';
 import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint, ExpectedCopyEvidence } from '../persistence/backupCheckpoint';
+import type { VersionedBackupReceipt } from '../persistence/versionedBackupReceipt';
 import { today } from '../utils';
 import {DocumentRecoveryReview} from './documents/DocumentRecoveryReview';
 import type {DocumentRecoveryDriver} from '../security/documentRecoveryDecision';
@@ -30,9 +31,14 @@ interface PrivacyViewProps {
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
   onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;
+  /** AP-02: V7 export with version-bound, one-use physical verification. */
+  onPrepareAssessmentV7Backup?: (password: string) => Promise<{ receipt: VersionedBackupReceipt; encryptedText: string }>;
+  onVerifyAssessmentV7WebBackup?: (receipt: VersionedBackupReceipt, file: Blob, active: () => boolean) => Promise<'verified' | 'cancelled'>;
+  onVerifyAssessmentV7AndroidBackup?: (receipt: VersionedBackupReceipt, encrypted: string, filename: string, active: () => boolean) => Promise<'verified' | 'cancelled'>;
+  onRecordAssessmentV7Backup?: (receipt: VersionedBackupReceipt) => Promise<void>;
   onBindBackupEvidence: (receipt: BackupReceipt, evidence: ExpectedCopyEvidence) => Promise<void>;
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
-  onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
+  onImportEncryptedBackup: (decryptedData: unknown, recoveryData?: unknown) => Promise<void>;
   onFactoryReset: () => void;
   /** Optional V8 owner authorization. Absent in the released App. */
   documentRecoveryWorkflow?:DocumentRecoveryDriver;
@@ -44,6 +50,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   isPrivacyShieldActive,
   onTogglePrivacyShield,
   onPrepareEncryptedBackup,
+  onPrepareAssessmentV7Backup,
+  onVerifyAssessmentV7WebBackup,
+  onVerifyAssessmentV7AndroidBackup,
+  onRecordAssessmentV7Backup,
   onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
@@ -56,9 +66,12 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
   const [decryptPassword, setDecryptPassword] = useState('');
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
+  const [selectedV7RecoveryFile, setSelectedV7RecoveryFile] = useState<File | null>(null);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
   const [isDecrypting, setIsDecrypting] = useState(false);
   const backupOperationPendingRef = useRef(false);
   const webVerificationRef = useRef<{ receipt: BackupReceipt; evidence: BackupByteEvidence } | null>(null);
+  const v7VerificationRef = useRef<VersionedBackupReceipt | null>(null);
   const [webVerificationAvailable, setWebVerificationAvailable] = useState(false);
   const [webVerificationMessage, setWebVerificationMessage] = useState('');
   const [isVerifyingCopy, setIsVerifyingCopy] = useState(false);
@@ -66,7 +79,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; webVerificationRef.current = null; };
+    return () => { mountedRef.current = false; webVerificationRef.current = null; v7VerificationRef.current = null; };
   }, []);
 
   // Total students & evaluations protected
@@ -96,6 +109,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     backupOperationPendingRef.current = true;
     setIsEncrypting(true);
     webVerificationRef.current = null;
+    v7VerificationRef.current = null;
     setWebVerificationAvailable(false);
     setWebVerificationMessage('');
     let downloadInitiated = false;
@@ -207,6 +221,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     backupOperationPendingRef.current = true;
     setIsDecrypting(true);
     webVerificationRef.current = null;
+    v7VerificationRef.current = null;
     setWebVerificationAvailable(false);
     setWebVerificationMessage('');
     const reader = new FileReader();
