@@ -86,7 +86,8 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(privacy).toContain('onVerifyAssessmentV7WebBackup(');
     expect(privacy).toContain('onRecordAssessmentV7Backup(');
     expect(privacy).toContain('selectedV7RecoveryFile');
-    expect(privacy).toContain('JSON.parse(recoveryText).version !== 2');
+    expect(privacy).toContain('isV7EncryptedEnvelope(recoveryText)');
+    expect(privacy).toContain('isV7EncryptedEnvelope(encryptedText)');
     expect(privacy).toContain('onImportAssessmentV7Backup(decryptedData, recoveryData)');
     expect(privacy).toContain('onImportEncryptedBackup(decryptedData)');
     const webExport = privacy.slice(privacy.indexOf('const handleExportAssessmentV7 ='), privacy.indexOf('const handleImportEncrypted ='));
