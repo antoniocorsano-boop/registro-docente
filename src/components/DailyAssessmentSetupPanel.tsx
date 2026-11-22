@@ -1,5 +1,6 @@
 import React,{useLayoutEffect,useRef,useState} from 'react';
 import type {ClassData,AppSettings} from '../types';
+import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import type {AssessmentPurpose,EvidenceKind} from '../assessment/assessmentEvidence';
 import {previewDailyAssessmentSetup,type AssessmentSetupReview,type AssessmentSetupCriterion} from '../assessment/dailyAssessmentSetup';
 import type {EvaluationDraftGuard} from './MatrixEvaluationEntry';
@@ -26,9 +27,10 @@ const input='block w-full min-w-0 max-w-full min-h-[48px] rounded-lg neon-input 
 /** A first-run classroom action: no inferred school curriculum, grades or proof.
  * Only explicit teacher data and confirmation can reach the existing vault.
  */
-export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyShieldActive,
+export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyShieldActive,approvedScopes,
  externalBusy,onBusyChange,onRegisterDraftGuard,onSave,onComplete}:{
  currentClass:ClassData;settings:AppSettings;date:string;isPrivacyShieldActive:boolean;
+ approvedScopes?:readonly ApprovedAssessmentScope[];
  externalBusy:boolean;onBusyChange:(value:boolean)=>void;
  onRegisterDraftGuard:(guard:EvaluationDraftGuard|null)=>void;onSave:AssessmentSetupSave;
  onComplete:PlannedCompletionSave;
@@ -63,7 +65,7 @@ export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyS
   if(blocked)return;
   setCompletion(old=>({...old,...patch,review:null}));setError('');setSuccess('');
  };
- const planned=listDailyPlannedProofs(currentClass,settings);
+ const planned=listDailyPlannedProofs(currentClass,settings,approvedScopes);
  const editCriterion=(index:number,patch:Partial<CriterionDraft>)=>
   update({criteria:draft.criteria.map((c,i)=>i===index?{...c,...patch}:c)});
  const review=()=>{
@@ -84,7 +86,7 @@ export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyS
     expected:{kind:c.kind as EvidenceKind,description:c.expectedDescription.trim(),method:c.method.trim()}
    }))
   };
-  const result=previewDailyAssessmentSetup(currentClass,settings,request,draft.intention);
+  const result=previewDailyAssessmentSetup(currentClass,settings,request,draft.intention,approvedScopes);
   if(!result.valid){setError('Impossibile verificare la prova. Controlla la data e il contesto della classe.');return;}
   setDraft(old=>({...old,review:result.review}));setError('');
  };
@@ -92,7 +94,7 @@ export function DailyAssessmentSetupPanel({currentClass,settings,date,isPrivacyS
   if(blocked||!completion.proof||!completion.day){setError('Seleziona una prova programmata e la data effettiva.');return;}
   const revisionId=crypto.randomUUID();
   const next=previewDailyPlannedCompletion(currentClass,settings,{
-   assessmentRevisionId:completion.proof,revisionId,completedOn:completion.day});
+   assessmentRevisionId:completion.proof,revisionId,completedOn:completion.day},approvedScopes);
   if(!next.valid){setError('Non è possibile concludere la prova: verifica i dati e lo storico.');return;}
   setCompletion(c=>({...c,review:next.review}));setError('');
  };
