@@ -141,8 +141,9 @@ describe('VAL-01/PRODUCT-05/S7d.2a isolated durable laboratory',()=>{
  });
  test('modified latest committed source rejects inside mutation queue',async()=>{
   const h=fake(),v=await sourceCandidate(h.get());
-  const blocker=h.owner.coordinator.enqueueTask(async()=>{await new Promise<void>(r=>{release=r;});});
   let release!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const blocker=h.owner.coordinator.enqueueTask(()=>gate);
   const pending=commitFormativeHistoryLaboratory(h.owner,settings,v,request);
   h.corrupt(s=>{
    const out=copy(s);
