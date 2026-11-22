@@ -3,6 +3,7 @@ import { createInitialArchiveSnapshot } from './initialArchiveSetup';
 import { createVersionedBackupReceiptAuthority, verifiedBackupDateForVersion } from '../persistence/versionedBackupReceipt';
 import { decryptDataWithPassword } from '../cryptoUtils';
 import { projectAssessmentRestoreV7 } from './assessmentRestorePolicy';
+import { verifiedBackupDate } from '../persistence/backupCheckpoint';
 
 const stamp = '2026-11-22T20:00:00.000Z';
 const password = 'ap02-synthetic-only';
@@ -26,7 +27,14 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     const saved = authority.consume(archive.meta, prepared.receipt, 7);
     expect(saved.verifiedBackupEvidence?.payloadVersion).toBe(7);
     expect(verifiedBackupDateForVersion(saved, 7)).toBe(stamp);
+    expect(verifiedBackupDate(saved)).toBe(stamp);
     expect(verifiedBackupDateForVersion(saved, 6)).toBeNull();
+    expect(verifiedBackupDate({ ...saved, verifiedBackupEvidence: {
+      ...saved.verifiedBackupEvidence!, sha256: 'bad'
+    } })).toBeNull();
+    expect(verifiedBackupDate({ ...saved, verifiedBackupEvidence: {
+      ...saved.verifiedBackupEvidence!, payloadVersion: 8 as 7
+    } })).toBeNull();
     expect(() => authority.consume(archive.meta, prepared.receipt, 7)).toThrow();
   });
 
