@@ -23,8 +23,11 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(decoded.snapshot.meta).toEqual({ changes: 0, lastBackup: stamp });
     expect(prepared.receipt.payloadVersion).toBe(7);
     expect(() => authority.consume(archive.meta, prepared.receipt, 7)).toThrow();
-    expect(await authority.verifyWeb(prepared.receipt, new Blob([prepared.encryptedText]), () => true)).toBe('verified');
-    const saved = authority.consume(archive.meta, prepared.receipt, 7);
+    // A rejected premature consumption revokes that grant by design.
+    // Verify a newly prepared grant, never reuse the invalidated one.
+    const fresh = await authority.prepare(archive, [], password, stamp);
+    expect(await authority.verifyWeb(fresh.receipt, new Blob([fresh.encryptedText]), () => true)).toBe('verified');
+    const saved = authority.consume(archive.meta, fresh.receipt, 7);
     expect(saved.verifiedBackupEvidence?.payloadVersion).toBe(7);
     expect(verifiedBackupDateForVersion(saved, 7)).toBe(stamp);
     expect(verifiedBackupDate(saved)).toBe(stamp);
@@ -35,7 +38,7 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(verifiedBackupDate({ ...saved, verifiedBackupEvidence: {
       ...saved.verifiedBackupEvidence!, payloadVersion: 8 as 7
     } })).toBeNull();
-    expect(() => authority.consume(archive.meta, prepared.receipt, 7)).toThrow();
+    expect(() => authority.consume(archive.meta, fresh.receipt, 7)).toThrow();
   });
 
   test('V7 restore requires an authenticated exact current-state recovery, not a matching label', async () => {
@@ -54,7 +57,7 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
 
   test('production App serializes V7 authority and restoration before persistent writing', async () => {
     const app = await Bun.file('src/App.tsx').text();
-    const v7Export = app.slice(app.indexOf('const prepareAssessmentV7Backup ='), app.indexOf('const bindBackupEvidence ='));
+    const v7Export = app.slice(app.indexOf('const prepareAssessmentV7Backup ='), app.indexOf('// CDC-01: teacher-assigned council entry'));
     expect(v7Export).toContain('mutationCoordinator.enqueueTask');
     expect(v7Export).toContain('resolveApprovedAssessmentScopes(snapshot.appData, snapshot.planning, snapshot.settings)');
     expect(v7Export).toContain('assessmentBackupAuthority.prepare(');
