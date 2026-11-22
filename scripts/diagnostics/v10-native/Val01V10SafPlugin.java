@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.util.Base64;
 import androidx.activity.result.ActivityResult;
 import com.getcapacitor.JSObject;
@@ -104,6 +105,9 @@ public class Val01V10SafPlugin extends Plugin {
         intent.setType("application/json");
         intent.putExtra(Intent.EXTRA_TITLE, FILENAME);
         intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+        // Suggest a local folder; the system picker still makes the choice.
+        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+            DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Download"));
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         choosing = true;
         try { startActivityForResult(call, intent, "destinationChosen"); }
@@ -192,6 +196,9 @@ public class Val01V10SafPlugin extends Plugin {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+        // Suggest a local folder; the system picker still makes the choice.
+        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+            DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Download"));
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         choosing = true;
         try { startActivityForResult(call, intent, "sourceChosen"); }
