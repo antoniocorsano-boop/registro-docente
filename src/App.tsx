@@ -3439,6 +3439,24 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     });
   };
 
+  const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
+    return mutationCoordinator.enqueueTask(() => backupReceiptAuthority.bindEvidence(receipt, evidence));
+  };
+
+  const recordEncryptedBackupExport = (
+    checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>
+  ): Promise<void> => {
+    return mutationCoordinator.enqueue<SecureMeta>({
+      getCommitted: () => metaRef.current,
+      derive: current => backupReceiptAuthority.consume(current, checkpoint),
+      persist: candidate => secureStorage.saveMeta(candidate),
+      publish: candidate => {
+        metaRef.current = candidate;
+        setMeta(candidate);
+      }
+    }).then(() => undefined);
+  };
+
   const prepareAssessmentV7Backup = (password: string) =>
     mutationCoordinator.enqueueTask(async () => {
       const snapshot = getCompleteCommittedSnapshot();
@@ -3465,24 +3483,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         setMeta(candidate);
       }
     }).then(() => undefined);
-
-  const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
-    return mutationCoordinator.enqueueTask(() => backupReceiptAuthority.bindEvidence(receipt, evidence));
-  };
-
-  const recordEncryptedBackupExport = (
-    checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>
-  ): Promise<void> => {
-    return mutationCoordinator.enqueue<SecureMeta>({
-      getCommitted: () => metaRef.current,
-      derive: current => backupReceiptAuthority.consume(current, checkpoint),
-      persist: candidate => secureStorage.saveMeta(candidate),
-      publish: candidate => {
-        metaRef.current = candidate;
-        setMeta(candidate);
-      }
-    }).then(() => undefined);
-  };
 
   // CDC-01: teacher-assigned council entry values are persisted in the existing appData Vault record.
   const handleSaveCouncilEntries = (classId: string, schoolYear: string, values: Record<string, string>): Promise<void> => {
