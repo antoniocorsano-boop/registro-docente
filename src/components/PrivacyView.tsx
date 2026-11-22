@@ -199,9 +199,23 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         if (encryptedText === null || !mountedRef.current) return;
         const decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
         if (!mountedRef.current) return;
-        if (!window.confirm('Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?')) return;
-        if (!mountedRef.current) return;
-        await onImportEncryptedBackup(decryptedData);
+        const isV7 = decryptedData !== null && typeof decryptedData === 'object'
+          && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7;
+        if (isV7) {
+          if (!recoveryPassword) throw new Error('Password della copia V7 di recupero mancante.');
+          if (!window.confirm('Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?')) return;
+          const recoveryText = await readEncryptedBackupOnAndroid(() => mountedRef.current);
+          if (!recoveryText || !mountedRef.current) return;
+          if (JSON.parse(recoveryText).version !== 2) throw new Error('Copia V7 di recupero non cifrata con protocollo V2.');
+          const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
+          if (!mountedRef.current) return;
+          await onImportEncryptedBackup(decryptedData, recoveryData);
+          setRecoveryPassword('');
+        } else {
+          if (!window.confirm('Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?')) return;
+          if (!mountedRef.current) return;
+          await onImportEncryptedBackup(decryptedData);
+        }
         setDecryptPassword('');
         alert('Backup cifrato verificato e ripristinato con successo!');
       } catch {
@@ -249,7 +263,30 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           decryptedData = parsed;
         }
 
-        await onImportEncryptedBackup(decryptedData);
+        const isV7 = decryptedData !== null && typeof decryptedData === 'object'
+          && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7;
+        if (isV7) {
+          if (!isEncryptedEnvelope || record.version !== 2) {
+            throw new Error('La copia V7 deve essere cifrata con il protocollo V2.');
+          }
+          if (!selectedV7RecoveryFile || !recoveryPassword) {
+            throw new Error('Seleziona la copia V7 dello stato corrente e inserisci la relativa password prima del ripristino.');
+          }
+          if (selectedV7RecoveryFile.size <= 0 || selectedV7RecoveryFile.size > 32 * 1024 * 1024) {
+            throw new Error('Dimensione della copia V7 di recupero non valida.');
+          }
+          const recoveryText = await selectedV7RecoveryFile.text();
+          if (JSON.parse(recoveryText).version !== 2) {
+            throw new Error('La copia di recupero deve essere cifrata con protocollo V2.');
+          }
+          const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
+          if (!window.confirm('Ripristino V7 protetto: la copia di recupero dello stato attuale sarà verificata prima di ogni sostituzione. Confermi?')) return;
+          await onImportEncryptedBackup(decryptedData, recoveryData);
+          setRecoveryPassword('');
+          setSelectedV7RecoveryFile(null);
+        } else {
+          await onImportEncryptedBackup(decryptedData);
+        }
         setDecryptPassword('');
         setSelectedEncryptedFile(null);
         alert(isEncryptedEnvelope
