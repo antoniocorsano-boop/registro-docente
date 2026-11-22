@@ -26,7 +26,7 @@ const own=(x:object,k:string)=>Object.prototype.hasOwnProperty.call(x,k);
 const exact=(x:unknown,ks:readonly string[]):x is Row=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&
  Object.keys(x).length===ks.length&&ks.every(k=>own(x,k));
 const instant=(x:unknown):x is string=>typeof x==='string'&&
- /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(x)&&
+ /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\\.\d{3}Z$/.test(x)&&
  Number.isFinite(Date.parse(x))&&new Date(x).toISOString()===x;
 const identifier=(x:unknown):x is string=>typeof x==='string'&&
  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
