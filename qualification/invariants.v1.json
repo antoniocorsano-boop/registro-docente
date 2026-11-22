@@ -3613,6 +3613,21 @@
         "src/security/val01Product05History.test.ts",
         "src/security/backupPayload.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D2B-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.2b",
+      "statement": "A separately selected V10 logical backup codec must preserve the professional institutional V9 and assessment V7 data unchanged while exporting only independently scope-validated class-level formativeBalanceHistoryV1. Nested/foreign aliases, tampered digest chains, duplicate scopes and class rosters, missing V2, or silent downgrades fail closed. Exact recovery V10 copy and immutable prefixes of all existing formative revisions are prerequisites for a pure restore projection. No production Vault/Android export/restore authority, auto-upgrade or released write permission is created.",
+      "impactPaths": [
+        "src/security/formativeBackupPayloadV10.ts",
+        "src/security/val01Product05V10Backup.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10Backup.test.ts",
+        "src/security/doc01InstitutionalBackupPayloadV9.test.ts",
+        "src/security/val01Product05History.test.ts"
+      ]
     }
   ]
 }
