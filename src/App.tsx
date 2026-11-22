@@ -3845,6 +3845,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             selectedStudentId={selectedStudentForReport}
             onSelectStudent={handleSelectStudentInReport}
             settings={settings}
+            approvedScopes={approvedAssessmentScopes}
             udas={udas}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
