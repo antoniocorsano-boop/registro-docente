@@ -3580,6 +3580,23 @@
         "src/security/val01Product05History.test.ts",
         "src/security/val01Product05CommitPreflight.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D2A-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.2a",
+      "statement": "An isolated laboratory-only formative history adapter must revalidate S7c and the append-only revision head inside the existing authenticated mutation queue, atomically persist appData and meta through SecureAppStorage, and withhold any success until an exact encrypted readback of both datasets. On failed or uncertain persistence, stale session, mismatch or publication failure it must quarantine without optimistic acknowledgement. No application entrypoint or new Vault key may activate this feature. Existing backup versions V6-V9 must fail closed rather than silently export or restore unsupported formativeBalanceHistoryV1.",
+      "impactPaths": [
+        "src/persistence/formativeHistoryLaboratoryCommit.ts",
+        "src/security/documentHistoryBackupFence.ts",
+        "src/security/val01Product05DurableLab.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05DurableLab.test.ts",
+        "src/security/val01Product05History.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/doc01InstitutionalBackupPayloadV9.test.ts"
+      ]
     }
   ]
 }

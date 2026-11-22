@@ -1,5 +1,5 @@
 /** DOC-01/D4c3b — fail-closed guard for unsupported DOC-01 backup history.
- * V6 and V7 have NO authorization to serialize or restore this new domain.
+ * Existing V6-V9 have NO authorization to serialize new document or individual\n * formative history until a separately qualified schema/restore codec exists.
  * This is a bounded inspection, not a new backup codec or restore authority.
  */
 const unsupported=()=>new Error('DOC01_HISTORY_BACKUP_UNSUPPORTED');
@@ -19,7 +19,7 @@ export function assertNoUnsupportedDocumentHistory(value:unknown):void{
    const proto=Object.getPrototypeOf(current);
    if(proto!==null&&proto!==Object.prototype&&proto!==Array.prototype)throw unsupported();
    for(const key of Reflect.ownKeys(current)){
-    if(typeof key!=='string'||(key==='documentHistoryV1'||key==='documentHistoryV2'))throw unsupported();
+    if(typeof key!=='string'||(key==='documentHistoryV1'||key==='documentHistoryV2'||key==='formativeBalanceHistoryV1'))throw unsupported();
     const descriptor=Object.getOwnPropertyDescriptor(current,key);
     if(!descriptor||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw unsupported();
     visit(descriptor.value,depth+1);
