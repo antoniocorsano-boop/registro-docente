@@ -3530,6 +3530,24 @@
         "src/security/val01Product02DailyCriterionRecording.test.ts",
         "src/security/val01StudentCriterionReadModel.test.ts"
       ]
+    },
+    {
+      "id": "AUDIT-PRE01-AP02-V6-GATE-I01",
+      "owner": "AUDIT-PRE-01/AP-02",
+      "statement": "The currently connected V6 backup exporter cannot issue an authoritative receipt for a committed archive containing assessmentEvidenceV1, even when the domain is malformed or empty. The historical V6/legacy restore path cannot replace a destination containing such evidence or accept a source hiding that domain under V6 or legacy labels. The refusal happens inside the existing durable mutation queue before receipt creation, legacy normalization or a Vault write. Synthetic accessors and cycles fail closed without executing getters; valid V6 backups and imports without V7 evidence retain the historical path. This is a partial preventive gate only: V7 export, version-bound receipts, protected V7 restore and physical Android qualification are still unimplemented in the UI, and no release or merge is authorized.",
+      "impactPaths": [
+        "src/security/ap02LegacyBackupBoundary.ts",
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "src/App.tsx",
+        "src/components/PrivacyView.tsx",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts"
+      ],
+      "browserSmoke": []
     }
   ]
 }
