@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
+import {driveSafPicker} from './val01-v10-saf-picker.mjs';
 
 const pkg='it.trama.registrodocente.lab.v10';
 const activity=pkg+'/it.trama.registrodocente.prova.MainActivity';
@@ -144,6 +145,60 @@ async function main(){
   {state:'consistent-synthetic-lab',epoch:1});
  stage('android-v10-double-rollback-not-detected',
   {limitation:'IndexedDB and localStorage both rolled back; external root absent'});
+ // New S7d.3f SAF scenarios are cumulative and strictly synthetic.
+ const syntheticFilename='LAB_V10_Synthetic_2031-02-01.enc.json';
+ assert.equal(await call('reset'),'pristine-synthetic-lab');
+ await call('first');await call('second');
+ // The picker is driven by real Android DocumentsUI, not by a fabricated URI.
+ const writing=call('safBeginWrite');
+ await driveSafPicker(adb,'create',syntheticFilename);
+ const chosenWrite=await writing;
+ assert.equal(chosenWrite.status,'selected');
+ assert.ok(chosenWrite.token);
+ const fileReceipt=await call('safCompleteWrite',chosenWrite.token);
+ assert.equal(fileReceipt.status,'lab-file-readback-verified-not-official');
+ assert.match(fileReceipt.sha256,/^[0-9a-f]{64}$/);
+ assert.ok(fileReceipt.bytes>100);
+ stage('android-v10-saf-create-write-readback',{sha256:fileReceipt.sha256,
+  bytes:fileReceipt.bytes,androidPicker:true,official:false});
+ // Consumed capability cannot be replayed for another save.
+ await assert.rejects(()=>call('safCompleteWrite',chosenWrite.token));
+ stage('android-v10-saf-write-token-one-use');
+ const openForValidation=call('safBeginRead');
+ await driveSafPicker(adb,'open',syntheticFilename);
+ const selectedRead=await openForValidation;
+ assert.equal(selectedRead.status,'selected');
+ const check=await call('safCompleteRead',selectedRead.token,false);
+ assert.equal(check.status,'lab-file-authenticated-not-restored');
+ assert.equal(check.epoch,2);
+ assert.equal(check.sha256,fileReceipt.sha256);
+ stage('android-v10-saf-open-cryptographic-validation',
+  {epoch:check.epoch,sha256:check.sha256,official:false});
+ assert.equal(await call('reset'),'pristine-synthetic-lab');
+ const reopen=call('safBeginRead');
+ await driveSafPicker(adb,'open',syntheticFilename);
+ const selectedRestore=await reopen;
+ assert.equal(selectedRestore.status,'selected');
+ const restored=await call('safCompleteRead',selectedRestore.token,true);
+ assert.equal(restored.status,'lab-restored-not-official');
+ assert.equal(restored.epoch,2);
+ const stoppedSaf=await forceRestart();
+ assert.equal((await call('inspect')).epoch,2);
+ stage('android-v10-saf-explicit-lab-restore-cold-restart',
+  {epoch:2,forcedStop:true,...stoppedSaf,official:false});
+ // A selected file can NEVER silently overwrite the existing synthetic state.
+ const openAgainstExisting=call('safBeginRead');
+ await driveSafPicker(adb,'open',syntheticFilename);
+ const selectedExisting=await openAgainstExisting;
+ await assert.rejects(()=>call('safCompleteRead',selectedExisting.token,true));
+ assert.equal((await call('inspect')).epoch,2);
+ stage('android-v10-saf-existing-state-rejected');
+ const cancelled=call('safBeginWrite');
+ await driveSafPicker(adb,'cancel',syntheticFilename);
+ const cancelResult=await cancelled;
+ assert.equal(cancelResult.status,'cancelled');
+ assert.equal((await call('inspect')).epoch,2);
+ stage('android-v10-saf-system-cancel-no-write');
  disconnect();
 }
 main().catch(e=>{disconnect();console.error(e);process.exitCode=1;});
