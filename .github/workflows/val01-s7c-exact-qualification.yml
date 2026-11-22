@@ -1,0 +1,55 @@
+# Qualification harness on a separate branch; checkout the immutable PR candidate.
+# This does not constitute main/full release qualification and never writes Vault data.
+name: VAL-01/PRODUCT-05/S7c — Exact-SHA full contracts
+on:
+  push:
+    branches: ['qual/val01-product05-s7c-exact-1356']
+permissions:
+  contents: read
+env:
+  EXACT_CANDIDATE: 1356e30a465bc758859f9d4edbbe8dbe3f355aab
+jobs:
+  security:
+    name: "162 invariants / S7 / backups / security / typecheck / build"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact proposed product SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.EXACT_CANDIDATE }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact checkout and no working-tree changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_CANDIDATE"
+          git diff --quiet
+      - name: Set up locked Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Canonical invariant registry
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Permanent browser coverage mapping
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: S7 and commit-preflight contracts
+        run: bun test src/security/val01Product05CommitPreflight.test.ts src/security/val01Product05BalanceDraft.test.ts src/security/val01Product05FormativeSources.test.ts src/security/val01FormativeBalance.test.ts src/security/val01FormativeRestitutionBoundary.test.ts
+      - name: Historic assessment backup and conservative restore contracts
+        run: bun test src/security/val01EvidenceBackupRoundtrip.test.ts src/security/val01AssessmentBackupPayload.test.ts src/security/val01AssessmentRestorePolicy.test.ts src/security/doc01InstitutionalBackupPayloadV9.test.ts
+      - name: Entire security and memory suite
+        run: bun run test:security
+      - name: TypeScript
+        run: bun run lint
+      - name: Production build only
+        run: bun run build
+      - name: Verify no change to exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_CANDIDATE"
+          git diff --quiet
+          echo "EXACT_SHA_S7C_SECURITY_GREEN_CANDIDATE_ONLY"
