@@ -3644,6 +3644,21 @@
         "src/security/androidBackupExport.test.ts",
         "src/security/webBackupVerification.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D2D-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.2d",
+      "statement": "A synthetic, independently authorized V10 durable receipt may be persisted only after single-use physical-copy verification, exact full committed snapshot digest validation under the same mutation queue, and authenticated encrypted write/readback into a separate laboratory Vault. No fabricated proof, stale file, altered snapshot with unchanged change counter, revoked session, preexisting record, failed write, mismatched readback or uncertain persistence may issue a success. The recorded state must remain lab-durable-not-official; SecureMeta, user AppData, production DB2 and native Android file stores are unchanged and cannot accept V10 on this basis.",
+      "impactPaths": [
+        "src/persistence/formativeV10DurableReceiptLab.ts",
+        "src/security/val01Product05V10DurableReceipt.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10DurableReceipt.test.ts",
+        "src/security/val01Product05V10PhysicalCopy.test.ts",
+        "src/security/val01Product05V10Backup.test.ts"
+      ]
     }
   ]
 }
