@@ -13,6 +13,7 @@ on:
       - 'scripts/diagnostics/val01-v10-browser-evidence.cjs'
       - 'scripts/diagnostics/val01-v10-native-evidence.mjs'
       - 'scripts/diagnostics/v10-native/Val01V10WitnessPlugin.java'
+      - 'scripts/diagnostics/val01-v10-native-witness-contract.test.mjs'
       - 'src/security/formativeV10LabTransaction.ts'
       - 'src/security/formativeV10StagedMetadata.ts'
       - 'src/security/formativeV10ReceiptJournal.ts'
@@ -48,6 +49,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           node --check scripts/diagnostics/val01-v10-browser-evidence.cjs
           node --check scripts/diagnostics/val01-v10-native-evidence.mjs
+          node --test scripts/diagnostics/val01-v10-native-witness-contract.test.mjs
           node scripts/qualification/check-invariants.mjs
           bun install --frozen-lockfile
           bun run lint
