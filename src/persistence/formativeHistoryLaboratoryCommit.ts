@@ -87,7 +87,7 @@ export async function commitFormativeHistoryLaboratory(
       !exactHistoryClasses(old.appData))fail('INVALID_COMMITTED_ARCHIVE');
   }catch{return fail('INVALID_COMMITTED_ARCHIVE');}
   const cls=old.appData.classes.find(x=>x.id===admitted.context.classId);
-  if(!cls)fail('INVALID_STUDENT_CONTEXT');
+  if(!cls)throw Error('INVALID_STUDENT_CONTEXT');
   const history=historyForClass(cls);
   const evaluated=await proposeFormativeBalanceHistoryAppend(cls,config,history,admitted,op);
   if(!evaluated.valid)return fail(evaluated.issue);
