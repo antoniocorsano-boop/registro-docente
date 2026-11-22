@@ -1,0 +1,48 @@
+# Independent exact-candidate qualification for a stacked draft; no deployment.
+name: VAL-01 S7d.2a — Cumulative exact-SHA security gate
+on:
+  push:
+    branches: ['qual/product05-s7d2a-f109-cumulative']
+permissions:
+  contents: read
+env:
+  EXPECT_HEAD: f10931a17bdc487247efe233379161b8f1ad2f8f
+jobs:
+  full:
+    name: "165 invariants / full security / encrypted-Vault guard / backups"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact PR application, not test harness tree
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.EXPECT_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutability
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECT_HEAD"
+          git diff --quiet
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Check canonical invariants
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Check browser test coverage
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: Qualify S7d1b S7d2a and backup isolation
+        run: bun test src/security/val01Product05DurableLab.test.ts src/security/val01Product05History.test.ts src/security/val01Product05CommitPreflight.test.ts src/security/doc01DocumentHistoryBackupFence.test.ts src/security/doc01InstitutionalBackupPayloadV9.test.ts src/security/val01AssessmentRestorePolicy.test.ts
+      - name: Full security and memory suite
+        run: bun run test:security
+      - name: TypeScript
+        run: bun run lint
+      - name: Build only
+        run: bun run build
+      - name: Exact SHA remained unchanged
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECT_HEAD"
+          git diff --quiet
+          echo S7D2A_CUMULATIVE_SECURITY_PASS_NOT_FULL_RELEASE
