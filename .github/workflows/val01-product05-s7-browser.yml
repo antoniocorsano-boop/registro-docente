@@ -1,0 +1,81 @@
+# Exact-SHA browser proof of PRODUCT-05/S7 session-only integration.
+name: VAL-01 PRODUCT-05/S7 — Isolated Chromium acceptance
+on:
+  push:
+    branches: ['qual/product05-s7-browser-8c3aa']
+permissions:
+  contents: read
+env:
+  CANDIDATE_SHA: 8c3aa82bdfc7252dd54af88a1a1ca5c34f25e56d
+jobs:
+  chromium:
+    name: "Synthetic S7 review / 320 / 390 / 200% / privacy"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout separate qualification-only harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Checkout exact PR candidate without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: candidate
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify exact candidate and copy only synthetic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          cp qualification-smoke/val01-product05/fixture.tsx candidate/tests/browser/fixtures/val01-product05-qualification-fixture.tsx
+          cp qualification-smoke/val01-product05/fixture.html candidate/tests/browser/fixtures/val01-product05-qualification.html
+          git -C candidate diff --quiet
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked candidate dependencies
+        working-directory: candidate
+        run: bun install --frozen-lockfile
+      - name: Prepare isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .product05-tools browser-evidence
+          echo '{"name":"product05-s7-tools","private":true}' > .product05-tools/package.json
+          npm --prefix .product05-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.product05-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp qualification-smoke/val01-product05/browser.spec.cjs .product05-tools/product05-s7-review.spec.cjs
+      - name: Start synthetic browser fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > ../browser-evidence/vite.log 2>&1) &
+          echo $! > browser-evidence/vite.pid
+          for i in $(seq 1 45); do
+            if curl --silent --fail http://127.0.0.1:4173/tests/browser/fixtures/val01-product05-qualification.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Run six S7 browser scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PRODUCT05_BASE_URL=http://127.0.0.1:4173
+          export PRODUCT05_EVIDENCE_DIR="$GITHUB_WORKSPACE/browser-evidence"
+          cd .product05-tools
+          ./node_modules/.bin/playwright test product05-s7-review.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
+      - name: Upload screenshots and error evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product05-s7-chromium-8c3aa
+          path: browser-evidence/
+          retention-days: 14
+          if-no-files-found: warn
