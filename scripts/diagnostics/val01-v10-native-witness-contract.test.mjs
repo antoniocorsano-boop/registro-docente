@@ -36,3 +36,10 @@ test('plugin is only injected into the disposable Android build',()=>{
  assert.match(workflow,/android:allowBackup="false"/);
  assert.doesNotMatch(readFileSync('mobile/android-probe/native/MainActivity.java','utf8'),/Val01V10WitnessPlugin/);
 });
+
+test('Java plugin registration inserts an actual newline, not literal slash-n',()=>{
+ const line=workflow.split('\n').find(row=>row.includes('entry.write_text(body.replace'));
+ assert.ok(line,'missing generated Java registration');
+ assert.ok(line.includes(String.raw`needle+'\n        registerPlugin`));
+ assert.ok(!line.includes(String.raw`needle+'\\n        registerPlugin`));
+});
