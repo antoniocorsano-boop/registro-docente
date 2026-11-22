@@ -3552,6 +3552,20 @@
       "browserSmoke": [
         "tests/browser/val01-product05-s7-review.spec.cjs"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7C-I01",
+      "owner": "VAL-01/PRODUCT-05/S7c",
+      "statement": "Only a fresh, independently scoped and explicitly session-confirmed S7 review may yield a minimal typed proposal for a future encrypted durable commit. The proposal is marked NOT SAVED, contains only the exact student/term context, explicitly selected source revisions, teacher-authored text, source digest and session timestamp, and excludes raw evidence facts, names, unrelated roster and internal rubric metadata. Rechecking must reject stale source revisions, changed text, foreign scope, invalid dates, duplicate revisions, forged fields and expired or tampered candidates. Neither preflight nor recheck authorizes storage, publication, official judgment, family restitution or Council contribution; no AppData schema, backup format, Vault or network writes may change.",
+      "impactPaths": [
+        "src/assessment/formativeBalanceCommitPreflight.ts",
+        "src/security/val01Product05CommitPreflight.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05CommitPreflight.test.ts",
+        "src/security/val01FormativeBalance.test.ts"
+      ]
     }
   ]
 }
