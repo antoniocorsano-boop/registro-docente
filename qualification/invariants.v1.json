@@ -3707,6 +3707,26 @@
         "src/security/val01Product05V10DurableReceipt.test.ts",
         "src/security/secureAppStorage.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D3D-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.3d",
+      "statement": "The synthetic V10 physical qualification MUST run the unchanged S7d.3c candidate inside real Chromium IndexedDB and an isolated Android WebView debug shell (API 32 and 36) against two actual origin stores. Reopen and native force-stop must preserve committed candidate history, and a torn write, missing or single-store rolled-back state must quarantine. The concurrent rollback of the IndexedDB pair and mutable localStorage witness is deliberately not detected and MUST be reported as a residual trust-root gap, never described as professionally secure. No user data, production backup/restore, native SAF V10 grant, SecureMeta, AppData, DB2, V6–V9, release APK or main branch may be changed or authorized by this workflow.",
+      "impactPaths": [
+        "tests/browser/fixtures/val01-s7d3d-v10-physical.fixture.ts",
+        "scripts/diagnostics/val01-v10-browser-evidence.cjs",
+        "scripts/diagnostics/val01-v10-native-evidence.mjs",
+        ".github/workflows/val01-v10-physical-lab.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10LabTransaction.test.ts",
+        "src/security/val01Product05V10StagedMetadata.test.ts",
+        "src/security/val01Product05V10ReceiptJournal.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
     }
   ]
 }
