@@ -55,3 +55,13 @@ La seconda esecuzione di diagnosi [#45028611201](https://github.com/antoniocorsa
 5. Solo dopo PASS nativo motivato, svolgere selezione fisica SAF V10, revisione indipendente e qualificazione cumulativa. Nessuna fusione di questa PR nello stato corrente.
 
 Le prove Chromium 9/9 e i 42 contratti V10 superati restano valide **solo nei rispettivi perimetri**. I due FAIL Android sono evidenze negative canoniche, non successi da ignorare.
+
+## Laboratorio correttivo S7d.3d.1 — testimone nativo durevole, non anti-rollback
+
+La PR #408 è conservata come evidenza **RED**: Chromium 9/9 PASS, Android API32/API36 FAIL su riapertura dopo arresto. Il motivo osservato è `witness:unverifiable` in localStorage della WebView, a fronte della coppia cifrata presente in IndexedDB. La quarantena è corretta; non si cancella o ricostruisce il riferimento dalla ricevuta.
+
+**Intervento separato:** modulo Java `Val01V10WitnessPlugin` ubicato solo in `scripts/diagnostics/v10-native/`. Il workflow lo copia e registra esclusivamente nell'applicazione di laboratorio `it.trama.registrodocente.lab.v10`, firmata per il collaudo e non pubblicata. Il plugin rifiuta le altre identità e i pacchetti non debug. Usa `SharedPreferences.commit()` (sincrono) e rilettura esatta, e richiede confronto-condizionato e incremento di una unità della versione. È un modello di **durabilità locale** e non un testimone hardware o una radice anti-rollback. L'iniezione `seedForTest` resta esclusivamente nel pacchetto sintetico e permette deliberatamente di mostrare che entrambi gli archivi possono ancora essere riportati indietro.
+
+La fixture TypeScript continua a usare localStorage in Chromium, ma su Capacitor Android deve risolvere il plugin nativo senza poter ripiegare silenziosamente su localStorage. Il programma nativo controlla `witnessStore: android-sharedpreferences` prima di registrare esiti; verifica due riaperture dopo `adb force-stop`, interruzioni dopo la transazione IndexedDB, perdita/ripristino parziale e doppio rollback intenzionale. Cinque controlli statici in un test Node garantiscono il confinamento al laboratorio.
+
+**Condizione per concludere questo incremento:** esecuzione completa su SHA esatto, Chromium PASS, API32 PASS e API36 PASS, rilettura comprovata dopo arresto dei processi, mantenendo esplicito l'esito `antiRollbackAuthority: NOT_PROVIDED`. Un PASS tecnico sul testimone nativo non costituisce accettazione professionale della V10; restano da qualificare la copia fisica SAF e una protezione anti-rollback realmente indipendente. Il candidato deve rimanere Draft e non integrato.
