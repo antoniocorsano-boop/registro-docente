@@ -3659,6 +3659,22 @@
         "src/security/val01Product05V10PhysicalCopy.test.ts",
         "src/security/val01Product05V10Backup.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D3A-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.3a",
+      "statement": "A V10 backup receipt may be PROPOSED only as staged-not-official after strict laboratory record validation and independent committed-snapshot digest matching. Its versioned chain must reject tampering, extra fields, replayed timestamps, broken sequence, unanchored/truncated history and stale independently supplied head digests. The proposal grants no official backup status or authority to write SecureMeta, AppData, Vault, DB2, Android files, or restore; V6-V9 and production formative-history fences remain enabled.",
+      "impactPaths": [
+        "src/security/formativeV10ReceiptJournal.ts",
+        "src/security/val01Product05V10ReceiptJournal.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10ReceiptJournal.test.ts",
+        "src/security/val01Product05V10DurableReceipt.test.ts",
+        "src/security/val01Product05V10Backup.test.ts",
+        "src/security/secureAppStorage.test.ts"
+      ]
     }
   ]
 }
