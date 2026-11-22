@@ -140,7 +140,7 @@ test('AP-02/F2 synthetic Android V7 UI: native readback, cancellation, stale rec
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   await createClass(firstClass);
   await nav('Privacy');
-  await expect(page.getByText('Ripristina backup cifrato')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ripristina backup cifrato' })).toBeVisible();
   await expect(page.locator('#restore-backup-file')).toHaveCount(0); // Android must use native picker
 
   // Native write returning a forged SHA is not a successful checkpoint.
