@@ -71,8 +71,8 @@ function fixtureStores(){
  };
  return {pairStore,anchorStore};
 }
-async function setup(stores=fixtureStores(),binding=session){
- const key=await generateDataEncryptionKey();
+async function setup(stores=fixtureStores(),binding=session,providedKey?:CryptoKey){
+ const key=providedKey??await generateDataEncryptionKey();
  const owner={
   syntheticOnly:true as const,coordinator:createDurableMutationCoordinator(),
   sessionBinding:binding,alive:true,source:original,
@@ -148,7 +148,7 @@ describe('VAL-01/PRODUCT-05/S7d.3c — isolated dual-store commit + conservative
   const x=await setup();
   await commitFirst(x);
   x.anchorStore.setHead({kind:'confirmed-absent'});
-  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore});
+  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore},session,x.key);
   expect(await restart.tx.inspect()).toEqual({state:'quarantined'});
   expect(restart.pairStore.raw()).not.toBeNull();
  });
@@ -156,7 +156,7 @@ describe('VAL-01/PRODUCT-05/S7d.3c — isolated dual-store commit + conservative
   const x=await setup();
   await commitFirst(x);
   x.pairStore.tamper(()=>null);
-  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore});
+  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore},session,x.key);
   expect(await restart.tx.inspect()).toEqual({state:'quarantined'});
  });
  test('tampered authenticated pair never matches independent head',async()=>{
@@ -168,7 +168,7 @@ describe('VAL-01/PRODUCT-05/S7d.3c — isolated dual-store commit + conservative
    cipher[cipher.length-1]^=1;
    return {...p,encrypted:{...p.encrypted,ciphertext:cipher.buffer}};
   });
-  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore});
+  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore},session,x.key);
   // Independent key identity mismatch ALSO rejects: no false success.
   expect(await restart.tx.inspect()).toEqual({state:'quarantined'});
  });
@@ -223,11 +223,11 @@ describe('VAL-01/PRODUCT-05/S7d.3c — isolated dual-store commit + conservative
   await x.tx.commit(t);
   const nowPair=x.pairStore.raw();
   x.pairStore.tamper(()=>oldPair);
-  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore});
+  const restart=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore},session,x.key);
   expect(await restart.tx.inspect()).toEqual({state:'quarantined'});
   x.pairStore.tamper(()=>nowPair);
   x.anchorStore.setHead(oldHead);
-  const restart2=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore});
+  const restart2=await setup({pairStore:x.pairStore,anchorStore:x.anchorStore},session,x.key);
   expect(await restart2.tx.inspect()).toEqual({state:'quarantined'});
  });
  test('rollback of BOTH synthetic stores is not detectable; genuine anti-rollback is external',async()=>{
