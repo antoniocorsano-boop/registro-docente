@@ -267,4 +267,20 @@ describe('VAL-01/PRODUCT-05/S7d.3c — isolated dual-store commit + conservative
   const fresh=createFormativeV10LabTransaction(newOwner,x.pairStore,x.anchorStore,x.key);
   expect(await fresh.inspect()).toEqual({state:'quarantined'});
  });
+ test('prepare preflight failure quarantines and cannot be silently retried',async()=>{
+  const x=await setup();
+  x.anchorStore.setHead({kind:'unverifiable'});
+  await expect(x.tx.prepare(proof(),original,recorded,sealed))
+   .rejects.toThrow('PREPARE_REJECTED_QUARANTINED');
+  expect(x.tx.isQuarantined()).toBe(true);
+  expect(x.owner.alive).toBe(false);
+ });
+ test('commit preflight failure after ticket issuance quarantines the session',async()=>{
+  const x=await setup();
+  const ticket=await x.tx.prepare(proof(),original,recorded,sealed);
+  x.anchorStore.setHead({kind:'unverifiable'});
+  await expect(x.tx.commit(ticket)).rejects.toThrow('COMMIT_REJECTED_QUARANTINED');
+  expect(x.tx.isQuarantined()).toBe(true);
+  expect(x.owner.alive).toBe(false);
+ });
 });
