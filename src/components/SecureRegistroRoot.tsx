@@ -102,8 +102,12 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const getRuntime = useCallback(() => {
     if (!storeRef.current) {
-      storeRef.current = new IndexedDbVaultStore(globalThis.indexedDB);
-      vaultRef.current = new SecureVault(storeRef.current);
+      const store = new IndexedDbVaultStore(globalThis.indexedDB);
+      storeRef.current = store;
+      // AP-01: getMetadata() is only an observation. The first STAGING
+      // owner must be reserved atomically against both stores, so a second
+      // browser tab can never replace the first creator's vault metadata.
+      vaultRef.current = new SecureVault(store, metadata => store.claimInitialMetadata(metadata));
       storageRef.current = new SecureAppStorage(vaultRef.current);
     }
 
