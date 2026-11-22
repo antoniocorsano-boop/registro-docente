@@ -60,6 +60,15 @@ describe('AUDIT-PRE-01/AP-02 — active historical V6 fail-closed boundary', () 
     cycle.nested = cycle;
     expect(containsAssessmentEvidenceV7(cycle)).toBe(true);
   });
+  test('shared references without a cycle remain admissible for historical archives', () => {
+    const sharedGrade = { id: 'grade-synthetic', value: '8' };
+    const appData = {
+      classes: [{ id: 'synthetic-class', grades: [sharedGrade], observed: sharedGrade }],
+      currentClassId: 'synthetic-class'
+    };
+    expect(containsAssessmentEvidenceV7(appData)).toBe(false);
+    expect(() => assertV6AssessmentExportAllowed(appData)).not.toThrow();
+  });
   test('the production app applies the gate before issuing receipts and before normalization', async () => {
     const code = await Bun.file('src/App.tsx').text();
     const exportCode = code.slice(code.indexOf('const prepareEncryptedBackup ='), code.indexOf('const bindBackupEvidence ='));
