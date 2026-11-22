@@ -3690,6 +3690,23 @@
         "src/security/val01Product05V10ReceiptJournal.test.ts",
         "src/security/secureAppStorage.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D3C-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.3c",
+      "statement": "The synthetic V10 transaction protocol MUST require independent proven absence or a current authenticated monotonic head, exact committed snapshot digest and an in-memory single-use ticket. After an atomic CAS of the synthetic encrypted receipt pair, exact authenticated readback is mandatory before a separate monotonic CAS and readback of the independently trusted head. Any attempted uncertain write, torn storage, missing independent anchor, stale session, mismatched digest, tampering or replay MUST quarantine without automatic rollback, retry or official backup status. An identical rollback of BOTH synthetic domains remains undetectable absent a genuine external anti-rollback trust root; no such production mechanism is shipped. No production SecureMeta/AppData/DB2/Android/UI or V6-V9 behavior may change.",
+      "impactPaths": [
+        "src/security/formativeV10LabTransaction.ts",
+        "src/security/val01Product05V10LabTransaction.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05V10LabTransaction.test.ts",
+        "src/security/val01Product05V10StagedMetadata.test.ts",
+        "src/security/val01Product05V10ReceiptJournal.test.ts",
+        "src/security/val01Product05V10DurableReceipt.test.ts",
+        "src/security/secureAppStorage.test.ts"
+      ]
     }
   ]
 }
