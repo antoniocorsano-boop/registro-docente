@@ -4,7 +4,7 @@
  */
 import type {AppSettings,ClassData} from '../types';
 import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence';
-import {validateAssessmentArchiveV1} from './assessmentArchive';
+import {validateAssessmentArchiveV1,type ApprovedAssessmentScope} from './assessmentArchive';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
 
@@ -20,7 +20,8 @@ export type DailyCriterionRecordingContext=
     readonly scope:AssessmentScopeV1;readonly assessments:readonly CriterionRecordingOption[]};
 
 export function resolveDailyCriterionRecordingContext(
- currentClass:ClassData,settings:Pick<AppSettings,'year'|'subject'>|undefined
+ currentClass:ClassData,settings:Pick<AppSettings,'year'|'subject'>|undefined,
+ approvedScopes?:readonly ApprovedAssessmentScope[]
 ):DailyCriterionRecordingContext{
  try{
   const field=Object.getOwnPropertyDescriptor(currentClass,'assessmentEvidenceV1');
@@ -29,7 +30,11 @@ export function resolveDailyCriterionRecordingContext(
   const subjectCode=resolveAssessmentSubjectCode(settings.subject);
   if(!subjectCode)return {status:'unverified'};
   const approved={classId:currentClass.id,schoolYear:settings.year,subjectCode};
-  const result=validateAssessmentArchiveV1({classes:[currentClass]},[approved]);
+  const authorized=approvedScopes??[approved];
+  if(!authorized.some(s=>s.classId===approved.classId&&
+   s.schoolYear===approved.schoolYear&&s.subjectCode===approved.subjectCode))
+   return {status:'unverified'};
+  const result=validateAssessmentArchiveV1({classes:[currentClass]},authorized);
   if(!result.valid||result.state!=='present')return {status:'unverified'};
   const cls=snapshotAssessmentData(currentClass) as ClassData;
   const sections=cls.assessmentEvidenceV1?.documents.filter(section=>
