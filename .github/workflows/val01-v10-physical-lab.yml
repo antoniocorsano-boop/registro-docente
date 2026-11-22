@@ -1,0 +1,201 @@
+# VAL-01/PRODUCT-05/S7d.3d. Isolated physical evidence on a stacked Draft PR.
+# This runs no product release, cannot authorize a V10 professional backup,
+# and deliberately exhibits the absence of a real external anti-rollback root.
+name: VAL-01 PRODUCT-05 S7d.3d — V10 physical lab (Web + Android)
+on:
+  pull_request:
+    branches:
+      - 'feat/val01-product05-s7d3c-v10-lab-transaction'
+    paths:
+      - '.github/workflows/val01-v10-physical-lab.yml'
+      - 'tests/browser/fixtures/val01-s7d3d-v10-physical.fixture.ts'
+      - 'scripts/diagnostics/val01-v10-browser-evidence.cjs'
+      - 'scripts/diagnostics/val01-v10-native-evidence.mjs'
+      - 'src/security/formativeV10LabTransaction.ts'
+      - 'src/security/formativeV10StagedMetadata.ts'
+      - 'src/security/formativeV10ReceiptJournal.ts'
+permissions:
+  contents: read
+concurrency:
+  group: val01-s7d3d-v10-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+env:
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  chromium:
+    name: Real Chromium / physical IDB V10 synthetic fixture
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Exact-SHA fixture compile, contracts and source isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node --check scripts/diagnostics/val01-v10-browser-evidence.cjs
+          node --check scripts/diagnostics/val01-v10-native-evidence.mjs
+          node scripts/qualification/check-invariants.mjs
+          bun install --frozen-lockfile
+          bun run lint
+          bun test src/security/val01Product05V10LabTransaction.test.ts src/security/val01Product05V10StagedMetadata.test.ts src/security/val01Product05V10ReceiptJournal.test.ts
+          mkdir -p dist v10-evidence/browser
+          bun build tests/browser/fixtures/val01-s7d3d-v10-physical.fixture.ts --target browser --format iife --outfile dist/fixture.js
+          test -s dist/fixture.js
+          cat > dist/index.html <<'HTML'
+          <!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>V10 laboratorio sintetico</title></head><body><h1>Laboratorio V10 sintetico</h1><p id="status">Caricamento</p><script src="./fixture.js"></script></body></html>
+          HTML
+          printf 'sha=%s\nscope=synthetic-only\nantiRollbackRoot=none\n' "$CANDIDATE_SHA" > v10-evidence/browser/provenance.txt
+          sha256sum dist/fixture.js >> v10-evidence/browser/provenance.txt
+      - name: Real Chromium, reload, torn storage and rollback limitation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .browser-tools
+          printf '{"name":"val01-v10-browser-tools","private":true}\n' > .browser-tools/package.json
+          npm --prefix .browser-tools install --no-audit --no-fund --save-exact --package-lock=false '@playwright/test@1.64.1'
+          timeout --signal=TERM --kill-after=5s 120s .browser-tools/node_modules/.bin/playwright install chromium
+          cp scripts/diagnostics/val01-v10-browser-evidence.cjs .browser-tools/v10-evidence.cjs
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist > v10-evidence/browser/http.log 2>&1 &
+          echo $! > v10-evidence/browser/http.pid
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:4173/ >/dev/null
+          V10_EVIDENCE_DIR="$GITHUB_WORKSPACE/v10-evidence/browser" BASE_URL='http://127.0.0.1:4173' node .browser-tools/v10-evidence.cjs
+          jq -e --arg sha "$CANDIDATE_SHA" '.candidate==$sha and .platform=="real-chromium" and .syntheticOnly==true and .antiRollbackAuthority=="NOT_PROVIDED" and ([.results[].stage]==["chromium-fixture-loaded","chromium-idb-cold-page-reload","chromium-versioned-epoch-two","chromium-single-store-rollback-quarantined","chromium-missing-pair-quarantined","chromium-missing-trusted-head-quarantined","chromium-ambiguous-idb-commit-fail-closed","chromium-double-rollback-unprotected-observed","chromium-no-page-errors"]) and all(.results[];.status=="PASS")' v10-evidence/browser/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v10-s7d3d-chromium-${{ env.CANDIDATE_SHA }}
+          path: v10-evidence/browser/
+          if-no-files-found: warn
+          retention-days: 7
+
+  native:
+    name: Android API ${{ matrix.api }} / actual WebView and process restart
+    needs: chromium
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      VAL01_API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Build isolated V10 native fixture on exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p dist v10-evidence/native
+          bun install --frozen-lockfile
+          bun build tests/browser/fixtures/val01-s7d3d-v10-physical.fixture.ts --target browser --format iife --outfile dist/fixture.js
+          cat > dist/index.html <<'HTML'
+          <!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h1>Laboratorio V10 sintetico</h1><p id="status">Caricamento</p><script src="./fixture.js"></script></body></html>
+          HTML
+          printf 'sha=%s\napi=%s\nscope=synthetic-only\nantiRollbackRoot=none\n' "$CANDIDATE_SHA" "$VAL01_API" > v10-evidence/native/provenance.txt
+          sha256sum dist/fixture.js >> v10-evidence/native/provenance.txt
+      - name: Build non-production Capacitor debug shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('android/app')
+          def change(path,pattern,value):
+              p=root/path
+              text,count=re.subn(pattern,value,p.read_text())
+              assert count==1,(path,pattern,count)
+              p.write_text(text)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"','applicationId "it.trama.registrodocente.lab.v10"')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"','android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"','android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          apk="$RUNNER_TEMP/val01-v10-synthetic.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/val01-v10-cert.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.v10'"
+          unzip -p "$apk" assets/public/fixture.js | cmp - ../../dist/fixture.js
+          sha256sum "$apk" >> ../../v10-evidence/native/provenance.txt
+          printf 'LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+      - name: Enable isolated emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Physical Android WebView V10 / force-stop and restart
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/val01-v10-native-evidence.mjs
+      - name: Require native evidence, real process stop and documented trust gap
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$VAL01_API" '
+            .candidate==$sha and .api==$api and .platform=="android-emulator-webview" and
+            .package=="it.trama.registrodocente.lab.v10" and .syntheticOnly==true and
+            .productionRelease==false and .antiRollbackAuthority=="NOT_PROVIDED" and
+            ([.results[].stage]==[
+              "android-v10-synthetic-boot",
+              "android-v10-cold-process-epoch1",
+              "android-v10-cold-process-epoch2",
+              "android-v10-rollback-pair-quarantined",
+              "android-v10-interrupted-idb-commit-quarantined",
+              "android-v10-missing-head-quarantined",
+              "android-v10-double-rollback-not-detected"]) and
+            all(.results[];.status=="PASS") and
+            ([.results[]|select(.forcedStop==true)]|length)==5 and
+            all(.results[]|select(.forcedStop==true);
+              .absenceSamples==2 and (.beforePids|length)>0 and (.afterPids|length)==0)
+          ' v10-evidence/native/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: val01-v10-native-api${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
+          path: v10-evidence/native/
+          if-no-files-found: warn
+          retention-days: 7
