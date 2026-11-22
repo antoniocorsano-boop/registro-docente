@@ -1,17 +1,19 @@
 import React, {useMemo} from 'react';
 import type {AppSettings,ClassData} from '../types';
 import {readStudentCriterionEvidence} from '../assessment/studentCriterionReadModel';
+import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 
 /** Teacher-only local consultation. No grade conversions, editing or export. */
-export function StudentCriterionEvidencePanel({currentClass,studentId,settings,isPrivacyShieldActive}:{
+export function StudentCriterionEvidencePanel({currentClass,studentId,settings,isPrivacyShieldActive,approvedScopes}:{
   currentClass:ClassData;
   studentId:string;
   settings?:AppSettings;
+  approvedScopes?:readonly ApprovedAssessmentScope[];
   isPrivacyShieldActive:boolean;
 }){
   const model=useMemo(()=>
-    isPrivacyShieldActive?readStudentCriterionEvidence(currentClass,settings,studentId):null,
-    [isPrivacyShieldActive,currentClass,settings?.year,settings?.subject,studentId]);
+    isPrivacyShieldActive?readStudentCriterionEvidence(currentClass,settings,studentId,approvedScopes):null,
+    [isPrivacyShieldActive,currentClass,settings?.year,settings?.subject,studentId,approvedScopes]);
   const label=(state:'observed'|'not_observed'|'not_applicable')=>
     state==='observed'?'Osservato':state==='not_observed'?'Non osservato':'Non pertinente';
   return (
