@@ -3540,23 +3540,36 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     });
   };
 
-  // Import Encrypted Backup
-  const handleImportEncryptedBackup = (decryptedData: unknown, recoveryData?: unknown): Promise<void> => {
+  // Import Encrypted Backup: preserve the V6 historical entry point and its
+  // independently qualified source contract; never pass V7 into this function.
+  const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
-      let candidate: CompleteSecureAppSnapshot;
-      if (recoveryData !== undefined) {
-        // Recovery scopes come from the current teacher's approved/adopted planning,
-        // never from untrusted documents or labels inside either imported file.
-        const scopes = resolveApprovedAssessmentScopes(
-          previousLogical.appData, previousLogical.planning, previousLogical.settings
-        );
-        candidate = await projectAssessmentRestoreV7(previousLogical, decryptedData, recoveryData, scopes, scopes);
-      } else {
-        // AP-02: the historical V6 route can neither import nor erase V7 evidence.
-        assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData);
-        candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
-      }
+      assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData);
+      const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
+      await restoreVerifiedCandidate(candidate, previousLogical);
+    });
+  };
+
+  // AP-02: V7 is separate and only accepts two authenticated decrypted copies.
+  const handleImportAssessmentV7Backup = (decryptedData: unknown, recoveryData: unknown): Promise<void> => {
+    return mutationCoordinator.enqueueTask(async () => {
+      const previousLogical = getCompleteCommittedSnapshot();
+      // Derive the authority solely from teacher-approved local state, not either file.
+      const scopes = resolveApprovedAssessmentScopes(
+        previousLogical.appData, previousLogical.planning, previousLogical.settings
+      );
+      const candidate = await projectAssessmentRestoreV7(
+        previousLogical, decryptedData, recoveryData, scopes, scopes
+      );
+      await restoreVerifiedCandidate(candidate, previousLogical);
+    });
+  };
+
+  // Both routes reuse the one atomic Vault restore and the post-commit UI reset.
+  const restoreVerifiedCandidate = async (
+    candidate: CompleteSecureAppSnapshot, previousLogical: CompleteSecureAppSnapshot
+  ): Promise<void> => {
       if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
@@ -3617,7 +3630,6 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         console.warn('Cronologia non aggiornata dopo ripristino confermato.');
       }
       toast('Backup cifrato verificato e ripristinato');
-    });
   };
 
   // Factory Reset / Diritto all'Oblio
@@ -4099,6 +4111,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             onBindBackupEvidence={bindBackupEvidence}
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
+            onImportAssessmentV7Backup={handleImportAssessmentV7Backup}
             onFactoryReset={handleFactoryReset}
           />
         )}
