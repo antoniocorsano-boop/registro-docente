@@ -3558,12 +3558,14 @@
         "src/components/PrivacyView.tsx",
         "src/security/secureAppStorage.ts",
         "src/security/ap02V7OperationalBackup.test.ts",
+        "src/security/ap02F1HistoricalRestore.test.ts",
         "src/security/ap02LegacyBackupBoundary.ts",
         "src/security/ap02LegacyBackupBoundary.test.ts",
         "qualification/invariants.v1.json"
       ],
       "tests": [
         "src/security/ap02V7OperationalBackup.test.ts",
+        "src/security/ap02F1HistoricalRestore.test.ts",
         "src/security/ap02LegacyBackupBoundary.test.ts",
         "src/security/val01VersionedBackupReceipt.test.ts",
         "src/security/val01AssessmentRestorePolicy.test.ts",
