@@ -1,0 +1,91 @@
+# Independent exact-head acceptance. Synthetic-only. Not the final main gate.
+name: PRODUCT-05/S7 — Exact-head reference/browser verification
+on:
+  push:
+    branches: ['qual/product05-s7-final-1db9']
+permissions:
+  contents: read
+env:
+  CANDIDATE_SHA: 1db9f988561041df1c0de690588e4e8aa0eaeca6
+jobs:
+  acceptance:
+    name: "161 invariants / reference mapping / six Chromium scenarios"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout separate qualification-only branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Checkout exact candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: candidate
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify candidate SHA
+        run: |
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git -C candidate diff --quiet
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Locked dependencies
+        working-directory: candidate
+        run: bun install --frozen-lockfile
+      - name: Validate 161 invariants
+        working-directory: candidate
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Verify reference-browser gate executes every registered suite exactly once
+        working-directory: candidate
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: Verify new S7 unit contracts
+        working-directory: candidate
+        run: bun test src/security/val01Product05BalanceDraft.test.ts
+      - name: Typecheck and production build (no deployment)
+        working-directory: candidate
+        run: |
+          bun run lint
+          bun run build
+      - name: Isolated Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .product05-tools browser-evidence
+          echo '{"name":"product05-s7-final-tools","private":true}' > .product05-tools/package.json
+          npm --prefix .product05-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.product05-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp candidate/tests/browser/val01-product05-s7-review.spec.cjs .product05-tools/product05-s7-review.spec.cjs
+      - name: Launch synthetic Vite fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > ../browser-evidence/vite.log 2>&1) &
+          echo $! > browser-evidence/vite.pid
+          for i in $(seq 1 45); do
+            if curl --silent --fail http://127.0.0.1:4173/tests/browser/fixtures/val01-product05-s7-review.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Run six permanent S7 Chromium cases at exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PRODUCT05_BASE_URL=http://127.0.0.1:4173
+          export PRODUCT05_EVIDENCE_DIR="$GITHUB_WORKSPACE/browser-evidence"
+          cd .product05-tools
+          ./node_modules/.bin/playwright test product05-s7-review.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
+      - name: Preserve screenshots and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product05-s7-final-1db9f988
+          path: browser-evidence/
+          retention-days: 14
+          if-no-files-found: warn
