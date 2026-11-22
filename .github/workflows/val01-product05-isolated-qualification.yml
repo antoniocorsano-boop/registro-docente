@@ -1,0 +1,115 @@
+# Qualification-only branch. Candidate source is EXACT SHA; main and the PR head are untouched.
+name: VAL-01 PRODUCT-05 — Exact-SHA isolated qualification
+on:
+  push:
+    branches: ['qual/val01-product05-8dc8-isolated']
+  workflow_dispatch:
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_SHA: 8dc8d8fc6903ac67806118c05875b9ca5097db51
+
+jobs:
+  contracts:
+    name: "159 invariants / six new tests / typecheck / build / regression"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact PR candidate, no credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify candidate identity
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install exact lockfile dependencies
+        run: bun install --frozen-lockfile
+      - name: Verify invariant registry
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Six new PRODUCT-05 contracts
+        run: bun test src/security/val01Product05FormativeSources.test.ts
+      - name: Check TypeScript
+        run: bun run lint
+      - name: Build production application without deploying
+        run: bun run build
+      - name: Run inherited security and memory contracts
+        run: bun run test:security
+
+  chromium:
+    name: "Chromium / 320px / 390px / text 200% / privacy"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout standalone verification harness
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Checkout EXACT PR source into separate working directory
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: candidate
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Verify candidate and place only synthetic, untracked test fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          cp qualification-smoke/val01-product05/fixture.tsx candidate/tests/browser/fixtures/val01-product05-qualification-fixture.tsx
+          cp qualification-smoke/val01-product05/fixture.html candidate/tests/browser/fixtures/val01-product05-qualification.html
+          git -C candidate diff --quiet
+          echo "Candidate tracked source unchanged: $CANDIDATE_SHA"
+      - name: Install Bun and locked candidate dependencies
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install candidate dependencies
+        working-directory: candidate
+        run: bun install --frozen-lockfile
+      - name: Install standalone Playwright and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .product05-tools browser-evidence
+          echo '{"name":"product05-test-tools","private":true}' > .product05-tools/package.json
+          npm --prefix .product05-tools install --save-exact --package-lock=false '@playwright/test@1.64.1'
+          ./.product05-tools/node_modules/.bin/playwright install --with-deps chromium
+          cp qualification-smoke/val01-product05/browser.spec.cjs .product05-tools/val01-product05-browser.spec.cjs
+      - name: Launch synthetic Vite fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd candidate && ./node_modules/.bin/vite --host 127.0.0.1 --port 4173 --strictPort > ../browser-evidence/vite.log 2>&1) &
+          echo $! > browser-evidence/server.pid
+          for n in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:4173/tests/browser/fixtures/val01-product05-qualification.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat browser-evidence/vite.log
+          exit 1
+      - name: Run the five new synthetic browser checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PRODUCT05_BASE_URL=http://127.0.0.1:4173
+          export PRODUCT05_EVIDENCE_DIR="$GITHUB_WORKSPACE/browser-evidence"
+          cd .product05-tools
+          ./node_modules/.bin/playwright test val01-product05-browser.spec.cjs --workers=1 --reporter=line --output=../browser-evidence/results
+      - name: Upload screenshots and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: val01-product05-browser-8dc8d8fc
+          path: browser-evidence/
+          retention-days: 14
+          if-no-files-found: warn
