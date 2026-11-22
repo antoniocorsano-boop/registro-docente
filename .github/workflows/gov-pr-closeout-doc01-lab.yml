@@ -1,0 +1,61 @@
+# GOV-PR-CLOSEOUT-01: exact-head qualification for one isolated reconciliation.
+# No secrets, artifacts containing records, production access, deployment or publication.
+name: GOV-PR-CLOSEOUT-01 — Contratti DOC-01 cifrati (laboratorio)
+
+on:
+  push:
+    branches:
+      - audit/gov-pr-closeout-01-doc01-reconcile-371-376
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gov-pr-closeout-01-doc01-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-security:
+    name: Exact-head invariants, encryption tests, typecheck and build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable candidate without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact commit and isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = "refs/heads/audit/gov-pr-closeout-01-doc01-reconcile-371-376"
+          echo "Synthetic laboratory exact candidate: $GITHUB_SHA"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Canonical invariants
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Original 10 CAS laboratory contracts plus v8 native boundary
+        run: bun test src/security/doc01EncryptedDocumentHistoryCommit.test.ts src/security/doc01DocumentHistoryCommit.test.ts src/security/doc01NativeV8RecoveryBoundary.test.ts
+      - name: Entire security and professional-memory suite
+        run: bun run test:security
+      - name: TypeScript strict typecheck
+        run: bun run lint
+      - name: Production build without deploy
+        run: bun run build
+      - name: Qualification limitations
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### GOV-PR-CLOSEOUT-01 / DOC-01 laboratory'
+            echo
+            echo "SHA: \`$GITHUB_SHA\`"
+            echo 'The run is NOT a browser qualification, a real Android emulator test, an independent code review, or a release authorization.'
+            echo 'No real school data or professional archive was used.'
+          } >> "$GITHUB_STEP_SUMMARY"
