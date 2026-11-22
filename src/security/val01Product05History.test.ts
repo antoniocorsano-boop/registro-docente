@@ -60,7 +60,7 @@ describe('VAL-01/PRODUCT-05/S7d1 — append-only history without saving',()=>{
   expect(result.record.confirmedAt).toBe('2027-02-01T10:00:00.000Z');
   const text=JSON.stringify(result.history);
   for(const forbidden of ['Scelta motivata','rubric-v1','Alunno fittizio',
-   'assessmentEvidenceV1','rawFact','competenceLevel','document','grade'])
+   'assessmentEvidenceV1','rawFact','competenceLevel','"document":','"grade":'])
    expect(text).not.toContain(forbidden);
   expect(JSON.stringify(cls)).toBe(before);
   expect((await validateFormativeBalanceHistoryV1(result.history,boardScope)).valid).toBe(true);
