@@ -1,6 +1,7 @@
 import React,{useLayoutEffect,useMemo,useRef,useState} from 'react';
 import type {AppSettings,ClassData} from '../types';
 import type {AssessmentScopeV1} from '../assessment/assessmentEvidence';
+import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import {previewIndividualObservation,type IndividualObservationPreview} from '../assessment/individualObservation';
 import type {EvidenceCommitRequest} from '../assessment/assessmentEvidenceMutation';
 import {resolveDailyCriterionRecordingContext} from '../assessment/dailyCriterionRecordingContext';
@@ -21,14 +22,15 @@ type Draft=ReturnType<typeof initial>;
 /** Explicit opt-in; completed qualified proof required, no grade inference.
  * A preview never writes. Only a durable application owner can issue a receipt.
  */
-export function DailyCriterionRecorder({currentClass,settings,date,isPrivacyShieldActive,
+export function DailyCriterionRecorder({currentClass,settings,date,isPrivacyShieldActive,approvedScopes,
  externalBusy,onBusyChange,onRegisterDraftGuard,onSave}:{
  currentClass:ClassData;settings?:AppSettings;date:string;isPrivacyShieldActive:boolean;
+ approvedScopes?:readonly ApprovedAssessmentScope[];
  externalBusy:boolean;onBusyChange:(busy:boolean)=>void;
  onRegisterDraftGuard:(guard:EvaluationDraftGuard|null)=>void;onSave:CriterionSave;
 }){
- const context=useMemo(()=>resolveDailyCriterionRecordingContext(currentClass,settings),
-  [currentClass,settings?.year,settings?.subject]);
+ const context=useMemo(()=>resolveDailyCriterionRecordingContext(currentClass,settings,approvedScopes),
+  [currentClass,settings?.year,settings?.subject,approvedScopes]);
  const [draft,setDraft]=useState<Draft>(initial);
  const draftRef=useRef(draft);draftRef.current=draft;
  const [pending,setPending]=useState(false);
