@@ -1,0 +1,54 @@
+# Exact-SHA verification on a separate harness ref; no production authority.
+name: VAL-01 S7d.2c — V10 exact-head full security and copy contracts
+on:
+  push:
+    branches: ['qual/val01-s7d2c-a15c-exact']
+permissions:
+  contents: read
+env:
+  EXACT_APPLICATION_SHA: a15c8da02271fa06323043a9fe6cc3fce82ca736
+jobs:
+  qualify:
+    name: "167 invariants / V10 copy / Web+Android / full security / build"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout immutable candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.EXACT_APPLICATION_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_APPLICATION_SHA"
+          git diff --quiet
+      - name: Set up pinned Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Check invariant registry
+        run: node scripts/qualification/check-invariants.mjs
+      - name: Check reference browser coverage
+        run: bun scripts/qualification/check-reference-browser-coverage.mjs
+      - name: S7d2c and inherited V10/V9 and app storage contracts
+        run: bun test src/security/val01Product05V10PhysicalCopy.test.ts src/security/val01Product05V10Backup.test.ts src/security/val01Product05DurableLab.test.ts src/security/val01Product05History.test.ts src/security/doc01InstitutionalBackupPayloadV9.test.ts src/security/secureAppStorage.test.ts
+      - name: Native Android encrypted copy and Web readback contracts
+        run: bun test src/security/androidBackupExport.test.ts src/security/androidBackupRestore.test.ts src/security/mobile01M2aNativeBackupContract.test.ts src/security/mobile01M2bNativeRestoreContract.test.ts src/security/webBackupVerification.test.ts
+      - name: Complete security and memory suite
+        run: bun run test:security
+      - name: Typecheck and production build, no deploy
+        run: |
+          bun run lint
+          bun run build
+      - name: Verify SHA unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_APPLICATION_SHA"
+          git diff --quiet
+          echo 'V10_S7D2C_EXACT_SOURCE_QUALIFIED_LAB_ONLY_NOT_ANDROID_NATIVE_NOT_MAIN_RELEASE'
