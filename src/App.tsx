@@ -212,6 +212,7 @@ import type { AssessmentSetupSave,PlannedCompletionSave } from './components/Dai
 import {deriveConfirmedDailyPlannedCompletion} from './assessment/dailyPlannedAssessmentCompletion';
 import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmentSetup';
 import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
+import { resolveApprovedAssessmentScopes } from './assessment/approvedAssessmentScopes';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -2131,6 +2132,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     schoolYear: settings.year,
     subjectCode: curricularSubjectCode
   }), [currentClass?.name, planning, settings.year, curricularSubjectCode]);
+  const approvedAssessmentScopes = React.useMemo(() =>
+    resolveApprovedAssessmentScopes(appData,planning,settings),
+    [appData.classes,planning,settings.year,settings.subject]);
   const resolvedTeachingFocus = resolveTeachingFocusForClass({
     focus: teachingFocus,
     currentClassId: currentClass?.id ?? null,
@@ -2969,9 +2973,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           !dailyMatrixModeRef.current||!isPrivacyShieldActive||
           settingsRef.current.year!==approvedSettings.year||
           settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
-        const approved=current.classes.filter(c=>
-          Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1')||c.id===classId)
-          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,subjectCode:subjectCode!}));
+        const approved=resolveApprovedAssessmentScopes(current,planningRef.current,approvedSettings);
         return deriveConfirmedDailyAssessmentSetup(current,approved,reviewed,confirmation);
       },{showBackupModal:false,successMessage:'',inlineFailure:true});
       const wanted=reviewed.mode==='planned'?reviewed.request.plannedRevisionId:reviewed.request.completedRevisionId;
@@ -3003,9 +3005,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
           !dailyMatrixModeRef.current||!isPrivacyShieldActive||
           settingsRef.current.year!==approvedSettings.year||
           settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
-        const approved=current.classes.filter(c=>
-          Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1'))
-          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,subjectCode:subjectCode!}));
+        const approved=resolveApprovedAssessmentScopes(current,planningRef.current,approvedSettings);
         return deriveConfirmedDailyPlannedCompletion(current,approved,reviewed,confirmation);
       },{showBackupModal:false,successMessage:'',inlineFailure:true});
       const revisionId=reviewed.preview.request.revisionId;
@@ -3041,10 +3041,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
            settingsRef.current.subject!==approvedSettings.subject)throw new Error('Contesto modificato.');
         // Scopes come from currently approved teacher settings and physical
         // class identities, never the untrusted document's self-declared scope.
-        const scopes=current.classes
-          .filter(c=>Object.prototype.hasOwnProperty.call(c,'assessmentEvidenceV1'))
-          .map(c=>({classId:c.id,schoolYear:approvedSettings.year,
-            subjectCode:subjectCode!}));
+        const scopes=resolveApprovedAssessmentScopes(current,planningRef.current,approvedSettings);
         return deriveConfirmedEvidenceMutation(current,scopes,scope,reviewed,confirmation).appData;
       },{showBackupModal:false,successMessage:'',inlineFailure:true});
       const revisionId=reviewed.preview.request.revisionId;
@@ -3798,7 +3795,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {activeTab === 'tabellone' && currentClass && (
           <div className="space-y-3">
             <MatrixSurfaceSelector mode={dailyMatrixMode?'daily':'historical'} onChange={mode=>switchDailyMatrixMode(mode==='daily')}/>
-            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} settings={settings} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation} onSaveCriterionEvidence={handleSaveCriterionEvidence} onSaveAssessmentSetup={handleSaveAssessmentSetup}
+            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} settings={settings} approvedScopes={approvedAssessmentScopes} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation} onSaveCriterionEvidence={handleSaveCriterionEvidence} onSaveAssessmentSetup={handleSaveAssessmentSetup}
  onCompletePlannedAssessment={handleCompletePlannedAssessment}/> : <MatrixView
             onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
