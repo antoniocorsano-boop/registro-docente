@@ -2,6 +2,7 @@ import React,{useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {AlertCircle,CheckCircle2,ChevronDown,CircleDashed,CircleX,LoaderCircle,Save,Star,ThumbsUp,TriangleAlert} from 'lucide-react';
 import type {AppData,AppSettings,BehaviorRecord,ClassData,EvaluationType,Grade,UdaRecord} from '../types';
 import {DailyCriterionRecorder,type CriterionSave} from './DailyCriterionRecorder';
+import type {ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import {DailyAssessmentSetupPanel,type AssessmentSetupSave,type PlannedCompletionSave} from './DailyAssessmentSetupPanel';
 import {BEHAVIOR_OPTIONS,formatStudentNameWithPrivacy,normalizeGrade,today,TYPES_LABEL} from '../utils';
 import {createDailyBatchId,resolveDailyWorkspace,type DailyGradeWrite,type DailyObservationWrite} from '../persistence/dailyMatrixWorkspace';
@@ -14,6 +15,7 @@ type Selection={kind:'auto'}|{kind:'existing';batchId:string}|{kind:'new';batchI
 type Draft={raw:string;expected:Grade|null};
 interface Props {
   data:AppData; currentClass:ClassData; udas:UdaRecord[]; settings:AppSettings; isPrivacyShieldActive:boolean;
+  approvedScopes?:readonly ApprovedAssessmentScope[];
   onRegisterDraftGuard:(guard:EvaluationDraftGuard|null)=>void;
   requestChange:(action:()=>void)=>void;
   onSaveGrade:(request:DailyGradeWrite)=>Promise<Grade>;
@@ -24,7 +26,7 @@ interface Props {
 }
 function StatusIcon({status}:{status?:Status}){const Icon=status?icons[status]:CircleDashed;return <Icon size={20} strokeWidth={1.8} aria-hidden="true"/>;}
 const label=(status?:Status)=>status?BEHAVIOR_OPTIONS.find(o=>o.label===status)?.label.split(' ').slice(0,-1).join(' ')||'Osservazione':'Non rilevato';
-export function DailyMatrixWorkspace({data,currentClass,udas,settings,isPrivacyShieldActive,onRegisterDraftGuard,requestChange,onSaveGrade,onSaveObservation,onSaveCriterionEvidence,onSaveAssessmentSetup,onCompletePlannedAssessment}:Props){
+export function DailyMatrixWorkspace({data,currentClass,udas,settings,isPrivacyShieldActive,approvedScopes,onRegisterDraftGuard,requestChange,onSaveGrade,onSaveObservation,onSaveCriterionEvidence,onSaveAssessmentSetup,onCompletePlannedAssessment}:Props){
   const [date,setDate]=useState(today);
   const [selection,setSelection]=useState<Selection>({kind:'auto'});
   const [drafts,setDrafts]=useState<Record<string,Draft>>({});
@@ -161,11 +163,11 @@ export function DailyMatrixWorkspace({data,currentClass,udas,settings,isPrivacyS
         </div>;
       })}
     </div>
-    <DailyAssessmentSetupPanel currentClass={currentClass} settings={settings} date={date}
+    <DailyAssessmentSetupPanel currentClass={currentClass} settings={settings} date={date} approvedScopes={approvedScopes}
       isPrivacyShieldActive={isPrivacyShieldActive} externalBusy={pending!==null||criterionBusy}
       onBusyChange={changeSetupBusy} onRegisterDraftGuard={registerSetupGuard}
       onSave={onSaveAssessmentSetup} onComplete={onCompletePlannedAssessment}/>
-    <DailyCriterionRecorder currentClass={currentClass} settings={settings} date={date}
+    <DailyCriterionRecorder currentClass={currentClass} settings={settings} date={date} approvedScopes={approvedScopes}
       isPrivacyShieldActive={isPrivacyShieldActive} externalBusy={pending!==null||setupBusy}
       onRegisterDraftGuard={registerCriterionGuard} onBusyChange={changeCriterionBusy}
       onSave={onSaveCriterionEvidence}/>
