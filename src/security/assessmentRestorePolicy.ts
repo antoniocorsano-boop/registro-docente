@@ -39,6 +39,42 @@ export function preservesAssessmentHistory(previous:AppData,candidate:AppData,
  return true;
 }
 
+/**
+ * AP-02: a previous V7 copy may predate a newly created class. The current
+ * teacher-approved contexts are the ONLY authority: the candidate can narrow
+ * this set to classes it actually contains, but can never add an approval.
+ *
+ * validateAssessmentArchiveV1 rejects approval entries for absent classes.
+ * Passing the complete current list to an older (otherwise valid) snapshot
+ * causes INVALID_SCOPE before its encrypted backup can be restored.
+ * Unsupported, duplicate or malformed class identities fail closed.
+ */
+export function selectApprovedScopesForIncomingV7Backup(
+  incoming:unknown,approvedScopes:readonly ApprovedAssessmentScope[]
+):readonly ApprovedAssessmentScope[]{
+ let data:unknown;
+ try{data=snapshotAssessmentData(incoming);}catch{throw db2Failure();}
+ if(!data||typeof data!=='object'||Array.isArray(data)||
+    (data as {backupDataVersion?:unknown}).backupDataVersion!==7)throw db2Failure();
+ const snapshot=(data as {snapshot?:unknown}).snapshot;
+ if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot))throw db2Failure();
+ const appData=(snapshot as {appData?:unknown}).appData;
+ if(!appData||typeof appData!=='object'||Array.isArray(appData))throw db2Failure();
+ const classes=(appData as {classes?:unknown}).classes;
+ if(!Array.isArray(classes))throw db2Failure();
+ const classIds=new Set<string>();
+ for(const cls of classes){
+  const id=cls&&typeof cls==='object'&&!Array.isArray(cls)
+    ?(cls as {id?:unknown}).id:null;
+  if(typeof id!=='string'||!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)||
+     classIds.has(id))throw db2Failure();
+  classIds.add(id);
+ }
+ // This is intersection only. The backup's contents cannot grant authority
+ // to a scope that was not approved independently by the current teacher.
+ return approvedScopes.filter(scope=>classIds.has(scope.classId));
+}
+
 /** Independent scope and exact recovery copy checks precede encryption of a
  * replacement. Local verification receipts never travel. A checkpoint copy
  * may reset only the change counter and backup date, never another dataset.
