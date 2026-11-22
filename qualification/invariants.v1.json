@@ -3502,6 +3502,34 @@
       "tests": [
         "src/security/val01Product04PlannedLifecycle.test.ts"
       ]
+    },
+    {
+      "id": "AUDIT-PRE01-AP03-I01",
+      "owner": "AUDIT-PRE-01/AP-03",
+      "statement": "The current teacher's explicitly configured year and discipline and already approved, adopted planning profiles for the exact physical class independently authorize each assessment archive context. Neither a stored assessment document nor its own declared school year, subject or bindings can grant scope authority. An archive with valid historical year/subject documents remains readable, and a current proof can be appended only after teacher review and confirmed durable App mutation without rewriting history; unapproved, foreign, malformed, non-adopted or stale scopes fail closed. Daily preparation, planned completion, criterion recording and private student dossier validate all relevant documents before selecting the current one. No automatic migration, backup codec activation, release, merge, personal-data upload or inference from marks.",
+      "impactPaths": [
+        "src/assessment/approvedAssessmentScopes.ts",
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/assessment/dailyPlannedAssessmentCompletion.ts",
+        "src/assessment/dailyCriterionRecordingContext.ts",
+        "src/assessment/studentCriterionReadModel.ts",
+        "src/App.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/components/DailyAssessmentSetupPanel.tsx",
+        "src/components/DailyCriterionRecorder.tsx",
+        "src/components/StudentCriterionEvidencePanel.tsx",
+        "src/components/StudentReportView.tsx",
+        "src/security/ap03HistoricalAssessmentScopes.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap03HistoricalAssessmentScopes.test.ts",
+        "src/security/val01AssessmentArchive.test.ts",
+        "src/security/val01Product03AssessmentSetup.test.ts",
+        "src/security/val01Product04PlannedLifecycle.test.ts",
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01StudentCriterionReadModel.test.ts"
+      ]
     }
   ]
 }
