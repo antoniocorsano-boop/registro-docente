@@ -188,6 +188,12 @@ describe('AUDIT-PRE-01/AP-02 F1 — complete synthetic historical V7 restore', (
     rewritten.appData.classes[0].assessmentEvidenceV1.documents[0].document.evidence[0].fact.description = 'Fatto storico riscritto';
     const relinked: any = structuredClone(current);
     relinked.appData.classes[0].assessmentEvidenceV1.documents[0].bindings[1].link.individual.gradeId = 'grade-f1-forged';
+    // Both revisions of one event must retain one grade identity. Changing
+    // only one link is rejected by the codec itself; changing both leaves a
+    // structurally valid but historically rewritten document, which the
+    // conservative restoration policy must independently refuse.
+    relinked.appData.classes[0].assessmentEvidenceV1.documents[0].bindings[2].link.individual.gradeId = 'grade-f1-forged';
+    expect(validateAssessmentArchiveV1(relinked.appData, scopes).valid).toBe(true);
     const tamperedRecovery: any = structuredClone(recovery.decoded);
     tamperedRecovery.snapshot.appData.classes[0].name = 'Copia non corrente';
 
