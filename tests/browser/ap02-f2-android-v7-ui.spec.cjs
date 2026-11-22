@@ -62,7 +62,7 @@ test('AP-02/F2 synthetic Android V7 UI: native readback, cancellation, stale rec
           if (token !== 'synthetic-out') throw Error('invalid synthetic destination');
           const envelope = JSON.parse(encryptedText);
           if (envelope.privacy_protocol !== 'REGISTRO_DOCENTE_AES_GCM_256' ||
-              envelope.version !== 2 || encryptedText.includes(firstClass))
+              envelope.version !== 2 || encryptedText.includes('Classe sintetica AP02 F2 A'))
             throw Error('native bridge received invalid or plain assessment backup');
           const physical = { ...await digest(encryptedText) };
           state.saved.push(encryptedText);
