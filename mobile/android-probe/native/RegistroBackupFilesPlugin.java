@@ -49,7 +49,7 @@ public class RegistroBackupFilesPlugin extends Plugin {
             return;
         }
         String filename = call.getString("filename");
-        if (filename == null || !filename.matches("Backup_Cifrato_GDPR_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.enc\\.json")) {
+        if (filename == null || !filename.matches("(?:Backup_Cifrato_GDPR_|Backup_Valutazioni_V7_)[0-9]{4}-[0-9]{2}-[0-9]{2}\\.enc\\.json")) {
             call.reject("Nome della copia di sicurezza non valido.", "INVALID_FILENAME");
             return;
         }
