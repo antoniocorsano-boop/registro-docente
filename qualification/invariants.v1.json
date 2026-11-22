@@ -3197,6 +3197,19 @@
         "src/security/doc01DocumentRecoveryDecision.test.ts",
         "src/security/doc01ControlledActivationBoundary.test.ts"
       ]
+    },
+    {
+      "id": "DOC-01-D4C3A-CAS-LAB-I01",
+      "owner": "GOV-PR-CLOSEOUT-01/DOC-01-CAS-LAB",
+      "statement": "A separately isolated synthetic-only AES-GCM document-history storage port requires an externally implemented atomic, durable generation compare-and-swap, validates the entire approved historical chain and session before mutation, and verifies authenticated ciphertext and committed generation on readback before issuing any receipt. It rejects stale generations, corrupted ciphertext, invalid scopes, revoked sessions, unsafe retries and uncertain readback. The port is an experimental alternative to DOC-01/D4c3a's existing application-snapshot coordinator; no DB2 migration, vault key admission, actual write authority, backup, restore, runtime entrypoint or product activation is introduced. AES-GCM alone does not prevent full-archive rollback.",
+      "impactPaths": [
+        "src/persistence/documentHistoryEncryptedCommit.ts",
+        "src/security/doc01D4c3Fixture.ts",
+        "src/security/doc01EncryptedDocumentHistoryCommit.test.ts"
+      ],
+      "tests": [
+        "src/security/doc01EncryptedDocumentHistoryCommit.test.ts"
+      ]
     }
   ]
 }
