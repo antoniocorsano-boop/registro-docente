@@ -65,22 +65,64 @@ const pairStore={
  read:()=>physicalRead('current'),
  compareAndReplace:physicalCAS
 };
-function witness():FormativeV10LabTrustedReadV1{
- const raw=localStorage.getItem(TRUST);
- if(raw===null)return {kind:'unverifiable'};
+/** Only the uniquely named synthetic debug shell has a native witness.
+ * A native bridge failure MUST NOT silently fall back to page localStorage.
+ * SharedPreferences offers process-restart durability, NOT anti-rollback.
+ */
+type NativeWitnessBridge={
+ read():Promise<{value:string|null}>;
+ compareAndAdvance(x:{expected:string;next:string}):Promise<{advanced:boolean}>;
+ seedForTest(x:{value:string|null}):Promise<{stored:boolean}>;
+};
+function nativeWitness():{native:boolean;bridge:NativeWitnessBridge|null}{
+ const cap=(globalThis as unknown as {Capacitor?:{
+  isNativePlatform?:()=>boolean;
+  Plugins?:{Val01V10Witness?:NativeWitnessBridge};
+ }}).Capacitor;
+ const native=cap?.isNativePlatform?.()===true;
+ return {native,bridge:native?(cap?.Plugins?.Val01V10Witness??null):null};
+}
+async function storedWitness():Promise<string|null>{
+ const n=nativeWitness();
+ if(!n.native)return localStorage.getItem(TRUST);
+ if(!n.bridge)throw Error('Missing synthetic Android witness plugin');
+ const value=(await n.bridge.read()).value;
+ if(value!==null&&typeof value!=='string')throw Error('Invalid native witness read');
+ return value;
+}
+async function seedWitness(value:string|null):Promise<void>{
+ const n=nativeWitness();
+ if(n.native){
+  if(!n.bridge)throw Error('Missing synthetic Android witness plugin');
+  if((await n.bridge.seedForTest({value})).stored!==true)
+   throw Error('Synthetic native seed not confirmed');
+ }else if(value===null)localStorage.removeItem(TRUST);
+ else localStorage.setItem(TRUST,value);
+}
+async function witness():Promise<FormativeV10LabTrustedReadV1>{
  try{
+  const raw=await storedWitness();
+  if(raw===null)return {kind:'unverifiable'};
   const x=JSON.parse(raw) as FormativeV10LabTrustedReadV1;
   return x&&typeof x==='object'?x:{kind:'unverifiable'};
  }catch{return {kind:'unverifiable'};}
 }
 const trustStore={
  syntheticOnly:true as const,
- async read(){return clone(witness());},
+ async read(){return clone(await witness());},
  async compareAndAdvance(expected:FormativeV10LabTrustedReadV1,
   next:FormativeV10LabTrustedHeadV1){
-  if(!sameDb2Physical(witness(),expected))return false;
-  localStorage.setItem(TRUST,JSON.stringify({kind:'established',head:next}));
-  return true;
+  const n=nativeWitness();
+  if(!sameDb2Physical(await witness(),expected))return false;
+  const nextValue=JSON.stringify({kind:'established',head:next});
+  if(n.native){
+   if(!n.bridge)throw Error('Missing synthetic Android witness plugin');
+   return (await n.bridge.compareAndAdvance({
+    expected:JSON.stringify(expected),next:nextValue
+   })).advanced===true;
+  }
+  localStorage.setItem(TRUST,nextValue);
+  return (await storedWitness())===nextValue;
  }
 };
 const keyPromise=crypto.subtle.importKey('raw',new Uint8Array(32).fill(7),
@@ -124,7 +166,7 @@ async function reset(){
  await physicalPut('epoch-one',null);
  localStorage.removeItem(OLD_HEAD);
  // Only EXPLICIT reset of the synthetic fixture establishes known absence.
- localStorage.setItem(TRUST,JSON.stringify({kind:'confirmed-absent'}));
+ await seedWitness(JSON.stringify({kind:'confirmed-absent'}));
  return (await (await transaction()).inspect()).state;
 }
 async function inspect(){
@@ -134,7 +176,7 @@ async function first(){
  return commit(ISO1);
 }
 async function second(){
- const pair=await physicalRead('current'),head=witness();
+ const pair=await physicalRead('current'),head=await witness();
  if(!pair||head.kind!=='established'||head.head.epoch!==1)
   throw Error('First synthetic epoch not established');
  await physicalPut('epoch-one',pair);
@@ -148,10 +190,10 @@ async function faultAfterPair(){
  let rejected=false;
  try{await tx.commit(t);}catch(e){rejected=String(e).includes('UNCERTAIN_QUARANTINED');}
  return {rejected,inspection:await tx.inspect(),pairPresent:!!await physicalRead('current'),
-  witnessKind:witness().kind};
+  witnessKind:(await witness()).kind};
 }
 async function corruptHead(){
- localStorage.removeItem(TRUST);
+ await seedWitness(null);
  return inspect();
 }
 async function removePair(){
@@ -168,7 +210,7 @@ async function rollbackBoth(){
  const old=await physicalRead('epoch-one'),head=localStorage.getItem(OLD_HEAD);
  if(!old||!head)throw Error('No saved old synthetic state');
  await physicalPut('current',old);
- localStorage.setItem(TRUST,head);
+ await seedWitness(head);
  return inspect();
 }
 async function diagnose(){
@@ -179,7 +221,7 @@ async function diagnose(){
  }={origin:location.origin,witness:'unknown',epoch:null,pairPresent:false,
   recordCount:null,ivType:null,cipherType:null,metadataAuthenticates:false,error:null};
  try{
-  const w=witness();
+  const w=await witness();
   result.witness=w.kind;
   if(w.kind==='established')result.epoch=w.head.epoch;
   const p=await physicalRead('current');
@@ -203,6 +245,7 @@ async function diagnose(){
 Object.assign(globalThis,{__val01V10Physical:{
  reset,inspect,diagnose,first,second,faultAfterPair,corruptHead,removePair,rollbackPair,rollbackBoth,
  status:()=>({origin:location.origin,syntheticOnly:true,
-  storage:'IndexedDB pair + localStorage witness; NOT genuine anti-rollback'})
+  witnessStore:nativeWitness().native?'android-sharedpreferences':'web-localstorage',
+  storage:'IndexedDB pair + mutable witness; NOT genuine anti-rollback'})
 }});
 document.getElementById('status')!.textContent='Laboratorio V10 sintetico disponibile';
