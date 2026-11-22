@@ -3580,6 +3580,24 @@
         "src/security/val01Product05History.test.ts",
         "src/security/val01Product05CommitPreflight.test.ts"
       ]
+    },
+    {
+      "id": "VAL-01-PRODUCT05-S7D1B-I01",
+      "owner": "VAL-01/PRODUCT-05/S7d.1b",
+      "statement": "The enhanced S7d history requires an independently approved class/year/subject/student roster, explicit period/date validity, append-only revisions with source and predecessor SHA-256 content digests, immutable teacher-authored text, unique confirmation and record IDs, and refusal of deleted, altered or reordered historical records on future restoration. While backup V6-V9 have no codec for formativeBalanceHistoryV1, exports and restore attempts must fail closed; ordinary SecureAppStorage appData writes must reject the reserved domain without forbidding legitimate DOC-01 V2. These gates do not authenticate a teacher, authorize a durable commit or upgrade backup formats; the history remains detached and no UI save is active.",
+      "impactPaths": [
+        "src/assessment/formativeBalanceHistory.ts",
+        "src/security/val01Product05History.test.ts",
+        "src/security/documentHistoryBackupFence.ts",
+        "src/security/secureAppStorage.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product05History.test.ts",
+        "src/security/val01Product05CommitPreflight.test.ts",
+        "src/security/backupPayload.test.ts",
+        "src/security/secureAppStorage.test.ts"
+      ]
     }
   ]
 }
