@@ -85,7 +85,7 @@ describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',(
  });
  test('scope authority does not change when the historical document forges its subject',()=>{
   const data=app(),authorized=resolveApprovedAssessmentScopes(data,planning(),settings);
-  data.classes[0].assessmentEvidenceV1!.documents[0].document.subjectCode='MATH';
+  (data.classes[0].assessmentEvidenceV1!.documents[0].document as unknown as {subjectCode:string}).subjectCode='MATH';
   expect(resolveApprovedAssessmentScopes(data,planning(),settings)).toEqual(authorized);
   expect(validateAssessmentArchiveV1(data,authorized).valid).toBe(false);
  });
