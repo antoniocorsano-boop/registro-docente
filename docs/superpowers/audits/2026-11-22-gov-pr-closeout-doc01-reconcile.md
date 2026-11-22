@@ -32,3 +32,7 @@ Il controllo full sulla #378 risultava 11/11 PASS. Non sono stati ripristinati a
 Nessuna modifica a `main`, `SecureAppStorage`, `VaultRecordKey`, `AppData`, schema DB2, backup V6–V9, motore Android o applicazione pubblica. I test hanno dati demo; non inserire dati scolastici reali. Nessun merge, rilascio, scrittura in archivi professionali o attivazione. Verificare il nuovo exact SHA (compilazione, test, suite sicurezza e regressione, browser e Android); revisione indipendente prima di promuovere la candidatura. L'eventuale collegamento CAS reale è una fase separata con migrazione autorizzata.
 
 Tracciabilità: https://github.com/antoniocorsano-boop/registro-docente/issues/404
+
+## Qualificazione isolata della PR di riconciliazione
+
+La PR #405 è stata indirizzata temporaneamente a `main` **esclusivamente** per attivare i controlli GitHub che ascoltano `pull_request` su `main`. Questo non equivale a un'integrazione, promozione o scelta del ramo di destinazione definitiva. Nessun altro ramo verrà unito e `main` non sarà modificata. Dopo il deposito dei risultati sul candidato esatto, la base della PR tornerà a `lab/doc01-d4c3e1-controlled-recovery-review`. La qualifica ottenuta contro `main` non sostituisce un'ulteriore verifica della futura convergenza.
