@@ -38,7 +38,9 @@ interface PrivacyViewProps {
   onRecordAssessmentV7Backup?: (receipt: VersionedBackupReceipt) => Promise<void>;
   onBindBackupEvidence: (receipt: BackupReceipt, evidence: ExpectedCopyEvidence) => Promise<void>;
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
-  onImportEncryptedBackup: (decryptedData: unknown, recoveryData?: unknown) => Promise<void>;
+  onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
+  /** V7 can restore only after a separately authenticated exact recovery copy. */
+  onImportAssessmentV7Backup?: (decryptedData: unknown, recoveryData: unknown) => Promise<void>;
   onFactoryReset: () => void;
   /** Optional V8 owner authorization. Absent in the released App. */
   documentRecoveryWorkflow?:DocumentRecoveryDriver;
@@ -57,6 +59,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
+  onImportAssessmentV7Backup,
   onFactoryReset,
   documentRecoveryWorkflow
 }) => {
@@ -255,6 +258,12 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         const encryptedText = await readEncryptedBackupOnAndroid(() => mountedRef.current);
         if (encryptedText === null || !mountedRef.current) return;
         const decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
+        // A V7 restore is allowed only from a current authenticated envelope.
+        if (decryptedData !== null && typeof decryptedData === 'object'
+          && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7
+          && JSON.parse(encryptedText).version !== 2) {
+          throw new Error('Copia V7 senza cifratura V2.');
+        }
         if (!mountedRef.current) return;
         const isV7 = decryptedData !== null && typeof decryptedData === 'object'
           && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7;
@@ -266,7 +275,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           if (JSON.parse(recoveryText).version !== 2) throw new Error('Copia V7 di recupero non cifrata con protocollo V2.');
           const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
           if (!mountedRef.current) return;
-          await onImportEncryptedBackup(decryptedData, recoveryData);
+          if (!onImportAssessmentV7Backup) throw new Error('Procedura di recupero V7 non disponibile.');
+          await onImportAssessmentV7Backup(decryptedData, recoveryData);
           setRecoveryPassword('');
         } else {
           if (!window.confirm('Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?')) return;
@@ -338,7 +348,8 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           }
           const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
           if (!window.confirm('Ripristino V7 protetto: la copia di recupero dello stato attuale sarà verificata prima di ogni sostituzione. Confermi?')) return;
-          await onImportEncryptedBackup(decryptedData, recoveryData);
+          if (!onImportAssessmentV7Backup) throw new Error('Procedura di recupero V7 non disponibile.');
+          await onImportAssessmentV7Backup(decryptedData, recoveryData);
           setRecoveryPassword('');
           setSelectedV7RecoveryFile(null);
         } else {
