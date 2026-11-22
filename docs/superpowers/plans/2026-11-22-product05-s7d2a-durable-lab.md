@@ -1,18 +1,13 @@
-# VAL-01/PRODUCT-05/S7d.2a — Laboratorio cifrato e blocco di compatibilità
+# VAL-01/PRODUCT-05/S7d.2a — Laboratorio convergente con PR #398
 
-**Base:** PR #397 `85f0457c7ebc7d4bf813fc319d38af4c57826b07`.
+Data: 22 novembre 2026. La base autorevole è PR #398 `9c922eb221e32563426526071efb5f1aa07395b1` (S7d.1b). La precedente PR #399 si basava sullo storico S7d.1 privo dei miglioramenti di #398: questa convergenza conserva le evidenze storiche della lavorazione, ma sostituisce il contenuto del ramo con la nuova API e con i controlli S7d.1b. Nessun merge in main.
 
-## Decisone di sicurezza
-Lo storico S7d.1 è definito, ma nessuna versione esistente di copia di sicurezza Web/Android (V6–V9) ha una qualifica esplicita per conservarlo. **Non attivare la scrittura nel prodotto** fintanto che un nuovo contratto di backup, ripristino conservativo e lettura nativa non sia qualificato. In particolare la proprietà `formativeBalanceHistoryV1` viene respinta dal controllo trasversale preesistente contro la perdita delle storie documentali, esteso anche al bilancio.
+## Contratto aggiornato
+1. Il laboratorio usa la nuova versione `FormativeBalanceHistoryV1` con `version/classId/schoolYear/subjectCode/records`, catena con `contentDigest` e `previousDigest`. Il candidato S7c viene riqualificato con le fonti attuali e il contesto indipendente.
+2. La richiesta di append contiene `expectedHeadDigest` che deve coincidere con la testa effettivamente letta dentro la coda condivisa. Revisioni e digest sono validati prima e dopo la proposta.
+3. L'adattatore verifica il salvataggio atomico dei dati/metadati e la loro rilettura **solo con un archivio sintetico iniettato**. Errori, revoche o disallineamenti quarantinano la sessione e impediscono false ricevute.
+4. La PR #398 rende `SecureAppStorage.saveAppDataAndMeta` esplicitamente non autorizzato per `formativeBalanceHistoryV1`: il laboratorio DEVE verificare il rifiuto, non aggirarlo. La barriera V6–V9 è quella esistente di #398, mantenuta senza duplicazioni.
+5. Nessuna modifica a codice di produzione che autorizzi il salvataggio, nessuna estensione di `ClassData/AppData`, nessuna pubblicazione o PDF. I test impiegano soltanto dati sintetici.
 
-## Lavoro effettivo
-- Nuovo adattatore isolato `src/persistence/formativeHistoryLaboratoryCommit.ts`: usa l'owner autenticato e il coordinatore condiviso esistente, fotografia dati verificata, selezione dell'alunno e ambito, confronto con revisione precedente, riconvalida delle fonti correnti S7c.
-- Scrittura atomica di `appData + meta` tramite `SecureAppStorage.saveAppDataAndMeta`; incremento contatore modifiche e successiva verifica rilettura integrale `appData + meta`. Esito di successo soltanto dopo rilettura e pubblicazione. Fallimenti / revoca comportano quarantena dell'owner senza tentativo di ripristino su stato incerto.
-- Le prove in memoria/cifratura sintetica usano il vero SecureVault con archivio di prova solo locale, mai dati professionali.
-- È una funzione di laboratorio: esige che l'owner dichiari esplicitamente `laboratoryApproved()`, nessun import nei componenti reali, nessun pulsante Salva. La riuscita del laboratorio non costituisce autorità di scrittura professionale.
-- Nessuna estensione di ClassData/AppData nei tipi canonici, niente chiavi fisiche del Vault aggiuntive, nessuna modifica al formato attivo dei backup.
-
-## Blocchi per promozione S7d.2b
-1. Definire nuovo schema esplicito (e versione backup appropriata) con validazione completa dei contenuti, protezione da decremento della versione e lettura di tutte le versioni storiche.
-2. Round-trip completo browser/Android (salvataggio, chiusura, riapertura, esportazione cifrata, rilettura e ripristino, controllo revisioni senza perdita) con prove di guasto.
-3. Qualifica integrale sullo SHA definitivo, revisione indipendente e decisione esplicita prima di integrare in main e prima di attivare la funzione nel prodotto.
+## Gate prima della promozione
+Occorre realizzare un codec esplicito per una versione successiva dei backup, definire il percorso di migrazione e ripristino conservativo anche Android, poi aggiungere un'autorità di scrittura cifrata che sia ristretto alla sessione docente e convalida l'integrità dello storico e dei dati. Successivamente prova integrale su commit finale, Chromium, Android/DB2, ripristino reale, revisione indipendente e decisione umana. Mai fondere #399 direttamente in main.

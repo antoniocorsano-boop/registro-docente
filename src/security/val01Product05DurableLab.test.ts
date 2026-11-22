@@ -19,7 +19,7 @@ import {createDurableMutationCoordinator} from '../persistence/durableMutationCo
 const settings:Pick<AppSettings,'year'|'subject'>={year:boardScope.schoolYear,subject:boardScope.subjectCode};
 const context={classId:boardScope.classId,schoolYear:boardScope.schoolYear,subjectCode:boardScope.subjectCode,
  studentId:'s1',period:'Q1' as const,from:'2026-09-01',to:'2027-01-31'};
-const request={id:'balance-test-1',recordedAt:'2027-02-01T10:02:00.000Z',expectedPreviousId:null};
+const request={id:'balance-test-1',recordedAt:'2027-02-01T10:02:00.000Z',expectedHeadDigest:null};
 function cls():ClassData{return {id:boardScope.classId,name:'Classe fittizia',
  students:boardScope.studentIds.map(id=>({id,name:'Alunno sintetico'})),
  grades:[],behaviors:[],assessmentEvidenceV1:{version:1,documents:[{document:structuredClone(boardDocument),bindings:[]}]}};}
@@ -98,8 +98,8 @@ describe('VAL-01/PRODUCT-05/S7d.2a isolated durable laboratory',()=>{
   expect(h.counters()).toEqual({writeCount:1,publishCount:1,invalidations:0});
   expect(h.get().meta.changes).toBe(3);
   expect(h.physical()).toEqual(h.get());
-  const saved=(h.get().appData.classes[0] as ClassData&{formativeBalanceHistoryV1:{entries:unknown[]}}).formativeBalanceHistoryV1;
-  expect(saved.entries).toHaveLength(1);
+  const saved=(h.get().appData.classes[0] as ClassData&{formativeBalanceHistoryV1:{records:unknown[]}}).formativeBalanceHistoryV1;
+  expect(saved.records).toHaveLength(1);
   expect(h.original.appData.classes[0]).not.toHaveProperty('formativeBalanceHistoryV1');
  });
  test('repeat and concurrent same-head append reject without extra writes',async()=>{
@@ -107,8 +107,8 @@ describe('VAL-01/PRODUCT-05/S7d.2a isolated durable laboratory',()=>{
   const a=commitFormativeHistoryLaboratory(h.owner,settings,v,request);
   const b=commitFormativeHistoryLaboratory(h.owner,settings,v,{...request,id:'balance-test-2'});
   expect((await a).revision).toBe(1);
-  await expect(b).rejects.toThrow('CONFLICT');
-  await expect(commitFormativeHistoryLaboratory(h.owner,settings,v,request)).rejects.toThrow('CONFLICT');
+  await expect(b).rejects.toThrow('STALE_HEAD');
+  await expect(commitFormativeHistoryLaboratory(h.owner,settings,v,request)).rejects.toThrow('STALE_HEAD');
   expect(h.counters()).toEqual({writeCount:1,publishCount:1,invalidations:0});
  });
  test('failure of physical atomic write never publishes and quarantines owner',async()=>{
@@ -156,29 +156,32 @@ describe('VAL-01/PRODUCT-05/S7d.2a isolated durable laboratory',()=>{
   await expect(pending).rejects.toThrow('STALE_EVIDENCE');
   expect(h.counters().writeCount).toBe(0);
  });
- test('real SecureVault encryption: atomic records, lock and reopen authenticated readback',async()=>{
+ test('existing SecureAppStorage blocks new formative history even after synthetic lab consent',async()=>{
   const store=new MemoryEncryptedStore(),vault=new SecureVault(store);
   await vault.initializeActive('synthetic password for isolated test');
   const storage=new SecureAppStorage(vault),origin=initial();
   await storage.saveAppDataAndMeta(origin.appData,origin.meta);
-  let committed=copy(origin),active=true,published=0;
+  let committed=copy(origin),active=true,published=0,invalidations=0;
   const owner:FormativeHistoryLaboratoryOwner={
    coordinator:createDurableMutationCoordinator(),storage,
    isActive:()=>active,laboratoryApproved:()=>true,getCommitted:()=>copy(committed),
-   publish:next=>{published++;committed=copy(next);},invalidate:()=>{active=false;}
+   publish:next=>{published++;committed=copy(next);},
+   invalidate:()=>{active=false;invalidations++;}
   };
   const v=await sourceCandidate(committed);
-  const receipt=await commitFormativeHistoryLaboratory(owner,settings,v,request);
-  expect(receipt.verified).toBe(true);
-  expect(published).toBe(1);
-  expect(store.batchKeys.at(-1)).toEqual(['appData','meta']);
+  await expect(commitFormativeHistoryLaboratory(owner,settings,v,request))
+   .rejects.toThrow('PERSISTENCE_UNCERTAIN');
+  expect(invalidations).toBe(1);
+  expect(published).toBe(0);
+  expect(store.batchKeys).toHaveLength(1);
   vault.lock();
   await expect(storage.loadSnapshot()).rejects.toThrow();
   await vault.unlock('synthetic password for isolated test');
   const restored=await storage.loadSnapshot();
-  expect(restored.appData).toEqual(committed.appData);
-  expect(restored.meta).toEqual(committed.meta);
-  await expect(vault.unlock('wrong synthetic password')).rejects.toThrow();
+  expect(restored.appData).toEqual(origin.appData);
+  expect(restored.meta).toEqual(origin.meta);
+  expect((restored.appData?.classes[0] as ClassData&{formativeBalanceHistoryV1?:unknown})
+    .formativeBalanceHistoryV1).toBeUndefined();
  });
  test('V6/V7/V8/V9 legacy backup guard refuses new history instead of silent downgrade',async()=>{
   const h=fake(),v=await sourceCandidate(h.get());
