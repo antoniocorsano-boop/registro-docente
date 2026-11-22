@@ -105,11 +105,13 @@ test('AP-02 V7 actual Privacy web UI: physical file verification and exact recov
     () => dialogs.some(d => d.type === 'alert' && /Archivio aggiornato non verificabile|non valid[oa]|non corrispond|Password errata/i.test(d.message)),
     { timeout: 30000, message: 'A stale recovery copy must be rejected before V7 restore' }
   ).toBe(true);
-  await nav('Oggi');
-  await expect(page.getByRole('button', { name: 'Apri classe ' + secondClass, exact: true })).toBeVisible();
+  // Preserve the exact current logical state between its authenticated
+  // recovery copy and the authorized restore attempt. Navigating to Oggi
+  // changes the active-class selection and is not part of backup recovery.
+  await expect(page.getByRole('heading', { name: /Privacy First/ })).toBeVisible();
+  expect(dialogs.some(d => d.type === 'alert' && /ripristinato con successo/i.test(d.message))).toBe(false);
 
   // The newly downloaded, authenticated exact current-state copy is accepted.
-  await nav('Privacy');
   await page.locator('#restore-backup-file').setInputFiles(target.path);
   await page.locator('#restore-v7-recovery').setInputFiles(recovery.path);
   await page.getByPlaceholder('Inserisci la password impostata alla cifratura').fill(backupPassword);
