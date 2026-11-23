@@ -116,6 +116,33 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(restore).toContain('wouldLoseCouncilEntries(');
   });
 
+  test('F2-DEVICE uses the installed professional UI and real Android SAF without distributing an APK', async () => {
+    const workflow = await Bun.file('.github/workflows/ap02-f2-native-device.yml').text();
+    const driver = await Bun.file('scripts/diagnostics/ap02-native-device-v7.mjs').text();
+    expect(workflow).toContain('bun run build');
+    expect(workflow).toContain('src/main.tsx');
+    expect(workflow).toContain('it.trama.registrodocente.lab.ap02v7');
+    expect(workflow).toContain('android:allowBackup="false"');
+    expect(workflow).toContain('ap02-native-device-v7.mjs');
+    expect(workflow).toContain('api: [32, 36]');
+    expect(workflow).toContain('productionRelease==false');
+    expect(workflow).toContain('ap02-device-evidence/result.json');
+    expect(workflow).not.toContain('upload-release-asset');
+    expect(workflow).not.toContain('actions/create-release');
+    expect(driver).toContain('Page.javascriptDialogOpening');
+    expect(driver).toContain('Configura archivio protetto');
+    expect(driver).toContain('input[name="archive-mode"][value="professional"]');
+    expect(driver).toContain('Esporta copia completa V7');
+    expect(driver).toContain('Backup_Valutazioni_V7_');
+    expect(driver).toContain('Scegli file e ripristina');
+    expect(driver).toContain('await nativeChoose(target)');
+    expect(driver).toContain('await nativeChoose(recovery)');
+    expect(driver).toContain('verifiedProcessStop(');
+    expect(driver).toContain('Sblocca Registro');
+    expect(driver).not.toContain('window.__ap02F2');
+    expect(driver).not.toContain('window.__val01NativeRestore');
+  });
+
   test('native Android SAF accepts the exact V7 filename without relaxing the legacy V6 allowlist', async () => {
     const native = await Bun.file('mobile/android-probe/native/RegistroBackupFilesPlugin.java').text();
     const privacy = await Bun.file('src/components/PrivacyView.tsx').text();
