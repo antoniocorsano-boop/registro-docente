@@ -192,7 +192,8 @@ function click(selector) {
 }
 function button(label) {
   return dom('(function(){const a=Array.from(document.querySelectorAll("button")).filter(e=>'+
-    'e.innerText?.trim() === '+JSON.stringify(label)+'&&!e.disabled&&e.getClientRects().length>0);'+
+    'e.innerText?.trim() === '+JSON.stringify(label)+'&&!e.disabled&&e.getClientRects().length>0'+
+    '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
     'if(a.length!==1)throw Error("AMBIGUOUS_BUTTON");a[0].click();return true;})()');
 }
 async function nav(label){
@@ -203,8 +204,25 @@ async function nav(label){
     'if(e.length!==1)throw Error("NAV_NOT_UNIQUE");e[0].click();return true;})()');
   if(label==='Oggi'){
     const confirm=await dom('Boolean(document.querySelector("[data-testid=header01-home-confirm]"))');
-    if(confirm)await button('Torna a Oggi');
+    if(confirm){
+      phase='visible-ui-home-confirm';
+      // Scope to the currently open, teacher-visible confirmation. A global
+      // "Torna a Oggi" lookup can match an inert or hidden navigation surface.
+      await until(()=>dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
+        'if(!root)return false;const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
+        'e.innerText?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
+        '&&getComputedStyle(e).visibility==="visible");return a.length===1;})()'),
+        'VISIBLE_EXACT_HOME_CONFIRM',20000);
+      await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
+        'const a=Array.from(root?.querySelectorAll("button")||[]).filter(e=>'+
+        'e.innerText?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
+        '&&getComputedStyle(e).visibility==="visible");if(a.length!==1)throw Error("HOME_CONFIRM_NOT_UNIQUE");'+
+        'a[0].click();return true;})()');
+      await until(()=>dom('!document.querySelector("[data-testid=header01-home-confirm]")'),
+        'HOME_CONFIRM_DISMISSED',20000);
+    }
   }
+  phase='visible-ui-navigation-'+label;
   await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
 }
 async function createClass(name){
@@ -236,7 +254,11 @@ async function createClass(name){
   await onPage('Gestione Elenco Alunni: '+name,45000);
   if(clickError)console.log('AP02_CLASS_PROMPT_RUNTIME_RECOVERED',api);
   const hasDone=await dom('document.body?.innerText?.includes("Dati Salvati in Locale con Successo!")');
-  if(hasDone)await button('Chiudi');
+  if(hasDone){
+    phase='visible-ui-close-save-notice';
+    await button('Chiudi');
+  }
+  phase='visible-ui-class-return-home';
   await nav('Oggi');
   await onPage(name,30000);
 }
