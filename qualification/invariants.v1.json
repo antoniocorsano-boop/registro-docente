@@ -3562,7 +3562,9 @@
         "tests/browser/ap02-f2-android-v7-ui.spec.cjs",
         "src/security/ap02LegacyBackupBoundary.ts",
         "src/security/ap02LegacyBackupBoundary.test.ts",
-        "qualification/invariants.v1.json"
+        "qualification/invariants.v1.json",
+        ".github/workflows/ap02-f2-native-device.yml",
+        "scripts/diagnostics/ap02-native-device-v7.mjs"
       ],
       "tests": [
         "src/security/ap02V7OperationalBackup.test.ts",
