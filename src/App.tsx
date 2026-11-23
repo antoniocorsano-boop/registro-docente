@@ -3467,11 +3467,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const verifyAssessmentV7WebBackup = (receipt: VersionedBackupReceipt, file: Blob, active: () => boolean) =>
     mutationCoordinator.enqueueTask(() => assessmentBackupAuthority.verifyWeb(receipt, file, active));
 
+  // AP-02/F2-DEVICE: Android's external document picker pauses the Activity.
+  // Never hold the durable-write queue while it is open: Root must drain,
+  // shield and lock, then allow explicit fresh native-epoch authentication
+  // before the physical readback. The one-use receipt verifies only encrypted
+  // bytes; its eventual metadata commit remains serialized below.
   const verifyAssessmentV7AndroidBackup = (
     receipt: VersionedBackupReceipt, encryptedText: string, filename: string, active: () => boolean
-  ) => mutationCoordinator.enqueueTask(() =>
-    assessmentBackupAuthority.verifyAndroid(receipt, encryptedText, filename, active)
-  );
+  ) => assessmentBackupAuthority.verifyAndroid(receipt, encryptedText, filename, active);
 
   const recordAssessmentV7Backup = (receipt: VersionedBackupReceipt): Promise<void> =>
     mutationCoordinator.enqueue<SecureMeta>({
