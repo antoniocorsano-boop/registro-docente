@@ -45,6 +45,9 @@ test('F2-DIAG-03 samples an injected activity source and stops without storing r
     appPackage: app, readActivityDump: () => frames[Math.min(index++,2)],
     now: () => index * 1000, pause: async () => {}, maxSamples: 3
   });
+  // Flush injected, zero-delay sampling before stopping the probe.
+  // Immediate stop legitimately preserves only the first observation.
+  for (let i = 0; i < 4; i++) await Promise.resolve();
   const result = await probe.stop();
   assert.equal(result.observationCount, 3);
   assert.equal(result.observedDocumentsUi, true);
