@@ -129,3 +129,56 @@ test('AP-02 V7 actual Privacy web UI: physical file verification and exact recov
   expect(dialogs.some(d => /Copia V7 generata/.test(d.message))).toBe(true);
   expect(pageErrors).toEqual([]);
 });
+
+// F3-R01: exercise the shared gate with real Chromium locators on a controlled
+// public document. These fixtures do not claim to be the production Vault.
+const { reloadVaultAndUnlock, awaitVaultWorkspace } = require('./header01-navigation.cjs');
+async function f3GateFixture(page, { locked = false, inert = false, accepts = true } = {}) {
+  await page.route('**/f3-gate-fixture', route => route.fulfill({
+    contentType: 'text/html',
+    body: `<section id="gate" ${locked ? '' : 'hidden'}>
+      <h1>Sblocca Registro</h1><input id="vault-password" type="password">
+      <button id="unlock">Sblocca Registro</button></section>
+      <section id="workspace" ${locked ? 'hidden' : ''} ${inert ? 'inert' : ''}>
+      <h2>Le mie classi</h2><button data-testid="header01-brand-navigation">Menu Registro</button></section>
+      <script>window.unlocks=0;document.querySelector('#unlock').onclick=()=>{
+        window.unlocks++;
+        if(${accepts} && document.querySelector('#vault-password').value==='synthetic-f3'){
+          document.querySelector('#gate').hidden=true;
+          document.querySelector('#workspace').hidden=false;
+        }
+      };</script>`
+  }));
+  await page.goto(baseURL + '/f3-gate-fixture');
+}
+
+test('F3-R01: full reload refuses workspace without mandatory authentication', async ({ page }) => {
+  await f3GateFixture(page);
+  await expect(reloadVaultAndUnlock(page, 'synthetic-f3', {
+    requireHome: true, requireUnlock: false, timeout: 500
+  })).rejects.toThrow(); // A caller cannot disable the reload authentication contract.
+  expect(await page.evaluate(() => window.unlocks)).toBe(0);
+});
+
+test('F3-R01: full reload observes lock and authenticates exactly once', async ({ page }) => {
+  await f3GateFixture(page, { locked: true });
+  await reloadVaultAndUnlock(page, 'synthetic-f3', { requireHome: true, timeout: 2000 });
+  expect(await page.evaluate(() => window.unlocks)).toBe(1);
+});
+
+test('F3-R01: rejected password never qualifies the workspace', async ({ page }) => {
+  await f3GateFixture(page, { locked: true, accepts: false });
+  await expect(reloadVaultAndUnlock(page, 'synthetic-f3', { timeout: 500 })).rejects.toThrow();
+  expect(await page.evaluate(() => window.unlocks)).toBe(1);
+});
+
+test('F3-R01: generic readiness refuses visible inert navigation', async ({ page }) => {
+  await f3GateFixture(page, { inert: true });
+  await expect(awaitVaultWorkspace(page, 'synthetic-f3', { timeout: 500 })).rejects.toThrow();
+});
+
+test('F3-R01: generic readiness still accepts an already authenticated workspace', async ({ page }) => {
+  await f3GateFixture(page);
+  await awaitVaultWorkspace(page, 'synthetic-f3', { requireHome: true, timeout: 500 });
+  expect(await page.evaluate(() => window.unlocks)).toBe(0);
+});

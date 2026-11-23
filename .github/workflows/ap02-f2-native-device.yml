@@ -9,6 +9,9 @@ on:
       - 'scripts/diagnostics/native-process-probe.mjs'
       - 'mobile/android-probe/**'
       - 'src/**'
+      # F3: shared reopening acceptance changes require the same native matrix.
+      - 'tests/browser/header01-navigation.cjs'
+      - 'tests/browser/ap02-v7-professional-web.spec.cjs'
       - 'qualification/invariants.v1.json'
 permissions:
   contents: read
