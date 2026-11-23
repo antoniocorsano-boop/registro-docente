@@ -202,7 +202,17 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('e.closest("[inert]")');
     expect(driver).toContain('visible-ui-close-save-notice');
     expect(driver).toContain('SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED');
-    expect(driver).toContain('await onPage(\'Gestione Elenco Alunni: \'+name');
+    // Class creation may suspend the Android session before React presents
+    // the resulting page; the real Vault gate must be processed first.
+    const classFlow = driver.slice(driver.indexOf('async function createClass(name){'),
+      driver.indexOf('function findV7Name()'));
+    expect(classFlow.indexOf("await ensureInteractiveSession('after-class-prompt')")).toBeGreaterThan(0);
+    expect(classFlow.indexOf("await ensureInteractiveSession('after-class-prompt')")).toBeLessThan(
+      classFlow.indexOf("const expectedClassHeading='Gestione Elenco Alunni: '+name")
+    );
+    expect(classFlow).toContain('INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT');
+    expect(classFlow).toContain('if(state.locked){');
+    expect(classFlow).toContain('return state.ready&&state.classVisible;');
     expect(driver).not.toContain('ui.enterClassName(name)');
     expect(driver).not.toContain('ui.submitClass(name)');
     expect(driver).not.toContain('window.__ap02F2');
