@@ -75,6 +75,7 @@ async function downloads() {
     tap(await findNative(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text),'DOC_DOWNLOADS'));
   }
 }
+let nativeSaveCompletionCount=0;
 async function nativeSave(alertIndex) {
   try {
     await downloads();
@@ -110,6 +111,8 @@ async function nativeSave(alertIndex) {
   }
   tap(await findNative(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'DOC_SAVE_BUTTON'));
   await until(nativeForeground,'RETURN_FROM_SAVE',45000);
+  // Picker return observed; this does not prove a new document was created.
+  nativeSaveCompletionCount++;
 }
 // Android opens an external DocumentsUI activity. The product deliberately
 // suspends and shields the Vault onPause. Resume by explicitly authenticating
@@ -437,6 +440,67 @@ function safeDeviceByteCount(filename) {
     return /^\d+$/.test(value) ? Number(value) : null;
   } catch { return null; }
 }
+// F2-DIAG-02: metadata only for two synthetic Android exports. No file bytes,
+// names, SAF URIs, password values, app records or raw ADB output are retained.
+// Snapshots are persisted only if the two encrypted-file hashes coincide.
+function readSyntheticFileMetadata(filename) {
+  assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
+  const present=safeDeviceFlag('-e',filename);
+  const regularFile=safeDeviceFlag('-f',filename);
+  const readableByShell=safeDeviceFlag('-r',filename);
+  let modifiedEpochSeconds=null,inode=null;
+  if(present===true) {
+    try {
+      const stat=adb('shell','stat','-c','%Y|%i','/sdcard/Download/'+filename);
+      const parts=/^(\d+)\|(\d+)$/.exec(stat);
+      if(parts) {modifiedEpochSeconds=Number(parts[1]);inode=parts[2];}
+    } catch { /* Unavailable metadata is not a reason to pass qualification. */ }
+  }
+  return {present,regularFile,readableByShell,
+    sizeBytes:present===true?safeDeviceByteCount(filename):null,
+    modifiedEpochSeconds,inode};
+}
+function captureSyntheticFilePair(datedFilename) {
+  return {observedAt:new Date().toISOString(),
+    retainedTarget:readSyntheticFileMetadata(targetName),
+    datedExport:readSyntheticFileMetadata(datedFilename)};
+}
+function changedIfKnown(before,after) {
+  return before===null||after===null ? null : before!==after;
+}
+function captureDuplicateExportDiagnostic(previous,current,before,pickerReturnsBefore) {
+  const after=captureSyntheticFilePair(current.name);
+  const prior=before.datedExport,next=after.datedExport;
+  const oldTarget=before.retainedTarget,newTarget=after.retainedTarget;
+  const diagnostic={
+    schemaVersion:2,stage:'native-v7-duplicate-export',candidate:sha,api,phase,
+    syntheticOnly:true,productionRelease:false,
+    fileLocation:'android-shared-downloads',
+    firstAndSecondEncryptedHashesEqual:previous.digest.sha256===current.digest.sha256,
+    sameDatedFilename:previous.name===current.name,
+    nativeSaveReturnObserved:nativeSaveCompletionCount===pickerReturnsBefore+1,
+    saveReturnsBefore:pickerReturnsBefore,
+    saveReturnsAfter:nativeSaveCompletionCount,
+    before,after,
+    changes:{
+      datedFileNewlyPresent:prior.present===false&&next.present===true,
+      datedFileSizeChanged:changedIfKnown(prior.sizeBytes,next.sizeBytes),
+      datedFileModifiedChanged:changedIfKnown(prior.modifiedEpochSeconds,next.modifiedEpochSeconds),
+      datedFileInodeChanged:changedIfKnown(prior.inode,next.inode),
+      retainedTargetSizeChanged:changedIfKnown(oldTarget.sizeBytes,newTarget.sizeBytes),
+      retainedTargetModifiedChanged:changedIfKnown(oldTarget.modifiedEpochSeconds,newTarget.modifiedEpochSeconds),
+      retainedTargetInodeChanged:changedIfKnown(oldTarget.inode,newTarget.inode),
+      targetAndDatedAreSameInode:
+        newTarget.inode===null||next.inode===null?null:newTarget.inode===next.inode
+    }
+  };
+  writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
+  console.log('AP02_F2_DUPLICATE_EXPORT_DIAGNOSTIC',JSON.stringify({
+    api,phase,sameDatedFilename:diagnostic.sameDatedFilename,
+    nativeSaveReturnObserved:diagnostic.nativeSaveReturnObserved,
+    changes:diagnostic.changes
+  }));
+}
 async function capturePhysicalReadDiagnostic(filename,attempts) {
   // Accept only the two fixed laboratory filename patterns and never persist
   // the basename, raw ADB output, file contents, SAF URI or DOM text.
@@ -589,7 +653,14 @@ async function run(){
   await nav('Oggi');
   await createClass(newerClass);
   await nav('Privacy');
+  // Observe physical file identities before export #2 through the actual UI.
+  const priorExportMetadata=captureSyntheticFilePair(target.name);
+  const pickerReturnsBeforeRecovery=nativeSaveCompletionCount;
   const recovery=await exportV7();
+  if(recovery.digest.sha256===target.digest.sha256) {
+    try {captureDuplicateExportDiagnostic(target,recovery,priorExportMetadata,pickerReturnsBeforeRecovery);}
+    catch {console.log('AP02_F2_DUPLICATE_EXPORT_DIAGNOSTIC_UNAVAILABLE',api);}
+  }
   assert.notEqual(recovery.digest.sha256,target.digest.sha256);
   record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true,nativeReauthCount});
   await restoreFromRealSaf(targetName,recovery.name);
