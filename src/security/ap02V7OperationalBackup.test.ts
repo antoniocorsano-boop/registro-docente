@@ -179,6 +179,18 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('inertOwnerContainsNavbar:');
     expect(driver).toContain('buttonHasLayoutRect:');
     expect(driver).toContain('homeConfirmDiagnostic:homeConfirmDiagnostic||undefined');
+    // Android API32 may protect the mounted App after a native prompt. CDP
+    // must not click controls through a hidden/inert Vault surface.
+    expect(driver).toContain('async function ensureInteractiveSession(scope)');
+    expect(driver).toContain('ANDROID_INTERACTIVE_OR_LOCK_');
+    expect(driver).toContain('ANDROID_SESSION_REAUTHORIZED_');
+    expect(driver).toContain('ANDROID_PROTECTED_SURFACE_');
+    expect(driver).toContain('AP02_SESSION_REAUTH_VIA_REAL_UI');
+    expect(driver).toContain("await ensureInteractiveSession('after-class-prompt')");
+    expect(driver).toContain("await ensureInteractiveSession('before-v7-export')");
+    expect(driver).toContain("await ensureInteractiveSession('before-nav-'+label)");
+    expect(driver).toContain('!brand.closest("[inert]")');
+
     expect(driver).toContain('NATIVE_UI_TREE_UNAVAILABLE');
     expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
     expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
