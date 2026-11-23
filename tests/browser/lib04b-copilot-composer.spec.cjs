@@ -1,3 +1,4 @@
+const { reloadVaultAndUnlock, awaitVaultWorkspace } = require('./header01-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
@@ -22,11 +23,7 @@ async function setupFreshVault(page) {
 
 async function reloadAndUnlock(page, url = baseURL) {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
-  if (await unlockHeading.isVisible().catch(() => false)) {
-    await page.locator('#vault-password').fill(vaultPassword);
-    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-  }
+  await awaitVaultWorkspace(page, vaultPassword);
 }
 
 async function openComposer(page) {
