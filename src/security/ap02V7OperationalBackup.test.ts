@@ -152,6 +152,11 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('VISIBLE_CLASS_CREATION_CONTROL');
     expect(driver).toContain('VISIBLE_EXACT_HOME_CONFIRM');
     expect(driver).toContain('PRIVACY_V7_EXPORT_BUTTON_READY');
+    expect(driver).toContain('NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF');
+    expect(driver).toContain('NATIVE_V7_VAULT_LOCKED_BEFORE_SAF');
+    expect(driver).toContain('NATIVE_V7_EXPORT_STILL_IN_PROGRESS');
+    expect(driver).toContain('NATIVE_V7_SAF_NOT_OBSERVED_OFF_FOREGROUND');
+    expect(workflow).toContain('ap02-device-evidence/saf-diagnostic.json');
     expect(driver).toContain('native-v7-export-submit');
     expect(driver).toContain('BUTTON_MATCH_COUNT_0');
     expect(driver).toContain('HOME_CONFIRM_DISMISSED');
