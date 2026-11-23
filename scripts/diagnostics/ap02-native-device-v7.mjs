@@ -241,7 +241,14 @@ async function run(){
   // synthetic PROFESSIONAL archive created through the actual product gate.
   await click('input[name="archive-mode"][value="professional"]');
   const profile=['Istituto totalmente fittizio','2026/2027','Docente sintetico','Tecnologia'];
-  for(let i=0;i<profile.length;i++)await field('fieldset input[required]:nth-of-type('+String(i+1)+')',profile[i]);
+  for(let i=0;i<profile.length;i++){
+    const index=i,value=profile[i];
+    await dom('(function(){const a=Array.from(document.querySelectorAll("fieldset input[required]"));'+
+      'if(a.length!==4||!a['+index+'])throw Error("SYNTHETIC_PROFILE_INPUT_MISSING");'+
+      'Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(a['+index+'],'+
+      JSON.stringify(value)+');a['+index+'].dispatchEvent(new Event("input",{bubbles:true}));'+
+      'a['+index+'].dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
+  }
   await field('#vault-password',password);
   await button('Crea il mio registro');
   await onPage('Le mie classi',60000);
