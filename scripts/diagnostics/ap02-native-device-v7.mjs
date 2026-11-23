@@ -71,6 +71,23 @@ async function nativeSave() {
   tap(await findNative(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'DOC_SAVE_BUTTON'));
   await until(nativeForeground,'RETURN_FROM_SAVE',45000);
 }
+// Android opens an external DocumentsUI activity. The product deliberately
+// suspends and shields the Vault onPause. Resume by explicitly authenticating
+// through its actual LOCKED screen; never bypass Root, grant an epoch or call
+// native plugin methods out of band.
+let nativeReauthCount=0;
+async function reauthenticateAfterPicker(kind) {
+  phase='native-saf-return-reauth-'+kind;
+  await until(()=>dom('Boolean(document.querySelector("#vault-password"))'),
+    'ANDROID_SESSION_REAUTH_REQUIRED_'+kind,35000);
+  await onPage('Sblocca Registro',35000);
+  await field('#vault-password',password);
+  await button('Sblocca Registro');
+  await until(()=>dom('!document.querySelector("#vault-password") && '+
+    'document.body?.innerText?.includes("Privacy First")'),
+    'ANDROID_SESSION_REAUTHORIZED_'+kind,45000);
+  nativeReauthCount++;
+}
 async function nativeChoose(filename) {
   await downloads();
   tap(await findNative(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'EXACT_DOCUMENT_'+filename));
@@ -221,6 +238,7 @@ async function exportV7(){
   const prior=dialogs.length;
   await button('Esporta copia completa V7');
   await nativeSave();
+  await reauthenticateAfterPicker('export');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&
     /Copia completa V7 salvata, riletta e verificata/.test(d.message)),
     'V7_VERIFIED_NATIVE_RECEIPT',45000);
@@ -234,9 +252,11 @@ async function restoreFromRealSaf(target,recovery){
   await field('#restore-v7-recovery-password',copyPassword);
   await button('Scegli file e ripristina');
   await nativeChoose(target);
+  await reauthenticateAfterPicker('target-source');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='confirm'&&/Ripristino V7/.test(d.message)),
     'REAL_RECOVERY_CONSENT',45000);
   await nativeChoose(recovery);
+  await reauthenticateAfterPicker('recovery-source');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&/ripristinato con successo/i.test(d.message)),
     'REAL_V7_RESTORE_RESULT',60000);
 }
@@ -277,19 +297,19 @@ async function run(){
   adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE',
     '-d','file:///sdcard/Download/'+targetName);
   assert.deepEqual(inspectEncryptedFile(targetName),target.digest);
-  record('native-v7-target-export-saf-verified',{target:target.digest,physical:true});
+  record('native-v7-target-export-saf-verified',{target:target.digest,physical:true,nativeReauthCount});
   await nav('Oggi');
   await createClass(newerClass);
   await nav('Privacy');
   const recovery=await exportV7();
   assert.notEqual(recovery.digest.sha256,target.digest.sha256);
-  record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true});
+  record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true,nativeReauthCount});
   await restoreFromRealSaf(targetName,recovery.name);
   await onPage('Le mie classi',60000);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(originalClass)+')'),true);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(newerClass)+')'),false);
   record('actual-professional-v7-native-saf-import-and-restored-ui',{twoFileSelection:true,
-    encryptedFilesDistinct:true});
+    encryptedFilesDistinct:true,nativeReauthCount});
   disconnect();
   const restart=await verifiedProcessStop({probe,forceStop:()=>adb('shell','am','force-stop',pkg)});
   await launch();
