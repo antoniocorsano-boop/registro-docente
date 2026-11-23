@@ -173,6 +173,11 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('HOME_CONFIRM_DIALOG_MISSING');
     expect(driver).toContain('homeConfirmDiagnostic=await captureHomeConfirmDiagnostic()');
     expect(driver).toContain('exactLabelCount:named.length');
+    expect(driver).toContain('planningExitDialogOpen:');
+    expect(driver).toContain('inertOwnerIsDrawer:');
+    expect(driver).toContain('inertOwnerIsRoot:');
+    expect(driver).toContain('inertOwnerContainsNavbar:');
+    expect(driver).toContain('buttonHasLayoutRect:');
     expect(driver).toContain('homeConfirmDiagnostic:homeConfirmDiagnostic||undefined');
     expect(driver).toContain('NATIVE_UI_TREE_UNAVAILABLE');
     expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
