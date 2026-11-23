@@ -378,8 +378,23 @@ async function createClass(name){
   await until(()=>classPromptAcknowledged===before+1,
     'SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED',15000);
   classPromptName=null;
-  await onPage('Gestione Elenco Alunni: '+name,45000);
+  // On Android 36 the OS may protect the mounted App while the prompt settles.
+  // Check the real authentication gate BEFORE waiting for class text, then
+  // require the class view to be interactive, not merely present in the DOM.
   await ensureInteractiveSession('after-class-prompt');
+  const expectedClassHeading='Gestione Elenco Alunni: '+name;
+  await until(async()=>{
+    const state=await dom('(function(){const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
+      'return {locked:!!document.querySelector("#vault-password"),'+
+      'ready:!!brand&&!brand.closest("[inert]")&&brand.getClientRects().length>0&&'+
+      'getComputedStyle(brand).visibility==="visible"&&document.visibilityState==="visible",'+
+      'classVisible:document.body?.innerText?.includes('+JSON.stringify(expectedClassHeading)+')===true};})()');
+    if(state.locked){
+      await ensureInteractiveSession('after-class-prompt');
+      return false;
+    }
+    return state.ready&&state.classVisible;
+  },'INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT',90000);
   if(clickError)console.log('AP02_CLASS_PROMPT_RUNTIME_RECOVERED',api);
   const hasDone=await dom('document.body?.innerText?.includes("Dati Salvati in Locale con Successo!")');
   if(hasDone){
