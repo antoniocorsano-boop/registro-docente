@@ -165,6 +165,15 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver.indexOf("'HOME_NAVIGATION_OR_CONFIRM'")).toBeLessThan(
       driver.indexOf("const confirm=await dom('Boolean(document.querySelector(")
     );
+    // Android API32: textContent is stable even when WebView innerText
+    // has not been calculated; never skip the visible modal confirmation.
+    expect(driver).toContain('e.textContent?.trim()==="Torna a Oggi"');
+    expect(driver).not.toContain('e.innerText?.trim()==="Torna a Oggi"');
+    expect(driver).toContain('[role=alertdialog][aria-modal=true]');
+    expect(driver).toContain('HOME_CONFIRM_DIALOG_MISSING');
+    expect(driver).toContain('homeConfirmDiagnostic=await captureHomeConfirmDiagnostic()');
+    expect(driver).toContain('exactLabelCount:named.length');
+    expect(driver).toContain('homeConfirmDiagnostic:homeConfirmDiagnostic||undefined');
     expect(driver).toContain('NATIVE_UI_TREE_UNAVAILABLE');
     expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
     expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
