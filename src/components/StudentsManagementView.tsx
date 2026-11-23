@@ -230,7 +230,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   type="button"
                   disabled={isImporting || isStudentMutationPending}
                   onClick={() => {
-                    if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" e tutte le sue valutazioni da questa classe?`)) {
+                    if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" dalla classe? Se sono presenti valutazioni o evidenze storiche, la rimozione sarà bloccata per conservarle.`)) {
                       void handleRemoveStudent(student.id);
                     }
                   }}

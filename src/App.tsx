@@ -217,6 +217,8 @@ import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmen
 import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
 import { resolveApprovedAssessmentScopes } from './assessment/approvedAssessmentScopes';
 import { canonicalAssessmentSchoolYear } from './assessment/assessmentSchoolYear';
+import { validateAssessmentArchiveV1 } from './assessment/assessmentArchive';
+import { AssessmentContinuityError, checkStudentRemovalContinuity, checkSettingsAssessmentContinuity } from './assessment/assessmentContinuity';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -1289,10 +1291,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const commitSettingsMutation = useCallback((patch: Partial<AppSettings>): Promise<AppSettings> => {
     return mutationCoordinator.enqueue<{ settings: AppSettings; meta: SecureMeta }>({
       getCommitted: () => ({ settings: settingsRef.current, meta: metaRef.current }),
-      derive: current => ({
-        settings: applySettingsPatch(current.settings, patch),
-        meta: incrementBackupChanges(current.meta)
-      }),
+      derive: current => {
+        const next = applySettingsPatch(current.settings, patch);
+        // Re-evaluate archive authority within the serialized mutation queue.
+        // A changed year/discipline cannot orphan existing V1 evidence.
+        if (!checkSettingsAssessmentContinuity(appDataRef.current, planningRef.current, current.settings, next).allowed) {
+          throw new AssessmentContinuityError('settings');
+        }
+        return { settings: next, meta: incrementBackupChanges(current.meta) };
+      },
       persist: candidate => secureStorage.saveSettingsAndMeta(candidate.settings, candidate.meta),
       publish: candidate => {
         settingsRef.current = candidate.settings;
@@ -1302,8 +1309,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       },
       afterCommit: () => toast('Impostazioni aggiornate')
     }).then(candidate => candidate.settings).catch(error => {
-      console.error('Secure settings save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      if (error instanceof AssessmentContinuityError) {
+        alert(error.message);
+      } else {
+        console.error('Secure settings save failed', error);
+        alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      }
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
@@ -3219,23 +3230,45 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
+      // A protected student cannot be deleted together with grades, council
+      // records, withdrawn observations or other frozen historic evidence.
+      if (!checkStudentRemovalContinuity(targetClass, studentId).allowed) {
+        throw new AssessmentContinuityError('student');
+      }
       const updatedClass: ClassData = {
         ...targetClass,
         students: targetClass.students.filter(s => s.id !== studentId),
         grades: (targetClass.grades || []).filter(g => g.studentId !== studentId),
         behaviors: (targetClass.behaviors || []).filter(b => b.studentId !== studentId),
-        // Keep Council backup references consistent after an explicit pupil deletion.
         councilAssessments: (targetClass.councilAssessments || [])
           .filter(entry => entry.studentId !== studentId)
       };
-      return {
+      const candidate:AppData = {
         ...current,
         classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
       };
+      // All physical classes and historical approvals must remain valid after
+      // a deletion; a local roster change never repairs or grants an old scope.
+      if (candidate.classes.some(c => Object.prototype.hasOwnProperty.call(c, 'assessmentEvidenceV1'))) {
+        const scopes = resolveApprovedAssessmentScopes(candidate, planningRef.current, settingsRef.current);
+        if (!validateAssessmentArchiveV1(candidate, scopes).valid) {
+          throw new AssessmentContinuityError('student');
+        }
+      }
+      return candidate;
     }, {
       showBackupModal: false,
-      successMessage: 'Alunno rimosso'
-    }).then(() => undefined);
+      successMessage: 'Alunno rimosso',
+      inlineFailure: true
+    }).then(() => undefined).catch(error => {
+      if (error instanceof AssessmentContinuityError) {
+        alert(error.message);
+      } else {
+        console.error('Secure student removal failed', error);
+        alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      }
+      throw error;
+    });
   };
 
   // Bulk add students from Excel

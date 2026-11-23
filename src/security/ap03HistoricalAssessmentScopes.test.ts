@@ -1,11 +1,14 @@
 // AUDIT-PRE-01 / AP-03 — synthetic authority and lifecycle regression.
 import {describe,expect,test} from 'bun:test';
 import {readFileSync} from 'node:fs';
-import type {AppData,ClassData} from '../types';
+import type {AppData,AppSettings,ClassData} from '../types';
 import type {PlanningState} from '../planning/types';
 import {boardDocument,boardScope} from '../../tests/browser/fixtures/val01-s6c-data';
 import {resolveApprovedAssessmentScopes} from '../assessment/approvedAssessmentScopes';
 import {canonicalAssessmentSchoolYear} from '../assessment/assessmentSchoolYear';
+import {checkStudentRemovalContinuity,checkSettingsAssessmentContinuity,AssessmentContinuityError} from '../assessment/assessmentContinuity';
+import {DEFAULT_SETTINGS} from '../utils';
+import {createDurableMutationCoordinator} from '../persistence/durableMutationCoordinator';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
 import {previewDailyAssessmentSetup,deriveConfirmedDailyAssessmentSetup,type AssessmentSetupRequest}
  from '../assessment/dailyAssessmentSetup';
@@ -40,6 +43,107 @@ const request=():AssessmentSetupRequest=>({
   description:'Rappresenta relazioni',expected:{kind:'product',description:'Schema originale',method:'Elaborato'}}]
 });
 describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',()=>{
+
+ test('F3-CONT-01 removal conserves student-linked observations and only allows an unreferenced roster entry',()=>{
+  const original=classroom(),before=JSON.stringify(original);
+  expect(checkStudentRemovalContinuity(original,'s1')).toEqual({allowed:false,reason:'HISTORICAL_RECORD'});
+  expect(checkStudentRemovalContinuity(original,'s5')).toEqual({allowed:false,reason:'HISTORICAL_RECORD'});
+  expect(checkStudentRemovalContinuity(original,'foreign')).toEqual({allowed:false,reason:'UNKNOWN_STUDENT'});
+  // s4 has no observation, binding, grade, council record or aggregate snapshot.
+  expect(checkStudentRemovalContinuity(original,'s4')).toEqual({allowed:true});
+  const candidate=app();
+  candidate.classes[0].students=candidate.classes[0].students.filter(s=>s.id!=='s4');
+  expect(validateAssessmentArchiveV1(candidate,resolveApprovedAssessmentScopes(candidate,planning(),settings)))
+   .toEqual({valid:true,state:'present'});
+  expect(JSON.stringify(original)).toBe(before);
+ });
+ test('F3-CONT-01 grades, behavior, council judgements and roster snapshots cannot be deleted',()=>{
+  const base=classroom();
+  delete base.assessmentEvidenceV1;
+  const grade=structuredClone(base);
+  grade.grades.push({id:'grade-s4',studentId:'s4',date:'2026-11-20',
+   type:'disegno',period:'Q1',title:'Prova fittizia',value:'7'});
+  expect(checkStudentRemovalContinuity(grade,'s4')).toEqual({allowed:false,reason:'HISTORICAL_RECORD'});
+  const behavior=structuredClone(base);
+  behavior.behaviors.push({id:'b-s4',studentId:'s4',date:'2026-11-20',status:'Costruttivo 👍'});
+  expect(checkStudentRemovalContinuity(behavior,'s4')).toEqual({allowed:false,reason:'HISTORICAL_RECORD'});
+  const council=structuredClone(base);
+  council.councilAssessments=[{studentId:'s4',schoolYear:'2026/2027',moment:'ingresso',
+   value:'In acquisizione',updatedAt:'2026-11-20T10:00:00.000Z'}];
+  expect(checkStudentRemovalContinuity(council,'s4')).toEqual({allowed:false,reason:'HISTORICAL_RECORD'});
+  const aggregate=structuredClone(base);
+  aggregate.councilEvidenceSnapshots=[{} as NonNullable<ClassData['councilEvidenceSnapshots']>[number]];
+  expect(checkStudentRemovalContinuity(aggregate,'s4')).toEqual({allowed:false,reason:'HISTORICAL_RECORD'});
+  const malformed=classroom();
+  malformed.assessmentEvidenceV1={version:1,documents:[]};
+  expect(checkStudentRemovalContinuity(malformed,'s4')).toEqual({allowed:false,reason:'INVALID_ARCHIVE'});
+  expect(base.students).toHaveLength(boardScope.studentIds.length);
+ });
+ test('F3-CONT-01 settings update needs independent adopted historical authority',()=>{
+  const data=app(),before=JSON.stringify(data);
+  const sourceSettings:AppSettings={...DEFAULT_SETTINGS,year:'2026/2027',subject:'TECH'};
+  const savedSettings=JSON.stringify(sourceSettings);
+  const changeYear={...sourceSettings,year:'2027/2028'};
+  const changeSubject={...sourceSettings,subject:'MATH'};
+  expect(checkSettingsAssessmentContinuity(data,planning('draft'),sourceSettings,changeYear))
+   .toEqual({allowed:false,reason:'SCOPE_NOT_APPROVED'});
+  expect(checkSettingsAssessmentContinuity(data,planning('draft'),sourceSettings,changeSubject))
+   .toEqual({allowed:false,reason:'SCOPE_NOT_APPROVED'});
+  expect(checkSettingsAssessmentContinuity(data,planning(),sourceSettings,changeYear))
+   .toEqual({allowed:true});
+  expect(checkSettingsAssessmentContinuity(data,planning(),sourceSettings,changeSubject))
+   .toEqual({allowed:true});
+  for(const year of ['2026/27','2026-2027','2026/2027']){
+   expect(checkSettingsAssessmentContinuity(data,planning('draft'),sourceSettings,{...sourceSettings,year}))
+    .toEqual({allowed:true});
+  }
+  expect(checkSettingsAssessmentContinuity(data,planning('draft'),sourceSettings,
+   {...sourceSettings,theme:'matrix'})).toEqual({allowed:true});
+  expect(checkSettingsAssessmentContinuity(data,planning(),sourceSettings,
+   {...sourceSettings,year:'invalid'})).toEqual({allowed:false,reason:'SCOPE_NOT_APPROVED'});
+  const absent=app();
+  delete absent.classes[0].assessmentEvidenceV1;
+  expect(checkSettingsAssessmentContinuity(absent,planning('draft'),sourceSettings,changeYear))
+   .toEqual({allowed:true});
+  expect(JSON.stringify(data)).toBe(before);
+  expect(JSON.stringify(sourceSettings)).toBe(savedSettings);
+ });
+ test('F3-CONT-01 blocked changes cannot persist or publish and production UI explains refusal',async()=>{
+  const start=app(),before=JSON.stringify(start);
+  let committed=start, persisted=0, published=0;
+  const coordinator=createDurableMutationCoordinator();
+  await expect(coordinator.enqueue({
+   getCommitted:()=>committed,
+   derive:current=>{
+    if(!checkStudentRemovalContinuity(current.classes[0],'s1').allowed)
+     throw new AssessmentContinuityError('student');
+    return current;
+   },
+   persist:async()=>{persisted++;},
+   publish:next=>{published++;committed=next;}
+  })).rejects.toThrow('Rimozione sospesa');
+  expect(persisted).toBe(0);expect(published).toBe(0);
+  expect(JSON.stringify(committed)).toBe(before);
+  const originalSettings:AppSettings={...DEFAULT_SETTINGS,year:'2026/2027',subject:'TECH'};
+  await expect(coordinator.enqueue({
+   getCommitted:()=>originalSettings,
+   derive:current=>{
+    if(!checkSettingsAssessmentContinuity(start,planning('draft'),current,
+      {...current,year:'2027/2028'}).allowed)throw new AssessmentContinuityError('settings');
+    return current;
+   },
+   persist:async()=>{persisted++;},
+   publish:()=>{published++;}
+  })).rejects.toThrow('Modifica non salvata');
+  expect(persisted).toBe(0);expect(published).toBe(0);
+  const appCode=readFileSync('src/App.tsx','utf8');
+  expect(appCode).toContain('checkStudentRemovalContinuity(targetClass, studentId)');
+  expect(appCode).toContain('checkSettingsAssessmentContinuity(appDataRef.current, planningRef.current');
+  expect(appCode).toContain('validateAssessmentArchiveV1(candidate, scopes)');
+  const ui=readFileSync('src/components/StudentsManagementView.tsx','utf8');
+  expect(ui).toContain('la rimozione sarà bloccata per conservarle');
+ });
+
 
  test('F3-CPL-01 current teacher year is canonical across all four assessment flows',()=>{
   const original=app(),before=JSON.stringify(original),sourcePlanning=planning();
