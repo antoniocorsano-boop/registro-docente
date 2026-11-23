@@ -237,6 +237,22 @@ function button(label) {
     '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
     'if(a.length!==1)throw Error("BUTTON_MATCH_COUNT_"+a.length);a[0].click();return true;})()');
 }
+// Collect only aggregate, non-sensitive DOM facts on an Android Home-confirm
+// failure. Never retain dialog text, class names, markup or screenshots.
+let homeConfirmDiagnostic = null;
+async function captureHomeConfirmDiagnostic(){
+  try {
+    return await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
+      'const buttons=Array.from(root?.querySelectorAll("button")||[]);'+
+      'const named=buttons.filter(e=>e.textContent?.trim()==="Torna a Oggi");'+
+      'const visible=named.filter(e=>e.getClientRects().length>0&&'+
+      'getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));'+
+      'return {dialogPresent:!!root,accessibleAlertdialog:!!root?.querySelector("[role=alertdialog][aria-modal=true]"),'+
+      'buttonCount:buttons.length,exactLabelCount:named.length,'+
+      'visibleCount:visible.length,enabledCount:visible.filter(e=>!e.disabled).length,'+
+      'inertCount:named.filter(e=>Boolean(e.closest("[inert]"))).length};})()');
+  } catch { return {diagnosticUnavailable:true}; }
+}
 async function nav(label){
   await click('[data-testid="header01-brand-navigation"]');
   await until(()=>dom('Boolean(document.querySelector("#registro-navigation-drawer"))'),'NAV_DRAWER',15000);
@@ -257,15 +273,20 @@ async function nav(label){
       phase='visible-ui-home-confirm';
       // Scope to the currently open, teacher-visible confirmation. A global
       // "Torna a Oggi" lookup can match an inert or hidden navigation surface.
+      try {
       await until(()=>dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-        'if(!root)return false;const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
-        'e.innerText?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
-        '&&getComputedStyle(e).visibility==="visible");return a.length===1;})()'),
+        'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))return false;const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
+        'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
+        '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));return a.length===1;})()'),
         'VISIBLE_EXACT_HOME_CONFIRM',20000);
+      } catch(error) {
+        homeConfirmDiagnostic=await captureHomeConfirmDiagnostic();
+        throw error;
+      }
       await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-        'const a=Array.from(root?.querySelectorAll("button")||[]).filter(e=>'+
-        'e.innerText?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
-        '&&getComputedStyle(e).visibility==="visible");if(a.length!==1)throw Error("HOME_CONFIRM_NOT_UNIQUE");'+
+        'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))throw Error("HOME_CONFIRM_DIALOG_MISSING");const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
+        'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
+        '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));if(a.length!==1)throw Error("HOME_CONFIRM_NOT_UNIQUE");'+
         'a[0].click();return true;})()');
       await until(()=>dom('!document.querySelector("[data-testid=header01-home-confirm]")'),
         'HOME_CONFIRM_DISMISSED',20000);
@@ -465,7 +486,7 @@ try{
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
   const code=String(error?.message||'UNKNOWN').slice(0,140);
   writeFileSync(out+'/failure.json',JSON.stringify({candidate:sha,api,phase,code,
-    qualified:false,productionRelease:false,syntheticOnly:true},null,2));
+    qualified:false,productionRelease:false,syntheticOnly:true,homeConfirmDiagnostic:homeConfirmDiagnostic||undefined},null,2));
   console.error('AP02_F2_DEVICE_BLOCKED',phase,code);
   process.exitCode=1;
 }finally{disconnect();}
