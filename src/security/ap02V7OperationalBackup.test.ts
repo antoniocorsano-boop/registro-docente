@@ -99,6 +99,21 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(v7Export).toContain('assessmentBackupAuthority.prepare(');
     expect(v7Export).toContain('assessmentBackupAuthority.verifyWeb(');
     expect(v7Export).toContain('assessmentBackupAuthority.verifyAndroid(');
+    // A real Android picker changes the native foreground epoch. Waiting for
+    // that picker inside the durable mutation tail deadlocks Root's mandatory
+    // pauseAndDrain before the fresh-password gate can be displayed.
+    const nativeVerify = app.slice(
+      app.indexOf('const verifyAssessmentV7AndroidBackup ='),
+      app.indexOf('const recordAssessmentV7Backup =')
+    );
+    expect(nativeVerify).toContain('assessmentBackupAuthority.verifyAndroid(');
+    expect(nativeVerify).not.toContain('mutationCoordinator.enqueueTask');
+    const receiptCommit = app.slice(
+      app.indexOf('const recordAssessmentV7Backup ='),
+      app.indexOf('// CDC-01: teacher-assigned council entry')
+    );
+    expect(receiptCommit).toContain('mutationCoordinator.enqueue<SecureMeta>');
+    expect(receiptCommit).toContain('assessmentBackupAuthority.consume(current, receipt, 7)');
     expect(v7Export).toContain('assessmentBackupAuthority.consume(current, receipt, 7)');
     expect(v7Export).toContain('secureStorage.saveMeta(candidate)');
     const restore = app.slice(app.indexOf('const handleImportEncryptedBackup ='), app.indexOf('const handleFactoryReset ='));
