@@ -150,6 +150,10 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('classPromptAcknowledged++');
     expect(driver).toContain("await button('Nuova Classe')");
     expect(driver).toContain('VISIBLE_CLASS_CREATION_CONTROL');
+    expect(driver).toContain('VISIBLE_EXACT_HOME_CONFIRM');
+    expect(driver).toContain('HOME_CONFIRM_DISMISSED');
+    expect(driver).toContain('e.closest("[inert]")');
+    expect(driver).toContain('visible-ui-close-save-notice');
     expect(driver).toContain('SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED');
     expect(driver).toContain('await onPage(\'Gestione Elenco Alunni: \'+name');
     expect(driver).not.toContain('ui.enterClassName(name)');
