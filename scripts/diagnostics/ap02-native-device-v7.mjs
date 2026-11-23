@@ -52,7 +52,8 @@ function nativeNodes() {
   return parseNativeNodes(adb('shell','cat','/sdcard/ap02-f2-ui.xml'));
 }
 const doc = n => /documentsui/i.test(n.pkg);
-const findNative = (fn,name) => until(()=>nativeNodes().find(n=>hasArea(n)&&fn(n)),name,45000);
+const findNative = (fn,name,timeout=45000) =>
+  until(()=>nativeNodes().find(n=>hasArea(n)&&fn(n)),name,timeout);
 function tap(n) {
   assert.ok(hasArea(n));
   const [x1,y1,x2,y2]=n.bounds;
@@ -60,14 +61,46 @@ function tap(n) {
 }
 async function downloads() {
   await findNative(n=>doc(n)&&(/show roots|open navigation drawer|mostra radici/i.test(n.desc)||
-    /^(Downloads|Download|save|salva)$/i.test(n.text)),'ANDROID_DOCUMENTS_UI');
+    /^(Downloads|Download|save|salva)$/i.test(n.text)),'ANDROID_DOCUMENTS_UI',
+    api===32?90000:45000);
   if(!nativeNodes().some(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text))) {
     tap(await findNative(n=>doc(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc),'DOC_ROOTS'));
     tap(await findNative(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text),'DOC_DOWNLOADS'));
   }
 }
-async function nativeSave() {
-  await downloads();
+async function nativeSave(alertIndex) {
+  try {
+    await downloads();
+  } catch(error) {
+    // Local instrumentation only: never inspect or upload decrypted archives,
+    // class names, password values, native window contents or ciphertext.
+    // The UI can silently cancel an export while Android is re-establishing
+    // its foreground session; distinguish this from an inaccessible picker.
+    const safe=await dom('(function(){const buttons=Array.from(document.querySelectorAll("button"));'+
+      'return {locked:!!document.querySelector("#vault-password"),'+
+      'cipherBusy:document.body?.innerText?.includes("Cifratura in corso...")===true,'+
+      'exportButtonVisible:buttons.some(e=>e.innerText?.trim()==="Esporta copia completa V7"'+
+      '&&e.getClientRects().length>0&&getComputedStyle(e).visibility==="visible"),'+
+      'documentVisibility:document.visibilityState};})()').catch(()=>null);
+    const failureAlert=dialogs.slice(alertIndex).some(d=>d.kind==='alert'&&
+      /Copia V7 non completata o non verificata/i.test(d.message));
+    const cancelledAlert=dialogs.slice(alertIndex).some(d=>d.kind==='alert'&&
+      /Inserisci e conferma una password/i.test(d.message));
+    const diagnostic={stage:'native-v7-saf-selection',
+      api,foreground:nativeForeground(),rejected:failureAlert,
+      validationRejected:cancelledAlert,locked:safe?.locked??null,
+      cipherBusy:safe?.cipherBusy??null,
+      exportButtonVisible:safe?.exportButtonVisible??null,
+      documentVisibility:safe?.documentVisibility??'unavailable',
+      originalError:String(error?.message||'UNKNOWN').replace(/[^A-Z0-9:_-]/gi,'_').slice(0,100)};
+    writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
+    if(failureAlert)throw Error('NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF');
+    if(cancelledAlert)throw Error('NATIVE_V7_EXPORT_FORM_REJECTED');
+    if(safe?.locked)throw Error('NATIVE_V7_VAULT_LOCKED_BEFORE_SAF');
+    if(safe?.cipherBusy)throw Error('NATIVE_V7_EXPORT_STILL_IN_PROGRESS');
+    throw Error(diagnostic.foreground?'NATIVE_V7_SAF_MISSING_FOREGROUND':
+      'NATIVE_V7_SAF_NOT_OBSERVED_OFF_FOREGROUND');
+  }
   tap(await findNative(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'DOC_SAVE_BUTTON'));
   await until(nativeForeground,'RETURN_FROM_SAVE',45000);
 }
@@ -297,7 +330,7 @@ async function exportV7(){
   phase='native-v7-export-submit';
   await button('Esporta copia completa V7');
   phase='native-v7-export-picker';
-  await nativeSave();
+  await nativeSave(prior);
   await reauthenticateAfterPicker('export');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&
     /Copia completa V7 salvata, riletta e verificata/.test(d.message)),
