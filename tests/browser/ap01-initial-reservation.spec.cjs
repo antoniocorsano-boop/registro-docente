@@ -51,15 +51,29 @@ test('AP-01: two simultaneous initial configurations cannot replace each other',
   ).toEqual([true, true]);
   await Promise.all(pages.map(page => page.evaluate(() => window.__ap01Release())));
 
-  // Exactly one tab is authorized as owner; the other remains protected.
-  await expect.poll(async () => {
-    const ready = await Promise.all(pages.map(page =>
-      page.getByRole('heading', { name: 'Le mie classi' }).isVisible()));
-    return ready.filter(Boolean).length;
-  }, { timeout: 45000 }).toBe(1);
-  const ready = await Promise.all(pages.map(page =>
-    page.getByRole('heading', { name: 'Le mie classi' }).isVisible()));
-  const owner = ready.indexOf(true);
+  // A visible Home is not a terminal outcome for the competing tab.
+  // Wait for BOTH submissions: one completes and the rival explicitly
+  // refuses setup or returns to a protected, non-authorized state.
+  const outcome = async page => {
+    if (await page.getByRole('heading', { name: 'Le mie classi' }).isVisible()) {
+      return 'success';
+    }
+    if (await page.getByRole('heading', { name: 'Sicurezza non disponibile' }).isVisible() ||
+        await page.getByRole('heading', { name: 'Sblocca Registro' }).isVisible()) {
+      return 'refused';
+    }
+    const formRejected = await page.getByRole('heading', { name: 'Configura archivio protetto' }).isVisible() &&
+      await page.locator('p.text-rose-300').isVisible() &&
+      await page.getByRole('button', { name: 'Avvia la prova' }).isEnabled();
+    return formRejected ? 'refused' : 'pending';
+  };
+  await expect.poll(async () =>
+    (await Promise.all(pages.map(outcome))).sort(),
+  { timeout: 60000 }).toEqual(['refused', 'success']);
+  const outcomes = await Promise.all(pages.map(outcome));
+  expect(outcomes.filter(value => value === 'success')).toHaveLength(1);
+  expect(outcomes.filter(value => value === 'refused')).toHaveLength(1);
+  const owner = outcomes.indexOf('success');
   expect(owner).toBeGreaterThanOrEqual(0);
 
   const physical = await pages[owner].evaluate(async () => {
@@ -91,4 +105,73 @@ test('AP-01: two simultaneous initial configurations cannot replace each other',
   await pages[owner].locator('#vault-password').fill(passwords[owner]);
   await pages[owner].getByRole('button', { name: 'Sblocca Registro' }).click();
   await expect(pages[owner].getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+});
+
+
+test('F3-CPL-03: a revoked migration during PBKDF2 cannot reserve an archive', async ({ page }) => {
+  const sourceKey = 'registro_docente_data_v35';
+  const legacy = JSON.stringify({ classes: [], currentClassId: null });
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Configura archivio protetto' })).toBeVisible();
+  await page.evaluate(([key, value]) => localStorage.setItem(key, value), [sourceKey, legacy]);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Proteggi i dati esistenti' })).toBeVisible();
+
+  await page.evaluate(() => {
+    const original = SubtleCrypto.prototype.deriveKey;
+    let held = false;
+    Object.defineProperty(SubtleCrypto.prototype, 'deriveKey', {
+      configurable: true, writable: true,
+      value: function (...args) {
+        if (args[0]?.name !== 'PBKDF2' || held) return original.apply(this, args);
+        held = true;
+        window.__f3KdfHeld = true;
+        return new Promise((resolve, reject) => {
+          window.__f3KdfRelease = () => original.apply(this, args).then(resolve, reject);
+        });
+      }
+    });
+  });
+
+  await page.locator('#vault-password').fill('synthetic-f3-revoked-migration');
+  await page.getByRole('button', { name: 'Proteggi i dati esistenti' }).click();
+  await expect.poll(() => page.evaluate(() => window.__f3KdfHeld === true),
+    { timeout: 30000 }).toBe(true);
+
+  // The browser's pagehide invalidates the Root's archive authority while
+  // real PBKDF2 is in flight; the crypto result must not reserve STAGING.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('pagehide'));
+    window.__f3KdfRelease();
+  });
+  await expect(page.getByRole('heading', { name: 'Proteggi i dati esistenti' }))
+    .toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toHaveCount(0);
+  expect(await page.evaluate(key => localStorage.getItem(key), sourceKey)).toBe(legacy);
+
+  const physical = await page.evaluate(async () => {
+    const name = 'registro-docente-secure-vault';
+    if (!(await indexedDB.databases()).some(item => item.name === name)) {
+      return { state: null, keys: [] };
+    }
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onupgradeneeded = () => {
+        request.transaction?.abort();
+        reject(Error('Unexpected database upgrade'));
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(['metadata', 'records'], 'readonly');
+        const metadata = tx.objectStore('metadata').get('current');
+        const keys = tx.objectStore('records').getAllKeys();
+        tx.oncomplete = () => resolve({ state: metadata.result?.state ?? null, keys: keys.result });
+        tx.onerror = tx.onabort = () => reject(tx.error);
+      });
+    } finally { db.close(); }
+  });
+  expect(physical).toEqual({ state: null, keys: [] });
 });

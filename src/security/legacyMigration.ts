@@ -264,7 +264,9 @@ export async function migrateLegacyToVault(
   const expectedInvariants = buildMigrationInvariants(sanitized);
 
   assertAuthorized?.();
-  await vault.createStaging(password);
+  // Recheck authorization after the asynchronous PBKDF2 boundary and before
+  // claiming STAGING metadata; a revoked migration must never reserve a vault.
+  await vault.createStaging(password, assertAuthorized);
   let activationInvoked = false;
 
   try {

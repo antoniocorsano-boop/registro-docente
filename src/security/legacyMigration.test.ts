@@ -327,6 +327,31 @@ describe('S-R02 revocable candidate legacy migration', () => {
     } };
   }
 
+  test('F3-CPL-03: authority revoked at the post-PBKDF2 boundary cannot reserve STAGING', async () => {
+    const source = makeMigrationStorage();
+    const original = collectLegacySnapshot(source);
+    const store = new MemoryVaultStore();
+    const vault = new SecureVault(store);
+    let checks = 0;
+    let revoked = false;
+    const assertAuthorized = () => {
+      checks++;
+      // Two migration checks precede createStaging. Inside createStaging,
+      // check 6 immediately follows PBKDF2 and precedes metadata reservation.
+      if (checks === 6) revoked = true;
+      if (revoked) throw new Error('Sessione revocata durante PBKDF2.');
+    };
+
+    await expect(migrateRevocable(source, vault, password, assertAuthorized))
+      .rejects.toThrow('Sessione revocata durante PBKDF2.');
+    expect(checks).toBe(6);
+    expect(collectLegacySnapshot(source)).toEqual(original);
+    expect(source.removed).toEqual([]);
+    expect(await store.getMetadata()).toBeNull();
+    expect(await store.listRecordKeys()).toEqual([]);
+    expect(vault.isUnlocked()).toBe(false);
+  });
+
   test('revocation after an encrypted write and before activation preserves source and removes only own staging', async () => {
     const source = makeMigrationStorage();
     const store = new MemoryVaultStore();
