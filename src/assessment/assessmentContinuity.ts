@@ -44,8 +44,9 @@ export function checkStudentRemovalContinuity(c:ClassData,studentId:string):Cont
  for(const section of archive.documents){
   if(!section||!section.document||!Array.isArray(section.document.evidence)||
      !Array.isArray(section.bindings))return blocked('INVALID_ARCHIVE');
-  if(section.document.evidence.some(e=>e?.studentId===studentId)||
-     section.bindings.some(binding=>binding?.link?.individual?.studentId===studentId))
+  if(section.document.evidence.some((e:{studentId?:unknown})=>e?.studentId===studentId)||
+     section.bindings.some((binding:{link?:{individual?:{studentId?:unknown}}})=>
+      binding?.link?.individual?.studentId===studentId))
    return blocked('HISTORICAL_RECORD');
  }
  return permitted;

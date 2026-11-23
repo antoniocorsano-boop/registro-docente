@@ -3610,6 +3610,23 @@
         "src/security/ap01AtomicBootstrap.test.ts"
       ],
       "browserSmoke": []
+    },
+    {
+      "id": "F3-CONT-01-I01",
+      "owner": "F3-CONT-01",
+      "statement": "Roster removal never deletes students with linked marks, observations, council records, frozen roster snapshots or archived criterion evidence. Settings changes must preserve independently authorized historical assessment scopes. Rejected changes neither persist nor publish. No implicit historical authority, repair, migration, personal-data export, release or merge.",
+      "impactPaths": [
+        "src/assessment/assessmentContinuity.ts",
+        "src/components/StudentsManagementView.tsx",
+        "src/App.tsx",
+        "src/security/ap03HistoricalAssessmentScopes.test.ts"
+      ],
+      "tests": [
+        "src/security/ap03HistoricalAssessmentScopes.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
     }
   ]
 }
