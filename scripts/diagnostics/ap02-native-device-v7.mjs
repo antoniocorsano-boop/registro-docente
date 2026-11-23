@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
+import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 
 const pkg = 'it.trama.registrodocente.lab.ap02v7';
 const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
@@ -76,7 +77,7 @@ async function downloads() {
   }
 }
 let nativeSaveCompletionCount=0;
-async function nativeSave(alertIndex) {
+async function nativeSave(alertIndex, activityProbe) {
   try {
     await downloads();
   } catch(error) {
@@ -100,7 +101,8 @@ async function nativeSave(alertIndex) {
       cipherBusy:safe?.cipherBusy??null,
       exportButtonVisible:safe?.exportButtonVisible??null,
       documentVisibility:safe?.documentVisibility??'unavailable',
-      originalError:String(error?.message||'UNKNOWN').replace(/[^A-Z0-9:_-]/gi,'_').slice(0,100)};
+      originalError:String(error?.message||'UNKNOWN').replace(/[^A-Z0-9:_-]/gi,'_').slice(0,100),
+      activityTrail:activityProbe?.snapshot()??null};
     writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
     if(failureAlert)throw Error('NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF');
     if(cancelledAlert)throw Error('NATIVE_V7_EXPORT_FORM_REJECTED');
@@ -587,9 +589,16 @@ async function exportV7(){
   await field('input[placeholder="Ripeti la password"]',copyPassword);
   const prior=dialogs.length;
   phase='native-v7-export-submit';
-  await button('Esporta copia completa V7');
-  phase='native-v7-export-picker';
-  await nativeSave(prior);
+  // Start before invoking the real UI, to catch picker arrival and early return.
+  // Only Activity categories and elapsed times survive a failed qualification.
+  const activityProbe=startSafActivityProbe({
+    appPackage:pkg, readActivityDump:()=>adb('shell','dumpsys','activity','activities')
+  });
+  try {
+    await button('Esporta copia completa V7');
+    phase='native-v7-export-picker';
+    await nativeSave(prior,activityProbe);
+  } finally { await activityProbe.stop(); }
   await reauthenticateAfterPicker('export');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&
     /Copia completa V7 salvata, riletta e verificata/.test(d.message)),
@@ -637,7 +646,25 @@ async function run(){
   }
   await field('#vault-password',password);
   await button('Crea il mio registro');
-  await onPage('Le mie classi',60000);
+  try { await onPage('Le mie classi',60000); }
+  catch(error) {
+    // Read only Boolean screen indicators and categorical Android activity.
+    // Never store input values, class names or the underlying activity dump.
+    const surface=await dom('(function(){return {'+
+      'locked:Boolean(document.querySelector("#vault-password")),'+
+      'visibility:document.visibilityState,'+
+      'homeHeadingVisible:Array.from(document.querySelectorAll("h2")).some(e=>'+
+      'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0)}})()').catch(()=>null);
+    let nativeActivity='unknown';
+    try { nativeActivity=classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg); } catch {}
+    writeFileSync(out+'/saf-diagnostic.json',JSON.stringify({schemaVersion:3,
+      stage:'professional-setup-home',api,phase,
+      originalError:String(error?.message||'UNKNOWN').replace(/[^A-Z0-9:_-]/gi,'_').slice(0,100),
+      nativeActivity,locked:surface?.locked??null,
+      visibility:['visible','hidden'].includes(surface?.visibility)?surface.visibility:'unknown',
+      homeHeadingVisible:surface?.homeHeadingVisible??null},null,2));
+    throw error;
+  }
   record('professional-vault-created-with-synthetic-profile');
   await createClass(originalClass);
   await nav('Privacy');
