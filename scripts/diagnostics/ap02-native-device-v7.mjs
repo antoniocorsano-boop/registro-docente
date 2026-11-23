@@ -217,7 +217,7 @@ async function createClass(name){
   assert.ok(nativeForeground(),'APPLICATION_NOT_FOREGROUND_FOR_CLASS');
   await until(()=>dom('document.visibilityState==="visible" && '+
     '!document.querySelector("#vault-password") && '+
-    '!document.querySelector("div[inert][style*=\"visibility: hidden\"]") && '+
+    '!Array.from(document.querySelectorAll("div[inert][style]")).some(e=>e.style.visibility==="hidden") && '+
     'Array.from(document.querySelectorAll("button")).filter(e=>'+
     'e.innerText?.trim()==="Nuova Classe" && !e.disabled && e.getClientRects().length>0).length===1'),
     'VISIBLE_CLASS_CREATION_CONTROL',30000);
