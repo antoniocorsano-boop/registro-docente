@@ -1,0 +1,145 @@
+name: AUDIT-PRE-01 AP-02 F2 — Installed professional Android V7 SAF
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ap02-f2-native-device.yml'
+      - 'scripts/diagnostics/ap02-native-device-v7.mjs'
+      - 'scripts/diagnostics/native-ui-driver.mjs'
+      - 'scripts/diagnostics/native-process-probe.mjs'
+      - 'mobile/android-probe/**'
+      - 'src/**'
+      - 'qualification/invariants.v1.json'
+permissions:
+  contents: read
+
+jobs:
+  installed-professional-v7:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      AP02_API: ${{ matrix.api }}
+    steps:
+      - name: Checkout exact candidate without write credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - name: Check exact HEAD and isolated diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node --check scripts/diagnostics/ap02-native-device-v7.mjs
+          node --test scripts/diagnostics/native-process-probe.test.mjs scripts/diagnostics/native-ui-driver.test.mjs
+          test -f src/main.tsx
+          test -f mobile/android-probe/native/RegistroBackupFilesPlugin.java
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Build exact real Web UI and separate debug-only Android laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p ap02-device-evidence
+          bun install --frozen-lockfile
+          bun run build
+          test -s dist/index.html
+          test -s dist/assets/$(ls dist/assets | head -n1)
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('android/app')
+          def change(p,old,new):
+              f=root/p
+              value,n=re.subn(old,new,f.read_text())
+              assert n==1,(str(f),n)
+              f.write_text(value)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"',
+                 'applicationId "it.trama.registrodocente.lab.ap02v7"')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"',
+                 'android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"',
+                 'android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          apk="$RUNNER_TEMP/ap02-f2-device-lab.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/ap02-cert.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.ap02v7'"
+          unzip -p "$apk" assets/public/index.html | cmp - ../../dist/index.html
+          sha256sum "$apk" > ../../ap02-device-evidence/apk-hash.txt
+          printf 'candidate=%s\napi=%s\npackage=it.trama.registrodocente.lab.ap02v7\nproduction_release=false\nsynthetic_only=true\n' \
+            "$CANDIDATE_SHA" "$AP02_API" > ../../ap02-device-evidence/provenance.txt
+          printf 'AP02_LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+      - name: Enable emulator hardware acceleration
+        shell: bash
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: F2-DEVICE actual professional UI, two Android SAF files and cold reopen
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs
+      - name: Require exact complete acceptance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+            .candidate==$sha and .api==$api and
+            .package=="it.trama.registrodocente.lab.ap02v7" and
+            .mode=="installed-professional-ui-real-saf" and
+            .syntheticOnly==true and .productionRelease==false and
+            ([.results[].stage] == [
+              "installed-professional-android-webview",
+              "professional-vault-created-with-synthetic-profile",
+              "native-v7-target-export-saf-verified",
+              "native-v7-current-recovery-export-saf-verified",
+              "actual-professional-v7-native-saf-import-and-restored-ui",
+              "actual-android-process-cold-reopen-preserves-v7-restore"
+            ]) and all(.results[]; .status=="PASS") and
+            .results[4].twoFileSelection==true and
+            .results[4].encryptedFilesDistinct==true and
+            .results[5].forcedStop==true and
+            .results[5].absenceSamples==2 and
+            .results[5].beforePidsCount>0 and
+            .results[5].afterPidsCount==0
+          ' ap02-device-evidence/result.json
+      - name: Preserve non-sensitive qualification record only
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ap02-f2-native-device-api${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
+          path: |
+            ap02-device-evidence/result.json
+            ap02-device-evidence/failure.json
+            ap02-device-evidence/provenance.txt
+            ap02-device-evidence/apk-hash.txt
+          retention-days: 14
+          if-no-files-found: warn
