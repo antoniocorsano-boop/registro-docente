@@ -55,7 +55,7 @@ function nativeNodes() {
   let xml;
   try{xml=adb('shell','cat','/sdcard/ap02-f2-ui.xml');}
   catch{throw Error('NATIVE_UI_TREE_UNAVAILABLE');}
-  if(!/<hierarchy\\b/.test(xml))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
+  if(!/<hierarchy\b/.test(xml))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
   return parseNativeNodes(xml);
 }
 const doc = n => /documentsui/i.test(n.pkg);
@@ -335,14 +335,14 @@ function findV7Name(){
   return names[0];
 }
 function inspectEncryptedFile(filename){
-  assert.match(filename,/^(?:Backup_Valutazioni_V7_\\d{4}-\\d{2}-\\d{2}\\.enc\\.json|AP02_F2_TARGET\\.enc\\.json)$/);
+  assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
   let bytes;
   try{bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000});}
   catch{throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');}
   const text=bytes.toString('utf8');
   // On some API36 emulator frames, adb exec-out reports a failed 'cat'
   // as text. Never submit that error text to the encrypted-envelope parser.
-  if(/^(?:cat:|sh:|\\/system\\/bin\\/sh:)/i.test(text.trimStart())||bytes.length===0)
+  if(/^(?:cat:|sh:|\/system\/bin\/sh:)/i.test(text.trimStart())||bytes.length===0)
     throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
   let e;
   try{e=JSON.parse(text);}
