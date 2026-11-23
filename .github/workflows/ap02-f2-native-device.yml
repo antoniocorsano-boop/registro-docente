@@ -142,6 +142,7 @@ jobs:
           path: |
             ap02-device-evidence/result.json
             ap02-device-evidence/failure.json
+            ap02-device-evidence/saf-diagnostic.json
             ap02-device-evidence/provenance.txt
             ap02-device-evidence/apk-hash.txt
           retention-days: 14
