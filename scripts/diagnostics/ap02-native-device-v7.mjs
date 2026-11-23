@@ -269,28 +269,35 @@ async function ensureInteractiveSession(scope){
     'const ready=Boolean(brand&&!brand.closest("[inert]")&&'+
     'brand.getClientRects().length>0&&getComputedStyle(brand).visibility==="visible"&&'+
     'document.visibilityState==="visible");return {locked,ready};})()');
-  const observed=await until(async()=>{
-    const first=await state();
-    if(first.locked)return 'locked';
-    if(!first.ready)return null;
-    // Do not accept a transient frame immediately before Android onPause.
+  // Android can protect the mounted WebView between a stable readiness
+  // sample and the final surface check. Retry the *real* authentication and
+  // visibility checks rather than clicking through inert content.
+  for(let attempt=0;attempt<4;attempt++){
+    const observed=await until(async()=>{
+      const first=await state();
+      if(first.locked)return 'locked';
+      if(!first.ready)return null;
+      await sleep(500);
+      const second=await state();
+      return second.locked?'locked':second.ready?'ready':null;
+    },'ANDROID_INTERACTIVE_OR_LOCK_'+scope,45000);
+    if(observed==='locked'){
+      phase='visible-ui-session-reauth-'+scope;
+      await onPage('Sblocca Registro',35000);
+      await field('#vault-password',password);
+      await button('Sblocca Registro');
+      await until(async()=>{
+        const next=await state();
+        return next.ready&&!next.locked;
+      },'ANDROID_SESSION_REAUTHORIZED_'+scope,45000);
+      console.log('AP02_SESSION_REAUTH_VIA_REAL_UI',scope,api);
+    }
+    const last=await state();
+    if(last.ready&&!last.locked)return;
+    console.log('AP02_INTERACTIVE_SURFACE_RETRY',scope,api,attempt+1);
     await sleep(500);
-    const second=await state();
-    return second.locked?'locked':second.ready?'ready':null;
-  },'ANDROID_INTERACTIVE_OR_LOCK_'+scope,45000);
-  if(observed==='locked'){
-    phase='visible-ui-session-reauth-'+scope;
-    await onPage('Sblocca Registro',35000);
-    await field('#vault-password',password);
-    await button('Sblocca Registro');
-    await until(async()=>{
-      const next=await state();
-      return next.ready&&!next.locked;
-    },'ANDROID_SESSION_REAUTHORIZED_'+scope,45000);
-    console.log('AP02_SESSION_REAUTH_VIA_REAL_UI',scope,api);
   }
-  const last=await state();
-  assert.ok(last.ready&&!last.locked,'ANDROID_PROTECTED_SURFACE_'+scope);
+  assert.fail('ANDROID_PROTECTED_SURFACE_'+scope);
 }
 async function nav(label){
   await ensureInteractiveSession('before-nav-'+label);

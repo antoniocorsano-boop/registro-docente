@@ -186,6 +186,10 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('ANDROID_SESSION_REAUTHORIZED_');
     expect(driver).toContain('ANDROID_PROTECTED_SURFACE_');
     expect(driver).toContain('AP02_SESSION_REAUTH_VIA_REAL_UI');
+    // Fail closed but tolerate a transient lifecycle transition between samples.
+    expect(driver).toContain('for(let attempt=0;attempt<4;attempt++)');
+    expect(driver).toContain('AP02_INTERACTIVE_SURFACE_RETRY');
+    expect(driver).toContain("assert.fail('ANDROID_PROTECTED_SURFACE_'+scope)");
     expect(driver).toContain("await ensureInteractiveSession('after-class-prompt')");
     expect(driver).toContain("await ensureInteractiveSession('before-v7-export')");
     expect(driver).toContain("await ensureInteractiveSession('before-nav-'+label)");
