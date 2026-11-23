@@ -418,16 +418,75 @@ function findV7Name(){
   assert.equal(names.length,1,'EXPECTED_ONE_V7_FILE');
   return names[0];
 }
+// F2-DEVICE diagnostic evidence: device-side metadata only, never file bytes,
+// filenames, class names or authentication data. Existing workflow preserves
+// saf-diagnostic.json on qualification failure.
+let lastPhysicalReadKind = 'not-attempted';
+function safeDeviceFlag(flag,filename) {
+  try {
+    execFileSync('adb',['shell','test',flag,'/sdcard/Download/'+filename],
+      {stdio:'ignore',timeout:7000});
+    return true;
+  } catch(error) {
+    return error?.status===1 ? false : null;
+  }
+}
+function safeDeviceByteCount(filename) {
+  try {
+    const value=adb('shell','stat','-c','%s','/sdcard/Download/'+filename);
+    return /^\d+$/.test(value) ? Number(value) : null;
+  } catch { return null; }
+}
+async function capturePhysicalReadDiagnostic(filename,attempts) {
+  // Accept only the two fixed laboratory filename patterns and never persist
+  // the basename, raw ADB output, file contents, SAF URI or DOM text.
+  assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
+  let transport='unavailable';
+  try {transport=adb('get-state')==='device'?'ready':'other';}catch{}
+  let foreground=null;
+  try {foreground=Boolean(nativeForeground());}catch{}
+  const session=await dom('(function(){return {'+
+    'locked:Boolean(document.querySelector("#vault-password")),'+
+    'visibility:document.visibilityState};})()').catch(()=>null);
+  const available=transport==='ready';
+  const diagnostic={
+    schemaVersion:1,stage:'native-v7-physical-read',
+    candidate:sha,api,phase,syntheticOnly:true,productionRelease:false,
+    fileRole:filename===targetName?'retained-target':'dated-export',
+    fileLocation:'android-shared-downloads',attempts,
+    lastReadKind:lastPhysicalReadKind,transport,foreground,
+    sessionLocked:session?.locked??null,
+    documentVisibility:['visible','hidden','prerender'].includes(session?.visibility)?
+      session.visibility:'unavailable',
+    filePresent:available?safeDeviceFlag('-e',filename):null,
+    regularFile:available?safeDeviceFlag('-f',filename):null,
+    readableByShell:available?safeDeviceFlag('-r',filename):null,
+    sizeBytes:available?safeDeviceByteCount(filename):null
+  };
+  writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
+  console.log('AP02_F2_PHYSICAL_READ_DIAGNOSTIC',
+    JSON.stringify({api,phase,fileRole:diagnostic.fileRole,
+      lastReadKind:diagnostic.lastReadKind,
+      transport:diagnostic.transport,filePresent:diagnostic.filePresent,
+      regularFile:diagnostic.regularFile,readableByShell:diagnostic.readableByShell,
+      sizeBytesKnown:diagnostic.sizeBytes!==null,
+      foreground:diagnostic.foreground,sessionLocked:diagnostic.sessionLocked}));
+}
 function inspectEncryptedFile(filename){
   assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
   let bytes;
   try{bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000});}
-  catch{throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');}
+  catch(error){
+    lastPhysicalReadKind=error?.code==='ETIMEDOUT'?'adb-exec-timeout':'adb-exec-rejected';
+    throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
+  }
   const text=bytes.toString('utf8');
   // On some API36 emulator frames, adb exec-out reports a failed 'cat'
   // as text. Never submit that error text to the encrypted-envelope parser.
-  if(/^(?:cat:|sh:|\/system\/bin\/sh:)/i.test(text.trimStart())||bytes.length===0)
+  if(/^(?:cat:|sh:|\/system\/bin\/sh:)/i.test(text.trimStart())||bytes.length===0){
+    lastPhysicalReadKind=bytes.length===0?'empty-read':'shell-error-response';
     throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
+  }
   let e;
   try{e=JSON.parse(text);}
   catch{throw Error('NATIVE_V7_ENVELOPE_INVALID_JSON');}
@@ -439,11 +498,19 @@ function inspectEncryptedFile(filename){
 }
 async function verifiedEncryptedFile(filename){
   const deadline=Date.now()+15000;
+  let attempts=0;
+  lastPhysicalReadKind='not-attempted';
   while(true){
+    attempts++;
     try{return inspectEncryptedFile(filename);}
     catch(error){
       if(error?.message!=='NATIVE_V7_PHYSICAL_READ_UNAVAILABLE')throw error;
-      if(Date.now()>=deadline)throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
+      if(Date.now()>=deadline){
+        // Missing diagnostics must never mask the physical-read failure.
+        try{await capturePhysicalReadDiagnostic(filename,attempts);}
+        catch{console.log('AP02_F2_PHYSICAL_READ_DIAGNOSTIC_UNAVAILABLE',api);}
+        throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
+      }
       await sleep(500);
     }
   }
