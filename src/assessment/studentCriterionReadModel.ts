@@ -43,7 +43,8 @@ export function readStudentCriterionEvidence(
     const authorized=approvedScopes??[scope];
     if(!authorized.some(s=>s.classId===scope.classId&&s.schoolYear===scope.schoolYear&&
       s.subjectCode===scope.subjectCode))return unverified();
-    const verified=validateAssessmentArchiveV1({classes:[currentClass]},authorized);
+    const verified=validateAssessmentArchiveV1({classes:[currentClass]},
+      authorized.filter(s=>s.classId===currentClass.id));
     if(!verified.valid||verified.state!=='present')return unverified();
     const archive=snapshotAssessmentData(descriptor.value) as AssessmentArchiveV1;
     const matching=archive.documents.filter(section=>

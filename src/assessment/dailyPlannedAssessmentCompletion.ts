@@ -42,7 +42,8 @@ export function listDailyPlannedProofs(c:ClassData,settings:Settings,
   if(new Set(scope.studentIds).size!==scope.studentIds.length)return {status:'unverified'};
   const authorized=approvedScopes??[approvedScope(scope)];
   if(!authorized.some(s=>same(s,approvedScope(scope))))return {status:'unverified'};
-  const verified=validateAssessmentArchiveV1({classes:[c]},authorized);
+  const verified=validateAssessmentArchiveV1({classes:[c]},
+   authorized.filter(s=>s.classId===c.id));
   if(!verified.valid)return {status:'unverified'};
   if(verified.state==='absent'||!c.assessmentEvidenceV1?.documents.some(section=>
    same(section.document,scope)))return {status:'absent'};

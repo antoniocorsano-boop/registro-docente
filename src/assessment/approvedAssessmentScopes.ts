@@ -14,6 +14,7 @@ import type {AppData,AppSettings} from '../types';
 import type {PlanningState} from '../planning/types';
 import type {ApprovedAssessmentScope} from './assessmentArchive';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {normalizeSchoolYear} from '../planning/planningFrameResolver';
 
 const validId=(x:unknown):x is string=>
  typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
@@ -60,8 +61,12 @@ export function resolveApprovedAssessmentScopes(
   if(!master||master.status!=='approved'||
      !master.currentVersionId||master.currentVersionId!==instance.adoptedVersionId)continue;
   const p=profiles.get(master.profileId);
-  if(!p||!validYear(p.schoolYear)||!validId(p.subjectCode))continue;
-  approve({classId:instance.classId,schoolYear:p.schoolYear,subjectCode:p.subjectCode});
+  // Planning accepts historical YYYY/YY and YYYY-YYYY years. Only the
+  // independently approved scope is canonicalized; stored plans are untouched.
+  const normalized=typeof p?.schoolYear==='string'?normalizeSchoolYear(p.schoolYear):null;
+  if(!p||!normalized||!validId(p.subjectCode))continue;
+  const schoolYear=normalized.replace('-', '/');
+  approve({classId:instance.classId,schoolYear,subjectCode:p.subjectCode});
  }
  return [...result.values()];
 }

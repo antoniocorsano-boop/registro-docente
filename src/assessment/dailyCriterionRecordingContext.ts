@@ -34,7 +34,10 @@ export function resolveDailyCriterionRecordingContext(
   if(!authorized.some(s=>s.classId===approved.classId&&
    s.schoolYear===approved.schoolYear&&s.subjectCode===approved.subjectCode))
    return {status:'unverified'};
-  const result=validateAssessmentArchiveV1({classes:[currentClass]},authorized);
+  // Validate only this class against its independently approved scopes.
+  // Whole-archive mutations still validate the complete scope list.
+  const result=validateAssessmentArchiveV1({classes:[currentClass]},
+   authorized.filter(s=>s.classId===currentClass.id));
   if(!result.valid||result.state!=='present')return {status:'unverified'};
   const cls=snapshotAssessmentData(currentClass) as ClassData;
   const sections=cls.assessmentEvidenceV1?.documents.filter(section=>

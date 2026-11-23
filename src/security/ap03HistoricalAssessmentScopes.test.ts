@@ -94,4 +94,68 @@ describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',(
   expect(resolveApprovedAssessmentScopes(data,planning(),settings)).toEqual(authorized);
   expect(validateAssessmentArchiveV1(data,authorized).valid).toBe(false);
  });
+
+ test('approved historical planning years normalize slash-short and dash-long formats without rewriting source',()=>{
+  const original=app(),before=JSON.stringify(original);
+  for(const schoolYear of ['2026/27','2026-2027','2026 / 2027']){
+   const source=planning();
+   const adapted:PlanningState={...source,
+    profiles:source.profiles.map(p=>({...p,schoolYear}))};
+   const saved=JSON.stringify(adapted);
+   const scopes=resolveApprovedAssessmentScopes(original,adapted,settings);
+   expect(scopes).toEqual([current,older]);
+   expect(validateAssessmentArchiveV1(original,scopes)).toEqual({valid:true,state:'present'});
+   expect(JSON.stringify(adapted)).toBe(saved);
+  }
+  for(const schoolYear of ['2026/28','2026-2028','2026/2026','2026-2025']){
+   const source=planning();
+   const adapted:PlanningState={...source,
+    profiles:source.profiles.map(p=>({...p,schoolYear}))};
+   const scopes=resolveApprovedAssessmentScopes(original,adapted,settings);
+   expect(scopes).toEqual([current]); // A malformed profile cannot grant authority.
+   expect(validateAssessmentArchiveV1(original,scopes)).toEqual({valid:false,issue:'INVALID_SCOPE'});
+  }
+  expect(JSON.stringify(original)).toBe(before);
+ });
+ test('multiple classes retain full-archive validation while all four class readers accept their scoped approvals',()=>{
+  const data=app();
+  const second:ClassData={id:'class-second',name:'Seconda classe sintetica',
+   students:[{id:'other-student',name:'Studente sintetico seconda classe'}],
+   grades:[],behaviors:[]};
+  data.classes.push(second);
+  const approved=resolveApprovedAssessmentScopes(data,planning(),settings);
+  expect(approved.some(scope=>scope.classId===second.id)).toBe(true);
+  expect(approved.filter(scope=>scope.classId===boardScope.classId)).toEqual([current,older]);
+  expect(validateAssessmentArchiveV1(data,approved)).toEqual({valid:true,state:'present'});
+  // Reproduce Copilot's original false rejection without relaxing the validator.
+  expect(validateAssessmentArchiveV1({classes:[data.classes[0]]},approved))
+   .toEqual({valid:false,issue:'INVALID_SCOPE'});
+  const preview=previewDailyAssessmentSetup(data.classes[0],settings,request(),'completed',approved);
+  expect(preview.valid).toBe(true);
+  if(!preview.valid)throw Error('Multi-class preview denied despite independent scopes');
+  const updated=deriveConfirmedDailyAssessmentSetup(data,approved,preview.review,confirmation);
+  expect(validateAssessmentArchiveV1(updated,approved)).toEqual({valid:true,state:'present'});
+  expect(updated.classes[1]).toEqual(second);
+  expect(listDailyPlannedProofs(updated.classes[0],settings,approved).status).toBe('ready');
+  expect(resolveDailyCriterionRecordingContext(updated.classes[0],settings,approved).status).toBe('ready');
+  expect(readStudentCriterionEvidence(updated.classes[0],settings,'s1',approved).status).toBe('ready');
+ });
+ test('class-scoped filtering cannot grant a foreign scope or bypass a corrupt second class at commit',()=>{
+  const data=app();
+  data.classes.push({id:'class-second',name:'Altra classe sintetica',
+   students:[{id:'other-student',name:'Altro studente'}],grades:[],behaviors:[]});
+  const approved=resolveApprovedAssessmentScopes(data,planning(),settings);
+  const foreign=approved.filter(scope=>scope.classId==='class-second');
+  expect(previewDailyAssessmentSetup(data.classes[0],settings,request(),'completed',foreign).valid).toBe(false);
+  expect(listDailyPlannedProofs(data.classes[0],settings,foreign).status).toBe('unverified');
+  expect(resolveDailyCriterionRecordingContext(data.classes[0],settings,foreign).status).toBe('unverified');
+  expect(readStudentCriterionEvidence(data.classes[0],settings,'s1',foreign).status).toBe('unverified');
+  const preview=previewDailyAssessmentSetup(data.classes[0],settings,request(),'completed',approved);
+  expect(preview.valid).toBe(true);
+  if(!preview.valid)throw Error('Expected authorized synthetic review');
+  const damaged=structuredClone(data);
+  damaged.classes[1].assessmentEvidenceV1={version:1,documents:[]};
+  expect(validateAssessmentArchiveV1(damaged,approved).valid).toBe(false);
+  expect(()=>deriveConfirmedDailyAssessmentSetup(damaged,approved,preview.review,confirmation)).toThrow();
+ });
 });

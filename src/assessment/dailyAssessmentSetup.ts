@@ -132,7 +132,7 @@ export function previewDailyAssessmentSetup(c:ClassData,
   const approved={classId:scope.classId,schoolYear:scope.schoolYear,subjectCode:scope.subjectCode};
   const authorized=approvedScopes??[approved];
   if(!authorized.some(s=>sameScope(s,approved))||!unique(scope.studentIds)||
-     !validateAssessmentArchiveV1({classes:[c]},authorized).valid)
+     !validateAssessmentArchiveV1({classes:[c]},authorized.filter(s=>s.classId===c.id)).valid)
    return {valid:false,issue:'INVALID_CONTEXT'};
   const base=extract(c,scope);
   const request=snapshotAssessmentData(raw) as AssessmentSetupRequest;
