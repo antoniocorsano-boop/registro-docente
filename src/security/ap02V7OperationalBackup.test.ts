@@ -160,6 +160,19 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('native-v7-export-submit');
     expect(driver).toContain('BUTTON_MATCH_COUNT_0');
     expect(driver).toContain('HOME_CONFIRM_DISMISSED');
+    expect(driver).toContain('HOME_NAVIGATION_OR_CONFIRM');
+    expect(driver).toContain('HOME_VIEW_CONFIRMED');
+    expect(driver.indexOf("'HOME_NAVIGATION_OR_CONFIRM'")).toBeLessThan(
+      driver.indexOf("const confirm=await dom('Boolean(document.querySelector(")
+    );
+    expect(driver).toContain('NATIVE_UI_TREE_UNAVAILABLE');
+    expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
+    expect(driver).toContain('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
+    expect(driver).toContain('NATIVE_V7_ENVELOPE_INVALID_JSON');
+    const readback = driver.slice(driver.indexOf('function inspectEncryptedFile('),
+      driver.indexOf('async function exportV7('));
+    expect(readback.indexOf("if(/^(?:cat:|sh:|")).toBeGreaterThan(0);
+    expect(readback.indexOf("if(/^(?:cat:|sh:|")).toBeLessThan(readback.indexOf('JSON.parse(text)'));
     expect(driver).toContain('e.closest("[inert]")');
     expect(driver).toContain('visible-ui-close-save-notice');
     expect(driver).toContain('SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED');
