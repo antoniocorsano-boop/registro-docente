@@ -145,6 +145,10 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(workflow).not.toContain('upload-release-asset');
     expect(workflow).not.toContain('actions/create-release');
     expect(driver).toContain('Page.javascriptDialogOpening');
+    expect(driver).toContain("if(d.type==='prompt') return;");
+    expect(driver).toContain('ui.enterClassName(name)');
+    expect(driver).toContain('ui.submitClass(name)');
+    expect(driver).not.toContain('UNEXPECTED_PROMPT');
     expect(driver).toContain('Configura archivio protetto');
     expect(driver).toContain('input[name="archive-mode"][value="professional"]');
     expect(driver).toContain('Esporta copia completa V7');
