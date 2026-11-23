@@ -48,8 +48,15 @@ async function until(fn, name, timeout = 60000) {
 }
 function nativeNodes() {
   adb('shell','rm','-f','/sdcard/ap02-f2-ui.xml');
-  adb('shell','uiautomator','dump','/sdcard/ap02-f2-ui.xml');
-  return parseNativeNodes(adb('shell','cat','/sdcard/ap02-f2-ui.xml'));
+  // Some emulator frames legitimately have no accessibility root. Do not
+  // interpret a failed Android shell 'cat' as XML or another data format.
+  const dump=adb('shell','uiautomator','dump','/sdcard/ap02-f2-ui.xml');
+  if(/null root node/i.test(dump))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
+  let xml;
+  try{xml=adb('shell','cat','/sdcard/ap02-f2-ui.xml');}
+  catch{throw Error('NATIVE_UI_TREE_UNAVAILABLE');}
+  if(!/<hierarchy\\b/.test(xml))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
+  return parseNativeNodes(xml);
 }
 const doc = n => /documentsui/i.test(n.pkg);
 const findNative = (fn,name,timeout=45000) =>
@@ -237,6 +244,14 @@ async function nav(label){
     '.filter(x=>x.textContent?.trim()==='+JSON.stringify(label)+'&&!x.disabled);'+
     'if(e.length!==1)throw Error("NAV_NOT_UNIQUE");e[0].click();return true;})()');
   if(label==='Oggi'){
+    // The drawer closes and the confirmation mounts asynchronously in React.
+    // A one-shot query can miss the dialog, leaving the real UI on the class
+    // page. Await either the visible confirmation or the actual Home heading.
+    await until(()=>dom('(function(){const confirm=document.querySelector("[data-testid=header01-home-confirm]");'+
+      'const home=Array.from(document.querySelectorAll("h2")).some(e=>'+
+      'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0'+
+      '&&getComputedStyle(e).visibility==="visible");return Boolean(confirm||home);})()'),
+      'HOME_NAVIGATION_OR_CONFIRM',25000);
     const confirm=await dom('Boolean(document.querySelector("[data-testid=header01-home-confirm]"))');
     if(confirm){
       phase='visible-ui-home-confirm';
@@ -258,6 +273,13 @@ async function nav(label){
   }
   phase='visible-ui-navigation-'+label;
   await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
+  if(label==='Oggi'){
+    await until(()=>dom('(function(){const a=Array.from(document.querySelectorAll("h2")).filter(e=>'+
+      'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0'+
+      '&&getComputedStyle(e).visibility==="visible");'+
+      'return a.length===1&&!document.querySelector("[data-testid=header01-home-confirm]");})()'),
+      'HOME_VIEW_CONFIRMED',25000);
+  }
   if(label==='Privacy'){
     phase='visible-ui-privacy-v7-ready';
     // On slower Android WebViews the Privacy heading may appear before the
@@ -313,14 +335,34 @@ function findV7Name(){
   return names[0];
 }
 function inspectEncryptedFile(filename){
-  const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000});
+  assert.match(filename,/^(?:Backup_Valutazioni_V7_\\d{4}-\\d{2}-\\d{2}\\.enc\\.json|AP02_F2_TARGET\\.enc\\.json)$/);
+  let bytes;
+  try{bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000});}
+  catch{throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');}
   const text=bytes.toString('utf8');
-  const e=JSON.parse(text);
+  // On some API36 emulator frames, adb exec-out reports a failed 'cat'
+  // as text. Never submit that error text to the encrypted-envelope parser.
+  if(/^(?:cat:|sh:|\\/system\\/bin\\/sh:)/i.test(text.trimStart())||bytes.length===0)
+    throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
+  let e;
+  try{e=JSON.parse(text);}
+  catch{throw Error('NATIVE_V7_ENVELOPE_INVALID_JSON');}
   assert.equal(e.privacy_protocol,'REGISTRO_DOCENTE_AES_GCM_256');
   assert.equal(e.version,2);
   assert.equal(typeof e.ciphertext,'string');
   assert.ok(bytes.length>300&&!text.includes(originalClass)&&!text.includes(newerClass));
   return {bytes:bytes.length,sha256:sha256(bytes)};
+}
+async function verifiedEncryptedFile(filename){
+  const deadline=Date.now()+15000;
+  while(true){
+    try{return inspectEncryptedFile(filename);}
+    catch(error){
+      if(error?.message!=='NATIVE_V7_PHYSICAL_READ_UNAVAILABLE')throw error;
+      if(Date.now()>=deadline)throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
+      await sleep(500);
+    }
+  }
 }
 async function exportV7(){
   phase='native-v7-export-form';
@@ -336,7 +378,7 @@ async function exportV7(){
     /Copia completa V7 salvata, riletta e verificata/.test(d.message)),
     'V7_VERIFIED_NATIVE_RECEIPT',45000);
   const name=findV7Name();
-  const digest=inspectEncryptedFile(name);
+  const digest=await verifiedEncryptedFile(name);
   return {name,digest};
 }
 async function restoreFromRealSaf(target,recovery){
@@ -389,7 +431,7 @@ async function run(){
   adb('shell','mv','/sdcard/Download/'+target.name,'/sdcard/Download/'+targetName);
   adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE',
     '-d','file:///sdcard/Download/'+targetName);
-  assert.deepEqual(inspectEncryptedFile(targetName),target.digest);
+  assert.deepEqual(await verifiedEncryptedFile(targetName),target.digest);
   record('native-v7-target-export-saf-verified',{target:target.digest,physical:true,nativeReauthCount});
   await nav('Oggi');
   await createClass(newerClass);
