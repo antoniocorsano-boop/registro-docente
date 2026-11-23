@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
+import { parseNativeNodes, resumedActivity, hasArea, createNativeUiDriver } from './native-ui-driver.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
 
 const pkg = 'it.trama.registrodocente.lab.ap02v7';
@@ -131,7 +131,13 @@ async function connect() {
     const w=waiting.get(msg.id);
     if(w){
       waiting.delete(msg.id);clearTimeout(w.timer);
-      if(msg.error||msg.result?.exceptionDetails)w.reject(new Error('CDP_EVALUATION_REJECTED:'+msg.error?.code));
+      if(msg.error||msg.result?.exceptionDetails){
+        const detail=msg.result?.exceptionDetails?.exception?.description||'';
+        const safe=['NEW_CLASS_MISSING','AMBIGUOUS_BUTTON','NAV_NOT_UNIQUE',
+          'MISSING_CONTROL','MISSING_INPUT','SYNTHETIC_PROFILE_INPUT_MISSING',
+          'ReferenceError','TypeError','InvalidStateError'].find(x=>detail.includes(x))||'UNKNOWN';
+        w.reject(new Error('CDP_EVALUATION_REJECTED:'+safe));
+      }
       else w.resolve(msg.result?.result?.value);
     }
   });
@@ -175,10 +181,18 @@ async function nav(label){
   await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
 }
 async function createClass(name){
-  dialogPrompt=name;
-  await dom('(function(){const e=Array.from(document.querySelectorAll("button")).find(x=>'+
-    'x.textContent?.includes("Nuova Classe")&&x.getClientRects().length);'+
-    'if(!e)throw Error("NEW_CLASS_MISSING");e.click();return true;})()');
+  // Native accessibility and ADB, not CDP injection, open and complete the
+  // actual Android JavaScript prompt. That prompt is owned by WebChromeClient
+  // and must not be treated as an ordinary CDP Page dialog.
+  phase='native-create-synthetic-class';
+  tap(await findNative(n=>n.pkg===pkg && n.clickable &&
+    [n.text,n.desc].some(t=>t?.includes('Nuova Classe')), 'NATIVE_ADD_CLASS_BUTTON'));
+  const ui=createNativeUiDriver({pkg,readNodes:nativeNodes,isForeground:nativeForeground,tap,
+    input:value=>adb('shell','input','text',value.replaceAll(' ','%s')),
+    clear:()=>{for(let i=0;i<100;i++)adb('shell','input','keyevent','67');},
+    hideKeyboard:()=>adb('shell','input','keyevent','4'),pause:sleep});
+  await ui.enterClassName(name);
+  await ui.submitClass(name);
   await onPage('Gestione Elenco Alunni: '+name,30000);
   const hasDone=await dom('document.body?.innerText?.includes("Dati Salvati in Locale con Successo!")');
   if(hasDone)await button('Chiudi');
