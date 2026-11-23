@@ -97,7 +97,7 @@ async function nativeChoose(filename) {
   await until(nativeForeground,'RETURN_FROM_OPEN',45000);
 }
 
-let socket=null,seq=0,dialogPrompt=null;
+let socket=null,seq=0;
 const waiting=new Map(),dialogs=[];
 function disconnect() {
   if(socket){socket.close();socket=null;}
@@ -134,15 +134,11 @@ async function connect() {
     if(msg.method==='Page.javascriptDialogOpening') {
       const d=msg.params;
       dialogs.push({kind:d.type,message:d.message});
-      let text;
-      if(d.type==='prompt'){
-        text=dialogPrompt;
-        dialogPrompt=null;
-        if(typeof text!=='string') throw new Error('UNEXPECTED_PROMPT');
-      }
-      // A real JavaScript dialog is admitted only for synthetic test actions.
-      void send('Page.handleJavaScriptDialog',{accept:true,...(text===undefined?{}:{promptText:text})})
-        .catch(()=>{});
+      // The Android WebChromeClient prompt belongs to the native accessibility
+      // driver. CDP also reports it, but MUST NOT close, autofill or double-
+      // submit it. Only real alert/confirm dialogs are acknowledged here.
+      if(d.type==='prompt') return;
+      void send('Page.handleJavaScriptDialog',{accept:true}).catch(()=>{});
       return;
     }
     const w=waiting.get(msg.id);
