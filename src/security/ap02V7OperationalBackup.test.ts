@@ -138,6 +138,8 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('await nativeChoose(target)');
     expect(driver).toContain('await nativeChoose(recovery)');
     expect(driver).toContain('verifiedProcessStop(');
+    expect(driver).toContain('reauthenticateAfterPicker(');
+    expect(driver).toContain('ANDROID_SESSION_REAUTH_REQUIRED_');
     expect(driver).toContain('Sblocca Registro');
     expect(driver).not.toContain('window.__ap02F2');
     expect(driver).not.toContain('window.__val01NativeRestore');
