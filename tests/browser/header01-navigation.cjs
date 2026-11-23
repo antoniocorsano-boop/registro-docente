@@ -42,4 +42,41 @@ async function closeMobileDrawerWithEscape(page) {
   }).toBeLessThanOrEqual(1);
 }
 
-module.exports = { navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape };
+// Shared browser-laboratory gate. DOMContentLoaded is not evidence that the
+// encrypted Vault has finished opening. Never click through a protected UI.
+async function awaitVaultWorkspace(page, vaultPassword, { requireHome = false } = {}) {
+  const lockedHeading = page.getByRole('heading', { name: 'Sblocca Registro', exact: true });
+  const homeHeading = page.getByRole('heading', { name: 'Le mie classi', exact: true });
+  const readyNavigation = navigationButton(page).first();
+  const state = async () => {
+    if (await lockedHeading.isVisible()) return 'locked';
+    if (await readyNavigation.isVisible()) return 'ready';
+    return 'loading';
+  };
+  await expect.poll(state, { timeout: 30000,
+    message: 'Vault must expose its public lock screen or interactive navigation'
+  }).not.toBe('loading');
+  if (await lockedHeading.isVisible()) {
+    const input = page.locator('#vault-password');
+    await expect(input).toBeVisible();
+    await input.fill(vaultPassword);
+    await page.getByRole('button', { name: 'Sblocca Registro', exact: true }).click();
+    await expect(lockedHeading).toBeHidden({ timeout: 30000 });
+  }
+  await expect.poll(state, { timeout: 30000,
+    message: 'Vault unlock must expose interactive navigation, not a protected surface'
+  }).toBe('ready');
+  // Some tests deliberately require a neutral Home; UX navigation tests
+  // instead inspect whether a class context was restored on reload.
+  if (requireHome) await expect(homeHeading).toBeVisible({ timeout: 10000 });
+}
+
+async function reloadVaultAndUnlock(page, vaultPassword, options = {}) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await awaitVaultWorkspace(page, vaultPassword, options);
+}
+
+module.exports = {
+  navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape,
+  awaitVaultWorkspace, reloadVaultAndUnlock
+};
