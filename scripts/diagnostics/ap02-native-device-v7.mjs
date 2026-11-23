@@ -250,7 +250,14 @@ async function captureHomeConfirmDiagnostic(){
       'return {dialogPresent:!!root,accessibleAlertdialog:!!root?.querySelector("[role=alertdialog][aria-modal=true]"),'+
       'buttonCount:buttons.length,exactLabelCount:named.length,'+
       'visibleCount:visible.length,enabledCount:visible.filter(e=>!e.disabled).length,'+
-      'inertCount:named.filter(e=>Boolean(e.closest("[inert]"))).length};})()');
+      'inertCount:named.filter(e=>Boolean(e.closest("[inert]"))).length,'+
+      'planningExitDialogOpen:!!document.querySelector("#planning-exit-title"),'+
+      'inertOwnerIsDrawer:named.some(e=>e.closest("[inert]")?.id==="registro-navigation-drawer"),'+
+      'inertOwnerIsRoot:named.some(e=>e.closest("[inert]")===document.querySelector("#root")),'+
+      'inertOwnerContainsNavbar:named.some(e=>Boolean(e.closest("[inert]")?.contains(document.querySelector("[data-testid=header01-brand-navigation]")))),'+
+      'buttonHasLayoutRect:named.some(e=>e.getClientRects().length>0),'+
+      'buttonStyleVisible:named.some(e=>getComputedStyle(e).visibility==="visible"),'+
+      'inertOwnerTag:named[0]?.closest("[inert]")?.tagName||null};})()');
   } catch { return {diagnosticUnavailable:true}; }
 }
 async function nav(label){
