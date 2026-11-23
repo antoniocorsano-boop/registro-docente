@@ -10,6 +10,7 @@ import {validateAssessmentArchiveV1} from './assessmentArchive';
 import {projectIndividualAssessmentEvidence} from './assessmentEvidenceProjection';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 type State='observed'|'not_observed'|'not_applicable';
 export interface CriterionEvidenceRow {
@@ -36,7 +37,7 @@ export function readStudentCriterionEvidence(
     const descriptor=Object.getOwnPropertyDescriptor(currentClass,'assessmentEvidenceV1');
     if(!descriptor)return {status:'absent'};
     if(!('value' in descriptor))return unverified();
-    const scope={classId:currentClass.id,schoolYear:settings?.year,subjectCode:resolveAssessmentSubjectCode(settings?.subject)};
+    const scope={classId:currentClass.id,schoolYear:canonicalAssessmentSchoolYear(settings?.year),subjectCode:resolveAssessmentSubjectCode(settings?.subject)};
     if(!scope.schoolYear||!scope.subjectCode||
        !currentClass.students.some(student=>student.id===studentId))return unverified();
     // The official local scope and roster are supplied independently.

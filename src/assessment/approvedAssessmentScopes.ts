@@ -14,7 +14,7 @@ import type {AppData,AppSettings} from '../types';
 import type {PlanningState} from '../planning/types';
 import type {ApprovedAssessmentScope} from './assessmentArchive';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
-import {normalizeSchoolYear} from '../planning/planningFrameResolver';
+import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 const validId=(x:unknown):x is string=>
  typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
@@ -31,7 +31,8 @@ export function resolveApprovedAssessmentScopes(
  if(!Array.isArray(app?.classes)||!Array.isArray(planning?.profiles)||
     !Array.isArray(planning?.masterPrograms)||!Array.isArray(planning?.classInstances))return [];
  const subjectCode=resolveAssessmentSubjectCode(settings?.subject);
- if(!subjectCode||!validYear(settings.year))return [];
+ const currentYear=canonicalAssessmentSchoolYear(settings?.year);
+ if(!subjectCode||!currentYear)return [];
  const ids=new Set<string>();
  for(const c of app.classes){
   if(!validId(c?.id)||ids.has(c.id))return [];
@@ -43,7 +44,7 @@ export function resolveApprovedAssessmentScopes(
   result.set(key(s),s);
  };
  // Current teacher configuration is independent of the detached evidence.
- for(const classId of ids)approve({classId,schoolYear:settings.year,subjectCode});
+ for(const classId of ids)approve({classId,schoolYear:currentYear,subjectCode});
  const masters=new Map<string,(typeof planning.masterPrograms)[number]>();
  for(const m of planning.masterPrograms){
   if(!validId(m?.id)||masters.has(m.id))return [];
@@ -63,9 +64,8 @@ export function resolveApprovedAssessmentScopes(
   const p=profiles.get(master.profileId);
   // Planning accepts historical YYYY/YY and YYYY-YYYY years. Only the
   // independently approved scope is canonicalized; stored plans are untouched.
-  const normalized=typeof p?.schoolYear==='string'?normalizeSchoolYear(p.schoolYear):null;
-  if(!p||!normalized||!validId(p.subjectCode))continue;
-  const schoolYear=normalized.replace('-', '/');
+  const schoolYear=canonicalAssessmentSchoolYear(p?.schoolYear);
+  if(!p||!schoolYear||!validId(p.subjectCode))continue;
   approve({classId:instance.classId,schoolYear,subjectCode:p.subjectCode});
  }
  return [...result.values()];

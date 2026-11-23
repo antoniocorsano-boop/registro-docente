@@ -1,9 +1,11 @@
 // AUDIT-PRE-01 / AP-03 — synthetic authority and lifecycle regression.
 import {describe,expect,test} from 'bun:test';
+import {readFileSync} from 'node:fs';
 import type {AppData,ClassData} from '../types';
 import type {PlanningState} from '../planning/types';
 import {boardDocument,boardScope} from '../../tests/browser/fixtures/val01-s6c-data';
 import {resolveApprovedAssessmentScopes} from '../assessment/approvedAssessmentScopes';
+import {canonicalAssessmentSchoolYear} from '../assessment/assessmentSchoolYear';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
 import {previewDailyAssessmentSetup,deriveConfirmedDailyAssessmentSetup,type AssessmentSetupRequest}
  from '../assessment/dailyAssessmentSetup';
@@ -38,6 +40,54 @@ const request=():AssessmentSetupRequest=>({
   description:'Rappresenta relazioni',expected:{kind:'product',description:'Schema originale',method:'Elaborato'}}]
 });
 describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',()=>{
+
+ test('F3-CPL-01 current teacher year is canonical across all four assessment flows',()=>{
+  const original=app(),before=JSON.stringify(original),sourcePlanning=planning();
+  const savedPlanning=JSON.stringify(sourcePlanning);
+  for(const year of ['2027/28','2027-2028','2027/2028','2027 / 2028']){
+   const alternative={...settings,year},beforeSettings=JSON.stringify(alternative);
+   const approved=resolveApprovedAssessmentScopes(original,sourcePlanning,alternative);
+   expect(canonicalAssessmentSchoolYear(year)).toBe('2027/2028');
+   expect(approved).toEqual([current,older]);
+   expect(validateAssessmentArchiveV1(original,approved)).toEqual({valid:true,state:'present'});
+   const preview=previewDailyAssessmentSetup(original.classes[0],alternative,request(),'completed',approved);
+   expect(preview.valid).toBe(true);
+   if(!preview.valid)throw Error('Current assessment context denied');
+   expect(preview.review.scope.schoolYear).toBe(current.schoolYear);
+   const next=deriveConfirmedDailyAssessmentSetup(original,approved,preview.review,confirmation);
+   expect(validateAssessmentArchiveV1(next,approved)).toEqual({valid:true,state:'present'});
+   expect(next.classes[0].assessmentEvidenceV1?.documents[0].document)
+    .toEqual(original.classes[0].assessmentEvidenceV1?.documents[0].document);
+   expect(next.classes[0].assessmentEvidenceV1?.documents[1].document.schoolYear).toBe(current.schoolYear);
+   expect(listDailyPlannedProofs(next.classes[0],alternative,approved).status).toBe('ready');
+   expect(resolveDailyCriterionRecordingContext(next.classes[0],alternative,approved).status).toBe('ready');
+   expect(readStudentCriterionEvidence(next.classes[0],alternative,'s1',approved).status).toBe('ready');
+   expect(JSON.stringify(alternative)).toBe(beforeSettings);
+  }
+  expect(JSON.stringify(original)).toBe(before);
+  expect(JSON.stringify(sourcePlanning)).toBe(savedPlanning);
+ });
+ test('F3-CPL-01 invalid years or unapproved scopes fail closed without altering source',()=>{
+  const original=app(),before=JSON.stringify(original);
+  for(const year of ['2027/29','2027-2029','2027/2027','2027-2026','2027','unexpected']){
+   expect(canonicalAssessmentSchoolYear(year)).toBeNull();
+   const alternative={...settings,year};
+   const approved=resolveApprovedAssessmentScopes(original,planning(),alternative);
+   expect(approved).toEqual([]);
+   expect(previewDailyAssessmentSetup(original.classes[0],alternative,request(),'completed',approved).valid).toBe(false);
+   expect(listDailyPlannedProofs(original.classes[0],alternative,approved).status).toBe('unverified');
+   expect(resolveDailyCriterionRecordingContext(original.classes[0],alternative,approved).status).toBe('unverified');
+   expect(readStudentCriterionEvidence(original.classes[0],alternative,'s1',approved).status).toBe('unverified');
+  }
+  expect(previewDailyAssessmentSetup(original.classes[0],{...settings,year:'2027/28'},request(),'completed',[]).valid).toBe(false);
+  expect(JSON.stringify(original)).toBe(before);
+ });
+ test('F3-CPL-01 App comparisons use canonical scope year and preserve raw settings-change guard',()=>{
+  const source=readFileSync('src/App.tsx','utf8');
+  expect(source.split('scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)').length-1).toBe(3);
+  expect(source.split('settingsRef.current.year!==approvedSettings.year').length-1).toBe(3);
+ });
+
  test('teacher settings and an adopted approved planning profile authorize separate years without reading document scope',()=>{
   const data=app(),before=structuredClone(data);
   const approved=resolveApprovedAssessmentScopes(data,planning(),settings);

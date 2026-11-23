@@ -216,6 +216,7 @@ import {deriveConfirmedDailyPlannedCompletion} from './assessment/dailyPlannedAs
 import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmentSetup';
 import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
 import { resolveApprovedAssessmentScopes } from './assessment/approvedAssessmentScopes';
+import { canonicalAssessmentSchoolYear } from './assessment/assessmentSchoolYear';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -2969,7 +2970,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const scope=reviewed.scope;
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
       evaluationSavePendingRef.current||!isPrivacyShieldActive||
-      scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+      scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
       !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
     const selected=appDataRef.current.classes.find(c=>c.id===classId);
     if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
@@ -3001,7 +3002,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
       evaluationSavePendingRef.current||!isPrivacyShieldActive||
-      scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+      scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
       !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
     const selected=appDataRef.current.classes.find(c=>c.id===classId);
     if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
@@ -3035,7 +3036,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
        evaluationSavePendingRef.current||!isPrivacyShieldActive||
-       scope.classId!==classId||scope.schoolYear!==approvedSettings.year||
+       scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
        !subjectCode||scope.subjectCode!==subjectCode)throw new Error('Contesto di rilevazione non attuale.');
     const activeClass=appDataRef.current.classes.find(c=>c.id===classId);
     if(!activeClass||scope.studentIds.length!==activeClass.students.length||

@@ -11,6 +11,7 @@ import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {previewAssessmentDefinition,confirmAssessmentDefinition} from './assessmentDefinitionPreparation';
 import {previewAssessmentCompletion,confirmAssessmentCompletion} from './assessmentCompletion';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 export interface AssessmentSetupCriterion{
  readonly criterionId:string;readonly revisionId:string;
@@ -126,8 +127,9 @@ export function previewDailyAssessmentSetup(c:ClassData,
  try{
   if(!settings?.year||!settings?.subject)return {valid:false,issue:'INVALID_CONTEXT'};
   const subjectCode=resolveAssessmentSubjectCode(settings.subject);
-  if(!subjectCode)return {valid:false,issue:'INVALID_CONTEXT'};
-  const scope:AssessmentScopeV1={classId:c.id,schoolYear:settings.year,
+  const schoolYear=canonicalAssessmentSchoolYear(settings.year);
+  if(!subjectCode||!schoolYear)return {valid:false,issue:'INVALID_CONTEXT'};
+  const scope:AssessmentScopeV1={classId:c.id,schoolYear,
    subjectCode,studentIds:c.students.map(s=>s.id)};
   const approved={classId:scope.classId,schoolYear:scope.schoolYear,subjectCode:scope.subjectCode};
   const authorized=approvedScopes??[approved];

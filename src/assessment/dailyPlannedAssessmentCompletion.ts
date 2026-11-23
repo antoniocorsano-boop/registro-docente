@@ -8,6 +8,7 @@ import {validateAssessmentArchiveV1,type ApprovedAssessmentScope} from './assess
 import {previewAssessmentCompletion,confirmAssessmentCompletion,type AssessmentCompletionPreview} from './assessmentCompletion';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 type Settings=Pick<AppSettings,'year'|'subject'>|undefined;
 export interface PlannedProofOption {readonly revisionId:string;readonly title:string;readonly scheduledFor:string;readonly criteriaCount:number}
@@ -36,8 +37,9 @@ export function listDailyPlannedProofs(c:ClassData,settings:Settings,
  try{
   if(!settings?.year||!settings.subject)return {status:'unverified'};
   const subjectCode=resolveAssessmentSubjectCode(settings.subject);
-  if(!subjectCode)return {status:'unverified'};
-  const scope:AssessmentScopeV1={classId:c.id,schoolYear:settings.year,subjectCode,
+  const schoolYear=canonicalAssessmentSchoolYear(settings.year);
+  if(!subjectCode||!schoolYear)return {status:'unverified'};
+  const scope:AssessmentScopeV1={classId:c.id,schoolYear,subjectCode,
    studentIds:c.students.map(s=>s.id)};
   if(new Set(scope.studentIds).size!==scope.studentIds.length)return {status:'unverified'};
   const authorized=approvedScopes??[approvedScope(scope)];

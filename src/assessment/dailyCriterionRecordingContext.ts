@@ -7,6 +7,7 @@ import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence'
 import {validateAssessmentArchiveV1,type ApprovedAssessmentScope} from './assessmentArchive';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 export interface CriterionRecordingOption {
  readonly assessmentRevisionId:string;
@@ -28,8 +29,9 @@ export function resolveDailyCriterionRecordingContext(
   if(!field)return {status:'absent'};
   if(!('value' in field)||!settings?.year||!settings?.subject)return {status:'unverified'};
   const subjectCode=resolveAssessmentSubjectCode(settings.subject);
-  if(!subjectCode)return {status:'unverified'};
-  const approved={classId:currentClass.id,schoolYear:settings.year,subjectCode};
+  const schoolYear=canonicalAssessmentSchoolYear(settings.year);
+  if(!subjectCode||!schoolYear)return {status:'unverified'};
+  const approved={classId:currentClass.id,schoolYear,subjectCode};
   const authorized=approvedScopes??[approved];
   if(!authorized.some(s=>s.classId===approved.classId&&
    s.schoolYear===approved.schoolYear&&s.subjectCode===approved.subjectCode))
