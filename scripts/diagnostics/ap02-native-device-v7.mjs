@@ -260,7 +260,40 @@ async function captureHomeConfirmDiagnostic(){
       'inertOwnerTag:named[0]?.closest("[inert]")?.tagName||null};})()');
   } catch { return {diagnosticUnavailable:true}; }
 }
+// Class prompts and Android lifecycle callbacks can suspend the mounted Vault.
+// A visible text node inside the protected, inert App is not an interactive
+// screen. Re-authenticate only through the actual public Vault lock UI.
+async function ensureInteractiveSession(scope){
+  const state=()=>dom('(function(){const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
+    'const locked=Boolean(document.querySelector("#vault-password"));'+
+    'const ready=Boolean(brand&&!brand.closest("[inert]")&&'+
+    'brand.getClientRects().length>0&&getComputedStyle(brand).visibility==="visible"&&'+
+    'document.visibilityState==="visible");return {locked,ready};})()');
+  const observed=await until(async()=>{
+    const first=await state();
+    if(first.locked)return 'locked';
+    if(!first.ready)return null;
+    // Do not accept a transient frame immediately before Android onPause.
+    await sleep(500);
+    const second=await state();
+    return second.locked?'locked':second.ready?'ready':null;
+  },'ANDROID_INTERACTIVE_OR_LOCK_'+scope,45000);
+  if(observed==='locked'){
+    phase='visible-ui-session-reauth-'+scope;
+    await onPage('Sblocca Registro',35000);
+    await field('#vault-password',password);
+    await button('Sblocca Registro');
+    await until(async()=>{
+      const next=await state();
+      return next.ready&&!next.locked;
+    },'ANDROID_SESSION_REAUTHORIZED_'+scope,45000);
+    console.log('AP02_SESSION_REAUTH_VIA_REAL_UI',scope,api);
+  }
+  const last=await state();
+  assert.ok(last.ready&&!last.locked,'ANDROID_PROTECTED_SURFACE_'+scope);
+}
 async function nav(label){
+  await ensureInteractiveSession('before-nav-'+label);
   await click('[data-testid="header01-brand-navigation"]');
   await until(()=>dom('Boolean(document.querySelector("#registro-navigation-drawer"))'),'NAV_DRAWER',15000);
   await dom('(function(){const e=Array.from(document.querySelectorAll("#registro-navigation-drawer button"))'+
@@ -346,6 +379,7 @@ async function createClass(name){
     'SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED',15000);
   classPromptName=null;
   await onPage('Gestione Elenco Alunni: '+name,45000);
+  await ensureInteractiveSession('after-class-prompt');
   if(clickError)console.log('AP02_CLASS_PROMPT_RUNTIME_RECOVERED',api);
   const hasDone=await dom('document.body?.innerText?.includes("Dati Salvati in Locale con Successo!")');
   if(hasDone){
@@ -394,6 +428,8 @@ async function verifiedEncryptedFile(filename){
 }
 async function exportV7(){
   phase='native-v7-export-form';
+  await ensureInteractiveSession('before-v7-export');
+  await onPage('Ripristina backup cifrato');
   await field('input[placeholder="Inserisci password sicura (min. 6 caratteri)"]',copyPassword);
   await field('input[placeholder="Ripeti la password"]',copyPassword);
   const prior=dialogs.length;
