@@ -1,4 +1,4 @@
-const { reloadVaultAndUnlock, awaitVaultWorkspace } = require('./header01-navigation.cjs');
+const { reloadVaultAndUnlock, gotoVaultAndUnlock } = require('./header01-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const fs = require('node:fs');
@@ -222,8 +222,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
   await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => null);
   navigationGraph.push({ from: 'library', to: await isVisible(page.getByRole('heading', { name: 'Le mie classi' })) ? 'home.classes' : 'unknown', action: 'browser-back' });
   if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) {
-    await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
-    await awaitVaultWorkspace(page, vaultPassword);
+    await gotoVaultAndUnlock(page, baseURL, vaultPassword);
     if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) await returnHome(page);
   }
 
@@ -234,8 +233,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
   navigationGraph.push({ from: 'planning', to: await isVisible(page.getByRole('heading', { name: 'Le mie classi' })) ? 'home.classes' : 'unknown', action: 'browser-back' });
 
   // Mobile fit is assessed on neutral Home, independently from semantic UX findings.
-  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
-  await awaitVaultWorkspace(page, vaultPassword);
+  await gotoVaultAndUnlock(page, baseURL, vaultPassword);
   if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) await returnHome(page);
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.getByRole('button', { name: 'Valutazioni', exact: true }).count()) await returnHome(page);

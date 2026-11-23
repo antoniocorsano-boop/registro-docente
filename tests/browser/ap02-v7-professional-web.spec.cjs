@@ -132,7 +132,7 @@ test('AP-02 V7 actual Privacy web UI: physical file verification and exact recov
 
 // F3-R01: exercise the shared gate with real Chromium locators on a controlled
 // public document. These fixtures do not claim to be the production Vault.
-const { reloadVaultAndUnlock, awaitVaultWorkspace } = require('./header01-navigation.cjs');
+const { reloadVaultAndUnlock, awaitVaultWorkspace, gotoVaultAndUnlock } = require('./header01-navigation.cjs');
 async function f3GateFixture(page, { locked = false, inert = false, accepts = true } = {}) {
   await page.route('**/f3-gate-fixture', route => route.fulfill({
     contentType: 'text/html',
@@ -181,4 +181,20 @@ test('F3-R01: generic readiness still accepts an already authenticated workspace
   await f3GateFixture(page);
   await awaitVaultWorkspace(page, 'synthetic-f3', { requireHome: true, timeout: 500 });
   expect(await page.evaluate(() => window.unlocks)).toBe(0);
+});
+
+test('F3-R02: full goto refuses an accessible workspace without fresh authentication', async ({ page }) => {
+  await f3GateFixture(page);
+  await expect(gotoVaultAndUnlock(page, baseURL + '/f3-gate-fixture', 'synthetic-f3', {
+    requireHome: true, requireUnlock: false, timeout: 1000
+  })).rejects.toThrow();
+  expect(await page.evaluate(() => window.unlocks)).toBe(0);
+});
+
+test('F3-R02: full goto observes public lock and authenticates exactly once', async ({ page }) => {
+  await f3GateFixture(page, { locked: true });
+  await gotoVaultAndUnlock(page, baseURL + '/f3-gate-fixture', 'synthetic-f3', {
+    requireHome: true, timeout: 5000
+  });
+  expect(await page.evaluate(() => window.unlocks)).toBe(1);
 });

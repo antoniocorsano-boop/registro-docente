@@ -1,4 +1,4 @@
-const { reloadVaultAndUnlock, awaitVaultWorkspace } = require('./header01-navigation.cjs');
+const { gotoVaultAndUnlock } = require('./header01-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 const { revealMaterialSourceSelect } = require('./teacher-first-copilot-helpers.cjs');
 const fs = require('node:fs');
@@ -19,11 +19,6 @@ async function setupFreshVault(page) {
   await page.locator('#vault-password').fill(vaultPassword);
   await page.getByRole('button', { name: 'Avvia la prova' }).click();
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
-}
-
-async function reloadAndUnlock(page, url = baseURL) {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await awaitVaultWorkspace(page, vaultPassword);
 }
 
 async function openComposer(page) {
@@ -82,7 +77,7 @@ test('LIB-06A routes REVIEW locally and keeps no-match fail-closed — desktop',
   await expect(composer.getByText('Prepara attività', { exact: true })).toHaveCount(0);
   await expect(composer.getByText('Sintetizza la fonte', { exact: true })).toHaveCount(0);
 
-  await reloadAndUnlock(page);
+  await gotoVaultAndUnlock(page, baseURL, vaultPassword, { requireHome: true });
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
   composer = await openComposer(page);
   const reloadedSourceSelect = await revealMaterialSourceSelect(composer);

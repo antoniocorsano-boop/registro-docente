@@ -84,7 +84,14 @@ async function reloadVaultAndUnlock(page, vaultPassword, options = {}) {
   await awaitVaultWorkspace(page, vaultPassword, { ...options, requireUnlock: true });
 }
 
+// A full document navigation also starts a new Vault lifecycle. The caller
+// cannot weaken the requirement to observe and complete real authentication.
+async function gotoVaultAndUnlock(page, url, vaultPassword, options = {}) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await awaitVaultWorkspace(page, vaultPassword, { ...options, requireUnlock: true });
+}
+
 module.exports = {
   navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape,
-  awaitVaultWorkspace, reloadVaultAndUnlock
+  awaitVaultWorkspace, reloadVaultAndUnlock, gotoVaultAndUnlock
 };
