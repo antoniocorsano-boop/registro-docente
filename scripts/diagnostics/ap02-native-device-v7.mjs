@@ -162,6 +162,7 @@ async function connect() {
         const detail=msg.result?.exceptionDetails?.exception?.description||'';
         const safe=['NEW_CLASS_MISSING','AMBIGUOUS_BUTTON','NAV_NOT_UNIQUE',
           'MISSING_CONTROL','MISSING_INPUT','SYNTHETIC_PROFILE_INPUT_MISSING',
+          'BUTTON_MATCH_COUNT_0','BUTTON_MATCH_COUNT_2','BUTTON_MATCH_COUNT_3',
           'ReferenceError','TypeError','InvalidStateError'].find(x=>detail.includes(x))||'UNKNOWN';
         w.reject(new Error('CDP_EVALUATION_REJECTED:'+safe));
       }
@@ -194,7 +195,7 @@ function button(label) {
   return dom('(function(){const a=Array.from(document.querySelectorAll("button")).filter(e=>'+
     'e.innerText?.trim() === '+JSON.stringify(label)+'&&!e.disabled&&e.getClientRects().length>0'+
     '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
-    'if(a.length!==1)throw Error("AMBIGUOUS_BUTTON");a[0].click();return true;})()');
+    'if(a.length!==1)throw Error("BUTTON_MATCH_COUNT_"+a.length);a[0].click();return true;})()');
 }
 async function nav(label){
   await click('[data-testid="header01-brand-navigation"]');
@@ -224,6 +225,16 @@ async function nav(label){
   }
   phase='visible-ui-navigation-'+label;
   await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
+  if(label==='Privacy'){
+    phase='visible-ui-privacy-v7-ready';
+    // On slower Android WebViews the Privacy heading may appear before the
+    // action mounts or becomes interactive. Never click a hidden/stale
+    // button, and never rely on text presence alone as a readiness signal.
+    await until(()=>dom('(function(){const a=Array.from(document.querySelectorAll("button")).filter(e=>'+
+      'e.innerText?.trim()==="Esporta copia completa V7" && !e.disabled && e.getClientRects().length>0'+
+      '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
+      'return a.length===1;})()'), 'PRIVACY_V7_EXPORT_BUTTON_READY',30000);
+  }
 }
 async function createClass(name){
   // Class setup is part of the public WebView UI, not a native SAF action.
@@ -279,10 +290,13 @@ function inspectEncryptedFile(filename){
   return {bytes:bytes.length,sha256:sha256(bytes)};
 }
 async function exportV7(){
+  phase='native-v7-export-form';
   await field('input[placeholder="Inserisci password sicura (min. 6 caratteri)"]',copyPassword);
   await field('input[placeholder="Ripeti la password"]',copyPassword);
   const prior=dialogs.length;
+  phase='native-v7-export-submit';
   await button('Esporta copia completa V7');
+  phase='native-v7-export-picker';
   await nativeSave();
   await reauthenticateAfterPicker('export');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&
