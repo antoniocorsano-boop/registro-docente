@@ -21,14 +21,43 @@ async function setupFreshVault(page) {
   await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
 }
 
+// A reload may finish DOMContentLoaded before the async encrypted Vault has
+// mounted its real lock screen. Never infer an unlocked state from a one-shot
+// isVisible() call; also preserve an implicitly restored class for UX evidence.
+async function waitForRestoredWorkspace(page) {
+  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro', exact: true });
+  const homeHeading = page.getByRole('heading', { name: 'Le mie classi', exact: true });
+  const classDashboard = page.getByRole('heading', { name: /^Panoramica Sezione:/ });
+  const classRoster = page.getByRole('heading', { name: /^Gestione Elenco Alunni:/ });
+  const visibleState = async () => {
+    if (await unlockHeading.isVisible()) return 'locked';
+    if (await homeHeading.isVisible()) return 'home';
+    if (await classDashboard.isVisible() || await classRoster.isVisible()) return 'class';
+    return 'loading';
+  };
+
+  // Distinguish loading, authentication and actual content before interacting.
+  await expect.poll(visibleState, { timeout: 30000,
+    message: 'Vault must show its real lock screen or an accessible workspace'
+  }).not.toBe('loading');
+
+  if (await unlockHeading.isVisible()) {
+    await expect(page.locator('#vault-password')).toBeVisible();
+    await page.locator('#vault-password').fill(vaultPassword);
+    await page.getByRole('button', { name: 'Sblocca Registro', exact: true }).click();
+    await expect(unlockHeading).toBeHidden({ timeout: 30000 });
+  }
+
+  // An unlocked Vault may legitimately restore a class context. Observe it
+  // instead of artificially forcing Home before UXNAV-001/002 are measured.
+  await expect.poll(visibleState, { timeout: 30000,
+    message: 'Authenticated Vault must expose Home or a visible class screen'
+  }).toMatch(/^(home|class)$/);
+}
+
 async function reloadAndUnlock(page) {
   await page.reload({ waitUntil: 'domcontentloaded' });
-  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
-  if (await unlockHeading.isVisible().catch(() => false)) {
-    await page.locator('#vault-password').fill(vaultPassword);
-    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-  }
-  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  await waitForRestoredWorkspace(page);
 }
 
 async function closePersistenceConfirmation(page) {
@@ -228,11 +257,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
   navigationGraph.push({ from: 'library', to: await isVisible(page.getByRole('heading', { name: 'Le mie classi' })) ? 'home.classes' : 'unknown', action: 'browser-back' });
   if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) {
     await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
-    const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
-    if (await isVisible(unlockHeading)) {
-      await page.locator('#vault-password').fill(vaultPassword);
-      await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-    }
+    await waitForRestoredWorkspace(page);
     if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) await returnHome(page);
   }
 
@@ -244,11 +269,7 @@ test('UX-QA-01 explores the teacher journey and records deterministic usability 
 
   // Mobile fit is assessed on neutral Home, independently from semantic UX findings.
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
-  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
-  if (await isVisible(unlockHeading)) {
-    await page.locator('#vault-password').fill(vaultPassword);
-    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-  }
+  await waitForRestoredWorkspace(page);
   if (!(await isVisible(page.getByRole('heading', { name: 'Le mie classi' })))) await returnHome(page);
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.getByRole('button', { name: 'Valutazioni', exact: true }).count()) await returnHome(page);
