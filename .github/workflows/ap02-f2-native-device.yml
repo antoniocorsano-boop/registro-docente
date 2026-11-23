@@ -124,8 +124,11 @@ jobs:
               "actual-professional-v7-native-saf-import-and-restored-ui",
               "actual-android-process-cold-reopen-preserves-v7-restore"
             ]) and all(.results[]; .status=="PASS") and
+            .results[2].nativeReauthCount>=1 and
+            .results[3].nativeReauthCount>=2 and
             .results[4].twoFileSelection==true and
             .results[4].encryptedFilesDistinct==true and
+            .results[4].nativeReauthCount>=4 and
             .results[5].forcedStop==true and
             .results[5].absenceSamples==2 and
             .results[5].beforePidsCount>0 and
