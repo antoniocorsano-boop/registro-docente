@@ -7,6 +7,8 @@ on:
       - 'scripts/diagnostics/ap02-native-device-v7.mjs'
       - 'scripts/diagnostics/native-ui-driver.mjs'
       - 'scripts/diagnostics/native-process-probe.mjs'
+      - 'scripts/diagnostics/native-v7-document-discovery.mjs'
+      - 'scripts/diagnostics/native-saf-lifecycle-probe.test.mjs'
       - 'mobile/android-probe/**'
       - 'src/**'
       # F3: shared reopening acceptance changes require the same native matrix.

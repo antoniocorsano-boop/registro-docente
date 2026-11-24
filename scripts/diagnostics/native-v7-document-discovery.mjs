@@ -1,3 +1,8 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 // F2-DEVICE: discover only lab V7 files created by Android ACTION_CREATE_DOCUMENT.
 // Android is the owner of the file names and normally adds "(1)" on collision.
 // Do not rename files via shell or interpret the receipt as proof of a new file.
@@ -10,7 +15,7 @@ const variants=[
 export function labV7Date(name) {
   if(typeof name!=='string')return null;
   const match=base.exec(name)||variants.map(r=>r.exec(name)).find(Boolean);
-  return match?match[1]:null;
+  return match&&match[0]===name?match[1]:null;
 }
 export function isOriginalV7Name(name){return base.test(name);}
 export function selectNewLabV7Name(before,after){
@@ -39,4 +44,20 @@ export function selectNewLabV7Name(before,after){
 export function quotedLabV7Path(name){
   if(labV7Date(name)===null)throw Error('INVALID_LAB_V7_FILE_NAME');
   return "'/sdcard/Download/"+name+"'";
+}
+
+// F2-DIAG-07: use the ADB sync protocol, not a remote shell command.
+// Raw remote path is one argv value, including any collision suffix. The
+// encrypted bytes are staged only in a private runner temp directory, never
+// in uploaded evidence. A failed or partial transfer cannot qualify.
+export function pullLabV7Bytes(name,run=execFileSync){
+  if(labV7Date(name)===null)throw Error('INVALID_LAB_V7_FILE_NAME');
+  const directory=mkdtempSync(join(tmpdir(),'ap02-v7-read-'));
+  const local=join(directory,'encrypted.bin');
+  try{
+    run('adb',['pull','/sdcard/Download/'+name,local],{timeout:30000,stdio:'ignore'});
+    return readFileSync(local);
+  }finally{
+    rmSync(directory,{recursive:true,force:true});
+  }
 }

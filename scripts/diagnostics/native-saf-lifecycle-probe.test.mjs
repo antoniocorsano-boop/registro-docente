@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { classifyResumedActivity, summarizeSafActivityTrail, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { classifyAdbCommand, createAdbTransportTrace } from './native-adb-transport-probe.mjs';
 import { classifyHomeNavigationFrame, safeHomeNavigationReport } from './native-home-navigation-probe.mjs';
-import {labV7Date,isOriginalV7Name,selectNewLabV7Name,quotedLabV7Path} from './native-v7-document-discovery.mjs';
+import {labV7Date,isOriginalV7Name,selectNewLabV7Name,quotedLabV7Path,pullLabV7Bytes} from './native-v7-document-discovery.mjs';
 
 const app = 'it.trama.registrodocente.lab.ap02v7';
 test('F2-DIAG-03 recognizes app, DocumentsUI and unrelated foreground activities without raw data', () => {
@@ -153,4 +153,34 @@ test('F2-DIAG-06 never treats overwrite, missing source or wrong date as two bac
     'Backup_Valutazioni_V7_2026-11-25.enc(1).json']),/V7_SECOND_DISTINCT_DOCUMENT_MISSING/);
   assert.throws(()=>selectNewLabV7Name([original],[original,second,second]),/INVALID_LAB_V7_FILE_LIST/);
   assert.throws(()=>selectNewLabV7Name([original],[original,second,'foreign']),/INVALID_LAB_V7_FILE_LIST/);
+});
+
+import { existsSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+test('F2-DIAG-07 pulls exact original and collision paths without shell quotes, returns exact bytes and cleans temp data',()=>{
+  for(const name of ['Backup_Valutazioni_V7_2026-11-24.enc.json','Backup_Valutazioni_V7_2026-11-24 (1).enc.json']){
+    const expected=Buffer.from([0,255,10,13,123,125]);
+    let local;
+    const bytes=pullLabV7Bytes(name,(command,args,options)=>{
+      assert.equal(command,'adb');
+      assert.deepEqual(args.slice(0,2),['pull','/sdcard/Download/'+name]);
+      assert.equal(options.stdio,'ignore');
+      assert.equal(options.timeout,30000);
+      local=args[2];
+      writeFileSync(local,expected);
+    });
+    assert.deepEqual(bytes,expected);
+    assert.equal(existsSync(dirname(local)),false);
+  }
+});
+test('F2-DIAG-07 refuses invalid paths and never accepts a partial failed pull',()=>{
+  for(const name of ['../secret','Backup_Valutazioni_V7_2026-11-24.enc.json\n']){
+    assert.throws(()=>pullLabV7Bytes(name,()=>assert.fail('unexpected transfer')),/INVALID_LAB_V7_FILE_NAME/);
+  }
+  let local;
+  assert.throws(()=>pullLabV7Bytes('Backup_Valutazioni_V7_2026-11-24.enc.json',(_command,args)=>{
+    local=args[2];writeFileSync(local,'partial');throw Error('simulated pull failure');
+  }),/simulated pull failure/);
+  assert.equal(existsSync(dirname(local)),false);
 });

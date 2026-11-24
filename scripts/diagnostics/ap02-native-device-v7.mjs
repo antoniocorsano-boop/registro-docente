@@ -11,7 +11,7 @@ import { probePackagePids, verifiedProcessStop } from './native-process-probe.mj
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { createAdbTransportTrace } from './native-adb-transport-probe.mjs';
 import { classifyHomeNavigationFrame, safeHomeNavigationReport } from './native-home-navigation-probe.mjs';
-import {labV7Date,isOriginalV7Name,selectNewLabV7Name,quotedLabV7Path} from './native-v7-document-discovery.mjs';
+import {labV7Date,isOriginalV7Name,selectNewLabV7Name,quotedLabV7Path,pullLabV7Bytes} from './native-v7-document-discovery.mjs';
 
 const pkg = 'it.trama.registrodocente.lab.ap02v7';
 const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
@@ -602,14 +602,22 @@ async function capturePhysicalReadDiagnostic(filename,attempts) {
 function inspectEncryptedFile(filename){
   assert.ok(labV7Date(filename)!==null,'INVALID_LAB_V7_FILENAME');
   let bytes;
-  try{bytes=execFileSync('adb',['exec-out','cat',quotedLabV7Path(filename)],{timeout:30000});}
+  try{
+    const before=safeDeviceByteCount(filename);
+    if(!Number.isSafeInteger(before)||before<=0)throw Error('LAB_V7_SIZE_UNAVAILABLE');
+    bytes=pullLabV7Bytes(filename);
+    const after=safeDeviceByteCount(filename);
+    if(bytes.length!==before||after!==before)throw Error('LAB_V7_SIZE_MISMATCH');
+  }
   catch(error){
-    lastPhysicalReadKind=error?.code==='ETIMEDOUT'?'adb-exec-timeout':'adb-exec-rejected';
+    lastPhysicalReadKind=error?.code==='ETIMEDOUT'?'adb-pull-timeout':
+      error?.message==='LAB_V7_SIZE_UNAVAILABLE'?'device-size-unavailable':
+      error?.message==='LAB_V7_SIZE_MISMATCH'?'physical-size-mismatch':'adb-pull-rejected';
     throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
   }
   const text=bytes.toString('utf8');
-  // On some API36 emulator frames, adb exec-out reports a failed 'cat'
-  // as text. Never submit that error text to the encrypted-envelope parser.
+  // Fail closed even if a transport unexpectedly yields shell error text.
+  // Never submit that text to the encrypted-envelope parser.
   if(/^(?:cat:|sh:|\/system\/bin\/sh:)/i.test(text.trimStart())||bytes.length===0){
     lastPhysicalReadKind=bytes.length===0?'empty-read':'shell-error-response';
     throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
