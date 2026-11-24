@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/ap02-f2-native-device.yml'
       - 'scripts/diagnostics/ap02-native-device-v7.mjs'
+      - 'scripts/diagnostics/native-lab-runtime.mjs'
+      - 'scripts/diagnostics/native-lab-runtime.test.mjs'
       - 'scripts/diagnostics/native-ui-driver.mjs'
       - 'scripts/diagnostics/native-process-probe.mjs'
       - 'scripts/diagnostics/native-v7-document-discovery.mjs'
@@ -42,7 +44,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           node --check scripts/diagnostics/ap02-native-device-v7.mjs
-          node --test scripts/diagnostics/native-process-probe.test.mjs scripts/diagnostics/native-ui-driver.test.mjs scripts/diagnostics/native-saf-lifecycle-probe.test.mjs
+          node --test scripts/diagnostics/native-process-probe.test.mjs scripts/diagnostics/native-ui-driver.test.mjs scripts/diagnostics/native-saf-lifecycle-probe.test.mjs scripts/diagnostics/native-lab-runtime.test.mjs
           test -f src/main.tsx
           test -f mobile/android-probe/native/RegistroBackupFilesPlugin.java
       - uses: actions/setup-node@v4
