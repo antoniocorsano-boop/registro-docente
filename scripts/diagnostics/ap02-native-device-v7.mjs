@@ -116,7 +116,7 @@ async function nativeSave(alertIndex, activityProbe) {
       cipherBusy:safe?.cipherBusy??null,
       exportButtonVisible:safe?.exportButtonVisible??null,
       documentVisibility:safe?.documentVisibility??'unavailable',
-      originalError:String(error?.message||'UNKNOWN').replace(/[^A-Z0-9:_-]/gi,'_').slice(0,100),
+      originalError:classifyFailure(error).code,
       activityTrail:activityProbe?.snapshot()??null};
     writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
     if(failureAlert)throw Error('NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF');
@@ -196,9 +196,10 @@ async function connect() {
     if(!Array.isArray(list))throw new LabFailure('INVALID_HARNESS_ARGUMENT');
     const target=list.find(x=>x.type==='page'&&x.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(x.url));
     if(!target)return null;
+    const handshakeBudget=commandBudget(4000);
     const ws=new WebSocket(target.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/,'ws://127.0.0.1:9222'));
     await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{ws.close();reject(new LabFailure('CDP_SOCKET_TIMEOUT'));},commandBudget(4000));
+      const timer=setTimeout(()=>{ws.close();reject(new LabFailure('CDP_SOCKET_TIMEOUT'));},handshakeBudget);
       ws.addEventListener('open',()=>{clearTimeout(timer);resolve();},{once:true});
       ws.addEventListener('error',()=>{clearTimeout(timer);ws.close();reject(new LabFailure('CDP_SOCKET_ERROR'));},{once:true});
       ws.addEventListener('close',()=>{clearTimeout(timer);reject(new LabFailure('CDP_DISCONNECTED'));},{once:true});
@@ -765,7 +766,7 @@ async function run(){
     try { nativeActivity=classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg); } catch {}
     writeFileSync(out+'/saf-diagnostic.json',JSON.stringify({schemaVersion:3,
       stage:'professional-setup-home',api,phase,
-      originalError:String(error?.message||'UNKNOWN').replace(/[^A-Z0-9:_-]/gi,'_').slice(0,100),
+      originalError:classifyFailure(error).code,
       nativeActivity,locked:surface?.locked??null,
       visibility:['visible','hidden'].includes(surface?.visibility)?surface.visibility:'unknown',
       homeHeadingVisible:surface?.homeHeadingVisible??null},null,2));
@@ -824,6 +825,6 @@ try{
     safActivityTrail:lastSafActivityTrail,
     homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,
     homeNavigationDiagnostic:homeNavigationDiagnostic||undefined},null,2));
-  console.error('AP02_F2_DEVICE_BLOCKED',phase,category,code);
+  console.error('AP02_F2_DEVICE_BLOCKED',phase,code,category);
   process.exitCode=1;
 }finally{disconnect();}
