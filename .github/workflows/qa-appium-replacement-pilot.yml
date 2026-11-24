@@ -1,7 +1,7 @@
 name: Q5-SYS-01 — Appium replacement pilot (not F2 qualification)
 on:
-  push:
-    branches: [qa/appium-replacement-pilot]
+  pull_request:
+    branches: [qa/qa-stability-01-q2]
     paths:
       - '.github/workflows/qa-appium-replacement-pilot.yml'
       - 'scripts/diagnostics/appium-pilot/**'
@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   pilot:
-    if: ${{ github.repository == 'antoniocorsano-boop/registro-docente' && github.ref == 'refs/heads/qa/appium-replacement-pilot' }}
+    if: ${{ github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && github.head_ref == 'qa/appium-replacement-pilot' && github.base_ref == 'qa/qa-stability-01-q2' && github.event.pull_request.base.sha == '4474a47c3e9455382740348c45d538b90b073eca' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 40
     strategy:
@@ -18,13 +18,13 @@ jobs:
       matrix:
         api: [32, 36]
     env:
-      CANDIDATE_SHA: ${{ github.sha }}
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
       AP02_API: ${{ matrix.api }}
       APPIUM_HOME: ${{ runner.temp }}/appium-q5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
           fetch-depth: 0
       - name: Verify frozen product and pilot-only delta
@@ -118,7 +118,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: appium-pilot-api${{ matrix.api }}-${{ github.sha }}
+          name: appium-pilot-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
           path: |
             ap02-device-evidence/appium-pilot.json
             ap02-device-evidence/apk-hash.txt
