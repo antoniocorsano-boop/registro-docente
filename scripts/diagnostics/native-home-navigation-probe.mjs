@@ -6,18 +6,21 @@ const signals = ['locked','confirmationVisible','todayHeadingVisible','classHead
 export function classifyHomeNavigationFrame(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'unavailable';
   const f = Object.fromEntries(signals.map(k => [k, raw[k] === true]));
-  if (f.locked) return 'locked';
+  // A stale protected DOM must not authorize authentication or confirmation.
+  if (!f.documentVisible) return 'background';
+  if (raw.gateError === true) return 'gate-error';
+  if (f.locked) return raw.lockReady === false ? 'protected' : 'locked';
+  if (raw.protectedSurface === true) return 'protected';
   if (f.confirmationVisible) return 'confirmation';
   if (f.documentVisible && f.todayHeadingVisible && f.classHeadingVisible &&
       f.newClassButtonVisible && f.brandInteractive) return 'home-ready';
-  if (!f.documentVisible) return 'background';
   if (!f.todayHeadingVisible) return 'other-view';
   return 'home-not-interactive';
 }
 
 export function safeHomeNavigationReport(samples, lastFrame) {
   const allowed = new Set(['unavailable','locked','confirmation','home-ready',
-    'background','other-view','home-not-interactive']);
+    'background','protected','gate-error','other-view','home-not-interactive']);
   const events = (Array.isArray(samples) ? samples : []).slice(-16).map(x => ({
     stage: allowed.has(x?.stage) ? x.stage : 'unavailable',
     elapsedMs: Number.isFinite(x?.elapsedMs) ?

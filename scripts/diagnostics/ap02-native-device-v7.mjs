@@ -480,10 +480,13 @@ let homeNavigationDiagnostic = null;
 // passwords, documents, or WebView markup into a diagnostic artifact.
 const publicHomeFrame = () => dom('(function(){'+
   'const visible='+interactiveSource+';'+
+  'const security=('+publicSurfaceFrame.toString()+')(null,document,getComputedStyle,visible);'+
   'const buttons=Array.from(document.querySelectorAll("button"));'+
   'const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
   'const confirmed=document.querySelector("[data-testid=header01-home-confirm]");'+
   'return {locked:!!document.querySelector("#vault-password"),'+
+  'lockReady:security.lock&&security.lockControls,gateError:security.gateError,'+
+  'protectedSurface:security.setup||security.gatePending||security.suspensionDraining||security.closingProtected||security.protectedField,'+
   'confirmationVisible:visible(confirmed),'+
   'todayHeadingVisible:visible(document.querySelector("#today-heading")),'+
   'classHeadingVisible:Array.from(document.querySelectorAll("h2")).some(e=>e.textContent?.trim()==="Le mie classi"&&visible(e)),'+
@@ -492,7 +495,7 @@ const publicHomeFrame = () => dom('(function(){'+
   'documentVisible:document.visibilityState==="visible"};})()');
 
 function captureHomeConfirmDiagnostic(submit=false){
-  return dom('('+publicHomeConfirmation.toString()+')(document,getComputedStyle,'+interactiveSource+','+JSON.stringify(submit)+')');
+  return dom('('+publicHomeConfirmation.toString()+')(document,getComputedStyle,'+interactiveSource+','+JSON.stringify(submit)+','+publicSurfaceFrame.toString()+')');
 }
 // Class prompts and Android lifecycle callbacks can suspend the mounted Vault.
 // A visible text node inside the protected, inert App is not an interactive
@@ -555,10 +558,14 @@ async function nav(label){
   if(label==='Oggi'){
     const started=Date.now(), transitions=[];
     let lastFrame=null;
+    // One public authentication allowance for the entire Oggi navigation.
+    // It is shared before, during and after the confirmation boundary.
+    const authenticateHome=makePublicAuthentication('home-navigation');
     const sample=async()=>{
       lastFrame=await publicHomeFrame();
       if(!nativeForeground())lastFrame={...lastFrame,documentVisible:false,brandInteractive:false};
       const stage=classifyHomeNavigationFrame(lastFrame);
+      if(stage==='gate-error')throw new LabFailure('PUBLIC_GATE_ERROR');
       if(transitions.length===0||transitions[transitions.length-1].stage!==stage)
         transitions.push({stage,elapsedMs:Date.now()-started});
       return stage;
@@ -569,7 +576,7 @@ async function nav(label){
       const first=await until(async()=>{
         const stage=await sample();
         if(stage==='locked'){
-          await ensureInteractiveSession('during-home-navigation');
+          await authenticateHome();
           return false;
         }
         return stage==='confirmation'||stage==='home-ready'?stage:false;
@@ -583,6 +590,7 @@ async function nav(label){
           await confirmHomeOnce({
             foreground:nativeForeground,
             attempt:()=>captureHomeConfirmDiagnostic(true),
+            authenticate:authenticateHome,
             onFrame:frame=>{homeConfirmDiagnostic=frame;},
             timeoutMs:20000
           });
@@ -601,7 +609,7 @@ async function nav(label){
       await until(async()=>{
         const stage=await sample();
         if(stage==='locked'){
-          await ensureInteractiveSession('after-home-navigation');
+          await authenticateHome();
           return false;
         }
         if(stage!=='home-ready')return false;

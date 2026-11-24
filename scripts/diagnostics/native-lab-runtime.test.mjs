@@ -828,3 +828,55 @@ test('Q5-R02 physical pull preserves inherited deadline category, single invocat
     assert.equal(calls,1);assert.equal(existsSync(local),false);
   }
 });
+
+
+// Q5-R12: actual Home confirmation predicate with a suspended, retained dialog.
+function q5HomeFixture(){
+  const state={locked:false,draining:false,rejected:false,present:true,foreground:true,clicks:0};
+  const owner={};
+  const button={textContent:'Torna a Oggi',disabled:false,closest:()=>state.locked||state.draining?owner:null,getClientRects:()=>[{}],click:()=>{state.clicks++;state.present=false;}};
+  const dialog={contains:e=>e===button};
+  const root={querySelector:()=>dialog,querySelectorAll:()=>[button]};
+  const doc={visibilityState:'visible',querySelector:s=>s.includes('header01-home-confirm')?(state.present?root:null):s==='#vault-password'&&state.locked?{}:null};
+  const style=()=>({visibility:state.locked||state.draining?'hidden':'visible'});
+  const interactive=e=>Boolean(e)&&!state.locked&&!state.draining;
+  const surface=()=>({lock:state.locked,lockControls:state.locked,gateError:state.rejected,suspensionDraining:state.draining,protectedField:state.locked});
+  const attempt=()=>publicHomeConfirmation(doc,style,interactive,true,surface);
+  return {state,attempt};
+}
+test('Q5-R12 suspension during retained Home confirmation authenticates once and clicks exactly once',async()=>{
+  const {state,attempt}=q5HomeFixture(),clock=fakeClock();let reads=0,submits=0;
+  state.draining=true;
+  const frames=[];
+  await confirmHomeOnce({...clock,timeoutMs:20000,foreground:()=>true,
+    attempt:()=>{if(++reads===2){state.draining=false;state.locked=true;}return attempt();},
+    authenticate:()=>{assert.equal(state.clicks,0);submits++;state.locked=false;},
+    onFrame:f=>frames.push(f)});
+  assert.equal(submits,1);assert.equal(state.clicks,1);
+  assert.equal(frames[0].protectedSurface,true);assert.equal(frames[1].locked,true);
+  assert.equal(frames[1].action,'not-performed');assert.equal(frames.at(-1).action,'performed');
+});
+test('Q5-R12 lock rejection, relock, missing dialog and uncertain authentication all fail closed',async()=>{
+  for(const mode of ['gate','relock','missing','uncertain']){
+    const {state,attempt}=q5HomeFixture();state.locked=true;let submits=0;
+    state.rejected=mode==='gate';
+    await assert.rejects(confirmHomeOnce({...fakeClock(),timeoutMs:20000,foreground:()=>true,attempt,
+      authenticate:()=>{submits++;if(mode==='uncertain')throw new LabFailure('CDP_DISCONNECTED');
+        if(mode!=='relock')state.locked=false;if(mode==='missing')state.present=false;}}),
+      {code:mode==='gate'?'PUBLIC_GATE_ERROR':mode==='relock'?'PUBLIC_RELOCK_AFTER_AUTH':mode==='missing'?'HOME_CONFIRM_DIALOG_MISSING':'CDP_DISCONNECTED'});
+    assert.equal(submits,mode==='gate'?0:1);assert.equal(state.clicks,0);
+  }
+});
+test('Q5-R12 background cannot authorize authentication or confirmation',async()=>{
+  const {state,attempt}=q5HomeFixture();state.locked=true;let reads=0,submits=0;
+  await assert.rejects(confirmHomeOnce({...fakeClock(),timeoutMs:1000,foreground:()=>false,
+    attempt:()=>{reads++;return attempt();},authenticate:()=>{submits++;}}),{code:'OBSERVATION_DEADLINE'});
+  assert.equal(reads,0);assert.equal(submits,0);assert.equal(state.clicks,0);
+});
+test('Q5-R12 one authentication allowance spans Home navigation boundaries',async()=>{
+  const {state,attempt}=q5HomeFixture();let submits=0;
+  const shared=createPublicAuthentication({waitForLock:()=>{},fill:()=>{},submit:()=>{submits++;},waitForSession:()=>{}});
+  await shared();state.locked=true;
+  await assert.rejects(confirmHomeOnce({...fakeClock(),timeoutMs:20000,foreground:()=>true,attempt,authenticate:shared}),{code:'PUBLIC_RELOCK_AFTER_AUTH'});
+  assert.equal(submits,1);assert.equal(state.clicks,0);
+});

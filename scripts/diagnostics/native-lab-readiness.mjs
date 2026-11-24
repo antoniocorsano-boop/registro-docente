@@ -11,15 +11,19 @@ export function isInteractiveElement(e,doc=document,style=getComputedStyle){
 }
 // One public-dialog predicate for both the read-only sample and the single
 // confirmation action. The returned frame contains only synthetic-safe counts.
-export function publicHomeConfirmation(doc=document,style=getComputedStyle,interactive=isInteractiveElement,submit=false){
+export function publicHomeConfirmation(doc=document,style=getComputedStyle,interactive=isInteractiveElement,submit=false,surface=null){
   const root=doc.querySelector('[data-testid="header01-home-confirm"]');
   const dialog=root?.querySelector('[role="alertdialog"][aria-modal="true"]');
   const buttons=Array.from(root?.querySelectorAll('button')||[]);
   const named=buttons.filter(e=>e.textContent?.trim()==='Torna a Oggi');
   const visible=named.filter(e=>interactive(e,doc,style));
   const locked=Boolean(doc.querySelector('#vault-password'));
+  const security=surface?surface(null,doc,style,interactive):null;
+  const gateError=security?.gateError===true;
+  const protectedSurface=locked||Boolean(security&&(security.setup||security.gatePending||security.suspensionDraining||security.closingProtected||security.protectedField));
   const frame={
-    documentVisible:doc.visibilityState==='visible',locked,
+    documentVisible:doc.visibilityState==='visible',locked,gateError,protectedSurface,
+    lockReady:security?.lock===true&&security.lockControls===true,
     dialogPresent:Boolean(root),accessibleAlertdialog:Boolean(dialog),
     dialogInteractive:interactive(dialog,doc,style),
     buttonCount:buttons.length,exactLabelCount:named.length,visibleCount:visible.length,
@@ -32,7 +36,7 @@ export function publicHomeConfirmation(doc=document,style=getComputedStyle,inter
     buttonHasLayoutRect:named.some(e=>e.getClientRects().length>0),
     buttonStyleVisible:named.some(e=>style(e).visibility==='visible')
   };
-  frame.ready=frame.documentVisible&&!locked&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0]);
+  frame.ready=frame.documentVisible&&!protectedSurface&&!gateError&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0]);
   // An explicit no-action result is the only outcome that permits another
   // conditional attempt. Readiness and the click share this synchronous DOM turn.
   frame.action='not-performed';
@@ -44,8 +48,8 @@ export function publicHomeConfirmation(doc=document,style=getComputedStyle,inter
 }
 // This observer can submit, so transport/evaluation failures must propagate
 // unchanged. It repeats only after a positively acknowledged no-action result.
-export async function confirmHomeOnce({foreground,attempt,onFrame=()=>{},timeoutMs=20000,now,sleep}){
-  let performed=false;
+export async function confirmHomeOnce({foreground,attempt,authenticate,onFrame=()=>{},timeoutMs=20000,now,sleep}){
+  let performed=false,authenticated=false;
   return observeUntil(async()=>{
     if(performed)throw new LabFailure('HOME_CONFIRM_NOT_UNIQUE');
     if(!await foreground()){onFrame({foreground:false,action:'not-attempted'});return false;}
@@ -55,6 +59,20 @@ export async function confirmHomeOnce({foreground,attempt,onFrame=()=>{},timeout
       throw new LabFailure('CDP_EVALUATION_REJECTED');
     performed=frame.action==='performed';
     onFrame({...frame,foreground:true});
+    if(frame.gateError===true)throw new LabFailure('PUBLIC_GATE_ERROR');
+    if(performed&&(frame.locked||frame.protectedSurface||frame.documentVisible===false))throw new LabFailure('CDP_EVALUATION_REJECTED');
+    // Only an acknowledged no-action in a visible, foreground lock can authorize
+    // one real authentication. The shared caller also guards the other stages.
+    if(!performed&&frame.documentVisible===true&&frame.locked===true&&frame.lockReady===true&&authenticate){
+      if(authenticated)throw new LabFailure('PUBLIC_RELOCK_AFTER_AUTH');
+      authenticated=true;
+      await authenticate();
+      return false;
+    }
+    // A previously observed explicit confirmation is never inferred from its
+    // disappearance after unlock. No second navigation command is allowed.
+    if(authenticated&&!performed&&frame.documentVisible===true&&!frame.protectedSurface&&!frame.locked&&frame.dialogPresent===false)
+      throw new LabFailure('HOME_CONFIRM_DIALOG_MISSING');
     return performed;
   },{timeoutMs,intervalMs:450,now,sleep,retryReadErrors:false});
 }
