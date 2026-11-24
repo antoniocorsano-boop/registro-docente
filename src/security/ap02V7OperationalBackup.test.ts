@@ -161,10 +161,23 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('BUTTON_MATCH_COUNT_0');
     expect(driver).toContain('HOME_CONFIRM_DISMISSED');
     expect(driver).toContain('HOME_NAVIGATION_OR_CONFIRM');
-    expect(driver).toContain('HOME_VIEW_CONFIRMED');
+    expect(driver).toContain('HOME_INTERACTIVE_READY');
+    expect(driver).toContain("if(first==='confirmation')");
     expect(driver.indexOf("'HOME_NAVIGATION_OR_CONFIRM'")).toBeLessThan(
-      driver.indexOf("const confirm=await dom('Boolean(document.querySelector(")
+      driver.indexOf("if(first==='confirmation')")
     );
+    // Two stable, accessible Home samples are required; a protected class
+    // page or stale text never qualifies as a successful navigation.
+    expect(driver).toContain("await ensureInteractiveSession('during-home-navigation')");
+    expect(driver).toContain("await ensureInteractiveSession('after-home-navigation')");
+    expect(driver).toContain("return (await sample())==='home-ready'");
+    expect(driver).toContain('homeNavigationDiagnostic=safeHomeNavigationReport(transitions,lastFrame)');
+    const navigationClassifier = await Bun.file('scripts/diagnostics/native-home-navigation-probe.mjs').text();
+    expect(navigationClassifier).toContain('classifyHomeNavigationFrame');
+    expect(navigationClassifier).toContain('classHeadingVisible');
+    expect(navigationClassifier).toContain('newClassButtonVisible');
+    expect(navigationClassifier).toContain('documentVisible');
+    expect(navigationClassifier).toContain('rawDomStored:false');
     // Android API32: textContent is stable even when WebView innerText
     // has not been calculated; never skip the visible modal confirmation.
     expect(driver).toContain('e.textContent?.trim()==="Torna a Oggi"');
