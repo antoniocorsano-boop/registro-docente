@@ -77,7 +77,7 @@ jobs:
           java-version: '21'
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'
       - name: Install isolated open-source automation stack
         shell: bash
         run: |
@@ -91,6 +91,7 @@ jobs:
           "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
           appium --version
           appium driver list --installed
+          test -x "$ANDROID_HOME/emulator/emulator"
           appium driver doctor uiautomator2
       - name: Build exact real Web UI and separate debug-only Android laboratory
         shell: bash

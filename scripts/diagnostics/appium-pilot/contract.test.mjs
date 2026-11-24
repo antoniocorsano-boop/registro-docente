@@ -13,7 +13,10 @@ test('Appium preflight exact and isolated before emulators',()=>{
   assert.match(workflow,/go run github\.com\/rhysd\/actionlint/);
   assert.ok(!workflow.includes('${{ runner.temp }}'));
   assert.ok(workflow.includes('export APPIUM_HOME="$RUNNER_TEMP/appium-q5"'));
-  assert.ok(workflow.indexOf('appium driver doctor uiautomator2')<workflow.indexOf('bun run build'));
+  const sdk = workflow.indexOf("packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'");
+  const emulator = workflow.indexOf('test -x "$ANDROID_HOME/emulator/emulator"');
+  const doctor = workflow.indexOf('appium driver doctor uiautomator2');
+  assert.ok(sdk>=0&&sdk<emulator&&emulator<doctor&&doctor<workflow.indexOf('bun run build'));
   assert.match(workflow,/api: \[32, 36\]/);
 });
 test('pinned direct versions and non-release evidence',()=>{
