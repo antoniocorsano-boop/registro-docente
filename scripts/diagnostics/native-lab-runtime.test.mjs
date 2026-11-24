@@ -833,11 +833,12 @@ test('Q5-R02 physical pull preserves inherited deadline category, single invocat
 // Q5-R12: actual Home confirmation predicate with a suspended, retained dialog.
 function q5HomeFixture(){
   const state={locked:false,draining:false,rejected:false,present:true,foreground:true,clicks:0};
-  const owner={};
+  const brand={};
+  const owner={contains:e=>e===brand||e===button||e===dialog||e===root};
   const button={textContent:'Torna a Oggi',disabled:false,closest:()=>state.locked||state.draining?owner:null,getClientRects:()=>[{}],click:()=>{state.clicks++;state.present=false;}};
   const dialog={contains:e=>e===button};
   const root={querySelector:()=>dialog,querySelectorAll:()=>[button]};
-  const doc={visibilityState:'visible',querySelector:s=>s.includes('header01-home-confirm')?(state.present?root:null):s==='#vault-password'&&state.locked?{}:null};
+  const doc={visibilityState:'visible',querySelector:s=>s.includes('header01-home-confirm')?(state.present?root:null):s.includes('header01-brand-navigation')?brand:s==='#vault-password'&&state.locked?{}:null};
   const style=()=>({visibility:state.locked||state.draining?'hidden':'visible'});
   const interactive=e=>Boolean(e)&&!state.locked&&!state.draining;
   const surface=()=>({lock:state.locked,lockControls:state.locked,gateError:state.rejected,suspensionDraining:state.draining,protectedField:state.locked});
@@ -854,6 +855,8 @@ test('Q5-R12 suspension during retained Home confirmation authenticates once and
     onFrame:f=>frames.push(f)});
   assert.equal(submits,1);assert.equal(state.clicks,1);
   assert.equal(frames[0].protectedSurface,true);assert.equal(frames[1].locked,true);
+  assert.equal(frames[0].inertOwnerContainsNavbar,true);assert.equal(frames[1].inertOwnerContainsNavbar,true);
+  assert.equal(frames.at(-1).inertOwnerContainsNavbar,false);
   assert.equal(frames[1].action,'not-performed');assert.equal(frames.at(-1).action,'performed');
 });
 test('Q5-R12 lock rejection, relock, missing dialog and uncertain authentication all fail closed',async()=>{
