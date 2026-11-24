@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
+import { createAdbTransportTrace } from './native-adb-transport-probe.mjs';
 
 const pkg = 'it.trama.registrodocente.lab.ap02v7';
 const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
@@ -22,13 +23,28 @@ const originalClass = 'Classe fittizia F2 A';
 const newerClass = 'Classe fittizia F2 B';
 const targetName = 'AP02_F2_TARGET.enc.json';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const adb = (...args) => execFileSync('adb', args, { encoding: 'utf8', timeout: 30000 }).trim();
+const adbTransport = createAdbTransportTrace();
+const adb = (...args) => {
+  const began = Date.now();
+  try {
+    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: 30000 }).trim();
+    adbTransport.record(args, began, 'ok');
+    return result;
+  } catch (error) {
+    // Only an allowlisted command category, duration and transport result are
+    // retained; never persist ADB arguments, stderr or response text.
+    adbTransport.record(args, began,
+      error?.code === 'ETIMEDOUT' ? 'timeout' : 'failed');
+    throw error;
+  }
+};
 const probe = () => probePackagePids(adb, pkg);
 const nativeForeground = () => resumedActivity(adb('shell','dumpsys','activity','activities'), pkg);
 const results = [];
 const out = 'ap02-device-evidence';
 mkdirSync(out,{recursive:true});
 let phase = 'preflight';
+let lastSafActivityTrail = null;
 function record(name, additional = {}) {
   phase = name;
   results.push({ stage:name, status:'PASS', ...additional });
@@ -115,6 +131,7 @@ async function nativeSave(alertIndex, activityProbe) {
   await until(nativeForeground,'RETURN_FROM_SAVE',45000);
   // Picker return observed; this does not prove a new document was created.
   nativeSaveCompletionCount++;
+  adbTransport.mark('picker-returned');
 }
 // Android opens an external DocumentsUI activity. The product deliberately
 // suspends and shields the Vault onPause. Resume by explicitly authenticating
@@ -123,14 +140,20 @@ async function nativeSave(alertIndex, activityProbe) {
 let nativeReauthCount=0;
 async function reauthenticateAfterPicker(kind) {
   phase='native-saf-return-reauth-'+kind;
+  adbTransport.mark('lock-wait-start');
   await until(()=>dom('Boolean(document.querySelector("#vault-password"))'),
     'ANDROID_SESSION_REAUTH_REQUIRED_'+kind,35000);
+  adbTransport.mark('lock-present');
   await onPage('Sblocca Registro',35000);
+  adbTransport.mark('lock-ui-ready');
   await field('#vault-password',password);
+  adbTransport.mark('password-field-entered');
   await button('Sblocca Registro');
+  adbTransport.mark('unlock-requested');
   await until(()=>dom('!document.querySelector("#vault-password") && '+
     'document.body?.innerText?.includes("Privacy First")'),
     'ANDROID_SESSION_REAUTHORIZED_'+kind,45000);
+  adbTransport.mark('unlocked');
   nativeReauthCount++;
 }
 async function nativeChoose(filename) {
@@ -598,7 +621,10 @@ async function exportV7(){
     await button('Esporta copia completa V7');
     phase='native-v7-export-picker';
     await nativeSave(prior,activityProbe);
-  } finally { await activityProbe.stop(); }
+  } finally {
+    lastSafActivityTrail = await activityProbe.stop();
+    adbTransport.mark('activity-probe-stopped');
+  }
   await reauthenticateAfterPicker('export');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&
     /Copia completa V7 salvata, riletta e verificata/.test(d.message)),
@@ -714,9 +740,17 @@ try{
   console.log('AP02_F2_DEVICE_SUCCESS',sha,api);
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
-  const code=String(error?.message||'UNKNOWN').slice(0,140);
+  const rawCode=String(error?.message||'UNKNOWN');
+  // Reject output-bearing command messages: only fixed, transport-safe
+  // categories are allowed to survive the diagnostic artifact.
+  const code=error?.code==='ETIMEDOUT'||/spawnSync adb ETIMEDOUT/.test(rawCode)
+    ?'ADB_TRANSPORT_TIMEOUT'
+    :/^[A-Z0-9:_-]{1,140}$/.test(rawCode)?rawCode:'UNCLASSIFIED_LAB_FAILURE';
   writeFileSync(out+'/failure.json',JSON.stringify({candidate:sha,api,phase,code,
-    qualified:false,productionRelease:false,syntheticOnly:true,homeConfirmDiagnostic:homeConfirmDiagnostic||undefined},null,2));
+    qualified:false,productionRelease:false,syntheticOnly:true,
+    adbTransport:adbTransport.snapshot(),
+    safActivityTrail:lastSafActivityTrail,
+    homeConfirmDiagnostic:homeConfirmDiagnostic||undefined},null,2));
   console.error('AP02_F2_DEVICE_BLOCKED',phase,code);
   process.exitCode=1;
 }finally{disconnect();}
