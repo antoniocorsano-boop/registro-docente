@@ -3691,7 +3691,8 @@
         "scripts/diagnostics/ap02-native-device-v7.mjs",
         "scripts/diagnostics/native-lab-runtime.test.mjs",
         ".github/workflows/ap02-f2-native-device.yml",
-        ".github/workflows/qa-stability-01-q4.yml"
+        ".github/workflows/qa-stability-01-q4.yml",
+        "scripts/diagnostics/native-adb-transport-probe.mjs"
       ],
       "tests": [
         "scripts/diagnostics/native-lab-runtime.test.mjs"

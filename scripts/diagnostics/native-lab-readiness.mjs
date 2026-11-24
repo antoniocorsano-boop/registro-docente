@@ -78,6 +78,8 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
       text('[role=status]','Chiusura in attesa di un’operazione locale. I dati sono nascosti; non spegnere il dispositivo durante il salvataggio.'),
     setup,lock,gateError:heading('Sicurezza non disponibile')||heading('Proteggi i dati esistenti'),
     gatePending:heading('Protezione dati in corso')||heading('Protezione del Registro'),
+    gateBusy:Array.from(doc.querySelectorAll('button')).some(e=>e.textContent?.trim()==='Operazione in corso…'&&e.getClientRects().length>0),
+    gateActionError:Array.from(doc.querySelectorAll('p.text-rose-300')).some(e=>ok(e)),
     protectedField:!!doc.querySelector('#vault-password'),
     lockControls:unique('#vault-password')&&button('Sblocca Registro'),
     professionalChoice:unique('input[name="archive-mode"][value="professional"]'),
@@ -129,12 +131,38 @@ export function classifySurface(frame,destination){
   if(destination==='class-detail'&&frame.classVisible)return 'ready';
   return 'not-ready';
 }
-export async function waitPublicSurface({sample,destination,authenticate,timeoutMs=60000,now,sleep,onState=()=>{}}){
+// Only candidate ready/lock/error frames need an independent native foreground
+// read. A DOM-only negative sample never authorizes an action or acceptance.
+export async function sampleDestinationFrame({readFrame,foreground,destination}){
+  const frame=await readFrame();
+  const preliminary=classifySurface({...frame,foreground:true},destination);
+  if(['ready','locked','gate-error'].includes(preliminary))
+    return {...frame,foreground:await foreground()};
+  return {...frame,foreground:null,domOnlyState:preliminary};
+}
+export function classifyDestinationObservation(frame,destination){
+  if(frame?.foreground===null){
+    const negative=classifySurface({...frame,foreground:true},destination);
+    return ['background','protected','not-ready'].includes(negative)&&frame.domOnlyState===negative?negative:'background';
+  }
+  return classifySurface(frame,destination);
+}
+export async function waitPublicSurface({sample,destination,authenticate,timeoutMs=60000,now,sleep,onState=()=>{},onReadFailure=()=>{}}){
   if(!['setup','lock','session','home','privacy','class','class-detail'].includes(destination))
     throw new LabFailure('INVALID_HARNESS_ARGUMENT');
   let consecutive=0,authenticated=false;
   return observeUntil(async()=>{
-    const state=classifySurface(await sample(),destination);
+    let frame;
+    // Only the read itself may be sampled again after a known ADB transport
+    // failure. The authentication callback remains outside this catch.
+    try{frame=await sample();}
+    catch(error){
+      const code=classifyFailure(error).code;
+      consecutive=0;
+      if(!['ADB_TRANSPORT_TIMEOUT','ADB_TRANSPORT_OFFLINE'].includes(code))throw error;
+      onReadFailure(code);onState('transport-unavailable');return false;
+    }
+    const state=classifyDestinationObservation(frame,destination);
     onState(state);
     if(state==='gate-error')throw new LabFailure('PUBLIC_GATE_ERROR');
     if(state==='locked'&&authenticate){
@@ -259,6 +287,6 @@ export function completeFingerprint(f){
 }
 export function safeSurfaceTrace(items){
   const destinations=new Set(['setup','lock','session','home','privacy','class','class-detail']);
-  const states=new Set(['background','gate-error','protected','locked','not-ready','ready']);
+  const states=new Set(['background','gate-error','protected','locked','not-ready','ready','transport-unavailable']);
   return items.slice(-80).filter(x=>destinations.has(x.destination)&&states.has(x.state)).map(x=>({destination:x.destination,state:x.state}));
 }

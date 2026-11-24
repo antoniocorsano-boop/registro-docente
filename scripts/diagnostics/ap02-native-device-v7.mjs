@@ -3,10 +3,10 @@
 // Chrome DevTools drives public DOM controls; no application internals, plugin
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
-import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, commandBudget, commandBudgetInfo, classifyAdbDeadline, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, sampleDestinationFrame, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumedActivity, hasArea } from './native-ui-driver.mjs';
@@ -32,17 +32,18 @@ const newerClass = 'Classe fittizia F2 B';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const adbTransport = createAdbTransportTrace();
 const adb = (...args) => {
+  const budget=commandBudgetInfo(30000);
   const began = Date.now();
   try {
-    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: commandBudget(30000), killSignal: 'SIGKILL', stdio:['ignore','pipe','pipe'] }).trim();
-    adbTransport.record(args, began, 'ok');
+    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: budget.timeoutMs, killSignal: 'SIGKILL', stdio:['ignore','pipe','pipe'] }).trim();
+    adbTransport.record(args, began, 'ok',budget);
     return result;
   } catch (error) {
     // Only an allowlisted command category, duration and transport result are
     // retained; never persist ADB arguments, stderr or response text.
     adbTransport.record(args, began,
-      error?.code === 'ETIMEDOUT' ? 'timeout' : 'failed');
-    throw normalizeAdbFailure(error);
+      error?.code === 'ETIMEDOUT' ? 'timeout' : 'failed',budget);
+    throw classifyAdbDeadline(error,budget);
   }
 };
 const probe = () => probePackagePids(adb, pkg);
@@ -53,6 +54,8 @@ mkdirSync(out,{recursive:true});
 let phase = 'preflight';
 let lastSafActivityTrail = null;
 const surfaceTransitions=[];
+let lastDestinationFrame=null;
+const surfaceReadFailures={ADB_TRANSPORT_TIMEOUT:0,ADB_TRANSPORT_OFFLINE:0};
 const readyDestinations=new Set();
 let cdpTargetObservation=null,nativeUiObservation=null,classControlObservation=null;
 const environment={schemaVersion:1,candidate:sha,api,syntheticOnly:true,productionRelease:false,
@@ -73,7 +76,16 @@ function observeSurface(destination,state){
   }
 }
 async function waitDestination(destination,label=null,ms=60000,reauth=true){
-  const ready=await waitPublicSurface({destination,timeoutMs:ms,sample:()=>samplePublicSurface(label),
+  const ready=await waitPublicSurface({destination,timeoutMs:ms,
+    sample:async()=>{
+      const frame=await sampleDestinationFrame({readFrame:()=>dom(surfaceExpression(label)),foreground:nativeForeground,destination});
+      lastDestinationFrame={destination,foreground:frame.foreground,documentVisible:frame.documentVisible===true,
+        gatePending:frame.gatePending===true,gateBusy:frame.gateBusy===true,gateActionError:frame.gateActionError===true,
+        protectedField:frame.protectedField===true,lock:frame.lock===true,setup:frame.setup===true,
+        brand:frame.brand===true,home:frame.home===true};
+      return frame;
+    },
+    onReadFailure:code=>{surfaceReadFailures[code]++;},
     onState:state=>observeSurface(destination,state),
     authenticate:reauth&&['home','privacy','class','class-detail'].includes(destination)?
       makePublicAuthentication('destination-'+destination):undefined});
@@ -973,13 +985,14 @@ async function run(){
       'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0)}})()').catch(()=>null);
     let nativeActivity='unknown';
     try { nativeActivity=classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg); } catch {}
-    const diagnostic={schemaVersion:3,
+    const diagnostic={schemaVersion:4,
       stage:'professional-setup-home',api,phase,
       originalError:classifyFailure(error).code,
       nativeActivity,locked:surface?.locked??null,
       visibility:['visible','hidden'].includes(surface?.visibility)?surface.visibility:'unknown',
       homeHeadingVisible:surface?.homeHeadingVisible??null,
-      publicSurfaceStates:safeSurfaceTrace(surfaceTransitions)};
+      publicSurfaceStates:safeSurfaceTrace(surfaceTransitions),
+      lastDestinationFrame,surfaceReadFailures:{...surfaceReadFailures}};
     writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
     console.log('AP02_STARTUP_HOME_DIAGNOSTIC',JSON.stringify(diagnostic));
     throw error;
@@ -1058,13 +1071,14 @@ try{
     surfaceTransitions:safeSurfaceTrace(surfaceTransitions),readyDestinations:[...readyDestinations].sort(),
     qualified:false,productionRelease:false,syntheticOnly:true,
     cdpTargetObservation,nativeUiObservation,classControlObservation,
-    adbTransport:adbTransport.snapshot(),
+    adbTransport:adbTransport.snapshot(),lastDestinationFrame,surfaceReadFailures,
     safActivityTrail:lastSafActivityTrail,
     safReturnLifecycle:safReturns,
     homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,
     homeNavigationDiagnostic:homeNavigationDiagnostic||undefined},null,2));
   console.error('AP02_F2_DEVICE_BLOCKED',phase,code,category);
-  console.log('AP02_STARTUP_STATE',JSON.stringify({startupOnly,cdpTargetObservation,publicSurfaceStates:safeSurfaceTrace(surfaceTransitions)}));
+  console.log('AP02_STARTUP_STATE',JSON.stringify({startupOnly,cdpTargetObservation,publicSurfaceStates:safeSurfaceTrace(surfaceTransitions),lastDestinationFrame,surfaceReadFailures}));
+  console.log('AP02_ADB_TRANSPORT_SUMMARY',JSON.stringify(adbTransport.snapshot()));
   console.log('AP02_SAF_LIFECYCLE_SUMMARY',JSON.stringify(safReturns));
   console.log('AP02_RECOVERY_CONSENT_STATE',JSON.stringify(recoveryConsent.snapshot()));
   process.exitCode=1;

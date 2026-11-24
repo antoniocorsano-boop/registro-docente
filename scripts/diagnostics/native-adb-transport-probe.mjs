@@ -31,13 +31,16 @@ export function createAdbTransportTrace({now = Date.now, maxCalls = 32} = {}) {
   let totalCalls = 0;
   const max = Number.isInteger(maxCalls) && maxCalls >= 1 && maxCalls <= 64 ? maxCalls : 32;
   return {
-    record(args, callStarted, result) {
+    record(args, callStarted, result, budget=null) {
       totalCalls++;
       const elapsedMs = Math.max(0, Math.round(now() - callStarted));
       calls.push({
         kind: classifyAdbCommand(args),
         elapsedMs,
-        result: result === 'timeout' ? 'timeout' : result === 'ok' ? 'ok' : 'failed'
+        result: result === 'timeout' ? 'timeout' : result === 'ok' ? 'ok' : 'failed',
+        ...(budget&&Number.isInteger(budget.timeoutMs)&&budget.timeoutMs>0&&budget.timeoutMs<=30000&&
+          ['command','observation'].includes(budget.limitedBy)?
+          {budgetMs:budget.timeoutMs,limitedBy:budget.limitedBy}:{})
       });
       if (calls.length > max) calls.shift();
     },

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { pullLabV7Bytes } from './native-v7-document-discovery.mjs';
-import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, createRecoveryConsentGate, V7_RECOVERY_CONSENT, failureCategories } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, observeUntil, commandBudget, commandBudgetInfo, classifyAdbDeadline, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, createRecoveryConsentGate, V7_RECOVERY_CONSENT, failureCategories } from './native-lab-runtime.mjs';
 const fakeClock = () => {
   let time = 0;
   return { now: () => time, sleep: async ms => { time += ms; }, advance: ms => { time += ms; } };
@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, sampleDestinationFrame, classifyDestinationObservation, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -727,4 +727,47 @@ test('Q4-R09 unavailable confirmation does not count as successful dismissal',as
   await assert.rejects(confirmHomeOnce({...clock,timeoutMs:1000,foreground:()=>true,
     attempt:()=>{attempts++;return {ready:false,action:'not-performed'};}}),{code:'OBSERVATION_DEADLINE'});
   assert.ok(attempts>1);
+});
+
+test('Q4-R10 ADB deadline classification distinguishes independent command allowance from truncated observation budget',async()=>{
+  const clock=fakeClock(),timeout={code:'ETIMEDOUT'};
+  assert.equal(classifyAdbDeadline(timeout,commandBudgetInfo(30000)).code,'ADB_TRANSPORT_TIMEOUT');
+  await withinDeadline(async()=>{
+    assert.deepEqual(commandBudgetInfo(30000),{timeoutMs:30000,limitedBy:'command'});
+    clock.advance(40000);
+    assert.deepEqual(commandBudgetInfo(30000),{timeoutMs:20000,limitedBy:'observation'});
+    assert.equal(classifyAdbDeadline(timeout,commandBudgetInfo(30000)).code,'COMMAND_DEADLINE');
+    assert.equal(classifyAdbDeadline(timeout,commandBudgetInfo(30000)).message,'COMMAND_DEADLINE');
+  },{timeoutMs:60000,now:clock.now});
+});
+test('Q4-R10 negative DOM frames avoid ADB; ready, lock and error require a real foreground read',async()=>{
+  let reads=0;
+  const sample=frame=>sampleDestinationFrame({readFrame:()=>frame,foreground:()=>{reads++;return true;},destination:'home'});
+  const negative=await sample({...readyFrame,gatePending:true});
+  assert.equal(negative.foreground,null);assert.equal(classifyDestinationObservation(negative,'home'),'protected');assert.equal(reads,0);
+  assert.equal(classifyDestinationObservation({...readyFrame,foreground:null,domOnlyState:'ready'},'home'),'background');
+  for(const frame of [readyFrame,{...readyFrame,lock:true,lockControls:true},{...readyFrame,gateError:true}]){
+    assert.equal((await sample(frame)).foreground,true);
+  }
+  assert.equal(reads,3);
+});
+test('Q4-R10 known ADB read failure invalidates streak, while authentication failure is never repeated',async()=>{
+  const clock=fakeClock(),states=[],errors=[];let samples=0;
+  await waitPublicSurface({...clock,timeoutMs:5000,destination:'home',
+    sample:()=>{samples++;if(samples===2)throw new LabFailure('ADB_TRANSPORT_TIMEOUT');return readyFrame;},
+    onState:s=>states.push(s),onReadFailure:e=>errors.push(e)});
+  assert.equal(samples,4);assert.deepEqual(states,['ready','transport-unavailable','ready','ready']);
+  assert.deepEqual(errors,['ADB_TRANSPORT_TIMEOUT']);
+  let submits=0;
+  await assert.rejects(waitPublicSurface({...fakeClock(),timeoutMs:5000,destination:'home',
+    sample:()=>({...readyFrame,lock:true,lockControls:true}),
+    authenticate:()=>{submits++;throw new LabFailure('ADB_TRANSPORT_TIMEOUT');}}),{code:'ADB_TRANSPORT_TIMEOUT'});
+  assert.equal(submits,1);
+});
+test('Q4-R10 unverified native foreground cannot qualify a destination or trigger authentication',async()=>{
+  let submits=0;
+  await assert.rejects(waitPublicSurface({...fakeClock(),timeoutMs:1000,destination:'home',
+    sample:()=>({...readyFrame,foreground:null,lock:true,lockControls:true,domOnlyState:'locked'}),
+    authenticate:()=>{submits++;}}),{code:'OBSERVATION_DEADLINE'});
+  assert.equal(submits,0);
 });

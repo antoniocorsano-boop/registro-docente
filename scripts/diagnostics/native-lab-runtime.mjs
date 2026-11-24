@@ -119,12 +119,23 @@ const scope = new AsyncLocalStorage();
 // Unsolicited CDP dialog events have their own command deadline. They must
 // not inherit the expired context of the WebSocket connection handshake.
 export function withoutObservationScope(fn) { return scope.exit(fn); }
-export function commandBudget(maxMs, now = performance.now.bind(performance)) {
+export function commandBudgetInfo(maxMs, now = performance.now.bind(performance)) {
   if (!Number.isFinite(maxMs) || maxMs <= 0) throw new LabFailure('INVALID_HARNESS_ARGUMENT');
   const deadline = scope.getStore();
-  const remaining = deadline ? Math.min(maxMs, deadline.end - deadline.now()) : maxMs;
+  const outerRemaining = deadline ? deadline.end - deadline.now() : Infinity;
+  const remaining = Math.min(maxMs,outerRemaining);
   if (remaining < 1) throw new LabFailure('COMMAND_DEADLINE');
-  return Math.floor(remaining);
+  return {timeoutMs:Math.floor(remaining),limitedBy:outerRemaining<=maxMs?'observation':'command'};
+}
+export function commandBudget(maxMs, now = performance.now.bind(performance)) {
+  return commandBudgetInfo(maxMs,now).timeoutMs;
+}
+// A truncated ADB allowance expiring is not affirmative evidence of an
+// independent transport failure. Preserve that distinction for every command.
+export function classifyAdbDeadline(error,budget){
+  if(error?.code==='ETIMEDOUT'&&budget?.limitedBy==='observation')
+    return new LabFailure('COMMAND_DEADLINE');
+  return normalizeAdbFailure(error);
 }
 export async function withinDeadline(run,{timeoutMs,now=performance.now.bind(performance),timeoutCode='COMMAND_DEADLINE'}={}){
   if(!Number.isFinite(timeoutMs)||timeoutMs<=0)throw new LabFailure('INVALID_HARNESS_ARGUMENT');
