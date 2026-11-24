@@ -250,7 +250,7 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('Configura archivio protetto');
     expect(driver).toContain('input[name="archive-mode"][value="professional"]');
     expect(driver).toContain('Esporta copia completa V7');
-    expect(driver).toContain('Backup_Valutazioni_V7_');
+    expect(discovery).toContain('Backup_Valutazioni_V7_');
     expect(driver).toContain('Scegli file e ripristina');
     expect(driver).toContain('await nativeChoose(target)');
     expect(driver).toContain('await nativeChoose(recovery)');
