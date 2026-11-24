@@ -68,6 +68,7 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
   const brand=unique('[data-testid="header01-brand-navigation"]');
   const setup=heading('Configura archivio protetto');
   const lock=heading('Sblocca Registro');
+  const gateActionError=Array.from(doc.querySelectorAll('p.text-rose-300')).some(e=>ok(e));
   return {
     documentVisible:doc.visibilityState==='visible',
     documentFocused:typeof doc.hasFocus==='function'?doc.hasFocus():null,
@@ -76,10 +77,11 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
     suspensionDelayed:text('[role=status]','Sessione protetta. Attesa della conclusione dell’operazione locale.'),
     closingProtected:text('[role=status]','Chiusura protetta del Registro…')||
       text('[role=status]','Chiusura in attesa di un’operazione locale. I dati sono nascosti; non spegnere il dispositivo durante il salvataggio.'),
-    setup,lock,gateError:heading('Sicurezza non disponibile')||heading('Proteggi i dati esistenti'),
+    setup,lock,gateError:heading('Sicurezza non disponibile')||heading('Proteggi i dati esistenti')||
+      ((setup||lock)&&gateActionError),
     gatePending:heading('Protezione dati in corso')||heading('Protezione del Registro'),
     gateBusy:Array.from(doc.querySelectorAll('button')).some(e=>e.textContent?.trim()==='Operazione in corso…'&&e.getClientRects().length>0),
-    gateActionError:Array.from(doc.querySelectorAll('p.text-rose-300')).some(e=>ok(e)),
+    gateActionError,
     protectedField:!!doc.querySelector('#vault-password'),
     lockControls:unique('#vault-password')&&button('Sblocca Registro'),
     professionalChoice:unique('input[name="archive-mode"][value="professional"]'),

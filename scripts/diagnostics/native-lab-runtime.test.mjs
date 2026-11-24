@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync } from 'node:fs';
 import { pullLabV7Bytes } from './native-v7-document-discovery.mjs';
 import { LabFailure, classifyFailure, observeUntil, commandBudget, commandBudgetInfo, classifyAdbDeadline, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, createRecoveryConsentGate, V7_RECOVERY_CONSENT, failureCategories } from './native-lab-runtime.mjs';
 const fakeClock = () => {
@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, sampleDestinationFrame, classifyDestinationObservation, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicSurfaceFrame, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, sampleDestinationFrame, classifyDestinationObservation, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -770,4 +770,61 @@ test('Q4-R10 unverified native foreground cannot qualify a destination or trigge
     sample:()=>({...readyFrame,foreground:null,lock:true,lockControls:true,domOnlyState:'locked'}),
     authenticate:()=>{submits++;}}),{code:'OBSERVATION_DEADLINE'});
   assert.equal(submits,0);
+});
+
+ 
+// Q5-R01 exercises the serialized public DOM predicate, not a fabricated
+// gateError flag. A visible rejection is terminal, never another submit.
+function q5GateFrame(title,rejected,hidden=false){
+  const heading={textContent:title}, error={textContent:'synthetic rejection',hidden};
+  const doc={visibilityState:'visible',querySelector:()=>null,querySelectorAll:selector=>{
+    if(selector==='h1,h2,h3,h4,[role=heading]')return [heading];
+    if(selector==='button'&&title==='Sblocca Registro')return [{textContent:title}];
+    if(selector==='#vault-password'&&title==='Sblocca Registro')return [{}];
+    if(selector==='input[name="archive-mode"][value="professional"]'&&title==='Configura archivio protetto')return [{}];
+    if(selector==='p.text-rose-300'&&rejected)return [error];
+    return [];
+  }};
+  // Match the production CDP serialization and provide explicit synthetic DOM visibility.
+  const frame=Function('return ('+publicSurfaceFrame.toString()+')')()(null,doc,()=>({}),e=>!e.hidden);
+  return frame;
+}
+test('Q5-R01 visible setup and unlock rejections are public gate errors; unrelated or hidden errors are not',()=>{
+  for(const title of ['Configura archivio protetto','Sblocca Registro']){
+    const frame=q5GateFrame(title,true);
+    assert.equal(frame.gateActionError,true);
+    assert.equal(frame.gateError,true);
+    assert.equal(classifySurface({...frame,foreground:true},'home'),'gate-error');
+    assert.equal(q5GateFrame(title,false).gateError,false);
+    assert.equal(q5GateFrame(title,true,true).gateError,false);
+  }
+  const unrelated=q5GateFrame('Ripristina backup cifrato',true);
+  assert.equal(unrelated.gateActionError,true);
+  assert.equal(unrelated.gateError,false);
+});
+test('Q5-R01 rejected unlock terminates after one submission and a verified foreground error',async()=>{
+  const clock=fakeClock();let submits=0,reads=0,foregroundReads=0;
+  const readFrame=()=>{reads++;return q5GateFrame('Sblocca Registro',submits>0);};
+  await assert.rejects(waitPublicSurface({...clock,timeoutMs:5000,destination:'home',
+    sample:()=>sampleDestinationFrame({readFrame,foreground:()=>{foregroundReads++;return true;},destination:'home'}),
+    authenticate:()=>{submits++;}}),{code:'PUBLIC_GATE_ERROR'});
+  assert.equal(submits,1);assert.equal(reads,2);assert.equal(foregroundReads,2);
+  assert.equal(classifySafReturnFrame('application',q5GateFrame('Sblocca Registro',true)),'gate-error');
+});
+test('Q5-R02 physical pull preserves inherited deadline category, single invocation and partial-file cleanup',async()=>{
+  const name='Backup_Valutazioni_V7_2031-01-15.enc.json';
+  for(const inherited of [false,true]){
+    const clock=fakeClock();let calls=0,local;
+    const attempt=()=>pullLabV7Bytes(name,(_cmd,args,options)=>{
+      calls++;local=args[2];assert.equal(options.timeout,inherited?15000:30000);
+      writeFileSync(local,'partial');
+      throw Object.assign(new Error('synthetic private detail'),{code:'ETIMEDOUT'});
+    });
+    const code=inherited?'COMMAND_DEADLINE':'ADB_TRANSPORT_TIMEOUT';
+    const category=inherited?'INDETERMINATE':'INFRASTRUCTURE';
+    const check=e=>{assert.equal(e.code,code);assert.equal(e.message,code);assert.equal(classifyFailure(e).category,category);return true;};
+    if(inherited)await assert.rejects(withinDeadline(attempt,{now:clock.now,timeoutMs:15000}),check);
+    else assert.throws(attempt,check);
+    assert.equal(calls,1);assert.equal(existsSync(local),false);
+  }
 });
