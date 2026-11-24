@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, publicHomeConfirmation, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -530,4 +530,39 @@ test('Q4 home confirmation requires a unique interactive control and never click
   }
   locked=false;eligible=true;duplicate=false;hidden=false;
   assert.equal(sample(true).ready,true);assert.equal(clicks,1);
+});
+
+test('Q4 SAF return separates foreground, protected drain, lock and apparent readiness',()=>{
+  const f={documentVisible:true,brand:true};
+  const locked={...f,brand:false,lock:true,lockControls:true,protectedField:true};
+  assert.equal(classifySafReturnFrame('documentsui',locked),'picker-active');
+  assert.equal(classifySafReturnFrame('application',{...locked,documentVisible:false}),'webview-hidden');
+  assert.equal(classifySafReturnFrame('application',{...f,suspensionDraining:true}),'draining');
+  assert.equal(classifySafReturnFrame('application',{...f,suspensionDraining:true,suspensionDelayed:true}),'drain-delayed');
+  assert.equal(classifySafReturnFrame('application',{...locked,lockControls:false}),'protected-not-ready');
+  assert.equal(classifySafReturnFrame('application',f),'interactive-without-observed-lock');
+  assert.equal(classifySafReturnFrame('application',locked),'lock-ready');
+  assert.equal(classifySafReturnFrame('application',{...locked,gateError:true}),'gate-error');
+});
+test('Q4 SAF return waits through native handoff and drain, never accepts an already interactive App',async()=>{
+  const clock=fakeClock(),states=[];
+  const app={documentVisible:true,brand:true};
+  const lock={documentVisible:true,lock:true,lockControls:true,protectedField:true};
+  const frames=[{activity:'documentsui',frame:null},{activity:'application',frame:app},
+    {activity:'application',frame:{...app,suspensionDraining:true}},
+    {activity:'application',frame:lock}];
+  await waitSafReturnLock({sample:()=>frames.shift(),onState:s=>states.push(s),...clock,timeoutMs:5000});
+  assert.deepEqual(states,['picker-active','interactive-without-observed-lock','draining','lock-ready']);
+  const never=fakeClock();
+  await assert.rejects(waitSafReturnLock({sample:()=>({activity:'application',frame:app}),...never,timeoutMs:1000}),{code:'OBSERVATION_DEADLINE'});
+});
+test('Q4 SAF return never treats an application error or read failure as a lock',async()=>{
+  for(const error of [false,true]){
+    const clock=fakeClock();let reads=0;
+    await assert.rejects(waitSafReturnLock({sample:()=>{reads++;
+      if(error)throw new LabFailure('CDP_DISCONNECTED');
+      return {activity:'application',frame:{documentVisible:true,gateError:true}};
+    },...clock,timeoutMs:1000}),{code:error?'CDP_DISCONNECTED':'PUBLIC_GATE_ERROR'});
+    assert.equal(reads,1);
+  }
 });

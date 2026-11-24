@@ -52,6 +52,11 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
   const lock=heading('Sblocca Registro');
   return {
     documentVisible:doc.visibilityState==='visible',
+    suspensionDraining:text('[role=status]','Protezione della sessione…')||
+      text('[role=status]','Sessione protetta. Attesa della conclusione dell’operazione locale.'),
+    suspensionDelayed:text('[role=status]','Sessione protetta. Attesa della conclusione dell’operazione locale.'),
+    closingProtected:text('[role=status]','Chiusura protetta del Registro…')||
+      text('[role=status]','Chiusura in attesa di un’operazione locale. I dati sono nascosti; non spegnere il dispositivo durante il salvataggio.'),
     setup,lock,gateError:heading('Sicurezza non disponibile')||heading('Proteggi i dati esistenti'),
     gatePending:heading('Protezione dati in corso')||heading('Protezione del Registro'),
     protectedField:!!doc.querySelector('#vault-password'),
@@ -65,6 +70,31 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
     classVisible:typeof label==='string'&&Array.from(doc.querySelectorAll('h1,h2,h3,h4,p,span,button,[role=heading]')).some(e=>ok(e)&&e.textContent?.trim()===label),
     drawer:unique('#registro-navigation-drawer')
   };
+}
+// SAF lifecycle evidence: a returned Activity alone is not an unlocked
+// Vault, and an apparently interactive App cannot substitute for a fresh lock.
+export function classifySafReturnFrame(activity,frame){
+  if(activity==='documentsui')return 'picker-active';
+  if(activity==='other')return 'other-activity';
+  if(activity!=='application')return 'activity-unknown';
+  if(!frame||frame.documentVisible!==true)return 'webview-hidden';
+  if(frame.gateError)return 'gate-error';
+  if(frame.closingProtected)return 'closing-protected';
+  if(frame.suspensionDelayed)return 'drain-delayed';
+  if(frame.suspensionDraining)return 'draining';
+  if(frame.lock&&frame.lockControls&&!frame.gatePending&&!frame.setup)return 'lock-ready';
+  if(frame.lock||frame.protectedField||frame.gatePending||frame.setup)return 'protected-not-ready';
+  if(frame.brand)return 'interactive-without-observed-lock';
+  return 'surface-not-ready';
+}
+export async function waitSafReturnLock({sample,onState=()=>{},timeoutMs=35000,now,sleep}){
+  return observeUntil(async()=>{
+    const {activity,frame}=await sample();
+    const state=classifySafReturnFrame(activity,frame);
+    onState(state);
+    if(state==='gate-error')throw new LabFailure('PUBLIC_GATE_ERROR');
+    return state==='lock-ready';
+  },{timeoutMs,intervalMs:450,now,sleep,retryReadErrors:false});
 }
 export function classifySurface(frame,destination){
   if(!frame||frame.foreground!==true||frame.documentVisible!==true)return 'background';

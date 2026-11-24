@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicHomeConfirmation, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumedActivity, hasArea } from './native-ui-driver.mjs';
@@ -202,10 +202,13 @@ async function nativeSave(alertIndex, activityProbe) {
     try{writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));}catch{}
     throw error;
   }
-  tap(await findNative(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'DOC_SAVE_BUTTON'));
+  const saveControl=await findNative(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'DOC_SAVE_BUTTON');
+  noteSafPicker();
+  tap(saveControl);
   await until(nativeForeground,'RETURN_FROM_SAVE',45000);
   // Picker return observed; this does not prove a new document was created.
   nativeSaveCompletionCount++;
+  noteSafReturned();
   adbTransport.mark('picker-returned');
 }
 // Android opens an external DocumentsUI activity. The product deliberately
@@ -213,22 +216,65 @@ async function nativeSave(alertIndex, activityProbe) {
 // through its actual LOCKED screen; never bypass Root, grant an epoch or call
 // native plugin methods out of band.
 let nativeReauthCount=0;
+const safReturns=[];
+let currentSafReturn=null;
+function beginSafReturn(role){
+  currentSafReturn={role,states:[],documentsUiObserved:false,returned:false,authenticated:false};
+  safReturns.push(currentSafReturn);
+  if(safReturns.length>4)safReturns.shift();
+}
+function markSafReturn(state){
+  if(!currentSafReturn)return;
+  const states=currentSafReturn.states;
+  if(states[states.length-1]===state)return;
+  states.push(state);
+  if(states.length>64)states.shift();
+  console.log('AP02_SAF_LIFECYCLE',api,currentSafReturn.role,state);
+}
+function noteSafPicker(){
+  if(!documentsForeground())throw new LabFailure('NATIVE_UI_FOREGROUND_LOST');
+  if(currentSafReturn)currentSafReturn.documentsUiObserved=true;
+  markSafReturn('picker-observed');
+}
+function noteSafReturned(){
+  if(currentSafReturn)currentSafReturn.returned=true;
+  markSafReturn('activity-returned');
+}
+async function sampleSafReturn(){
+  const activity=classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg);
+  if(activity!=='application')return {activity,frame:null};
+  const frame=await dom(surfaceExpression(null));
+  // A successful lock sample is valid only while the same Activity is in front.
+  if(frame.lock&&frame.lockControls&&!nativeForeground())return {activity:'unknown',frame:null};
+  return {activity,frame};
+}
 async function reauthenticateAfterPicker(kind) {
   phase='native-saf-return-reauth-'+kind;
   adbTransport.mark('lock-wait-start');
-  await until(()=>dom('Boolean(document.querySelector("#vault-password"))'),
-    'ANDROID_SESSION_REAUTH_REQUIRED_'+kind,35000);
+  if(!currentSafReturn?.documentsUiObserved||!currentSafReturn.returned)
+    throw new LabFailure('NATIVE_UI_FOREGROUND_LOST');
+  try{
+    await waitSafReturnLock({sample:sampleSafReturn,onState:markSafReturn,timeoutMs:35000});
+  }catch(error){
+    if(error instanceof LabFailure&&error.observation)error.observation.purpose='ANDROID_SESSION_REAUTH_REQUIRED';
+    throw error;
+  }
   adbTransport.mark('lock-present');
   await makePublicAuthentication('saf-'+kind,step=>{
     const marks={'lock-ready':'lock-ui-ready','password-entered':'password-field-entered',
       'unlock-requested':'unlock-requested','unlocked':'unlocked'};
     adbTransport.mark(marks[step]);
+    markSafReturn(step);
   })();
   nativeReauthCount++;
+  currentSafReturn.authenticated=true;
+  currentSafReturn=null;
 }
 async function nativeChoose(filename) {
   await downloads();
-  tap(await findNative(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'EXACT_DOCUMENT_'+filename));
+  const sourceControl=await findNative(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'EXACT_DOCUMENT_'+filename);
+  noteSafPicker();
+  tap(sourceControl);
   const open=n=>doc(n)&&/^(open|apri)$/i.test(n.text);
   // Observe return or a stable positive confirmation control; no duplicate tap.
   let previous=null,consecutive=0;
@@ -246,6 +292,7 @@ async function nativeChoose(filename) {
   },{timeoutMs:25000,intervalMs:450,retryReadErrors:true,retryCodes:nativeReadRetryCodes});
   if(next!=='returned'&&!nativeForeground())tap(next);
   await until(nativeForeground,'RETURN_FROM_OPEN',45000);
+  noteSafReturned();
 }
 
 let socket=null,channel=null;
@@ -796,6 +843,7 @@ async function exportV7(previous=null){
     appPackage:pkg, readActivityDump:()=>adb('shell','dumpsys','activity','activities')
   });
   try {
+    beginSafReturn('export');
     await button('Esporta copia completa V7');
     phase='native-v7-export-picker';
     await nativeSave(prior,activityProbe);
@@ -839,11 +887,13 @@ async function restoreFromRealSaf(target,recovery){
   const prior=dialogs.length;
   await field('input[placeholder="Inserisci la password impostata alla cifratura"]',copyPassword);
   await field('#restore-v7-recovery-password',copyPassword);
+  beginSafReturn('target-source');
   await button('Scegli file e ripristina');
   await nativeChoose(target);
   await reauthenticateAfterPicker('target-source');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='confirm'&&/Ripristino V7/.test(d.message)),
     'REAL_RECOVERY_CONSENT',45000);
+  beginSafReturn('recovery-source');
   await nativeChoose(recovery);
   await reauthenticateAfterPicker('recovery-source');
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&/ripristinato con successo/i.test(d.message)),
@@ -965,8 +1015,10 @@ try{
     cdpTargetObservation,nativeUiObservation,classControlObservation,
     adbTransport:adbTransport.snapshot(),
     safActivityTrail:lastSafActivityTrail,
+    safReturnLifecycle:safReturns,
     homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,
     homeNavigationDiagnostic:homeNavigationDiagnostic||undefined},null,2));
   console.error('AP02_F2_DEVICE_BLOCKED',phase,code,category);
+  console.log('AP02_SAF_LIFECYCLE_SUMMARY',JSON.stringify(safReturns));
   process.exitCode=1;
 }finally{disconnect();}
