@@ -191,19 +191,44 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(navigationClassifier).toContain('newClassButtonVisible');
     expect(navigationClassifier).toContain('documentVisible');
     expect(navigationClassifier).toContain('rawDomStored:false');
-    // Android API32: textContent is stable even when WebView innerText
-    // has not been calculated; never skip the visible modal confirmation.
-    expect(driver).toContain('e.textContent?.trim()==="Torna a Oggi"');
-    expect(driver).not.toContain('e.innerText?.trim()==="Torna a Oggi"');
-    expect(driver).toContain('[role=alertdialog][aria-modal=true]');
-    expect(driver).toContain('HOME_CONFIRM_DIALOG_MISSING');
-    expect(driver).toContain('homeConfirmDiagnostic=await captureHomeConfirmDiagnostic()');
-    expect(driver).toContain('exactLabelCount:named.length');
-    expect(driver).toContain('planningExitDialogOpen:');
-    expect(driver).toContain('inertOwnerIsDrawer:');
-    expect(driver).toContain('inertOwnerIsRoot:');
-    expect(driver).toContain('inertOwnerContainsNavbar:');
-    expect(driver).toContain('buttonHasLayoutRect:');
+    // Android API32: the shared public dialog predicate uses textContent
+    // and never skips the visible modal confirmation. Bind both observation
+    // and the one-shot action to the actual serialized predicate.
+    const readiness = await Bun.file('scripts/diagnostics/native-lab-readiness.mjs').text();
+    const homeConfirm = readiness.slice(readiness.indexOf('export function publicHomeConfirmation('),
+      readiness.indexOf('export function publicSurfaceFrame('));
+    expect(homeConfirm).toContain("e.textContent?.trim()==='Torna a Oggi'");
+    expect(homeConfirm).not.toContain('innerText');
+    expect(homeConfirm).toContain('[role="alertdialog"][aria-modal="true"]');
+    expect(homeConfirm).toContain('HOME_CONFIRM_DIALOG_MISSING');
+    expect(homeConfirm).toContain('HOME_CONFIRM_NOT_UNIQUE');
+    expect(homeConfirm).toContain('named.filter(e=>interactive(e,doc,style))');
+    expect(homeConfirm).toContain('frame.documentVisible&&!locked&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0])');
+    expect(homeConfirm).toContain("if(!frame.ready)throw Error('HOME_CONFIRM_NOT_UNIQUE');");
+    expect(homeConfirm).toContain('visible[0].click()');
+    expect(homeConfirm).toContain('submit=false');
+    expect(homeConfirm).toContain('if(submit){');
+    expect(homeConfirm.indexOf('if(submit){')).toBeLessThan(homeConfirm.indexOf('visible[0].click()'));
+    expect(homeConfirm.indexOf("if(!frame.ready)throw Error('HOME_CONFIRM_NOT_UNIQUE');")).toBeLessThan(homeConfirm.indexOf('visible[0].click()'));
+    expect(driver).toContain('publicHomeConfirmation.toString()');
+    expect(driver).toContain("function captureHomeConfirmDiagnostic(submit=false)");
+    expect(driver).toContain("const frame=await captureHomeConfirmDiagnostic()");
+    expect(driver).toContain('homeConfirmDiagnostic={...frame,foreground}');
+    expect(driver).toContain('return foreground&&frame.ready');
+    const confirmFlow = driver.slice(driver.indexOf("if(first==='confirmation')"),
+      driver.indexOf("phase='visible-ui-navigation-Oggi';"));
+    const confirmSubmit = confirmFlow.indexOf('await captureHomeConfirmDiagnostic(true)');
+    expect(confirmSubmit).toBeGreaterThan(confirmFlow.indexOf("'VISIBLE_EXACT_HOME_CONFIRM',20000"));
+    expect(confirmFlow.indexOf("if(!nativeForeground())throw new LabFailure('NATIVE_UI_FOREGROUND_LOST');")).toBeGreaterThan(0);
+    expect(confirmFlow.indexOf("if(!nativeForeground())throw new LabFailure('NATIVE_UI_FOREGROUND_LOST');")).toBeLessThan(confirmSubmit);
+    expect(confirmFlow.match(/captureHomeConfirmDiagnostic\(true\)/g)?.length).toBe(1);
+    expect(confirmFlow.indexOf("'HOME_CONFIRM_DISMISSED',20000")).toBeGreaterThan(confirmSubmit);
+    expect(homeConfirm).toContain('exactLabelCount:named.length');
+    expect(homeConfirm).toContain('planningExitDialogOpen:');
+    expect(homeConfirm).toContain('inertOwnerIsDrawer:');
+    expect(homeConfirm).toContain('inertOwnerIsRoot:');
+    expect(homeConfirm).toContain('inertOwnerContainsNavbar:');
+    expect(homeConfirm).toContain('buttonHasLayoutRect:');
     expect(driver).toContain('homeConfirmDiagnostic:homeConfirmDiagnostic||undefined');
     // Android API32 may protect the mounted App after a native prompt. CDP
     // must not click controls through a hidden/inert Vault surface.
@@ -229,7 +254,8 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
       driver.indexOf('async function exportV7('));
     expect(readback.indexOf("if(/^(?:cat:|sh:|")).toBeGreaterThan(0);
     expect(readback.indexOf("if(/^(?:cat:|sh:|")).toBeLessThan(readback.indexOf('JSON.parse(text)'));
-    expect(driver).toContain('e.closest("[inert]")');
+    expect(readiness).toContain("e.closest('[inert],[aria-hidden=\"true\"],[hidden]')");
+    expect(homeConfirm).toContain("e.closest('[inert]')");
     expect(driver).toContain('visible-ui-close-save-notice');
     expect(driver).toContain('SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED');
     // Class creation may suspend the Android session before React presents
