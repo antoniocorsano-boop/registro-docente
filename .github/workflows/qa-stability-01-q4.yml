@@ -54,8 +54,20 @@ jobs:
           mapfile -t tests < <(node -e 'for (const f of require("./q4-preflight-plan.json").testFiles) console.log(f)')
           test "${#tests[@]}" -gt 0
           bun test "${tests[@]}"
-  startup:
+  hybrid:
     needs: preflight
+    if: >-
+      ${{ github.repository == 'antoniocorsano-boop/registro-docente' &&
+      github.event.pull_request.number == 414 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'qa/qa-stability-01-q2' &&
+      github.event.pull_request.base.sha == '80378e9daab60fe6c389e372c3c79e3dcd09aac0' }}
+    uses: ./.github/workflows/qa-appium-replacement-pilot.yml
+    with:
+      candidate_sha: ${{ github.event.pull_request.head.sha }}
+  startup:
+    needs: [preflight, hybrid]
     if: >-
       ${{ github.repository == 'antoniocorsano-boop/registro-docente' &&
       github.event.pull_request.number == 414 &&
@@ -74,7 +86,7 @@ jobs:
       trial: ${{ matrix.trial }}
       startup_only: true
   pilot:
-    needs: [preflight, startup]
+    needs: [preflight, hybrid, startup]
     if: >-
       ${{ github.repository == 'antoniocorsano-boop/registro-docente' &&
       github.event.pull_request.number == 414 &&
@@ -87,7 +99,7 @@ jobs:
       candidate_sha: ${{ github.event.pull_request.head.sha }}
       trial: 0
   q4:
-    needs: [preflight, pilot]
+    needs: [preflight, hybrid, pilot]
     if: >-
       ${{ github.repository == 'antoniocorsano-boop/registro-docente' &&
       github.event.pull_request.number == 414 &&

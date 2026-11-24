@@ -3710,6 +3710,22 @@
       "tests": [
         "scripts/diagnostics/appium-pilot/contract.test.mjs"
       ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I02",
+      "owner": "QA-STABILITY-01",
+      "statement": "After the successful temporary feasibility pilot and its fast-forward reconciliation, the hybrid laboratory is a mandatory complementary gate of canonical Q4 and the direct F2 run for the frozen PR 412 candidate. It runs once per coordinator on the exact approved PR 414 or PR 412 head, read-only, with only laboratory delta against the frozen product; all prior F2 six-stage, Q3 environment, readiness and independent Q4 trial criteria remain mandatory. Hybrid evidence never claims full F2 or authorizes merge or release.",
+      "impactPaths": [
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        ".github/workflows/qa-stability-01-q4.yml",
+        ".github/workflows/ap02-f2-native-device.yml",
+        "scripts/diagnostics/appium-pilot/",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
+      ]
     }
   ]
 }

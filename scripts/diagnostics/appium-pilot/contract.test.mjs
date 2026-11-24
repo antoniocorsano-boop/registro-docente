@@ -2,13 +2,21 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const workflow=readFileSync('.github/workflows/qa-appium-replacement-pilot.yml','utf8');
+const q4=readFileSync('.github/workflows/qa-stability-01-q4.yml','utf8');
+const f2=readFileSync('.github/workflows/ap02-f2-native-device.yml','utf8');
 const pilot=readFileSync('scripts/diagnostics/appium-pilot/pilot.py','utf8');
 const runner=readFileSync('scripts/diagnostics/appium-pilot/run.sh','utf8');
 const registry=JSON.parse(readFileSync('qualification/invariants.v1.json','utf8'));
 test('Appium preflight exact and isolated before emulators',()=>{
   assert.match(workflow,/permissions:\n  contents: read/);
-  assert.equal((workflow.match(/github.event.pull_request.number == 415/g)||[]).length,2);
+  assert.equal((workflow.match(/github.event.pull_request.number == 414/g)||[]).length,1);
+  assert.equal((workflow.match(/github.event.pull_request.number == 412/g)||[]).length,1);
+  assert.ok(!workflow.includes('github.event.pull_request.number == 415'));
+  assert.match(workflow,/on:\n  workflow_call:/);
+  assert.equal((workflow.match(/inputs.candidate_sha == github.event.pull_request.head.sha/g)||[]).length,1);
   assert.match(workflow,/pilot:\n    needs: preflight/);
+  assert.ok(workflow.includes('test "$APPROVED_CALLER" = true'));
+  assert.ok(!workflow.includes('if: ${{ github.event_name'));
   assert.match(workflow,/node scripts\/qualification\/impact\.mjs/);
   assert.match(workflow,/go run github\.com\/rhysd\/actionlint/);
   assert.ok(!workflow.includes('${{ runner.temp }}'));
@@ -62,4 +70,18 @@ test('native picker delegates to the existing qualified F2 primitives',()=>{
   for(const x of ['native_picker(driver, "save")','native_picker(driver, "open", name)','saf-wait-protected-lock','saf-wait-exact-public-dialog','session-device-readiness','CANONICAL_NATIVE_PICKER_FAILED'])assert.ok(pilot.includes(x),x);
   assert.ok(workflow.includes('native-picker.test.mjs'));
   assert.ok(workflow.includes('python3 -m unittest discover -s scripts/diagnostics/appium-pilot'));
+});
+
+test('canonical Q4 and direct F2 coordinate hybrid without weakening inherited gates',()=>{
+  assert.match(q4,/hybrid:\n    needs: preflight/);
+  assert.match(q4,/startup:\n    needs: \[preflight, hybrid\]/);
+  assert.match(q4,/pilot:\n    needs: \[preflight, hybrid, startup\]/);
+  assert.match(q4,/q4:\n    needs: \[preflight, hybrid, pilot\]/);
+  assert.equal((q4.match(/uses: \.\/\.github\/workflows\/qa-appium-replacement-pilot\.yml/g)||[]).length,1);
+  assert.match(f2,/hybrid-evidence:\n    if:.*inputs\.candidate_sha == '' && github\.event\.pull_request\.number == 412/);
+  assert.match(f2,/uses: \.\/\.github\/workflows\/qa-appium-replacement-pilot\.yml/);
+  for(const marker of ['Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','nativeReauthCount>=4','absenceSamples==2','surface-readiness.json','environment.json','AP02_STARTUP_ONLY'])assert.ok(f2.includes(marker),marker);
+  assert.ok(workflow.includes('.fullF2Qualified==false'));
+  assert.ok(workflow.includes('git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD'));
+  assert.ok(registry.invariants.some(x=>x.id==='QA-STABILITY-01-APPIUM-I02'));
 });

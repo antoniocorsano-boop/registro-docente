@@ -17,6 +17,8 @@ on:
     paths:
       - '.github/workflows/ap02-f2-native-device.yml'
       - 'scripts/diagnostics/ap02-native-device-v7.mjs'
+      - '.github/workflows/qa-appium-replacement-pilot.yml'
+      - 'scripts/diagnostics/appium-pilot/**'
       - 'scripts/diagnostics/native-lab-runtime.mjs'
       - 'scripts/diagnostics/native-lab-readiness.mjs'
       - 'scripts/diagnostics/native-lab-transitions.mjs'
@@ -36,6 +38,13 @@ permissions:
   contents: read
 
 jobs:
+  # Direct qualification of the frozen candidate also requires the hybrid gate.
+  # Q4 calls it once in its coordinator, not once per inherited trial.
+  hybrid-evidence:
+    if: ${{ inputs.candidate_sha == '' && github.event.pull_request.number == 412 }}
+    uses: ./.github/workflows/qa-appium-replacement-pilot.yml
+    with:
+      candidate_sha: ${{ github.event.pull_request.head.sha }}
   installed-professional-v7:
     runs-on: ubuntu-22.04
     timeout-minutes: 40
