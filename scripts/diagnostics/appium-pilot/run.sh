@@ -11,4 +11,4 @@ for _ in $(seq 1 40); do
   sleep 1
 done
 curl -fsS --max-time 2 http://127.0.0.1:4723/status >/dev/null
-timeout --signal=TERM --kill-after=10s 480s "$RUNNER_TEMP/q5-appium-venv/bin/python" scripts/diagnostics/appium-pilot/pilot.py
+timeout --signal=TERM --kill-after=10s 900s "$RUNNER_TEMP/q5-appium-venv/bin/python" scripts/diagnostics/appium-pilot/pilot.py

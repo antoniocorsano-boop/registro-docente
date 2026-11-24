@@ -34,6 +34,7 @@ jobs:
           node scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --manifest /tmp/appium-impact.json
           node --test scripts/diagnostics/appium-pilot/contract.test.mjs
           python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
+          python3 -m unittest discover -s scripts/diagnostics/appium-pilot -p 'test_*.py'
           bash -n scripts/diagnostics/appium-pilot/run.sh
       - name: Validate workflow with actionlint
         shell: bash

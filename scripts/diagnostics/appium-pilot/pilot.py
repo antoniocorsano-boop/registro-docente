@@ -9,6 +9,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
+from native_contracts import classify_activity, native_selector, StableSelection
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
@@ -29,9 +30,15 @@ def save():
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
 
+def phase(name):
+    evidence["failureDetail"] = name
+    save()
+    print("APPIUM_TRANSITION", name, flush=True)
+
 def stage(name, next_phase):
     evidence["stages"].append(name)
     evidence["failurePhase"] = next_phase
+    evidence["failureDetail"] = None
     save()
     print("APPIUM_PILOT_STAGE_PASS", name, flush=True)
 
@@ -312,91 +319,159 @@ def create_class(driver, name):
     navigate(driver, "Oggi", "home")
     wait(driver, lambda d: class_visible(d, name))
 
+def activity_surface():
+    raw = adb_read("shell", "dumpsys", "activity", "activities").decode("utf-8", errors="replace")
+    return classify_activity(raw, PKG)
+
+def activity_is(driver, expected):
+    actual = activity_surface()
+    if evidence.get("lastActivity") != actual:
+        evidence["lastActivity"] = actual
+        trail = evidence.setdefault("activityTransitions", [])
+        if len(trail) < 64:
+            trail.append(actual)
+        save()
+        print("APPIUM_ACTIVITY", actual, flush=True)
+    if actual != expected:
+        return False
+    # Independent native activity evidence plus Appium's current-package signal.
+    package = driver.current_package
+    return package == PKG if expected == "application" else package in (
+        "com.google.android.documentsui", "com.android.documentsui")
+
 def documents_foreground(driver):
-    return re.fullmatch(r"(?:com\.google\.android|com\.android)\.documentsui", driver.current_package or "") is not None
+    return activity_is(driver, "documentsui")
 
-def native_match(driver, predicate):
-    items = []
-    for e in driver.find_elements(By.XPATH, "//*"):
-        if e.is_displayed() and e.is_enabled() and predicate(e):
-            items.append(e)
-    return items[0] if len(items) == 1 else False
+def native_candidate(driver, labels, attribute="text", reject_preview=False):
+    selector = native_selector(labels, attribute, reject_preview)
+    elements = driver.find_elements(By.XPATH, selector)
+    if len(elements) != 1:
+        return None
+    element = elements[0]
+    if not element.is_displayed() or not element.is_enabled():
+        return None
+    rect = element.rect
+    if rect["width"] <= 0 or rect["height"] <= 0:
+        return None
+    return element, (selector, tuple(rect[k] for k in ("x", "y", "width", "height")))
 
-def doc_control(driver, labels, attribute="text"):
+def doc_control(driver, labels, attribute="text", reject_preview=False):
+    stable = StableSelection()
     def sample(d):
         if not documents_foreground(d):
+            stable.observe(None)
             return False
-        return native_match(d, lambda e: e.get_attribute(attribute) in labels)
+        found = native_candidate(d, labels, attribute, reject_preview)
+        if not found or not documents_foreground(d):
+            stable.observe(None)
+            return False
+        return found[0] if stable.observe(found[1]) else False
     return wait(driver, sample, 60)
 
+def native_click(driver, element):
+    if not documents_foreground(driver):
+        raise RuntimeError("PICKER_FOREGROUND_CHANGED")
+    element.click()
+
 def open_downloads(driver):
+    phase("saf-wait-native-activity")
+    # ADB observation before changing context avoids treating an Appium context
+    # switch as evidence that Android actually opened the picker.
+    wait(driver, lambda d: activity_surface() == "documentsui", 90)
+    phase("saf-switch-native-context")
     driver.switch_to.context("NATIVE_APP")
-    wait(driver, documents_foreground, 90)
+    wait(driver, documents_foreground, 60)
+    phase("saf-downloads-location")
+    stable = StableSelection()
     def sample(d):
         if not documents_foreground(d):
+            stable.observe(None)
             return False
-        folder = native_match(d, lambda e: e.get_attribute("text") in ("Download", "Downloads"))
-        if folder:
-            return ("folder", folder)
-        root = native_match(d, lambda e: (e.get_attribute("content-desc") or "").lower() in
-                            ("show roots", "open navigation drawer", "mostra radici"))
-        return ("root", root) if root else False
+        folder = native_candidate(d, ("Download", "Downloads"))
+        root = None if folder else native_candidate(d, ("Show roots", "Open navigation drawer", "Mostra radici",
+                                                        "show roots", "open navigation drawer", "mostra radici"), "content-desc")
+        found = folder or root
+        if not found or not documents_foreground(d):
+            stable.observe(None)
+            return False
+        kind = "folder" if folder else "root"
+        return (kind, found[0]) if stable.observe((kind, found[1])) else False
     kind, element = wait(driver, sample, 60)
     if kind == "root":
-        element.click()
-        doc_control(driver, ("Download", "Downloads")).click()
+        phase("saf-open-roots")
+        native_click(driver, element)
+        phase("saf-select-downloads")
+        native_click(driver, doc_control(driver, ("Download", "Downloads")))
+    phase("saf-downloads-ready")
 
 def picker_return(driver, role, expected_dialog):
-    wait(driver, lambda d: d.current_package == PKG, 60)
+    phase("saf-wait-application-return")
+    wait(driver, lambda d: activity_is(d, "application"), 60)
+    phase("saf-reconnect-webview")
     webview(driver)
+    phase("saf-wait-protected-lock")
     def locked(d):
         f = surface(d)
         if f["gate"]:
             raise RuntimeError("PUBLIC_GATE_ERROR")
         return f["visible"] and f["lockReady"] and not f["blocked"] and d.current_package == PKG
     wait(driver, locked, 60)
+    phase("saf-reauthenticate-once")
     visible(driver, "#vault-password").send_keys(PASSWORD)
     click_allow_alert(exact_button(driver, "Sblocca Registro"))
     # An exact downstream dialog is required, not merely the submit response.
+    phase("saf-wait-exact-public-dialog")
     alert = alert_matching(driver, expected_dialog)
+    phase("saf-accept-exact-public-dialog")
     alert.accept()
     evidence.setdefault("safReturns", []).append(role)
     save()
 
 def select_document(driver, name):
     open_downloads(driver)
-    doc_control(driver, (name,)).click()
+    phase("saf-select-exact-document")
+    native_click(driver, doc_control(driver, (name,), reject_preview=True))
+    phase("saf-observe-open-or-return")
+    stable = StableSelection()
     def next_step(d):
-        if d.current_package == PKG:
+        if activity_is(d, "application"):
             return "returned"
         if documents_foreground(d):
-            element = native_match(d, lambda e: (e.get_attribute("text") or "").lower() in ("open", "apri"))
-            if element:
-                return element
+            found = native_candidate(d, ("Open", "Apri", "OPEN", "APRI"))
+            if found and documents_foreground(d):
+                return found[0] if stable.observe(found[1]) else False
+        stable.observe(None)
         return False
     result = wait(driver, next_step, 60)
     if result != "returned":
-        if not documents_foreground(driver):
-            raise RuntimeError("PICKER_FOREGROUND_CHANGED")
-        result.click()
-    wait(driver, lambda d: d.current_package == PKG, 60)
+        phase("saf-confirm-open")
+        native_click(driver, result)
+    phase("saf-observe-document-return")
+    wait(driver, lambda d: activity_is(d, "application"), 60)
 
 def export_copy(driver, previous=None):
+    phase("export-observe-physical-baseline")
     before = physical_files()
     if previous is None:
         if before:
             raise RuntimeError("UNEXPECTED_EXISTING_DOCUMENT")
     elif before != [previous[0]] or physical_digest(previous[0]) != previous[1]:
         raise RuntimeError("ORIGINAL_DOCUMENT_CHANGED")
+    phase("export-verify-privacy-ready")
     observe_destination(driver, "privacy", {"used": False})
+    phase("export-fill-encryption-form")
     visible(driver, 'input[placeholder="Inserisci password sicura (min. 6 caratteri)"]').send_keys(COPY_PASSWORD)
     visible(driver, 'input[placeholder="Ripeti la password"]').send_keys(COPY_PASSWORD)
+    phase("export-submit-once")
     exact_button(driver, "Esporta copia completa V7").click()
     open_downloads(driver)
-    doc_control(driver, ("Save", "Salva", "SAVE", "SALVA")).click()
+    phase("saf-save-control")
+    native_click(driver, doc_control(driver, ("Save", "Salva", "SAVE", "SALVA")))
     picker_return(driver, "target-export" if previous is None else "recovery-export",
                   "Copia completa V7 salvata, riletta e verificata.")
+    phase("export-discover-physical-document")
     name = select_new_file(before, physical_files())
+    phase("export-verify-encrypted-envelope")
     digest = physical_digest(name)
     if previous is not None:
         if physical_digest(previous[0]) != previous[1] or digest["sha256"] == previous[1]["sha256"]:
@@ -406,14 +481,17 @@ def export_copy(driver, previous=None):
     return name, digest
 
 def restore_copies(driver, target, recovery):
+    phase("restore-verify-privacy-ready")
     observe_destination(driver, "privacy", {"used": False})
     visible(driver, 'input[placeholder="Inserisci la password impostata alla cifratura"]').send_keys(COPY_PASSWORD)
     visible(driver, "#restore-v7-recovery-password").send_keys(COPY_PASSWORD)
+    phase("restore-submit-once")
     exact_button(driver, "Scegli file e ripristina").click()
     select_document(driver, target[0])
     picker_return(driver, "target-source", CONSENT)
     select_document(driver, recovery[0])
     picker_return(driver, "recovery-source", "Backup cifrato verificato e ripristinato con successo!")
+    phase("restore-verify-class-content")
     assert_class_state(driver, False)
 
 def main():
@@ -427,6 +505,13 @@ def main():
     })
     driver = None
     try:
+        phase("session-device-readiness")
+        def device_ready(_):
+            return (adb_read("get-state").strip() == b"device" and
+                    adb_read("shell", "getprop", "sys.boot_completed").strip() == b"1" and
+                    adb_read("shell", "pm", "path", "android").strip().startswith(b"package:"))
+        WebDriverWait(None, 60, poll_frequency=1).until(device_ready)
+        phase("session-create-once")
         driver = webdriver.Remote("http://127.0.0.1:4723", options=opts)
         driver.implicitly_wait(0)
         wait(driver, lambda d: d.current_package == PKG)
@@ -486,13 +571,16 @@ def main():
         # Persist only a categorical exception type, never page source,
         # credentials, screenshots or arbitrary exception messages.
         evidence["failureType"] = type(exc).__name__
-        raise SystemExit("APPIUM_PILOT_FAILED " + evidence["failurePhase"] + " " + type(exc).__name__) from None
+        raise SystemExit("APPIUM_PILOT_FAILED " + evidence["failurePhase"] + " " + str(evidence.get("failureDetail")) + " " + type(exc).__name__) from None
     finally:
         if driver is not None:
             try:
                 driver.quit()
             except Exception:
-                evidence.update(status="FAIL", failurePhase="driver-quit")
+                if evidence["status"] == "PASS":
+                    evidence.update(status="FAIL", failurePhase="driver-quit")
+                else:
+                    evidence["cleanupFailed"] = True
         save()
     if evidence["status"] != "PASS":
         raise SystemExit("APPIUM_PILOT_FAILED")

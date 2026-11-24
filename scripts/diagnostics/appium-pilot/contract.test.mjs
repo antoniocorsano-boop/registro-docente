@@ -50,3 +50,9 @@ test('backup and restore pilot retains physical encrypted copies and real SAF bo
   assert.ok(workflow.includes('.safReturns==["target-export","recovery-export","target-source","recovery-source"]'));
   assert.ok(workflow.includes('.physicalCopies[0].sha256!=.physicalCopies[1].sha256'));
 });
+
+test('native picker uses scoped stable selectors and safe transition diagnostics',()=>{
+  assert.ok(!pilot.includes('By.XPATH, "//*"'));
+  for(const x of ['native_selector(labels, attribute, reject_preview)','StableSelection()','activity_surface()','saf-wait-native-activity','saf-switch-native-context','saf-save-control','saf-wait-protected-lock','saf-wait-exact-public-dialog','export-verify-encrypted-envelope','session-device-readiness'])assert.ok(pilot.includes(x),x);
+  assert.ok(workflow.includes('python3 -m unittest discover -s scripts/diagnostics/appium-pilot'));
+});
