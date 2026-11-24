@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
+import { resumedActivity, hasArea } from './native-ui-driver.mjs';
+import { waitUniquePublicTarget, readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, safFailureDetail, prepareClassCreation, nativeReadRetryCodes } from './native-lab-transitions.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { createAdbTransportTrace } from './native-adb-transport-probe.mjs';
@@ -51,6 +52,7 @@ let phase = 'preflight';
 let lastSafActivityTrail = null;
 const surfaceTransitions=[];
 const readyDestinations=new Set();
+let cdpTargetObservation=null,nativeUiObservation=null,classControlObservation=null;
 const environment={schemaVersion:1,candidate:sha,api,syntheticOnly:true,productionRelease:false,
   runId:process.env.GITHUB_RUN_ID||null,runAttempt:process.env.GITHUB_RUN_ATTEMPT||null,
   bootReady:false,bootObservation:null,packageReady:false,launches:0,foreground:false,cdpReady:false,versions:null,emulatorIdentity:null,complete:false};
@@ -136,30 +138,32 @@ async function until(fn, name, timeout = 60000, retryReadErrors = true) {
   }
 }
 function nativeNodes() {
-  adb('shell','rm','-f','/sdcard/ap02-f2-ui.xml');
-  // Some emulator frames legitimately have no accessibility root. Do not
-  // interpret a failed Android shell 'cat' as XML or another data format.
-  const dump=adb('shell','uiautomator','dump','/sdcard/ap02-f2-ui.xml');
-  if(/null root node/i.test(dump))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
-  const xml=adb('shell','cat','/sdcard/ap02-f2-ui.xml');
-  if(!/<hierarchy\b/.test(xml))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
-  return parseNativeNodes(xml);
+  // NATIVE_UI_TREE_UNAVAILABLE is a read-only transient; no tap is retried.
+  return readNativeSnapshot(adb,state=>{nativeUiObservation=state;});
 }
 const doc = n => /documentsui/i.test(n.pkg);
-const findNative = (fn,name,timeout=45000) =>
-  until(()=>nativeNodes().find(n=>hasArea(n)&&fn(n)),name,timeout);
+const documentsForeground=()=>classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg)==='documentsui';
+const nativeSelection=(select,timeout=45000)=>waitNativeSelection({
+  read:nativeNodes,foreground:documentsForeground,select,timeoutMs:timeout,
+  onState:state=>{nativeUiObservation=state;}
+});
+const findNative = (fn,name,timeout=45000) => nativeSelection(nodes=>uniqueNativeControl(nodes,fn),timeout);
 function tap(n) {
   assert.ok(hasArea(n));
   const [x1,y1,x2,y2]=n.bounds;
-  adb('shell','input','tap',String(Math.floor((x1+x2)/2)),String(Math.floor((y1+y2)/2)));
+  return requireDocumentsUiTap({foreground:documentsForeground,node:n,tap:()=>adb('shell','input','tap',String(Math.floor((x1+x2)/2)),String(Math.floor((y1+y2)/2)))});
 }
 async function downloads() {
-  await findNative(n=>doc(n)&&(/show roots|open navigation drawer|mostra radici/i.test(n.desc)||
-    /^(Downloads|Download|save|salva)$/i.test(n.text)),'ANDROID_DOCUMENTS_UI',
-    api===32?90000:45000);
-  if(!nativeNodes().some(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text))) {
-    tap(await findNative(n=>doc(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc),'DOC_ROOTS'));
-    tap(await findNative(n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text),'DOC_DOWNLOADS'));
+  const root=n=>doc(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc);
+  const folder=n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text);
+  const decision=await nativeSelection(nodes=>{
+    if(nodes.some(n=>folder(n)&&hasArea(n)))return {key:'downloads',value:'downloads'};
+    const open=uniqueNativeControl(nodes,root);
+    return open?{key:open.key,value:open.value}:null;
+  },api===32?90000:45000);
+  if(decision!=='downloads'){
+    tap(decision);
+    tap(await findNative(folder,'DOC_DOWNLOADS'));
   }
 }
 let nativeSaveCompletionCount=0;
@@ -190,12 +194,11 @@ async function nativeSave(alertIndex, activityProbe) {
       originalError:classifyFailure(error).code,
       activityTrail:activityProbe?.snapshot()??null};
     // Secondary UI evidence adds context, never replaces the primary failure.
-    diagnostic.detailCode=failureAlert?'NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF':
-      cancelledAlert?'NATIVE_V7_EXPORT_FORM_REJECTED':
-      safe?.locked?'NATIVE_V7_VAULT_LOCKED_BEFORE_SAF':
-      safe?.cipherBusy?'NATIVE_V7_EXPORT_STILL_IN_PROGRESS':
-      diagnostic.foreground===true?'NATIVE_V7_SAF_MISSING_FOREGROUND':
-      diagnostic.foreground===false?'NATIVE_V7_SAF_NOT_OBSERVED_OFF_FOREGROUND':null;
+    // Once DocumentsUI has been observed, Vault lock is expected; do not label
+    // it NATIVE_V7_VAULT_LOCKED_BEFORE_SAF or erase the original error.
+    // The closed detail taxonomy includes NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF,
+    // NATIVE_V7_EXPORT_STILL_IN_PROGRESS and NATIVE_V7_SAF_NOT_OBSERVED_OFF_FOREGROUND.
+    diagnostic.detailCode=safFailureDetail(diagnostic);
     try{writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));}catch{}
     throw error;
   }
@@ -226,9 +229,22 @@ async function reauthenticateAfterPicker(kind) {
 async function nativeChoose(filename) {
   await downloads();
   tap(await findNative(n=>doc(n)&&n.text===filename&&!/preview|anteprima/i.test(n.desc),'EXACT_DOCUMENT_'+filename));
-  await until(()=>nativeForeground()||nativeNodes().some(n=>doc(n)&&/^(open|apri)$/i.test(n.text)),
-    'SELECT_DOCUMENT',25000);
-  if(!nativeForeground()) tap(await findNative(n=>doc(n)&&/^(open|apri)$/i.test(n.text),'DOC_OPEN_BUTTON'));
+  const open=n=>doc(n)&&/^(open|apri)$/i.test(n.text);
+  // Observe return or a stable positive confirmation control; no duplicate tap.
+  let previous=null,consecutive=0;
+  const next=await observeUntil(()=>{
+    let item;
+    try{
+      if(nativeForeground())return 'returned';
+      if(!documentsForeground()){previous=null;consecutive=0;return false;}
+      const nodes=nativeNodes();
+      item=documentsForeground()?uniqueNativeControl(nodes,open):null;
+    }catch(error){previous=null;consecutive=0;throw error;}
+    if(!item){previous=null;consecutive=0;return false;}
+    consecutive=item.key===previous?consecutive+1:1;previous=item.key;
+    return consecutive>=2?item.value:false;
+  },{timeoutMs:25000,intervalMs:450,retryReadErrors:true,retryCodes:nativeReadRetryCodes});
+  if(next!=='returned'&&!nativeForeground())tap(next);
   await until(nativeForeground,'RETURN_FROM_OPEN',45000);
 }
 
@@ -248,35 +264,67 @@ function send(method,params={},timeout=35000) {
   if(!active||!channel)return Promise.reject(new LabFailure('CDP_DISCONNECTED'));
   return channel.request(id=>active.send(JSON.stringify({id,method,params})),timeout);
 }
-async function connect() {
-  const s=await until(async()=>{
-    const ps=probe();if(ps.length!==1)return null;
-    adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+ps[0]);
-    let list;
-    try {
-      const resp=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(commandBudget(3000))});
-      if(!resp.ok)return null;
-      list=await resp.json();
-    }catch(error){
-      if(error instanceof LabFailure)throw error;
-      if(error?.name==='TimeoutError'||error instanceof TypeError)return null;
-      throw error;
-    }
-    if(!Array.isArray(list))throw new LabFailure('INVALID_HARNESS_ARGUMENT');
-    const targets=list.filter(x=>x.type==='page'&&x.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(x.url));
-    if(targets.length>1)throw new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');
-    if(!targets.length)return null;
-    const target=targets[0];
-    const handshakeBudget=commandBudget(4000);
-    const ws=new WebSocket(target.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/,'ws://127.0.0.1:9222'));
+async function openCdpSocket(endpoint){
+  const budget=commandBudget(4000),ws=new WebSocket(endpoint);
+  try{
     await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{ws.close();reject(new LabFailure('CDP_SOCKET_TIMEOUT'));},handshakeBudget);
+      const timer=setTimeout(()=>reject(new LabFailure('CDP_SOCKET_TIMEOUT')),budget);
       ws.addEventListener('open',()=>{clearTimeout(timer);resolve();},{once:true});
-      ws.addEventListener('error',()=>{clearTimeout(timer);ws.close();reject(new LabFailure('CDP_SOCKET_ERROR'));},{once:true});
+      ws.addEventListener('error',()=>{clearTimeout(timer);reject(new LabFailure('CDP_SOCKET_ERROR'));},{once:true});
       ws.addEventListener('close',()=>{clearTimeout(timer);reject(new LabFailure('CDP_DISCONNECTED'));},{once:true});
     });
     return ws;
-  },'WEBVIEW_DEBUG_TARGET',60000);
+  }catch(error){ws.close();throw error;}
+}
+async function readSocketSurface(ws){
+  const probeChannel=createPendingCommands();
+  const close=()=>probeChannel.close();
+  const message=e=>{
+    let msg;try{msg=JSON.parse(e.data);}catch{close();return;}
+    if(msg.error||msg.result?.exceptionDetails)probeChannel.settle(msg.id,new LabFailure('CDP_EVALUATION_REJECTED'));
+    else probeChannel.settle(msg.id,null,msg.result?.result?.value);
+  };
+  ws.addEventListener('close',close);ws.addEventListener('error',close);ws.addEventListener('message',message);
+  try{
+    // Runtime.evaluate is read-only here: no Page.enable, handlers, input or storage.
+    return await probeChannel.request(id=>ws.send(JSON.stringify({id,method:'Runtime.evaluate',
+      params:{expression:surfaceExpression(null),returnByValue:true}})),4000);
+  }finally{
+    probeChannel.close();ws.removeEventListener('close',close);ws.removeEventListener('error',close);ws.removeEventListener('message',message);
+  }
+}
+async function connect(expected){
+  const selected=await waitUniquePublicTarget({expected,
+    sample:async()=>{
+      const ps=probe();if(ps.length!==1||!nativeForeground())return null;
+      adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+ps[0]);
+      let list;
+      try{
+        const resp=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(commandBudget(3000))});
+        if(!resp.ok)return null;
+        list=await resp.json();
+      }catch(error){
+        if(error instanceof LabFailure)throw error;
+        if(error?.name==='TimeoutError'||error instanceof TypeError)return null;
+        throw error;
+      }
+      return {pid:ps[0],foreground:nativeForeground(),list};
+    },
+    inspect:async target=>{
+      const ws=await openCdpSocket(target.endpoint);
+      try{return await readSocketSurface(ws);}finally{ws.close();}
+    },
+    verify:pid=>{const current=probe();return current.length===1&&current[0]===pid&&nativeForeground();},
+    onState:state=>{cdpTargetObservation=state;}
+  });
+  const s=await openCdpSocket(selected.endpoint);
+  try{
+    const frame=await readSocketSurface(s);
+    const pids=probe();
+    if(pids.length!==1||pids[0]!==selected.pid||
+       classifySurface({...frame,foreground:nativeForeground()},expected)!=='ready')
+      throw new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');
+  }catch(error){s.close();throw error;}
   socket=s;
   const active=createPendingCommands();channel=active;
   s.addEventListener('close',()=>active.close(),{once:true});
@@ -520,13 +568,13 @@ async function createClass(name){
   // and its REAL window.prompt via Chrome DevTools instead; never construct
   // internal application records or mutate a Vault through test hooks.
   phase='visible-ui-create-synthetic-class';
-  assert.ok(nativeForeground(),'APPLICATION_NOT_FOREGROUND_FOR_CLASS');
-  await until(()=>dom('document.visibilityState==="visible" && '+
-    '!document.querySelector("#vault-password") && '+
-    '!Array.from(document.querySelectorAll("div[inert][style]")).some(e=>e.style.visibility==="hidden") && '+
-    'Array.from(document.querySelectorAll("button")).filter(e=>'+
-    'e.textContent?.trim()==="Nuova Classe" && ('+interactiveSource+')(e)).length===1'),
-    'VISIBLE_CLASS_CREATION_CONTROL',30000);
+  // VISIBLE_CLASS_CREATION_CONTROL: the Q3 Home gate is observed again at the
+  // actual action boundary, including at most one real unlock for this scope.
+  await prepareClassCreation({sample:()=>samplePublicSurface(null),
+    authenticate:makePublicAuthentication('before-class-creation'),
+    onState:state=>{classControlObservation=state;observeSurface('home',state);}});
+  readyDestinations.add('home');
+  if(!nativeForeground())throw new LabFailure('CLASS_CREATION_CONTROL_CHANGED');
   if(classPromptName!==null)throw Error('CLASS_PROMPT_ALREADY_PENDING');
   const before=classPromptAcknowledged;
   classPromptName=name;
@@ -820,7 +868,7 @@ async function launch(){
   adb('shell','am','start','-W','-n',activity);
   await until(()=>probe().length===1&&nativeForeground(),'PREFLIGHT_FOREGROUND',45000);
   phase='preflight-cdp';
-  await connect();
+  await connect(environment.launches===0?'setup':'lock');
   await until(()=>probe().length===1&&nativeForeground(),'PREFLIGHT_FOREGROUND',45000);
   const chromium=await dom('navigator.userAgent.match(/Chrome\\/([0-9.]+)/)?.[1]??null');
   const detected=versionFacts({chromium}).chromium;
@@ -925,6 +973,7 @@ try{
     dialogCommands:dialogTracker.snapshot(),
     surfaceTransitions:safeSurfaceTrace(surfaceTransitions),readyDestinations:[...readyDestinations].sort(),
     qualified:false,productionRelease:false,syntheticOnly:true,
+    cdpTargetObservation,nativeUiObservation,classControlObservation,
     adbTransport:adbTransport.snapshot(),
     safActivityTrail:lastSafActivityTrail,
     homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,

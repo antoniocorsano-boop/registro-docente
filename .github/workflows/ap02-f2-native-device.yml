@@ -15,6 +15,7 @@ on:
       - 'scripts/diagnostics/ap02-native-device-v7.mjs'
       - 'scripts/diagnostics/native-lab-runtime.mjs'
       - 'scripts/diagnostics/native-lab-readiness.mjs'
+      - 'scripts/diagnostics/native-lab-transitions.mjs'
       - 'scripts/diagnostics/native-lab-runtime.test.mjs'
       - 'scripts/diagnostics/run-native-lab-contracts.mjs'
       - 'scripts/diagnostics/native-ui-driver.mjs'
@@ -41,7 +42,7 @@ jobs:
         api: [32, 36]
     env:
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
-      Q4_TRIAL: ${{ inputs.trial || '' }}
+      Q4_TRIAL: ${{ inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
       AP02_API: ${{ matrix.api }}
     steps:
       - name: Validate isolated Q4 invocation before checkout
@@ -68,7 +69,7 @@ jobs:
           test "$EVENT_BASE" = 80378e9daab60fe6c389e372c3c79e3dcd09aac0
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$CANDIDATE_SHA" = "$EVENT_HEAD"
-          [[ "$Q4_TRIAL" =~ ^[123]$ ]]
+          [[ "$Q4_TRIAL" =~ ^[0123]$ ]]
           test "$GITHUB_RUN_ATTEMPT" = 1
       - name: Checkout exact candidate without write credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

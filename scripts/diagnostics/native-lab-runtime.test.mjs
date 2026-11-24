@@ -397,3 +397,98 @@ test('Q4 exact installed emulator identity survives classified version-probe fai
   assert.equal(emulatorIdentity({...p,binarySha256:null,probe:{status:1}}).version,null);
   assert.equal(emulatorIdentity({...p,packageMetadata:'',probe:{status:1}}).version,null);
 });
+
+import { localPageTargets, waitUniquePublicTarget, readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, safFailureDetail, prepareClassCreation } from './native-lab-transitions.mjs';
+const target=(id)=>({type:'page',id,url:'http://localhost/',webSocketDebuggerUrl:'ws://localhost/devtools/page/'+id});
+const setupFrame={documentVisible:true,setup:true,professionalChoice:true};
+test('Q4-R03 observes unique real setup context twice and rejects unrelated localhost target',async()=>{
+  const clock=fakeClock(),states=[],calls=[];
+  const selected=await waitUniquePublicTarget({expected:'setup',now:clock.now,sleep:clock.sleep,timeoutMs:5000,
+    sample:()=>({pid:17,foreground:true,list:[target('a'),target('b')]}),
+    inspect:async x=>{calls.push(x.id);return x.id==='a'?setupFrame:{documentVisible:true};},
+    onState:s=>states.push(s)});
+  assert.equal(selected.id,'a');assert.deepEqual(calls,['a','b','a','b']);
+  assert.deepEqual(states.at(-1),{state:'stable',candidates:2,matches:1});
+  assert.equal(localPageTargets([{...target('x'),url:'https://evil.example/'}]).length,0);
+});
+test('Q4-R03 ambiguous and incomplete observations never choose a target',async()=>{
+  for(const mode of ['ambiguous','disconnected']){
+    const clock=fakeClock();
+    await assert.rejects(waitUniquePublicTarget({expected:'setup',now:clock.now,sleep:clock.sleep,timeoutMs:1100,
+      sample:()=>({pid:17,foreground:true,list:[target('a'),target('b')]}),
+      inspect:async x=>{if(mode==='disconnected'&&x.id==='b')throw new LabFailure('CDP_DISCONNECTED');return setupFrame;}
+    }),{code:mode==='ambiguous'?'PREFLIGHT_CDP_TARGET_AMBIGUOUS':'OBSERVATION_DEADLINE'});
+  }
+});
+test('Q4-R03 resets streak on transient ambiguity, PID change and zero targets',async()=>{
+  const clock=fakeClock();let i=0;
+  const snapshots=[{pid:1,list:[]},{pid:1,list:[target('a')]},{pid:2,list:[target('a')]},{pid:2,list:[target('a'),target('b')]},{pid:2,list:[target('a')]},{pid:2,list:[target('a')]}];
+  const chosen=await waitUniquePublicTarget({expected:'setup',now:clock.now,sleep:clock.sleep,timeoutMs:5000,
+    sample:()=>({...snapshots[i++],foreground:true}),inspect:async()=>setupFrame});
+  assert.equal(chosen.pid,2);assert.equal(i,6);
+});
+const snapshotXml='<hierarchy><node package="com.android.documentsui" text="Save" enabled="true" bounds="[1,2][10,20]" /></hierarchy>';
+test('Q4-R04 dump succeeds then missing snapshot is classified; permission and unknown exits are not retried',()=>{
+  for(const [stderr,code] of [['cat: /sdcard/ap02-f2-ui.xml: No such file or directory','NATIVE_UI_TREE_UNAVAILABLE'],['Permission denied','NATIVE_UI_PERMISSION_DENIED'],['unexpected','NATIVE_UI_READ_FAILED']]){
+    assert.throws(()=>readNativeSnapshot((...args)=>{
+      if(args[1]==='cat')throw Object.assign(new Error('private text'),{status:1,stderr});
+      return '';
+    }),{code});
+  }
+  assert.throws(()=>readNativeSnapshot((...args)=>args[1]==='cat'?'<hierarchy>':''),{code:'NATIVE_UI_TREE_UNAVAILABLE'});
+  assert.equal(readNativeSnapshot((...args)=>args[1]==='cat'?snapshotXml:'').length,1);
+});
+test('Q4-R04 stable picker control requires two foreground samples and retries only missing snapshot',async()=>{
+  const clock=fakeClock();let reads=0,taps=0;
+  const chosen=await waitNativeSelection({now:clock.now,sleep:clock.sleep,timeoutMs:5000,foreground:()=>true,
+    read:()=>{reads++;if(reads===2)throw new LabFailure('NATIVE_UI_TREE_UNAVAILABLE');return readNativeSnapshot((...a)=>a[1]==='cat'?snapshotXml:'');},
+    select:nodes=>uniqueNativeControl(nodes,n=>n.text==='Save')});
+  assert.equal(reads,4);
+  requireDocumentsUiTap({foreground:()=>true,node:chosen,tap:()=>{taps++;}});
+  assert.throws(()=>requireDocumentsUiTap({foreground:()=>false,node:chosen,tap:()=>{taps++;}}),{code:'NATIVE_UI_FOREGROUND_LOST'});
+  assert.equal(taps,1);
+  assert.equal(uniqueNativeControl([chosen,chosen],()=>true),null);
+  assert.equal(uniqueNativeControl([{...chosen,enabled:false}],()=>true),null);
+});
+test('Q4-R04 lock during observed DocumentsUI is not labelled pre-picker rejection',()=>{
+  assert.equal(safFailureDetail({locked:true,foreground:false,activityTrail:{observedDocumentsUi:true}}),'NATIVE_V7_SAF_OBSERVED_UI_UNAVAILABLE');
+  assert.equal(safFailureDetail({locked:true,activityTrail:{observedDocumentsUi:false}}),'NATIVE_V7_VAULT_LOCKED_BEFORE_SAF');
+});
+test('Q4-R05 class action boundary observes lock, one authentication, stable Home and final check',async()=>{
+  const clock=fakeClock();let auth=0,reads=0;
+  const locked={...readyFrame,lock:true,lockControls:true,protectedField:true};
+  const frames=[locked,readyFrame,readyFrame,readyFrame];
+  assert.equal(await prepareClassCreation({sample:()=>{reads++;return frames.shift();},authenticate:async()=>{auth++;},now:clock.now,sleep:clock.sleep,timeoutMs:5000}),true);
+  assert.equal(auth,1);assert.equal(reads,4);
+});
+test('Q4-R05 missing or ambiguous Home button and a late lock fail before class mutation',async()=>{
+  const clock=fakeClock();
+  await assert.rejects(prepareClassCreation({sample:()=>({...readyFrame,home:false}),now:clock.now,sleep:clock.sleep,timeoutMs:1000}),{code:'OBSERVATION_DEADLINE'});
+  const frames=[readyFrame,readyFrame,{...readyFrame,lock:true,lockControls:true,protectedField:true}];
+  await assert.rejects(prepareClassCreation({sample:()=>frames.shift(),timeoutMs:3000,now:clock.now,sleep:clock.sleep}),{code:'CLASS_CREATION_CONTROL_CHANGED'});
+});
+
+test('Q4 pilot trial 0 must pass on both APIs before three counted trials',()=>{
+  const q=readFileSync(new URL('../../.github/workflows/qa-stability-01-q4.yml',import.meta.url),'utf8');
+  const f=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
+  assert.ok(q.includes('trial: 0'));
+  assert.ok(q.includes('needs: [preflight, pilot]'));
+  assert.ok(q.includes('Qualify selected inherited Bun contracts before Android pilot'));
+  assert.ok(f.includes('^[0123]$'));
+});
+
+test('Q4-R03 foreground loss after inspection resets the unique-target streak',async()=>{
+  const clock=fakeClock();let checks=0;
+  await waitUniquePublicTarget({expected:'setup',now:clock.now,sleep:clock.sleep,timeoutMs:5000,
+    sample:()=>({pid:17,foreground:true,list:[target('a')]}),inspect:async()=>setupFrame,
+    verify:()=>++checks!==2});
+  assert.equal(checks,4);
+});
+test('Q4-R04 transport failure during foreground checks invalidates previous sample',async()=>{
+  const clock=fakeClock();let foregroundReads=0,snapshots=0;
+  await waitNativeSelection({now:clock.now,sleep:clock.sleep,timeoutMs:5000,
+    foreground:()=>{if(++foregroundReads===3)throw new LabFailure('ADB_TRANSPORT_OFFLINE');return true;},
+    read:()=>{snapshots++;return readNativeSnapshot((...args)=>args[1]==='cat'?snapshotXml:'');},
+    select:nodes=>uniqueNativeControl(nodes,n=>n.text==='Save')});
+  assert.equal(snapshots,3);
+});
