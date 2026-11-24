@@ -34,6 +34,7 @@ const categories = Object.freeze({
   PUBLIC_GATE_ERROR: 'INDETERMINATE',
   PUBLIC_RELOCK_AFTER_AUTH: 'INDETERMINATE',
   CDP_DIALOG_OUTCOME_UNKNOWN: 'INDETERMINATE',
+  RECOVERY_CONSENT_INVALID: 'INDETERMINATE',
   PROCESS_STOP_DEADLINE: 'INDETERMINATE',
   V7_FIRST_FILE_NOT_UNIQUE: 'INDETERMINATE',
   V7_SECOND_DISTINCT_DOCUMENT_MISSING: 'INDETERMINATE',
@@ -233,5 +234,34 @@ export function createDialogTracker(){
     check,
     async flush(){while(pending.size)await Promise.all([...pending]);check();},
     snapshot(){return {requested,acknowledged,pending:pending.size,failed:failure!==null};},
+  };
+}
+
+// AP02 V7: retain the exact public consent dialog instead of automatically
+// opening the second picker while the driver is still observing the first
+// authenticated return. No dialog text or credential is retained here.
+export const V7_RECOVERY_CONSENT='Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?';
+export function createRecoveryConsentGate(){
+  let state='idle',submitted=false,acknowledged=false,observed=false,invalid=false;
+  const check=()=>{if(invalid)throw new LabFailure('RECOVERY_CONSENT_INVALID');};
+  const ready=()=>{check();return state==='armed'&&submitted&&acknowledged&&observed;};
+  return {
+    arm(){if(state!=='idle')throw new LabFailure('RECOVERY_CONSENT_INVALID');state='armed';},
+    startSubmit(){check();if(state!=='armed'||submitted)throw new LabFailure('RECOVERY_CONSENT_INVALID');submitted=true;},
+    acknowledgeSubmit(){check();if(!submitted||acknowledged||state!=='armed')throw new LabFailure('RECOVERY_CONSENT_INVALID');acknowledged=true;},
+    capture(kind,message){
+      if(state!=='armed'&&state!=='sending')return false;
+      if(state!=='armed'||!submitted||observed||kind!=='confirm'||message!==V7_RECOVERY_CONSENT)invalid=true;
+      else observed=true;
+      return true; // hold even unexpected dialogs; never automatically accept
+    },
+    ready,
+    async accept(sendOnce){
+      if(!ready())throw new LabFailure('RECOVERY_CONSENT_INVALID');
+      state='sending';
+      try{await sendOnce();check();state='accepted';}
+      catch(error){state='failed';throw error;}
+    },
+    snapshot(){return {state,submitted,acknowledged,observed,invalid};}
   };
 }

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { pullLabV7Bytes } from './native-v7-document-discovery.mjs';
-import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, failureCategories } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, createRecoveryConsentGate, V7_RECOVERY_CONSENT, failureCategories } from './native-lab-runtime.mjs';
 const fakeClock = () => {
   let time = 0;
   return { now: () => time, sleep: async ms => { time += ms; }, advance: ms => { time += ms; } };
@@ -565,4 +565,35 @@ test('Q4 SAF return never treats an application error or read failure as a lock'
     },...clock,timeoutMs:1000}),{code:error?'CDP_DISCONNECTED':'PUBLIC_GATE_ERROR'});
     assert.equal(reads,1);
   }
+});
+
+test('Q4 restore consent is held until the one actual password submission is acknowledged',async()=>{
+  const gate=createRecoveryConsentGate();let accepts=0;
+  gate.arm();gate.startSubmit();
+  assert.equal(gate.capture('confirm',V7_RECOVERY_CONSENT),true);
+  assert.equal(gate.ready(),false);
+  await assert.rejects(gate.accept(()=>accepts++),{code:'RECOVERY_CONSENT_INVALID'});
+  gate.acknowledgeSubmit();assert.equal(gate.ready(),true);
+  await gate.accept(async()=>{accepts++;});
+  assert.equal(gate.snapshot().state,'accepted');assert.equal(accepts,1);
+  await assert.rejects(gate.accept(()=>accepts++),{code:'RECOVERY_CONSENT_INVALID'});
+  assert.equal(accepts,1);
+});
+test('Q4 restore consent rejects early, mismatched and duplicate dialogs without accepting them',async()=>{
+  for(const mode of ['early','wrong','duplicate','alert']){
+    const gate=createRecoveryConsentGate();let accepts=0;gate.arm();
+    if(mode!=='early')gate.startSubmit();
+    assert.equal(gate.capture(mode==='alert'?'alert':'confirm',mode==='wrong'?'Ripristino V7':V7_RECOVERY_CONSENT),true);
+    if(mode==='duplicate')gate.capture('confirm',V7_RECOVERY_CONSENT);
+    assert.throws(()=>gate.ready(),{code:'RECOVERY_CONSENT_INVALID'});
+    await assert.rejects(gate.accept(()=>accepts++),{code:'RECOVERY_CONSENT_INVALID'});
+    assert.equal(accepts,0);
+  }
+});
+test('Q4 unknown consent command outcome is not retried',async()=>{
+  const gate=createRecoveryConsentGate();let calls=0;
+  gate.arm();gate.startSubmit();gate.acknowledgeSubmit();gate.capture('confirm',V7_RECOVERY_CONSENT);
+  await assert.rejects(gate.accept(()=>{calls++;throw new LabFailure('CDP_TIMEOUT');}),{code:'CDP_TIMEOUT'});
+  await assert.rejects(gate.accept(()=>calls++),{code:'RECOVERY_CONSENT_INVALID'});
+  assert.equal(calls,1);
 });

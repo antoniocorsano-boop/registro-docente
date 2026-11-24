@@ -288,6 +288,30 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).not.toContain('window.__val01NativeRestore');
   });
 
+  test('F2 target-source consent is exact downstream evidence of authenticated native read, and is held until explicit acceptance', async () => {
+    const driver = await Bun.file('scripts/diagnostics/ap02-native-device-v7.mjs').text();
+    const runtime = await Bun.file('scripts/diagnostics/native-lab-runtime.mjs').text();
+    const privacy = await Bun.file('src/components/PrivacyView.tsx').text();
+    const bridge = await Bun.file('src/security/androidBackupExport.ts').text();
+    const root = await Bun.file('src/components/SecureRegistroRoot.tsx').text();
+    const flow = privacy.slice(privacy.indexOf('const handleImportEncrypted'), privacy.indexOf('if (!selectedEncryptedFile)'));
+    const consent = 'Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?';
+    expect(flow).toContain(consent);
+    expect(runtime).toContain(consent);
+    expect(flow.indexOf('await readEncryptedBackupOnAndroid')).toBeLessThan(flow.indexOf('await decryptDataWithPassword(encryptedText, decryptPassword)'));
+    expect(flow.indexOf('await decryptDataWithPassword(encryptedText, decryptPassword)')).toBeLessThan(flow.indexOf(consent));
+    const read = bridge.slice(bridge.indexOf('export async function readEncryptedBackupOnAndroid'));
+    expect(read).toContain('return await sessionAccess(runtime, isActive) ? result.encryptedText : null;');
+    expect(root).toContain('current?.foreground && authenticatedEpochRef.current === current.epoch &&');
+    expect(root).toContain('!suspendedRef.current && vaultRef.current?.isUnlocked()');
+    expect(driver).toContain('if(recoveryConsent.capture(d.type,d.message))return;');
+    expect(driver).toContain('recoveryConsent.ready()&&nativeForeground()');
+    const restore = driver.slice(driver.indexOf('async function restoreFromRealSaf'), driver.indexOf('async function launch'));
+    expect(restore.indexOf("await reauthenticateAfterPicker('target-source')")).toBeLessThan(restore.indexOf('await recoveryConsent.accept('));
+    expect(restore.indexOf('await recoveryConsent.accept(')).toBeLessThan(restore.indexOf('await nativeChoose(recovery)'));
+    expect(restore).toContain("await reauthenticateAfterPicker('recovery-source')");
+  });
+
   test('native Android SAF accepts the exact V7 filename without relaxing the legacy V6 allowlist', async () => {
     const native = await Bun.file('mobile/android-probe/native/RegistroBackupFilesPlugin.java').text();
     const privacy = await Bun.file('src/components/PrivacyView.tsx').text();
