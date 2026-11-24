@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { classifyResumedActivity, summarizeSafActivityTrail, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { classifyAdbCommand, createAdbTransportTrace } from './native-adb-transport-probe.mjs';
 import { classifyHomeNavigationFrame, safeHomeNavigationReport } from './native-home-navigation-probe.mjs';
+import {labV7Date,isOriginalV7Name,selectNewLabV7Name,quotedLabV7Path} from './native-v7-document-discovery.mjs';
 
 const app = 'it.trama.registrodocente.lab.ap02v7';
 test('F2-DIAG-03 recognizes app, DocumentsUI and unrelated foreground activities without raw data', () => {
@@ -117,4 +118,39 @@ test('F2-DIAG-05 retains only classified navigation stages, not raw private UI d
     ['other-view','locked','home-ready','unavailable']);
   assert.equal(trace.rawDomStored,false);
   assert.equal(JSON.stringify(trace).includes('secret-user'),false);
+});
+
+test('F2-DIAG-06 recognizes Android numbered collision files but rejects arbitrary paths', () => {
+  const base='Backup_Valutazioni_V7_2026-11-24.enc.json';
+  const variants=[
+    'Backup_Valutazioni_V7_2026-11-24(1).enc.json',
+    'Backup_Valutazioni_V7_2026-11-24 (1).enc.json',
+    'Backup_Valutazioni_V7_2026-11-24.enc(1).json',
+    'Backup_Valutazioni_V7_2026-11-24.enc (1).json',
+    'Backup_Valutazioni_V7_2026-11-24.enc.json(1)'
+  ];
+  assert.equal(isOriginalV7Name(base),true);
+  assert.equal(labV7Date(base),'2026-11-24');
+  for(const name of variants){
+    assert.equal(labV7Date(name),'2026-11-24');
+    assert.equal(selectNewLabV7Name([base],[base,name]),name);
+    assert.equal(quotedLabV7Path(name),"'"+'/sdcard/Download/'+name+"'");
+  }
+  for(const name of ['../../secret.enc.json','Backup_Valutazioni_V7_2026-11-24;rm.enc.json',
+    'Backup_Valutazioni_V7_2026-11-24.enc.json.bak']){
+    assert.equal(labV7Date(name),null);
+    assert.throws(()=>quotedLabV7Path(name),/INVALID_LAB_V7_FILE_NAME/);
+  }
+});
+test('F2-DIAG-06 never treats overwrite, missing source or wrong date as two backups', () => {
+  const original='Backup_Valutazioni_V7_2026-11-24.enc.json';
+  const second='Backup_Valutazioni_V7_2026-11-24.enc(1).json';
+  assert.equal(selectNewLabV7Name([],[original]),original);
+  assert.throws(()=>selectNewLabV7Name([],[]),/V7_FIRST_FILE_NOT_UNIQUE/);
+  assert.throws(()=>selectNewLabV7Name([original],[original]),/V7_SECOND_DISTINCT_DOCUMENT_MISSING/);
+  assert.throws(()=>selectNewLabV7Name([original],[second]),/V7_SECOND_DISTINCT_DOCUMENT_MISSING/);
+  assert.throws(()=>selectNewLabV7Name([original],[original,
+    'Backup_Valutazioni_V7_2026-11-25.enc(1).json']),/V7_SECOND_DISTINCT_DOCUMENT_MISSING/);
+  assert.throws(()=>selectNewLabV7Name([original],[original,second,second]),/INVALID_LAB_V7_FILE_LIST/);
+  assert.throws(()=>selectNewLabV7Name([original],[original,second,'foreign']),/INVALID_LAB_V7_FILE_LIST/);
 });

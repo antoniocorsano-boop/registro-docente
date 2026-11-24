@@ -11,6 +11,7 @@ import { probePackagePids, verifiedProcessStop } from './native-process-probe.mj
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { createAdbTransportTrace } from './native-adb-transport-probe.mjs';
 import { classifyHomeNavigationFrame, safeHomeNavigationReport } from './native-home-navigation-probe.mjs';
+import {labV7Date,isOriginalV7Name,selectNewLabV7Name,quotedLabV7Path} from './native-v7-document-discovery.mjs';
 
 const pkg = 'it.trama.registrodocente.lab.ap02v7';
 const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
@@ -22,7 +23,6 @@ const password = 'ap02-local-synthetic-2026';
 const copyPassword = 'ap02-copy-synthetic-2026';
 const originalClass = 'Classe fittizia F2 A';
 const newerClass = 'Classe fittizia F2 B';
-const targetName = 'AP02_F2_TARGET.enc.json';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const adbTransport = createAdbTransportTrace();
 const adb = (...args) => {
@@ -480,11 +480,9 @@ async function createClass(name){
   await nav('Oggi');
   await onPage(name,30000);
 }
-function findV7Name(){
+function listLabV7Files(){
   const ls=adb('shell','ls','-1','/sdcard/Download');
-  const names=ls.split('\n').map(s=>s.trim()).filter(s=>/^Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json$/.test(s));
-  assert.equal(names.length,1,'EXPECTED_ONE_V7_FILE');
-  return names[0];
+  return ls.split('\n').map(s=>s.trim()).filter(s=>labV7Date(s)!==null).sort();
 }
 // F2-DEVICE diagnostic evidence: device-side metadata only, never file bytes,
 // filenames, class names or authentication data. Existing workflow preserves
@@ -492,7 +490,7 @@ function findV7Name(){
 let lastPhysicalReadKind = 'not-attempted';
 function safeDeviceFlag(flag,filename) {
   try {
-    execFileSync('adb',['shell','test',flag,'/sdcard/Download/'+filename],
+    execFileSync('adb',['shell','test',flag,quotedLabV7Path(filename)],
       {stdio:'ignore',timeout:7000});
     return true;
   } catch(error) {
@@ -501,7 +499,7 @@ function safeDeviceFlag(flag,filename) {
 }
 function safeDeviceByteCount(filename) {
   try {
-    const value=adb('shell','stat','-c','%s','/sdcard/Download/'+filename);
+    const value=adb('shell','stat','-c','%s',quotedLabV7Path(filename));
     return /^\d+$/.test(value) ? Number(value) : null;
   } catch { return null; }
 }
@@ -509,14 +507,14 @@ function safeDeviceByteCount(filename) {
 // names, SAF URIs, password values, app records or raw ADB output are retained.
 // Snapshots are persisted only if the two encrypted-file hashes coincide.
 function readSyntheticFileMetadata(filename) {
-  assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
+  assert.ok(labV7Date(filename)!==null,'INVALID_LAB_V7_FILENAME');
   const present=safeDeviceFlag('-e',filename);
   const regularFile=safeDeviceFlag('-f',filename);
   const readableByShell=safeDeviceFlag('-r',filename);
   let modifiedEpochSeconds=null,inode=null;
   if(present===true) {
     try {
-      const stat=adb('shell','stat','-c','%Y|%i','/sdcard/Download/'+filename);
+      const stat=adb('shell','stat','-c','%Y|%i',quotedLabV7Path(filename));
       const parts=/^(\d+)\|(\d+)$/.exec(stat);
       if(parts) {modifiedEpochSeconds=Number(parts[1]);inode=parts[2];}
     } catch { /* Unavailable metadata is not a reason to pass qualification. */ }
@@ -525,16 +523,16 @@ function readSyntheticFileMetadata(filename) {
     sizeBytes:present===true?safeDeviceByteCount(filename):null,
     modifiedEpochSeconds,inode};
 }
-function captureSyntheticFilePair(datedFilename) {
+function captureSyntheticFilePair(datedFilename,originalName) {
   return {observedAt:new Date().toISOString(),
-    retainedTarget:readSyntheticFileMetadata(targetName),
+    retainedTarget:readSyntheticFileMetadata(originalName),
     datedExport:readSyntheticFileMetadata(datedFilename)};
 }
 function changedIfKnown(before,after) {
   return before===null||after===null ? null : before!==after;
 }
 function captureDuplicateExportDiagnostic(previous,current,before,pickerReturnsBefore) {
-  const after=captureSyntheticFilePair(current.name);
+  const after=captureSyntheticFilePair(current.name,previous.name);
   const prior=before.datedExport,next=after.datedExport;
   const oldTarget=before.retainedTarget,newTarget=after.retainedTarget;
   const diagnostic={
@@ -569,7 +567,7 @@ function captureDuplicateExportDiagnostic(previous,current,before,pickerReturnsB
 async function capturePhysicalReadDiagnostic(filename,attempts) {
   // Accept only the two fixed laboratory filename patterns and never persist
   // the basename, raw ADB output, file contents, SAF URI or DOM text.
-  assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
+  assert.ok(labV7Date(filename)!==null,'INVALID_LAB_V7_FILENAME');
   let transport='unavailable';
   try {transport=adb('get-state')==='device'?'ready':'other';}catch{}
   let foreground=null;
@@ -581,7 +579,7 @@ async function capturePhysicalReadDiagnostic(filename,attempts) {
   const diagnostic={
     schemaVersion:1,stage:'native-v7-physical-read',
     candidate:sha,api,phase,syntheticOnly:true,productionRelease:false,
-    fileRole:filename===targetName?'retained-target':'dated-export',
+    fileRole:isOriginalV7Name(filename)?'original':'numbered-copy',
     fileLocation:'android-shared-downloads',attempts,
     lastReadKind:lastPhysicalReadKind,transport,foreground,
     sessionLocked:session?.locked??null,
@@ -602,9 +600,9 @@ async function capturePhysicalReadDiagnostic(filename,attempts) {
       foreground:diagnostic.foreground,sessionLocked:diagnostic.sessionLocked}));
 }
 function inspectEncryptedFile(filename){
-  assert.match(filename,/^(?:Backup_Valutazioni_V7_\d{4}-\d{2}-\d{2}\.enc\.json|AP02_F2_TARGET\.enc\.json)$/);
+  assert.ok(labV7Date(filename)!==null,'INVALID_LAB_V7_FILENAME');
   let bytes;
-  try{bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+filename],{timeout:30000});}
+  try{bytes=execFileSync('adb',['exec-out','cat',quotedLabV7Path(filename)],{timeout:30000});}
   catch(error){
     lastPhysicalReadKind=error?.code==='ETIMEDOUT'?'adb-exec-timeout':'adb-exec-rejected';
     throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE');
@@ -644,7 +642,17 @@ async function verifiedEncryptedFile(filename){
     }
   }
 }
-async function exportV7(){
+async function exportV7(previous=null){
+  // Let ACTION_CREATE_DOCUMENT create genuinely separate files on a filename
+  // collision. No shell rename, copy, media broadcast, or forged receipts.
+  const filesBefore=listLabV7Files();
+  if(previous===null){
+    assert.equal(filesBefore.length,0,'UNEXPECTED_EXISTING_V7_DOCUMENT');
+  } else {
+    assert.deepEqual(filesBefore,[previous.name],'ORIGINAL_V7_FILE_NOT_PRESENT');
+    assert.deepEqual(await verifiedEncryptedFile(previous.name),previous.digest,
+      'ORIGINAL_V7_FILE_CHANGED_BEFORE_EXPORT');
+  }
   phase='native-v7-export-form';
   await ensureInteractiveSession('before-v7-export');
   await onPage('Ripristina backup cifrato');
@@ -669,8 +677,31 @@ async function exportV7(){
   await until(()=>dialogs.slice(prior).some(d=>d.kind==='alert'&&
     /Copia completa V7 salvata, riletta e verificata/.test(d.message)),
     'V7_VERIFIED_NATIVE_RECEIPT',45000);
-  const name=findV7Name();
+  phase='native-v7-export-physical-discovery';
+  const filesAfter=listLabV7Files();
+  let name;
+  try{
+    name=selectNewLabV7Name(filesBefore,filesAfter);
+  }catch(error){
+    // Record only aggregate observations, never the on-device filenames.
+    writeFileSync(out+'/saf-diagnostic.json',JSON.stringify({
+      schemaVersion:3,stage:'android-saf-document-discovery',
+      candidate:sha,api,syntheticOnly:true,productionRelease:false,
+      countBefore:filesBefore.length,countAfter:filesAfter.length,
+      originalStillPresent:previous===null?null:filesAfter.includes(previous.name),
+      code:/^[A-Z0-9:_-]+$/.test(String(error?.message))?error.message:'INVALID_DOCUMENT_SELECTION'
+    },null,2));
+    throw error;
+  }
   const digest=await verifiedEncryptedFile(name);
+  if(previous!==null){
+    // Collision has not altered the first copy, and the second encrypted
+    // document must be distinct. The later restore tests its actual content.
+    assert.deepEqual(await verifiedEncryptedFile(previous.name),previous.digest,
+      'ORIGINAL_V7_FILE_MODIFIED_BY_SECOND_EXPORT');
+    assert.notEqual(digest.sha256,previous.digest.sha256,
+      'V7_SECOND_ENCRYPTED_COPY_NOT_DISTINCT');
+  }
   return {name,digest};
 }
 async function restoreFromRealSaf(target,recovery){
@@ -735,28 +766,24 @@ async function run(){
   await createClass(originalClass);
   await nav('Privacy');
   const target=await exportV7();
-  // The product uses a date-only V7 basename. Retain the exact encrypted
-  // target bytes locally under a second name, so the next export cannot
-  // overwrite it. Native file readback still validates its envelope.
-  adb('shell','mv','/sdcard/Download/'+target.name,'/sdcard/Download/'+targetName);
-  adb('shell','am','broadcast','-a','android.intent.action.MEDIA_SCANNER_SCAN_FILE',
-    '-d','file:///sdcard/Download/'+targetName);
-  assert.deepEqual(await verifiedEncryptedFile(targetName),target.digest);
+  // The first document remains at its original provider-owned location.
+  // Android will give the second same-day copy a numbered filename.
+  assert.deepEqual(await verifiedEncryptedFile(target.name),target.digest);
   record('native-v7-target-export-saf-verified',{target:target.digest,physical:true,nativeReauthCount});
   await nav('Oggi');
   await createClass(newerClass);
   await nav('Privacy');
   // Observe physical file identities before export #2 through the actual UI.
-  const priorExportMetadata=captureSyntheticFilePair(target.name);
+  const priorExportMetadata=captureSyntheticFilePair(target.name,target.name);
   const pickerReturnsBeforeRecovery=nativeSaveCompletionCount;
-  const recovery=await exportV7();
+  const recovery=await exportV7(target);
   if(recovery.digest.sha256===target.digest.sha256) {
     try {captureDuplicateExportDiagnostic(target,recovery,priorExportMetadata,pickerReturnsBeforeRecovery);}
     catch {console.log('AP02_F2_DUPLICATE_EXPORT_DIAGNOSTIC_UNAVAILABLE',api);}
   }
   assert.notEqual(recovery.digest.sha256,target.digest.sha256);
   record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true,nativeReauthCount});
-  await restoreFromRealSaf(targetName,recovery.name);
+  await restoreFromRealSaf(target.name,recovery.name);
   await onPage('Le mie classi',60000);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(originalClass)+')'),true);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(newerClass)+')'),false);

@@ -162,6 +162,19 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(driver).toContain('HOME_CONFIRM_DISMISSED');
     expect(driver).toContain('HOME_NAVIGATION_OR_CONFIRM');
     expect(driver).toContain('HOME_INTERACTIVE_READY');
+    // F2-DIAG-06: Android SAF must own both same-day files. A shell mv or media
+    // broadcast can invalidate DocumentsProvider bookkeeping and hang API32.
+    const discovery = await Bun.file('scripts/diagnostics/native-v7-document-discovery.mjs').text();
+    expect(discovery).toContain('selectNewLabV7Name(before,after)');
+    expect(discovery).toContain('V7_SECOND_DISTINCT_DOCUMENT_MISSING');
+    expect(discovery).toContain('quotedLabV7Path(name)');
+    expect(driver).toContain('name=selectNewLabV7Name(filesBefore,filesAfter)');
+    expect(driver).toContain('await verifiedEncryptedFile(previous.name)');
+    expect(driver).toContain('await restoreFromRealSaf(target.name,recovery.name)');
+    expect(driver).toContain('assert.notEqual(digest.sha256,previous.digest.sha256');
+    expect(driver).not.toContain('MEDIA_SCANNER_SCAN_FILE');
+    expect(driver).not.toContain("adb('shell','mv'");
+    expect(driver).not.toContain('AP02_F2_TARGET.enc.json');
     expect(driver).toContain("if(first==='confirmation')");
     expect(driver.indexOf("'HOME_NAVIGATION_OR_CONFIRM'")).toBeLessThan(
       driver.indexOf("if(first==='confirmation')")
