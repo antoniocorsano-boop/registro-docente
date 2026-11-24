@@ -3,7 +3,7 @@
 // Chrome DevTools drives public DOM controls; no application internals, plugin
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
-import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope } from './native-lab-runtime.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -60,7 +60,23 @@ function sha256(b){return createHash('sha256').update(b).digest('hex');}
 async function until(fn, name, timeout = 60000, retryReadErrors = true) {
   // Names may include localized UI text or filenames; never retain them in
   // the failure record. Scope is inherited by bounded ADB/CDP commands.
-  return observeUntil(fn,{timeoutMs:timeout,retryReadErrors});
+  try{return await observeUntil(fn,{timeoutMs:timeout,retryReadErrors});}
+  catch(error){
+    if(error instanceof LabFailure&&error.observation){
+      const purposes=['UI_TEXT_','ANDROID_INTERACTIVE_OR_LOCK_','ANDROID_SESSION_REAUTH_REQUIRED_',
+        'ANDROID_SESSION_REAUTHORIZED_','EXACT_DOCUMENT_'];
+      const prefix=purposes.find(p=>name.startsWith(p));
+      const fixed=['WEBVIEW_DEBUG_TARGET','NAV_DRAWER','HOME_NAVIGATION_OR_CONFIRM',
+        'HOME_INTERACTIVE_READY','VISIBLE_EXACT_HOME_CONFIRM','HOME_CONFIRM_DISMISSED',
+        'PRIVACY_V7_EXPORT_BUTTON_READY','VISIBLE_CLASS_CREATION_CONTROL',
+        'SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED','INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT',
+        'ANDROID_DOCUMENTS_UI','DOC_ROOTS','DOC_DOWNLOADS','DOC_SAVE_BUTTON',
+        'DOC_OPEN_BUTTON','RETURN_FROM_SAVE','RETURN_FROM_OPEN','SELECT_DOCUMENT',
+        'V7_VERIFIED_NATIVE_RECEIPT','REAL_RECOVERY_CONSENT','REAL_V7_RESTORE_RESULT'];
+      error.observation.purpose=prefix?prefix.slice(0,-1):fixed.includes(name)?name:'OTHER_OBSERVATION';
+    }
+    throw error;
+  }
 }
 function nativeNodes() {
   adb('shell','rm','-f','/sdcard/ap02-f2-ui.xml');
@@ -225,15 +241,15 @@ async function connect() {
         const expected=classPromptName;
         if(typeof expected!=='string' || !d.message?.startsWith(
           'Inserisci la denominazione della nuova classe')) {
-          void send('Page.handleJavaScriptDialog',{accept:false}).catch(()=>{});
+          void withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:false})).catch(()=>{});
           return;
         }
         classPromptName=null;
         classPromptAcknowledged++;
-        void send('Page.handleJavaScriptDialog',{accept:true,promptText:expected}).catch(()=>{});
+        void withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:true,promptText:expected})).catch(()=>{});
         return;
       }
-      void send('Page.handleJavaScriptDialog',{accept:true}).catch(()=>{});
+      void withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:true})).catch(()=>{});
       return;
     }
     if(msg.error||msg.result?.exceptionDetails){
