@@ -165,7 +165,9 @@ test('F2-DIAG-07 pulls exact original and collision paths without shell quotes, 
     const bytes=pullLabV7Bytes(name,(command,args,options)=>{
       assert.equal(command,'adb');
       assert.deepEqual(args.slice(0,2),['pull','/sdcard/Download/'+name]);
-      assert.equal(options.stdio,'ignore');
+      // Capture stderr in memory for transport classification; never emit it.
+      assert.deepEqual(options.stdio,['ignore','ignore','pipe']);
+      assert.equal(options.killSignal,'SIGKILL');
       assert.equal(options.timeout,30000);
       local=args[2];
       writeFileSync(local,expected);
@@ -183,4 +185,20 @@ test('F2-DIAG-07 refuses invalid paths and never accepts a partial failed pull',
     local=args[2];writeFileSync(local,'partial');throw Error('simulated pull failure');
   }),/simulated pull failure/);
   assert.equal(existsSync(dirname(local)),false);
+});
+
+test('F2-DIAG-07 captured transport failures preserve safe classification and clean partial bytes',()=>{
+  const name='Backup_Valutazioni_V7_2026-11-24.enc.json';
+  for(const [error,code] of [
+    [Object.assign(new Error('private command details'),{status:1,stderr:'adb: device offline\n'}),'ADB_TRANSPORT_OFFLINE'],
+    [Object.assign(new Error('private timeout details'),{code:'ETIMEDOUT'}),'ADB_TRANSPORT_TIMEOUT']
+  ]){
+    let local,calls=0;
+    assert.throws(()=>pullLabV7Bytes(name,(_cmd,args,options)=>{
+      calls++;local=args[2];assert.deepEqual(options.stdio,['ignore','ignore','pipe']);
+      writeFileSync(local,'partial');throw error;
+    }),e=>e.code===code&&e.message===code);
+    assert.equal(calls,1);
+    assert.equal(existsSync(dirname(local)),false);
+  }
 });

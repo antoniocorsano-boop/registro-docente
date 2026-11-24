@@ -69,6 +69,12 @@ jobs:
             const p=require("./ci-fast-plan.json");
             for (const file of p.changedNodeScripts) execFileSync("node",["--check",file],{stdio:"inherit"});
           '
+      - name: Set up Node 22 for native laboratory contracts
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run complete F2 native laboratory Node contracts
+        run: node scripts/diagnostics/run-native-lab-contracts.mjs
       - name: Set up Bun only when source or inherited contracts changed
         if: steps.plan.outputs.need_bun == 'true'
         uses: oven-sh/setup-bun@v2

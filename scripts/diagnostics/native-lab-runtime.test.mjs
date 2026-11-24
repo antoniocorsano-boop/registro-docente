@@ -354,3 +354,21 @@ test('Q4 wrapper preserves three trials, two APIs, isolated identity and F2 gate
   assert.ok(!wrapper.includes('secrets: inherit'));
   assert.ok(!wrapper.includes('contents: write'));
 });
+
+test('Q4 preflight and CI-FAST invoke the same complete Node runner as F2',()=>{
+  const read=p=>readFileSync(new URL('../../'+p,import.meta.url),'utf8');
+  const runner='scripts/diagnostics/run-native-lab-contracts.mjs';
+  const f2=read('.github/workflows/ap02-f2-native-device.yml');
+  const q4=read('.github/workflows/qa-stability-01-q4.yml');
+  const fast=read('.github/workflows/ci-fast-development.yml');
+  const code=read(runner);
+  for(const workflow of [f2,q4,fast]){
+    assert.ok(workflow.includes('node '+runner));
+    assert.ok(workflow.includes("node-version: '22'"));
+  }
+  assert.ok(q4.includes('needs: preflight'));
+  assert.ok(q4.indexOf('node '+runner)<q4.indexOf('    needs: preflight'));
+  for(const name of ['native-process-probe','native-ui-driver','native-saf-lifecycle-probe','native-lab-runtime'])
+    assert.ok(code.includes('scripts/diagnostics/'+name+'.test.mjs'));
+  assert.ok(code.includes("['--test',...tests]"));
+});

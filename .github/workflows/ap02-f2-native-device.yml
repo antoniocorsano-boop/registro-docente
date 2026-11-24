@@ -16,6 +16,7 @@ on:
       - 'scripts/diagnostics/native-lab-runtime.mjs'
       - 'scripts/diagnostics/native-lab-readiness.mjs'
       - 'scripts/diagnostics/native-lab-runtime.test.mjs'
+      - 'scripts/diagnostics/run-native-lab-contracts.mjs'
       - 'scripts/diagnostics/native-ui-driver.mjs'
       - 'scripts/diagnostics/native-process-probe.mjs'
       - 'scripts/diagnostics/native-v7-document-discovery.mjs'
@@ -74,18 +75,17 @@ jobs:
         with:
           ref: ${{ env.CANDIDATE_SHA }}
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Check exact HEAD and isolated diagnostic
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          node --check scripts/diagnostics/ap02-native-device-v7.mjs
-          node --test scripts/diagnostics/native-process-probe.test.mjs scripts/diagnostics/native-ui-driver.test.mjs scripts/diagnostics/native-saf-lifecycle-probe.test.mjs scripts/diagnostics/native-lab-runtime.test.mjs
+          node scripts/diagnostics/run-native-lab-contracts.mjs
           test -f src/main.tsx
           test -f mobile/android-probe/native/RegistroBackupFilesPlugin.java
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-java@v4
         with:
