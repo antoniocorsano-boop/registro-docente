@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands, withoutObservationScope } from './native-lab-runtime.mjs';
 const fakeClock = () => {
   let time = 0;
   return { now: () => time, sleep: async ms => { time += ms; }, advance: ms => { time += ms; } };
@@ -84,4 +84,13 @@ test('synchronous socket send failure clears pending command', async () => {
   const channel=createPendingCommands();
   await assert.rejects(channel.request(()=>{throw Error('private details');},20),{code:'CDP_SEND_FAILED'});
   assert.equal(channel.size,0);
+});
+test('unsolicited event uses its own deadline, not expired connection scope', async () => {
+  const clock=fakeClock();
+  await assert.rejects(observeUntil(() => {
+    clock.advance(12);
+    assert.throws(()=>commandBudget(50),{code:'COMMAND_DEADLINE'});
+    assert.equal(withoutObservationScope(()=>commandBudget(50)),50);
+    return true;
+  }, {...clock,timeoutMs:10}), {code:'OBSERVATION_DEADLINE'});
 });
