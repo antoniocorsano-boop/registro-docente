@@ -13,6 +13,14 @@ const categories = Object.freeze({
   CDP_SOCKET_TIMEOUT: 'INFRASTRUCTURE',
   CDP_SEND_FAILED: 'INFRASTRUCTURE',
   CDP_EVALUATION_REJECTED: 'INDETERMINATE',
+  BUTTON_MATCH_COUNT_0: 'INDETERMINATE',
+  BUTTON_MATCH_COUNT_2: 'INDETERMINATE',
+  BUTTON_MATCH_COUNT_3: 'INDETERMINATE',
+  NEW_CLASS_MISSING: 'INDETERMINATE',
+  AMBIGUOUS_BUTTON: 'INDETERMINATE',
+  CDP_REFERENCE_ERROR: 'INDETERMINATE',
+  CDP_TYPE_ERROR: 'INDETERMINATE',
+  CDP_INVALID_STATE_ERROR: 'INDETERMINATE',
   ADB_TRANSPORT_TIMEOUT: 'INFRASTRUCTURE',
   NATIVE_UI_TREE_UNAVAILABLE: 'INDETERMINATE',
   ASSERTION_FAILED: 'INDETERMINATE',
@@ -44,6 +52,24 @@ export class LabFailure extends Error {
     this.code = this.message;
   }
 }
+// Preserve only a closed set of legacy control errors. Parse the first line,
+// never copy arbitrary exception text, stack frames or CDP error payloads.
+const evaluationCodes = new Set([
+  'BUTTON_MATCH_COUNT_0','BUTTON_MATCH_COUNT_2','BUTTON_MATCH_COUNT_3',
+  'NEW_CLASS_MISSING','AMBIGUOUS_BUTTON','NAV_NOT_UNIQUE',
+  'MISSING_CONTROL','MISSING_INPUT','SYNTHETIC_PROFILE_INPUT_MISSING',
+  'HOME_CONFIRM_DIALOG_MISSING','HOME_CONFIRM_NOT_UNIQUE',
+]);
+export function cdpEvaluationFailure(detail) {
+  if (typeof detail !== 'string') return new LabFailure('CDP_EVALUATION_REJECTED');
+  const first = detail.split(/\r?\n/,1)[0];
+  const token = first.startsWith('Error: ') ? first.slice(7) : first;
+  if (evaluationCodes.has(token)) return new LabFailure(token);
+  if (/^ReferenceError(?::|$)/.test(first)) return new LabFailure('CDP_REFERENCE_ERROR');
+  if (/^TypeError(?::|$)/.test(first)) return new LabFailure('CDP_TYPE_ERROR');
+  if (/^InvalidStateError(?::|$)/.test(first)) return new LabFailure('CDP_INVALID_STATE_ERROR');
+  return new LabFailure('CDP_EVALUATION_REJECTED');
+}
 export function classifyFailure(error) {
   let code = 'UNKNOWN_FAILURE';
   const message = typeof error?.message === 'string' ? error.message : '';
@@ -51,7 +77,7 @@ export function classifyFailure(error) {
   else if (error?.code === 'ERR_ASSERTION') code = 'ASSERTION_FAILED';
   else if (error?.code === 'ETIMEDOUT' && error?.syscall === 'spawnSync adb') code = 'ADB_TRANSPORT_TIMEOUT';
   else if (message.startsWith('CONDITION_TIMEOUT:')) code = 'OBSERVATION_DEADLINE';
-  else if (message.startsWith('CDP_EVALUATION_REJECTED:')) code = 'CDP_EVALUATION_REJECTED';
+  else if (message.startsWith('CDP_EVALUATION_REJECTED:')) code = cdpEvaluationFailure(message.slice('CDP_EVALUATION_REJECTED:'.length)).code;
   else if (message.startsWith('CDP_TIMEOUT:') || message === 'DOM_WAIT_TIMEOUT') code = 'CDP_TIMEOUT';
   else if (Object.hasOwn(categories, message)) code = message;
   return { category: categories[code] || 'INDETERMINATE', code };

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands, withoutObservationScope } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, observeUntil, commandBudget, createPendingCommands, withoutObservationScope, cdpEvaluationFailure } from './native-lab-runtime.mjs';
 const fakeClock = () => {
   let time = 0;
   return { now: () => time, sleep: async ms => { time += ms; }, advance: ms => { time += ms; } };
@@ -93,4 +93,36 @@ test('unsolicited event uses its own deadline, not expired connection scope', as
     assert.equal(withoutObservationScope(()=>commandBudget(50)),50);
     return true;
   }, {...clock,timeoutMs:10}), {code:'OBSERVATION_DEADLINE'});
+});
+
+test('CDP control failure preserves legacy button and navigation codes', () => {
+  for (const code of ['BUTTON_MATCH_COUNT_0','BUTTON_MATCH_COUNT_2','BUTTON_MATCH_COUNT_3',
+    'NAV_NOT_UNIQUE','MISSING_CONTROL','MISSING_INPUT','NEW_CLASS_MISSING','AMBIGUOUS_BUTTON',
+    'SYNTHETIC_PROFILE_INPUT_MISSING','HOME_CONFIRM_DIALOG_MISSING','HOME_CONFIRM_NOT_UNIQUE']) {
+    assert.deepEqual(classifyFailure(cdpEvaluationFailure('Error: '+code+'\n    at synthetic private stack')), {
+      category:'INDETERMINATE',code,
+    });
+  }
+  assert.equal(classifyFailure(new Error('CDP_EVALUATION_REJECTED:BUTTON_MATCH_COUNT_0')).code,'BUTTON_MATCH_COUNT_0');
+});
+test('CDP unknown detail and substring impostors are not persisted or misclassified', () => {
+  for (const detail of [undefined,'secret value','Error: private BUTTON_MATCH_COUNT_0 suffix',
+    'Error: BUTTON_MATCH_COUNT_0 secret suffix','Error: other\nBUTTON_MATCH_COUNT_0','BUTTON_MATCH_COUNT_9']) {
+    assert.deepEqual(classifyFailure(cdpEvaluationFailure(detail)),{
+      category:'INDETERMINATE',code:'CDP_EVALUATION_REJECTED',
+    });
+  }
+  for (const [name,code] of [['ReferenceError','CDP_REFERENCE_ERROR'],['TypeError','CDP_TYPE_ERROR'],
+    ['InvalidStateError','CDP_INVALID_STATE_ERROR']]) {
+    assert.deepEqual(classifyFailure(cdpEvaluationFailure(name+': private value')),{
+      category:'INDETERMINATE',code,
+    });
+  }
+});
+test('a rejected CDP control command cannot be retried as observation', async () => {
+  let calls=0;const clock=fakeClock();
+  await assert.rejects(observeUntil(()=>{
+    calls++;throw cdpEvaluationFailure('Error: BUTTON_MATCH_COUNT_0');
+  },{...clock,timeoutMs:20,retryReadErrors:true}),{code:'BUTTON_MATCH_COUNT_0'});
+  assert.equal(calls,1);
 });

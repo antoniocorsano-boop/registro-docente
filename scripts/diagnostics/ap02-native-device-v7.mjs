@@ -3,7 +3,7 @@
 // Chrome DevTools drives public DOM controls; no application internals, plugin
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
-import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure } from './native-lab-runtime.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -253,8 +253,8 @@ async function connect() {
       return;
     }
     if(msg.error||msg.result?.exceptionDetails){
-      // Do not store exception text from the page.
-      active.settle(msg.id,new LabFailure('CDP_EVALUATION_REJECTED'));
+      // Retain only allowlisted control/error codes, never raw page text.
+      active.settle(msg.id,cdpEvaluationFailure(msg.result?.exceptionDetails?.exception?.description));
     }else active.settle(msg.id,null,msg.result?.result?.value);
   });
   await send('Page.enable');
@@ -282,6 +282,7 @@ function button(label) {
   return dom('(function(){const a=Array.from(document.querySelectorAll("button")).filter(e=>'+
     'e.innerText?.trim() === '+JSON.stringify(label)+'&&!e.disabled&&e.getClientRects().length>0'+
     '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
+    'if(a.length===0)throw Error("BUTTON_MATCH_COUNT_0");'+
     'if(a.length!==1)throw Error("BUTTON_MATCH_COUNT_"+a.length);a[0].click();return true;})()');
 }
 // Collect only aggregate, non-sensitive DOM facts on an Android Home-confirm
