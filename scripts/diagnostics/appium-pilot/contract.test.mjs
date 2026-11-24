@@ -41,6 +41,12 @@ test('navigation uses real unique controls and exact destination evidence',()=>{
   for(const x of ['#registro-navigation-drawer button','Torna a Oggi','PUBLIC_RELOCK_AFTER_AUTH','Esporta copia completa V7','Scegli file e ripristina','restore-v7-recovery-password','consecutive >= 2','assert_native_foreground(d)'])assert.ok(pilot.includes(x),x);
   assert.ok(pilot.includes('navigate(driver, "Privacy", "privacy")'));
   assert.ok(pilot.includes('navigate(driver, "Oggi", "home")'));
-  assert.ok(workflow.includes('"professional-home","privacy-navigation","home-navigation","native-stop-verified"'));
+  assert.ok(workflow.includes('"professional-home","privacy-navigation","home-navigation","target-class"'));
   assert.ok(workflow.includes('.fullF2Qualified==false'));
+});
+
+test('backup and restore pilot retains physical encrypted copies and real SAF boundaries',()=>{
+  for(const x of ['adb_read("pull", remote, str(local))','REGISTRO_DOCENTE_AES_GCM_256','DISTINCT_ENCRYPTED_COPY_NOT_VERIFIED','picker_return(driver, "target-source", CONSENT)','picker_return(driver, "recovery-source"','assert_class_state(driver, False)','stage("cold-restored-content", "complete")'])assert.ok(pilot.includes(x),x);
+  assert.ok(workflow.includes('.safReturns==["target-export","recovery-export","target-source","recovery-source"]'));
+  assert.ok(workflow.includes('.physicalCopies[0].sha256!=.physicalCopies[1].sha256'));
 });

@@ -1,4 +1,4 @@
-name: Q5-SYS-01 — Appium replacement pilot (not F2 qualification)
+name: Q5-SYS-02b — Appium backup and restore pilot (not F2 qualification)
 on:
   pull_request:
     branches: [qa/qa-stability-01-q2]
@@ -151,7 +151,7 @@ jobs:
           script: bash scripts/diagnostics/appium-pilot/run.sh
       - name: Require actual pilot evidence, never F2 qualification
         run: |
-          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '.candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .stages==["native-session","webview-setup","professional-home","privacy-navigation","home-navigation","native-stop-verified","cold-lock","cold-authenticated-home"]' ap02-device-evidence/appium-pilot.json
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '.candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .stages==["native-session","webview-setup","professional-home","privacy-navigation","home-navigation","target-class","target-export","recovery-class","recovery-export","restore","native-stop-verified","cold-lock","cold-authenticated-home","cold-restored-content"] and .safReturns==["target-export","recovery-export","target-source","recovery-source"] and (.physicalCopies|length)==2 and .physicalCopies[0].sha256!=.physicalCopies[1].sha256' ap02-device-evidence/appium-pilot.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

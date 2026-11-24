@@ -2,6 +2,9 @@
 Not F2 qualification; no application hooks, no synthetic PASS, no mutation replay.
 """
 import json
+import hashlib
+import re
+import tempfile
 import os
 import subprocess
 import time
@@ -9,7 +12,7 @@ from pathlib import Path
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, NoAlertPresentException, UnexpectedAlertPresentException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -203,13 +206,223 @@ def navigate(driver, label, destination):
                      '[data-testid="header01-home-confirm"] [role="alertdialog"] button').click()
         observe_destination(driver, destination, authentication)
 
+
+COPY_PASSWORD = "appium-copy-synthetic-2026"
+ORIGINAL_CLASS = "Classe fittizia F2 A"
+NEWER_CLASS = "Classe fittizia F2 B"
+CONSENT = ("Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, "
+           "già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?")
+BASE_NAME = re.compile(r"Backup_Valutazioni_V7_(\d{4}-\d{2}-\d{2})\.enc\.json")
+FILE_PATTERNS = (BASE_NAME,
+    re.compile(r"Backup_Valutazioni_V7_(\d{4}-\d{2}-\d{2}) ?\(\d{1,3}\)\.enc\.json"),
+    re.compile(r"Backup_Valutazioni_V7_(\d{4}-\d{2}-\d{2})\.enc ?\(\d{1,3}\)\.json"),
+    re.compile(r"Backup_Valutazioni_V7_(\d{4}-\d{2}-\d{2})\.enc\.json ?\(\d{1,3}\)"))
+
+def file_date(name):
+    for pattern in FILE_PATTERNS:
+        match = pattern.fullmatch(name)
+        if match:
+            return match.group(1)
+    return None
+
+def adb_read(*args):
+    return subprocess.run(["adb", *args], check=True, capture_output=True, timeout=30).stdout
+
+def physical_files():
+    return sorted(name for name in adb_read("shell", "ls", "-1", "/sdcard/Download").decode().splitlines()
+                  if file_date(name))
+
+def physical_digest(name):
+    if not file_date(name):
+        raise RuntimeError("INVALID_LAB_FILENAME")
+    remote = "/sdcard/Download/" + name
+    def size():
+        data = adb_read("shell", "stat", "-c", "%s", "'" + remote + "'").strip()
+        if not data.isdigit() or int(data) <= 0:
+            raise RuntimeError("DEVICE_SIZE_UNAVAILABLE")
+        return int(data)
+    before = size()
+    with tempfile.TemporaryDirectory(prefix="appium-v7-") as tmp:
+        local = Path(tmp) / "encrypted.bin"
+        adb_read("pull", remote, str(local))
+        data = local.read_bytes()
+    if before != len(data) or before != size():
+        raise RuntimeError("PHYSICAL_SIZE_MISMATCH")
+    envelope = json.loads(data.decode("utf-8"))
+    if (envelope.get("privacy_protocol") != "REGISTRO_DOCENTE_AES_GCM_256" or
+            envelope.get("version") != 2 or not isinstance(envelope.get("ciphertext"), str) or
+            len(data) <= 300 or ORIGINAL_CLASS.encode() in data or NEWER_CLASS.encode() in data):
+        raise RuntimeError("INVALID_ENCRYPTED_ENVELOPE")
+    return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+def select_new_file(before, after):
+    if not before and len(after) == 1 and BASE_NAME.fullmatch(after[0]):
+        return after[0]
+    if len(before) == 1 and len(after) == 2 and before[0] in after and BASE_NAME.fullmatch(before[0]):
+        added = set(after) - set(before)
+        if len(added) == 1:
+            name = next(iter(added))
+            if file_date(name) == file_date(before[0]):
+                return name
+    raise RuntimeError("DISTINCT_DOCUMENT_NOT_VERIFIED")
+
+def alert_matching(driver, expected, prefix=False):
+    def sample(d):
+        try:
+            alert = d.switch_to.alert
+            text = alert.text
+        except NoAlertPresentException:
+            return False
+        if not (text.startswith(expected) if prefix else text == expected):
+            raise RuntimeError("UNEXPECTED_PUBLIC_DIALOG")
+        return alert
+    return wait(driver, sample, 60)
+
+def click_allow_alert(element):
+    # A synchronous public dialog may interrupt the click response.
+    # Never resend it; only a subsequent exact dialog may prove the transition.
+    try:
+        element.click()
+    except UnexpectedAlertPresentException:
+        pass
+
+def class_visible(driver, name):
+    return driver.execute_script("""
+        return [...document.querySelectorAll('h1,h2,h3,h4,p,span,button,[role=heading]')]
+          .some(e=>e.textContent.trim()===arguments[0] && e.getClientRects().length &&
+            !e.closest('[inert],[hidden],[aria-hidden="true"]') && getComputedStyle(e).visibility==='visible');
+    """, name)
+
+def assert_class_state(driver, expected_newer):
+    home_ready(driver)
+    if not class_visible(driver, ORIGINAL_CLASS) or bool(class_visible(driver, NEWER_CLASS)) != expected_newer:
+        raise RuntimeError("SYNTHETIC_CLASS_STATE_MISMATCH")
+
+def create_class(driver, name):
+    observe_destination(driver, "home", {"used": False})
+    click_allow_alert(exact_button(driver, "Nuova Classe"))
+    prompt = alert_matching(driver, "Inserisci la denominazione della nuova classe", prefix=True)
+    prompt.send_keys(name)
+    prompt.accept()
+    observe_destination(driver, "session", {"used": False})
+    wait(driver, lambda d: class_visible(d, "Gestione Elenco Alunni: " + name))
+    # A visible save notification is acknowledged only if actually present.
+    if driver.execute_script("return document.body.innerText.includes('Dati Salvati in Locale con Successo!')"):
+        exact_button(driver, "Chiudi").click()
+    navigate(driver, "Oggi", "home")
+    wait(driver, lambda d: class_visible(d, name))
+
+def documents_foreground(driver):
+    return re.fullmatch(r"(?:com\.google\.android|com\.android)\.documentsui", driver.current_package or "") is not None
+
+def native_match(driver, predicate):
+    items = []
+    for e in driver.find_elements(By.XPATH, "//*"):
+        if e.is_displayed() and e.is_enabled() and predicate(e):
+            items.append(e)
+    return items[0] if len(items) == 1 else False
+
+def doc_control(driver, labels, attribute="text"):
+    def sample(d):
+        if not documents_foreground(d):
+            return False
+        return native_match(d, lambda e: e.get_attribute(attribute) in labels)
+    return wait(driver, sample, 60)
+
+def open_downloads(driver):
+    driver.switch_to.context("NATIVE_APP")
+    wait(driver, documents_foreground, 90)
+    def sample(d):
+        if not documents_foreground(d):
+            return False
+        folder = native_match(d, lambda e: e.get_attribute("text") in ("Download", "Downloads"))
+        if folder:
+            return ("folder", folder)
+        root = native_match(d, lambda e: (e.get_attribute("content-desc") or "").lower() in
+                            ("show roots", "open navigation drawer", "mostra radici"))
+        return ("root", root) if root else False
+    kind, element = wait(driver, sample, 60)
+    if kind == "root":
+        element.click()
+        doc_control(driver, ("Download", "Downloads")).click()
+
+def picker_return(driver, role, expected_dialog):
+    wait(driver, lambda d: d.current_package == PKG, 60)
+    webview(driver)
+    def locked(d):
+        f = surface(d)
+        if f["gate"]:
+            raise RuntimeError("PUBLIC_GATE_ERROR")
+        return f["visible"] and f["lockReady"] and not f["blocked"] and d.current_package == PKG
+    wait(driver, locked, 60)
+    visible(driver, "#vault-password").send_keys(PASSWORD)
+    click_allow_alert(exact_button(driver, "Sblocca Registro"))
+    # An exact downstream dialog is required, not merely the submit response.
+    alert = alert_matching(driver, expected_dialog)
+    alert.accept()
+    evidence.setdefault("safReturns", []).append(role)
+    save()
+
+def select_document(driver, name):
+    open_downloads(driver)
+    doc_control(driver, (name,)).click()
+    def next_step(d):
+        if d.current_package == PKG:
+            return "returned"
+        if documents_foreground(d):
+            element = native_match(d, lambda e: (e.get_attribute("text") or "").lower() in ("open", "apri"))
+            if element:
+                return element
+        return False
+    result = wait(driver, next_step, 60)
+    if result != "returned":
+        if not documents_foreground(driver):
+            raise RuntimeError("PICKER_FOREGROUND_CHANGED")
+        result.click()
+    wait(driver, lambda d: d.current_package == PKG, 60)
+
+def export_copy(driver, previous=None):
+    before = physical_files()
+    if previous is None:
+        if before:
+            raise RuntimeError("UNEXPECTED_EXISTING_DOCUMENT")
+    elif before != [previous[0]] or physical_digest(previous[0]) != previous[1]:
+        raise RuntimeError("ORIGINAL_DOCUMENT_CHANGED")
+    observe_destination(driver, "privacy", {"used": False})
+    visible(driver, 'input[placeholder="Inserisci password sicura (min. 6 caratteri)"]').send_keys(COPY_PASSWORD)
+    visible(driver, 'input[placeholder="Ripeti la password"]').send_keys(COPY_PASSWORD)
+    exact_button(driver, "Esporta copia completa V7").click()
+    open_downloads(driver)
+    doc_control(driver, ("Save", "Salva", "SAVE", "SALVA")).click()
+    picker_return(driver, "target-export" if previous is None else "recovery-export",
+                  "Copia completa V7 salvata, riletta e verificata.")
+    name = select_new_file(before, physical_files())
+    digest = physical_digest(name)
+    if previous is not None:
+        if physical_digest(previous[0]) != previous[1] or digest["sha256"] == previous[1]["sha256"]:
+            raise RuntimeError("DISTINCT_ENCRYPTED_COPY_NOT_VERIFIED")
+    evidence.setdefault("physicalCopies", []).append(digest)
+    save()
+    return name, digest
+
+def restore_copies(driver, target, recovery):
+    observe_destination(driver, "privacy", {"used": False})
+    visible(driver, 'input[placeholder="Inserisci la password impostata alla cifratura"]').send_keys(COPY_PASSWORD)
+    visible(driver, "#restore-v7-recovery-password").send_keys(COPY_PASSWORD)
+    exact_button(driver, "Scegli file e ripristina").click()
+    select_document(driver, target[0])
+    picker_return(driver, "target-source", CONSENT)
+    select_document(driver, recovery[0])
+    picker_return(driver, "recovery-source", "Backup cifrato verificato e ripristinato con successo!")
+    assert_class_state(driver, False)
+
 def main():
     opts = UiAutomator2Options().load_capabilities({
         "platformName": "Android", "appium:automationName": "UiAutomator2",
         "appium:deviceName": "Android Emulator", "appium:app": os.environ["AP02_LAB_APK"],
         "appium:appPackage": PKG, "appium:appActivity": ACTIVITY,
         "appium:noReset": False, "appium:fullReset": False,
-        "appium:autoGrantPermissions": False, "appium:newCommandTimeout": 120,
+        "appium:autoGrantPermissions": False, "unhandledPromptBehavior": "ignore", "appium:newCommandTimeout": 120,
         "appium:ensureWebviewsHavePages": True, "appium:enableWebviewDetailsCollection": True,
     })
     driver = None
@@ -233,7 +446,22 @@ def main():
         navigate(driver, "Privacy", "privacy")
         stage("privacy-navigation", "home-navigation")
         navigate(driver, "Oggi", "home")
-        stage("home-navigation", "native-stop-verified")
+        stage("home-navigation", "target-class")
+        create_class(driver, ORIGINAL_CLASS)
+        assert_class_state(driver, False)
+        stage("target-class", "target-export")
+        navigate(driver, "Privacy", "privacy")
+        target = export_copy(driver)
+        stage("target-export", "recovery-class")
+        navigate(driver, "Oggi", "home")
+        create_class(driver, NEWER_CLASS)
+        assert_class_state(driver, True)
+        stage("recovery-class", "recovery-export")
+        navigate(driver, "Privacy", "privacy")
+        recovery = export_copy(driver, target)
+        stage("recovery-export", "restore")
+        restore_copies(driver, target, recovery)
+        stage("restore", "native-stop-verified")
         driver.switch_to.context("NATIVE_APP")
         assert_native_foreground(driver)
         assert_running()
@@ -250,7 +478,9 @@ def main():
         visible(driver, "#vault-password").send_keys(PASSWORD)
         click(driver, "form button[type=submit]")
         home_ready(driver)
-        stage("cold-authenticated-home", "complete")
+        stage("cold-authenticated-home", "cold-restored-content")
+        assert_class_state(driver, False)
+        stage("cold-restored-content", "complete")
         evidence.update(status="PASS", failurePhase=None)
     except Exception as exc:
         # Persist only a categorical exception type, never page source,
