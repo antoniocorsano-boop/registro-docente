@@ -36,3 +36,11 @@ test('all pilot paths have dedicated invariant coverage',()=>{
   for(const path of [".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/pilot.py","scripts/diagnostics/appium-pilot/run.sh","scripts/diagnostics/appium-pilot/contract.test.mjs"])assert.ok(inv.impactPaths.some(p=>p.endsWith('/')?path.startsWith(p):path===p),path);
   assert.ok(inv.tests.includes('scripts/diagnostics/appium-pilot/contract.test.mjs'));
 });
+
+test('navigation uses real unique controls and exact destination evidence',()=>{
+  for(const x of ['#registro-navigation-drawer button','Torna a Oggi','PUBLIC_RELOCK_AFTER_AUTH','Esporta copia completa V7','Scegli file e ripristina','restore-v7-recovery-password','consecutive >= 2','assert_native_foreground(d)'])assert.ok(pilot.includes(x),x);
+  assert.ok(pilot.includes('navigate(driver, "Privacy", "privacy")'));
+  assert.ok(pilot.includes('navigate(driver, "Oggi", "home")'));
+  assert.ok(workflow.includes('"professional-home","privacy-navigation","home-navigation","native-stop-verified"'));
+  assert.ok(workflow.includes('.fullF2Qualified==false'));
+});
