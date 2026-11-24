@@ -57,6 +57,9 @@ export function classifyFailure(error) {
   return { category: categories[code] || 'INDETERMINATE', code };
 }
 const scope = new AsyncLocalStorage();
+// Unsolicited CDP dialog events have their own command deadline. They must
+// not inherit the expired context of the WebSocket connection handshake.
+export function withoutObservationScope(fn) { return scope.exit(fn); }
 export function commandBudget(maxMs, now = performance.now.bind(performance)) {
   if (!Number.isFinite(maxMs) || maxMs <= 0) throw new LabFailure('INVALID_HARNESS_ARGUMENT');
   const deadline = scope.getStore();
