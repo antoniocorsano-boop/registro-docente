@@ -6,7 +6,7 @@ import type {PlanningState} from '../planning/types';
 import {boardDocument,boardScope} from '../../tests/browser/fixtures/val01-s6c-data';
 import {resolveApprovedAssessmentScopes} from '../assessment/approvedAssessmentScopes';
 import {canonicalAssessmentSchoolYear} from '../assessment/assessmentSchoolYear';
-import {checkStudentRemovalContinuity,checkSettingsAssessmentContinuity,AssessmentContinuityError} from '../assessment/assessmentContinuity';
+import {checkStudentRemovalContinuity,checkSettingsAssessmentContinuity,checkPlanningAssessmentContinuity,AssessmentContinuityError} from '../assessment/assessmentContinuity';
 import {DEFAULT_SETTINGS} from '../utils';
 import {createDurableMutationCoordinator} from '../persistence/durableMutationCoordinator';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
@@ -43,6 +43,89 @@ const request=():AssessmentSetupRequest=>({
   description:'Rappresenta relazioni',expected:{kind:'product',description:'Schema originale',method:'Elaborato'}}]
 });
 describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',()=>{
+
+ test('F3-CONT-02 planning profile/adoption changes cannot orphan archived evidence',()=>{
+  const data=app(),source=planning(),sourceSettings:AppSettings={...DEFAULT_SETTINGS,
+   year:'2027/2028',subject:'TECH'},before=JSON.stringify(data),
+   beforePlanning=JSON.stringify(source),beforeSettings=JSON.stringify(sourceSettings);
+  expect(checkPlanningAssessmentContinuity(data,source,sourceSettings)).toEqual({allowed:true});
+  const invalid:PlanningState[]=[
+   {...source,profiles:source.profiles.map(p=>({...p,schoolYear:'2025/2026'}))},
+   {...source,profiles:source.profiles.map(p=>({...p,subjectCode:'MATH'}))},
+   {...source,profiles:[]},
+   {...source,masterPrograms:source.masterPrograms.map(m=>({...m,status:'draft' as const}))},
+   {...source,masterPrograms:source.masterPrograms.map(m=>({...m,currentVersionId:'other-version'}))},
+   {...source,classInstances:[]}
+  ];
+  for(const candidate of invalid){
+   expect(checkPlanningAssessmentContinuity(data,candidate,sourceSettings))
+    .toEqual({allowed:false,reason:'SCOPE_NOT_APPROVED'});
+   expect(validateAssessmentArchiveV1(data,resolveApprovedAssessmentScopes(data,candidate,sourceSettings)))
+    .toEqual({valid:false,issue:'INVALID_SCOPE'});
+  }
+  // Both documented spellings are equivalent: no rewrite of persisted sources.
+  for(const year of ['2026/27','2026-2027','2026/2027']){
+   const candidate={...source,profiles:source.profiles.map(p=>({...p,schoolYear:year}))};
+   expect(checkPlanningAssessmentContinuity(data,candidate,sourceSettings)).toEqual({allowed:true});
+  }
+  const ordinaryChange={...source,resources:[{id:'resource-synthetic',kind:'other' as const,
+   title:'Risorsa sintetica'}]};
+  expect(checkPlanningAssessmentContinuity(data,ordinaryChange,sourceSettings)).toEqual({allowed:true});
+  expect(JSON.stringify(data)).toBe(before);
+  expect(JSON.stringify(source)).toBe(beforePlanning);
+  expect(JSON.stringify(sourceSettings)).toBe(beforeSettings);
+ });
+ test('F3-CONT-02 independent approval is checked across every physical class',()=>{
+  const data=app(),source=planning(),additional=classroom();
+  additional.id='class-second';
+  additional.assessmentEvidenceV1={version:1,documents:[{document:{...oldDoc(),classId:'class-second'},bindings:[]}]};
+  data.classes.push(additional);
+  const dual:PlanningState={...source,classInstances:[
+   ...source.classInstances,
+   {id:'instance-other',classId:'class-second',masterProgramId:'master-h',adoptedVersionId:'version-h'}
+  ]};
+  const cfg:AppSettings={...DEFAULT_SETTINGS,year:'2027/2028',subject:'TECH'};
+  const saved=JSON.stringify(data),savedPlanning=JSON.stringify(dual);
+  expect(checkPlanningAssessmentContinuity(data,dual,cfg)).toEqual({allowed:true});
+  const removed:PlanningState={...dual,classInstances:dual.classInstances.filter(i=>i.classId!=='class-second')};
+  expect(checkPlanningAssessmentContinuity(data,removed,cfg))
+   .toEqual({allowed:false,reason:'SCOPE_NOT_APPROVED'});
+  expect(validateAssessmentArchiveV1(data,resolveApprovedAssessmentScopes(data,removed,cfg)))
+   .toEqual({valid:false,issue:'INVALID_SCOPE'});
+  expect(JSON.stringify(data)).toBe(saved);
+  expect(JSON.stringify(dual)).toBe(savedPlanning);
+ });
+ test('F3-CONT-02 planning refusal cannot persist or publish and a valid retry succeeds',async()=>{
+  const data=app(),cfg:AppSettings={...DEFAULT_SETTINGS,year:'2027/2028',subject:'TECH'};
+  let committed=planning(),writes=0,published=0;
+  const before=JSON.stringify(committed),archiveBefore=JSON.stringify(data);
+  const coordinator=createDurableMutationCoordinator();
+  const attempt=(next:(v:PlanningState)=>PlanningState)=>coordinator.enqueue({
+   getCommitted:()=>committed,
+   derive:current=>{
+    const candidate=next(current);
+    if(!checkPlanningAssessmentContinuity(data,candidate,cfg).allowed)
+     throw new AssessmentContinuityError('planning');
+    return candidate;
+   },
+   persist:async()=>{writes++;},
+   publish:next=>{committed=next;published++;}
+  });
+  await expect(attempt(current=>({...current,
+   profiles:current.profiles.map(p=>({...p,schoolYear:'2025/2026'}))
+  }))).rejects.toThrow('Programmazione non salvata');
+  expect(writes).toBe(0);expect(published).toBe(0);
+  expect(JSON.stringify(committed)).toBe(before);
+  await attempt(current=>({...current,profiles:current.profiles.map(p=>({...p,schoolYear:'2026/27'}))}));
+  expect(writes).toBe(1);expect(published).toBe(1);
+  expect(JSON.stringify(data)).toBe(archiveBefore);
+  const code=readFileSync('src/App.tsx','utf8');
+  expect(code).toContain('checkPlanningAssessmentContinuity(');
+  expect(code).toContain('appDataRef.current, candidatePlanning, settingsRef.current');
+  expect(code).toContain("throw new AssessmentContinuityError('planning')");
+  expect(code).toContain('secureStorage.savePlanningAndMeta(candidate.planning, candidate.meta)');
+ });
+
 
  test('F3-CONT-01 removal conserves student-linked observations and only allows an unreferenced roster entry',()=>{
   const original=classroom(),before=JSON.stringify(original);

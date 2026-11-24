@@ -73,11 +73,29 @@ export function checkSettingsAssessmentContinuity(
   ?permitted:blocked('SCOPE_NOT_APPROVED');
 }
 
+/** F3-CONT-02 — planning may change only while all already-persisted V1
+ * evidence remains valid under independently approved/adopted candidate scopes.
+ * This read-only gate applies to EVERY serialized planning mutation, including
+ * changes to profile identities, adopted versions, or program status. It does
+ * not modify historical documents or infer authority from their content.
+ */
+export function checkPlanningAssessmentContinuity(
+ app:AppData,candidatePlanning:PlanningState,settings:AppSettings
+):ContinuityDecision {
+ if(!Array.isArray(app?.classes))return blocked('INVALID_ARCHIVE');
+ if(!app.classes.some(c=>c&&owns(c,'assessmentEvidenceV1')))return permitted;
+ const scopes=resolveApprovedAssessmentScopes(app,candidatePlanning,settings);
+ return validateAssessmentArchiveV1(app,scopes).valid
+  ?permitted:blocked('SCOPE_NOT_APPROVED');
+}
+
 export class AssessmentContinuityError extends Error {
- constructor(readonly kind:'student'|'settings') {
+ constructor(readonly kind:'student'|'settings'|'planning') {
   super(kind==='student'
    ?'Rimozione sospesa: sono presenti dati o evidenze da conservare, oppure la classe richiede una verifica. Non eliminare lo studente: mantieni il suo storico nel registro cifrato. È necessaria una procedura dedicata di archiviazione prima della rimozione.'
-   :'Modifica non salvata: alcune evidenze storiche perderebbero l’ambito autorizzato. Mantieni le impostazioni precedenti e approva/adotta la programmazione storica pertinente prima di riprovare.');
+   :kind==='settings'
+    ?'Modifica non salvata: alcune evidenze storiche perderebbero l’ambito autorizzato. Mantieni le impostazioni precedenti e approva/adotta la programmazione storica pertinente prima di riprovare.'
+    :'Programmazione non salvata: la modifica renderebbe non verificabili evidenze valutative già conservate. Mantieni il profilo o l’adozione storica approvati e verifica la continuità prima di riprovare.');
   this.name='AssessmentContinuityError';
  }
 }

@@ -218,7 +218,7 @@ import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScop
 import { resolveApprovedAssessmentScopes } from './assessment/approvedAssessmentScopes';
 import { canonicalAssessmentSchoolYear } from './assessment/assessmentSchoolYear';
 import { validateAssessmentArchiveV1 } from './assessment/assessmentArchive';
-import { AssessmentContinuityError, checkStudentRemovalContinuity, checkSettingsAssessmentContinuity } from './assessment/assessmentContinuity';
+import { AssessmentContinuityError, checkStudentRemovalContinuity, checkSettingsAssessmentContinuity, checkPlanningAssessmentContinuity } from './assessment/assessmentContinuity';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -1346,10 +1346,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ): Promise<PlanningState> => {
     return mutationCoordinator.enqueue<{ planning: PlanningState; meta: SecureMeta }>({
       getCommitted: () => ({ planning: planningRef.current, meta: metaRef.current }),
-      derive: current => ({
-        planning: applyPlanningMutation(current.planning, derive),
-        meta: incrementBackupChanges(current.meta)
-      }),
+      derive: current => {
+        const candidatePlanning = applyPlanningMutation(current.planning, derive);
+        // Check the entire encrypted local archive against the proposed
+        // independently approved scopes before persisting any planning change.
+        // Every planning entry point shares this serialized mutation boundary.
+        if (!checkPlanningAssessmentContinuity(
+          appDataRef.current, candidatePlanning, settingsRef.current
+        ).allowed) {
+          throw new AssessmentContinuityError('planning');
+        }
+        return {
+          planning: candidatePlanning,
+          meta: incrementBackupChanges(current.meta)
+        };
+      },
       persist: candidate => secureStorage.savePlanningAndMeta(candidate.planning, candidate.meta),
       publish: candidate => {
         planningRef.current = candidate.planning;
@@ -1359,8 +1370,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       },
       afterCommit: () => toast('Programmazione salvata')
     }).then(candidate => candidate.planning).catch(error => {
-      console.error('Secure planning save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      if (error instanceof AssessmentContinuityError) {
+        alert(error.message);
+      } else {
+        console.error('Secure planning save failed', error);
+        alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      }
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
