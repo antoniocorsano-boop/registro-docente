@@ -3,7 +3,7 @@
 // Chrome DevTools drives public DOM controls; no application internals, plugin
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
-import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -29,7 +29,7 @@ const adbTransport = createAdbTransportTrace();
 const adb = (...args) => {
   const began = Date.now();
   try {
-    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: commandBudget(30000), killSignal: 'SIGKILL' }).trim();
+    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: commandBudget(30000), killSignal: 'SIGKILL', stdio:['ignore','pipe','pipe'] }).trim();
     adbTransport.record(args, began, 'ok');
     return result;
   } catch (error) {
@@ -37,7 +37,7 @@ const adb = (...args) => {
     // retained; never persist ADB arguments, stderr or response text.
     adbTransport.record(args, began,
       error?.code === 'ETIMEDOUT' ? 'timeout' : 'failed');
-    throw error;
+    throw normalizeAdbFailure(error);
   }
 };
 const probe = () => probePackagePids(adb, pkg);
@@ -47,7 +47,8 @@ const out = 'ap02-device-evidence';
 mkdirSync(out,{recursive:true});
 let phase = 'preflight';
 let lastSafActivityTrail = null;
-function record(name, additional = {}) {
+async function record(name, additional = {}) {
+  await dialogTracker.flush();
   phase = name;
   results.push({ stage:name, status:'PASS', ...additional });
   writeFileSync(out+'/result.json',JSON.stringify({schemaVersion:1,candidate:sha,api,package:pkg,
@@ -84,9 +85,7 @@ function nativeNodes() {
   // interpret a failed Android shell 'cat' as XML or another data format.
   const dump=adb('shell','uiautomator','dump','/sdcard/ap02-f2-ui.xml');
   if(/null root node/i.test(dump))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
-  let xml;
-  try{xml=adb('shell','cat','/sdcard/ap02-f2-ui.xml');}
-  catch{throw Error('NATIVE_UI_TREE_UNAVAILABLE');}
+  const xml=adb('shell','cat','/sdcard/ap02-f2-ui.xml');
   if(!/<hierarchy\b/.test(xml))throw Error('NATIVE_UI_TREE_UNAVAILABLE');
   return parseNativeNodes(xml);
 }
@@ -116,31 +115,33 @@ async function nativeSave(alertIndex, activityProbe) {
     // class names, password values, native window contents or ciphertext.
     // The UI can silently cancel an export while Android is re-establishing
     // its foreground session; distinguish this from an inaccessible picker.
-    const safe=await dom('(function(){const buttons=Array.from(document.querySelectorAll("button"));'+
+    const safe=await bestEffortDiagnostic(()=>dom('(function(){const buttons=Array.from(document.querySelectorAll("button"));'+
       'return {locked:!!document.querySelector("#vault-password"),'+
       'cipherBusy:document.body?.innerText?.includes("Cifratura in corso...")===true,'+
       'exportButtonVisible:buttons.some(e=>e.innerText?.trim()==="Esporta copia completa V7"'+
       '&&e.getClientRects().length>0&&getComputedStyle(e).visibility==="visible"),'+
-      'documentVisibility:document.visibilityState};})()').catch(()=>null);
+      'documentVisibility:document.visibilityState};})()'));
     const failureAlert=dialogs.slice(alertIndex).some(d=>d.kind==='alert'&&
       /Copia V7 non completata o non verificata/i.test(d.message));
     const cancelledAlert=dialogs.slice(alertIndex).some(d=>d.kind==='alert'&&
       /Inserisci e conferma una password/i.test(d.message));
     const diagnostic={stage:'native-v7-saf-selection',
-      api,foreground:nativeForeground(),rejected:failureAlert,
+      api,foreground:await bestEffortDiagnostic(()=>Boolean(nativeForeground())),rejected:failureAlert,
       validationRejected:cancelledAlert,locked:safe?.locked??null,
       cipherBusy:safe?.cipherBusy??null,
       exportButtonVisible:safe?.exportButtonVisible??null,
       documentVisibility:safe?.documentVisibility??'unavailable',
       originalError:classifyFailure(error).code,
       activityTrail:activityProbe?.snapshot()??null};
-    writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
-    if(failureAlert)throw Error('NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF');
-    if(cancelledAlert)throw Error('NATIVE_V7_EXPORT_FORM_REJECTED');
-    if(safe?.locked)throw Error('NATIVE_V7_VAULT_LOCKED_BEFORE_SAF');
-    if(safe?.cipherBusy)throw Error('NATIVE_V7_EXPORT_STILL_IN_PROGRESS');
-    throw Error(diagnostic.foreground?'NATIVE_V7_SAF_MISSING_FOREGROUND':
-      'NATIVE_V7_SAF_NOT_OBSERVED_OFF_FOREGROUND');
+    // Secondary UI evidence adds context, never replaces the primary failure.
+    diagnostic.detailCode=failureAlert?'NATIVE_V7_EXPORT_REJECTED_BEFORE_SAF':
+      cancelledAlert?'NATIVE_V7_EXPORT_FORM_REJECTED':
+      safe?.locked?'NATIVE_V7_VAULT_LOCKED_BEFORE_SAF':
+      safe?.cipherBusy?'NATIVE_V7_EXPORT_STILL_IN_PROGRESS':
+      diagnostic.foreground===true?'NATIVE_V7_SAF_MISSING_FOREGROUND':
+      diagnostic.foreground===false?'NATIVE_V7_SAF_NOT_OBSERVED_OFF_FOREGROUND':null;
+    try{writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));}catch{}
+    throw error;
   }
   tap(await findNative(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'DOC_SAVE_BUTTON'));
   await until(nativeForeground,'RETURN_FROM_SAVE',45000);
@@ -182,6 +183,7 @@ async function nativeChoose(filename) {
 
 let socket=null,channel=null;
 const dialogs=[];
+const dialogTracker=createDialogTracker();
 let classPromptName=null;
 let classPromptAcknowledged=0;
 function disconnect() {
@@ -241,15 +243,14 @@ async function connect() {
         const expected=classPromptName;
         if(typeof expected!=='string' || !d.message?.startsWith(
           'Inserisci la denominazione della nuova classe')) {
-          void withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:false})).catch(()=>{});
+          try{dialogTracker.track(()=>withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:false})));}catch{}
           return;
         }
         classPromptName=null;
-        classPromptAcknowledged++;
-        void withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:true,promptText:expected})).catch(()=>{});
+        try{dialogTracker.track(()=>withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:true,promptText:expected})),()=>{classPromptAcknowledged++;});}catch{}
         return;
       }
-      void withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:true})).catch(()=>{});
+      try{dialogTracker.track(()=>withoutObservationScope(()=>send('Page.handleJavaScriptDialog',{accept:true})));}catch{}
       return;
     }
     if(msg.error||msg.result?.exceptionDetails){
@@ -262,6 +263,7 @@ async function connect() {
 async function evaluate(expr,timeout=35000){
   // Only public DOM operations, never internal App methods, Vault keys or
   // decrypted backup contents.
+  dialogTracker.check();
   return send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true},timeout);
 }
 const dom = body => evaluate('('+body+')');
@@ -469,7 +471,7 @@ async function createClass(name){
   let clickError=null;
   try{await button('Nuova Classe');}
   catch(error){clickError=error;}
-  await until(()=>classPromptAcknowledged===before+1,
+  await until(()=>{dialogTracker.check();return classPromptAcknowledged===before+1;},
     'SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED',15000);
   classPromptName=null;
   // On Android 36 the OS may protect the mounted App while the prompt settles.
@@ -510,17 +512,17 @@ let lastPhysicalReadKind = 'not-attempted';
 function safeDeviceFlag(flag,filename) {
   try {
     execFileSync('adb',['shell','test',flag,quotedLabV7Path(filename)],
-      {stdio:'ignore',timeout:7000});
+      {stdio:'ignore',timeout:commandBudget(7000),killSignal:'SIGKILL'});
     return true;
   } catch(error) {
     return error?.status===1 ? false : null;
   }
 }
-function safeDeviceByteCount(filename) {
+function safeDeviceByteCount(filename,strict=false) {
   try {
     const value=adb('shell','stat','-c','%s',quotedLabV7Path(filename));
     return /^\d+$/.test(value) ? Number(value) : null;
-  } catch { return null; }
+  } catch(error) {if(strict)throw error;return null;}
 }
 // F2-DIAG-02: metadata only for two synthetic Android exports. No file bytes,
 // names, SAF URIs, password values, app records or raw ADB output are retained.
@@ -622,13 +624,14 @@ function inspectEncryptedFile(filename){
   assert.ok(labV7Date(filename)!==null,'INVALID_LAB_V7_FILENAME');
   let bytes;
   try{
-    const before=safeDeviceByteCount(filename);
+    const before=safeDeviceByteCount(filename,true);
     if(!Number.isSafeInteger(before)||before<=0)throw Error('LAB_V7_SIZE_UNAVAILABLE');
     bytes=pullLabV7Bytes(filename);
-    const after=safeDeviceByteCount(filename);
+    const after=safeDeviceByteCount(filename,true);
     if(bytes.length!==before||after!==before)throw Error('LAB_V7_SIZE_MISMATCH');
   }
   catch(error){
+    if(isTransportOrDeadline(error))throw error;
     lastPhysicalReadKind=error?.code==='ETIMEDOUT'?'adb-pull-timeout':
       error?.message==='LAB_V7_SIZE_UNAVAILABLE'?'device-size-unavailable':
       error?.message==='LAB_V7_SIZE_MISMATCH'?'physical-size-mismatch':'adb-pull-rejected';
@@ -651,22 +654,19 @@ function inspectEncryptedFile(filename){
   return {bytes:bytes.length,sha256:sha256(bytes)};
 }
 async function verifiedEncryptedFile(filename){
-  const deadline=Date.now()+15000;
   let attempts=0;
   lastPhysicalReadKind='not-attempted';
-  while(true){
-    attempts++;
-    try{return inspectEncryptedFile(filename);}
-    catch(error){
-      if(error?.message!=='NATIVE_V7_PHYSICAL_READ_UNAVAILABLE')throw error;
-      if(Date.now()>=deadline){
-        // Missing diagnostics must never mask the physical-read failure.
-        try{await capturePhysicalReadDiagnostic(filename,attempts);}
-        catch{console.log('AP02_F2_PHYSICAL_READ_DIAGNOSTIC_UNAVAILABLE',api);}
-        throw Error('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
-      }
-      await sleep(500);
-    }
+  try{
+    return await observeUntil(()=>{attempts++;return inspectEncryptedFile(filename);},{
+      timeoutMs:15000,intervalMs:500,retryReadErrors:true,
+      retryCodes:['NATIVE_V7_PHYSICAL_READ_UNAVAILABLE']
+    });
+  }catch(error){
+    await bestEffortDiagnostic(()=>capturePhysicalReadDiagnostic(filename,attempts));
+    if(classifyFailure(error).code==='OBSERVATION_DEADLINE' &&
+       error.observation?.lastCode==='NATIVE_V7_PHYSICAL_READ_UNAVAILABLE')
+      throw new LabFailure('NATIVE_V7_PHYSICAL_READ_UNAVAILABLE_AFTER_RETRY');
+    throw error;
   }
 }
 async function exportV7(previous=null){
@@ -755,7 +755,7 @@ async function run(){
   assert.equal(adb('install','--no-incremental',process.env.AP02_LAB_APK).split('\n').filter(x=>x==='Success').length,1);
   await launch();
   await onPage('Configura archivio protetto',60000);
-  record('installed-professional-android-webview');
+  await record('installed-professional-android-webview');
   // In contrast to the earlier demo-mode browser test, this is a wholly
   // synthetic PROFESSIONAL archive created through the actual product gate.
   await click('input[name="archive-mode"][value="professional"]');
@@ -789,14 +789,14 @@ async function run(){
       homeHeadingVisible:surface?.homeHeadingVisible??null},null,2));
     throw error;
   }
-  record('professional-vault-created-with-synthetic-profile');
+  await record('professional-vault-created-with-synthetic-profile');
   await createClass(originalClass);
   await nav('Privacy');
   const target=await exportV7();
   // The first document remains at its original provider-owned location.
   // Android will give the second same-day copy a numbered filename.
   assert.deepEqual(await verifiedEncryptedFile(target.name),target.digest);
-  record('native-v7-target-export-saf-verified',{target:target.digest,physical:true,nativeReauthCount});
+  await record('native-v7-target-export-saf-verified',{target:target.digest,physical:true,nativeReauthCount});
   await nav('Oggi');
   await createClass(newerClass);
   await nav('Privacy');
@@ -809,12 +809,12 @@ async function run(){
     catch {console.log('AP02_F2_DUPLICATE_EXPORT_DIAGNOSTIC_UNAVAILABLE',api);}
   }
   assert.notEqual(recovery.digest.sha256,target.digest.sha256);
-  record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true,nativeReauthCount});
+  await record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true,nativeReauthCount});
   await restoreFromRealSaf(target.name,recovery.name);
   await onPage('Le mie classi',60000);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(originalClass)+')'),true);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(newerClass)+')'),false);
-  record('actual-professional-v7-native-saf-import-and-restored-ui',{twoFileSelection:true,
+  await record('actual-professional-v7-native-saf-import-and-restored-ui',{twoFileSelection:true,
     encryptedFilesDistinct:true,nativeReauthCount});
   disconnect();
   const restart=await verifiedProcessStop({probe,forceStop:()=>adb('shell','am','force-stop',pkg)});
@@ -825,18 +825,20 @@ async function run(){
   await onPage('Le mie classi',60000);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(originalClass)+')'),true);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(newerClass)+')'),false);
-  record('actual-android-process-cold-reopen-preserves-v7-restore',{
+  await record('actual-android-process-cold-reopen-preserves-v7-restore',{
     forcedStop:true,absenceSamples:restart.absenceSamples,
     beforePidsCount:restart.beforePids?.length,afterPidsCount:restart.afterPids?.length});
 }
 try{
   await run();
+  await dialogTracker.flush();
   console.log('AP02_F2_DEVICE_SUCCESS',sha,api);
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
   const {category,code}=classifyFailure(error);
   writeFileSync(out+'/failure.json',JSON.stringify({candidate:sha,api,phase,code,category,
     observation:error instanceof LabFailure?error.observation:undefined,
+    dialogCommands:dialogTracker.snapshot(),
     qualified:false,productionRelease:false,syntheticOnly:true,
     adbTransport:adbTransport.snapshot(),
     safActivityTrail:lastSafActivityTrail,

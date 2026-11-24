@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { commandBudget, normalizeAdbFailure } from './native-lab-runtime.mjs';
 
 // F2-DEVICE: discover only lab V7 files created by Android ACTION_CREATE_DOCUMENT.
 // Android is the owner of the file names and normally adds "(1)" on collision.
@@ -55,7 +56,8 @@ export function pullLabV7Bytes(name,run=execFileSync){
   const directory=mkdtempSync(join(tmpdir(),'ap02-v7-read-'));
   const local=join(directory,'encrypted.bin');
   try{
-    run('adb',['pull','/sdcard/Download/'+name,local],{timeout:30000,stdio:'ignore'});
+    try{run('adb',['pull','/sdcard/Download/'+name,local],{timeout:commandBudget(30000),killSignal:'SIGKILL',stdio:['ignore','ignore','pipe']});}
+    catch(error){throw normalizeAdbFailure(error);}
     return readFileSync(local);
   }finally{
     rmSync(directory,{recursive:true,force:true});

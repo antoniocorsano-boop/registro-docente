@@ -4,6 +4,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 
+export const failureCategories=Object.freeze(['INFRASTRUCTURE','HARNESS','PRODUCT','INDETERMINATE']);
+// PRODUCT is reserved for independently established evidence, never inferred from a timeout.
 const categories = Object.freeze({
   OBSERVATION_DEADLINE: 'INDETERMINATE',
   COMMAND_DEADLINE: 'INDETERMINATE',
@@ -22,6 +24,13 @@ const categories = Object.freeze({
   CDP_TYPE_ERROR: 'INDETERMINATE',
   CDP_INVALID_STATE_ERROR: 'INDETERMINATE',
   ADB_TRANSPORT_TIMEOUT: 'INFRASTRUCTURE',
+  ADB_TRANSPORT_OFFLINE: 'INFRASTRUCTURE',
+  CDP_DIALOG_OUTCOME_UNKNOWN: 'INDETERMINATE',
+  PROCESS_STOP_DEADLINE: 'INDETERMINATE',
+  V7_FIRST_FILE_NOT_UNIQUE: 'INDETERMINATE',
+  V7_SECOND_DISTINCT_DOCUMENT_MISSING: 'INDETERMINATE',
+  INVALID_LAB_V7_FILE_LIST: 'HARNESS',
+  INVALID_LAB_V7_FILE_NAME: 'HARNESS',
   NATIVE_UI_TREE_UNAVAILABLE: 'INDETERMINATE',
   ASSERTION_FAILED: 'INDETERMINATE',
   INVALID_HARNESS_ARGUMENT: 'HARNESS',
@@ -79,8 +88,16 @@ export function classifyFailure(error) {
   else if (message.startsWith('CONDITION_TIMEOUT:')) code = 'OBSERVATION_DEADLINE';
   else if (message.startsWith('CDP_EVALUATION_REJECTED:')) code = cdpEvaluationFailure(message.slice('CDP_EVALUATION_REJECTED:'.length)).code;
   else if (message.startsWith('CDP_TIMEOUT:') || message === 'DOM_WAIT_TIMEOUT') code = 'CDP_TIMEOUT';
+  else if (message === 'Process still present or absence not verified after force-stop') code = 'PROCESS_STOP_DEADLINE';
   else if (Object.hasOwn(categories, message)) code = message;
   return { category: categories[code] || 'INDETERMINATE', code };
+}
+export function normalizeAdbFailure(error) {
+  if(error instanceof LabFailure)return error;
+  if(error?.code==='ETIMEDOUT')return new LabFailure('ADB_TRANSPORT_TIMEOUT');
+  if(/(?:^|\n)(?:adb: )?(?:error: )?(?:device offline|device not found|no devices\/emulators found|device '[^'\n]+' not found)(?:\r?\n|$)/i.test(String(error?.stderr??'')))
+    return new LabFailure('ADB_TRANSPORT_OFFLINE');
+  return error;
 }
 const scope = new AsyncLocalStorage();
 // Unsolicited CDP dialog events have their own command deadline. They must
@@ -93,12 +110,31 @@ export function commandBudget(maxMs, now = performance.now.bind(performance)) {
   if (remaining < 1) throw new LabFailure('COMMAND_DEADLINE');
   return Math.floor(remaining);
 }
+export async function withinDeadline(run,{timeoutMs,now=performance.now.bind(performance),timeoutCode='COMMAND_DEADLINE'}={}){
+  if(!Number.isFinite(timeoutMs)||timeoutMs<=0)throw new LabFailure('INVALID_HARNESS_ARGUMENT');
+  const parent=scope.getStore(),clock=parent?.now||now;
+  const end=Math.min(parent?.end??Infinity,clock()+timeoutMs);
+  return scope.run({end,now:clock},async()=>{
+    if(clock()>=end)throw new LabFailure(timeoutCode);
+    const value=await run();
+    if(clock()>=end)throw new LabFailure(timeoutCode);
+    return value;
+  });
+}
+export async function bestEffortDiagnostic(read){
+  try{return await withoutObservationScope(()=>withinDeadline(read,{timeoutMs:5000}));}
+  catch{return null;}
+}
+export function isTransportOrDeadline(error){
+  const f=classifyFailure(error);
+  return f.category==='INFRASTRUCTURE'||['COMMAND_DEADLINE','OBSERVATION_DEADLINE','CDP_TIMEOUT'].includes(f.code);
+}
 // This loop never races or abandons an active callback. Each callback must
 // perform only observation, or use the non-retrying transition path below.
 // The caller must bound every I/O operation with commandBudget.
 export async function observeUntil(read, {
   timeoutMs, intervalMs = 350, retryReadErrors = false,
-  now = performance.now.bind(performance), sleep = delay,
+  now = performance.now.bind(performance), sleep = delay, retryCodes = ['CDP_TIMEOUT','NATIVE_UI_TREE_UNAVAILABLE'],
 } = {}) {
   if (typeof read !== 'function' || !Number.isFinite(timeoutMs) || timeoutMs <= 0 ||
       !Number.isFinite(intervalMs) || intervalMs <= 0) throw new LabFailure('INVALID_HARNESS_ARGUMENT');
@@ -115,7 +151,7 @@ export async function observeUntil(read, {
         const failure = classifyFailure(error);
         // Only these explicitly recognized observation failures can be sampled
         // again. Callers containing taps/submits/reauth must disable retry.
-        if (!retryReadErrors || !['CDP_TIMEOUT','NATIVE_UI_TREE_UNAVAILABLE'].includes(failure.code)) throw error;
+        if (!retryReadErrors || !retryCodes.includes(failure.code)) throw error;
         transientErrors++;
         lastCode = failure.code;
       }
@@ -130,7 +166,7 @@ export async function observeUntil(read, {
 }
 // One timer and one settlement per command; no automatic resend (the outcome
 // of a mutation may be unknown). A closed channel rejects all pending commands.
-export function createPendingCommands({ setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+export function createPendingCommands({ setTimer = setTimeout, clearTimer = clearTimeout, now = performance.now.bind(performance) } = {}) {
   const pending = new Map();
   let seq = 0, closed = false;
   function settle(id, error, value) {
@@ -138,6 +174,7 @@ export function createPendingCommands({ setTimer = setTimeout, clearTimer = clea
     if (!item) return false;
     pending.delete(id);
     clearTimer(item.timer);
+    if(!error&&item.clock()>=item.deadline)error=new LabFailure('CDP_TIMEOUT');
     if (error) item.reject(error); else item.resolve(value);
     return true;
   }
@@ -148,7 +185,8 @@ export function createPendingCommands({ setTimer = setTimeout, clearTimer = clea
       try { ms = commandBudget(maxMs); } catch (error) { return Promise.reject(error); }
       return new Promise((resolve, reject) => {
         const id = ++seq;
-        const item = { resolve, reject, timer: null };
+        const clock=scope.getStore()?.now||now;
+        const item = { resolve, reject, timer: null, clock, deadline:clock()+ms };
         pending.set(id, item);
         item.timer = setTimer(() => settle(id, new LabFailure('CDP_TIMEOUT')), ms);
         try { transmit(id); }
@@ -161,5 +199,22 @@ export function createPendingCommands({ setTimer = setTimeout, clearTimer = clea
       for (const id of pending.keys()) settle(id, new LabFailure('CDP_DISCONNECTED'));
     },
     get size() { return pending.size; },
+  };
+}
+
+export function createDialogTracker(){
+  const pending=new Set();
+  let requested=0,acknowledged=0,failure=null;
+  function check(){if(failure)throw failure;}
+  return {
+    track(sendOnce,onAck=()=>{}){
+      check();requested++;
+      const task=Promise.resolve().then(sendOnce).then(()=>{acknowledged++;onAck();})
+        .catch(()=>{failure ||= new LabFailure('CDP_DIALOG_OUTCOME_UNKNOWN');});
+      pending.add(task);void task.then(()=>pending.delete(task));
+    },
+    check,
+    async flush(){while(pending.size)await Promise.all([...pending]);check();},
+    snapshot(){return {requested,acknowledged,pending:pending.size,failed:failure!==null};},
   };
 }
