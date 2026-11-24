@@ -6,6 +6,7 @@ on:
       - '.github/workflows/ap02-f2-native-device.yml'
       - 'scripts/diagnostics/ap02-native-device-v7.mjs'
       - 'scripts/diagnostics/native-lab-runtime.mjs'
+      - 'scripts/diagnostics/native-lab-readiness.mjs'
       - 'scripts/diagnostics/native-lab-runtime.test.mjs'
       - 'scripts/diagnostics/native-ui-driver.mjs'
       - 'scripts/diagnostics/native-process-probe.mjs'
@@ -141,6 +142,20 @@ jobs:
             .results[5].beforePidsCount>0 and
             .results[5].afterPidsCount==0
           ' ap02-device-evidence/result.json
+      - name: Require complete Q3 environment and readiness evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+            .candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and
+            .bootReady==true and .packageReady==true and .foreground==true and .cdpReady==true and
+            .complete==true and .launches==2 and
+            (.versions | [.adb,.platformTools,.emulator,.webviewPackage,.webviewVersion,.androidBuild,.runnerImage,.runnerVersion,.node,.chromium] | all(type=="string" and length>0))
+          ' ap02-device-evidence/environment.json
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+            .candidate==$sha and .api==$api and .rawDomStored==false and
+            (.readyDestinations | sort == ["class","class-detail","home","lock","privacy","session","setup"])
+          ' ap02-device-evidence/surface-readiness.json
       - name: Preserve non-sensitive qualification record only
         uses: actions/upload-artifact@v4
         if: always()
@@ -152,5 +167,7 @@ jobs:
             ap02-device-evidence/saf-diagnostic.json
             ap02-device-evidence/provenance.txt
             ap02-device-evidence/apk-hash.txt
+            ap02-device-evidence/environment.json
+            ap02-device-evidence/surface-readiness.json
           retention-days: 14
           if-no-files-found: warn

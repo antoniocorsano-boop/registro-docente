@@ -184,3 +184,65 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   }),{now:clock.now,timeoutMs:100});
   assert.equal(bytes.toString(),'synthetic');
 });
+
+import { isInteractiveElement, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
+test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
+  const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
+  assert.equal(bootReady(f),true);
+  for(const key of Object.keys(f))assert.equal(bootReady({...f,[key]:'unknown'}),false);
+});
+test('Q3 fingerprint extracts only known version fields and rejects missing or injected data',()=>{
+  const v=versionFacts({adb:'Android Debug Bridge version 1.0.41\nVersion 36.0.0-1234',emulator:'Android emulator version 36.2.1.0 (build_id 123)',webview:'Current WebView package (name, version): (com.google.android.webview, 130.0.1.2)',androidBuild:'google/sdk_gphone/x86:12/ABC/123:userdebug/dev-keys',runnerImage:'ubuntu22',runnerVersion:'20261124.1',node:'v22.15.0',chromium:'130.0.1.2'});
+  assert.equal(v.adb,'1.0.41');
+  assert.equal(v.emulator,'36.2.1.0');assert.equal(v.webviewVersion,'130.0.1.2');
+  assert.equal(versionFacts({androidBuild:'private text\nother'}).androidBuild,null);
+  assert.equal(v.platformTools,'36.0.0');assert.equal(v.platformToolsBuild,'1234');assert.equal(v.emulatorBuild,'123');
+  assert.equal(completeFingerprint(v),true);
+  assert.equal(completeFingerprint({...v,platformTools:null}),false);
+});
+test('Q3 destination rejects stale page, background, gate, missing controls',()=>{
+  assert.equal(classifySurface(readyFrame,'privacy'),'ready');
+  for(const f of [{...readyFrame,foreground:false},{...readyFrame,documentVisible:false},{...readyFrame,protectedField:true},{...readyFrame,privacy:false},{...readyFrame,brand:false}])
+    assert.notEqual(classifySurface(f,'privacy'),'ready');
+  assert.equal(classifySurface({...readyFrame,lock:true,lockControls:true},'privacy'),'locked');
+  assert.equal(classifySurface({...readyFrame,gateError:true},'privacy'),'gate-error');
+  assert.equal(classifySurface({foreground:true,documentVisible:true,setup:true,professionalChoice:true},'setup'),'ready');
+  assert.equal(classifySurface({...readyFrame,lock:true,lockControls:true},'lock'),'ready');
+});
+test('Q3 actual predicate refuses hidden or inert ancestor, disabled and background controls',()=>{
+  const doc={visibilityState:'visible'};
+  const style=()=>({visibility:'visible',display:'block',opacity:'1',pointerEvents:'auto'});
+  const e={closest:()=>null,matches:()=>false,getClientRects:()=>[{}],parentElement:null};
+  assert.equal(isInteractiveElement(e,doc,style),true);
+  assert.equal(isInteractiveElement({...e,closest:()=>({})},doc,style),false);
+  assert.equal(isInteractiveElement({...e,matches:()=>true},doc,style),false);
+  assert.equal(isInteractiveElement(e,{visibilityState:'hidden'},style),false);
+  assert.equal(isInteractiveElement({...e,parentElement:{hidden:true}},doc,n=>n.hidden?{...style(),opacity:'0'}:style()),false);
+});
+test('Q3 lock observed before one real authentication and two ready samples',async()=>{
+  const clock=fakeClock();let i=0,auth=0;
+  const frames=[{...readyFrame,lock:true,lockControls:true},readyFrame,readyFrame];
+  await waitPublicSurface({sample:()=>frames[i++],destination:'privacy',authenticate:async()=>{auth++;},timeoutMs:5000,now:clock.now,sleep:clock.sleep});
+  assert.equal(auth,1);assert.equal(i,3);
+});
+test('Q3 uncertain authentication and second lock never cause repeated submit',async()=>{
+  for(const fail of [true,false]){
+    const clock=fakeClock();let calls=0;
+    await assert.rejects(waitPublicSurface({sample:()=>({...readyFrame,lock:true,lockControls:true}),destination:'privacy',
+      authenticate:async()=>{calls++;if(fail)throw new LabFailure('CDP_TIMEOUT');},timeoutMs:5000,now:clock.now,sleep:clock.sleep}),
+      {code:fail?'CDP_TIMEOUT':'PUBLIC_RELOCK_AFTER_AUTH'});
+    assert.equal(calls,1);
+  }
+});
+test('Q3 application error blocks instead of being labelled transport; no arbitrary trace data',async()=>{
+  const clock=fakeClock();
+  await assert.rejects(waitPublicSurface({sample:()=>({...readyFrame,gateError:true}),destination:'privacy',timeoutMs:5000,now:clock.now,sleep:clock.sleep}),{code:'PUBLIC_GATE_ERROR'});
+  assert.equal(classifyFailure(new LabFailure('PUBLIC_GATE_ERROR')).category,'INDETERMINATE');
+  assert.deepEqual(safeSurfaceTrace([{destination:'privacy',state:'ready',payload:'private'},{destination:'secret',state:'ready'}]),[{destination:'privacy',state:'ready'}]);
+});
+test('Q3 incomplete or alternating readiness times out; disconnection propagates',async()=>{
+  const clock=fakeClock();let i=0;
+  await assert.rejects(waitPublicSurface({sample:()=>i++%2===0?readyFrame:{...readyFrame,privacy:false},destination:'privacy',timeoutMs:1000,now:clock.now,sleep:clock.sleep}),{code:'OBSERVATION_DEADLINE'});
+  await assert.rejects(waitPublicSurface({sample:()=>{throw new LabFailure('CDP_DISCONNECTED');},destination:'privacy',timeoutMs:1000}),{code:'CDP_DISCONNECTED'});
+});

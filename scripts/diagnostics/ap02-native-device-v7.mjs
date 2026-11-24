@@ -4,8 +4,9 @@
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
@@ -47,6 +48,58 @@ const out = 'ap02-device-evidence';
 mkdirSync(out,{recursive:true});
 let phase = 'preflight';
 let lastSafActivityTrail = null;
+const surfaceTransitions=[];
+const readyDestinations=new Set();
+const environment={schemaVersion:1,candidate:sha,api,syntheticOnly:true,productionRelease:false,
+  runId:process.env.GITHUB_RUN_ID||null,runAttempt:process.env.GITHUB_RUN_ATTEMPT||null,
+  bootReady:false,packageReady:false,launches:0,foreground:false,cdpReady:false,versions:null,complete:false};
+function saveEnvironment(){writeFileSync(out+'/environment.json',JSON.stringify(environment,null,2));}
+const surfaceExpression=(label)=>'('+publicSurfaceFrame.toString()+')('+JSON.stringify(label)+',document,getComputedStyle,'+isInteractiveElement.toString()+')';
+const interactiveSource=isInteractiveElement.toString();
+async function samplePublicSurface(label){
+  const frame=await dom(surfaceExpression(label));
+  return {...frame,foreground:nativeForeground()};
+}
+function observeSurface(destination,state){
+  const previous=surfaceTransitions[surfaceTransitions.length-1];
+  if(previous?.destination!==destination||previous?.state!==state){
+    surfaceTransitions.push({destination,state});
+    if(surfaceTransitions.length>80)surfaceTransitions.shift();
+  }
+}
+async function waitDestination(destination,label=null,ms=60000,reauth=true){
+  const ready=await waitPublicSurface({destination,timeoutMs:ms,sample:()=>samplePublicSurface(label),
+    onState:state=>observeSurface(destination,state),
+    authenticate:reauth&&['home','privacy','class','class-detail'].includes(destination)?async()=>{
+      await ensureInteractiveSession('destination-'+destination);
+    }:undefined});
+  readyDestinations.add(destination);
+  return ready;
+}
+async function preflightBoot(){
+  phase='preflight-boot';
+  saveEnvironment();
+  try{
+    await observeUntil(()=>bootReady({
+      transport:adb('get-state'),boot:adb('shell','getprop','sys.boot_completed'),
+      animation:adb('shell','getprop','init.svc.bootanim'),packageManager:adb('shell','pm','path','android')
+    }),{timeoutMs:90000,intervalMs:1000,retryReadErrors:true,retryCodes:['ADB_TRANSPORT_OFFLINE','ADB_TRANSPORT_TIMEOUT']});
+  }catch(error){
+    if(classifyFailure(error).code==='OBSERVATION_DEADLINE')throw new LabFailure('PREFLIGHT_BOOT_UNREADY');
+    throw error;
+  }
+  environment.bootReady=true;
+  saveEnvironment();
+  if(Number(adb('shell','getprop','ro.build.version.sdk'))!==api)throw new LabFailure('PREFLIGHT_WRONG_API');
+  phase='preflight-versions';
+  const emulatorProbe=spawnSync((process.env.ANDROID_HOME||process.env.ANDROID_SDK_ROOT)+'/emulator/emulator',['-version'],
+    {encoding:'utf8',timeout:commandBudget(10000),killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']});
+  if(emulatorProbe.error||emulatorProbe.status!==0)throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');
+  environment.versions=versionFacts({adb:adb('version'),emulator:String(emulatorProbe.stdout||'')+'\n'+String(emulatorProbe.stderr||''),
+    webview:adb('shell','dumpsys','webviewupdate'),androidBuild:adb('shell','getprop','ro.build.fingerprint'),
+    runnerImage:process.env.ImageOS,runnerVersion:process.env.ImageVersion,node:process.version});
+  saveEnvironment();
+}
 async function record(name, additional = {}) {
   await dialogTracker.flush();
   phase = name;
@@ -73,7 +126,7 @@ async function until(fn, name, timeout = 60000, retryReadErrors = true) {
         'SYNTHETIC_CLASS_PROMPT_NOT_ACCEPTED','INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT',
         'ANDROID_DOCUMENTS_UI','DOC_ROOTS','DOC_DOWNLOADS','DOC_SAVE_BUTTON',
         'DOC_OPEN_BUTTON','RETURN_FROM_SAVE','RETURN_FROM_OPEN','SELECT_DOCUMENT',
-        'V7_VERIFIED_NATIVE_RECEIPT','REAL_RECOVERY_CONSENT','REAL_V7_RESTORE_RESULT'];
+        'V7_VERIFIED_NATIVE_RECEIPT','REAL_RECOVERY_CONSENT','REAL_V7_RESTORE_RESULT','PREFLIGHT_FOREGROUND'];
       error.observation.purpose=prefix?prefix.slice(0,-1):fixed.includes(name)?name:'OTHER_OBSERVATION';
     }
     throw error;
@@ -166,9 +219,7 @@ async function reauthenticateAfterPicker(kind) {
   adbTransport.mark('password-field-entered');
   await button('Sblocca Registro');
   adbTransport.mark('unlock-requested');
-  await until(()=>dom('!document.querySelector("#vault-password") && '+
-    'document.body?.innerText?.includes("Privacy First")'),
-    'ANDROID_SESSION_REAUTHORIZED_'+kind,45000);
+  await waitDestination('session',null,45000,false);
   adbTransport.mark('unlocked');
   nativeReauthCount++;
 }
@@ -212,8 +263,10 @@ async function connect() {
       throw error;
     }
     if(!Array.isArray(list))throw new LabFailure('INVALID_HARNESS_ARGUMENT');
-    const target=list.find(x=>x.type==='page'&&x.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(x.url));
-    if(!target)return null;
+    const targets=list.filter(x=>x.type==='page'&&x.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(x.url));
+    if(targets.length>1)throw new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');
+    if(!targets.length)return null;
+    const target=targets[0];
     const handshakeBudget=commandBudget(4000);
     const ws=new WebSocket(target.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/,'ws://127.0.0.1:9222'));
     await new Promise((resolve,reject)=>{
@@ -268,22 +321,26 @@ async function evaluate(expr,timeout=35000){
 }
 const dom = body => evaluate('('+body+')');
 async function onPage(text,ms=30000){
-  return until(()=>dom('document.body?.innerText?.includes('+JSON.stringify(text)+')'), 'UI_TEXT_'+text,ms);
+  if(text==='Configura archivio protetto')return waitDestination('setup',null,ms,false);
+  if(text==='Sblocca Registro')return waitDestination('lock',null,ms,false);
+  if(text==='Le mie classi')return waitDestination('home',null,ms);
+  if(text==='Ripristina backup cifrato')return waitDestination('privacy',null,ms);
+  if(text===originalClass||text===newerClass)return waitDestination('class',text,ms);
+  throw new LabFailure('INVALID_HARNESS_ARGUMENT');
 }
 function field(selector,value){
   return dom('(function(){const el=document.querySelector('+JSON.stringify(selector)+');'+
-    'if(!el||el.disabled)throw Error("MISSING_INPUT");'+
+    'if(!('+interactiveSource+')(el)||el.readOnly)throw Error("MISSING_INPUT");'+
     'Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(el,'+JSON.stringify(value)+');'+
     'el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
 }
 function click(selector) {
   return dom('(function(){const el=document.querySelector('+JSON.stringify(selector)+');'+
-    'if(!el||el.disabled)throw Error("MISSING_CONTROL");el.click();return true;})()');
+    'if(!('+interactiveSource+')(el))throw Error("MISSING_CONTROL");el.click();return true;})()');
 }
 function button(label) {
   return dom('(function(){const a=Array.from(document.querySelectorAll("button")).filter(e=>'+
-    'e.innerText?.trim() === '+JSON.stringify(label)+'&&!e.disabled&&e.getClientRects().length>0'+
-    '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
+    'e.textContent?.trim() === '+JSON.stringify(label)+'&&('+interactiveSource+')(e));'+
     'if(a.length===0)throw Error("BUTTON_MATCH_COUNT_0");'+
     'if(a.length!==1)throw Error("BUTTON_MATCH_COUNT_"+a.length);a[0].click();return true;})()');
 }
@@ -294,7 +351,7 @@ let homeNavigationDiagnostic = null;
 // Inspect only fixed public UI predicates; never extract names, screen text,
 // passwords, documents, or WebView markup into a diagnostic artifact.
 const publicHomeFrame = () => dom('(function(){'+
-  'const visible=e=>Boolean(e&&e.getClientRects().length>0&&!e.closest("[inert], [aria-hidden=true]")&&getComputedStyle(e).visibility==="visible");'+
+  'const visible='+interactiveSource+';'+
   'const buttons=Array.from(document.querySelectorAll("button"));'+
   'const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
   'const confirmed=document.querySelector("[data-testid=header01-home-confirm]");'+
@@ -303,7 +360,7 @@ const publicHomeFrame = () => dom('(function(){'+
   'todayHeadingVisible:visible(document.querySelector("#today-heading")),'+
   'classHeadingVisible:Array.from(document.querySelectorAll("h2")).some(e=>e.textContent?.trim()==="Le mie classi"&&visible(e)),'+
   'newClassButtonVisible:buttons.some(e=>e.textContent?.trim()==="Nuova Classe"&&!e.disabled&&visible(e)),'+
-  'brandInteractive:visible(brand)&&!brand.disabled,'+
+  'brandInteractive:visible(brand)&&!brand.disabled&&!brand.closest("[inert]"),'+
   'documentVisible:document.visibilityState==="visible"};})()');
 
 async function captureHomeConfirmDiagnostic(){
@@ -330,11 +387,12 @@ async function captureHomeConfirmDiagnostic(){
 // A visible text node inside the protected, inert App is not an interactive
 // screen. Re-authenticate only through the actual public Vault lock UI.
 async function ensureInteractiveSession(scope){
-  const state=()=>dom('(function(){const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
-    'const locked=Boolean(document.querySelector("#vault-password"));'+
-    'const ready=Boolean(brand&&!brand.closest("[inert]")&&'+
-    'brand.getClientRects().length>0&&getComputedStyle(brand).visibility==="visible"&&'+
-    'document.visibilityState==="visible");return {locked,ready};})()');
+  const state=async()=>{
+    const f=await samplePublicSurface(null);
+    if(f.gateError)throw new LabFailure('PUBLIC_GATE_ERROR');
+    return {locked:f.foreground&&f.documentVisible&&f.lock&&f.lockControls,
+      ready:f.foreground&&f.documentVisible&&f.brand&&!f.setup&&!f.lock&&!f.gatePending&&!f.protectedField};
+  };
   // Android can protect the mounted WebView between a stable readiness
   // sample and the final surface check. Retry the *real* authentication and
   // visibility checks rather than clicking through inert content.
@@ -368,15 +426,16 @@ async function ensureInteractiveSession(scope){
 async function nav(label){
   await ensureInteractiveSession('before-nav-'+label);
   await click('[data-testid="header01-brand-navigation"]');
-  await until(()=>dom('Boolean(document.querySelector("#registro-navigation-drawer"))'),'NAV_DRAWER',15000);
+  await until(async()=>nativeForeground()&&await dom('(function(){const e=document.querySelector("#registro-navigation-drawer");return ('+interactiveSource+')(e);})()'),'NAV_DRAWER',15000);
   await dom('(function(){const e=Array.from(document.querySelectorAll("#registro-navigation-drawer button"))'+
-    '.filter(x=>x.textContent?.trim()==='+JSON.stringify(label)+'&&!x.disabled);'+
+    '.filter(x=>x.textContent?.trim()==='+JSON.stringify(label)+'&&('+interactiveSource+')(x));'+
     'if(e.length!==1)throw Error("NAV_NOT_UNIQUE");e[0].click();return true;})()');
   if(label==='Oggi'){
     const started=Date.now(), transitions=[];
     let lastFrame=null;
     const sample=async()=>{
       lastFrame=await publicHomeFrame();
+      if(!nativeForeground())lastFrame={...lastFrame,documentVisible:false,brandInteractive:false};
       const stage=classifyHomeNavigationFrame(lastFrame);
       if(transitions.length===0||transitions[transitions.length-1].stage!==stage)
         transitions.push({stage,elapsedMs:Date.now()-started});
@@ -433,19 +492,14 @@ async function nav(label){
       console.log('AP02_HOME_NAVIGATION_BLOCKED',api,homeNavigationDiagnostic.lastStage);
       throw error;
     }
+  } else if(label==='Privacy'){
+    phase='visible-ui-navigation-Privacy';
+    // The exact public destination, real gate and both V7 forms must be ready.
+    await until(()=>waitDestination('privacy',null,45000),'PRIVACY_V7_EXPORT_BUTTON_READY',45000,false);
+    phase='visible-ui-privacy-v7-ready';
   } else {
     phase='visible-ui-navigation-'+label;
-    await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
-  }
-  if(label==='Privacy'){
-    phase='visible-ui-privacy-v7-ready';
-    // On slower Android WebViews the Privacy heading may appear before the
-    // action mounts or becomes interactive. Never click a hidden/stale
-    // button, and never rely on text presence alone as a readiness signal.
-    await until(()=>dom('(function(){const a=Array.from(document.querySelectorAll("button")).filter(e=>'+
-      'e.innerText?.trim()==="Esporta copia completa V7" && !e.disabled && e.getClientRects().length>0'+
-      '&&!e.closest("[inert]")&&getComputedStyle(e).visibility==="visible");'+
-      'return a.length===1;})()'), 'PRIVACY_V7_EXPORT_BUTTON_READY',30000);
+    await onPage('Le mie classi');
   }
 }
 async function createClass(name){
@@ -460,7 +514,7 @@ async function createClass(name){
     '!document.querySelector("#vault-password") && '+
     '!Array.from(document.querySelectorAll("div[inert][style]")).some(e=>e.style.visibility==="hidden") && '+
     'Array.from(document.querySelectorAll("button")).filter(e=>'+
-    'e.innerText?.trim()==="Nuova Classe" && !e.disabled && e.getClientRects().length>0).length===1'),
+    'e.textContent?.trim()==="Nuova Classe" && ('+interactiveSource+')(e)).length===1'),
     'VISIBLE_CLASS_CREATION_CONTROL',30000);
   if(classPromptName!==null)throw Error('CLASS_PROMPT_ALREADY_PENDING');
   const before=classPromptAcknowledged;
@@ -480,17 +534,18 @@ async function createClass(name){
   await ensureInteractiveSession('after-class-prompt');
   const expectedClassHeading='Gestione Elenco Alunni: '+name;
   await until(async()=>{
-    const state=await dom('(function(){const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
-      'return {locked:!!document.querySelector("#vault-password"),'+
-      'ready:!!brand&&!brand.closest("[inert]")&&brand.getClientRects().length>0&&'+
-      'getComputedStyle(brand).visibility==="visible"&&document.visibilityState==="visible",'+
-      'classVisible:document.body?.innerText?.includes('+JSON.stringify(expectedClassHeading)+')===true};})()');
+    const f=await samplePublicSurface(expectedClassHeading);
+    if(f.gateError)throw new LabFailure('PUBLIC_GATE_ERROR');
+    const state={locked:f.foreground&&f.documentVisible&&f.lock&&f.lockControls,
+      ready:f.foreground&&f.documentVisible&&f.brand&&!f.protectedField&&!f.gatePending,
+      classVisible:f.classVisible};
     if(state.locked){
       await ensureInteractiveSession('after-class-prompt');
       return false;
     }
     return state.ready&&state.classVisible;
   },'INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT',90000,false);
+  await waitDestination('class-detail',expectedClassHeading,45000);
   if(clickError)console.log('AP02_CLASS_PROMPT_RUNTIME_RECOVERED',api);
   const hasDone=await dom('document.body?.innerText?.includes("Dati Salvati in Locale con Successo!")');
   if(hasDone){
@@ -732,6 +787,7 @@ async function exportV7(previous=null){
   return {name,digest};
 }
 async function restoreFromRealSaf(target,recovery){
+  await waitDestination('privacy',null,45000);
   const prior=dialogs.length;
   await field('input[placeholder="Inserisci la password impostata alla cifratura"]',copyPassword);
   await field('#restore-v7-recovery-password',copyPassword);
@@ -746,12 +802,28 @@ async function restoreFromRealSaf(target,recovery){
     'REAL_V7_RESTORE_RESULT',60000);
 }
 async function launch(){
+  phase='preflight-package';
+  if(!/^package:\/[^\r\n]+\.apk(?:\r?\n|$)/.test(adb('shell','pm','path',pkg)))throw new LabFailure('PREFLIGHT_PACKAGE_UNAVAILABLE');
+  environment.packageReady=true;
+  phase='preflight-launch';
   adb('shell','am','start','-W','-n',activity);
+  await until(()=>probe().length===1&&nativeForeground(),'PREFLIGHT_FOREGROUND',45000);
+  phase='preflight-cdp';
   await connect();
-  assert.equal(probe().length,1);
+  await until(()=>probe().length===1&&nativeForeground(),'PREFLIGHT_FOREGROUND',45000);
+  const chromium=await dom('navigator.userAgent.match(/Chrome\\/([0-9.]+)/)?.[1]??null');
+  const detected=versionFacts({chromium}).chromium;
+  if(environment.versions.chromium&&environment.versions.chromium!==detected)throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');
+  environment.versions.chromium=detected;
+  environment.foreground=true;environment.cdpReady=true;
+  environment.launches++;
+  environment.complete=completeFingerprint(environment.versions);
+  saveEnvironment();
+  if(!environment.complete)throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');
 }
 async function run(){
-  assert.equal(Number(adb('shell','getprop','ro.build.version.sdk')),api);
+  await preflightBoot();
+  phase='preflight-install';
   assert.equal(adb('install','--no-incremental',process.env.AP02_LAB_APK).split('\n').filter(x=>x==='Success').length,1);
   await launch();
   await onPage('Configura archivio protetto',60000);
@@ -763,7 +835,7 @@ async function run(){
   for(let i=0;i<profile.length;i++){
     const index=i,value=profile[i];
     await dom('(function(){const a=Array.from(document.querySelectorAll("fieldset input[required]"));'+
-      'if(a.length!==4||!a['+index+'])throw Error("SYNTHETIC_PROFILE_INPUT_MISSING");'+
+      'if(a.length!==4||!('+interactiveSource+')(a['+index+']))throw Error("SYNTHETIC_PROFILE_INPUT_MISSING");'+
       'Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(a['+index+'],'+
       JSON.stringify(value)+');a['+index+'].dispatchEvent(new Event("input",{bubbles:true}));'+
       'a['+index+'].dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
@@ -832,13 +904,16 @@ async function run(){
 try{
   await run();
   await dialogTracker.flush();
+  writeFileSync(out+'/surface-readiness.json',JSON.stringify({candidate:sha,api,rawDomStored:false,readyDestinations:[...readyDestinations].sort(),transitions:safeSurfaceTrace(surfaceTransitions)},null,2));
   console.log('AP02_F2_DEVICE_SUCCESS',sha,api);
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
   const {category,code}=classifyFailure(error);
+  try{saveEnvironment();}catch{}
   writeFileSync(out+'/failure.json',JSON.stringify({candidate:sha,api,phase,code,category,
     observation:error instanceof LabFailure?error.observation:undefined,
     dialogCommands:dialogTracker.snapshot(),
+    surfaceTransitions:safeSurfaceTrace(surfaceTransitions),readyDestinations:[...readyDestinations].sort(),
     qualified:false,productionRelease:false,syntheticOnly:true,
     adbTransport:adbTransport.snapshot(),
     safActivityTrail:lastSafActivityTrail,
