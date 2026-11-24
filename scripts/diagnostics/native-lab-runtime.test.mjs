@@ -185,7 +185,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -245,4 +245,99 @@ test('Q3 incomplete or alternating readiness times out; disconnection propagates
   const clock=fakeClock();let i=0;
   await assert.rejects(waitPublicSurface({sample:()=>i++%2===0?readyFrame:{...readyFrame,privacy:false},destination:'privacy',timeoutMs:1000,now:clock.now,sleep:clock.sleep}),{code:'OBSERVATION_DEADLINE'});
   await assert.rejects(waitPublicSurface({sample:()=>{throw new LabFailure('CDP_DISCONNECTED');},destination:'privacy',timeoutMs:1000}),{code:'CDP_DISCONNECTED'});
+});
+
+test('Q3-R01 real boot sampler short circuits every not-ready predecessor',()=>{
+  const steps=[['get-state'],['shell','getprop','sys.boot_completed'],['shell','getprop','init.svc.bootanim'],['shell','pm','path','android']];
+  const values=['device','1','stopped','package:/system/framework/framework-res.apk'];
+  for(let stop=0;stop<steps.length;stop++){
+    const seen=[];
+    const ready=sampleBootReadiness((...args)=>{
+      const index=seen.length;seen.push(args);
+      return index===stop?'not-ready':values[index];
+    });
+    assert.equal(ready,false);assert.deepEqual(seen,steps.slice(0,stop+1));
+  }
+  let i=0;assert.equal(sampleBootReadiness((...args)=>{assert.deepEqual(args,steps[i]);return values[i++];}),true);
+});
+test('Q3-R01 real boot wait retries only known missing service within shared budget',async()=>{
+  const clock=fakeClock();let polls=0,pm=0;
+  const adb=(...args)=>{
+    if(args[0]==='get-state'){polls++;return 'device';}
+    if(args[2]==='sys.boot_completed')return polls===1?'0':'1';
+    if(args[2]==='init.svc.bootanim')return 'stopped';
+    assert.equal(args.join(' '),'shell pm path android');
+    pm++;assert.ok(commandBudget(90000)<=5000);
+    if(pm===1)throw Object.assign(new Error('private shell detail'),{status:1,stderr:"cmd: Can't find service: package\n",stdout:''});
+    return 'package:/system/framework/framework-res.apk';
+  };
+  assert.equal(await waitBootReadiness(adb,{now:clock.now,sleep:clock.sleep,timeoutMs:5000,intervalMs:1000}),true);
+  assert.equal(polls,3);assert.equal(pm,2);
+});
+test('Q3-R01 unexpected package manager error is never converted to transient readiness',async()=>{
+  const clock=fakeClock();let polls=0;
+  const unexpected=Object.assign(new Error('unexpected package error'),{status:1,stderr:'Permission denied'});
+  await assert.rejects(waitBootReadiness((...args)=>{
+    if(args[0]==='get-state'){polls++;return 'device';}
+    if(args[2]==='sys.boot_completed')return '1';
+    if(args[2]==='init.svc.bootanim')return 'stopped';
+    throw unexpected;
+  },{now:clock.now,sleep:clock.sleep,timeoutMs:5000}),e=>e===unexpected);
+  assert.equal(polls,1);
+});
+test('Q3-R01 missing package service timeout retains classified observation evidence',async()=>{
+  const clock=fakeClock();let polls=0;
+  await assert.rejects(waitBootReadiness((...args)=>{
+    if(args[0]==='get-state'){polls++;return 'device';}
+    if(args[2]==='sys.boot_completed')return '1';
+    if(args[2]==='init.svc.bootanim')return 'stopped';
+    return 'Error: Could not access the Package Manager. Is the system running?';
+  },{now:clock.now,sleep:clock.sleep,timeoutMs:2100,intervalMs:1000}),e=>{
+    assert.equal(e.code,'PREFLIGHT_BOOT_UNREADY');
+    assert.deepEqual(e.observation,{attempts:3,transientErrors:3,lastCode:'PREFLIGHT_PACKAGE_SERVICE_PENDING'});return true;
+  });
+  assert.equal(polls,3);
+});
+test('Q3-R02 real authentication adapter fills and submits exactly once within destination wait',async()=>{
+  const clock=fakeClock();const actions=[];
+  const locked={...readyFrame,lock:true,lockControls:true,protectedField:true};
+  let frames=[locked,readyFrame,readyFrame];
+  const authenticate=createPublicAuthentication({
+    waitForLock:async()=>{actions.push('observed-real-lock');},
+    fill:async()=>{actions.push('field');},
+    submit:async()=>{actions.push('submit');},
+    waitForSession:async()=>{actions.push('ready-session');}
+  });
+  await waitPublicSurface({sample:()=>frames.shift(),destination:'privacy',authenticate,now:clock.now,sleep:clock.sleep,timeoutMs:5000});
+  assert.deepEqual(actions,['observed-real-lock','field','submit','ready-session']);
+  await assert.rejects(authenticate(),{code:'PUBLIC_RELOCK_AFTER_AUTH'});
+  assert.equal(actions.filter(x=>x==='submit').length,1);
+});
+test('Q3-R02 real adapter blocks second lock and uncertain fill/submit outcomes',async()=>{
+  const locked={...readyFrame,lock:true,lockControls:true,protectedField:true};
+  for(const mode of ['fill','submit','relock']){
+    const clock=fakeClock(),actions=[];
+    const authenticate=createPublicAuthentication({
+      waitForLock:async()=>{actions.push('lock');},
+      fill:async()=>{actions.push('field');if(mode==='fill')throw new LabFailure('CDP_TIMEOUT');},
+      submit:async()=>{actions.push('submit');if(mode==='submit')throw new LabFailure('CDP_TIMEOUT');},
+      waitForSession:async()=>{actions.push('session');}
+    });
+    await assert.rejects(waitPublicSurface({sample:()=>locked,destination:'privacy',authenticate,now:clock.now,sleep:clock.sleep,timeoutMs:5000}),
+      {code:mode==='relock'?'PUBLIC_RELOCK_AFTER_AUTH':'CDP_TIMEOUT'});
+    await assert.rejects(authenticate(),{code:'PUBLIC_RELOCK_AFTER_AUTH'});
+    assert.equal(actions.filter(x=>x==='field').length,1);
+    assert.equal(actions.filter(x=>x==='submit').length,mode==='fill'?0:1);
+  }
+});
+test('Q3-R02 separate positively observed lifecycle boundaries permit four independent SAF unlocks',async()=>{
+  let fills=0,submits=0,locks=0,sessions=0;
+  for(let boundary=0;boundary<4;boundary++){
+    const authenticate=createPublicAuthentication({
+      waitForLock:async()=>{locks++;},fill:async()=>{fills++;},
+      submit:async()=>{submits++;},waitForSession:async()=>{sessions++;}
+    });
+    await authenticate();await assert.rejects(authenticate(),{code:'PUBLIC_RELOCK_AFTER_AUTH'});
+  }
+  assert.deepEqual({locks,fills,submits,sessions},{locks:4,fills:4,submits:4,sessions:4});
 });

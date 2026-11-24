@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
@@ -70,24 +70,15 @@ function observeSurface(destination,state){
 async function waitDestination(destination,label=null,ms=60000,reauth=true){
   const ready=await waitPublicSurface({destination,timeoutMs:ms,sample:()=>samplePublicSurface(label),
     onState:state=>observeSurface(destination,state),
-    authenticate:reauth&&['home','privacy','class','class-detail'].includes(destination)?async()=>{
-      await ensureInteractiveSession('destination-'+destination);
-    }:undefined});
+    authenticate:reauth&&['home','privacy','class','class-detail'].includes(destination)?
+      makePublicAuthentication('destination-'+destination):undefined});
   readyDestinations.add(destination);
   return ready;
 }
 async function preflightBoot(){
   phase='preflight-boot';
   saveEnvironment();
-  try{
-    await observeUntil(()=>bootReady({
-      transport:adb('get-state'),boot:adb('shell','getprop','sys.boot_completed'),
-      animation:adb('shell','getprop','init.svc.bootanim'),packageManager:adb('shell','pm','path','android')
-    }),{timeoutMs:90000,intervalMs:1000,retryReadErrors:true,retryCodes:['ADB_TRANSPORT_OFFLINE','ADB_TRANSPORT_TIMEOUT']});
-  }catch(error){
-    if(classifyFailure(error).code==='OBSERVATION_DEADLINE')throw new LabFailure('PREFLIGHT_BOOT_UNREADY');
-    throw error;
-  }
+  await waitBootReadiness(adb);
   environment.bootReady=true;
   saveEnvironment();
   if(Number(adb('shell','getprop','ro.build.version.sdk'))!==api)throw new LabFailure('PREFLIGHT_WRONG_API');
@@ -213,14 +204,11 @@ async function reauthenticateAfterPicker(kind) {
   await until(()=>dom('Boolean(document.querySelector("#vault-password"))'),
     'ANDROID_SESSION_REAUTH_REQUIRED_'+kind,35000);
   adbTransport.mark('lock-present');
-  await onPage('Sblocca Registro',35000);
-  adbTransport.mark('lock-ui-ready');
-  await field('#vault-password',password);
-  adbTransport.mark('password-field-entered');
-  await button('Sblocca Registro');
-  adbTransport.mark('unlock-requested');
-  await waitDestination('session',null,45000,false);
-  adbTransport.mark('unlocked');
+  await makePublicAuthentication('saf-'+kind,step=>{
+    const marks={'lock-ready':'lock-ui-ready','password-entered':'password-field-entered',
+      'unlock-requested':'unlock-requested','unlocked':'unlocked'};
+    adbTransport.mark(marks[step]);
+  })();
   nativeReauthCount++;
 }
 async function nativeChoose(filename) {
@@ -386,7 +374,20 @@ async function captureHomeConfirmDiagnostic(){
 // Class prompts and Android lifecycle callbacks can suspend the mounted Vault.
 // A visible text node inside the protected, inert App is not an interactive
 // screen. Re-authenticate only through the actual public Vault lock UI.
+function makePublicAuthentication(scope,onStep=()=>{}){
+  return createPublicAuthentication({
+    waitForLock:async()=>{await onPage('Sblocca Registro',35000);},
+    fill:async()=>{await field('#vault-password',password);},
+    submit:async()=>{await button('Sblocca Registro');},
+    waitForSession:()=>waitDestination('session',null,45000,false),
+    onStep:step=>{
+      onStep(step);
+      if(step==='unlocked')console.log('AP02_SESSION_REAUTH_VIA_REAL_UI',scope,api);
+    }
+  });
+}
 async function ensureInteractiveSession(scope){
+  const authenticate=makePublicAuthentication(scope);
   const state=async()=>{
     const f=await samplePublicSurface(null);
     if(f.gateError)throw new LabFailure('PUBLIC_GATE_ERROR');
@@ -394,8 +395,8 @@ async function ensureInteractiveSession(scope){
       ready:f.foreground&&f.documentVisible&&f.brand&&!f.setup&&!f.lock&&!f.gatePending&&!f.protectedField};
   };
   // Android can protect the mounted WebView between a stable readiness
-  // sample and the final surface check. Retry the *real* authentication and
-  // visibility checks rather than clicking through inert content.
+  // sample and the final surface check. Only read observations may repeat;
+  // the one-use authentication adapter rejects a second lock in this scope.
   for(let attempt=0;attempt<4;attempt++){
     const observed=await until(async()=>{
       const first=await state();
@@ -407,14 +408,12 @@ async function ensureInteractiveSession(scope){
     },'ANDROID_INTERACTIVE_OR_LOCK_'+scope,45000);
     if(observed==='locked'){
       phase='visible-ui-session-reauth-'+scope;
-      await onPage('Sblocca Registro',35000);
-      await field('#vault-password',password);
-      await button('Sblocca Registro');
+      await authenticate();
       await until(async()=>{
         const next=await state();
-        return next.ready&&!next.locked;
-      },'ANDROID_SESSION_REAUTHORIZED_'+scope,45000);
-      console.log('AP02_SESSION_REAUTH_VIA_REAL_UI',scope,api);
+        if(next.locked)throw new LabFailure('PUBLIC_RELOCK_AFTER_AUTH');
+        return next.ready;
+      },'ANDROID_SESSION_REAUTHORIZED_'+scope,45000,false);
     }
     const last=await state();
     if(last.ready&&!last.locked)return;
@@ -892,9 +891,8 @@ async function run(){
   const restart=await verifiedProcessStop({probe,forceStop:()=>adb('shell','am','force-stop',pkg)});
   await launch();
   await onPage('Sblocca Registro',60000);
-  await field('#vault-password',password);
-  await button('Sblocca Registro');
-  await onPage('Le mie classi',60000);
+  await makePublicAuthentication('cold-reopen')();
+  await waitDestination('home',null,60000,false);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(originalClass)+')'),true);
   assert.equal(await dom('document.body?.innerText?.includes('+JSON.stringify(newerClass)+')'),false);
   await record('actual-android-process-cold-reopen-preserves-v7-restore',{

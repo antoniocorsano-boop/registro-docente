@@ -1,5 +1,5 @@
 // QA-STABILITY-01/Q3: synthetic lab preflight and public UI readiness.
-import { LabFailure, observeUntil, classifyFailure } from './native-lab-runtime.mjs';
+import { LabFailure, observeUntil, classifyFailure, normalizeAdbFailure } from './native-lab-runtime.mjs';
 export function isInteractiveElement(e,doc=document,style=getComputedStyle){
   if(!e||doc.visibilityState!=='visible'||e.closest('[inert],[aria-hidden="true"],[hidden]')||
     e.matches(':disabled,[aria-disabled="true"]')||e.getClientRects().length===0)return false;
@@ -69,6 +69,59 @@ export async function waitPublicSurface({sample,destination,authenticate,timeout
 }
 export function bootReady({transport,boot,animation,packageManager}){
   return transport==='device'&&boot==='1'&&animation==='stopped'&&/^package:\/[^\r\n]+\.apk(?:\r?\n|$)/.test(packageManager||'');
+}
+// Q3-R01: do not query a later subsystem before its predecessors are ready.
+// A fixed, affirmative package-service-unavailable message is the only extra
+// transient condition. Arbitrary shell errors never become readiness samples.
+function packageServicePending(value){
+  return /^(?:(?:cmd|pm): (?:Can't|Cannot) find service: package|Error: Could not access the Package Manager\. Is the system running\?)$/i.test(String(value??'').trim());
+}
+export function sampleBootReadiness(adb){
+  if(adb('get-state')!=='device')return false;
+  if(adb('shell','getprop','sys.boot_completed')!=='1')return false;
+  if(adb('shell','getprop','init.svc.bootanim')!=='stopped')return false;
+  let packageManager;
+  try{packageManager=adb('shell','pm','path','android');}
+  catch(error){
+    const normalized=normalizeAdbFailure(error);
+    if(normalized instanceof LabFailure)throw normalized;
+    const stderr=String(error?.stderr??'').trim(),stdout=String(error?.stdout??'').trim();
+    if(Number.isInteger(error?.status)&&error.status!==0&&
+       ((packageServicePending(stderr)&&!stdout)||(packageServicePending(stdout)&&!stderr)||
+        (packageServicePending(stdout)&&stdout===stderr)))
+      throw new LabFailure('PREFLIGHT_PACKAGE_SERVICE_PENDING');
+    throw error;
+  }
+  if(packageServicePending(packageManager))throw new LabFailure('PREFLIGHT_PACKAGE_SERVICE_PENDING');
+  return bootReady({transport:'device',boot:'1',animation:'stopped',packageManager});
+}
+export async function waitBootReadiness(adb,{timeoutMs=90000,intervalMs=1000,now,sleep}={}){
+  try{
+    return await observeUntil(()=>sampleBootReadiness(adb),{
+      timeoutMs,intervalMs,now,sleep,retryReadErrors:true,
+      retryCodes:['ADB_TRANSPORT_OFFLINE','ADB_TRANSPORT_TIMEOUT','PREFLIGHT_PACKAGE_SERVICE_PENDING']
+    });
+  }catch(error){
+    if(classifyFailure(error).code==='OBSERVATION_DEADLINE'){
+      const failure=new LabFailure('PREFLIGHT_BOOT_UNREADY');
+      failure.observation=error.observation;throw failure;
+    }
+    throw error;
+  }
+}
+// Q3-R02: the same one-use adapter drives the public password field and submit
+// in production-like synthetic tests. It cannot repeat an uncertain mutation;
+// a fresh scope is required for a separately observed lifecycle boundary.
+export function createPublicAuthentication({waitForLock,fill,submit,waitForSession,onStep=()=>{}}){
+  let attempted=false;
+  return async()=>{
+    if(attempted)throw new LabFailure('PUBLIC_RELOCK_AFTER_AUTH');
+    attempted=true;
+    await waitForLock();onStep('lock-ready');
+    await fill();onStep('password-entered');
+    await submit();onStep('unlock-requested');
+    await waitForSession();onStep('unlocked');
+  };
 }
 export function versionFacts(raw){
   const version=(value)=>/^\d+(?:\.\d+){1,4}$/.test(String(value??''))?String(value):null;
