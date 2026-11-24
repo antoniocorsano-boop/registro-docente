@@ -85,3 +85,12 @@ test('canonical Q4 and direct F2 coordinate hybrid without weakening inherited g
   assert.ok(workflow.includes('git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD'));
   assert.ok(registry.invariants.some(x=>x.id==='QA-STABILITY-01-APPIUM-I02'));
 });
+
+test('hybrid workflow has one build, one emulator run and a fail-closed delta check',()=>{
+  for(const marker of ['      - name: Install isolated open-source automation stack','      - name: Build exact real Web UI and separate debug-only Android laboratory','      - name: Appium real installed application pilot','      - name: Require actual pilot evidence, never F2 qualification'])assert.equal(workflow.split(marker).length,2,marker);
+  assert.ok(!workflow.split('\n').some(line=>line.length&&/^\S/.test(line)&&! /^(name:|on:|permissions:|jobs:|#)/.test(line)));
+  assert.ok(workflow.includes('changed=$(git diff --name-only'));
+  assert.ok(workflow.includes('UNAPPROVED_LAB_DELTA'));
+  assert.ok(workflow.includes('done <<< "$changed"'));
+  assert.ok(!workflow.includes('|| true'));
+});

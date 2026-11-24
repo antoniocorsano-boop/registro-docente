@@ -473,7 +473,8 @@ test('Q4 pilot trial 0 must pass on both APIs before three counted trials',()=>{
   const q=readFileSync(new URL('../../.github/workflows/qa-stability-01-q4.yml',import.meta.url),'utf8');
   const f=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
   assert.ok(q.includes('trial: 0'));
-  assert.ok(q.includes('needs: [preflight, pilot]'));
+  assert.ok(q.includes('needs: [preflight, hybrid, pilot]'));
+  assert.ok(q.includes('needs: [preflight, hybrid, startup]'));
   assert.ok(q.includes('Qualify selected inherited Bun contracts before Android pilot'));
   assert.ok(f.includes('^[0123]$'));
 });
@@ -646,9 +647,10 @@ test('Q4-R07 independent startup matrix precedes pilot and cannot count as full 
   const f=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
   const d=readFileSync(new URL('./ap02-native-device-v7.mjs',import.meta.url),'utf8');
   const startup=q.slice(q.indexOf('  startup:'),q.indexOf('  pilot:'));
-  assert.ok(startup.includes('needs: preflight')&&startup.includes('trial: [1, 2, 3]')&&startup.includes('startup_only: true'));
-  assert.ok(q.slice(q.indexOf('  pilot:'),q.indexOf('  q4:')).includes('needs: [preflight, startup]'));
-  assert.ok(q.includes('needs: [preflight, pilot]'));
+  assert.ok(startup.includes('needs: [preflight, hybrid]')&&startup.includes('trial: [1, 2, 3]')&&startup.includes('startup_only: true'));
+  assert.ok(q.slice(q.indexOf('  hybrid:'),q.indexOf('  startup:')).includes('needs: preflight'));
+  assert.ok(q.slice(q.indexOf('  pilot:'),q.indexOf('  q4:')).includes('needs: [preflight, hybrid, startup]'));
+  assert.ok(q.includes('needs: [preflight, hybrid, pilot]'));
   assert.ok(f.includes('default: false')&&f.includes('if: ${{ !inputs.startup_only }}'));
   assert.ok(f.includes('q4-startup-api{0}-trial{1}')&&f.includes('.fullF2Qualified==false'));
   assert.ok(f.includes('.results[4].nativeReauthCount>=4')&&f.includes('.results[5].absenceSamples==2'));

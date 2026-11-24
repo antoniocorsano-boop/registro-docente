@@ -70,104 +70,14 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD
-          test -z "$(git diff --name-only 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD | grep -vE '^(\.github/workflows/(qa-appium-replacement-pilot|ap02-f2-native-device|qa-stability-01-q4|ci-fast-development)\.yml|scripts/diagnostics/appium-pilot/[^/]+|scripts/diagnostics/(ap02-native-device-v7|native-adb-transport-probe|native-home-navigation-probe|native-lab-readiness|native-lab-runtime|native-lab-runtime\.test|native-lab-transitions|native-process-probe|native-process-probe\.test|native-saf-lifecycle-probe\.test|native-v7-document-discovery|run-native-lab-contracts)\.mjs|qualification/invariants\.v1\.json|src/security/ap02V7OperationalBackup\.test\.ts)
-          python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - uses: oven-sh/setup-bun@v2
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'
-      - name: Install isolated open-source automation stack
-        shell: bash
-        run: |
-          set -euo pipefail
-          export APPIUM_HOME="$RUNNER_TEMP/appium-q5"
-          printf 'APPIUM_HOME=%s\n' "$APPIUM_HOME" >> "$GITHUB_ENV"
-          npm install --global --no-audit --no-fund appium@3.8.0
-          appium driver install uiautomator2@8.6.0
-          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
-          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
-          "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
-          appium --version
-          appium driver list --installed
-          test -x "$ANDROID_HOME/emulator/emulator"
-          appium driver doctor uiautomator2
-      - name: Build exact real Web UI and separate debug-only Android laboratory
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          mkdir -p ap02-device-evidence
-          bun install --frozen-lockfile
-          bun run build
-          test -s dist/index.html
-          test -s dist/assets/$(ls dist/assets | head -n1)
-          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
-          cd mobile/android-probe
-          npx --no-install cap add android
-          npx --no-install cap sync android
-          node prepare-native-back.mjs
-          native=android/app/src/main/java/it/trama/registrodocente/prova
-          cp native/*.java "$native/"
-          python3 - <<'PY'
-          import pathlib,re
-          root=pathlib.Path('android/app')
-          def change(p,old,new):
-              f=root/p
-              value,n=re.subn(old,new,f.read_text())
-              assert n==1,(str(f),n)
-              f.write_text(value)
-          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"',
-                 'applicationId "it.trama.registrodocente.lab.ap02v7"')
-          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"',
-                 'android:name="it.trama.registrodocente.prova.MainActivity"')
-          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"',
-                 'android:allowBackup="false" android:fullBackupContent="false"')
-          PY
-          (cd android; bash ./gradlew --no-daemon assembleDebug)
-          apk="$RUNNER_TEMP/ap02-f2-device-lab.apk"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/ap02-cert.txt"
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.ap02v7'"
-          unzip -p "$apk" assets/public/index.html | cmp - ../../dist/index.html
-          sha256sum "$apk" > ../../ap02-device-evidence/apk-hash.txt
-          printf 'candidate=%s\napi=%s\npackage=it.trama.registrodocente.lab.ap02v7\nproduction_release=false\nsynthetic_only=true\n' \
-            "$CANDIDATE_SHA" "$AP02_API" > ../../ap02-device-evidence/provenance.txt
-          printf 'AP02_LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
-      - name: Enable emulator hardware acceleration
-        shell: bash
-        run: |
-          test -e /dev/kvm
-          sudo chmod 666 /dev/kvm
-      - name: Appium real installed application pilot
-        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
-        with:
-          api-level: ${{ matrix.api }}
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: false
-          script: bash scripts/diagnostics/appium-pilot/run.sh
-      - name: Require actual pilot evidence, never F2 qualification
-        run: |
-          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '.candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .stages==["native-session","webview-setup","professional-home","privacy-navigation","home-navigation","target-class","target-export","recovery-class","recovery-export","restore","native-stop-verified","cold-lock","cold-authenticated-home","cold-restored-content"] and .safReturns==["target-export","recovery-export","target-source","recovery-source"] and (.physicalCopies|length)==2 and .physicalCopies[0].sha256!=.physicalCopies[1].sha256' ap02-device-evidence/appium-pilot.json
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: appium-pilot-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
-          path: |
-            ap02-device-evidence/appium-pilot.json
-            ap02-device-evidence/apk-hash.txt
-            ap02-device-evidence/provenance.txt
-          retention-days: 14
-          if-no-files-found: warn
- || true)"
+          changed=$(git diff --name-only 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD)
+          while IFS= read -r path; do
+            if test -z "$path"; then continue; fi
+            if ! [[ "$path" =~ ^(\.github/workflows/(qa-appium-replacement-pilot|ap02-f2-native-device|qa-stability-01-q4|ci-fast-development)\.yml|scripts/diagnostics/appium-pilot/[^/]+|scripts/diagnostics/(ap02-native-device-v7|native-adb-transport-probe|native-home-navigation-probe|native-lab-readiness|native-lab-runtime|native-lab-runtime\.test|native-lab-transitions|native-process-probe|native-process-probe\.test|native-saf-lifecycle-probe\.test|native-v7-document-discovery|run-native-lab-contracts)\.mjs|qualification/invariants\.v1\.json|src/security/ap02V7OperationalBackup\.test\.ts)$ ]]; then
+              echo 'UNAPPROVED_LAB_DELTA' >&2
+              exit 1
+            fi
+          done <<< "$changed"
           python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
       - uses: actions/setup-node@v4
         with:
