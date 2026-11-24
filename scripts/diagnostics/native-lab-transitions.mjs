@@ -3,6 +3,18 @@ import { LabFailure, observeUntil, withinDeadline, classifyFailure, normalizeAdb
 import { classifySurface, waitPublicSurface } from './native-lab-readiness.mjs';
 import { parseNativeNodes, hasArea } from './native-ui-driver.mjs';
 const readTransient=new Set(['CDP_TIMEOUT','CDP_DISCONNECTED','CDP_SOCKET_ERROR','CDP_SOCKET_TIMEOUT','CDP_SEND_FAILED']);
+// Chromium AwDevToolsManagerDelegate::GetTargetDescription supplies native
+// attachment, visibility and screen rectangle. Missing facts are not evidence
+// that a competing WebView is inactive. Keep no raw descriptions or geometry.
+export function nativeViewState(description){
+  let d;
+  try{d=typeof description==='string'?JSON.parse(description):null;}catch{return 'unknown';}
+  if(!d||typeof d!=='object'||Array.isArray(d))return 'unknown';
+  if(d.attached===false||d.visible===false||d.empty===true)return 'inactive';
+  if(d.attached===true&&d.visible===true&&d.empty===false&&
+    Number.isFinite(d.width)&&d.width>0&&Number.isFinite(d.height)&&d.height>0)return 'active';
+  return 'unknown';
+}
 export function localPageTargets(list){
   if(!Array.isArray(list))throw new LabFailure('INVALID_HARNESS_ARGUMENT');
   const targets=[];
@@ -12,11 +24,39 @@ export function localPageTargets(list){
     try{page=new URL(x.url);ws=new URL(x.webSocketDebuggerUrl);}catch{continue;}
     if(!['http:','https:'].includes(page.protocol)||page.hostname!=='localhost'||page.username||page.password||
       ws.protocol!=='ws:'||!/^\/devtools\/page\/[A-Za-z0-9_.-]+$/.test(ws.pathname)||ws.search||ws.hash)continue;
-    targets.push({id:x.id,endpoint:'ws://127.0.0.1:9222'+ws.pathname});
+    targets.push({id:x.id,endpoint:'ws://127.0.0.1:9222'+ws.pathname,nativeView:nativeViewState(x.description)});
   }
-  if(new Set(targets.map(x=>x.id)).size!==targets.length||targets.length>8)
+  if(new Set(targets.map(x=>x.id)).size!==targets.length||new Set(targets.map(x=>x.endpoint)).size!==targets.length||targets.length>8)
     throw new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');
   return targets;
+}
+// Native-inactive candidates can be excluded positively. For several native
+// active views, only one affirmatively focused document may be selected; all
+// others must explicitly report no focus. DOM readiness alone is insufficient.
+export async function identifyPublicTarget(targets,inspect,expected){
+  if(targets.some(x=>x.nativeView==='unknown'))
+    return {state:'native-evidence-incomplete',matches:0};
+  const active=targets.filter(x=>x.nativeView==='active');
+  const observations=[];
+  for(const target of active){
+    try{
+      const frame=await inspect(target);
+      if(!frame||typeof frame.documentVisible!=='boolean'||
+         (active.length>1&&typeof frame.documentFocused!=='boolean'))
+        return {state:'inspection-incomplete',matches:0};
+      observations.push({target,frame});
+    }catch(error){
+      if(!readTransient.has(classifyFailure(error).code))throw error;
+      return {state:'inspection-incomplete',matches:0};
+    }
+  }
+  if(!observations.length)return {state:'no-target',matches:0};
+  const eligible=observations.length===1?observations:observations.filter(x=>x.frame.documentFocused===true);
+  if(eligible.length!==1)return {state:'ambiguous',matches:eligible.length||observations.length};
+  const match=eligible[0];
+  if(classifySurface({...match.frame,foreground:true},expected)!=='ready')
+    return {state:'no-target',matches:0};
+  return {state:'identified',matches:1,target:match.target};
 }
 export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,expected,timeoutMs=60000,now,sleep,onState=()=>{},
   acquire,inspectAcquired,confirmIdentity,release}){
@@ -28,28 +68,18 @@ export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,exp
       const snapshot=await sample();
       if(!snapshot||snapshot.foreground!==true||!snapshot.pid){reset();last='not-foreground';onState({state:last,candidates:0,matches:0});return false;}
       const targets=localPageTargets(snapshot.list);
-      let incomplete=false;const matched=[];
-      for(const target of targets){
-        try{
-          const frame=await inspect(target);
-          if(!frame||typeof frame.documentVisible!=='boolean'){incomplete=true;continue;}
-          const state=classifySurface({...frame,foreground:true},expected);
-          if(state==='ready')matched.push(target);
-        }catch(error){
-          if(!readTransient.has(classifyFailure(error).code))throw error;
-          incomplete=true;
-        }
-      }
+      const identified=await identifyPublicTarget(targets,inspect,expected);
       if(!await verify(snapshot.pid)){reset();last='not-foreground';onState({state:last,candidates:targets.length,matches:0});return false;}
-      if(incomplete||matched.length!==1){
-        reset();last=incomplete?'inspection-incomplete':matched.length>1?'ambiguous':'no-target';
-        onState({state:last,candidates:targets.length,matches:matched.length});return false;
+      if(!identified.target){
+        reset();last=identified.state;
+        onState({state:last,candidates:targets.length,matches:identified.matches});return false;
       }
-      const key=JSON.stringify([snapshot.pid,matched[0].id,matched[0].endpoint]);
+      const signature=list=>JSON.stringify(list.map(x=>[x.id,x.endpoint,x.nativeView]).sort((a,b)=>a[0].localeCompare(b[0])));
+      const key=JSON.stringify([snapshot.pid,identified.target.id,identified.target.endpoint,signature(targets)]);
       streak=prior===key?streak+1:1;prior=key;last=streak>=2?'stable':'single-sample';
       onState({state:last,candidates:targets.length,matches:1});
       if(streak<2)return false;
-      const selected={...matched[0],pid:snapshot.pid};
+      const selected={...identified.target,pid:snapshot.pid};
       if(!acquire)return selected;
       // The old final connection happened after this bounded loop, allowing
       // a transient visibility change to turn a valid search into a failure.
@@ -67,10 +97,14 @@ export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,exp
         // Fresh list must describe the same candidate set, PID and endpoint.
         // No forwarding change, mutation, Page.enable or input during handoff.
         const identity=await confirmIdentity(selected);
-        const signature=list=>JSON.stringify(list.map(x=>[x.id,x.endpoint]).sort((a,b)=>a[0].localeCompare(b[0])));
-        if(!identity||identity.pid!==selected.pid||identity.foreground!==true||
-          signature(localPageTargets(identity.list))!==signature(targets)||!await verify(selected.pid))
+        if(!identity||identity.pid!==selected.pid||identity.foreground!==true)
           return rejectHandoff('handoff-identity-changed');
+        const currentTargets=localPageTargets(identity.list);
+        if(signature(currentTargets)!==signature(targets))return rejectHandoff('handoff-identity-changed');
+        const finalSelection=await identifyPublicTarget(currentTargets,
+          target=>target.id===selected.id?inspectAcquired(held):inspect(target),expected);
+        if(finalSelection.target?.id!==selected.id||!await verify(selected.pid))
+          return rejectHandoff('handoff-selection-changed');
         last='handoff-stable';onState({state:last,candidates:targets.length,matches:1});
         keep=true;
         return {...selected,connection:held};

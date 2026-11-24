@@ -398,14 +398,15 @@ test('Q4 exact installed emulator identity survives classified version-probe fai
   assert.equal(emulatorIdentity({...p,packageMetadata:'',probe:{status:1}}).version,null);
 });
 
-import { localPageTargets, waitUniquePublicTarget, readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, safFailureDetail, prepareClassCreation } from './native-lab-transitions.mjs';
-const target=(id)=>({type:'page',id,url:'http://localhost/',webSocketDebuggerUrl:'ws://localhost/devtools/page/'+id});
-const setupFrame={documentVisible:true,setup:true,professionalChoice:true};
+import { nativeViewState, localPageTargets, identifyPublicTarget, waitUniquePublicTarget, readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, safFailureDetail, prepareClassCreation } from './native-lab-transitions.mjs';
+const nativeDescription=(overrides={})=>JSON.stringify({attached:true,visible:true,empty:false,width:400,height:800,...overrides});
+const target=(id,description=nativeDescription())=>({type:'page',id,url:'http://localhost/',webSocketDebuggerUrl:'ws://localhost/devtools/page/'+id,description});
+const setupFrame={documentVisible:true,documentFocused:true,setup:true,professionalChoice:true};
 test('Q4-R03 observes unique real setup context twice and rejects unrelated localhost target',async()=>{
   const clock=fakeClock(),states=[],calls=[];
   const selected=await waitUniquePublicTarget({expected:'setup',now:clock.now,sleep:clock.sleep,timeoutMs:5000,
     sample:()=>({pid:17,foreground:true,list:[target('a'),target('b')]}),
-    inspect:async x=>{calls.push(x.id);return x.id==='a'?setupFrame:{documentVisible:true};},
+    inspect:async x=>{calls.push(x.id);return x.id==='a'?setupFrame:{documentVisible:true,documentFocused:false};},
     onState:s=>states.push(s)});
   assert.equal(selected.id,'a');assert.deepEqual(calls,['a','b','a','b']);
   assert.deepEqual(states.at(-1),{state:'stable',candidates:2,matches:1});
@@ -655,4 +656,47 @@ test('Q4-R07 independent startup matrix precedes pilot and cannot count as full 
   assert.ok(d.includes("startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS'"));
   const flow=d.slice(d.indexOf('if(startupOnly){'),d.indexOf('await createClass(originalClass)'));
   assert.ok(flow.includes('verifiedProcessStop')&&flow.includes("await makePublicAuthentication('startup-cold-reopen')()")&&flow.includes('fullF2Qualified:false'));
+});
+
+test('Q4-R08 native metadata distinguishes an attached visible view without trusting absent fields',()=>{
+  assert.equal(nativeViewState(nativeDescription()),'active');
+  for(const d of [{attached:false},{visible:false},{empty:true}])
+    assert.equal(nativeViewState(nativeDescription(d)),'inactive');
+  for(const d of ['',undefined,'bad','{}',nativeDescription({width:0}),nativeDescription({height:'800'})])
+    assert.equal(nativeViewState(d),'unknown');
+});
+test('Q4-R08 excludes only positively inactive competing WebViews and fails closed on unknown metadata',async()=>{
+  const active=target('a'),detached=target('b',nativeDescription({attached:false}));
+  const candidates=localPageTargets([active,detached]);let inspected=0;
+  const result=await identifyPublicTarget(candidates,()=>{inspected++;return setupFrame;},'setup');
+  assert.equal(result.target.id,'a');assert.equal(inspected,1);
+  const unknown=await identifyPublicTarget(localPageTargets([active,target('b','')]),()=>setupFrame,'setup');
+  assert.equal(unknown.state,'native-evidence-incomplete');
+});
+test('Q4-R08 two active WebViews require exactly one explicitly focused and ready document',async()=>{
+  const targets=localPageTargets([target('a'),target('b')]);
+  const single=await identifyPublicTarget(targets,x=>({...setupFrame,documentFocused:x.id==='b'}),'setup');
+  assert.equal(single.target.id,'b');
+  for(const focus of [true,false,undefined]){
+    const result=await identifyPublicTarget(targets,()=>({...setupFrame,documentFocused:focus}),'setup');
+    assert.equal(result.state,focus===undefined?'inspection-incomplete':'ambiguous');
+    assert.equal(result.target,undefined);
+  }
+  const wrong=await identifyPublicTarget(targets,x=>x.id==='a'?{...setupFrame,documentFocused:false}:{documentVisible:true,documentFocused:true},'setup');
+  assert.equal(wrong.state,'no-target');
+});
+test('Q4-R08 rejects changed native visibility or focus during retained connection handoff',async()=>{
+  for(const mode of ['visibility','focus']){
+    const clock=fakeClock(),closed=[];let acquired=0,phase='search';
+    const identity=()=>({pid:17,foreground:true,list:[target('a'),target('b')]});
+    const focus=x=>({...setupFrame,documentFocused:phase==='verify'&&acquired===1?x.id==='b':x.id==='a'});
+    const result=await waitUniquePublicTarget({expected:'setup',...clock,timeoutMs:5000,sample:()=>{phase='search';return identity();},
+      inspect:focus,acquire:x=>({id:x.id,n:++acquired}),inspectAcquired:focus,
+      confirmIdentity:()=>{phase='verify';const f=identity();if(mode==='visibility'&&acquired===1)f.list[1]=target('b',nativeDescription({visible:false}));return f;},
+      release:s=>closed.push(s.n)});
+    assert.equal(result.connection.n,2);assert.deepEqual(closed,[1]);
+  }
+});
+test('Q4-R08 duplicate debugger endpoints never qualify as two independent identities',()=>{
+  assert.throws(()=>localPageTargets([target('a'),{...target('b'),webSocketDebuggerUrl:target('a').webSocketDebuggerUrl}]),{code:'PREFLIGHT_CDP_TARGET_AMBIGUOUS'});
 });

@@ -52,6 +52,7 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
   const lock=heading('Sblocca Registro');
   return {
     documentVisible:doc.visibilityState==='visible',
+    documentFocused:typeof doc.hasFocus==='function'?doc.hasFocus():null,
     suspensionDraining:text('[role=status]','Protezione della sessione…')||
       text('[role=status]','Sessione protetta. Attesa della conclusione dell’operazione locale.'),
     suspensionDelayed:text('[role=status]','Sessione protetta. Attesa della conclusione dell’operazione locale.'),
