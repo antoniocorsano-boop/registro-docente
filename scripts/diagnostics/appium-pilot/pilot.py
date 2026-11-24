@@ -122,9 +122,15 @@ def exact_button(driver, label, scope="button"):
 def surface(driver):
     # Reuse the same public UI predicates as the existing F2 navigation.
     return driver.execute_script("""
-        const visible = e => !!e && e.getClientRects().length > 0 &&
-            !e.closest('[inert],[hidden],[aria-hidden="true"]') &&
-            getComputedStyle(e).visibility === 'visible' && !e.disabled;
+        const visible = e => {
+            if (!e || e.closest('[inert],[hidden],[aria-hidden="true"]') ||
+                e.matches(':disabled,[aria-disabled="true"]') || !e.getClientRects().length) return false;
+            for (let n=e; n; n=n.parentElement) {
+                const s=getComputedStyle(n);
+                if (s.visibility!=='visible'||s.display==='none'||s.opacity==='0'||s.pointerEvents==='none') return false;
+            }
+            return true;
+        };
         const unique = (s, t=null) => [...document.querySelectorAll(s)]
             .filter(e => visible(e) && (t===null || e.textContent.trim()===t)).length===1;
         const h = t => unique('h1,h2,h3,h4,[role=heading]',t);
@@ -165,10 +171,13 @@ def observe_destination(driver, destination, authentication, allow_confirmation=
             raise RuntimeError("PUBLIC_GATE_ERROR")
         if f["lockReady"] and not f["blocked"]:
             return "locked"
-        ready = f["brand"] and not f["blocked"] and not f["lock"] and not f["protectedField"]
+        ready = not f["blocked"] and not f["lock"] and not f["protectedField"]
         if ready and allow_confirmation and f["confirm"]:
             return "confirmation"
-        good = ready and (f[destination] if destination != "session" else True) and not f["confirm"]
+        # The drawer or modal may intentionally make the background brand inert.
+        good = ready and not f["confirm"] and (
+            f["drawer"] if destination == "drawer" else
+            f["brand"] and (f[destination] if destination != "session" else True))
         consecutive = consecutive + 1 if good else 0
         return "ready" if consecutive >= 2 else False
     while True:
