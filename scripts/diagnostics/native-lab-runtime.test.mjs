@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
@@ -340,4 +341,16 @@ test('Q3-R02 separate positively observed lifecycle boundaries permit four indep
     await authenticate();await assert.rejects(authenticate(),{code:'PUBLIC_RELOCK_AFTER_AUTH'});
   }
   assert.deepEqual({locks,fills,submits,sessions},{locks:4,fills:4,submits:4,sessions:4});
+});
+
+// Q4 governance: guard exact isolated orchestration without modifying main gates.
+test('Q4 wrapper preserves three trials, two APIs, isolated identity and F2 gates',()=>{
+  const wrapper=readFileSync(new URL('../../.github/workflows/qa-stability-01-q4.yml',import.meta.url),'utf8');
+  const f2=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
+  for(const s of ['branches: [fix/audit-pre-01-atomic-bootstrap]','github.event.pull_request.number == 414','qa/qa-stability-01-q2','80378e9daab60fe6c389e372c3c79e3dcd09aac0','trial: [1, 2, 3]','fail-fast: false','uses: ./.github/workflows/ap02-f2-native-device.yml','contents: read'])
+    assert.ok(wrapper.includes(s),s);
+  for(const s of ['branches: [main]','api: [32, 36]','workflow_call:','test "$CANDIDATE_SHA" = "$EVENT_HEAD"','test "$GITHUB_RUN_ATTEMPT" = 1','q4-api{0}-trial{1}-{2}-run{3}-attempt{4}','q4-identity.json','Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','.results[4].nativeReauthCount>=4','.results[5].absenceSamples==2','productionRelease==false','syntheticOnly==true','persist-credentials: false'])
+    assert.ok(f2.includes(s),s);
+  assert.ok(!wrapper.includes('secrets: inherit'));
+  assert.ok(!wrapper.includes('contents: write'));
 });

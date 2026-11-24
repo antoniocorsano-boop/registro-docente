@@ -3643,6 +3643,19 @@
       "tests": [
         "src/security/outboundBoundaryClosure.test.ts"
       ]
+    },
+    {
+      "id": "QA-STABILITY-01-Q4-I01",
+      "owner": "QA-STABILITY-01",
+      "statement": "Q4 is isolated from the main-targeted F2 qualification and executes three independent trials for each of Android API 32 and 36, on the exact PR 414 candidate and frozen base, through the same six-stage F2 workflow and added Q3 evidence gate. Each trial preserves distinct aggregate identity and evidence, does not retry failed jobs for acceptance, has read-only permissions, and cannot authorize merge or publication.",
+      "impactPaths": [
+        ".github/workflows/qa-stability-01-q4.yml",
+        ".github/workflows/ap02-f2-native-device.yml",
+        "scripts/diagnostics/native-lab-runtime.test.mjs"
+      ],
+      "tests": [
+        "scripts/diagnostics/native-lab-runtime.test.mjs"
+      ]
     }
   ]
 }

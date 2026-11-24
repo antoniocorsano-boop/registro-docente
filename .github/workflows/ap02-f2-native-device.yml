@@ -1,5 +1,13 @@
 name: AUDIT-PRE-01 AP-02 F2 — Installed professional Android V7 SAF
 on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
+      trial:
+        required: true
+        type: number
   pull_request:
     branches: [main]
     paths:
@@ -31,9 +39,36 @@ jobs:
       matrix:
         api: [32, 36]
     env:
-      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      Q4_TRIAL: ${{ inputs.trial || '' }}
       AP02_API: ${{ matrix.api }}
     steps:
+      - name: Validate isolated Q4 invocation before checkout
+        if: ${{ inputs.candidate_sha != '' || github.event.pull_request.base.ref != 'main' }}
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+          EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+          EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          EVENT_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_NAME" = pull_request
+          test "$EVENT_PR" = 414
+          test "$GITHUB_REPOSITORY" = antoniocorsano-boop/registro-docente
+          test "$EVENT_HEAD_REPO" = "$GITHUB_REPOSITORY"
+          test "$EVENT_BASE_REPO" = "$GITHUB_REPOSITORY"
+          test "$EVENT_HEAD_REF" = qa/qa-stability-01-q2
+          test "$EVENT_BASE_REF" = fix/audit-pre-01-atomic-bootstrap
+          test "$EVENT_BASE" = 80378e9daab60fe6c389e372c3c79e3dcd09aac0
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$CANDIDATE_SHA" = "$EVENT_HEAD"
+          [[ "$Q4_TRIAL" =~ ^[123]$ ]]
+          test "$GITHUB_RUN_ATTEMPT" = 1
       - name: Checkout exact candidate without write credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -156,11 +191,18 @@ jobs:
             .candidate==$sha and .api==$api and .rawDomStored==false and
             (.readyDestinations | sort == ["class","class-detail","home","lock","privacy","session","setup"])
           ' ap02-device-evidence/surface-readiness.json
+      - name: Record isolated Q4 identity
+        if: ${{ always() && inputs.candidate_sha != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ap02-device-evidence
+          jq -n --arg candidate "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q4_TRIAL" --arg runId "$GITHUB_RUN_ID" --arg runAttempt "$GITHUB_RUN_ATTEMPT" '{schemaVersion:1,candidate:$candidate,api:$api,trial:$trial,runId:$runId,runAttempt:$runAttempt,syntheticOnly:true,productionRelease:false}' > ap02-device-evidence/q4-identity.json
       - name: Preserve non-sensitive qualification record only
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ap02-f2-native-device-api${{ matrix.api }}-${{ env.CANDIDATE_SHA }}
+          name: ${{ inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA) }}
           path: |
             ap02-device-evidence/result.json
             ap02-device-evidence/failure.json
@@ -169,5 +211,6 @@ jobs:
             ap02-device-evidence/apk-hash.txt
             ap02-device-evidence/environment.json
             ap02-device-evidence/surface-readiness.json
+            ap02-device-evidence/q4-identity.json
           retention-days: 14
           if-no-files-found: warn
