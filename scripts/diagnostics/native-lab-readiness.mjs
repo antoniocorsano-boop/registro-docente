@@ -9,6 +9,37 @@ export function isInteractiveElement(e,doc=document,style=getComputedStyle){
   }
   return true;
 }
+// One public-dialog predicate for both the read-only sample and the single
+// confirmation action. The returned frame contains only synthetic-safe counts.
+export function publicHomeConfirmation(doc=document,style=getComputedStyle,interactive=isInteractiveElement,submit=false){
+  const root=doc.querySelector('[data-testid="header01-home-confirm"]');
+  const dialog=root?.querySelector('[role="alertdialog"][aria-modal="true"]');
+  const buttons=Array.from(root?.querySelectorAll('button')||[]);
+  const named=buttons.filter(e=>e.textContent?.trim()==='Torna a Oggi');
+  const visible=named.filter(e=>interactive(e,doc,style));
+  const locked=Boolean(doc.querySelector('#vault-password'));
+  const frame={
+    documentVisible:doc.visibilityState==='visible',locked,
+    dialogPresent:Boolean(root),accessibleAlertdialog:Boolean(dialog),
+    dialogInteractive:interactive(dialog,doc,style),
+    buttonCount:buttons.length,exactLabelCount:named.length,visibleCount:visible.length,
+    enabledCount:named.filter(e=>!e.disabled).length,
+    inertCount:named.filter(e=>Boolean(e.closest('[inert]'))).length,
+    planningExitDialogOpen:Boolean(doc.querySelector('#planning-exit-title')),
+    inertOwnerIsDrawer:named.some(e=>e.closest('[inert]')?.id==='registro-navigation-drawer'),
+    inertOwnerIsRoot:named.some(e=>Boolean(e.closest('[inert]'))&&e.closest('[inert]')===doc.querySelector('#root')),
+    inertOwnerContainsNavbar:named.some(e=>Boolean(e.closest('[inert]')?.contains(doc.querySelector('[data-testid="header01-brand-navigation"]')))),
+    buttonHasLayoutRect:named.some(e=>e.getClientRects().length>0),
+    buttonStyleVisible:named.some(e=>style(e).visibility==='visible')
+  };
+  frame.ready=frame.documentVisible&&!locked&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0]);
+  if(submit){
+    if(!dialog)throw Error('HOME_CONFIRM_DIALOG_MISSING');
+    if(!frame.ready)throw Error('HOME_CONFIRM_NOT_UNIQUE');
+    visible[0].click();
+  }
+  return frame;
+}
 export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,visible=isInteractiveElement){
   const ok=e=>visible(e,doc,style);
   const unique=(selector)=>Array.from(doc.querySelectorAll(selector)).filter(ok).length===1;

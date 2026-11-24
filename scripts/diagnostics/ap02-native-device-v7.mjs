@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumedActivity, hasArea } from './native-ui-driver.mjs';
@@ -411,25 +411,8 @@ const publicHomeFrame = () => dom('(function(){'+
   'brandInteractive:visible(brand)&&!brand.disabled&&!brand.closest("[inert]"),'+
   'documentVisible:document.visibilityState==="visible"};})()');
 
-async function captureHomeConfirmDiagnostic(){
-  try {
-    return await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-      'const buttons=Array.from(root?.querySelectorAll("button")||[]);'+
-      'const named=buttons.filter(e=>e.textContent?.trim()==="Torna a Oggi");'+
-      'const visible=named.filter(e=>e.getClientRects().length>0&&'+
-      'getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));'+
-      'return {dialogPresent:!!root,accessibleAlertdialog:!!root?.querySelector("[role=alertdialog][aria-modal=true]"),'+
-      'buttonCount:buttons.length,exactLabelCount:named.length,'+
-      'visibleCount:visible.length,enabledCount:visible.filter(e=>!e.disabled).length,'+
-      'inertCount:named.filter(e=>Boolean(e.closest("[inert]"))).length,'+
-      'planningExitDialogOpen:!!document.querySelector("#planning-exit-title"),'+
-      'inertOwnerIsDrawer:named.some(e=>e.closest("[inert]")?.id==="registro-navigation-drawer"),'+
-      'inertOwnerIsRoot:named.some(e=>e.closest("[inert]")===document.querySelector("#root")),'+
-      'inertOwnerContainsNavbar:named.some(e=>Boolean(e.closest("[inert]")?.contains(document.querySelector("[data-testid=header01-brand-navigation]")))),'+
-      'buttonHasLayoutRect:named.some(e=>e.getClientRects().length>0),'+
-      'buttonStyleVisible:named.some(e=>getComputedStyle(e).visibility==="visible"),'+
-      'inertOwnerTag:named[0]?.closest("[inert]")?.tagName||null};})()');
-  } catch { return {diagnosticUnavailable:true}; }
+function captureHomeConfirmDiagnostic(submit=false){
+  return dom('('+publicHomeConfirmation.toString()+')(document,getComputedStyle,'+interactiveSource+','+JSON.stringify(submit)+')');
 }
 // Class prompts and Android lifecycle callbacks can suspend the mounted Vault.
 // A visible text node inside the protected, inert App is not an interactive
@@ -513,22 +496,28 @@ async function nav(label){
       },'HOME_NAVIGATION_OR_CONFIRM',45000,false);
       if(first==='confirmation'){
         phase='visible-ui-home-confirm';
+        homeConfirmDiagnostic=null;
         try {
-          await until(()=>dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-            'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))return false;const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
-            'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
-            '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));return a.length===1;})()'),
-            'VISIBLE_EXACT_HOME_CONFIRM',20000);
+          await until(async()=>{
+            const frame=await captureHomeConfirmDiagnostic();
+            // Retain the last successful read even if the following ADB/CDP
+            // request fails at the deadline. Never store raw DOM or text.
+            homeConfirmDiagnostic={...frame,foreground:null};
+            const foreground=nativeForeground();
+            homeConfirmDiagnostic={...frame,foreground};
+            return foreground&&frame.ready;
+          },'VISIBLE_EXACT_HOME_CONFIRM',20000);
         } catch(error){
-          homeConfirmDiagnostic=await captureHomeConfirmDiagnostic();
+          if(!homeConfirmDiagnostic){
+            const frame=await bestEffortDiagnostic(()=>captureHomeConfirmDiagnostic());
+            homeConfirmDiagnostic=frame?{...frame,foreground:null}:{diagnosticUnavailable:true};
+          }
           throw error;
         }
-        await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-          'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))throw Error("HOME_CONFIRM_DIALOG_MISSING");'+
-          'const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
-          'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
-          '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));'+
-          'if(a.length!==1)throw Error("HOME_CONFIRM_NOT_UNIQUE");a[0].click();return true;})()');
+        phase='visible-ui-home-confirm-submit';
+        if(!nativeForeground())throw new LabFailure('NATIVE_UI_FOREGROUND_LOST');
+        await captureHomeConfirmDiagnostic(true); // single action; never resend
+        phase='visible-ui-home-confirm-dismiss';
         await until(()=>dom('!document.querySelector("[data-testid=header01-home-confirm]")'),
           'HOME_CONFIRM_DISMISSED',20000);
       }

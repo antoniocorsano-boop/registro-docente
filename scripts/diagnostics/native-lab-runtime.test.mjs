@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -491,4 +491,43 @@ test('Q4-R04 transport failure during foreground checks invalidates previous sam
     read:()=>{snapshots++;return readNativeSnapshot((...args)=>args[1]==='cat'?snapshotXml:'');},
     select:nodes=>uniqueNativeControl(nodes,n=>n.text==='Save')});
   assert.equal(snapshots,3);
+});
+
+test('Q4 final fractional budget exits observation without launching another command',async()=>{
+  const clock=fakeClock();const budgets=[];
+  await assert.rejects(observeUntil(()=>{
+    budgets.push(commandBudget(100));clock.advance(0.5);return false;
+  },{...clock,timeoutMs:10,intervalMs:9}),e=>{
+    assert.deepEqual(e.observation,{attempts:1,transientErrors:0,lastCode:null});
+    return e.code==='OBSERVATION_DEADLINE';
+  });
+  assert.deepEqual(budgets,[10]);
+});
+test('Q4 command deadline inside a transition still propagates without retry',async()=>{
+  const clock=fakeClock();let actions=0;
+  await assert.rejects(observeUntil(()=>{
+    actions++;clock.advance(9.5);commandBudget(100);return true;
+  },{...clock,timeoutMs:10,retryReadErrors:false}),{code:'COMMAND_DEADLINE'});
+  assert.equal(actions,1);
+});
+test('Q4 home confirmation requires a unique interactive control and never clicks during reads',()=>{
+  let clicks=0,locked=false,eligible=true,duplicate=false,hidden=false;
+  const element={closest:()=>null,getClientRects:()=>[{}],disabled:false};
+  const button={...element,textContent:'Torna a Oggi',click:()=>clicks++};
+  const dialog={...element,contains:e=>e===button};
+  const root={querySelector:()=>dialog,querySelectorAll:()=>duplicate?[button,{...button}]:[button]};
+  const doc={get visibilityState(){return hidden?'hidden':'visible';},querySelector:s=>
+    s.includes('header01-home-confirm')?root:s==='#vault-password'&&locked?{}:null};
+  const style=()=>({visibility:'visible'});
+  const interactive=e=>Boolean(e)&&eligible&&!hidden;
+  const sample=(submit=false)=>publicHomeConfirmation(doc,style,interactive,submit);
+  assert.equal(sample().ready,true);assert.equal(clicks,0);
+  for(const mode of ['lock','inert','duplicate','hidden']){
+    locked=mode==='lock';eligible=mode!=='inert';duplicate=mode==='duplicate';hidden=mode==='hidden';
+    assert.equal(sample().ready,false);
+    assert.throws(()=>sample(true),{message:'HOME_CONFIRM_NOT_UNIQUE'});
+    assert.equal(clicks,0);
+  }
+  locked=false;eligible=true;duplicate=false;hidden=false;
+  assert.equal(sample(true).ready,true);assert.equal(clicks,1);
 });

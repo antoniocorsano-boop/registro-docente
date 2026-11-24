@@ -157,7 +157,8 @@ export async function observeUntil(read, {
   const end = Math.min(parent?.end ?? Infinity, clock() + timeoutMs);
   let attempts = 0, transientErrors = 0, lastCode = null;
   return scope.run({ end, now: clock }, async () => {
-    while (clock() < end) {
+    // No command may start with a fractional residual budget that commandBudget rejects.
+    while (end - clock() >= 1) {
       attempts++;
       let value;
       try { value = await read(); }
@@ -171,7 +172,9 @@ export async function observeUntil(read, {
       }
       if (clock() >= end) break;
       if (value) return value;
-      await sleep(Math.min(intervalMs, end - clock()));
+      const remaining=end-clock();
+      if(remaining<1)break;
+      await sleep(Math.min(intervalMs, remaining));
     }
     const error = new LabFailure('OBSERVATION_DEADLINE');
     error.observation = { attempts, transientErrors, lastCode };
