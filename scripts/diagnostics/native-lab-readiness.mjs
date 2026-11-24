@@ -33,12 +33,30 @@ export function publicHomeConfirmation(doc=document,style=getComputedStyle,inter
     buttonStyleVisible:named.some(e=>style(e).visibility==='visible')
   };
   frame.ready=frame.documentVisible&&!locked&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0]);
-  if(submit){
-    if(!dialog)throw Error('HOME_CONFIRM_DIALOG_MISSING');
-    if(!frame.ready)throw Error('HOME_CONFIRM_NOT_UNIQUE');
+  // An explicit no-action result is the only outcome that permits another
+  // conditional attempt. Readiness and the click share this synchronous DOM turn.
+  frame.action='not-performed';
+  if(submit&&frame.ready){
     visible[0].click();
+    frame.action='performed';
   }
   return frame;
+}
+// This observer can submit, so transport/evaluation failures must propagate
+// unchanged. It repeats only after a positively acknowledged no-action result.
+export async function confirmHomeOnce({foreground,attempt,onFrame=()=>{},timeoutMs=20000,now,sleep}){
+  let performed=false;
+  return observeUntil(async()=>{
+    if(performed)throw new LabFailure('HOME_CONFIRM_NOT_UNIQUE');
+    if(!await foreground()){onFrame({foreground:false,action:'not-attempted'});return false;}
+    const frame=await attempt();
+    if(!frame||!['not-performed','performed'].includes(frame.action)||
+       typeof frame.ready!=='boolean'||(frame.action==='performed')!==frame.ready)
+      throw new LabFailure('CDP_EVALUATION_REJECTED');
+    performed=frame.action==='performed';
+    onFrame({...frame,foreground:true});
+    return performed;
+  },{timeoutMs,intervalMs:450,now,sleep,retryReadErrors:false});
 }
 export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,visible=isInteractiveElement){
   const ok=e=>visible(e,doc,style);

@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, publicHomeConfirmation, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -526,11 +526,11 @@ test('Q4 home confirmation requires a unique interactive control and never click
   for(const mode of ['lock','inert','duplicate','hidden']){
     locked=mode==='lock';eligible=mode!=='inert';duplicate=mode==='duplicate';hidden=mode==='hidden';
     assert.equal(sample().ready,false);
-    assert.throws(()=>sample(true),{message:'HOME_CONFIRM_NOT_UNIQUE'});
+    assert.equal(sample(true).action,'not-performed');
     assert.equal(clicks,0);
   }
   locked=false;eligible=true;duplicate=false;hidden=false;
-  assert.equal(sample(true).ready,true);assert.equal(clicks,1);
+  assert.equal(sample(true).action,'performed');assert.equal(clicks,1);
 });
 
 test('Q4 SAF return separates foreground, protected drain, lock and apparent readiness',()=>{
@@ -699,4 +699,32 @@ test('Q4-R08 rejects changed native visibility or focus during retained connecti
 });
 test('Q4-R08 duplicate debugger endpoints never qualify as two independent identities',()=>{
   assert.throws(()=>localPageTargets([target('a'),{...target('b'),webSocketDebuggerUrl:target('a').webSocketDebuggerUrl}]),{code:'PREFLIGHT_CDP_TARGET_AMBIGUOUS'});
+});
+
+test('Q4-R09 atomic home confirmation repeats only after acknowledged no-action',async()=>{
+  const clock=fakeClock(),frames=[];let attempts=0,clicks=0,checks=0;
+  await confirmHomeOnce({...clock,timeoutMs:5000,foreground:()=>++checks!==1,
+    attempt:()=>{attempts++;if(attempts<3)return {ready:false,action:'not-performed'};
+      clicks++;return {ready:true,action:'performed'};},onFrame:f=>frames.push(f.action)});
+  assert.equal(attempts,3);assert.equal(clicks,1);
+  assert.deepEqual(frames,['not-attempted','not-performed','not-performed','performed']);
+});
+test('Q4-R09 unknown or invalid confirmation outcome never permits another attempt',async()=>{
+  for(const mode of ['transport','invalid','contradictory','late']){
+    const clock=fakeClock();let attempts=0;
+    await assert.rejects(confirmHomeOnce({...clock,timeoutMs:1000,foreground:()=>true,attempt:()=>{
+      attempts++;
+      if(mode==='transport')throw new LabFailure('CDP_TIMEOUT');
+      if(mode==='invalid')return null;
+      if(mode==='contradictory')return {ready:true,action:'not-performed'};
+      clock.advance(1000);return {ready:true,action:'performed'};
+    }}),{code:mode==='transport'?'CDP_TIMEOUT':mode==='late'?'OBSERVATION_DEADLINE':'CDP_EVALUATION_REJECTED'});
+    assert.equal(attempts,1);
+  }
+});
+test('Q4-R09 unavailable confirmation does not count as successful dismissal',async()=>{
+  const clock=fakeClock();let attempts=0;
+  await assert.rejects(confirmHomeOnce({...clock,timeoutMs:1000,foreground:()=>true,
+    attempt:()=>{attempts++;return {ready:false,action:'not-performed'};}}),{code:'OBSERVATION_DEADLINE'});
+  assert.ok(attempts>1);
 });

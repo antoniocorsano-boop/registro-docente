@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicHomeConfirmation, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumedActivity, hasArea } from './native-ui-driver.mjs';
@@ -566,15 +566,14 @@ async function nav(label){
         phase='visible-ui-home-confirm';
         homeConfirmDiagnostic=null;
         try {
-          await until(async()=>{
-            const frame=await captureHomeConfirmDiagnostic();
-            // Retain the last successful read even if the following ADB/CDP
-            // request fails at the deadline. Never store raw DOM or text.
-            homeConfirmDiagnostic={...frame,foreground:null};
-            const foreground=nativeForeground();
-            homeConfirmDiagnostic={...frame,foreground};
-            return foreground&&frame.ready;
-          },'VISIBLE_EXACT_HOME_CONFIRM',20000);
+          // One synchronous browser predicate checks and clicks. A known
+          // no-action response may be sampled again; unknown outcomes never retry.
+          await confirmHomeOnce({
+            foreground:nativeForeground,
+            attempt:()=>captureHomeConfirmDiagnostic(true),
+            onFrame:frame=>{homeConfirmDiagnostic=frame;},
+            timeoutMs:20000
+          });
         } catch(error){
           if(!homeConfirmDiagnostic){
             const frame=await bestEffortDiagnostic(()=>captureHomeConfirmDiagnostic());
@@ -582,9 +581,6 @@ async function nav(label){
           }
           throw error;
         }
-        phase='visible-ui-home-confirm-submit';
-        if(!nativeForeground())throw new LabFailure('NATIVE_UI_FOREGROUND_LOST');
-        await captureHomeConfirmDiagnostic(true); // single action; never resend
         phase='visible-ui-home-confirm-dismiss';
         await until(()=>dom('!document.querySelector("[data-testid=header01-home-confirm]")'),
           'HOME_CONFIRM_DISMISSED',20000);
