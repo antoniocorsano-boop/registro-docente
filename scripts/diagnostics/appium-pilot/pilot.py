@@ -9,7 +9,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from native_contracts import classify_activity, native_selector, StableSelection
+from native_contracts import classify_activity
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
@@ -339,70 +339,39 @@ def activity_is(driver, expected):
     return package == PKG if expected == "application" else package in (
         "com.google.android.documentsui", "com.android.documentsui")
 
-def documents_foreground(driver):
-    return activity_is(driver, "documentsui")
-
-def native_candidate(driver, labels, attribute="text", reject_preview=False):
-    selector = native_selector(labels, attribute, reject_preview)
-    elements = driver.find_elements(By.XPATH, selector)
-    if len(elements) != 1:
-        return None
-    element = elements[0]
-    if not element.is_displayed() or not element.is_enabled():
-        return None
-    rect = element.rect
-    if rect["width"] <= 0 or rect["height"] <= 0:
-        return None
-    return element, (selector, tuple(rect[k] for k in ("x", "y", "width", "height")))
-
-def doc_control(driver, labels, attribute="text", reject_preview=False):
-    stable = StableSelection()
-    def sample(d):
-        if not documents_foreground(d):
-            stable.observe(None)
-            return False
-        found = native_candidate(d, labels, attribute, reject_preview)
-        if not found or not documents_foreground(d):
-            stable.observe(None)
-            return False
-        return found[0] if stable.observe(found[1]) else False
-    return wait(driver, sample, 60)
-
-def native_click(driver, element):
-    if not documents_foreground(driver):
-        raise RuntimeError("PICKER_FOREGROUND_CHANGED")
-    element.click()
-
-def open_downloads(driver):
+def native_picker(driver, action, name=None):
     phase("saf-wait-native-activity")
-    # ADB observation before changing context avoids treating an Appium context
-    # switch as evidence that Android actually opened the picker.
     wait(driver, lambda d: activity_surface() == "documentsui", 90)
     phase("saf-switch-native-context")
     driver.switch_to.context("NATIVE_APP")
-    wait(driver, documents_foreground, 60)
-    phase("saf-downloads-location")
-    stable = StableSelection()
-    def sample(d):
-        if not documents_foreground(d):
-            stable.observe(None)
-            return False
-        folder = native_candidate(d, ("Download", "Downloads"))
-        root = None if folder else native_candidate(d, ("Show roots", "Open navigation drawer", "Mostra radici",
-                                                        "show roots", "open navigation drawer", "mostra radici"), "content-desc")
-        found = folder or root
-        if not found or not documents_foreground(d):
-            stable.observe(None)
-            return False
-        kind = "folder" if folder else "root"
-        return (kind, found[0]) if stable.observe((kind, found[1])) else False
-    kind, element = wait(driver, sample, 60)
-    if kind == "root":
-        phase("saf-open-roots")
-        native_click(driver, element)
-        phase("saf-select-downloads")
-        native_click(driver, doc_control(driver, ("Download", "Downloads")))
-    phase("saf-downloads-ready")
+    wait(driver, lambda d: activity_is(d, "documentsui"), 60)
+    # One owner of all native picker operations: the pre-existing F2 helpers.
+    # No Appium selector fallback, no second invocation after an unknown result.
+    phase("saf-canonical-native-driver")
+    script = Path(__file__).with_name("native-picker.mjs")
+    result = subprocess.run(["node", str(script)], input=json.dumps({"action": action, "name": name}),
+                            capture_output=True, text=True, timeout=280)
+    phases = {"saf-downloads-location", "saf-open-roots", "saf-select-downloads",
+              "saf-downloads-ready", "saf-save-control", "saf-select-exact-document",
+              "saf-observe-open-or-return", "saf-confirm-open", "saf-observe-document-return",
+              "saf-native-complete"}
+    last_phase = None
+    completed = False
+    for line in result.stdout.splitlines():
+        event = json.loads(line)
+        kind, value = event.get("kind"), event.get("value")
+        if kind == "phase" and value in phases:
+            last_phase = value
+            phase(value)
+        elif kind == "observation" and isinstance(value, str) and re.fullmatch(r"[a-z0-9_-]+|[A-Z0-9_]+", value):
+            evidence["nativeObservation"] = value
+        elif kind == "failure" and isinstance(value, str) and re.fullmatch(r"[A-Z0-9_]+", value):
+            evidence["nativeFailureCode"] = value
+        elif kind == "result" and value == "PASS":
+            completed = True
+    save()
+    if result.returncode != 0 or not completed or last_phase != "saf-native-complete":
+        raise RuntimeError("CANONICAL_NATIVE_PICKER_FAILED")
 
 def picker_return(driver, role, expected_dialog):
     phase("saf-wait-application-return")
@@ -428,26 +397,7 @@ def picker_return(driver, role, expected_dialog):
     save()
 
 def select_document(driver, name):
-    open_downloads(driver)
-    phase("saf-select-exact-document")
-    native_click(driver, doc_control(driver, (name,), reject_preview=True))
-    phase("saf-observe-open-or-return")
-    stable = StableSelection()
-    def next_step(d):
-        if activity_is(d, "application"):
-            return "returned"
-        if documents_foreground(d):
-            found = native_candidate(d, ("Open", "Apri", "OPEN", "APRI"))
-            if found and documents_foreground(d):
-                return found[0] if stable.observe(found[1]) else False
-        stable.observe(None)
-        return False
-    result = wait(driver, next_step, 60)
-    if result != "returned":
-        phase("saf-confirm-open")
-        native_click(driver, result)
-    phase("saf-observe-document-return")
-    wait(driver, lambda d: activity_is(d, "application"), 60)
+    native_picker(driver, "open", name)
 
 def export_copy(driver, previous=None):
     phase("export-observe-physical-baseline")
@@ -464,9 +414,7 @@ def export_copy(driver, previous=None):
     visible(driver, 'input[placeholder="Ripeti la password"]').send_keys(COPY_PASSWORD)
     phase("export-submit-once")
     exact_button(driver, "Esporta copia completa V7").click()
-    open_downloads(driver)
-    phase("saf-save-control")
-    native_click(driver, doc_control(driver, ("Save", "Salva", "SAVE", "SALVA")))
+    native_picker(driver, "save")
     picker_return(driver, "target-export" if previous is None else "recovery-export",
                   "Copia completa V7 salvata, riletta e verificata.")
     phase("export-discover-physical-document")

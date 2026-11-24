@@ -51,8 +51,12 @@ test('backup and restore pilot retains physical encrypted copies and real SAF bo
   assert.ok(workflow.includes('.physicalCopies[0].sha256!=.physicalCopies[1].sha256'));
 });
 
-test('native picker uses scoped stable selectors and safe transition diagnostics',()=>{
+test('native picker delegates to the existing qualified F2 primitives',()=>{
+  const bridge=readFileSync('scripts/diagnostics/appium-pilot/native-picker.mjs','utf8');
   assert.ok(!pilot.includes('By.XPATH, "//*"'));
-  for(const x of ['native_selector(labels, attribute, reject_preview)','StableSelection()','activity_surface()','saf-wait-native-activity','saf-switch-native-context','saf-save-control','saf-wait-protected-lock','saf-wait-exact-public-dialog','export-verify-encrypted-envelope','session-device-readiness'])assert.ok(pilot.includes(x),x);
+  assert.ok(!pilot.includes('def native_candidate'));
+  for(const x of ['readNativeSnapshot','waitNativeSelection','uniqueNativeControl','requireDocumentsUiTap','classifyResumedActivity','nativeReadRetryCodes'])assert.ok(bridge.includes(x),x);
+  for(const x of ['native_picker(driver, "save")','native_picker(driver, "open", name)','saf-wait-protected-lock','saf-wait-exact-public-dialog','session-device-readiness','CANONICAL_NATIVE_PICKER_FAILED'])assert.ok(pilot.includes(x),x);
+  assert.ok(workflow.includes('native-picker.test.mjs'));
   assert.ok(workflow.includes('python3 -m unittest discover -s scripts/diagnostics/appium-pilot'));
 });
