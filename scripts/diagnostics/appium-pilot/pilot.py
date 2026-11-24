@@ -345,11 +345,11 @@ def native_picker(driver, action, name=None):
     phase("saf-switch-native-context")
     driver.switch_to.context("NATIVE_APP")
     wait(driver, lambda d: activity_is(d, "documentsui"), 60)
-    # One owner of all native picker operations: the pre-existing F2 helpers.
+    # One accessibility owner: existing Appium session; F2 selection and tap guards.
     # No Appium selector fallback, no second invocation after an unknown result.
     phase("saf-canonical-native-driver")
     script = Path(__file__).with_name("native-picker.mjs")
-    result = subprocess.run(["node", str(script)], input=json.dumps({"action": action, "name": name}),
+    result = subprocess.run(["node", str(script)], input=json.dumps({"action": action, "name": name, "sessionId": driver.session_id}),
                             capture_output=True, text=True, timeout=280)
     phases = {"saf-downloads-location", "saf-open-roots", "saf-select-downloads",
               "saf-downloads-ready", "saf-save-control", "saf-select-exact-document",
@@ -367,6 +367,7 @@ def native_picker(driver, action, name=None):
             evidence["nativeObservation"] = value
         elif kind == "failure" and isinstance(value, str) and re.fullmatch(r"[A-Z0-9_]+", value):
             evidence["nativeFailureCode"] = value
+            print("APPIUM_NATIVE_FAILURE", value, flush=True)
         elif kind == "result" and value == "PASS":
             completed = True
     save()

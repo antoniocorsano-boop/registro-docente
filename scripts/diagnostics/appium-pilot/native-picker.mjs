@@ -1,13 +1,13 @@
-// Q5-SYS-04: adapter to the existing F2 Android document-picker implementation.
+// Q5-SYS-05: reuse F2 selection contracts, with Appium as sole accessibility owner.
 // Runs only on the synthetic emulator. Never logs raw tree, coordinates or names.
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {LabFailure, classifyFailure, commandBudgetInfo, classifyAdbDeadline, observeUntil} from '../native-lab-runtime.mjs';
-import {readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, nativeReadRetryCodes} from '../native-lab-transitions.mjs';
+import {waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, nativeReadRetryCodes} from '../native-lab-transitions.mjs';
 import {classifyResumedActivity} from '../native-saf-lifecycle-probe.mjs';
-import {hasArea} from '../native-ui-driver.mjs';
+import {hasArea,parseNativeNodes} from '../native-ui-driver.mjs';
 import {labV7Date} from '../native-v7-document-discovery.mjs';
 
 const pkg='it.trama.registrodocente.lab.ap02v7';
@@ -16,11 +16,12 @@ const folder=n=>doc(n)&&/^(Downloads|Download)$/i.test(n.text);
 const root=n=>doc(n)&&/show roots|open navigation drawer|mostra radici/i.test(n.desc);
 const save=n=>doc(n)&&/^(save|salva)$/i.test(n.text);
 const open=n=>doc(n)&&/^(open|apri)$/i.test(n.text);
-export function createPicker({adb,api,report=()=>{},now,sleep}){
+export function createPicker({adb,readNodes,api,report=()=>{},now,sleep}){
+  assert.equal(typeof readNodes,'function');
   assert.ok([32,36].includes(api));
   const activity=()=>classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg);
   const foreground=()=>activity()==='documentsui';
-  const read=()=>readNativeSnapshot(adb);
+  const read=readNodes;
   const selection=(select,timeoutMs=45000)=>waitNativeSelection({
     read,foreground,select,timeoutMs,now,sleep,onState:state=>report('observation',state)
   });
@@ -86,6 +87,38 @@ export function createPicker({adb,api,report=()=>{},now,sleep}){
   }
   return {run};
 }
+// Appium UiAutomator2 owns the native accessibility connection. Do not launch
+// a second uiautomator dump while that instrumentation session is active.
+// The wire response is consumed in memory only; never persist XML or session ID.
+export function parseAppiumSnapshot(wire){
+  let value;
+  try{value=JSON.parse(wire).value;}catch{throw new LabFailure('NATIVE_UI_READ_FAILED');}
+  if(typeof value!=='string')throw new LabFailure('NATIVE_UI_READ_FAILED');
+  if(!/<hierarchy\b/.test(value)||!/<\/hierarchy>\s*$/.test(value))
+    throw new LabFailure('NATIVE_UI_TREE_UNAVAILABLE');
+  // UiAutomator2 uses class names as XML tags; the F2 parser accepts node tags.
+  // Attributes and XML-escaped values are preserved; hidden elements excluded.
+  const normalized=value.replace(/<([A-Za-z_][\w.:-]*)(\s+[^<>]*?)\/?>/g,(tag,name,attrs)=>{
+    if(name==='hierarchy')return tag;
+    if(!/\bpackage="/.test(attrs)||/\bdisplayed="false"/.test(attrs))return '';
+    return '<node'+attrs+(/\bclass="/.test(attrs)?'':' class="'+name+'"')+'>';
+  });
+  const nodes=parseNativeNodes(normalized);
+  if(!nodes.length)throw new LabFailure('NATIVE_UI_TREE_UNAVAILABLE');
+  return nodes;
+}
+export function appiumSnapshot(sessionId,execute=execFileSync){
+  if(typeof sessionId!=='string'||!/^[a-f0-9-]{36}$/i.test(sessionId))
+    throw new LabFailure('INVALID_HARNESS_ARGUMENT');
+  const budget=commandBudgetInfo(30000);
+  let wire;
+  try{wire=execute('curl',['--noproxy','*','--fail','--silent','--show-error',
+    '--max-time',String(budget.timeoutMs/1000),
+    'http://127.0.0.1:4723/session/'+sessionId+'/source'],
+    {encoding:'utf8',timeout:budget.timeoutMs,maxBuffer:8*1024*1024,killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']});}
+  catch(error){throw new LabFailure(error?.code==='ETIMEDOUT'&&budget.limitedBy==='observation'?'COMMAND_DEADLINE':'NATIVE_UI_READ_FAILED');}
+  return parseAppiumSnapshot(wire);
+}
 function adb(...args){
   const budget=commandBudgetInfo(30000);
   try{return execFileSync('adb',args,{encoding:'utf8',timeout:budget.timeoutMs,killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']}).trim();}
@@ -94,14 +127,14 @@ function adb(...args){
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   let last=null;
   const report=(kind,value)=>{
-    if(kind==='phase'||value!==last){
+    if(kind==='phase'||kind==='failure'||kind==='result'||value!==last){
       process.stdout.write(JSON.stringify({kind,value})+'\n');
       last=value;
     }
   };
   try{
     const request=JSON.parse(readFileSync(0,'utf8'));
-    await createPicker({adb,api:Number(process.env.AP02_API),report}).run(request.action,request.name);
+    await createPicker({adb,readNodes:()=>appiumSnapshot(request.sessionId),api:Number(process.env.AP02_API),report}).run(request.action,request.name);
     report('result','PASS');
   }catch(error){
     const classified=classifyFailure(error);

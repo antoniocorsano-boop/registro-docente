@@ -55,7 +55,10 @@ test('native picker delegates to the existing qualified F2 primitives',()=>{
   const bridge=readFileSync('scripts/diagnostics/appium-pilot/native-picker.mjs','utf8');
   assert.ok(!pilot.includes('By.XPATH, "//*"'));
   assert.ok(!pilot.includes('def native_candidate'));
-  for(const x of ['readNativeSnapshot','waitNativeSelection','uniqueNativeControl','requireDocumentsUiTap','classifyResumedActivity','nativeReadRetryCodes'])assert.ok(bridge.includes(x),x);
+  assert.ok(!bridge.includes('readNativeSnapshot'));
+  assert.ok(!bridge.includes("'uiautomator','dump'"));
+  assert.ok(pilot.includes('"sessionId": driver.session_id'));
+  for(const x of ['appiumSnapshot','parseNativeNodes','waitNativeSelection','uniqueNativeControl','requireDocumentsUiTap','classifyResumedActivity','nativeReadRetryCodes'])assert.ok(bridge.includes(x),x);
   for(const x of ['native_picker(driver, "save")','native_picker(driver, "open", name)','saf-wait-protected-lock','saf-wait-exact-public-dialog','session-device-readiness','CANONICAL_NATIVE_PICKER_FAILED'])assert.ok(pilot.includes(x),x);
   assert.ok(workflow.includes('native-picker.test.mjs'));
   assert.ok(workflow.includes('python3 -m unittest discover -s scripts/diagnostics/appium-pilot'));

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createPicker} from './native-picker.mjs';
+import {createPicker,parseAppiumSnapshot,appiumSnapshot} from './native-picker.mjs';
 
 const pkg='com.android.documentsui';
 const app='it.trama.registrodocente.lab.ap02v7';
@@ -9,8 +9,6 @@ function fixture(initial,actions){
   let view=initial, foreground=pkg, now=0;const taps=[];
   const adb=(...args)=>{
     if(args[1]==='dumpsys')return 'topResumedActivity '+foreground+'/.Main';
-    if(args[1]==='rm'||args[1]==='uiautomator')return '';
-    if(args[1]==='cat')return '<hierarchy>'+view+'</hierarchy>';
     if(args[1]==='input'){
       taps.push(Number(args[3]));
       const next=actions.shift();
@@ -22,7 +20,7 @@ function fixture(initial,actions){
     }
     throw Error('unexpected command');
   };
-  return {picker:createPicker({adb,api:32,now:()=>now,sleep:async ms=>{now+=ms;}}),taps};
+  return {picker:createPicker({adb,readNodes:()=>parseAppiumSnapshot(JSON.stringify({value:'<hierarchy>'+view+'</hierarchy>'})),api:32,now:()=>now,sleep:async ms=>{now+=ms;}}),taps};
 }
 test('canonical native path opens roots, selects Download and saves exactly once',async()=>{
   const f=fixture(node('','Show roots',0),[{view:node('Downloads','',20)},{view:node('Save','',40)},{foreground:app}]);
@@ -44,4 +42,22 @@ test('ambiguous save target does not authorize a tap',async()=>{
   const f=fixture(node('Downloads')+node('Save','',20)+node('Save','',40),[]);
   await assert.rejects(f.picker.run('save'));
   assert.deepEqual(f.taps,[]);
+});
+
+test('Appium class tags normalize to F2 nodes and hidden nodes are excluded',()=>{
+  const xml='<hierarchy><android.widget.TextView package="'+pkg+'" text="Downloads" enabled="true" displayed="true" bounds="[0,0][20,20]"/><android.widget.TextView package="'+pkg+'" text="Downloads" enabled="true" displayed="false" bounds="[20,0][40,20]"/></hierarchy>';
+  const nodes=parseAppiumSnapshot(JSON.stringify({value:xml}));
+  assert.equal(nodes.length,1);
+  assert.equal(nodes[0].clazz,'android.widget.TextView');
+  assert.equal(nodes[0].text,'Downloads');
+});
+test('source uses only local existing session and fails closed for invalid IDs or responses',()=>{
+  const id='12345678-1234-1234-1234-123456789abc';
+  let calls=0;
+  const execute=(cmd,args)=>{calls++;assert.equal(cmd,'curl');assert.equal(args.at(-1),'http://127.0.0.1:4723/session/'+id+'/source');return JSON.stringify({value:'<hierarchy>'+node('Downloads')+'</hierarchy>'});};
+  assert.equal(appiumSnapshot(id,execute).length,1);
+  assert.throws(()=>appiumSnapshot('../other',execute),/INVALID_HARNESS_ARGUMENT/);
+  assert.equal(calls,1);
+  assert.throws(()=>parseAppiumSnapshot('{"value":{"error":"unknown"}}'),/NATIVE_UI_READ_FAILED/);
+  assert.throws(()=>parseAppiumSnapshot('{"value":"<hierarchy></hierarchy>"}'),/NATIVE_UI_TREE_UNAVAILABLE/);
 });
