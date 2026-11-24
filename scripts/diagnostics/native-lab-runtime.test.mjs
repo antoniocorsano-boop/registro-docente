@@ -639,3 +639,20 @@ test('Q4-R06 known read-only handoff transport failure may repeat but not beyond
     confirmIdentity:identity,release:s=>closed.push(s.number)}),{code:'PREFLIGHT_CDP_HANDOFF_UNSTABLE'});
   assert.equal(count,1);assert.deepEqual(closed,[1]);
 });
+
+test('Q4-R07 independent startup matrix precedes pilot and cannot count as full F2 acceptance',()=>{
+  const q=readFileSync(new URL('../../.github/workflows/qa-stability-01-q4.yml',import.meta.url),'utf8');
+  const f=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
+  const d=readFileSync(new URL('./ap02-native-device-v7.mjs',import.meta.url),'utf8');
+  const startup=q.slice(q.indexOf('  startup:'),q.indexOf('  pilot:'));
+  assert.ok(startup.includes('needs: preflight')&&startup.includes('trial: [1, 2, 3]')&&startup.includes('startup_only: true'));
+  assert.ok(q.slice(q.indexOf('  pilot:'),q.indexOf('  q4:')).includes('needs: [preflight, startup]'));
+  assert.ok(q.includes('needs: [preflight, pilot]'));
+  assert.ok(f.includes('default: false')&&f.includes('if: ${{ !inputs.startup_only }}'));
+  assert.ok(f.includes('q4-startup-api{0}-trial{1}')&&f.includes('.fullF2Qualified==false'));
+  assert.ok(f.includes('.results[4].nativeReauthCount>=4')&&f.includes('.results[5].absenceSamples==2'));
+  assert.ok(d.indexOf('if(startupOnly){')<d.indexOf('await createClass(originalClass)'));
+  assert.ok(d.includes("startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS'"));
+  const flow=d.slice(d.indexOf('if(startupOnly){'),d.indexOf('await createClass(originalClass)'));
+  assert.ok(flow.includes('verifiedProcessStop')&&flow.includes("await makePublicAuthentication('startup-cold-reopen')()")&&flow.includes('fullF2Qualified:false'));
+});

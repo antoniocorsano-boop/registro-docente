@@ -21,6 +21,8 @@ const pkg = 'it.trama.registrodocente.lab.ap02v7';
 const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
 const api = Number(process.env.AP02_API);
 const sha = process.env.CANDIDATE_SHA;
+const startupOnly=process.env.AP02_STARTUP_ONLY==='true';
+if(startupOnly)assert.match(process.env.Q4_TRIAL||'',/^[123]$/);
 assert.ok([32,36].includes(api));
 assert.match(sha || '', /^[0-9a-f]{40}$/);
 const password = 'ap02-local-synthetic-2026';
@@ -383,8 +385,10 @@ async function connect(expected){
     confirmIdentity:()=>readCdpIdentity(false),
     release:ws=>ws.close(),
     onState:state=>{
+      const prior=cdpTargetObservation;
       cdpTargetObservation=state;
-      if(state.state.startsWith('handoff-'))console.log('AP02_CDP_HANDOFF',api,state.state,state.candidates,state.matches);
+      if(!prior||prior.state!==state.state||prior.candidates!==state.candidates||prior.matches!==state.matches)
+        console.log('AP02_CDP_TARGET_STATE',api,state.state,state.candidates,state.matches);
     }
   });
   const s=selected.connection;
@@ -945,6 +949,7 @@ async function run(){
   await launch();
   await onPage('Configura archivio protetto',60000);
   await record('installed-professional-android-webview');
+  phase='startup-professional-profile';
   // In contrast to the earlier demo-mode browser test, this is a wholly
   // synthetic PROFESSIONAL archive created through the actual product gate.
   await click('input[name="archive-mode"][value="professional"]');
@@ -958,7 +963,9 @@ async function run(){
       'a['+index+'].dispatchEvent(new Event("change",{bubbles:true}));return true;})()');
   }
   await field('#vault-password',password);
+  phase='startup-professional-submit';
   await button('Crea il mio registro');
+  phase='startup-professional-home';
   try { await onPage('Le mie classi',60000); }
   catch(error) {
     // Read only Boolean screen indicators and categorical Android activity.
@@ -970,15 +977,37 @@ async function run(){
       'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0)}})()').catch(()=>null);
     let nativeActivity='unknown';
     try { nativeActivity=classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg); } catch {}
-    writeFileSync(out+'/saf-diagnostic.json',JSON.stringify({schemaVersion:3,
+    const diagnostic={schemaVersion:3,
       stage:'professional-setup-home',api,phase,
       originalError:classifyFailure(error).code,
       nativeActivity,locked:surface?.locked??null,
       visibility:['visible','hidden'].includes(surface?.visibility)?surface.visibility:'unknown',
-      homeHeadingVisible:surface?.homeHeadingVisible??null},null,2));
+      homeHeadingVisible:surface?.homeHeadingVisible??null,
+      publicSurfaceStates:safeSurfaceTrace(surfaceTransitions)};
+    writeFileSync(out+'/saf-diagnostic.json',JSON.stringify(diagnostic,null,2));
+    console.log('AP02_STARTUP_HOME_DIAGNOSTIC',JSON.stringify(diagnostic));
     throw error;
   }
   await record('professional-vault-created-with-synthetic-profile');
+  if(startupOnly){
+    // A distinct diagnostic run, not a counted F2 trial. Preserve the same
+    // installed synthetic archive and require an independently observed stop.
+    phase='startup-cold-stop';
+    disconnect();
+    const restart=await verifiedProcessStop({probe,forceStop:()=>adb('shell','am','force-stop',pkg)});
+    await launch();
+    phase='startup-cold-authentication';
+    await onPage('Sblocca Registro',60000);
+    await makePublicAuthentication('startup-cold-reopen')();
+    await waitDestination('home',null,60000,false);
+    await dialogTracker.flush();
+    writeFileSync(out+'/startup.json',JSON.stringify({schemaVersion:1,candidate:sha,api,
+      trial:Number(process.env.Q4_TRIAL),mode:'startup-only',syntheticOnly:true,productionRelease:false,
+      fullF2Qualified:false,setupHome:true,coldAuthenticatedHome:true,forcedStop:true,
+      absenceSamples:restart.absenceSamples,beforePidsCount:restart.beforePids?.length,
+      afterPidsCount:restart.afterPids?.length},null,2));
+    return;
+  }
   await createClass(originalClass);
   await nav('Privacy');
   const target=await exportV7();
@@ -1021,7 +1050,7 @@ try{
   await run();
   await dialogTracker.flush();
   writeFileSync(out+'/surface-readiness.json',JSON.stringify({candidate:sha,api,rawDomStored:false,readyDestinations:[...readyDestinations].sort(),transitions:safeSurfaceTrace(surfaceTransitions)},null,2));
-  console.log('AP02_F2_DEVICE_SUCCESS',sha,api);
+  console.log(startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS',sha,api);
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
   const {category,code}=classifyFailure(error);
@@ -1039,6 +1068,7 @@ try{
     homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,
     homeNavigationDiagnostic:homeNavigationDiagnostic||undefined},null,2));
   console.error('AP02_F2_DEVICE_BLOCKED',phase,code,category);
+  console.log('AP02_STARTUP_STATE',JSON.stringify({startupOnly,cdpTargetObservation,publicSurfaceStates:safeSurfaceTrace(surfaceTransitions)}));
   console.log('AP02_SAF_LIFECYCLE_SUMMARY',JSON.stringify(safReturns));
   console.log('AP02_RECOVERY_CONSENT_STATE',JSON.stringify(recoveryConsent.snapshot()));
   process.exitCode=1;

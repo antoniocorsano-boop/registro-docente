@@ -8,6 +8,10 @@ on:
       trial:
         required: true
         type: number
+      startup_only:
+        required: false
+        type: boolean
+        default: false
   pull_request:
     branches: [main]
     paths:
@@ -44,6 +48,7 @@ jobs:
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
       Q4_TRIAL: ${{ inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
       AP02_API: ${{ matrix.api }}
+      AP02_STARTUP_ONLY: ${{ inputs.startup_only && 'true' || 'false' }}
     steps:
       - name: Validate isolated Q4 invocation before checkout
         if: ${{ inputs.candidate_sha != '' || github.event.pull_request.base.ref != 'main' }}
@@ -70,6 +75,7 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$CANDIDATE_SHA" = "$EVENT_HEAD"
           [[ "$Q4_TRIAL" =~ ^[0123]$ ]]
+          if test "$AP02_STARTUP_ONLY" = true; then [[ "$Q4_TRIAL" =~ ^[123]$ ]]; fi
           test "$GITHUB_RUN_ATTEMPT" = 1
       - name: Checkout exact candidate without write credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -152,6 +158,7 @@ jobs:
           disable-animations: false
           script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs
       - name: Require exact complete acceptance evidence
+        if: ${{ !inputs.startup_only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -178,6 +185,18 @@ jobs:
             .results[5].beforePidsCount>0 and
             .results[5].afterPidsCount==0
           ' ap02-device-evidence/result.json
+      - name: Require independent startup-only acceptance evidence
+        if: ${{ inputs.startup_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q4_TRIAL" '
+            .candidate==$sha and .api==$api and .trial==$trial and
+            .mode=="startup-only" and .syntheticOnly==true and .productionRelease==false and
+            .fullF2Qualified==false and .setupHome==true and .coldAuthenticatedHome==true and
+            .forcedStop==true and .absenceSamples==2 and .beforePidsCount>0 and .afterPidsCount==0
+          ' ap02-device-evidence/startup.json
+          jq -e '([.results[].stage] == ["installed-professional-android-webview","professional-vault-created-with-synthetic-profile"]) and all(.results[]; .status=="PASS")' ap02-device-evidence/result.json
       - name: Require complete Q3 environment and readiness evidence
         shell: bash
         run: |
@@ -194,22 +213,29 @@ jobs:
                ($e.source=="sdk-package" and (["timeout","spawn-error","nonzero-exit","missing-version"] | index($e.probeStatus)!=null)))) and
             (.versions | [.adb,.platformTools,.emulator,.webviewPackage,.webviewVersion,.androidBuild,.runnerImage,.runnerVersion,.node,.chromium] | all(type=="string" and length>0))
           ' ap02-device-evidence/environment.json
-          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
-            .candidate==$sha and .api==$api and .rawDomStored==false and
-            (.readyDestinations | sort == ["class","class-detail","home","lock","privacy","session","setup"])
-          ' ap02-device-evidence/surface-readiness.json
+          if test "$AP02_STARTUP_ONLY" = true; then
+            jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+              .candidate==$sha and .api==$api and .rawDomStored==false and
+              (.readyDestinations | sort == ["home","lock","session","setup"])
+            ' ap02-device-evidence/surface-readiness.json
+          else
+            jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+              .candidate==$sha and .api==$api and .rawDomStored==false and
+              (.readyDestinations | sort == ["class","class-detail","home","lock","privacy","session","setup"])
+            ' ap02-device-evidence/surface-readiness.json
+          fi
       - name: Record isolated Q4 identity
         if: ${{ always() && inputs.candidate_sha != '' }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ap02-device-evidence
-          jq -n --arg candidate "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q4_TRIAL" --arg runId "$GITHUB_RUN_ID" --arg runAttempt "$GITHUB_RUN_ATTEMPT" '{schemaVersion:1,candidate:$candidate,api:$api,trial:$trial,runId:$runId,runAttempt:$runAttempt,syntheticOnly:true,productionRelease:false}' > ap02-device-evidence/q4-identity.json
+          jq -n --arg candidate "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q4_TRIAL" --arg runId "$GITHUB_RUN_ID" --arg runAttempt "$GITHUB_RUN_ATTEMPT" --argjson startupOnly "$AP02_STARTUP_ONLY" '{schemaVersion:1,candidate:$candidate,api:$api,trial:$trial,runId:$runId,runAttempt:$runAttempt,startupOnly:$startupOnly,syntheticOnly:true,productionRelease:false}' > ap02-device-evidence/q4-identity.json
       - name: Preserve non-sensitive qualification record only
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA) }}
+          name: ${{ inputs.startup_only && format('q4-startup-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || (inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA)) }}
           path: |
             ap02-device-evidence/result.json
             ap02-device-evidence/failure.json
@@ -219,5 +245,6 @@ jobs:
             ap02-device-evidence/environment.json
             ap02-device-evidence/surface-readiness.json
             ap02-device-evidence/q4-identity.json
+            ap02-device-evidence/startup.json
           retention-days: 14
           if-no-files-found: warn
