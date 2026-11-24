@@ -181,8 +181,22 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     );
     // Two stable, accessible Home samples are required; a protected class
     // page or stale text never qualifies as a successful navigation.
-    expect(driver).toContain("await ensureInteractiveSession('during-home-navigation')");
-    expect(driver).toContain("await ensureInteractiveSession('after-home-navigation')");
+    // Q5-R12: the navigation owns exactly one authentication allowance,
+    // shared before, during and after the explicit confirmation.
+    const homeNavigation = driver.slice(driver.indexOf("if(label==='Oggi'){"),
+      driver.indexOf("} else if(label==='Privacy'){"));
+    expect(homeNavigation).toContain("const authenticateHome=makePublicAuthentication('home-navigation')");
+    expect(homeNavigation.match(/makePublicAuthentication\(/g)?.length).toBe(1);
+    expect(homeNavigation.match(/await authenticateHome\(\)/g)?.length).toBe(2);
+    const beforeConfirm = homeNavigation.slice(0,homeNavigation.indexOf("if(first==='confirmation')"));
+    const afterConfirm = homeNavigation.slice(homeNavigation.indexOf("phase='visible-ui-navigation-Oggi';"));
+    for (const stage of [beforeConfirm,afterConfirm]) {
+      expect(stage).toContain("if(stage==='locked'){");
+      expect(stage).toContain('await authenticateHome()');
+      expect(stage.indexOf("if(stage==='locked'){")).toBeLessThan(stage.indexOf('await authenticateHome()'));
+    }
+    expect(homeNavigation).toContain("if(stage==='gate-error')throw new LabFailure('PUBLIC_GATE_ERROR')");
+    expect(homeNavigation).not.toContain('ensureInteractiveSession(');
     expect(driver).toContain("return (await sample())==='home-ready'");
     expect(driver).toContain('homeNavigationDiagnostic=safeHomeNavigationReport(transitions,lastFrame)');
     const navigationClassifier = await Bun.file('scripts/diagnostics/native-home-navigation-probe.mjs').text();
@@ -201,7 +215,8 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(homeConfirm).not.toContain('innerText');
     expect(homeConfirm).toContain('[role="alertdialog"][aria-modal="true"]');
     expect(homeConfirm).toContain('named.filter(e=>interactive(e,doc,style))');
-    expect(homeConfirm).toContain('frame.documentVisible&&!locked&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0])');
+    expect(homeConfirm).toContain('const protectedSurface=locked||Boolean(');
+    expect(homeConfirm).toContain('frame.documentVisible&&!protectedSurface&&!gateError&&frame.dialogInteractive&&named.length===1&&visible.length===1&&dialog.contains(visible[0])');
     expect(homeConfirm).toContain("frame.action='not-performed'");
     expect(homeConfirm).toContain('if(submit&&frame.ready){');
     expect(homeConfirm).toContain('visible[0].click()');
@@ -214,6 +229,13 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(atomic).toContain('if(!await foreground())');
     expect(atomic).toContain("performed=frame.action==='performed'");
     expect(atomic).toContain("throw new LabFailure('CDP_EVALUATION_REJECTED')");
+    expect(atomic).toContain("if(frame.gateError===true)throw new LabFailure('PUBLIC_GATE_ERROR')");
+    expect(atomic).toContain('if(!performed&&frame.documentVisible===true&&frame.locked===true&&frame.lockReady===true&&authenticate)');
+    expect(atomic).toContain("if(authenticated)throw new LabFailure('PUBLIC_RELOCK_AFTER_AUTH')");
+    expect(atomic).toContain('authenticated=true;');
+    expect(atomic).toContain('await authenticate();');
+    expect(atomic.indexOf('authenticated=true;')).toBeLessThan(atomic.indexOf('await authenticate();'));
+    expect(atomic).toContain("throw new LabFailure('HOME_CONFIRM_DIALOG_MISSING')");
     expect(atomic.indexOf('if(!await foreground())')).toBeLessThan(atomic.indexOf('const frame=await attempt()'));
     expect(driver).toContain('publicHomeConfirmation.toString()');
     expect(driver).toContain("function captureHomeConfirmDiagnostic(submit=false)");
@@ -222,6 +244,7 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(confirmFlow).toContain('await confirmHomeOnce({');
     expect(confirmFlow).toContain('foreground:nativeForeground');
     expect(confirmFlow).toContain('attempt:()=>captureHomeConfirmDiagnostic(true)');
+    expect(confirmFlow).toContain('authenticate:authenticateHome');
     expect(confirmFlow).toContain('onFrame:frame=>{homeConfirmDiagnostic=frame;}');
     expect(confirmFlow.match(/captureHomeConfirmDiagnostic\(true\)/g)?.length).toBe(1);
     expect(confirmFlow.indexOf("'HOME_CONFIRM_DISMISSED',20000")).toBeGreaterThan(confirmFlow.indexOf('await confirmHomeOnce({'));
