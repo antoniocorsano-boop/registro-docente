@@ -354,38 +354,40 @@ async function readSocketSurface(ws){
     probeChannel.close();ws.removeEventListener('close',close);ws.removeEventListener('error',close);ws.removeEventListener('message',message);
   }
 }
+async function readCdpIdentity(forward){
+  const ps=probe();if(ps.length!==1||!nativeForeground())return null;
+  if(forward)adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+ps[0]);
+  let list;
+  try{
+    const resp=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(commandBudget(3000))});
+    if(!resp.ok)return null;
+    list=await resp.json();
+  }catch(error){
+    if(error instanceof LabFailure)throw error;
+    if(error?.name==='TimeoutError'||error instanceof TypeError)return null;
+    throw error;
+  }
+  const current=probe();
+  return {pid:ps[0],foreground:current.length===1&&current[0]===ps[0]&&nativeForeground(),list};
+}
 async function connect(expected){
   const selected=await waitUniquePublicTarget({expected,
-    sample:async()=>{
-      const ps=probe();if(ps.length!==1||!nativeForeground())return null;
-      adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+ps[0]);
-      let list;
-      try{
-        const resp=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(commandBudget(3000))});
-        if(!resp.ok)return null;
-        list=await resp.json();
-      }catch(error){
-        if(error instanceof LabFailure)throw error;
-        if(error?.name==='TimeoutError'||error instanceof TypeError)return null;
-        throw error;
-      }
-      return {pid:ps[0],foreground:nativeForeground(),list};
-    },
+    sample:()=>readCdpIdentity(true),
     inspect:async target=>{
       const ws=await openCdpSocket(target.endpoint);
       try{return await readSocketSurface(ws);}finally{ws.close();}
     },
     verify:pid=>{const current=probe();return current.length===1&&current[0]===pid&&nativeForeground();},
-    onState:state=>{cdpTargetObservation=state;}
+    acquire:target=>openCdpSocket(target.endpoint),
+    inspectAcquired:readSocketSurface,
+    confirmIdentity:()=>readCdpIdentity(false),
+    release:ws=>ws.close(),
+    onState:state=>{
+      cdpTargetObservation=state;
+      if(state.state.startsWith('handoff-'))console.log('AP02_CDP_HANDOFF',api,state.state,state.candidates,state.matches);
+    }
   });
-  const s=await openCdpSocket(selected.endpoint);
-  try{
-    const frame=await readSocketSurface(s);
-    const pids=probe();
-    if(pids.length!==1||pids[0]!==selected.pid||
-       classifySurface({...frame,foreground:nativeForeground()},expected)!=='ready')
-      throw new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');
-  }catch(error){s.close();throw error;}
+  const s=selected.connection;
   socket=s;
   const active=createPendingCommands();channel=active;
   s.addEventListener('close',()=>active.close(),{once:true});

@@ -18,11 +18,13 @@ export function localPageTargets(list){
     throw new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');
   return targets;
 }
-export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,expected,timeoutMs=60000,now,sleep,onState=()=>{}}){
-  let prior=null,streak=0,last='no-target';
+export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,expected,timeoutMs=60000,now,sleep,onState=()=>{},
+  acquire,inspectAcquired,confirmIdentity,release}){
+  if(acquire&&(!inspectAcquired||!confirmIdentity||!release))throw new LabFailure('INVALID_HARNESS_ARGUMENT');
+  let prior=null,streak=0,last='no-target',held=null,completed=false;
   const reset=()=>{prior=null;streak=0;};
   try{
-    return await observeUntil(async()=>{
+    const result=await observeUntil(async()=>{
       const snapshot=await sample();
       if(!snapshot||snapshot.foreground!==true||!snapshot.pid){reset();last='not-foreground';onState({state:last,candidates:0,matches:0});return false;}
       const targets=localPageTargets(snapshot.list);
@@ -46,13 +48,50 @@ export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,exp
       const key=JSON.stringify([snapshot.pid,matched[0].id,matched[0].endpoint]);
       streak=prior===key?streak+1:1;prior=key;last=streak>=2?'stable':'single-sample';
       onState({state:last,candidates:targets.length,matches:1});
-      return streak>=2?{...matched[0],pid:snapshot.pid}:false;
+      if(streak<2)return false;
+      const selected={...matched[0],pid:snapshot.pid};
+      if(!acquire)return selected;
+      // The old final connection happened after this bounded loop, allowing
+      // a transient visibility change to turn a valid search into a failure.
+      // Open and validate the actual retained socket within the SAME budget.
+      const rejectHandoff=state=>{
+        reset();last=state;onState({state:last,candidates:targets.length,matches:1});return false;
+      };
+      let keep=false;
+      try{
+        held=await acquire(selected);
+        if(!held)return rejectHandoff('handoff-incomplete');
+        const frame=await inspectAcquired(held);
+        if(!frame||typeof frame.documentVisible!=='boolean')return rejectHandoff('handoff-incomplete');
+        if(classifySurface({...frame,foreground:true},expected)!=='ready')return rejectHandoff('handoff-not-ready');
+        // Fresh list must describe the same candidate set, PID and endpoint.
+        // No forwarding change, mutation, Page.enable or input during handoff.
+        const identity=await confirmIdentity(selected);
+        const signature=list=>JSON.stringify(list.map(x=>[x.id,x.endpoint]).sort((a,b)=>a[0].localeCompare(b[0])));
+        if(!identity||identity.pid!==selected.pid||identity.foreground!==true||
+          signature(localPageTargets(identity.list))!==signature(targets)||!await verify(selected.pid))
+          return rejectHandoff('handoff-identity-changed');
+        last='handoff-stable';onState({state:last,candidates:targets.length,matches:1});
+        keep=true;
+        return {...selected,connection:held};
+      }catch(error){
+        if(!readTransient.has(classifyFailure(error).code))throw error;
+        return rejectHandoff('handoff-incomplete');
+      }finally{
+        if(!keep&&held){release(held);held=null;}
+      }
     },{timeoutMs,intervalMs:450,now,sleep,retryReadErrors:false});
+    completed=true;
+    return result;
   }catch(error){
-    if(classifyFailure(error).code==='OBSERVATION_DEADLINE'&&last==='ambiguous'){
-      const blocked=new LabFailure('PREFLIGHT_CDP_TARGET_AMBIGUOUS');blocked.observation=error.observation;throw blocked;
+    if(classifyFailure(error).code==='OBSERVATION_DEADLINE'&&(last==='ambiguous'||last.startsWith('handoff-'))){
+      const blocked=new LabFailure(last==='ambiguous'?'PREFLIGHT_CDP_TARGET_AMBIGUOUS':'PREFLIGHT_CDP_HANDOFF_UNSTABLE');
+      blocked.observation=error.observation;throw blocked;
     }
     throw error;
+  }finally{
+    // A late success rejected by the observation deadline cannot leak a socket.
+    if(!completed&&held)release(held);
   }
 }
 const snapshotPath='/sdcard/ap02-f2-ui.xml';

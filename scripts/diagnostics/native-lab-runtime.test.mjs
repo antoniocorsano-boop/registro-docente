@@ -597,3 +597,45 @@ test('Q4 unknown consent command outcome is not retried',async()=>{
   await assert.rejects(gate.accept(()=>calls++),{code:'RECOVERY_CONSENT_INVALID'});
   assert.equal(calls,1);
 });
+
+test('Q4-R06 transient final connection readiness loss resets selection and closes rejected socket',async()=>{
+  const clock=fakeClock(),closed=[],states=[];let acquired=0,samples=0;
+  const identity=()=>({pid:17,foreground:true,list:[target('a')]});
+  const selected=await waitUniquePublicTarget({expected:'setup',...clock,timeoutMs:5000,
+    sample:()=>{samples++;return identity();},inspect:()=>setupFrame,
+    acquire:()=>({number:++acquired}),inspectAcquired:s=>s.number===1?{documentVisible:false}:setupFrame,
+    confirmIdentity:identity,release:s=>closed.push(s.number),onState:s=>states.push(s.state)});
+  assert.equal(samples,4);assert.equal(selected.connection.number,2);
+  assert.deepEqual(closed,[1]);assert.ok(states.includes('handoff-not-ready'));
+  assert.equal(states.at(-1),'handoff-stable');
+});
+test('Q4-R06 final PID, foreground and candidate-set changes require fresh selection',async()=>{
+  for(const mode of ['pid','foreground','list']){
+    const clock=fakeClock(),closed=[];let n=0;
+    const identity=()=>({pid:17,foreground:true,list:[target('a')]});
+    const selected=await waitUniquePublicTarget({expected:'setup',...clock,timeoutMs:5000,sample:identity,inspect:()=>setupFrame,
+      acquire:()=>({number:++n}),inspectAcquired:()=>setupFrame,confirmIdentity:()=>{
+        const f=identity();if(n!==1)return f;
+        if(mode==='pid')f.pid=18;if(mode==='foreground')f.foreground=false;if(mode==='list')f.list.push(target('b'));return f;
+      },release:s=>closed.push(s.number)});
+    assert.equal(selected.connection.number,2);assert.deepEqual(closed,[1]);
+  }
+});
+test('Q4-R06 retained socket is closed on late success and unknown read failure',async()=>{
+  for(const mode of ['late','unknown']){
+    const clock=fakeClock(),closed=[];const identity=()=>({pid:17,foreground:true,list:[target('a')]});
+    await assert.rejects(waitUniquePublicTarget({expected:'setup',...clock,timeoutMs:1000,sample:identity,inspect:()=>setupFrame,
+      acquire:()=>({number:1}),inspectAcquired:()=>{if(mode==='unknown')throw new LabFailure('CDP_EVALUATION_REJECTED');return setupFrame;},
+      confirmIdentity:()=>{clock.advance(1000);return identity();},release:s=>closed.push(s.number)}),
+      {code:mode==='late'?'PREFLIGHT_CDP_HANDOFF_UNSTABLE':'CDP_EVALUATION_REJECTED'});
+    assert.deepEqual(closed,[1]);
+  }
+});
+test('Q4-R06 known read-only handoff transport failure may repeat but not beyond common deadline',async()=>{
+  const clock=fakeClock(),closed=[];let count=0;
+  const identity=()=>({pid:17,foreground:true,list:[target('a')]});
+  await assert.rejects(waitUniquePublicTarget({expected:'setup',...clock,timeoutMs:800,sample:identity,inspect:()=>setupFrame,
+    acquire:()=>({number:++count}),inspectAcquired:()=>{throw new LabFailure('CDP_DISCONNECTED');},
+    confirmIdentity:identity,release:s=>closed.push(s.number)}),{code:'PREFLIGHT_CDP_HANDOFF_UNSTABLE'});
+  assert.equal(count,1);assert.deepEqual(closed,[1]);
+});
