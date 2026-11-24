@@ -3,6 +3,7 @@
 // Chrome DevTools drives public DOM controls; no application internals, plugin
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
+import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands } from './native-lab-runtime.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -28,7 +29,7 @@ const adbTransport = createAdbTransportTrace();
 const adb = (...args) => {
   const began = Date.now();
   try {
-    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: 30000 }).trim();
+    const result = execFileSync('adb', args, { encoding: 'utf8', timeout: commandBudget(30000), killSignal: 'SIGKILL' }).trim();
     adbTransport.record(args, began, 'ok');
     return result;
   } catch (error) {
@@ -56,13 +57,10 @@ function record(name, additional = {}) {
   console.log('AP02_DEVICE_STAGE_PASS',name);
 }
 function sha256(b){return createHash('sha256').update(b).digest('hex');}
-async function until(fn, name, timeout = 60000) {
-  const end = Date.now()+timeout;
-  while(Date.now()<end) {
-    try{const x=await fn();if(x)return x;}catch{}
-    await sleep(350);
-  }
-  throw new Error('CONDITION_TIMEOUT:'+name);
+async function until(fn, name, timeout = 60000, retryReadErrors = true) {
+  // Names may include localized UI text or filenames; never retain them in
+  // the failure record. Scope is inherited by bounded ADB/CDP commands.
+  return observeUntil(fn,{timeoutMs:timeout,retryReadErrors});
 }
 function nativeNodes() {
   adb('shell','rm','-f','/sdcard/ap02-f2-ui.xml');
@@ -166,42 +164,55 @@ async function nativeChoose(filename) {
   await until(nativeForeground,'RETURN_FROM_OPEN',45000);
 }
 
-let socket=null,seq=0;
-const waiting=new Map(),dialogs=[];
+let socket=null,channel=null;
+const dialogs=[];
 let classPromptName=null;
 let classPromptAcknowledged=0;
 function disconnect() {
-  if(socket){socket.close();socket=null;}
-  for(const [id,p] of waiting){clearTimeout(p.timer);p.reject(new Error('CDP_DISCONNECTED'));waiting.delete(id);}
+  const active=socket;
+  channel?.close();channel=null;socket=null;
+  if(active)active.close();
   try{adb('forward','--remove','tcp:9222');}catch{}
 }
-function send(method,params={}) {
-  const id=++seq;
-  return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{waiting.delete(id);reject(new Error('CDP_TIMEOUT:'+method));},40000);
-    waiting.set(id,{timer,resolve,reject});
-    socket.send(JSON.stringify({id,method,params}));
-  });
+function send(method,params={},timeout=35000) {
+  const active=socket;
+  if(!active||!channel)return Promise.reject(new LabFailure('CDP_DISCONNECTED'));
+  return channel.request(id=>active.send(JSON.stringify({id,method,params})),timeout);
 }
 async function connect() {
   const s=await until(async()=>{
     const ps=probe();if(ps.length!==1)return null;
     adb('forward','tcp:9222','localabstract:webview_devtools_remote_'+ps[0]);
-    const resp=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(3000)});
-    const list=await resp.json();
+    let list;
+    try {
+      const resp=await fetch('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(commandBudget(3000))});
+      if(!resp.ok)return null;
+      list=await resp.json();
+    }catch(error){
+      if(error instanceof LabFailure)throw error;
+      if(error?.name==='TimeoutError'||error instanceof TypeError)return null;
+      throw error;
+    }
+    if(!Array.isArray(list))throw new LabFailure('INVALID_HARNESS_ARGUMENT');
     const target=list.find(x=>x.type==='page'&&x.webSocketDebuggerUrl&&/^https?:\/\/localhost(?:[:/]|$)/.test(x.url));
     if(!target)return null;
     const ws=new WebSocket(target.webSocketDebuggerUrl.replace(/ws:\/\/[^/]+/,'ws://127.0.0.1:9222'));
     await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{ws.close();reject(new Error('CDP_SOCKET_TIMEOUT'));},4000);
+      const timer=setTimeout(()=>{ws.close();reject(new LabFailure('CDP_SOCKET_TIMEOUT'));},commandBudget(4000));
       ws.addEventListener('open',()=>{clearTimeout(timer);resolve();},{once:true});
-      ws.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('CDP_SOCKET_ERROR'));},{once:true});
+      ws.addEventListener('error',()=>{clearTimeout(timer);ws.close();reject(new LabFailure('CDP_SOCKET_ERROR'));},{once:true});
+      ws.addEventListener('close',()=>{clearTimeout(timer);reject(new LabFailure('CDP_DISCONNECTED'));},{once:true});
     });
     return ws;
   },'WEBVIEW_DEBUG_TARGET',60000);
   socket=s;
-  socket.addEventListener('message',e=>{
-    const msg=JSON.parse(e.data);
+  const active=createPendingCommands();channel=active;
+  s.addEventListener('close',()=>active.close(),{once:true});
+  s.addEventListener('error',()=>active.close(),{once:true});
+  s.addEventListener('message',e=>{
+    if(socket!==s)return;
+    let msg;
+    try{msg=JSON.parse(e.data);}catch{active.close();s.close();return;}
     if(msg.method==='Page.javascriptDialogOpening') {
       const d=msg.params;
       dialogs.push({kind:d.type,message:d.message});
@@ -224,27 +235,17 @@ async function connect() {
       void send('Page.handleJavaScriptDialog',{accept:true}).catch(()=>{});
       return;
     }
-    const w=waiting.get(msg.id);
-    if(w){
-      waiting.delete(msg.id);clearTimeout(w.timer);
-      if(msg.error||msg.result?.exceptionDetails){
-        const detail=msg.result?.exceptionDetails?.exception?.description||'';
-        const safe=['NEW_CLASS_MISSING','AMBIGUOUS_BUTTON','NAV_NOT_UNIQUE',
-          'MISSING_CONTROL','MISSING_INPUT','SYNTHETIC_PROFILE_INPUT_MISSING',
-          'BUTTON_MATCH_COUNT_0','BUTTON_MATCH_COUNT_2','BUTTON_MATCH_COUNT_3',
-          'ReferenceError','TypeError','InvalidStateError'].find(x=>detail.includes(x))||'UNKNOWN';
-        w.reject(new Error('CDP_EVALUATION_REJECTED:'+safe));
-      }
-      else w.resolve(msg.result?.result?.value);
-    }
+    if(msg.error||msg.result?.exceptionDetails){
+      // Do not store exception text from the page.
+      active.settle(msg.id,new LabFailure('CDP_EVALUATION_REJECTED'));
+    }else active.settle(msg.id,null,msg.result?.result?.value);
   });
   await send('Page.enable');
 }
 async function evaluate(expr,timeout=35000){
   // Only public DOM operations, never internal App methods, Vault keys or
   // decrypted backup contents.
-  const p=send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true});
-  return await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('DOM_WAIT_TIMEOUT')),timeout))]);
+  return send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true},timeout);
 }
 const dom = body => evaluate('('+body+')');
 async function onPage(text,ms=30000){
@@ -371,7 +372,7 @@ async function nav(label){
           return false;
         }
         return stage==='confirmation'||stage==='home-ready'?stage:false;
-      },'HOME_NAVIGATION_OR_CONFIRM',45000);
+      },'HOME_NAVIGATION_OR_CONFIRM',45000,false);
       if(first==='confirmation'){
         phase='visible-ui-home-confirm';
         try {
@@ -405,7 +406,7 @@ async function nav(label){
         // class label or a stale/inert DOM fragment must not count as success.
         await sleep(450);
         return (await sample())==='home-ready';
-      },'HOME_INTERACTIVE_READY',60000);
+      },'HOME_INTERACTIVE_READY',60000,false);
       console.log('AP02_HOME_NAVIGATION_CONFIRMED',api);
     } catch(error){
       homeNavigationDiagnostic=safeHomeNavigationReport(transitions,lastFrame);
@@ -469,7 +470,7 @@ async function createClass(name){
       return false;
     }
     return state.ready&&state.classVisible;
-  },'INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT',90000);
+  },'INTERACTIVE_SYNTHETIC_CLASS_AFTER_PROMPT',90000,false);
   if(clickError)console.log('AP02_CLASS_PROMPT_RUNTIME_RECOVERED',api);
   const hasDone=await dom('document.body?.innerText?.includes("Dati Salvati in Locale con Successo!")');
   if(hasDone){
@@ -815,18 +816,14 @@ try{
   console.log('AP02_F2_DEVICE_SUCCESS',sha,api);
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
-  const rawCode=String(error?.message||'UNKNOWN');
-  // Reject output-bearing command messages: only fixed, transport-safe
-  // categories are allowed to survive the diagnostic artifact.
-  const code=error?.code==='ETIMEDOUT'||/spawnSync adb ETIMEDOUT/.test(rawCode)
-    ?'ADB_TRANSPORT_TIMEOUT'
-    :/^[A-Z0-9:_-]{1,140}$/.test(rawCode)?rawCode:'UNCLASSIFIED_LAB_FAILURE';
-  writeFileSync(out+'/failure.json',JSON.stringify({candidate:sha,api,phase,code,
+  const {category,code}=classifyFailure(error);
+  writeFileSync(out+'/failure.json',JSON.stringify({candidate:sha,api,phase,code,category,
+    observation:error instanceof LabFailure?error.observation:undefined,
     qualified:false,productionRelease:false,syntheticOnly:true,
     adbTransport:adbTransport.snapshot(),
     safActivityTrail:lastSafActivityTrail,
     homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,
     homeNavigationDiagnostic:homeNavigationDiagnostic||undefined},null,2));
-  console.error('AP02_F2_DEVICE_BLOCKED',phase,code);
+  console.error('AP02_F2_DEVICE_BLOCKED',phase,category,code);
   process.exitCode=1;
 }finally{disconnect();}
