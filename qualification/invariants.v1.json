@@ -3627,6 +3627,22 @@
       "browserSmoke": [
         "tests/browser/qualification-invariant-smoke.spec.cjs"
       ]
+    },
+    {
+      "id": "SEC-3-OUTBOUND-I01",
+      "owner": "SEC-3",
+      "statement": "Outbound UDA generation requires explicit teacher opt-in and professional classification; missing authorization and student-personal classification are rejected before external provider use. Local embedding routes and direct clients reject unsupported providers and non-loopback endpoints and do not follow redirects to another endpoint. Qualification uses an actual isolated production-mode server with bounded readiness and request deadlines, and never retries a failed security assertion or accepts an unavailable server as a pass. No personal student data, release or merge authority.",
+      "impactPaths": [
+        "src/security/outboundBoundaryClosure.test.ts",
+        "src/security/dataClassification.ts",
+        "src/services/embeddingService.ts",
+        "src/components/UdaGanttView.tsx",
+        "server.ts",
+        "src/server/runtimeHost.ts"
+      ],
+      "tests": [
+        "src/security/outboundBoundaryClosure.test.ts"
+      ]
     }
   ]
 }
