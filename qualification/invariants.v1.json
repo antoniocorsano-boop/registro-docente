@@ -3584,7 +3584,7 @@
     {
       "id": "CI-FAST-01-I01",
       "owner": "CI-FAST-01",
-      "statement": "Development-only CI checks on non-main stacked pull requests must validate exact head and base SHAs, enforce the canonical invariant registry and fail-closed impacted test coverage, run only changed or inherited Bun contracts plus source-relevant typecheck/build and the shared complete native laboratory Node 22 contract collection, and cancel superseded runs without using write credentials or student data. They must explicitly report NOT_FULL_QUALIFICATION and preserve unchanged every existing main-targeted full security, Chromium, native Android, backup/restore, independent review and release gate. Unrecognized, missing, forged or incompatible test paths cannot be treated as a successful fast qualification.",
+      "statement": "Development-only CI checks on non-main stacked pull requests must validate exact head and base SHAs, enforce the canonical invariant registry and fail-closed impacted test coverage, run only changed or inherited Bun contracts plus source-relevant typecheck/build, and cancel superseded runs without using write credentials or student data. They must explicitly report NOT_FULL_QUALIFICATION and preserve unchanged every existing main-targeted full security, Chromium, native Android, backup/restore, independent review and release gate. Unrecognized, missing, forged or incompatible test paths cannot be treated as a successful fast qualification.",
       "impactPaths": [
         ".github/workflows/ci-fast-development.yml",
         "scripts/qualification/ci-fast-plan.mjs",
@@ -3648,7 +3648,7 @@
     {
       "id": "QA-STABILITY-01-Q4-I01",
       "owner": "QA-STABILITY-01",
-      "statement": "Q4 is isolated from the main-targeted F2 qualification and executes three independent trials for each of Android API 32 and 36, on the exact PR 414 candidate and frozen base, through the same six-stage F2 workflow and added Q3 evidence gate. Each trial preserves distinct aggregate identity and evidence, does not retry failed jobs for acceptance, has read-only permissions, and cannot authorize merge or publication. A single exact-SHA Node 22 preflight runs the entire F2 native contract collection before any matrix job, and CI-FAST runs the identical entrypoint.",
+      "statement": "Q4 is isolated from the main-targeted F2 qualification and executes three independent trials for each of Android API 32 and 36, on the exact PR 414 candidate and frozen base, through the same six-stage F2 workflow and added Q3 evidence gate. Each trial preserves distinct aggregate identity and evidence, does not retry failed jobs for acceptance, has read-only permissions, and cannot authorize merge or publication.",
       "impactPaths": [
         ".github/workflows/qa-stability-01-q4.yml",
         ".github/workflows/ap02-f2-native-device.yml",
@@ -3656,6 +3656,24 @@
         "scripts/diagnostics/run-native-lab-contracts.mjs",
         "scripts/diagnostics/native-saf-lifecycle-probe.test.mjs",
         ".github/workflows/ci-fast-development.yml"
+      ],
+      "tests": [
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        "scripts/diagnostics/native-saf-lifecycle-probe.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-Q4-I02",
+      "owner": "QA-STABILITY-01",
+      "statement": "The shared Node 22 F2 contract runner and invariant impact checks must pass on the exact Q4 head and frozen base before any six-trial matrix job. Boot readiness accepts a stopped animation service or independently verified absent bootanimation process when the service property is empty. Emulator identity requires an exact SDK package revision, executable SHA-256, provenance and successful compatible executable version output or a classified probe failure; missing or mismatching identity fails closed. Earlier published invariant semantics remain unchanged.",
+      "impactPaths": [
+        "scripts/diagnostics/native-lab-readiness.mjs",
+        "scripts/diagnostics/ap02-native-device-v7.mjs",
+        ".github/workflows/qa-stability-01-q4.yml",
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/ci-fast-development.yml",
+        "scripts/diagnostics/run-native-lab-contracts.mjs"
       ],
       "tests": [
         "scripts/diagnostics/native-lab-runtime.test.mjs",

@@ -185,6 +185,12 @@ jobs:
             .candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and
             .bootReady==true and .packageReady==true and .foreground==true and .cdpReady==true and
             .complete==true and .launches==2 and
+            (.bootObservation=="ready-stopped" or .bootObservation=="ready-absent-verified") and
+            (.emulatorIdentity as $e | $e.version==.versions.emulator and
+              ($e.binarySha256 | test("^[a-f0-9]{64}$")) and
+              ($e.revision | test("^[0-9]+([.][0-9]+){1,4}$")) and
+              (($e.source=="executable" and $e.probeStatus=="ok") or
+               ($e.source=="sdk-package" and (["timeout","spawn-error","nonzero-exit","missing-version"] | index($e.probeStatus)!=null)))) and
             (.versions | [.adb,.platformTools,.emulator,.webviewPackage,.webviewVersion,.androidBuild,.runnerImage,.runnerVersion,.node,.chromium] | all(type=="string" and length>0))
           ' ap02-device-evidence/environment.json
           jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '

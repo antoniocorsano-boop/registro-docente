@@ -6,8 +6,9 @@ import assert from 'node:assert/strict';
 import { LabFailure, classifyFailure, commandBudget, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { isInteractiveElement, publicSurfaceFrame, waitPublicSurface, waitBootReadiness, createPublicAuthentication, emulatorIdentity, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
@@ -52,7 +53,7 @@ const surfaceTransitions=[];
 const readyDestinations=new Set();
 const environment={schemaVersion:1,candidate:sha,api,syntheticOnly:true,productionRelease:false,
   runId:process.env.GITHUB_RUN_ID||null,runAttempt:process.env.GITHUB_RUN_ATTEMPT||null,
-  bootReady:false,packageReady:false,launches:0,foreground:false,cdpReady:false,versions:null,complete:false};
+  bootReady:false,bootObservation:null,packageReady:false,launches:0,foreground:false,cdpReady:false,versions:null,emulatorIdentity:null,complete:false};
 function saveEnvironment(){writeFileSync(out+'/environment.json',JSON.stringify(environment,null,2));}
 const surfaceExpression=(label)=>'('+publicSurfaceFrame.toString()+')('+JSON.stringify(label)+',document,getComputedStyle,'+isInteractiveElement.toString()+')';
 const interactiveSource=isInteractiveElement.toString();
@@ -78,15 +79,26 @@ async function waitDestination(destination,label=null,ms=60000,reauth=true){
 async function preflightBoot(){
   phase='preflight-boot';
   saveEnvironment();
-  await waitBootReadiness(adb);
+  await waitBootReadiness(adb,{onState:state=>{environment.bootObservation=state;}});
   environment.bootReady=true;
   saveEnvironment();
   if(Number(adb('shell','getprop','ro.build.version.sdk'))!==api)throw new LabFailure('PREFLIGHT_WRONG_API');
   phase='preflight-versions';
-  const emulatorProbe=spawnSync((process.env.ANDROID_HOME||process.env.ANDROID_SDK_ROOT)+'/emulator/emulator',['-version'],
+  const sdk=process.env.ANDROID_HOME||process.env.ANDROID_SDK_ROOT;
+  if(!sdk)throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');
+  const directory=join(sdk,'emulator'),binary=join(directory,'emulator');
+  let metadata,binarySha256;
+  try{
+    metadata=readFileSync(join(directory,'source.properties'),'utf8');
+    binarySha256=sha256(readFileSync(binary));
+  }catch{throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');}
+  const emulatorProbe=spawnSync(binary,['-version'],
     {encoding:'utf8',timeout:commandBudget(10000),killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']});
-  if(emulatorProbe.error||emulatorProbe.status!==0)throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');
-  environment.versions=versionFacts({adb:adb('version'),emulator:String(emulatorProbe.stdout||'')+'\n'+String(emulatorProbe.stderr||''),
+  const identity=emulatorIdentity({probe:emulatorProbe,packageMetadata:metadata,binarySha256});
+  environment.emulatorIdentity=identity;
+  saveEnvironment();
+  if(!identity.version)throw new LabFailure('PREFLIGHT_VERSION_INCOMPLETE');
+  environment.versions=versionFacts({adb:adb('version'),emulator:'Android emulator version '+identity.version+(identity.build?' (build_id '+identity.build+')':''),
     webview:adb('shell','dumpsys','webviewupdate'),androidBuild:adb('shell','getprop','ro.build.fingerprint'),
     runnerImage:process.env.ImageOS,runnerVersion:process.env.ImageVersion,node:process.version});
   saveEnvironment();

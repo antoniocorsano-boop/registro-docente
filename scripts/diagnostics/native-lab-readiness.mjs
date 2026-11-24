@@ -76,10 +76,24 @@ export function bootReady({transport,boot,animation,packageManager}){
 function packageServicePending(value){
   return /^(?:(?:cmd|pm): (?:Can't|Cannot) find service: package|Error: Could not access the Package Manager\. Is the system running\?)$/i.test(String(value??'').trim());
 }
-export function sampleBootReadiness(adb){
-  if(adb('get-state')!=='device')return false;
-  if(adb('shell','getprop','sys.boot_completed')!=='1')return false;
-  if(adb('shell','getprop','init.svc.bootanim')!=='stopped')return false;
+// Some emulator images start with -no-boot-anim: the init service may not
+// exist. Only a valid process list proving no bootanimation process permits
+// that alternative. An explicitly running or unknown service never qualifies.
+export function bootAnimationState(service,processList){
+  if(service==='stopped')return 'stopped';
+  if(service!=='')return service==='running'?'running':'not-ready';
+  const rows=String(processList??'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(rows.shift()!=='NAME'||!rows.some(x=>x==='init'||x==='/init')||
+    rows.some(x=>/\s/.test(x)))return 'not-ready';
+  return rows.some(x=>/(?:^|\/)bootanimation(?:$|:)/.test(x))?'running':'absent-verified';
+}
+export function sampleBootReadiness(adb,onState=()=>{}){
+  if(adb('get-state')!=='device'){onState('transport-not-ready');return false;}
+  if(adb('shell','getprop','sys.boot_completed')!=='1'){onState('boot-not-ready');return false;}
+  const service=adb('shell','getprop','init.svc.bootanim');
+  const animation=bootAnimationState(service,service===''?adb('shell','ps','-A','-o','NAME'):undefined);
+  onState('animation-'+animation);
+  if(!['stopped','absent-verified'].includes(animation))return false;
   let packageManager;
   try{packageManager=adb('shell','pm','path','android');}
   catch(error){
@@ -93,11 +107,13 @@ export function sampleBootReadiness(adb){
     throw error;
   }
   if(packageServicePending(packageManager))throw new LabFailure('PREFLIGHT_PACKAGE_SERVICE_PENDING');
-  return bootReady({transport:'device',boot:'1',animation:'stopped',packageManager});
+  const ready=bootReady({transport:'device',boot:'1',animation:'stopped',packageManager});
+  if(!ready)onState('package-not-ready');else onState('ready-'+animation);
+  return ready;
 }
-export async function waitBootReadiness(adb,{timeoutMs=90000,intervalMs=1000,now,sleep}={}){
+export async function waitBootReadiness(adb,{timeoutMs=90000,intervalMs=1000,now,sleep,onState}={}){
   try{
-    return await observeUntil(()=>sampleBootReadiness(adb),{
+    return await observeUntil(()=>sampleBootReadiness(adb,onState),{
       timeoutMs,intervalMs,now,sleep,retryReadErrors:true,
       retryCodes:['ADB_TRANSPORT_OFFLINE','ADB_TRANSPORT_TIMEOUT','PREFLIGHT_PACKAGE_SERVICE_PENDING']
     });
@@ -122,6 +138,23 @@ export function createPublicAuthentication({waitForLock,fill,submit,waitForSessi
     await submit();onStep('unlock-requested');
     await waitForSession();onStep('unlocked');
   };
+}
+// The SDK package revision is an independent, inspectable identity of the
+// exact installed emulator binary; never infer it from the API level.
+export function emulatorIdentity({probe,packageMetadata,binarySha256}){
+  const sha=/^[a-f0-9]{64}$/.test(String(binarySha256??''))?binarySha256:null;
+  const revision=String(packageMetadata??'').match(/^Pkg\.Revision\s*=\s*(\d+(?:\.\d+){1,4})\s*$/m)?.[1]??null;
+  const output=String(probe?.stdout??'')+'\n'+String(probe?.stderr??'');
+  const version=output.match(/Android emulator version (\d+(?:\.\d+){1,4})/i)?.[1]??null;
+  const build=output.match(/\bbuild_id (\d{1,20})\b/)?.[1]??null;
+  const reason=probe?.error?.code==='ETIMEDOUT'?'timeout':probe?.error?'spawn-error':
+    probe?.status!==0?'nonzero-exit':!version?'missing-version':'ok';
+  if(!sha||!revision)return {version:null,source:null,revision,binarySha256:sha,build:null,probeStatus:reason};
+  // Only accept output from a successful command consistent with the SDK revision.
+  if(reason==='ok'&&version!==revision&&!version.startsWith(revision+'.'))
+    return {version:null,source:null,revision,binarySha256:sha,build:null,probeStatus:'revision-mismatch'};
+  return {version:reason==='ok'?version:revision,source:reason==='ok'?'executable':'sdk-package',
+    revision,binarySha256:sha,build:reason==='ok'?build:null,probeStatus:reason};
 }
 export function versionFacts(raw){
   const version=(value)=>/^\d+(?:\.\d+){1,4}$/.test(String(value??''))?String(value):null;

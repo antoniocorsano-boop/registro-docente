@@ -23,6 +23,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -30,10 +31,13 @@ jobs:
         shell: bash
         env:
           CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = 1
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node scripts/qualification/check-invariants.mjs
+          node scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --manifest q4-preflight-impact.json
           node scripts/diagnostics/run-native-lab-contracts.mjs
   q4:
     needs: preflight

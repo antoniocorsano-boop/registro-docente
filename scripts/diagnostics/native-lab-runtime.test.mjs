@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication } from './native-lab-readiness.mjs';
+import { isInteractiveElement, classifySurface, waitPublicSurface, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -371,4 +371,29 @@ test('Q4 preflight and CI-FAST invoke the same complete Node runner as F2',()=>{
   for(const name of ['native-process-probe','native-ui-driver','native-saf-lifecycle-probe','native-lab-runtime'])
     assert.ok(code.includes('scripts/diagnostics/'+name+'.test.mjs'));
   assert.ok(code.includes("['--test',...tests]"));
+});
+
+test('Q4 boot proves absent animation only from empty service and complete process list',()=>{
+  assert.equal(bootAnimationState('stopped'), 'stopped');
+  assert.equal(bootAnimationState('', 'NAME\ninit\nsystem_server'),'absent-verified');
+  for(const list of ['', 'NAME\nsystem_server','NAME\ninit\nbootanimation','NAME\ninit\n/system/bin/bootanimation','error: unavailable'])
+    assert.notEqual(bootAnimationState('',list),'absent-verified');
+  assert.equal(bootAnimationState('running','NAME\ninit'),'running');
+  const states=[],calls=[];
+  assert.equal(sampleBootReadiness((...args)=>{
+    calls.push(args.join(' '));
+    return {'get-state':'device','shell getprop sys.boot_completed':'1','shell getprop init.svc.bootanim':'','shell ps -A -o NAME':'NAME\ninit\nsystem_server','shell pm path android':'package:/system/framework/framework-res.apk'}[args.join(' ')];
+  },s=>states.push(s)),true);
+  assert.deepEqual(states,['animation-absent-verified','ready-absent-verified']);
+  assert.equal(calls.at(-1),'shell pm path android');
+});
+test('Q4 exact installed emulator identity survives classified version-probe failure, rejects mismatch',()=>{
+  const p={packageMetadata:'Pkg.Desc=Android Emulator\nPkg.Revision=37.3.10\n',binarySha256:'a'.repeat(64)};
+  const success=emulatorIdentity({...p,probe:{status:0,stdout:'Android emulator version 37.3.10.0 (build_id 16970787)'}});
+  assert.equal(success.version,'37.3.10.0');assert.equal(success.source,'executable');
+  const failed=emulatorIdentity({...p,probe:{status:1,stderr:'private process detail'}});
+  assert.deepEqual(failed,{version:'37.3.10',source:'sdk-package',revision:'37.3.10',binarySha256:'a'.repeat(64),build:null,probeStatus:'nonzero-exit'});
+  assert.equal(emulatorIdentity({...p,probe:{status:0,stdout:'Android emulator version 38.0.1.0'}}).version,null);
+  assert.equal(emulatorIdentity({...p,binarySha256:null,probe:{status:1}}).version,null);
+  assert.equal(emulatorIdentity({...p,packageMetadata:'',probe:{status:1}}).version,null);
 });
