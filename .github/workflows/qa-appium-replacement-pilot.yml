@@ -5,11 +5,44 @@ on:
     paths:
       - '.github/workflows/qa-appium-replacement-pilot.yml'
       - 'scripts/diagnostics/appium-pilot/**'
+      - 'qualification/invariants.v1.json'
 permissions:
   contents: read
 jobs:
+  preflight:
+    if: ${{ github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.number == 415 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && github.head_ref == 'qa/appium-replacement-pilot' && github.base_ref == 'qa/qa-stability-01-q2' && github.event.pull_request.base.sha == '4474a47c3e9455382740348c45d538b90b073eca' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact candidate contracts before any emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node scripts/qualification/check-invariants.mjs
+          node scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --manifest /tmp/appium-impact.json
+          node --test scripts/diagnostics/appium-pilot/contract.test.mjs
+          python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
+          bash -n scripts/diagnostics/appium-pilot/run.sh
+      - name: Validate workflow with actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/qa-appium-replacement-pilot.yml
   pilot:
-    if: ${{ github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && github.head_ref == 'qa/appium-replacement-pilot' && github.base_ref == 'qa/qa-stability-01-q2' && github.event.pull_request.base.sha == '4474a47c3e9455382740348c45d538b90b073eca' }}
+    needs: preflight
+    if: ${{ github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.number == 415 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && github.head_ref == 'qa/appium-replacement-pilot' && github.base_ref == 'qa/qa-stability-01-q2' && github.event.pull_request.base.sha == '4474a47c3e9455382740348c45d538b90b073eca' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 40
     strategy:
@@ -20,7 +53,6 @@ jobs:
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
       AP02_API: ${{ matrix.api }}
-      APPIUM_HOME: ${{ runner.temp }}/appium-q5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -33,7 +65,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           git merge-base --is-ancestor 4474a47c3e9455382740348c45d538b90b073eca HEAD
-          test -z "$(git diff --name-only 4474a47c3e9455382740348c45d538b90b073eca HEAD | grep -vE '^(.github/workflows/qa-appium-replacement-pilot.yml|scripts/diagnostics/appium-pilot/[^/]+)$' || true)"
+          test -z "$(git diff --name-only 4474a47c3e9455382740348c45d538b90b073eca HEAD | grep -vE '^(\.github/workflows/qa-appium-replacement-pilot\.yml|scripts/diagnostics/appium-pilot/[^/]+|qualification/invariants\.v1\.json)$' || true)"
           python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
       - uses: actions/setup-node@v4
         with:
@@ -46,6 +78,20 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - name: Install isolated open-source automation stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APPIUM_HOME="$RUNNER_TEMP/appium-q5"
+          printf 'APPIUM_HOME=%s\n' "$APPIUM_HOME" >> "$GITHUB_ENV"
+          npm install --global --no-audit --no-fund appium@3.8.0
+          appium driver install uiautomator2@8.6.0
+          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
+          appium --version
+          appium driver list --installed
+          appium driver doctor uiautomator2
       - name: Build exact real Web UI and separate debug-only Android laboratory
         shell: bash
         run: |
@@ -93,16 +139,6 @@ jobs:
         run: |
           test -e /dev/kvm
           sudo chmod 666 /dev/kvm
-      - name: Install isolated open-source automation stack
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --global --no-audit --no-fund appium@3.8.0
-          appium driver install uiautomator2@8.6.0
-          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
-          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
-          appium --version
-          appium driver list --installed
       - name: Appium real installed application pilot
         uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
         with:

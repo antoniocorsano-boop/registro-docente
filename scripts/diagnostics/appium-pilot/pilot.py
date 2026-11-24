@@ -4,10 +4,12 @@ Not F2 qualification; no application hooks, no synthetic PASS, no mutation repla
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -31,7 +33,8 @@ def stage(name, next_phase):
     print("APPIUM_PILOT_STAGE_PASS", name, flush=True)
 
 def wait(driver, condition, seconds=60):
-    return WebDriverWait(driver, seconds, poll_frequency=0.5).until(condition)
+    return WebDriverWait(driver, seconds, poll_frequency=0.5,
+                         ignored_exceptions=(StaleElementReferenceException,)).until(condition)
 
 def visible(driver, selector):
     return wait(driver, EC.visibility_of_element_located((By.CSS_SELECTOR, selector)))
@@ -58,12 +61,53 @@ def assert_native_foreground(driver):
     if driver.current_package != PKG:
         raise RuntimeError("NATIVE_FOREGROUND_MISMATCH")
 
+def process_probe():
+    return subprocess.run(["adb", "shell", "pidof", PKG], capture_output=True, text=True, timeout=10)
+
+def assert_running():
+    result = process_probe()
+    pids = result.stdout.split()
+    if result.returncode != 0 or result.stderr.strip() or not pids or not all(
+            part.isascii() and part.isdigit() for part in pids):
+        raise RuntimeError("PROCESS_PRESENCE_NOT_VERIFIED")
+
 def assert_stopped():
-    # Independent process absence, not inferred from a successful stop command.
-    for _ in range(2):
-        result = subprocess.run(["adb", "shell", "pidof", PKG], capture_output=True, text=True, timeout=10)
-        if result.returncode != 1 or result.stdout.strip():
+    for index in range(2):
+        if index:
+            time.sleep(0.5)
+        result = process_probe()
+        if result.returncode != 1 or result.stdout.strip() or result.stderr.strip():
             raise RuntimeError("PROCESS_ABSENCE_NOT_VERIFIED")
+
+def home_ready(driver):
+    consecutive = 0
+    def sample(d):
+        nonlocal consecutive
+        frame = d.execute_script("""
+            const visible = e => !!e && e.getClientRects().length > 0 &&
+                !e.closest('[inert],[hidden],[aria-hidden="true"]') &&
+                getComputedStyle(e).visibility === 'visible';
+            const unique = (selector, label=null) =>
+                [...document.querySelectorAll(selector)].filter(e => visible(e) &&
+                  (label===null || e.textContent.trim()===label)).length===1;
+            const gate = unique('h1','Sicurezza non disponibile') ||
+                (['Configura archivio protetto','Sblocca Registro'].some(label=>unique('h1',label)) &&
+                 [...document.querySelectorAll('p.text-rose-300')].some(visible));
+            return {
+              ready: document.visibilityState==='visible' &&
+                !document.querySelector('#vault-password') &&
+                unique('#today-heading') &&
+                unique('h1,h2','Le mie classi') &&
+                unique('button','Nuova Classe') &&
+                unique('[data-testid="header01-brand-navigation"]'),
+              gateError: gate
+            };
+        """)
+        if frame["gateError"]:
+            raise RuntimeError("PUBLIC_GATE_ERROR")
+        consecutive = consecutive + 1 if frame["ready"] else 0
+        return consecutive >= 2
+    wait(driver, sample)
 
 def main():
     opts = UiAutomator2Options().load_capabilities({
@@ -90,11 +134,11 @@ def main():
         visible(driver, "#vault-password").send_keys(PASSWORD)
         click(driver, "form button[type=submit]")
         # Read-only confirmation of the real product state, not click acknowledgement.
-        heading(driver, "Le mie classi")
-        visible(driver, "#today-heading")
+        home_ready(driver)
         stage("professional-home", "native-stop-verified")
         driver.switch_to.context("NATIVE_APP")
         assert_native_foreground(driver)
+        assert_running()
         if not driver.terminate_app(PKG):
             raise RuntimeError("NATIVE_TERMINATION_NOT_ACKNOWLEDGED")
         assert_stopped()
@@ -107,8 +151,7 @@ def main():
         stage("cold-lock", "cold-authenticated-home")
         visible(driver, "#vault-password").send_keys(PASSWORD)
         click(driver, "form button[type=submit]")
-        heading(driver, "Le mie classi")
-        visible(driver, "#today-heading")
+        home_ready(driver)
         stage("cold-authenticated-home", "complete")
         evidence.update(status="PASS", failurePhase=None)
     except Exception as exc:

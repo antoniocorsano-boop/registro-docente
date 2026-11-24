@@ -3697,6 +3697,19 @@
       "tests": [
         "scripts/diagnostics/native-lab-runtime.test.mjs"
       ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I01",
+      "owner": "QA-STABILITY-01",
+      "statement": "The isolated Appium feasibility pilot is confined to the exact temporary child PR of the frozen Q4 candidate, requires read-only credentials, exact candidate provenance and static preflight before API 32/36 emulators, uses real installed synthetic professional UI and native process stop/reopening, never replays mutating commands or treats a pilot as full F2, and exports only categorical non-sensitive evidence. Existing F2 acceptance, invariants and integration gates remain unchanged.",
+      "impactPaths": [
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/appium-pilot/"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ]
     }
   ]
 }
