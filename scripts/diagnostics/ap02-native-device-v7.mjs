@@ -10,6 +10,7 @@ import { parseNativeNodes, resumedActivity, hasArea } from './native-ui-driver.m
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { createAdbTransportTrace } from './native-adb-transport-probe.mjs';
+import { classifyHomeNavigationFrame, safeHomeNavigationReport } from './native-home-navigation-probe.mjs';
 
 const pkg = 'it.trama.registrodocente.lab.ap02v7';
 const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
@@ -268,6 +269,22 @@ function button(label) {
 // Collect only aggregate, non-sensitive DOM facts on an Android Home-confirm
 // failure. Never retain dialog text, class names, markup or screenshots.
 let homeConfirmDiagnostic = null;
+let homeNavigationDiagnostic = null;
+// Inspect only fixed public UI predicates; never extract names, screen text,
+// passwords, documents, or WebView markup into a diagnostic artifact.
+const publicHomeFrame = () => dom('(function(){'+
+  'const visible=e=>Boolean(e&&e.getClientRects().length>0&&!e.closest("[inert], [aria-hidden=true]")&&getComputedStyle(e).visibility==="visible");'+
+  'const buttons=Array.from(document.querySelectorAll("button"));'+
+  'const brand=document.querySelector("[data-testid=header01-brand-navigation]");'+
+  'const confirmed=document.querySelector("[data-testid=header01-home-confirm]");'+
+  'return {locked:!!document.querySelector("#vault-password"),'+
+  'confirmationVisible:visible(confirmed),'+
+  'todayHeadingVisible:visible(document.querySelector("#today-heading")),'+
+  'classHeadingVisible:Array.from(document.querySelectorAll("h2")).some(e=>e.textContent?.trim()==="Le mie classi"&&visible(e)),'+
+  'newClassButtonVisible:buttons.some(e=>e.textContent?.trim()==="Nuova Classe"&&!e.disabled&&visible(e)),'+
+  'brandInteractive:visible(brand)&&!brand.disabled,'+
+  'documentVisible:document.visibilityState==="visible"};})()');
+
 async function captureHomeConfirmDiagnostic(){
   try {
     return await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
@@ -335,46 +352,69 @@ async function nav(label){
     '.filter(x=>x.textContent?.trim()==='+JSON.stringify(label)+'&&!x.disabled);'+
     'if(e.length!==1)throw Error("NAV_NOT_UNIQUE");e[0].click();return true;})()');
   if(label==='Oggi'){
-    // The drawer closes and the confirmation mounts asynchronously in React.
-    // A one-shot query can miss the dialog, leaving the real UI on the class
-    // page. Await either the visible confirmation or the actual Home heading.
-    await until(()=>dom('(function(){const confirm=document.querySelector("[data-testid=header01-home-confirm]");'+
-      'const home=Array.from(document.querySelectorAll("h2")).some(e=>'+
-      'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0'+
-      '&&getComputedStyle(e).visibility==="visible");return Boolean(confirm||home);})()'),
-      'HOME_NAVIGATION_OR_CONFIRM',25000);
-    const confirm=await dom('Boolean(document.querySelector("[data-testid=header01-home-confirm]"))');
-    if(confirm){
-      phase='visible-ui-home-confirm';
-      // Scope to the currently open, teacher-visible confirmation. A global
-      // "Torna a Oggi" lookup can match an inert or hidden navigation surface.
-      try {
-      await until(()=>dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-        'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))return false;const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
-        'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
-        '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));return a.length===1;})()'),
-        'VISIBLE_EXACT_HOME_CONFIRM',20000);
-      } catch(error) {
-        homeConfirmDiagnostic=await captureHomeConfirmDiagnostic();
-        throw error;
+    const started=Date.now(), transitions=[];
+    let lastFrame=null;
+    const sample=async()=>{
+      lastFrame=await publicHomeFrame();
+      const stage=classifyHomeNavigationFrame(lastFrame);
+      if(transitions.length===0||transitions[transitions.length-1].stage!==stage)
+        transitions.push({stage,elapsedMs:Date.now()-started});
+      return stage;
+    };
+    try {
+      // Observe the real security gate at each navigation boundary. This
+      // supports an OS-triggered Vault lock but never bypasses reauthentication.
+      const first=await until(async()=>{
+        const stage=await sample();
+        if(stage==='locked'){
+          await ensureInteractiveSession('during-home-navigation');
+          return false;
+        }
+        return stage==='confirmation'||stage==='home-ready'?stage:false;
+      },'HOME_NAVIGATION_OR_CONFIRM',45000);
+      if(first==='confirmation'){
+        phase='visible-ui-home-confirm';
+        try {
+          await until(()=>dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
+            'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))return false;const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
+            'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
+            '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));return a.length===1;})()'),
+            'VISIBLE_EXACT_HOME_CONFIRM',20000);
+        } catch(error){
+          homeConfirmDiagnostic=await captureHomeConfirmDiagnostic();
+          throw error;
+        }
+        await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
+          'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))throw Error("HOME_CONFIRM_DIALOG_MISSING");'+
+          'const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
+          'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
+          '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));'+
+          'if(a.length!==1)throw Error("HOME_CONFIRM_NOT_UNIQUE");a[0].click();return true;})()');
+        await until(()=>dom('!document.querySelector("[data-testid=header01-home-confirm]")'),
+          'HOME_CONFIRM_DISMISSED',20000);
       }
-      await dom('(function(){const root=document.querySelector("[data-testid=header01-home-confirm]");'+
-        'if(!root||!root.querySelector("[role=alertdialog][aria-modal=true]"))throw Error("HOME_CONFIRM_DIALOG_MISSING");const a=Array.from(root.querySelectorAll("button")).filter(e=>'+
-        'e.textContent?.trim()==="Torna a Oggi"&&!e.disabled&&e.getClientRects().length>0'+
-        '&&getComputedStyle(e).visibility==="visible"&&!e.closest("[inert]"));if(a.length!==1)throw Error("HOME_CONFIRM_NOT_UNIQUE");'+
-        'a[0].click();return true;})()');
-      await until(()=>dom('!document.querySelector("[data-testid=header01-home-confirm]")'),
-        'HOME_CONFIRM_DISMISSED',20000);
+      phase='visible-ui-navigation-Oggi';
+      await until(async()=>{
+        const stage=await sample();
+        if(stage==='locked'){
+          await ensureInteractiveSession('after-home-navigation');
+          return false;
+        }
+        if(stage!=='home-ready')return false;
+        // Require two real, stable, interactive Home frames. A background
+        // class label or a stale/inert DOM fragment must not count as success.
+        await sleep(450);
+        return (await sample())==='home-ready';
+      },'HOME_INTERACTIVE_READY',60000);
+      console.log('AP02_HOME_NAVIGATION_CONFIRMED',api);
+    } catch(error){
+      homeNavigationDiagnostic=safeHomeNavigationReport(transitions,lastFrame);
+      console.log('AP02_HOME_NAVIGATION_BLOCKED',api,homeNavigationDiagnostic.lastStage);
+      throw error;
     }
-  }
-  phase='visible-ui-navigation-'+label;
-  await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
-  if(label==='Oggi'){
-    await until(()=>dom('(function(){const a=Array.from(document.querySelectorAll("h2")).filter(e=>'+
-      'e.textContent?.trim()==="Le mie classi"&&e.getClientRects().length>0'+
-      '&&getComputedStyle(e).visibility==="visible");'+
-      'return a.length===1&&!document.querySelector("[data-testid=header01-home-confirm]");})()'),
-      'HOME_VIEW_CONFIRMED',25000);
+  } else {
+    phase='visible-ui-navigation-'+label;
+    await onPage(label==='Privacy'?'Ripristina backup cifrato':'Le mie classi');
   }
   if(label==='Privacy'){
     phase='visible-ui-privacy-v7-ready';
@@ -750,7 +790,8 @@ try{
     qualified:false,productionRelease:false,syntheticOnly:true,
     adbTransport:adbTransport.snapshot(),
     safActivityTrail:lastSafActivityTrail,
-    homeConfirmDiagnostic:homeConfirmDiagnostic||undefined},null,2));
+    homeConfirmDiagnostic:homeConfirmDiagnostic||undefined,
+    homeNavigationDiagnostic:homeNavigationDiagnostic||undefined},null,2));
   console.error('AP02_F2_DEVICE_BLOCKED',phase,code);
   process.exitCode=1;
 }finally{disconnect();}

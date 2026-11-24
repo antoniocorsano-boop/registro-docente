@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyResumedActivity, summarizeSafActivityTrail, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { classifyAdbCommand, createAdbTransportTrace } from './native-adb-transport-probe.mjs';
+import { classifyHomeNavigationFrame, safeHomeNavigationReport } from './native-home-navigation-probe.mjs';
 
 const app = 'it.trama.registrodocente.lab.ap02v7';
 test('F2-DIAG-03 recognizes app, DocumentsUI and unrelated foreground activities without raw data', () => {
@@ -85,4 +86,35 @@ test('F2-DIAG-04 retains only a bounded, synthetic transport trace and allowed r
   assert.equal(actual.syntheticOnly,true);
   assert.equal(JSON.stringify(actual).includes('synthetic-secret'),false);
   assert.equal(JSON.stringify(actual).includes('private.xml'),false);
+});
+
+test('F2-DIAG-05 requires a complete, interactive Home and never accepts protected or stale views', () => {
+  const valid={
+    locked:false,confirmationVisible:false,todayHeadingVisible:true,
+    classHeadingVisible:true,newClassButtonVisible:true,brandInteractive:true,
+    documentVisible:true
+  };
+  assert.equal(classifyHomeNavigationFrame(valid),'home-ready');
+  assert.equal(classifyHomeNavigationFrame({...valid,locked:true}),'locked');
+  assert.equal(classifyHomeNavigationFrame({...valid,confirmationVisible:true}),'confirmation');
+  assert.equal(classifyHomeNavigationFrame({...valid,documentVisible:false}),'background');
+  assert.equal(classifyHomeNavigationFrame({...valid,todayHeadingVisible:false}),'other-view');
+  assert.equal(classifyHomeNavigationFrame({...valid,brandInteractive:false}),'home-not-interactive');
+  assert.equal(classifyHomeNavigationFrame({...valid,newClassButtonVisible:false}),'home-not-interactive');
+  assert.equal(classifyHomeNavigationFrame(null),'unavailable');
+});
+test('F2-DIAG-05 retains only classified navigation stages, not raw private UI details', () => {
+  const trace=safeHomeNavigationReport([
+    {stage:'other-view',elapsedMs:100,privateField:'secret-user'},
+    {stage:'locked',elapsedMs:200,secret:'secret-user'},
+    {stage:'home-ready',elapsedMs:1000},
+    {stage:'UNEXPECTED_NAME',elapsedMs:1500}
+  ],{locked:false,todayHeadingVisible:true,documentVisible:true,
+    classHeadingVisible:true,newClassButtonVisible:true,brandInteractive:true,
+    password:'secret-user',className:'secret-user'});
+  assert.equal(trace.lastStage,'home-ready');
+  assert.deepEqual(trace.transitions.map(x=>x.stage),
+    ['other-view','locked','home-ready','unavailable']);
+  assert.equal(trace.rawDomStored,false);
+  assert.equal(JSON.stringify(trace).includes('secret-user'),false);
 });
