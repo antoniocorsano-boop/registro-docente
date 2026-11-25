@@ -20,3 +20,24 @@ export function approvedAssessmentSubjectCodes(subjectCode: string): readonly st
   }
   return [subjectCode];
 }
+
+/** Equivalence is restricted to the explicitly recognized historical alias.
+ * Opaque identifiers (including TECH) remain case-sensitive and distinct.
+ * This predicate selects a context; it does not grant archive authority.
+ */
+export function sameAssessmentSubject(a:string,b:string):boolean {
+  return approvedAssessmentSubjectCodes(a).includes(b);
+}
+
+type DocumentScope={readonly classId:string;readonly schoolYear:string;readonly subjectCode:string};
+/** Use only after exact independent archive validation. A second equivalent
+ * document is ambiguous, never a reason to merge, rewrite or choose one.
+ */
+export function selectUniqueAssessmentDocument<T extends DocumentScope>(
+ documents:readonly T[],scope:DocumentScope
+):T|undefined {
+ const matching=documents.filter(d=>d.classId===scope.classId&&
+  d.schoolYear===scope.schoolYear&&sameAssessmentSubject(d.subjectCode,scope.subjectCode));
+ if(matching.length>1)throw Error('Ambiguous assessment document');
+ return matching[0];
+}

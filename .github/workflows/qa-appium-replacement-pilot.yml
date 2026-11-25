@@ -90,8 +90,15 @@ jobs:
             test "$(git rev-parse "$composition^{tree}")" = "$approved_tree"
             git merge-base --is-ancestor "$composition" HEAD
             expected=$(printf '%s\n' .github/workflows/ap02-f2-native-device.yml .github/workflows/qa-appium-replacement-pilot.yml scripts/diagnostics/appium-pilot/contract.test.mjs qualification/invariants.v1.json | LC_ALL=C sort)
-            actual=$(git diff --name-only --no-renames "$composition" HEAD | LC_ALL=C sort)
+            admission_base=177cab29ecbc8e216d656a9d4c9dc66664932892
+            test "$(git rev-list --parents -n 1 "$admission_base")" = "$admission_base $composition"
+            git merge-base --is-ancestor "$admission_base" HEAD
+            actual=$(git diff --name-only --no-renames "$composition" "$admission_base" | LC_ALL=C sort)
             test "$actual" = "$expected"
+            # R3a: exclusively the reviewed historical-discipline correction and its contracts.
+            expected_r3a=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs src/App.tsx src/assessment/assessmentEvidenceMutation.ts src/assessment/assessmentSubjectScope.ts src/assessment/dailyAssessmentSetup.ts src/assessment/dailyCriterionRecordingContext.ts src/assessment/dailyPlannedAssessmentCompletion.ts src/assessment/studentCriterionReadModel.ts src/security/candProdHistoricalSubject.test.ts | LC_ALL=C sort)
+            actual_r3a=$(git diff --name-only --no-renames "$admission_base" HEAD | LC_ALL=C sort)
+            test "$actual_r3a" = "$expected_r3a"
             python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
             exit 0
           fi

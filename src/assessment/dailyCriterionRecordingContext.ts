@@ -6,7 +6,7 @@ import type {AppSettings,ClassData} from '../types';
 import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence';
 import {validateAssessmentArchiveV1,type ApprovedAssessmentScope} from './assessmentArchive';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
-import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {approvedAssessmentSubjectCodes,resolveAssessmentSubjectCode,selectUniqueAssessmentDocument} from './assessmentSubjectScope';
 import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 export interface CriterionRecordingOption {
@@ -32,7 +32,7 @@ export function resolveDailyCriterionRecordingContext(
   const schoolYear=canonicalAssessmentSchoolYear(settings.year);
   if(!subjectCode||!schoolYear)return {status:'unverified'};
   const approved={classId:currentClass.id,schoolYear,subjectCode};
-  const authorized=approvedScopes??[approved];
+  const authorized=approvedScopes??approvedAssessmentSubjectCodes(subjectCode).map(code=>({...approved,subjectCode:code}));
   if(!authorized.some(s=>s.classId===approved.classId&&
    s.schoolYear===approved.schoolYear&&s.subjectCode===approved.subjectCode))
    return {status:'unverified'};
@@ -42,14 +42,9 @@ export function resolveDailyCriterionRecordingContext(
    authorized.filter(s=>s.classId===currentClass.id));
   if(!result.valid||result.state!=='present')return {status:'unverified'};
   const cls=snapshotAssessmentData(currentClass) as ClassData;
-  const sections=cls.assessmentEvidenceV1?.documents.filter(section=>
-    section.document.classId===approved.classId&&
-    section.document.schoolYear===approved.schoolYear&&
-    section.document.subjectCode===approved.subjectCode);
-  if(sections?.length===0)return {status:'absent'};
-  if(!sections||sections.length!==1)return {status:'unverified'};
-  const document=sections[0].document;
-  const scope:AssessmentScopeV1={...approved,studentIds:cls.students.map(s=>s.id)};
+  const document=selectUniqueAssessmentDocument(cls.assessmentEvidenceV1!.documents.map(section=>section.document),approved);
+  if(!document)return {status:'absent'};
+  const scope:AssessmentScopeV1={...approved,subjectCode:document.subjectCode,studentIds:cls.students.map(s=>s.id)};
   const criteria=new Map(document.criteria.map(c=>[c.revisionId,c.description]));
   const assessments=document.assessments.filter(a=>a.status==='completed'&&
     !document.assessments.some(next=>next.supersedesRevisionId===a.revisionId)).map(a=>({

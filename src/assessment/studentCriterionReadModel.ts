@@ -4,12 +4,12 @@
  * from an unverified archived document's claimed authority.
  */
 import type {AppSettings,ClassData} from '../types';
-import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence';
+import type {AssessmentScopeV1} from './assessmentEvidence';
 import type {AssessmentArchiveV1,ApprovedAssessmentScope} from './assessmentArchive';
 import {validateAssessmentArchiveV1} from './assessmentArchive';
 import {projectIndividualAssessmentEvidence} from './assessmentEvidenceProjection';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
-import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {approvedAssessmentSubjectCodes,resolveAssessmentSubjectCode,selectUniqueAssessmentDocument} from './assessmentSubjectScope';
 import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 type State='observed'|'not_observed'|'not_applicable';
@@ -37,26 +37,23 @@ export function readStudentCriterionEvidence(
     const descriptor=Object.getOwnPropertyDescriptor(currentClass,'assessmentEvidenceV1');
     if(!descriptor)return {status:'absent'};
     if(!('value' in descriptor))return unverified();
-    const scope={classId:currentClass.id,schoolYear:canonicalAssessmentSchoolYear(settings?.year),subjectCode:resolveAssessmentSubjectCode(settings?.subject)};
-    if(!scope.schoolYear||!scope.subjectCode||
+    const schoolYear=canonicalAssessmentSchoolYear(settings?.year);
+    const subjectCode=resolveAssessmentSubjectCode(settings?.subject);
+    if(!schoolYear||!subjectCode||
        !currentClass.students.some(student=>student.id===studentId))return unverified();
+    const scope={classId:currentClass.id,schoolYear,subjectCode};
     // The official local scope and roster are supplied independently.
-    const authorized=approvedScopes??[scope];
+    const authorized=approvedScopes??approvedAssessmentSubjectCodes(scope.subjectCode).map(subjectCode=>({...scope,subjectCode}));
     if(!authorized.some(s=>s.classId===scope.classId&&s.schoolYear===scope.schoolYear&&
       s.subjectCode===scope.subjectCode))return unverified();
     const verified=validateAssessmentArchiveV1({classes:[currentClass]},
       authorized.filter(s=>s.classId===currentClass.id));
     if(!verified.valid||verified.state!=='present')return unverified();
     const archive=snapshotAssessmentData(descriptor.value) as AssessmentArchiveV1;
-    const matching=archive.documents.filter(section=>
-      section.document.classId===scope.classId&&
-      section.document.schoolYear===scope.schoolYear&&
-      section.document.subjectCode===scope.subjectCode);
-    if(matching.length===0)return {status:'absent'};
-    if(matching.length!==1)return unverified();
-    const document=matching[0].document as AssessmentEvidenceV1;
+    const document=selectUniqueAssessmentDocument(archive.documents.map(section=>section.document),scope);
+    if(!document)return {status:'absent'};
     const context:AssessmentScopeV1={classId:scope.classId,schoolYear:scope.schoolYear,
-      subjectCode:scope.subjectCode,studentIds:currentClass.students.map(student=>student.id)};
+      subjectCode:document.subjectCode,studentIds:currentClass.students.map(student=>student.id)};
     const projected=projectIndividualAssessmentEvidence(document,context,studentId);
     if(!projected.valid)return unverified();
 

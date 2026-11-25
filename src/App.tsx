@@ -214,7 +214,7 @@ import type { CriterionSave } from './components/DailyCriterionRecorder';
 import type { AssessmentSetupSave,PlannedCompletionSave } from './components/DailyAssessmentSetupPanel';
 import {deriveConfirmedDailyPlannedCompletion} from './assessment/dailyPlannedAssessmentCompletion';
 import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmentSetup';
-import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
+import { resolveAssessmentSubjectCode, sameAssessmentSubject } from './assessment/assessmentSubjectScope';
 import { resolveApprovedAssessmentScopes } from './assessment/approvedAssessmentScopes';
 import { canonicalAssessmentSchoolYear } from './assessment/assessmentSchoolYear';
 import { validateAssessmentArchiveV1 } from './assessment/assessmentArchive';
@@ -2997,7 +2997,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
       evaluationSavePendingRef.current||!isPrivacyShieldActive||
       scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
-      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+      !subjectCode||!sameAssessmentSubject(scope.subjectCode,subjectCode))throw Error('Contesto prova non attuale.');
     const selected=appDataRef.current.classes.find(c=>c.id===classId);
     if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
       throw Error('Elenco classe cambiato.');
@@ -3029,7 +3029,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
       evaluationSavePendingRef.current||!isPrivacyShieldActive||
       scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
-      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+      !subjectCode||!sameAssessmentSubject(scope.subjectCode,subjectCode))throw Error('Contesto prova non attuale.');
     const selected=appDataRef.current.classes.find(c=>c.id===classId);
     if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
       throw Error('Elenco classe cambiato.');
@@ -3063,7 +3063,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
        evaluationSavePendingRef.current||!isPrivacyShieldActive||
        scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
-       !subjectCode||scope.subjectCode!==subjectCode)throw new Error('Contesto di rilevazione non attuale.');
+       !subjectCode||!sameAssessmentSubject(scope.subjectCode,subjectCode))throw new Error('Contesto di rilevazione non attuale.');
     const activeClass=appDataRef.current.classes.find(c=>c.id===classId);
     if(!activeClass||scope.studentIds.length!==activeClass.students.length||
        !scope.studentIds.every((id,i)=>id===activeClass.students[i].id))throw new Error('Elenco alunni non più attuale.');

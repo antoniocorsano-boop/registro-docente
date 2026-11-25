@@ -7,7 +7,7 @@ import type {AssessmentEvidenceV1,AssessmentScopeV1} from './assessmentEvidence'
 import {validateAssessmentArchiveV1,type ApprovedAssessmentScope} from './assessmentArchive';
 import {previewAssessmentCompletion,confirmAssessmentCompletion,type AssessmentCompletionPreview} from './assessmentCompletion';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
-import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {approvedAssessmentSubjectCodes,resolveAssessmentSubjectCode,selectUniqueAssessmentDocument} from './assessmentSubjectScope';
 import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 type Settings=Pick<AppSettings,'year'|'subject'>|undefined;
@@ -28,9 +28,9 @@ const status=():PlannedCompletionResult=>({valid:false});
 function lookup(c:ClassData,scope:AssessmentScopeV1):AssessmentEvidenceV1{
  const field=Object.getOwnPropertyDescriptor(c,'assessmentEvidenceV1');
  if(!field||!('value' in field))throw Error('Missing document');
- const sections=c.assessmentEvidenceV1?.documents.filter(part=>same(part.document,scope));
- if(!sections||sections.length!==1)throw Error('Nonunique document');
- return snapshotAssessmentData(sections[0].document) as AssessmentEvidenceV1;
+ const document=selectUniqueAssessmentDocument(c.assessmentEvidenceV1!.documents.map(part=>part.document),scope);
+ if(!document||document.subjectCode!==scope.subjectCode)throw Error('Missing or changed document identity');
+ return snapshotAssessmentData(document) as AssessmentEvidenceV1;
 }
 export function listDailyPlannedProofs(c:ClassData,settings:Settings,
  approvedScopes?:readonly ApprovedAssessmentScope[]):PlannedProofs{
@@ -42,18 +42,20 @@ export function listDailyPlannedProofs(c:ClassData,settings:Settings,
   const scope:AssessmentScopeV1={classId:c.id,schoolYear,subjectCode,
    studentIds:c.students.map(s=>s.id)};
   if(new Set(scope.studentIds).size!==scope.studentIds.length)return {status:'unverified'};
-  const authorized=approvedScopes??[approvedScope(scope)];
+  const authorized=approvedScopes??approvedAssessmentSubjectCodes(subjectCode).map(code=>({...approvedScope(scope),subjectCode:code}));
   if(!authorized.some(s=>same(s,approvedScope(scope))))return {status:'unverified'};
   const verified=validateAssessmentArchiveV1({classes:[c]},
    authorized.filter(s=>s.classId===c.id));
   if(!verified.valid)return {status:'unverified'};
-  if(verified.state==='absent'||!c.assessmentEvidenceV1?.documents.some(section=>
-   same(section.document,scope)))return {status:'absent'};
-  const document=lookup(c,scope);
+  if(verified.state==='absent')return {status:'absent'};
+  const selected=selectUniqueAssessmentDocument(c.assessmentEvidenceV1!.documents.map(section=>section.document),scope);
+  if(!selected)return {status:'absent'};
+  const document=snapshotAssessmentData(selected) as AssessmentEvidenceV1;
+  const documentScope:AssessmentScopeV1={...scope,subjectCode:document.subjectCode};
   const proofs=document.assessments.filter(a=>a.status==='planned'&&
    !document.assessments.some(next=>next.supersedesRevisionId===a.revisionId))
     .map(a=>({revisionId:a.revisionId,title:a.title,scheduledFor:a.date,criteriaCount:a.criteria.length}));
-  return {status:'ready',scope,document,proofs};
+  return {status:'ready',scope:documentScope,document,proofs};
  }catch{return {status:'unverified'};}
 }
 export function previewDailyPlannedCompletion(c:ClassData,settings:Settings,request:{

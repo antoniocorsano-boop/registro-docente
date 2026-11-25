@@ -3763,14 +3763,49 @@
     {
       "id": "CAND-PROD-01-ADMISSION-I01",
       "owner": "CAND-PROD-01",
-      "statement": "The single production candidate branch must be admitted only through a same-repository pull request to the exact frozen main base and exact head SHA. Its composition has the approved Q5 content tree and exactly one parent, the frozen main; after composition only the four enumerated admission files may change. Direct F2 requires both the independent hybrid gate and canonical dual-channel F2 on API 32 and 36, retaining historical Q4 and PR 412 admission unchanged. Wrong base, tree, SHA, route, missing gate or unapproved product/laboratory delta fails closed. Qualification does not grant merge or release authority.",
+      "statement": "The single production candidate branch must be admitted only through a same-repository pull request to the exact frozen main base and exact head SHA. Its composition has the approved Q5 content tree and exactly one parent, the frozen main; the initial admission commit changes exactly the four enumerated admission files; the R3a candidate must descend from that exact frozen admission commit and change only the eleven individually enumerated historical-subject correction and contract files. No general application wildcard is permitted. Direct F2 requires both the independent hybrid gate and canonical dual-channel F2 on API 32 and 36, retaining historical Q4 and PR 412 admission unchanged. Wrong base, tree, SHA, route, missing gate or unapproved product/laboratory delta fails closed. Qualification does not grant merge or release authority.",
       "impactPaths": [
         ".github/workflows/ap02-f2-native-device.yml",
         ".github/workflows/qa-appium-replacement-pilot.yml",
         "scripts/diagnostics/appium-pilot/contract.test.mjs",
-        "qualification/invariants.v1.json"
+        "qualification/invariants.v1.json",
+        "src/App.tsx",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "src/assessment/assessmentSubjectScope.ts",
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/assessment/dailyCriterionRecordingContext.ts",
+        "src/assessment/dailyPlannedAssessmentCompletion.ts",
+        "src/assessment/studentCriterionReadModel.ts",
+        "src/security/candProdHistoricalSubject.test.ts"
       ],
       "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ]
+    },
+    {
+      "id": "CAND-PROD-01-HISTORICAL-SUBJECT-I01",
+      "owner": "CAND-PROD-01/R3a",
+      "statement": "Only the explicit Tecnologia/tecnologia alias is equivalent in current-class and current-year document selection and App context checks. Exact independently approved scopes and whole-class or whole-archive validation precede selection; the original stored subject code remains exact for projection, preview, mutation and verified receipt. New documents use the canonical code only when no equivalent document exists. Two equivalent documents fail closed rather than choosing, merging or creating another document, including during the durable derive after preview. Opaque identifiers, historical revision graphs, bindings, grades and behavior are preserved. No new persistence authority, archive rewrite, migration or release authorization.",
+      "impactPaths": [
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "src/App.tsx",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "src/assessment/assessmentSubjectScope.ts",
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/assessment/dailyCriterionRecordingContext.ts",
+        "src/assessment/dailyPlannedAssessmentCompletion.ts",
+        "src/assessment/studentCriterionReadModel.ts",
+        "src/security/candProdHistoricalSubject.test.ts"
+      ],
+      "tests": [
+        "src/security/candProdHistoricalSubject.test.ts",
+        "src/security/ap03HistoricalAssessmentScopes.test.ts",
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01Product03AssessmentSetup.test.ts",
+        "src/security/val01Product04PlannedLifecycle.test.ts",
+        "src/security/val01StudentCriterionReadModel.test.ts",
         "scripts/diagnostics/appium-pilot/contract.test.mjs"
       ]
     }

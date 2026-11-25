@@ -10,7 +10,7 @@ import {validateAssessmentArchiveV1,type ApprovedAssessmentScope,type Assessment
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
 import {previewAssessmentDefinition,confirmAssessmentDefinition} from './assessmentDefinitionPreparation';
 import {previewAssessmentCompletion,confirmAssessmentCompletion} from './assessmentCompletion';
-import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {approvedAssessmentSubjectCodes,resolveAssessmentSubjectCode,selectUniqueAssessmentDocument} from './assessmentSubjectScope';
 import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 export interface AssessmentSetupCriterion{
@@ -58,10 +58,9 @@ function extract(c:ClassData,s:AssessmentScopeV1):AssessmentEvidenceV1|null{
  if(!field)return null;
  if(!('value' in field))throw Error('Invalid archive');
  const envelope=field.value as AssessmentArchiveV1;
- const matches=envelope.documents.filter(d=>sameScope(d.document,s));
- if(matches.length>1)throw Error('No unique document');
- if(matches.length===0)return null; // Existing history may belong to another independently approved scope.
- return snapshotAssessmentData(matches[0].document) as AssessmentEvidenceV1;
+ const document=selectUniqueAssessmentDocument(envelope.documents.map(d=>d.document),s);
+ // Existing history may belong to another independently approved scope.
+ return document?snapshotAssessmentData(document) as AssessmentEvidenceV1:null;
 }
 function validateRequest(r:AssessmentSetupRequest,s:AssessmentScopeV1){
  const ids=[r.activityId,r.assessmentId,r.plannedRevisionId,r.completedRevisionId,
@@ -132,15 +131,18 @@ export function previewDailyAssessmentSetup(c:ClassData,
   const scope:AssessmentScopeV1={classId:c.id,schoolYear,
    subjectCode,studentIds:c.students.map(s=>s.id)};
   const approved={classId:scope.classId,schoolYear:scope.schoolYear,subjectCode:scope.subjectCode};
-  const authorized=approvedScopes??[approved];
+  const authorized=approvedScopes??approvedAssessmentSubjectCodes(subjectCode).map(code=>({...approved,subjectCode:code}));
   if(!authorized.some(s=>sameScope(s,approved))||!unique(scope.studentIds)||
      !validateAssessmentArchiveV1({classes:[c]},authorized.filter(s=>s.classId===c.id)).valid)
    return {valid:false,issue:'INVALID_CONTEXT'};
   const base=extract(c,scope);
+  // Keep the physical historical identity; only a genuinely absent document
+  // starts a new canonical archive section.
+  const documentScope:AssessmentScopeV1=base?{...scope,subjectCode:base.subjectCode}:scope;
   const request=snapshotAssessmentData(raw) as AssessmentSetupRequest;
   if(mode!=='planned'&&mode!=='completed')return fail();
-  build(base??emptyDocument(scope),scope,request,request.preparedAt,mode);
-  return {valid:true,review:{scope,baseDocument:base,request,...(mode==='planned'?{mode:'planned' as const}:{})}};
+  build(base??emptyDocument(documentScope),documentScope,request,request.preparedAt,mode);
+  return {valid:true,review:{scope:documentScope,baseDocument:base,request,...(mode==='planned'?{mode:'planned' as const}:{})}};
  }catch{return fail();}
 }
 /** Reruns validation inside the durable queue on the latest committed state.
@@ -166,6 +168,8 @@ export function deriveConfirmedDailyAssessmentSetup(
   if(!c||JSON.stringify(c.students.map(s=>s.id))!==JSON.stringify(review.scope.studentIds))
    throw reject();
   const original=extract(c,review.scope);
+  if(original?original.subjectCode!==review.scope.subjectCode:
+    resolveAssessmentSubjectCode(review.scope.subjectCode)!==review.scope.subjectCode)throw reject();
   if(JSON.stringify(original)!==JSON.stringify(review.baseDocument))throw reject();
   const mode=review.mode??'completed';
   if(mode!=='planned'&&mode!=='completed')throw reject();

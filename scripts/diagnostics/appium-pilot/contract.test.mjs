@@ -232,6 +232,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   const baseRef='1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1';
   const compositionRef='c0b9b1e0c5b5e6976fcb22fcffd4008a45b1829a';
   const treeRef='361e07245112478461e904109a89d81b4ebbdfe3';
+  const admissionRef='177cab29ecbc8e216d656a9d4c9dc66664932892';
   assert.ok(workflow.includes(route+" && github.event.pull_request.base.sha == '"+baseRef+"'"));
   assert.ok(workflow.includes('github.event.pull_request.head.repo.full_name == github.repository'));
   assert.ok(workflow.includes('github.event.pull_request.base.repo.full_name == github.repository'));
@@ -243,6 +244,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   assert.ok(hybrid.includes(route));
   assert.ok(registry.invariants.some(i=>i.id==='CAND-PROD-01-ADMISSION-I01'));
   const paths=['.github/workflows/ap02-f2-native-device.yml','.github/workflows/qa-appium-replacement-pilot.yml','scripts/diagnostics/appium-pilot/contract.test.mjs','qualification/invariants.v1.json'];
+  const r3aPaths=[".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","src/App.tsx","src/assessment/assessmentEvidenceMutation.ts","src/assessment/assessmentSubjectScope.ts","src/assessment/dailyAssessmentSetup.ts","src/assessment/dailyCriterionRecordingContext.ts","src/assessment/dailyPlannedAssessmentCompletion.ts","src/assessment/studentCriterionReadModel.ts","src/security/candProdHistoricalSubject.test.ts"];
   const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
@@ -252,12 +254,13 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     put('src/App.tsx','base');const base=commit('base');
     put('src/App.tsx','qualified');put('scripts/diagnostics/appium-pilot/pilot.py','# synthetic\n');
     const composition=commit('composition');const tree=git('rev-parse',composition+'^{tree}');
-    for(const path of paths)put(path,'approved admission');const candidate=commit('admission');
+    for(const path of paths)put(path,'approved admission');const admission=commit('admission');
+    for(const path of r3aPaths)put(path,'approved R3a correction');const candidate=commit('R3a');
     const source=workflow.split('      - name: Verify frozen product and approved laboratory-only delta\n')[1].split('      - uses:')[0].split('        run: |\n')[1].split('\n').map(line=>line.slice(10)).join('\n');
     const run=(sha,{eventBase=base,candidateSha=sha,route='production',overrides={}}={})=>{
       git('checkout','-q','--detach',sha);
       let script=source;
-      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,...overrides};
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,...overrides};
       for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
       const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:'999',CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
       rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
@@ -271,8 +274,11 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     fail(candidate,{overrides:{[treeRef]:'0'.repeat(40)}});
     fail(candidate,{eventBase:composition,overrides:{[baseRef]:composition}});
     fail(composition);
+    fail(admission);
+    fail(candidate,{overrides:{[admissionRef]:composition}});
     fail(candidate,{route:'legacy'});
-    git('checkout','-q','--detach',candidate);put('src/App.tsx','unauthorized');fail(commit('unauthorized product'));
+    git('checkout','-q','--detach',candidate);put('src/unauthorized.ts','unauthorized');fail(commit('unauthorized product'));
     git('checkout','-q','--detach',candidate);put('scripts/diagnostics/extra.mjs','unauthorized');fail(commit('unauthorized laboratory'));
+    git('checkout','-q','--detach',candidate);put('src/App.tsx','qualified');fail(commit('missing approved product change'));
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
