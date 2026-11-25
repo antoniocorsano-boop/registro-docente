@@ -113,7 +113,9 @@ test('canonical F2 uses hybrid for PR 414 and 412, with real Q3 and startup proo
 
 test('dual diagnostic remains separate and official Q4 requires dual-native evidence',()=>{
   const historic=readFileSync('scripts/diagnostics/ap02-native-device-v7.mjs','utf8');
-  for(const marker of ["'appium:autoLaunch':false","'appium:autoWebview':false","appiumSnapshot(nativeSession)","Q5_DUAL_DIAGNOSTIC_PASS","fullF2Qualified:false","nativeReauthCount,4","dual-diagnostic"])assert.ok(historic.includes(marker),marker);
+  for(const marker of ["'appium:autoLaunch':false","'appium:autoWebview':false","Q5_DUAL_DIAGNOSTIC_PASS","fullF2Qualified:false","nativeReauthCount,4","dual-diagnostic"])assert.ok(historic.includes(marker),marker);
+  assert.match(historic,/^function nativeNodes\(\)\s*\{\s*if\s*\(dualNative\)\s*\{\s*const nodes\s*=\s*readGuardedNativeSnapshot\(\{\s*session:\s*nativeSession\s*,\s*foreground:\s*documentsForeground\s*,\s*read:\s*appiumSnapshot\s*,\s*onState:\s*state\s*=>\s*\{\s*nativeUiObservation\s*=\s*state;\s*\}\s*\}\);\s*nativeSnapshots\+\+;\s*return nodes;\s*\}/m,
+    'nativeNodes must return the guarded Appium snapshot for the active native session');
   assert.ok(q4.includes('dual_diagnostic: true'));
   assert.ok(q4.includes('mode: qualification'));
   assert.ok(f2.includes('Q5_DUAL_QUALIFICATION:'));
@@ -175,14 +177,15 @@ test('Q5-SYS-13 admission: exact promoted product and unchanged Q4 fail closed',
 });
 
 test('Q5-SYS-14 reads only: foreground loss between checks is transient, missing session is fatal',()=>{
-  let reads=0;const states=[];
-  const read=()=>{reads++;return ['synthetic'];};
-  assert.throws(()=>readGuardedNativeSnapshot({session:'synthetic',foreground:()=>false,read,onState:s=>states.push(s)}),{code:'NATIVE_UI_TREE_UNAVAILABLE'});
+  const session='11111111-2222-4333-8444-555555555555';
+  const reads=[],states=[];
+  const read=actualSession=>{reads.push(actualSession);return ['synthetic'];};
+  assert.throws(()=>readGuardedNativeSnapshot({session,foreground:()=>false,read,onState:s=>states.push(s)}),{code:'NATIVE_UI_TREE_UNAVAILABLE'});
   assert.deepEqual(states,['foreground-transition']);
   assert.throws(()=>readGuardedNativeSnapshot({session:null,foreground:()=>true,read}),{code:'INVALID_HARNESS_ARGUMENT'});
-  assert.equal(reads,0);
-  assert.deepEqual(readGuardedNativeSnapshot({session:'synthetic',foreground:()=>true,read}),['synthetic']);
-  assert.equal(reads,1);
+  assert.deepEqual(reads,[]);
+  assert.deepEqual(readGuardedNativeSnapshot({session,foreground:()=>true,read}),['synthetic']);
+  assert.deepEqual(reads,[session]);
 });
 test('Q5-SYS-14 documentsui-to-unknown-to-application recovers only with positive return evidence',async()=>{
   let now=0,reads=0;const states=[];
