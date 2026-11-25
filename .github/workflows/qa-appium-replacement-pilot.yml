@@ -5,6 +5,9 @@ on:
       candidate_sha:
         required: true
         type: string
+      dual_diagnostic:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -21,6 +24,7 @@ jobs:
           APPROVED_CALLER: ${{ github.event_name == 'pull_request' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && inputs.candidate_sha == github.event.pull_request.head.sha && ((github.event.pull_request.number == 414 && github.head_ref == 'qa/qa-stability-01-q2' && github.base_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.event.pull_request.base.sha == '80378e9daab60fe6c389e372c3c79e3dcd09aac0') || (github.event.pull_request.number == 412 && github.head_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.base_ref == 'main')) }}
         run: |
           test "$APPROVED_CALLER" = true
+          if test "${{ inputs.dual_diagnostic }}" = true; then test "${{ github.event.pull_request.number }}" = 414; fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -56,9 +60,12 @@ jobs:
       max-parallel: 1
       matrix:
         api: [32, 36]
+        trial: ${{ fromJSON(inputs.dual_diagnostic && '[1,2]' || '[1]') }}
     env:
       CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       AP02_API: ${{ matrix.api }}
+      Q5_DUAL_DIAGNOSTIC: ${{ inputs.dual_diagnostic }}
+      Q5_DUAL_TRIAL: ${{ matrix.trial }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -163,14 +170,22 @@ jobs:
           disable-animations: false
           script: bash scripts/diagnostics/appium-pilot/run.sh
       - name: Require actual pilot evidence, never F2 qualification
+        if: ${{ !inputs.dual_diagnostic }}
         run: |
           jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '.candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .stages==["native-session","webview-setup","professional-home","privacy-navigation","home-navigation","target-class","target-export","recovery-class","recovery-export","restore","native-stop-verified","cold-lock","cold-authenticated-home","cold-restored-content"] and .safReturns==["target-export","recovery-export","target-source","recovery-source"] and (.physicalCopies|length)==2 and .physicalCopies[0].sha256!=.physicalCopies[1].sha256' ap02-device-evidence/appium-pilot.json
+      - name: Require isolated dual-channel diagnostic evidence
+        if: ${{ inputs.dual_diagnostic }}
+        run: |
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q5_DUAL_TRIAL" '.candidate==$sha and .api==$api and .trial==$trial and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .nativeContextOnly==true and .cdpDirect==true and .nativeSnapshots>0 and .nativeReauthCount==4 and (.stages|length)==6 and .safReturns==["export","export","target-source","recovery-source"]' ap02-device-evidence/dual-diagnostic/summary.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: appium-pilot-api${{ matrix.api }}-${{ github.event.pull_request.head.sha }}
+          name: ${{ inputs.dual_diagnostic && 'dual-diagnostic' || 'appium-pilot' }}-api${{ matrix.api }}-trial${{ matrix.trial }}-${{ github.event.pull_request.head.sha }}
           path: |
             ap02-device-evidence/appium-pilot.json
+            ap02-device-evidence/dual-diagnostic/summary.json
+            ap02-device-evidence/dual-diagnostic/failure.json
+            ap02-device-evidence/dual-diagnostic/environment.json
             ap02-device-evidence/apk-hash.txt
             ap02-device-evidence/provenance.txt
           retention-days: 14

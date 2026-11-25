@@ -104,3 +104,13 @@ test('canonical F2 uses hybrid for PR 414 and 412, with real Q3 and startup proo
   for(const marker of ['waitBootReadiness','emulatorIdentity','versionFacts','publicSurfaceFrame','classifySurface'])assert.ok(q3.includes(marker),marker);
   assert.ok(f2.includes('ap02-device-evidence/appium-pilot.json'));
 });
+
+
+test('dual diagnostic keeps native-only session and cannot start official Q4',()=>{
+  const historic=readFileSync('scripts/diagnostics/ap02-native-device-v7.mjs','utf8');
+  for(const marker of ["'appium:autoLaunch':false","'appium:autoWebview':false","appiumSnapshot(nativeSession)","Q5_DUAL_DIAGNOSTIC_PASS","fullF2Qualified:false","nativeReauthCount,4","dual-diagnostic"])assert.ok(historic.includes(marker),marker);
+  assert.ok(q4.includes('dual_diagnostic: true'));
+  assert.ok(q4.includes('mode: diagnostic'));
+  assert.equal(q4.split("needs.preflight.outputs.mode == 'qualification'").length-1,3);
+  assert.ok(workflow.includes('Require isolated dual-channel diagnostic evidence'));
+});

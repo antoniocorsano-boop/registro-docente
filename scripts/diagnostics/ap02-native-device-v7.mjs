@@ -3,6 +3,7 @@
 // Chrome DevTools drives public DOM controls; no application internals, plugin
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
+import {appiumSnapshot} from './appium-pilot/native-picker.mjs';
 import { LabFailure, classifyFailure, commandBudget, commandBudgetInfo, classifyAdbDeadline, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -22,6 +23,9 @@ const activity = pkg + '/it.trama.registrodocente.prova.MainActivity';
 const api = Number(process.env.AP02_API);
 const sha = process.env.CANDIDATE_SHA;
 const startupOnly=process.env.AP02_STARTUP_ONLY==='true';
+const dualDiagnostic=process.env.Q5_DUAL_DIAGNOSTIC==='true';
+if(dualDiagnostic)assert.ok(!startupOnly,'DUAL_DIAGNOSTIC_REQUIRES_FULL_FLOW');
+let nativeSession=null,nativeSnapshots=0;
 if(startupOnly)assert.match(process.env.Q4_TRIAL||'',/^[123]$/);
 assert.ok([32,36].includes(api));
 assert.match(sha || '', /^[0-9a-f]{40}$/);
@@ -49,7 +53,7 @@ const adb = (...args) => {
 const probe = () => probePackagePids(adb, pkg);
 const nativeForeground = () => resumedActivity(adb('shell','dumpsys','activity','activities'), pkg);
 const results = [];
-const out = 'ap02-device-evidence';
+const out = dualDiagnostic?'ap02-device-evidence/dual-diagnostic':'ap02-device-evidence';
 mkdirSync(out,{recursive:true});
 let phase = 'preflight';
 let lastSafActivityTrail = null;
@@ -151,7 +155,40 @@ async function until(fn, name, timeout = 60000, retryReadErrors = true) {
     throw error;
   }
 }
+async function nativeRequest(method,path,body){
+  const response=await fetch('http://127.0.0.1:4723'+path,{
+    method,headers:{'content-type':'application/json'},
+    ...(body===undefined?{}:{body:JSON.stringify(body)}),
+    signal:AbortSignal.timeout(commandBudget(60000))});
+  const payload=await response.json();
+  if(!response.ok||payload.value?.error)throw new LabFailure('NATIVE_UI_READ_FAILED');
+  return payload.value;
+}
+async function startNativeSession(){
+  const value=await nativeRequest('POST','/session',{capabilities:{alwaysMatch:{
+    platformName:'Android','appium:automationName':'UiAutomator2',
+    'appium:deviceName':'Android Emulator','appium:appPackage':pkg,
+    'appium:appActivity':'it.trama.registrodocente.prova.MainActivity',
+    'appium:noReset':true,'appium:autoLaunch':false,'appium:autoWebview':false,
+    'appium:shouldTerminateApp':false,'appium:newCommandTimeout':900,
+    'appium:uiautomator2ServerReadTimeout':30000
+  },firstMatch:[{}]}});
+  assert.match(value?.sessionId||'',/^[a-f0-9-]{36}$/i);
+  nativeSession=value.sessionId;
+  assert.equal(await nativeRequest('GET','/session/'+nativeSession+'/context'),'NATIVE_APP');
+}
+async function closeNativeSession(){
+  if(!nativeSession)return;
+  const id=nativeSession;nativeSession=null;
+  await nativeRequest('DELETE','/session/'+id);
+}
 function nativeNodes() {
+  if(dualDiagnostic){
+    assert.ok(nativeSession&&documentsForeground(),'NATIVE_UI_FOREGROUND_LOST');
+    const nodes=appiumSnapshot(nativeSession);
+    nativeSnapshots++;
+    return nodes;
+  }
   // NATIVE_UI_TREE_UNAVAILABLE is a read-only transient; no tap is retried.
   return readNativeSnapshot(adb,state=>{nativeUiObservation=state;});
 }
@@ -962,6 +999,7 @@ async function run(){
   await preflightBoot();
   phase='preflight-install';
   assert.equal(adb('install','--no-incremental',process.env.AP02_LAB_APK).split('\n').filter(x=>x==='Success').length,1);
+  if(dualDiagnostic)await startNativeSession();
   await launch();
   await onPage('Configura archivio protetto',60000);
   await record('installed-professional-android-webview');
@@ -1067,7 +1105,17 @@ try{
   await run();
   await dialogTracker.flush();
   writeFileSync(out+'/surface-readiness.json',JSON.stringify({candidate:sha,api,rawDomStored:false,readyDestinations:[...readyDestinations].sort(),transitions:safeSurfaceTrace(surfaceTransitions)},null,2));
-  console.log(startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS',sha,api);
+  if(dualDiagnostic){
+    assert.ok(nativeSnapshots>0&&environment.complete&&environment.launches===2);
+    assert.deepEqual(safReturns.map(x=>x.role),['export','export','target-source','recovery-source']);
+    assert.ok(safReturns.every(x=>x.documentsUiObserved&&x.returned&&x.authenticated));
+    assert.equal(nativeReauthCount,4);
+    assert.equal(results.length,6);
+    assert.equal(await nativeRequest('GET','/session/'+nativeSession+'/context'),'NATIVE_APP');
+    await closeNativeSession();
+    writeFileSync(out+'/summary.json',JSON.stringify({candidate:sha,api,trial:Number(process.env.Q5_DUAL_TRIAL),syntheticOnly:true,productionRelease:false,fullF2Qualified:false,status:'PASS',nativeSnapshots,nativeReauthCount,stages:results.map(x=>x.stage),safReturns:safReturns.map(x=>x.role),nativeContextOnly:true,cdpDirect:true},null,2));
+    console.log('Q5_DUAL_DIAGNOSTIC_PASS',sha,api);
+  }else console.log(startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS',sha,api);
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
   const {category,code}=classifyFailure(error);
@@ -1090,4 +1138,9 @@ try{
   console.log('AP02_SAF_LIFECYCLE_SUMMARY',JSON.stringify(safReturns));
   console.log('AP02_RECOVERY_CONSENT_STATE',JSON.stringify(recoveryConsent.snapshot()));
   process.exitCode=1;
-}finally{disconnect();}
+}finally{
+  disconnect();
+  if(dualDiagnostic&&nativeSession){
+    try{await closeNativeSession();}catch{process.exitCode=1;console.error('Q5_DUAL_NATIVE_CLEANUP_FAILED');}
+  }
+}

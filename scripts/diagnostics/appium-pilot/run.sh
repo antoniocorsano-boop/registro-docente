@@ -2,7 +2,11 @@
 set -euo pipefail
 # Local-only server; enable only the documented official ChromeDriver download.
 # No broad relaxed-security, no raw logs or screenshot artifacts.
-appium server --address 127.0.0.1 --port 4723 --log-level error --allow-insecure uiautomator2:chromedriver_autodownload >"$RUNNER_TEMP/q5-appium.log" 2>&1 &
+if test "${Q5_DUAL_DIAGNOSTIC:-false}" = true; then
+  appium server --address 127.0.0.1 --port 4723 --log-level error >"$RUNNER_TEMP/q5-appium.log" 2>&1 &
+else
+  appium server --address 127.0.0.1 --port 4723 --log-level error --allow-insecure uiautomator2:chromedriver_autodownload >"$RUNNER_TEMP/q5-appium.log" 2>&1 &
+fi
 server=$!
 trap 'kill "$server" 2>/dev/null || true' EXIT
 for _ in $(seq 1 40); do
@@ -11,4 +15,8 @@ for _ in $(seq 1 40); do
   sleep 1
 done
 curl -fsS --max-time 2 http://127.0.0.1:4723/status >/dev/null
-timeout --signal=TERM --kill-after=10s 900s "$RUNNER_TEMP/q5-appium-venv/bin/python" scripts/diagnostics/appium-pilot/pilot.py
+if test "${Q5_DUAL_DIAGNOSTIC:-false}" = true; then
+  timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs
+else
+  timeout --signal=TERM --kill-after=10s 900s "$RUNNER_TEMP/q5-appium-venv/bin/python" scripts/diagnostics/appium-pilot/pilot.py
+fi
