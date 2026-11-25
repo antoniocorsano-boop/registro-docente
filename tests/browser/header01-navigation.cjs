@@ -42,4 +42,56 @@ async function closeMobileDrawerWithEscape(page) {
   }).toBeLessThanOrEqual(1);
 }
 
-module.exports = { navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape };
+// Shared browser-laboratory gate. DOMContentLoaded is not evidence that the
+// encrypted Vault has finished opening. Never click through a protected UI.
+async function awaitVaultWorkspace(page, vaultPassword, {
+  requireHome = false, requireUnlock = false, timeout = 30000
+} = {}) {
+  const lockedHeading = page.getByRole('heading', { name: 'Sblocca Registro', exact: true });
+  const homeHeading = page.getByRole('heading', { name: 'Le mie classi', exact: true });
+  const readyNavigation = navigationButton(page).first();
+  const state = async () => {
+    if (await lockedHeading.isVisible()) return 'locked';
+    if (await readyNavigation.isVisible() && await readyNavigation.evaluate(element =>
+      !element.closest('[inert], [aria-hidden="true"]') &&
+      !element.matches(':disabled, [aria-disabled="true"]')
+    )) return 'ready';
+    return 'loading';
+  };
+  await expect.poll(state, { timeout,
+    message: 'Vault must expose its public lock screen or interactive navigation'
+  }).not.toBe('loading');
+  // A full reload of an established archive must prove fresh authentication.
+  // Generic readiness is also used after an independently authenticated entry.
+  if (requireUnlock) await expect(lockedHeading).toBeVisible({ timeout });
+  if (requireUnlock || await lockedHeading.isVisible()) {
+    const input = page.locator('#vault-password');
+    await expect(input).toBeVisible({ timeout });
+    await input.fill(vaultPassword, { timeout });
+    await page.getByRole('button', { name: 'Sblocca Registro', exact: true }).click({ timeout });
+    await expect(lockedHeading).toBeHidden({ timeout });
+  }
+  await expect.poll(state, { timeout,
+    message: 'Vault unlock must expose interactive navigation, not a protected surface'
+  }).toBe('ready');
+  // Some tests deliberately require a neutral Home; UX navigation tests
+  // instead inspect whether a class context was restored on reload.
+  if (requireHome) await expect(homeHeading).toBeVisible({ timeout });
+}
+
+async function reloadVaultAndUnlock(page, vaultPassword, options = {}) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await awaitVaultWorkspace(page, vaultPassword, { ...options, requireUnlock: true });
+}
+
+// A full document navigation also starts a new Vault lifecycle. The caller
+// cannot weaken the requirement to observe and complete real authentication.
+async function gotoVaultAndUnlock(page, url, vaultPassword, options = {}) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await awaitVaultWorkspace(page, vaultPassword, { ...options, requireUnlock: true });
+}
+
+module.exports = {
+  navigationButton, privacyButton, settleOggiNavigation, closeMobileDrawerWithEscape,
+  awaitVaultWorkspace, reloadVaultAndUnlock, gotoVaultAndUnlock
+};

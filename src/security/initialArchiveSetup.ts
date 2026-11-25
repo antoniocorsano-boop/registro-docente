@@ -50,8 +50,32 @@ export function createInitialArchiveSnapshot(setup: NewArchiveSetup): CompleteSe
 /** Verify the complete encrypted archive before activation.
  * createStaging rejects an existing vault; only our own staging may be discarded.
  */
-export async function initializeNewArchive(vault: SecureVault, password: string, setup: NewArchiveSetup): Promise<void> {
+export async function initializeNewArchive(
+  vault: SecureVault, password: string, setup: NewArchiveSetup, assertAuthorized?: () => void
+): Promise<void> {
   const candidate = createInitialArchiveSnapshot(setup);
+  if (assertAuthorized) {
+    assertAuthorized();
+    // A rejected claim never owns the competing archive. Once the claim
+    // returns, our staging can be discarded, unless activation was invoked.
+    await vault.createStaging(password, assertAuthorized);
+    let activationInvoked = false;
+    try {
+      assertAuthorized();
+      await new SecureAppStorage(vault).writeInitialSnapshotVerified(candidate, assertAuthorized);
+      assertAuthorized();
+      await vault.activate(assertAuthorized, () => { activationInvoked = true; });
+      assertAuthorized();
+    } catch (error) {
+      try {
+        if (!activationInvoked) await vault.discardStaging();
+      } finally {
+        vault.lock();
+      }
+      throw error;
+    }
+    return;
+  }
   await vault.createStaging(password);
   try {
     await new SecureAppStorage(vault).restoreSnapshotVerified(candidate);

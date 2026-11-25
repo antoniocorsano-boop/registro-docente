@@ -174,6 +174,9 @@ import {
   type PreparedBackupCheckpoint
 } from './persistence/backupCheckpoint';
 import { applySettingsPatch } from './persistence/settingsMutation';
+import { assertV6AssessmentExportAllowed, assertHistoricalAssessmentRestoreAllowed } from './security/ap02LegacyBackupBoundary';
+import { createVersionedBackupReceiptAuthority, type VersionedBackupReceipt } from './persistence/versionedBackupReceipt';
+import { projectAssessmentRestoreV7, selectApprovedScopesForIncomingV7Backup } from './security/assessmentRestorePolicy';
 import { reconcileSubmissionGrades, type SubmissionImportSelection, type SubmissionImportPreview } from './persistence/submissionGradeImport';
 import type { LocalSemanticMemoryPort } from '../vendor/contextual-copilot-semantic-memory/index';
 import {
@@ -205,6 +208,17 @@ import { DailyMatrixWorkspace } from './components/DailyMatrixWorkspace';
 import { MatrixSurfaceSelector } from './components/MatrixSurfaceSelector';
 import { applyDailyGrade, applyDailyObservation, type DailyGradeWrite, type DailyObservationWrite } from './persistence/dailyMatrixWorkspace';
 import { applyMatrixCell, type MatrixCellWrite } from './persistence/matrixCellMutation';
+import { deriveConfirmedEvidenceMutation, type EvidenceCommitRequest } from './assessment/assessmentEvidenceMutation';
+import type { AssessmentScopeV1 } from './assessment/assessmentEvidence';
+import type { CriterionSave } from './components/DailyCriterionRecorder';
+import type { AssessmentSetupSave,PlannedCompletionSave } from './components/DailyAssessmentSetupPanel';
+import {deriveConfirmedDailyPlannedCompletion} from './assessment/dailyPlannedAssessmentCompletion';
+import { deriveConfirmedDailyAssessmentSetup } from './assessment/dailyAssessmentSetup';
+import { resolveAssessmentSubjectCode } from './assessment/assessmentSubjectScope';
+import { resolveApprovedAssessmentScopes } from './assessment/approvedAssessmentScopes';
+import { canonicalAssessmentSchoolYear } from './assessment/assessmentSchoolYear';
+import { validateAssessmentArchiveV1 } from './assessment/assessmentArchive';
+import { AssessmentContinuityError, checkStudentRemovalContinuity, checkSettingsAssessmentContinuity, checkPlanningAssessmentContinuity } from './assessment/assessmentContinuity';
 import { BehaviorsView, type BehaviorDraftGuard } from './components/BehaviorsView';
 import { applyObservationChanges } from './behavior/observationChanges';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -747,6 +761,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const backupReceiptAuthority = backupReceiptAuthorityRef.current ?? (
     backupReceiptAuthorityRef.current = createBackupReceiptAuthority()
   );
+  // AP-02: V7 has its own session-scoped, version-bound authority.
+  const assessmentBackupAuthorityRef = useRef<ReturnType<typeof createVersionedBackupReceiptAuthority> | null>(null);
+  const assessmentBackupAuthority = assessmentBackupAuthorityRef.current ?? (
+    assessmentBackupAuthorityRef.current = createVersionedBackupReceiptAuthority(7)
+  );
   const settingsRef = useRef(settings);
   const udasRef = useRef(udas);
   const planningRef = useRef(planning);
@@ -1272,10 +1291,15 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   const commitSettingsMutation = useCallback((patch: Partial<AppSettings>): Promise<AppSettings> => {
     return mutationCoordinator.enqueue<{ settings: AppSettings; meta: SecureMeta }>({
       getCommitted: () => ({ settings: settingsRef.current, meta: metaRef.current }),
-      derive: current => ({
-        settings: applySettingsPatch(current.settings, patch),
-        meta: incrementBackupChanges(current.meta)
-      }),
+      derive: current => {
+        const next = applySettingsPatch(current.settings, patch);
+        // Re-evaluate archive authority within the serialized mutation queue.
+        // A changed year/discipline cannot orphan existing V1 evidence.
+        if (!checkSettingsAssessmentContinuity(appDataRef.current, planningRef.current, current.settings, next).allowed) {
+          throw new AssessmentContinuityError('settings');
+        }
+        return { settings: next, meta: incrementBackupChanges(current.meta) };
+      },
       persist: candidate => secureStorage.saveSettingsAndMeta(candidate.settings, candidate.meta),
       publish: candidate => {
         settingsRef.current = candidate.settings;
@@ -1285,8 +1309,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       },
       afterCommit: () => toast('Impostazioni aggiornate')
     }).then(candidate => candidate.settings).catch(error => {
-      console.error('Secure settings save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      if (error instanceof AssessmentContinuityError) {
+        alert(error.message);
+      } else {
+        console.error('Secure settings save failed', error);
+        alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      }
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
@@ -1318,10 +1346,21 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   ): Promise<PlanningState> => {
     return mutationCoordinator.enqueue<{ planning: PlanningState; meta: SecureMeta }>({
       getCommitted: () => ({ planning: planningRef.current, meta: metaRef.current }),
-      derive: current => ({
-        planning: applyPlanningMutation(current.planning, derive),
-        meta: incrementBackupChanges(current.meta)
-      }),
+      derive: current => {
+        const candidatePlanning = applyPlanningMutation(current.planning, derive);
+        // Check the entire encrypted local archive against the proposed
+        // independently approved scopes before persisting any planning change.
+        // Every planning entry point shares this serialized mutation boundary.
+        if (!checkPlanningAssessmentContinuity(
+          appDataRef.current, candidatePlanning, settingsRef.current
+        ).allowed) {
+          throw new AssessmentContinuityError('planning');
+        }
+        return {
+          planning: candidatePlanning,
+          meta: incrementBackupChanges(current.meta)
+        };
+      },
       persist: candidate => secureStorage.savePlanningAndMeta(candidate.planning, candidate.meta),
       publish: candidate => {
         planningRef.current = candidate.planning;
@@ -1331,8 +1370,12 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       },
       afterCommit: () => toast('Programmazione salvata')
     }).then(candidate => candidate.planning).catch(error => {
-      console.error('Secure planning save failed', error);
-      alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      if (error instanceof AssessmentContinuityError) {
+        alert(error.message);
+      } else {
+        console.error('Secure planning save failed', error);
+        alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      }
       throw error;
     });
   }, [mutationCoordinator, secureStorage, toast]);
@@ -2124,6 +2167,9 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     schoolYear: settings.year,
     subjectCode: curricularSubjectCode
   }), [currentClass?.name, planning, settings.year, curricularSubjectCode]);
+  const approvedAssessmentScopes = React.useMemo(() =>
+    resolveApprovedAssessmentScopes(appData,planning,settings),
+    [appData.classes,planning,settings.year,settings.subject]);
   const resolvedTeachingFocus = resolveTeachingFocusForClass({
     focus: teachingFocus,
     currentClassId: currentClass?.id ?? null,
@@ -2940,6 +2986,111 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       if(!record)throw Error('Ricevuta non disponibile.');return record;
     }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
   };
+  // VAL-01/PRODUCT-03 — explicit proof and criteria from an empty or
+  // previously confirmed local assessment archive. Reuse the same mutation
+  // coordinator, atomic encrypted save and backup metadata as every grade.
+  const handleSaveAssessmentSetup:AssessmentSetupSave=async(reviewed,confirmation)=>{
+    const classId=currentClassIdRef.current;
+    const approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    const scope=reviewed.scope;
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+      evaluationSavePendingRef.current||!isPrivacyShieldActive||
+      scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
+      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+    const selected=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
+      throw Error('Elenco classe cambiato.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+          !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+          settingsRef.current.year!==approvedSettings.year||
+          settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
+        const approved=resolveApprovedAssessmentScopes(current,planningRef.current,approvedSettings);
+        return deriveConfirmedDailyAssessmentSetup(current,approved,reviewed,confirmation);
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const wanted=reviewed.mode==='planned'?reviewed.request.plannedRevisionId:reviewed.request.completedRevisionId;
+      const expectedStatus=reviewed.mode==='planned'?'planned':'completed';
+      const saved=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
+        .find(d=>d.document.classId===scope.classId&&d.document.schoolYear===scope.schoolYear&&
+          d.document.subjectCode===scope.subjectCode)?.document.assessments
+        .find(a=>a.revisionId===wanted&&a.status===expectedStatus);
+      if(!saved)throw Error('Ricevuta prova non verificabile.');
+      return {revisionId:saved.revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+  // VAL-01/PRODUCT-04 — separate S6a confirmation of a previously
+  // scheduled proof, always through canonical encrypted App commit.
+  const handleCompletePlannedAssessment:PlannedCompletionSave=async(reviewed,confirmation)=>{
+    const classId=currentClassIdRef.current,scope=reviewed.scope,approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+      evaluationSavePendingRef.current||!isPrivacyShieldActive||
+      scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
+      !subjectCode||scope.subjectCode!==subjectCode)throw Error('Contesto prova non attuale.');
+    const selected=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!selected||JSON.stringify(selected.students.map(s=>s.id))!==JSON.stringify(scope.studentIds))
+      throw Error('Elenco classe cambiato.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+          !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+          settingsRef.current.year!==approvedSettings.year||
+          settingsRef.current.subject!==approvedSettings.subject)throw Error('Contesto modificato.');
+        const approved=resolveApprovedAssessmentScopes(current,planningRef.current,approvedSettings);
+        return deriveConfirmedDailyPlannedCompletion(current,approved,reviewed,confirmation);
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const revisionId=reviewed.preview.request.revisionId;
+      const saved=result.classes.find(c=>c.id===classId)?.assessmentEvidenceV1?.documents
+       .find(d=>d.document.classId===scope.classId&&d.document.schoolYear===scope.schoolYear&&
+        d.document.subjectCode===scope.subjectCode)?.document.assessments
+       .find(a=>a.revisionId===revisionId&&a.status==='completed'&&
+         a.supersedesRevisionId===reviewed.preview.request.assessmentRevisionId);
+      if(!saved)throw Error('Ricevuta conclusione non verificabile.');
+      return {revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
+  // VAL-01/PRODUCT-02 — confirmed criterion observation through the SAME
+  // encrypted durable coordinator as votes. No new archive/grade or inference.
+  const handleSaveCriterionEvidence:CriterionSave=async(scope,reviewed,confirmation)=>{
+    if(reviewed.kind!=='new')throw new Error('Solo nuove rilevazioni confermate dal docente.');
+    const classId=currentClassIdRef.current;
+    const approvedSettings=settingsRef.current;
+    const subjectCode=resolveAssessmentSubjectCode(approvedSettings.subject);
+    if(!classId||activeTabRef.current!=='tabellone'||!dailyMatrixModeRef.current||
+       evaluationSavePendingRef.current||!isPrivacyShieldActive||
+       scope.classId!==classId||scope.schoolYear!==canonicalAssessmentSchoolYear(approvedSettings.year)||
+       !subjectCode||scope.subjectCode!==subjectCode)throw new Error('Contesto di rilevazione non attuale.');
+    const activeClass=appDataRef.current.classes.find(c=>c.id===classId);
+    if(!activeClass||scope.studentIds.length!==activeClass.students.length||
+       !scope.studentIds.every((id,i)=>id===activeClass.students[i].id))throw new Error('Elenco alunni non più attuale.');
+    evaluationSavePendingRef.current=true;setEvaluationSavePending(true);
+    try{
+      const result=await commitAppDataMutation(current=>{
+        if(currentClassIdRef.current!==classId||activeTabRef.current!=='tabellone'||
+           !dailyMatrixModeRef.current||!isPrivacyShieldActive||
+           settingsRef.current.year!==approvedSettings.year||
+           settingsRef.current.subject!==approvedSettings.subject)throw new Error('Contesto modificato.');
+        // Scopes come from currently approved teacher settings and physical
+        // class identities, never the untrusted document's self-declared scope.
+        const scopes=resolveApprovedAssessmentScopes(current,planningRef.current,approvedSettings);
+        return deriveConfirmedEvidenceMutation(current,scopes,scope,reviewed,confirmation).appData;
+      },{showBackupModal:false,successMessage:'',inlineFailure:true});
+      const revisionId=reviewed.preview.request.revisionId;
+      const cls=result.classes.find(c=>c.id===classId);
+      const saved=cls?.assessmentEvidenceV1?.documents
+        .find(section=>section.document.classId===scope.classId&&
+          section.document.schoolYear===scope.schoolYear&&
+          section.document.subjectCode===scope.subjectCode)
+        ?.document.evidence.find(e=>e.revisionId===revisionId);
+      if(!saved||saved.studentId!==reviewed.preview.request.studentId)
+        throw new Error('Ricevuta da verificare sul dato già salvato.');
+      return {revisionId};
+    }finally{evaluationSavePendingRef.current=false;setEvaluationSavePending(false);}
+  };
   const handleSaveMatrixCell = async (request:MatrixCellWrite):Promise<Grade> => {
     const classId=currentClassIdRef.current;
     if(!classId||!matrixEvaluationModeRef.current||activeTabRef.current!=='voti'||evaluationSavePendingRef.current)throw Error('Contesto valutazione non disponibile.');
@@ -3094,23 +3245,45 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     return commitAppDataMutation(current => {
       const targetClass = current.classes.find(c => c.id === classId);
       if (!targetClass) throw new Error('Classe non più disponibile.');
+      // A protected student cannot be deleted together with grades, council
+      // records, withdrawn observations or other frozen historic evidence.
+      if (!checkStudentRemovalContinuity(targetClass, studentId).allowed) {
+        throw new AssessmentContinuityError('student');
+      }
       const updatedClass: ClassData = {
         ...targetClass,
         students: targetClass.students.filter(s => s.id !== studentId),
         grades: (targetClass.grades || []).filter(g => g.studentId !== studentId),
         behaviors: (targetClass.behaviors || []).filter(b => b.studentId !== studentId),
-        // Keep Council backup references consistent after an explicit pupil deletion.
         councilAssessments: (targetClass.councilAssessments || [])
           .filter(entry => entry.studentId !== studentId)
       };
-      return {
+      const candidate:AppData = {
         ...current,
         classes: current.classes.map(c => (c.id === classId ? updatedClass : c))
       };
+      // All physical classes and historical approvals must remain valid after
+      // a deletion; a local roster change never repairs or grants an old scope.
+      if (candidate.classes.some(c => Object.prototype.hasOwnProperty.call(c, 'assessmentEvidenceV1'))) {
+        const scopes = resolveApprovedAssessmentScopes(candidate, planningRef.current, settingsRef.current);
+        if (!validateAssessmentArchiveV1(candidate, scopes).valid) {
+          throw new AssessmentContinuityError('student');
+        }
+      }
+      return candidate;
     }, {
       showBackupModal: false,
-      successMessage: 'Alunno rimosso'
-    }).then(() => undefined);
+      successMessage: 'Alunno rimosso',
+      inlineFailure: true
+    }).then(() => undefined).catch(error => {
+      if (error instanceof AssessmentContinuityError) {
+        alert(error.message);
+      } else {
+        console.error('Secure student removal failed', error);
+        alert(DURABLE_SAVE_FAILURE_MESSAGE);
+      }
+      throw error;
+    });
   };
 
   // Bulk add students from Excel
@@ -3308,9 +3481,11 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
   });
 
   const prepareEncryptedBackup = (): Promise<AuthorizedBackupCheckpoint> => {
-    return mutationCoordinator.enqueueTask(() =>
-      backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()))
-    );
+    return mutationCoordinator.enqueueTask(() => {
+      // AP-02: never issue a V6 receipt for an archive containing V7 evidence.
+      assertV6AssessmentExportAllowed(appDataRef.current);
+      return backupReceiptAuthority.issue(prepareBackupCheckpoint(getCompleteCommittedSnapshot(), new Date().toISOString()));
+    });
   };
 
   const bindBackupEvidence = (receipt: BackupReceipt, evidence: ExpectedCopyEvidence): Promise<void> => {
@@ -3330,6 +3505,36 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       }
     }).then(() => undefined);
   };
+
+  const prepareAssessmentV7Backup = (password: string) =>
+    mutationCoordinator.enqueueTask(async () => {
+      const snapshot = getCompleteCommittedSnapshot();
+      const scopes = resolveApprovedAssessmentScopes(snapshot.appData, snapshot.planning, snapshot.settings);
+      return assessmentBackupAuthority.prepare(snapshot, scopes, password, new Date().toISOString());
+    });
+
+  const verifyAssessmentV7WebBackup = (receipt: VersionedBackupReceipt, file: Blob, active: () => boolean) =>
+    mutationCoordinator.enqueueTask(() => assessmentBackupAuthority.verifyWeb(receipt, file, active));
+
+  // AP-02/F2-DEVICE: Android's external document picker pauses the Activity.
+  // Never hold the durable-write queue while it is open: Root must drain,
+  // shield and lock, then allow explicit fresh native-epoch authentication
+  // before the physical readback. The one-use receipt verifies only encrypted
+  // bytes; its eventual metadata commit remains serialized below.
+  const verifyAssessmentV7AndroidBackup = (
+    receipt: VersionedBackupReceipt, encryptedText: string, filename: string, active: () => boolean
+  ) => assessmentBackupAuthority.verifyAndroid(receipt, encryptedText, filename, active);
+
+  const recordAssessmentV7Backup = (receipt: VersionedBackupReceipt): Promise<void> =>
+    mutationCoordinator.enqueue<SecureMeta>({
+      getCommitted: () => metaRef.current,
+      derive: current => assessmentBackupAuthority.consume(current, receipt, 7),
+      persist: candidate => secureStorage.saveMeta(candidate),
+      publish: candidate => {
+        metaRef.current = candidate;
+        setMeta(candidate);
+      }
+    }).then(() => undefined);
 
   // CDC-01: teacher-assigned council entry values are persisted in the existing appData Vault record.
   const handleSaveCouncilEntries = (classId: string, schoolYear: string, values: Record<string, string>): Promise<void> => {
@@ -3387,16 +3592,48 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
     });
   };
 
-  // Import Encrypted Backup
+  // Import Encrypted Backup: preserve the V6 historical entry point and its
+  // independently qualified source contract; never pass V7 into this function.
   const handleImportEncryptedBackup = (decryptedData: unknown): Promise<void> => {
     return mutationCoordinator.enqueueTask(async () => {
       const previousLogical = getCompleteCommittedSnapshot();
+      assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData);
       const candidate = await normalizeBackupPayloadVerified(decryptedData, previousLogical);
+      await restoreVerifiedCandidate(candidate, previousLogical);
+    });
+  };
+
+  // AP-02: V7 is separate and only accepts two authenticated decrypted copies.
+  const handleImportAssessmentV7Backup = (decryptedData: unknown, recoveryData: unknown): Promise<void> => {
+    return mutationCoordinator.enqueueTask(async () => {
+      const previousLogical = getCompleteCommittedSnapshot();
+      // Derive the authority solely from teacher-approved local state, not either file.
+      const scopes = resolveApprovedAssessmentScopes(
+        previousLogical.appData, previousLogical.planning, previousLogical.settings
+      );
+      // AP-02: a valid older copy may not contain classes created later.
+      // Only the current teacher-approved scopes may authorize an imported
+      // document; intersect them with candidate class IDs, never trust the
+      // imported file to supply its own scopes.
+      const incomingScopes = selectApprovedScopesForIncomingV7Backup(decryptedData, scopes);
+      const candidate = await projectAssessmentRestoreV7(
+        previousLogical, decryptedData, recoveryData, scopes, incomingScopes,
+        { requireCandidateScopeContinuity: true }
+      );
+      await restoreVerifiedCandidate(candidate, previousLogical);
+    });
+  };
+
+  // Both routes reuse the one atomic Vault restore and the post-commit UI reset.
+  const restoreVerifiedCandidate = async (
+    candidate: CompleteSecureAppSnapshot, previousLogical: CompleteSecureAppSnapshot
+  ): Promise<void> => {
       if (wouldLoseCouncilEntries(previousLogical.appData, candidate.appData)
         && !window.confirm('ATTENZIONE: questo ripristino sostituirà valutazioni, sedute o fotografie storiche dei Consigli già salvate. Conserva prima un nuovo backup cifrato. Vuoi sostituire comunque i dati correnti?')) {
         throw new Error('Importazione annullata: i dati dei Consigli già salvati sono stati conservati.');
       }
       backupReceiptAuthority.invalidate();
+      assessmentBackupAuthority.invalidate();
       const restored = await secureStorage.restoreSnapshotVerified(candidate, previousLogical);
       const restoredVisibleAppData = { ...restored.appData, currentClassId: null };
       appDataRef.current = restoredVisibleAppData;
@@ -3451,15 +3688,16 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         console.warn('Cronologia non aggiornata dopo ripristino confermato.');
       }
       toast('Backup cifrato verificato e ripristinato');
-    });
   };
 
   // Factory Reset / Diritto all'Oblio
   const handleFactoryReset = async () => {
     backupReceiptAuthority.invalidate();
+    assessmentBackupAuthority.invalidate();
     try {
       await mutationCoordinator.enqueueTask(async () => {
       backupReceiptAuthority.invalidate();
+      assessmentBackupAuthority.invalidate();
       await onFactoryReset();
       const resetAppData: AppData = { classes: [], currentClassId: null };
       const resetPlanning = createEmptyPlanningState();
@@ -3679,7 +3917,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
         {activeTab === 'tabellone' && currentClass && (
           <div className="space-y-3">
             <MatrixSurfaceSelector mode={dailyMatrixMode?'daily':'historical'} onChange={mode=>switchDailyMatrixMode(mode==='daily')}/>
-            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation}/> : <MatrixView
+            {dailyMatrixMode ? <DailyMatrixWorkspace key={currentClass.id} data={appData} currentClass={currentClass} udas={udas} settings={settings} approvedScopes={approvedAssessmentScopes} isPrivacyShieldActive={isPrivacyShieldActive} onRegisterDraftGuard={registerEvaluationDraftGuard} requestChange={requestDailyContextChange} onSaveGrade={handleDailyGrade} onSaveObservation={handleDailyObservation} onSaveCriterionEvidence={handleSaveCriterionEvidence} onSaveAssessmentSetup={handleSaveAssessmentSetup}
+ onCompletePlannedAssessment={handleCompletePlannedAssessment}/> : <MatrixView
             onInsertEvaluation={()=>{setEditingBatchId(null);handleNavigateTab('voti',{evaluationBatchId:null,returnTab:'tabellone'});}}
             key={currentClass.id}
             currentClass={currentClass}
@@ -3728,6 +3967,7 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             selectedStudentId={selectedStudentForReport}
             onSelectStudent={handleSelectStudentInReport}
             settings={settings}
+            approvedScopes={approvedAssessmentScopes}
             udas={udas}
             isPrivacyShieldActive={isPrivacyShieldActive}
           />
@@ -3920,9 +4160,14 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
             isPrivacyShieldActive={isPrivacyShieldActive}
             onTogglePrivacyShield={handleTogglePrivacyShield}
             onPrepareEncryptedBackup={prepareEncryptedBackup}
+            onPrepareAssessmentV7Backup={prepareAssessmentV7Backup}
+            onVerifyAssessmentV7WebBackup={verifyAssessmentV7WebBackup}
+            onVerifyAssessmentV7AndroidBackup={verifyAssessmentV7AndroidBackup}
+            onRecordAssessmentV7Backup={recordAssessmentV7Backup}
             onBindBackupEvidence={bindBackupEvidence}
             onRecordBackupExport={recordEncryptedBackupExport}
             onImportEncryptedBackup={handleImportEncryptedBackup}
+            onImportAssessmentV7Backup={handleImportAssessmentV7Backup}
             onFactoryReset={handleFactoryReset}
           />
         )}

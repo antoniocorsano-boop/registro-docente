@@ -1,0 +1,219 @@
+name: Q5-SYS-07 — Mandatory hybrid Android evidence (not full F2 alone)
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
+      dual_diagnostic:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - name: Admit only approved exact-SHA callers (fail closed)
+        shell: bash
+        env:
+          APPROVED_CALLER: ${{ github.event_name == 'pull_request' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && inputs.candidate_sha == github.event.pull_request.head.sha && ((github.event.pull_request.number == 414 && github.head_ref == 'qa/qa-stability-01-q2' && github.base_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.event.pull_request.base.sha == '80378e9daab60fe6c389e372c3c79e3dcd09aac0') || (github.event.pull_request.number == 412 && github.head_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.base_ref == 'main')) }}
+        run: |
+          test "$APPROVED_CALLER" = true
+          test "${{ inputs.dual_diagnostic }}" = true
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact candidate contracts before any emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node scripts/qualification/check-invariants.mjs
+          node scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --manifest /tmp/appium-impact.json
+          node --test scripts/diagnostics/appium-pilot/contract.test.mjs scripts/diagnostics/appium-pilot/native-picker.test.mjs
+          node --check scripts/diagnostics/appium-pilot/q3-evidence.mjs
+          python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py scripts/diagnostics/appium-pilot/qualification_contracts.py
+          python3 -m unittest discover -s scripts/diagnostics/appium-pilot -p 'test_*.py'
+          bash -n scripts/diagnostics/appium-pilot/run.sh
+      - name: Validate workflow with actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/qa-appium-replacement-pilot.yml .github/workflows/qa-stability-01-q4.yml .github/workflows/ap02-f2-native-device.yml
+  pilot:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        api: [32, 36]
+        trial: [1]
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      AP02_API: ${{ matrix.api }}
+      Q5_DUAL_DIAGNOSTIC: ${{ inputs.dual_diagnostic }}
+      Q5_DUAL_TRIAL: ${{ matrix.trial }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify frozen product and approved laboratory-only delta
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD
+          # Q4 is still laboratory-only. PR 412 admits only the audited APP-01 promotion.
+          lab_head=HEAD
+          case "$PR_NUMBER" in
+            414) ;;
+            412)
+              lab_head=72dd969863d6fa74229f04a8c95eabda0095ebb8
+              red=239c9b07a65dd9363073eb133c286f9a154ce622
+              green=69d56478081077eef07aa3c1873bf4710f17807c
+              git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 "$lab_head"
+              test "$(git rev-list --parents -n 1 "$red")" = "$red $lab_head"
+              test "$(git rev-list --parents -n 1 "$green")" = "$green $red"
+              git merge-base --is-ancestor "$green" HEAD
+              expected=$(printf '%s\n' src/App.tsx src/assessment/approvedAssessmentScopes.ts src/assessment/assessmentSubjectScope.ts src/security/ap02F1HistoricalRestore.test.ts src/security/ap03HistoricalAssessmentScopes.test.ts src/security/assessmentRestorePolicy.ts | LC_ALL=C sort)
+              actual=$(git diff --name-only --no-renames "$lab_head" "$green" | LC_ALL=C sort)
+              test "$actual" = "$expected"
+              post=$(git diff --name-only --no-renames "$green" HEAD)
+              while IFS= read -r path; do
+                case "$path" in
+                  ''|.github/workflows/qa-appium-replacement-pilot.yml|scripts/diagnostics/appium-pilot/contract.test.mjs|scripts/diagnostics/ap02-native-device-v7.mjs|scripts/diagnostics/native-lab-transitions.mjs) ;;
+                  *) echo 'UNAPPROVED_POST_PROMOTION_DELTA' >&2; exit 1 ;;
+                esac
+              done <<< "$post"
+              ;;
+            *) echo 'UNAPPROVED_CALLER' >&2; exit 1 ;;
+          esac
+          changed=$(git diff --name-only --no-renames 80378e9daab60fe6c389e372c3c79e3dcd09aac0 "$lab_head")
+          while IFS= read -r path; do
+            if test -z "$path"; then continue; fi
+            if ! [[ "$path" =~ ^(\.github/workflows/(qa-appium-replacement-pilot|ap02-f2-native-device|qa-stability-01-q4|ci-fast-development)\.yml|scripts/diagnostics/appium-pilot/[^/]+|scripts/diagnostics/(ap02-native-device-v7|native-adb-transport-probe|native-home-navigation-probe|native-lab-readiness|native-lab-runtime|native-lab-runtime\.test|native-lab-transitions|native-process-probe|native-process-probe\.test|native-saf-lifecycle-probe\.test|native-v7-document-discovery|run-native-lab-contracts)\.mjs|qualification/invariants\.v1\.json|src/security/ap02V7OperationalBackup\.test\.ts)$ ]]; then
+              echo 'UNAPPROVED_LAB_DELTA' >&2
+              exit 1
+            fi
+          done <<< "$changed"
+          python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'
+      - name: Install isolated open-source automation stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APPIUM_HOME="$RUNNER_TEMP/appium-q5"
+          printf 'APPIUM_HOME=%s\n' "$APPIUM_HOME" >> "$GITHUB_ENV"
+          npm install --global --no-audit --no-fund appium@3.8.0
+          appium driver install uiautomator2@8.6.0
+          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
+          appium --version
+          appium driver list --installed
+          test -x "$ANDROID_HOME/emulator/emulator"
+          appium driver doctor uiautomator2
+      - name: Build exact real Web UI and separate debug-only Android laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p ap02-device-evidence
+          bun install --frozen-lockfile
+          bun run build
+          test -s dist/index.html
+          test -s dist/assets/$(ls dist/assets | head -n1)
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('android/app')
+          def change(p,old,new):
+              f=root/p
+              value,n=re.subn(old,new,f.read_text())
+              assert n==1,(str(f),n)
+              f.write_text(value)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"',
+                 'applicationId "it.trama.registrodocente.lab.ap02v7"')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"',
+                 'android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"',
+                 'android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          apk="$RUNNER_TEMP/ap02-f2-device-lab.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/ap02-cert.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.ap02v7'"
+          unzip -p "$apk" assets/public/index.html | cmp - ../../dist/index.html
+          sha256sum "$apk" > ../../ap02-device-evidence/apk-hash.txt
+          printf 'candidate=%s\napi=%s\npackage=it.trama.registrodocente.lab.ap02v7\nproduction_release=false\nsynthetic_only=true\n' \
+            "$CANDIDATE_SHA" "$AP02_API" > ../../ap02-device-evidence/provenance.txt
+          printf 'AP02_LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+      - name: Enable emulator hardware acceleration
+        shell: bash
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Appium real installed application pilot
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: bash scripts/diagnostics/appium-pilot/run.sh
+      - name: Require actual pilot evidence, never F2 qualification
+        if: ${{ !inputs.dual_diagnostic }}
+        run: |
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '.candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .stages==["native-session","webview-setup","professional-home","privacy-navigation","home-navigation","target-class","target-export","recovery-class","recovery-export","restore","native-stop-verified","cold-lock","cold-authenticated-home","cold-restored-content"] and .safReturns==["target-export","recovery-export","target-source","recovery-source"] and (.physicalCopies|length)==2 and .physicalCopies[0].sha256!=.physicalCopies[1].sha256' ap02-device-evidence/appium-pilot.json
+      - name: Require isolated dual-channel diagnostic evidence
+        if: ${{ inputs.dual_diagnostic }}
+        run: |
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q5_DUAL_TRIAL" '.candidate==$sha and .api==$api and .trial==$trial and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .nativeContextOnly==true and .cdpDirect==true and .nativeSnapshots>0 and .nativeReauthCount==4 and (.stages|length)==6 and .safReturns==["export","export","target-source","recovery-source"]' ap02-device-evidence/dual-diagnostic/summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.dual_diagnostic && 'dual-diagnostic' || 'appium-pilot' }}-api${{ matrix.api }}-trial${{ matrix.trial }}-${{ github.event.pull_request.head.sha }}
+          path: |
+            ap02-device-evidence/appium-pilot.json
+            ap02-device-evidence/dual-diagnostic/summary.json
+            ap02-device-evidence/dual-diagnostic/failure.json
+            ap02-device-evidence/dual-diagnostic/environment.json
+            ap02-device-evidence/apk-hash.txt
+            ap02-device-evidence/provenance.txt
+          retention-days: 14
+          if-no-files-found: warn

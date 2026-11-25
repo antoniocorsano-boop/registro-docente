@@ -2,44 +2,81 @@ import { describe, expect, test } from 'bun:test';
 import { getEmbedding, testEmbeddingConnection } from '../services/embeddingService';
 import type { LocalEmbeddingConfig } from '../types';
 
+const SERVER_START_TIMEOUT_MS = 15_000;
+const SERVER_REQUEST_TIMEOUT_MS = 5_000;
+const SERVER_TEST_TIMEOUT_MS = 30_000;
+
 async function withProductionServer<T>(run: (baseUrl: string) => Promise<T>): Promise<T> {
-  const port = 44000 + Math.floor(Math.random() * 1000);
+  // Ask the OS for a free port. Require the child's own listening
+  // announcement so an unrelated process on that port cannot qualify.
+  const reservation = Bun.serve({
+    hostname: '127.0.0.1', port: 0,
+    fetch: () => new Response(null, { status: 503 })
+  });
+  const port = reservation.port;
+  reservation.stop(true);
   const baseUrl = `http://127.0.0.1:${port}`;
   const server = Bun.spawn(['node', 'server.ts'], {
     env: {
       ...process.env,
       NODE_ENV: 'production',
+      TRAMA_BIND_HOST: '127.0.0.1',
       PORT: String(port),
       GEMINI_API_KEY: ''
     },
     stdout: 'pipe',
-    stderr: 'pipe'
+    stderr: 'ignore'
   });
 
+  let listening = false;
+  const marker = `Server avviato su ${baseUrl}`;
+  const drain = (async () => {
+    const decoder = new TextDecoder();
+    const reader = server.stdout.getReader();
+    let tail = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        tail += decoder.decode(value, { stream: true });
+        const lines = tail.split(/\r?\n/);
+        tail = (lines.pop() ?? '').slice(-1024);
+        if (lines.some(line => line.trim() === marker)) listening = true;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  })().catch(() => { /* readiness remains false unless the marker was seen */ });
+
   try {
-    let ready = false;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      try {
-        const probe = await fetch(`${baseUrl}/api/embeddings/test`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}'
-        });
-        if (probe.status === 400) {
-          ready = true;
-          break;
+    const deadline = performance.now() + SERVER_START_TIMEOUT_MS;
+    while (performance.now() < deadline) {
+      if (server.exitCode !== null) throw new Error('SEC3_SERVER_EXITED_BEFORE_READY');
+      if (listening) {
+        let ready = false;
+        try {
+          const probe = await fetch(`${baseUrl}/api/embeddings/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+            signal: AbortSignal.timeout(1_000)
+          });
+          const status = probe.status;
+          await probe.body?.cancel();
+          ready = status === 400;
+        } catch {
+          // Only the readiness probe can be retried, never the security test.
+          if (server.exitCode !== null) throw new Error('SEC3_SERVER_EXITED_BEFORE_READY');
         }
-      } catch {
-        // Server not listening yet.
+        if (ready && server.exitCode === null) return await run(baseUrl);
       }
       await Bun.sleep(50);
     }
-
-    expect(ready).toBe(true);
-    return await run(baseUrl);
+    throw new Error('SEC3_SERVER_READY_TIMEOUT');
   } finally {
-    server.kill();
+    if (server.exitCode === null) server.kill('SIGKILL');
     await server.exited;
+    await drain;
   }
 }
 
@@ -57,6 +94,7 @@ describe('SEC-3 outbound boundary closure', () => {
   test('UDA Gemini server boundary fails closed when policy metadata is missing', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
+        signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,11 +108,12 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
-  });
+  }, SERVER_TEST_TIMEOUT_MS);
 
   test('UDA Gemini server boundary blocks student personal data even with opt-in', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
+        signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -88,11 +127,12 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
-  });
+  }, SERVER_TEST_TIMEOUT_MS);
 
   test('local embedding server proxy rejects a non-loopback endpoint before outbound fetch', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/embeddings/test`, {
+        signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -110,7 +150,7 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
-  });
+  }, SERVER_TEST_TIMEOUT_MS);
 
   test('local embedding direct client rejects a non-loopback endpoint before any fetch', async () => {
     const config: LocalEmbeddingConfig = {
@@ -142,6 +182,7 @@ describe('SEC-3 outbound boundary closure', () => {
   test('embedding test route rejects an unknown provider before local fallback', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/embeddings/test`, {
+        signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,11 +200,12 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
-  });
+  }, SERVER_TEST_TIMEOUT_MS);
 
   test('embedding generate route rejects an unknown provider before local fallback', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/embeddings/generate`, {
+        signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -181,7 +223,7 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
-  });
+  }, SERVER_TEST_TIMEOUT_MS);
 
   test('getEmbedding rejects an unknown provider before any direct-client fetch', async () => {
     const config = {
@@ -275,6 +317,7 @@ describe('SEC-3 outbound boundary closure', () => {
     try {
       await withProductionServer(async baseUrl => {
         const response = await fetch(`${baseUrl}/api/embeddings/test`, {
+          signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS),
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -298,5 +341,5 @@ describe('SEC-3 outbound boundary closure', () => {
       redirector.stop(true);
       redirectTarget.stop(true);
     }
-  });
+  }, SERVER_TEST_TIMEOUT_MS);
 });

@@ -1,0 +1,293 @@
+name: AUDIT-PRE-01 AP-02 F2 — Installed professional Android V7 SAF
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
+      trial:
+        required: true
+        type: number
+      startup_only:
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/ap02-f2-native-device.yml'
+      - 'scripts/diagnostics/ap02-native-device-v7.mjs'
+      - '.github/workflows/qa-appium-replacement-pilot.yml'
+      - 'scripts/diagnostics/appium-pilot/**'
+      - 'scripts/diagnostics/native-lab-runtime.mjs'
+      - 'scripts/diagnostics/native-lab-readiness.mjs'
+      - 'scripts/diagnostics/native-lab-transitions.mjs'
+      - 'scripts/diagnostics/native-lab-runtime.test.mjs'
+      - 'scripts/diagnostics/run-native-lab-contracts.mjs'
+      - 'scripts/diagnostics/native-ui-driver.mjs'
+      - 'scripts/diagnostics/native-process-probe.mjs'
+      - 'scripts/diagnostics/native-v7-document-discovery.mjs'
+      - 'scripts/diagnostics/native-saf-lifecycle-probe.test.mjs'
+      - 'mobile/android-probe/**'
+      - 'src/**'
+      # F3: shared reopening acceptance changes require the same native matrix.
+      - 'tests/browser/header01-navigation.cjs'
+      - 'tests/browser/ap02-v7-professional-web.spec.cjs'
+      - 'qualification/invariants.v1.json'
+permissions:
+  contents: read
+
+jobs:
+  # Direct qualification of the frozen candidate also requires the hybrid gate.
+  # Q4 calls it once in its coordinator, not once per inherited trial.
+  hybrid-evidence:
+    if: ${{ inputs.candidate_sha == '' && github.event.pull_request.number == 412 }}
+    uses: ./.github/workflows/qa-appium-replacement-pilot.yml
+    with:
+      candidate_sha: ${{ github.event.pull_request.head.sha }}
+      dual_diagnostic: true
+  installed-professional-v7:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [32, 36]
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
+      Q4_TRIAL: ${{ inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
+      AP02_API: ${{ matrix.api }}
+      AP02_STARTUP_ONLY: ${{ inputs.startup_only && 'true' || 'false' }}
+      USE_HYBRID: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
+      HYBRID_QUALIFICATION_MODE: ${{ inputs.startup_only && 'startup' || 'full' }}
+      Q5_DUAL_QUALIFICATION: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
+    steps:
+      - name: Validate isolated Q4 invocation before checkout
+        if: ${{ inputs.candidate_sha != '' || github.event.pull_request.base.ref != 'main' }}
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+          EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+          EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          EVENT_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_NAME" = pull_request
+          test "$EVENT_PR" = 414
+          test "$GITHUB_REPOSITORY" = antoniocorsano-boop/registro-docente
+          test "$EVENT_HEAD_REPO" = "$GITHUB_REPOSITORY"
+          test "$EVENT_BASE_REPO" = "$GITHUB_REPOSITORY"
+          test "$EVENT_HEAD_REF" = qa/qa-stability-01-q2
+          test "$EVENT_BASE_REF" = fix/audit-pre-01-atomic-bootstrap
+          test "$EVENT_BASE" = 80378e9daab60fe6c389e372c3c79e3dcd09aac0
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$CANDIDATE_SHA" = "$EVENT_HEAD"
+          [[ "$Q4_TRIAL" =~ ^[0123]$ ]]
+          if test "$AP02_STARTUP_ONLY" = true; then [[ "$Q4_TRIAL" =~ ^[123]$ ]]; fi
+          test "$GITHUB_RUN_ATTEMPT" = 1
+      - name: Checkout exact candidate without write credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact HEAD and isolated diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node scripts/diagnostics/run-native-lab-contracts.mjs
+          test -f src/main.tsx
+          test -f mobile/android-probe/native/RegistroBackupFilesPlugin.java
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'
+      - name: Install isolated open-source automation stack
+        if: ${{ env.USE_HYBRID == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APPIUM_HOME="$RUNNER_TEMP/appium-q5"
+          printf 'APPIUM_HOME=%s\n' "$APPIUM_HOME" >> "$GITHUB_ENV"
+          npm install --global --no-audit --no-fund appium@3.8.0
+          appium driver install uiautomator2@8.6.0
+          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
+          appium --version
+          appium driver list --installed
+          test -x "$ANDROID_HOME/emulator/emulator"
+          appium driver doctor uiautomator2
+      - name: Build exact real Web UI and separate debug-only Android laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p ap02-device-evidence
+          bun install --frozen-lockfile
+          bun run build
+          test -s dist/index.html
+          test -s dist/assets/$(ls dist/assets | head -n1)
+          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('android/app')
+          def change(p,old,new):
+              f=root/p
+              value,n=re.subn(old,new,f.read_text())
+              assert n==1,(str(f),n)
+              f.write_text(value)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"',
+                 'applicationId "it.trama.registrodocente.lab.ap02v7"')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"',
+                 'android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"',
+                 'android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          apk="$RUNNER_TEMP/ap02-f2-device-lab.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/ap02-cert.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.ap02v7'"
+          unzip -p "$apk" assets/public/index.html | cmp - ../../dist/index.html
+          sha256sum "$apk" > ../../ap02-device-evidence/apk-hash.txt
+          printf 'candidate=%s\napi=%s\npackage=it.trama.registrodocente.lab.ap02v7\nproduction_release=false\nsynthetic_only=true\n' \
+            "$CANDIDATE_SHA" "$AP02_API" > ../../ap02-device-evidence/provenance.txt
+          printf 'AP02_LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+      - name: Enable emulator hardware acceleration
+        shell: bash
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: F2-DEVICE actual professional UI, two Android SAF files and cold reopen
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: bash -c 'if test "$USE_HYBRID" = true; then bash scripts/diagnostics/appium-pilot/run.sh; else timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs; fi'
+      - name: Require exact complete acceptance evidence
+        if: ${{ !inputs.startup_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+            .candidate==$sha and .api==$api and
+            .package=="it.trama.registrodocente.lab.ap02v7" and
+            .mode=="installed-professional-ui-real-saf" and
+            .syntheticOnly==true and .productionRelease==false and
+            ([.results[].stage] == [
+              "installed-professional-android-webview",
+              "professional-vault-created-with-synthetic-profile",
+              "native-v7-target-export-saf-verified",
+              "native-v7-current-recovery-export-saf-verified",
+              "actual-professional-v7-native-saf-import-and-restored-ui",
+              "actual-android-process-cold-reopen-preserves-v7-restore"
+            ]) and all(.results[]; .status=="PASS") and
+            .results[2].nativeReauthCount>=1 and
+            .results[3].nativeReauthCount>=2 and
+            .results[4].twoFileSelection==true and
+            .results[4].encryptedFilesDistinct==true and
+            .results[4].nativeReauthCount>=4 and
+            .results[5].forcedStop==true and
+            .results[5].absenceSamples==2 and
+            .results[5].beforePidsCount>0 and
+            .results[5].afterPidsCount==0
+          ' ap02-device-evidence/result.json
+      - name: Require independent startup-only acceptance evidence
+        if: ${{ inputs.startup_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q4_TRIAL" '
+            .candidate==$sha and .api==$api and .trial==$trial and
+            .mode=="startup-only" and .syntheticOnly==true and .productionRelease==false and
+            .fullF2Qualified==false and .setupHome==true and .coldAuthenticatedHome==true and
+            .forcedStop==true and .absenceSamples==2 and .beforePidsCount>0 and .afterPidsCount==0
+          ' ap02-device-evidence/startup.json
+          jq -e '([.results[].stage] == ["installed-professional-android-webview","professional-vault-created-with-synthetic-profile"]) and all(.results[]; .status=="PASS")' ap02-device-evidence/result.json
+      - name: Require complete Q3 environment and readiness evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+            .candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and
+            .bootReady==true and .packageReady==true and .foreground==true and .cdpReady==true and
+            .complete==true and .launches==2 and
+            (.bootObservation=="ready-stopped" or .bootObservation=="ready-absent-verified") and
+            (.emulatorIdentity as $e | $e.version==.versions.emulator and
+              ($e.binarySha256 | test("^[a-f0-9]{64}$")) and
+              ($e.revision | test("^[0-9]+([.][0-9]+){1,4}$")) and
+              (($e.source=="executable" and $e.probeStatus=="ok") or
+               ($e.source=="sdk-package" and (["timeout","spawn-error","nonzero-exit","missing-version"] | index($e.probeStatus)!=null)))) and
+            (.versions | [.adb,.platformTools,.emulator,.webviewPackage,.webviewVersion,.androidBuild,.runnerImage,.runnerVersion,.node,.chromium] | all(type=="string" and length>0))
+          ' ap02-device-evidence/environment.json
+          if test "$AP02_STARTUP_ONLY" = true; then
+            jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+              .candidate==$sha and .api==$api and .rawDomStored==false and
+              (.readyDestinations | sort == ["home","lock","session","setup"])
+            ' ap02-device-evidence/surface-readiness.json
+          else
+            jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '
+              .candidate==$sha and .api==$api and .rawDomStored==false and
+              (.readyDestinations | sort == ["class","class-detail","home","lock","privacy","session","setup"])
+            ' ap02-device-evidence/surface-readiness.json
+          fi
+      - name: Require native-only dual-channel evidence in approved candidates
+        if: ${{ env.USE_HYBRID == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson startup "$AP02_STARTUP_ONLY" '
+            .candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and
+            .mode=="canonical-candidate" and .startupOnly==$startup and
+            .nativeContextOnly==true and .cdpDirect==true and .sessionClosed==true and
+            (if $startup then .nativeSnapshots==0 and .nativeReauthCount==0 and .safReturns==[] and (.stages|length)==2
+             else .nativeSnapshots>0 and .nativeReauthCount==4 and .safReturns==["export","export","target-source","recovery-source"] and (.stages|length)==6 end)
+          ' ap02-device-evidence/dual-channel.json
+      - name: Record isolated Q4 identity
+        if: ${{ always() && inputs.candidate_sha != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ap02-device-evidence
+          jq -n --arg candidate "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q4_TRIAL" --arg runId "$GITHUB_RUN_ID" --arg runAttempt "$GITHUB_RUN_ATTEMPT" --argjson startupOnly "$AP02_STARTUP_ONLY" '{schemaVersion:1,candidate:$candidate,api:$api,trial:$trial,runId:$runId,runAttempt:$runAttempt,startupOnly:$startupOnly,syntheticOnly:true,productionRelease:false}' > ap02-device-evidence/q4-identity.json
+      - name: Preserve non-sensitive qualification record only
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.startup_only && format('q4-startup-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || (inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA)) }}
+          path: |
+            ap02-device-evidence/result.json
+            ap02-device-evidence/appium-pilot.json
+            ap02-device-evidence/failure.json
+            ap02-device-evidence/saf-diagnostic.json
+            ap02-device-evidence/provenance.txt
+            ap02-device-evidence/apk-hash.txt
+            ap02-device-evidence/environment.json
+            ap02-device-evidence/surface-readiness.json
+            ap02-device-evidence/q4-identity.json
+            ap02-device-evidence/startup.json
+            ap02-device-evidence/dual-channel.json
+          retention-days: 14
+          if-no-files-found: warn

@@ -77,6 +77,9 @@ jobs:
           # Cap browser download at 120 seconds; fail promptly with a clear error.
           timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
+          cp tests/browser/ap01-initial-reservation.spec.cjs .browser-tools/ap01-initial-reservation.spec.cjs
+          cp tests/browser/ap02-v7-professional-web.spec.cjs .browser-tools/ap02-v7-professional-web.spec.cjs
+          cp tests/browser/ap02-f2-android-v7-ui.spec.cjs .browser-tools/ap02-f2-android-v7-ui.spec.cjs
           cp tests/browser/mobile01-m1-offline-pdf.spec.cjs .browser-tools/mobile01-m1-offline-pdf.spec.cjs
           cp tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs .browser-tools/mobile01-m2-native-backup-roundtrip.spec.cjs
           cp tests/browser/mobile01-m2c-native-pdf.spec.cjs .browser-tools/mobile01-m2c-native-pdf.spec.cjs
@@ -161,6 +164,45 @@ jobs:
           echo "Production server did not become ready within 30 seconds."
           cat browser-evidence/server.log
           exit 1
+
+      - name: AUDIT-PRE-01 / AP-01 — Real two-tab archive reservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ap01-initial-reservation.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/ap01-atomic-bootstrap
+
+      - name: AUDIT-PRE-01 / AP-02 — Real V7 Privacy backup and protected restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ap02-v7-professional-web.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/ap02-v7-professional-web
+
+      - name: AUDIT-PRE-01 / AP-02 F2 — Android V7 UI synthetic native bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ap02-f2-android-v7-ui.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/ap02-f2-android-v7-ui
 
       - name: Run qualification invariant smoke
         shell: bash

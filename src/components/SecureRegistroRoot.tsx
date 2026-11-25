@@ -20,6 +20,7 @@ import { SecureVault } from '../security/secureVault';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
+import { BootFault, bootMessage, createProtectedBootstrap, observeArchive } from '../security/protectedBootstrap';
 import type { SuspendedMutationLease } from '../persistence/durableMutationCoordinator';
 import {
   ANDROID_SESSION_EVENT, isAndroidSessionRuntime, readAndroidSessionState,
@@ -36,6 +37,9 @@ const LEGACY_DATA_KEYS = [
   META_KEY
 ] as const;
 
+// Positive local evidence only: no credentials or personal records.
+const ESTABLISHED_ARCHIVE_KEY = 'registro_archive_established_v1';
+const COMPLETE_ARCHIVE_KEY = 'registro_archive_complete_v1';
 const AUTO_LOCK_STORAGE_KEY = 'registro_auto_lock_minutes';
 const DEFAULT_AUTO_LOCK_MS = 15 * 60_000;
 type AutoLockMinutes = 0 | 15 | 30 | 60;
@@ -73,6 +77,22 @@ export const SecureRegistroRoot: React.FC = () => {
   const authenticatedEpochRef = useRef<number | null>(null);
   const lifecycleRevisionRef = useRef(0);
   const [nativeState, setNativeState] = useState<AndroidSessionState | null>(null);
+  const bootstrapGenerationRef = useRef(0);
+  // A transient, strictly local admission generation; never persisted.
+  const archiveAuthorityRevisionRef = useRef(0);
+  const archiveOperationPendingRef = useRef(false);
+  const bootstrapRef = useRef<ReturnType<typeof createProtectedBootstrap> | null>(null);
+  const establishedArchive = useCallback(() =>
+    window.localStorage.getItem(ESTABLISHED_ARCHIVE_KEY) === '1' ||
+    window.localStorage.getItem(COMPLETE_ARCHIVE_KEY) === '1', []);
+  const protectedBootstrap = useCallback(() => {
+    if (!bootstrapRef.current) bootstrapRef.current = createProtectedBootstrap({
+      observe: signal => observeArchive(globalThis.indexedDB, signal,
+        window.localStorage.getItem(COMPLETE_ARCHIVE_KEY) === '1'),
+      established: establishedArchive
+    });
+    return bootstrapRef.current;
+  }, [establishedArchive]);
   const registerSessionSuspension = useCallback((request: (() => SuspendedMutationLease) | null) => {
     suspendRequestRef.current = request;
   }, []);
@@ -82,8 +102,12 @@ export const SecureRegistroRoot: React.FC = () => {
 
   const getRuntime = useCallback(() => {
     if (!storeRef.current) {
-      storeRef.current = new IndexedDbVaultStore(globalThis.indexedDB);
-      vaultRef.current = new SecureVault(storeRef.current);
+      const store = new IndexedDbVaultStore(globalThis.indexedDB);
+      storeRef.current = store;
+      // AP-01: getMetadata() is only an observation. The first STAGING
+      // owner must be reserved atomically against both stores, so a second
+      // browser tab can never replace the first creator's vault metadata.
+      vaultRef.current = new SecureVault(store, metadata => store.claimInitialMetadata(metadata));
       storageRef.current = new SecureAppStorage(vaultRef.current);
     }
 
@@ -95,43 +119,78 @@ export const SecureRegistroRoot: React.FC = () => {
   }, []);
 
   const inspectBootstrap = useCallback(async () => {
+    const generation = ++bootstrapGenerationRef.current;
+    const current = () => generation === bootstrapGenerationRef.current;
     setGateState('CHECKING');
     setErrorMessage(null);
 
-    const indexedDbAvailable = Boolean(globalThis.indexedDB);
-    const webCryptoAvailable = Boolean(globalThis.crypto?.subtle);
-    if (!indexedDbAvailable || !webCryptoAvailable) {
-      setErrorMessage('IndexedDB o Web Crypto non sono disponibili: il Registro non userà un fallback in chiaro.');
+    if (!globalThis.indexedDB || !globalThis.crypto?.subtle) {
+      setErrorMessage('IndexedDB o Web Crypto non sono disponibili: nessun archivio verrà creato.');
       setGateState('ERROR');
       return;
     }
-
     try {
-      const { store } = getRuntime();
-      const metadata = await store.getMetadata();
+      // Never construct the writable store before read-only classification.
+      const result = await protectedBootstrap().run();
+      if (!current()) return;
+      if (result.kind === 'error') throw result.fault;
+      const observation = result.observation;
+      if (observation.kind === 'active') {
+        // The regular product entrypoint owns DB1; DB2 remains laboratory-only.
+        if (observation.version !== 1) {
+          throw new Error('Versione archivio non attiva in questo Registro. I dati non verranno modificati.');
+        }
+        window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY, '1');
+        setGateState('LOCKED');
+        return;
+      }
+      if (observation.kind === 'erased') {
+        throw new Error('Archivio aggiornato da verificare: nessuna inizializzazione automatica.');
+      }
       const hasLegacyData = LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null);
       const nextState = decideVaultBootstrap({
-        metadataState: metadata?.state ?? null,
-        hasLegacyData,
-        indexedDbAvailable,
-        webCryptoAvailable
+        metadataState: null, hasLegacyData, indexedDbAvailable: true, webCryptoAvailable: true,
+        archivePreviouslyEstablished: establishedArchive(), physicalArchiveStatus: 'absent'
       });
-
-      if (nextState === 'ERROR' && metadata?.state === 'STAGING') {
-        setErrorMessage('È stata rilevata una configurazione o migrazione interrotta. Riprova: gli archivi già attivi non verranno cancellati.');
-      }
       setGateState(nextState);
+      if (nextState === 'ERROR') {
+        setErrorMessage('Archivio precedente non verificabile. Non cancellare i dati o le copie cifrate.');
+      }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Controllo del Secure Local Vault non riuscito.');
+      if (!current()) return;
+      setErrorMessage(error instanceof BootFault ? bootMessage(error) :
+        error instanceof Error ? error.message : 'Controllo di sicurezza non riuscito.');
       setGateState('ERROR');
     }
-  }, [getRuntime]);
+  }, [protectedBootstrap, establishedArchive]);
 
   useEffect(() => {
     void inspectBootstrap();
+    return () => {
+      bootstrapGenerationRef.current++;
+      archiveAuthorityRevisionRef.current++;
+      bootstrapRef.current?.cancel();
+    };
   }, [inspectBootstrap]);
 
+  useEffect(() => {
+    // Leaving the page permanently revokes every in-flight archive mutation.
+    const onVisibility = () => {
+      if (document.hidden) archiveAuthorityRevisionRef.current++;
+    };
+    const onPageHide = () => { archiveAuthorityRevisionRef.current++; };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      archiveAuthorityRevisionRef.current++;
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, []);
+
   const revokeNativeAuthorization = useCallback(() => {
+    // Also revoke pending Web/Android setup and migration authorization.
+    archiveAuthorityRevisionRef.current++;
     const epoch = authenticatedEpochRef.current;
     authenticatedEpochRef.current = null;
     if (epoch !== null && isAndroidSessionRuntime()) {
@@ -270,6 +329,37 @@ export const SecureRegistroRoot: React.FC = () => {
     return { epoch: native.epoch, revision: lifecycleRevisionRef.current };
   }, [syncNativeSession]);
 
+  // A single owner for setup, authenticated residual cleanup and migration.
+  // The admission lease is checked inside every asynchronous vault boundary.
+  const beginArchiveOperation = useCallback(async () => {
+    if (archiveOperationPendingRef.current) {
+      throw new Error('Un’altra operazione sull’archivio è ancora in corso.');
+    }
+    archiveOperationPendingRef.current = true;
+    const authorityRevision = archiveAuthorityRevisionRef.current;
+    try {
+      const attempt = await getForegroundEpoch();
+      const assertAuthorized = () => {
+        if (archiveAuthorityRevisionRef.current !== authorityRevision ||
+            closingRef.current || suspendedRef.current !== null || document.hidden ||
+            lifecycleRevisionRef.current !== attempt.revision ||
+            (attempt.epoch !== null && (
+              !nativeStateRef.current?.foreground ||
+              nativeStateRef.current.epoch !== attempt.epoch))) {
+          throw new Error('Autorizzazione archivio revocata o sessione cambiata.');
+        }
+      };
+      assertAuthorized();
+      return {
+        attempt, assertAuthorized,
+        end: () => { archiveOperationPendingRef.current = false; }
+      };
+    } catch (error) {
+      archiveOperationPendingRef.current = false;
+      throw error;
+    }
+  }, [getForegroundEpoch]);
+
   // Only the synchronous commit callback may consume the admission lease or
   // reveal the App. No await between the last validation and that commit.
   const confirmForegroundEpoch = useCallback(async (
@@ -343,9 +433,15 @@ export const SecureRegistroRoot: React.FC = () => {
     });
   }, [syncNativeSession]);
 
-  const loadReadySnapshot = useCallback(async (attempt: { epoch: number | null; revision: number }) => {
+  const loadReadySnapshot = useCallback(async (
+    attempt: { epoch: number | null; revision: number }, assertAuthorized?: () => void
+  ) => {
     const { storage } = getRuntime();
-    const nextSnapshot = await storage.loadSnapshot();
+    let physicallyComplete = false;
+    const nextSnapshot = await storage.loadSnapshot(value => { physicallyComplete = value; });
+    if (window.localStorage.getItem(COMPLETE_ARCHIVE_KEY) === '1' && !physicallyComplete) {
+      throw new Error('Archivio precedentemente completo ora incompleto. Nessun dato verrà sovrascritto.');
+    }
 
     // Teacher navigation starts from a neutral Home on every vault bootstrap.
     // Replace, rather than push, the current entry so Back cannot restore a
@@ -378,82 +474,101 @@ export const SecureRegistroRoot: React.FC = () => {
     }
 
     await confirmForegroundEpoch(attempt, () => {
+      assertAuthorized?.();
+      window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY, '1');
+      if (physicallyComplete) window.localStorage.setItem(COMPLETE_ARCHIVE_KEY, '1');
       setSnapshot(nextSnapshot);
       setGateState('READY');
     });
   }, [getRuntime, confirmForegroundEpoch]);
 
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
-    const attempt = await getForegroundEpoch();
-    const { vault, store } = getRuntime();
-    if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
-      throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
-    }
-    await initializeNewArchive(vault, password, setup);
+    const operation = await beginArchiveOperation();
+    const { attempt, assertAuthorized } = operation;
     try {
-      await loadReadySnapshot(attempt);
+      if (establishedArchive()) throw new Error('Archivio già stabilito: non è ammessa una nuova configurazione.');
+      const inspected = await protectedBootstrap().run();
+      assertAuthorized();
+      if (inspected.kind !== 'ok' ||
+          (inspected.observation.kind !== 'absent' && inspected.observation.kind !== 'empty') ||
+          establishedArchive()) {
+        await inspectBootstrap();
+        throw new Error('Stato dell’archivio cambiato o non verificabile. Nessuna configurazione eseguita.');
+      }
+      const { vault, store } = getRuntime();
+      if (await store.getMetadata() || LEGACY_DATA_KEYS.some(key => window.localStorage.getItem(key) !== null)) {
+        throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
+      }
+      assertAuthorized();
+      await initializeNewArchive(vault, password, setup, assertAuthorized);
+      await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
-      vault.lock();
-      setGateState('LOCKED');
+      // ACTIVE may already be committed: inspect, do not claim a rollback.
+      vaultRef.current?.lock();
+      await inspectBootstrap();
       throw error;
+    } finally {
+      operation.end();
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [beginArchiveOperation, getRuntime, loadReadySnapshot, establishedArchive, protectedBootstrap, inspectBootstrap]);
 
   const handleUnlock = useCallback(async (password: string) => {
-    const attempt = await getForegroundEpoch();
-    const { vault } = getRuntime();
-    await vault.unlock(password);
+    const operation = await beginArchiveOperation();
+    const { attempt, assertAuthorized } = operation;
     try {
-      await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault);
-      await loadReadySnapshot(attempt);
+      const { vault } = getRuntime();
+      await vault.unlock(password);
+      assertAuthorized();
+      await cleanupVerifiedLegacyAfterActivation(window.localStorage, vault, assertAuthorized);
+      await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
-      vault.lock();
+      vaultRef.current?.lock();
       throw error;
+    } finally {
+      operation.end();
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch]);
+  }, [beginArchiveOperation, getRuntime, loadReadySnapshot]);
 
   const handleMigrate = useCallback(async (password: string) => {
-    const attempt = await getForegroundEpoch();
+    const operation = await beginArchiveOperation();
+    const { attempt, assertAuthorized } = operation;
     const { vault } = getRuntime();
     setGateState('MIGRATING');
     try {
-      await migrateLegacyToVault(window.localStorage, vault, password);
-      await loadReadySnapshot(attempt);
+      assertAuthorized();
+      await migrateLegacyToVault(window.localStorage, vault, password, assertAuthorized);
+      await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
-      // Activation may already have committed before foreground authorization
-      // failed. Always revoke the in-memory key and inspect durable state;
-      // never ask to migrate an ACTIVE archive again.
+      // ACTIVE may already be committed. Always re-inspect; never assume
+      // cancellation means that an on-disk write was rolled back.
       vault.lock();
       authenticatedEpochRef.current = null;
       setSnapshot(null);
       await inspectBootstrap();
       throw error;
+    } finally {
+      operation.end();
     }
-  }, [getRuntime, loadReadySnapshot, getForegroundEpoch, inspectBootstrap]);
+  }, [beginArchiveOperation, getRuntime, loadReadySnapshot, inspectBootstrap]);
 
   const handleRetry = useCallback(() => {
-    void (async () => {
-      try {
-        if (storeRef.current && vaultRef.current) {
-          const metadata = await storeRef.current.getMetadata();
-          if (metadata?.state === 'STAGING') {
-            await vaultRef.current.discardStaging();
-          }
-        }
-        await inspectBootstrap();
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : 'Ripristino del controllo di sicurezza non riuscito.');
-        setGateState('ERROR');
-      }
-    })();
+    // Retry only inspects: never silently discard STAGING or residual data.
+    void inspectBootstrap();
   }, [inspectBootstrap]);
 
   const handleFactoryReset = useCallback(async () => {
+    archiveAuthorityRevisionRef.current++;
+    if (archiveOperationPendingRef.current) {
+      throw new Error('Operazione sull’archivio in corso: impossibile cancellare ora.');
+    }
     const { vault } = getRuntime();
     await vault.clearAll();
     for (const legacyKey of LEGACY_DATA_KEYS) {
       window.localStorage.removeItem(legacyKey);
     }
+    // Confirmed reset alone removes positive-history flags after clearAll commits.
+    window.localStorage.removeItem(ESTABLISHED_ARCHIVE_KEY);
+    window.localStorage.removeItem(COMPLETE_ARCHIVE_KEY);
     revokeNativeAuthorization();
     suspendedRef.current = null;
     setSuspensionPhase(null);

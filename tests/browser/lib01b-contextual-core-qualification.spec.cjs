@@ -1,3 +1,4 @@
+const { reloadVaultAndUnlock } = require('./header01-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 const { navigationButton, settleOggiNavigation } = require('./header01-navigation.cjs');
 const { selectLibraryUseTarget, libraryUseAction } = require('./library-use-surface-helpers.cjs');
@@ -24,13 +25,7 @@ async function setupFreshVault(page) {
 }
 
 async function reloadAndUnlock(page) {
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  const unlockHeading = page.getByRole('heading', { name: 'Sblocca Registro' });
-  if (await unlockHeading.isVisible().catch(() => false)) {
-    await page.locator('#vault-password').fill(vaultPassword);
-    await page.getByRole('button', { name: 'Sblocca Registro' }).click();
-  }
-  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  await reloadVaultAndUnlock(page, vaultPassword, { requireHome: true });
 }
 
 async function openDrawerItem(page, label) {
