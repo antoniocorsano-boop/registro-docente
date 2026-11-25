@@ -3742,6 +3742,23 @@
         "scripts/diagnostics/appium-pilot/contract.test.mjs",
         "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
       ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I04",
+      "owner": "QA-STABILITY-01",
+      "statement": "For approved PR 414/412 canonical qualification, Appium remains NATIVE_APP for native picker observations and the independent CDP driver operates the real public WebView; no Appium context switching or ChromeDriver download is used. Diagnostic and canonical evidence are mutually exclusive. Canonical evidence requires closed native session, exact SHA, API, mode and actual four authenticated SAF returns in full mode; startup is separately identified. All inherited F2, Q3, Q4 and complementary gates remain mandatory; no merge or release authority.",
+      "impactPaths": [
+        "scripts/diagnostics/ap02-native-device-v7.mjs",
+        "scripts/diagnostics/appium-pilot/",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        ".github/workflows/qa-stability-01-q4.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
+      ]
     }
   ]
 }

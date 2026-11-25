@@ -45,6 +45,7 @@ jobs:
     uses: ./.github/workflows/qa-appium-replacement-pilot.yml
     with:
       candidate_sha: ${{ github.event.pull_request.head.sha }}
+      dual_diagnostic: true
   installed-professional-v7:
     runs-on: ubuntu-22.04
     timeout-minutes: 40
@@ -60,6 +61,7 @@ jobs:
       AP02_STARTUP_ONLY: ${{ inputs.startup_only && 'true' || 'false' }}
       USE_HYBRID: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
       HYBRID_QUALIFICATION_MODE: ${{ inputs.startup_only && 'startup' || 'full' }}
+      Q5_DUAL_QUALIFICATION: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
     steps:
       - name: Validate isolated Q4 invocation before checkout
         if: ${{ inputs.candidate_sha != '' || github.event.pull_request.base.ref != 'main' }}
@@ -251,6 +253,18 @@ jobs:
               (.readyDestinations | sort == ["class","class-detail","home","lock","privacy","session","setup"])
             ' ap02-device-evidence/surface-readiness.json
           fi
+      - name: Require native-only dual-channel evidence in approved candidates
+        if: ${{ env.USE_HYBRID == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson startup "$AP02_STARTUP_ONLY" '
+            .candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and
+            .mode=="canonical-candidate" and .startupOnly==$startup and
+            .nativeContextOnly==true and .cdpDirect==true and .sessionClosed==true and
+            (if $startup then .nativeSnapshots==0 and .nativeReauthCount==0 and .safReturns==[] and (.stages|length)==2
+             else .nativeSnapshots>0 and .nativeReauthCount==4 and .safReturns==["export","export","target-source","recovery-source"] and (.stages|length)==6 end)
+          ' ap02-device-evidence/dual-channel.json
       - name: Record isolated Q4 identity
         if: ${{ always() && inputs.candidate_sha != '' }}
         shell: bash
@@ -274,5 +288,6 @@ jobs:
             ap02-device-evidence/surface-readiness.json
             ap02-device-evidence/q4-identity.json
             ap02-device-evidence/startup.json
+            ap02-device-evidence/dual-channel.json
           retention-days: 14
           if-no-files-found: warn

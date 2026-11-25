@@ -24,6 +24,9 @@ const api = Number(process.env.AP02_API);
 const sha = process.env.CANDIDATE_SHA;
 const startupOnly=process.env.AP02_STARTUP_ONLY==='true';
 const dualDiagnostic=process.env.Q5_DUAL_DIAGNOSTIC==='true';
+const dualQualification=process.env.Q5_DUAL_QUALIFICATION==='true';
+const dualNative=dualDiagnostic||dualQualification;
+assert.ok(!(dualDiagnostic&&dualQualification),'DUAL_MODES_MUTUALLY_EXCLUSIVE');
 if(dualDiagnostic)assert.ok(!startupOnly,'DUAL_DIAGNOSTIC_REQUIRES_FULL_FLOW');
 let nativeSession=null,nativeSnapshots=0;
 if(startupOnly)assert.match(process.env.Q4_TRIAL||'',/^[123]$/);
@@ -183,7 +186,7 @@ async function closeNativeSession(){
   await nativeRequest('DELETE','/session/'+id);
 }
 function nativeNodes() {
-  if(dualDiagnostic){
+  if(dualNative){
     assert.ok(nativeSession&&documentsForeground(),'NATIVE_UI_FOREGROUND_LOST');
     const nodes=appiumSnapshot(nativeSession);
     nativeSnapshots++;
@@ -999,7 +1002,7 @@ async function run(){
   await preflightBoot();
   phase='preflight-install';
   assert.equal(adb('install','--no-incremental',process.env.AP02_LAB_APK).split('\n').filter(x=>x==='Success').length,1);
-  if(dualDiagnostic)await startNativeSession();
+  if(dualNative)await startNativeSession();
   await launch();
   await onPage('Configura archivio protetto',60000);
   await record('installed-professional-android-webview');
@@ -1115,7 +1118,26 @@ try{
     await closeNativeSession();
     writeFileSync(out+'/summary.json',JSON.stringify({candidate:sha,api,trial:Number(process.env.Q5_DUAL_TRIAL),syntheticOnly:true,productionRelease:false,fullF2Qualified:false,status:'PASS',nativeSnapshots,nativeReauthCount,stages:results.map(x=>x.stage),safReturns:safReturns.map(x=>x.role),nativeContextOnly:true,cdpDirect:true},null,2));
     console.log('Q5_DUAL_DIAGNOSTIC_PASS',sha,api);
-  }else console.log(startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS',sha,api);
+  }else{
+    if(dualQualification){
+      assert.ok(environment.complete&&environment.launches===2);
+      if(startupOnly){
+        assert.equal(nativeSnapshots,0);assert.equal(nativeReauthCount,0);
+        assert.equal(results.length,2);assert.equal(safReturns.length,0);
+      }else{
+        assert.ok(nativeSnapshots>0);
+        assert.deepEqual(safReturns.map(x=>x.role),['export','export','target-source','recovery-source']);
+        assert.ok(safReturns.every(x=>x.documentsUiObserved&&x.returned&&x.authenticated));
+        assert.equal(nativeReauthCount,4);assert.equal(results.length,6);
+      }
+      assert.equal(await nativeRequest('GET','/session/'+nativeSession+'/context'),'NATIVE_APP');
+      await closeNativeSession();
+      writeFileSync(out+'/dual-channel.json',JSON.stringify({candidate:sha,api,syntheticOnly:true,productionRelease:false,
+        mode:'canonical-candidate',startupOnly,nativeContextOnly:true,cdpDirect:true,nativeSnapshots,nativeReauthCount,
+        safReturns:safReturns.map(x=>x.role),stages:results.map(x=>x.stage),sessionClosed:true},null,2));
+    }
+    console.log(startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS',sha,api);
+  }
 }catch(error){
   // Classify failures but never echo data, passwords, ciphertext or WebView DOM.
   const {category,code}=classifyFailure(error);
@@ -1140,7 +1162,7 @@ try{
   process.exitCode=1;
 }finally{
   disconnect();
-  if(dualDiagnostic&&nativeSession){
+  if(dualNative&&nativeSession){
     try{await closeNativeSession();}catch{process.exitCode=1;console.error('Q5_DUAL_NATIVE_CLEANUP_FAILED');}
   }
 }
