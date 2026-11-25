@@ -74,11 +74,38 @@ jobs:
           fetch-depth: 0
       - name: Verify frozen product and approved laboratory-only delta
         shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD
-          changed=$(git diff --name-only 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD)
+          # Q4 is still laboratory-only. PR 412 admits only the audited APP-01 promotion.
+          lab_head=HEAD
+          case "$PR_NUMBER" in
+            414) ;;
+            412)
+              lab_head=72dd969863d6fa74229f04a8c95eabda0095ebb8
+              red=239c9b07a65dd9363073eb133c286f9a154ce622
+              green=69d56478081077eef07aa3c1873bf4710f17807c
+              git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 "$lab_head"
+              test "$(git rev-list --parents -n 1 "$red")" = "$red $lab_head"
+              test "$(git rev-list --parents -n 1 "$green")" = "$green $red"
+              git merge-base --is-ancestor "$green" HEAD
+              expected=$(printf '%s\n' src/App.tsx src/assessment/approvedAssessmentScopes.ts src/assessment/assessmentSubjectScope.ts src/security/ap02F1HistoricalRestore.test.ts src/security/ap03HistoricalAssessmentScopes.test.ts src/security/assessmentRestorePolicy.ts | LC_ALL=C sort)
+              actual=$(git diff --name-only --no-renames "$lab_head" "$green" | LC_ALL=C sort)
+              test "$actual" = "$expected"
+              post=$(git diff --name-only --no-renames "$green" HEAD)
+              while IFS= read -r path; do
+                case "$path" in
+                  ''|.github/workflows/qa-appium-replacement-pilot.yml|scripts/diagnostics/appium-pilot/contract.test.mjs) ;;
+                  *) echo 'UNAPPROVED_POST_PROMOTION_DELTA' >&2; exit 1 ;;
+                esac
+              done <<< "$post"
+              ;;
+            *) echo 'UNAPPROVED_CALLER' >&2; exit 1 ;;
+          esac
+          changed=$(git diff --name-only --no-renames 80378e9daab60fe6c389e372c3c79e3dcd09aac0 "$lab_head")
           while IFS= read -r path; do
             if test -z "$path"; then continue; fi
             if ! [[ "$path" =~ ^(\.github/workflows/(qa-appium-replacement-pilot|ap02-f2-native-device|qa-stability-01-q4|ci-fast-development)\.yml|scripts/diagnostics/appium-pilot/[^/]+|scripts/diagnostics/(ap02-native-device-v7|native-adb-transport-probe|native-home-navigation-probe|native-lab-readiness|native-lab-runtime|native-lab-runtime\.test|native-lab-transitions|native-process-probe|native-process-probe\.test|native-saf-lifecycle-probe\.test|native-v7-document-discovery|run-native-lab-contracts)\.mjs|qualification/invariants\.v1\.json|src/security/ap02V7OperationalBackup\.test\.ts)$ ]]; then

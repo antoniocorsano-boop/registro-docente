@@ -1,6 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {tmpdir} from 'node:os';
+import {dirname,join} from 'node:path';
 const workflow=readFileSync('.github/workflows/qa-appium-replacement-pilot.yml','utf8');
 const q4=readFileSync('.github/workflows/qa-stability-01-q4.yml','utf8');
 const f2=readFileSync('.github/workflows/ap02-f2-native-device.yml','utf8');
@@ -123,4 +126,46 @@ test('dual diagnostic remains separate and official Q4 requires dual-native evid
   assert.ok(registry.invariants.some(x=>x.id==='QA-STABILITY-01-APPIUM-I04'));
   assert.equal(q4.split("needs.preflight.outputs.mode == 'qualification'").length-1,3);
   assert.ok(workflow.includes('Require isolated dual-channel diagnostic evidence'));
+});
+
+test('Q5-SYS-13 admission: exact promoted product and unchanged Q4 fail closed',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'q5-admission-'));
+  const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
+  const commit=message=>{git('add','.');git('commit','-qm',message);return git('rev-parse','HEAD');};
+  const paths=['src/App.tsx','src/assessment/approvedAssessmentScopes.ts','src/assessment/assessmentSubjectScope.ts','src/security/ap02F1HistoricalRestore.test.ts','src/security/ap03HistoricalAssessmentScopes.test.ts','src/security/assessmentRestorePolicy.ts'];
+  try{
+    git('init','-q');git('config','user.name','Synthetic');git('config','user.email','synthetic@example.invalid');
+    put('scripts/diagnostics/appium-pilot/pilot.py','# synthetic\n');for(const path of paths)put(path,'initial');
+    const base=commit('base');
+    put('scripts/diagnostics/appium-pilot/pilot.py','# approved lab\n');
+    const lab=commit('lab');
+    put(paths[3],'red');put(paths[4],'red');const red=commit('red');
+    for(const path of paths)put(path,'green');
+    const green=commit('green');
+    put('.github/workflows/qa-appium-replacement-pilot.yml','approved workflow');
+    put('scripts/diagnostics/appium-pilot/contract.test.mjs','approved test');
+    const candidate=commit('candidate');
+    const source=workflow.split('      - name: Verify frozen product and approved laboratory-only delta\n')[1].split('      - uses:')[0].split('        run: |\n')[1].split('\n').map(line=>line.slice(10)).join('\n');
+    const run=(pr,sha,overrides={})=>{
+      let script=source;
+      const refs={'80378e9daab60fe6c389e372c3c79e3dcd09aac0':base,'72dd969863d6fa74229f04a8c95eabda0095ebb8':lab,'239c9b07a65dd9363073eb133c286f9a154ce622':red,'69d56478081077eef07aa3c1873bf4710f17807c':green,...overrides};
+      for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
+      const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:String(pr),CANDIDATE_SHA:sha},encoding:'utf8'});
+      rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
+      return result;
+    };
+    const pass=(pr,sha,overrides)=>{const result=run(pr,sha,overrides);assert.equal(result.status,0,result.stderr);};
+    const fail=(pr,sha,overrides)=>{const result=run(pr,sha,overrides);assert.equal(typeof result.status,'number');assert.notEqual(result.status,0);};
+    pass(412,candidate);
+    fail(415,candidate);
+    fail(412,green);
+    fail(412,candidate,{'239c9b07a65dd9363073eb133c286f9a154ce622':base});
+    fail(414,candidate);
+    put(paths[0],'unauthorized');const badApp=commit('unauthorized app');fail(412,badApp);
+    git('checkout','-q','--detach',candidate);
+    put('scripts/diagnostics/appium-pilot/unapproved.mjs','unauthorized');const badLab=commit('unauthorized lab');fail(412,badLab);
+    git('checkout','-q','--detach',lab);pass(414,lab);fail(412,lab);
+    put('src/unapproved.ts','unauthorized');const q4Bad=commit('q4 unauthorized');fail(414,q4Bad);
+  }finally{rmSync(dir,{recursive:true,force:true});}
 });
