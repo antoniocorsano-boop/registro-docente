@@ -9,10 +9,11 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from native_contracts import classify_activity, webview_attempt
+from native_contracts import classify_activity, webview_attempt, webview_deadline
 from qualification_contracts import canonical_records
 
 from appium import webdriver
+from appium.webdriver.client_config import AppiumClientConfig
 from appium.common.exceptions import NoSuchContextException
 from appium.options.android import UiAutomator2Options
 from selenium.common.exceptions import StaleElementReferenceException, NoAlertPresentException, UnexpectedAlertPresentException
@@ -115,8 +116,22 @@ def webview(driver):
         save()
         print("APPIUM_WEBVIEW_CONTEXT_RETRY", evidence["webviewContextRetries"], flush=True)
 
-    # Discovery and attachment are one bounded observation. No UI mutation is replayed.
-    wait(driver, lambda d: webview_attempt(d, PKG, NoSuchContextException, transient), 60)
+    started = time.monotonic()
+    evidence["webviewConnectionCount"] = evidence.get("webviewConnectionCount", 0) + 1
+    def step(name):
+        evidence["webviewLastCommand"] = name
+        trace = evidence.setdefault("webviewTrace", [])
+        trace.append(dict(connection=evidence["webviewConnectionCount"], command=name,
+                          elapsedMs=int((time.monotonic()-started)*1000)))
+        del trace[:-64]
+        save()
+        print("APPIUM_WEBVIEW_COMMAND", name, trace[-1]["elapsedMs"], flush=True)
+
+    # The explicit wait alone cannot interrupt a synchronous HTTP call.
+    # A timed-out command has unknown outcome: abort, never replay a mutation.
+    with webview_deadline(90):
+        wait(driver, lambda d: webview_attempt(d, PKG, NoSuchContextException, transient, step), 60)
+    step("verified")
 
 
 def assert_native_foreground(driver):
@@ -512,6 +527,9 @@ def main():
         "appium:noReset": False, "appium:fullReset": False,
         "appium:autoGrantPermissions": False, "unhandledPromptBehavior": "ignore", "appium:newCommandTimeout": 120,
         "appium:ensureWebviewsHavePages": True, "appium:enableWebviewDetailsCollection": True,
+        # Official UiAutomator2 lifecycle: discard ChromeDriver when returning native.
+        "appium:recreateChromeDriverSessions": True,
+        "appium:uiautomator2ServerReadTimeout": 60000,
     })
     driver = None
     try:
@@ -525,7 +543,11 @@ def main():
             environment.update(json.loads(q3_command("boot",150)))
             q3_surface = q3_command("surface",10)
         phase("session-create-once")
-        driver = webdriver.Remote("http://127.0.0.1:4723", options=opts)
+        config = AppiumClientConfig(
+            remote_server_addr="http://127.0.0.1:4723", timeout=90,
+            init_args_for_pool_manager={"init_args_for_pool_manager": {"retries": False}},
+        )
+        driver = webdriver.Remote(config.remote_server_addr, options=opts, client_config=config)
         driver.implicitly_wait(0)
         wait(driver, lambda d: d.current_package == PKG)
         stage("native-session", "webview-setup")

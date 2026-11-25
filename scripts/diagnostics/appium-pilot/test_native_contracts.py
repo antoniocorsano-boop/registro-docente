@@ -78,3 +78,49 @@ class WebviewContracts(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "session lost"):
             self.attempt(driver, retries)
         self.assertEqual(retries, [])
+
+
+class WebviewLifecycleContracts(unittest.TestCase):
+    def test_steps_identify_exact_command(self):
+        from native_contracts import webview_attempt
+        driver, steps = FakeDriver(), []
+        self.assertTrue(webview_attempt(driver, "lab.app", ContextMissing, lambda: None, steps.append))
+        self.assertEqual(steps, ["foreground-before", "discover-context", "attach-context",
+                                 "verify-local-url", "foreground-after"])
+
+    def test_failed_attach_is_last_observation(self):
+        from native_contracts import webview_attempt
+        driver, steps = FakeDriver(), []
+        driver.failure = RuntimeError("unknown transport result")
+        with self.assertRaisesRegex(RuntimeError, "unknown transport result"):
+            webview_attempt(driver, "lab.app", ContextMissing, lambda: None, steps.append)
+        self.assertEqual(steps[-1], "attach-context")
+        self.assertEqual(len(driver.switches), 1)
+
+    def test_deadline_interrupts_blocked_call_and_restores_handler(self):
+        import signal
+        import time
+        from native_contracts import WebviewDeadlineExceeded, webview_deadline
+        previous = signal.getsignal(signal.SIGALRM)
+        started = time.monotonic()
+        with self.assertRaises(WebviewDeadlineExceeded):
+            with webview_deadline(0.05):
+                time.sleep(2)
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL)[0], 0)
+        self.assertEqual(signal.getsignal(signal.SIGALRM), previous)
+
+    def test_deadline_does_not_swallow_other_errors(self):
+        import signal
+        from native_contracts import webview_deadline
+        with self.assertRaisesRegex(ValueError, "sentinel"):
+            with webview_deadline(1):
+                raise ValueError("sentinel")
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL)[0], 0)
+
+    def test_nested_deadline_rejected(self):
+        from native_contracts import webview_deadline
+        with webview_deadline(1):
+            with self.assertRaisesRegex(RuntimeError, "INVALID_OR_NESTED"):
+                with webview_deadline(1):
+                    pass
