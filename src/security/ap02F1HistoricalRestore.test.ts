@@ -155,12 +155,62 @@ describe('AUDIT-PRE-01/AP-02 F1 — complete synthetic historical V7 restore', (
     expect(validateAssessmentArchiveV1(orphaning.snapshot.appData, scopes).valid).toBe(true);
     const vault = new SyntheticAtomicVault(current);
     const restore = async () => {
-      const proposal = await projectAssessmentRestoreV7(current, orphaning, recovery, scopes, scopes);
+      const proposal = await projectAssessmentRestoreV7(
+        current, orphaning, recovery, scopes, scopes, { requireCandidateScopeContinuity: true }
+      );
       await storage(vault).restoreSnapshotVerified(proposal, current);
     };
     await expect(restore()).rejects.toThrow();
     expect(vault.writes).toBe(0);
     expect(await storage(vault).loadExactBackupSnapshot()).toEqual(current);
+  });
+
+  test('Q5-APP-01 preserves V7 consultation and export after restoration with an adopted historical program', async () => {
+    const current = historicalSnapshot();
+    const secondClass = { id: 'other-class', name: 'Seconda classe sintetica', students: [], grades: [], behaviors: [] };
+    current.appData.classes.push(secondClass);
+    const scopes = resolveApprovedAssessmentScopes(current.appData, current.planning, current.settings);
+    const target = await createAssessmentBackupPayloadV7(current, scopes, targetAt);
+    const recovery = await createAssessmentBackupPayloadV7(current, scopes, recoveryAt);
+    const vault = new SyntheticAtomicVault(current);
+    const year = '2027-2028';
+    const profile = { id: 'profile-history', schoolYear: '2026/27', subjectCode: scope.subjectCode };
+    const master = { id: 'master-history', profileId: profile.id, status: 'approved', currentVersionId: 'version-history' };
+    const adoption = { id: 'adoption-history', classId: scope.classId, masterProgramId: master.id, adoptedVersionId: 'version-history' };
+    const planning = {
+      ...target.snapshot.planning, profiles: [profile], masterPrograms: [master], classInstances: [adoption]
+    };
+    const restore = async (candidatePlanning: unknown) => {
+      const incoming = {
+        ...target, snapshot: {
+          ...target.snapshot, settings: { ...target.snapshot.settings, year }, planning: candidatePlanning
+        }
+      };
+      const projected = await projectAssessmentRestoreV7(
+        current, incoming, recovery, scopes, scopes, { requireCandidateScopeContinuity: true }
+      );
+      return storage(vault).restoreSnapshotVerified(projected, current);
+    };
+    for (const invalid of [
+      { ...planning, profiles: [{ ...profile, subjectCode: 'MATH' }] },
+      { ...planning, masterPrograms: [{ ...master, status: 'draft' }] },
+      { ...planning, classInstances: [{ ...adoption, adoptedVersionId: 'wrong-version' }] },
+      { ...planning, classInstances: [{ ...adoption, classId: secondClass.id }] },
+      { ...planning, classInstances: [] },
+    ]) {
+      await expect(restore(invalid)).rejects.toThrow();
+      expect(vault.writes).toBe(0);
+    }
+    expect(await storage(vault).loadExactBackupSnapshot()).toEqual(current);
+    const restored = await restore(planning);
+    const approved = resolveApprovedAssessmentScopes(restored.appData, restored.planning, restored.settings);
+    expect(vault.writes).toBe(1);
+    expect(approved).toContainEqual(scope);
+    expect(approved).toContainEqual({ ...scope, classId: secondClass.id, schoolYear: '2027/2028' });
+    expect(evidenceGraph(restored)).toEqual(evidenceGraph(current));
+    expect(validateAssessmentArchiveV1(restored.appData, approved)).toEqual({ valid: true, state: 'present' });
+    const exported = await createAssessmentBackupPayloadV7(restored, approved, targetAt);
+    expect(evidenceGraph(exported.snapshot)).toEqual(evidenceGraph(current));
   });
 
   test('encrypted V7 export, independently approved scopes, exact recovery and atomic readback retain every frozen revision', async () => {
@@ -179,7 +229,7 @@ describe('AUDIT-PRE-01/AP-02 F1 — complete synthetic historical V7 restore', (
     const incomingScopes = selectApprovedScopesForIncomingV7Backup(target.decoded, scopes);
     expect(incomingScopes).toEqual(scopes);
     const proposal = await projectAssessmentRestoreV7(
-      exact!, target.decoded, recovery.decoded, scopes, incomingScopes
+      exact!, target.decoded, recovery.decoded, scopes, incomingScopes, { requireCandidateScopeContinuity: true }
     );
     const persisted = await storage(vault).restoreSnapshotVerified(proposal, exact!);
     const readback = await storage(vault).loadExactBackupSnapshot();

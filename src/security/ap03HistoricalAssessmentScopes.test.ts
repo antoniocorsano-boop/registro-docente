@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import type {AppData,AppSettings,ClassData} from '../types';
 import type {PlanningState} from '../planning/types';
 import {boardDocument,boardScope} from '../../tests/browser/fixtures/val01-s6c-data';
+import {resolveAssessmentSubjectCode} from '../assessment/assessmentSubjectScope';
 import {resolveApprovedAssessmentScopes} from '../assessment/approvedAssessmentScopes';
 import {canonicalAssessmentSchoolYear} from '../assessment/assessmentSchoolYear';
 import {checkStudentRemovalContinuity,checkSettingsAssessmentContinuity,checkPlanningAssessmentContinuity,AssessmentContinuityError} from '../assessment/assessmentContinuity';
@@ -49,11 +50,21 @@ describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',(
   const section=data.classes[0].assessmentEvidenceV1!.documents[0];
   Object.assign(section.document,{subjectCode:'Tecnologia'});
   const before=structuredClone(data);
+  expect(resolveAssessmentSubjectCode('Tecnologia')).toBe('tecnologia');
+  expect(resolveAssessmentSubjectCode('TECH')).toBe('TECH');
   const currentSettings={...DEFAULT_SETTINGS,year:older.schoolYear,subject:'Tecnologia'};
   const next={...currentSettings,year:'2027/2028'};
   expect(validateAssessmentArchiveV1(data,resolveApprovedAssessmentScopes(data,planning(),currentSettings)).valid).toBe(true);
   expect(checkSettingsAssessmentContinuity(data,planning('approved',older.classId,'version-h','tecnologia'),currentSettings,next))
    .toEqual({allowed:true});
+  for(const unauthorized of [
+   planning('draft',older.classId,'version-h','tecnologia'),
+   planning('approved',older.classId,'wrong-version','tecnologia'),
+   planning('approved',older.classId,'version-h','MATH'),
+  ]) {
+   expect(checkSettingsAssessmentContinuity(data,unauthorized,currentSettings,next))
+    .toEqual({allowed:false,reason:'SCOPE_NOT_APPROVED'});
+  }
   expect(data).toEqual(before);
  });
 

@@ -3617,7 +3617,8 @@ export default function App({ initialSnapshot, secureStorage, onFactoryReset, on
       // imported file to supply its own scopes.
       const incomingScopes = selectApprovedScopesForIncomingV7Backup(decryptedData, scopes);
       const candidate = await projectAssessmentRestoreV7(
-        previousLogical, decryptedData, recoveryData, scopes, incomingScopes
+        previousLogical, decryptedData, recoveryData, scopes, incomingScopes,
+        { requireCandidateScopeContinuity: true }
       );
       await restoreVerifiedCandidate(candidate, previousLogical);
     });

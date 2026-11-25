@@ -13,7 +13,7 @@
 import type {AppData,AppSettings} from '../types';
 import type {PlanningState} from '../planning/types';
 import type {ApprovedAssessmentScope} from './assessmentArchive';
-import {resolveAssessmentSubjectCode} from './assessmentSubjectScope';
+import {approvedAssessmentSubjectCodes,resolveAssessmentSubjectCode} from './assessmentSubjectScope';
 import {canonicalAssessmentSchoolYear} from './assessmentSchoolYear';
 
 const validId=(x:unknown):x is string=>
@@ -41,7 +41,10 @@ export function resolveApprovedAssessmentScopes(
  const result=new Map<string,ApprovedAssessmentScope>();
  const approve=(s:ApprovedAssessmentScope)=>{
   if(!ids.has(s.classId)||!validId(s.subjectCode)||!validYear(s.schoolYear))return;
-  result.set(key(s),s);
+  for(const subjectCode of approvedAssessmentSubjectCodes(s.subjectCode)){
+   const scope={...s,subjectCode};
+   result.set(key(scope),scope);
+  }
  };
  // Current teacher configuration is independent of the detached evidence.
  for(const classId of ids)approve({classId,schoolYear:currentYear,subjectCode});

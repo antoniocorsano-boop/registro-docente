@@ -6,6 +6,7 @@
 import type {AppData,ClassData} from '../types';
 import type {AssessmentArchiveV1,ApprovedAssessmentScope} from '../assessment/assessmentArchive';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
+import {resolveApprovedAssessmentScopes} from '../assessment/approvedAssessmentScopes';
 import {snapshotAssessmentData} from '../assessment/assessmentRevisionBindings';
 import {createAssessmentBackupPayloadV7,inspectAssessmentBackupPayload} from './assessmentBackupPayload';
 import {sameDb2Physical,db2Failure} from './db2PhysicalLifecycle';
@@ -82,7 +83,8 @@ export function selectApprovedScopesForIncomingV7Backup(
  */
 export async function projectAssessmentRestoreV7(
  current:CompleteSecureAppSnapshot,incoming:unknown,recovery:unknown,
- currentScopes:readonly ApprovedAssessmentScope[],incomingScopes:readonly ApprovedAssessmentScope[]
+ currentScopes:readonly ApprovedAssessmentScope[],incomingScopes:readonly ApprovedAssessmentScope[],
+ options?: {requireCandidateScopeContinuity: boolean}
 ):Promise<CompleteSecureAppSnapshot>{
  if(!incoming||typeof incoming!=='object'||!recovery||typeof recovery!=='object')throw db2Failure();
  const detached=snapshotAssessmentData(recovery) as {exportedAt?:unknown};
@@ -97,6 +99,13 @@ export async function projectAssessmentRestoreV7(
  const checkpoint={...previous.snapshot,meta:{changes:0,lastBackup:at}};
  if(!sameDb2Physical(recover.snapshot,previous.snapshot)&&!sameDb2Physical(recover.snapshot,checkpoint))throw db2Failure();
  if(!preservesAssessmentHistory(previous.snapshot.appData,next.snapshot.appData,currentScopes,incomingScopes))throw db2Failure();
- return {...next.snapshot,copilotState:normalizeLoadedCopilotState(next.snapshot.copilotState),
+ const candidate={...next.snapshot,copilotState:normalizeLoadedCopilotState(next.snapshot.copilotState),
   meta:withoutLocalBackupVerification(next.snapshot.meta)};
+ // The operational restore persists these settings and planning together.
+ // Their scopes must validate the result in addition to the current authority.
+ if(options?.requireCandidateScopeContinuity){
+  const candidateScopes=resolveApprovedAssessmentScopes(candidate.appData,candidate.planning,candidate.settings);
+  if(!validateAssessmentArchiveV1(candidate.appData,candidateScopes).valid)throw db2Failure();
+ }
+ return candidate;
 }
