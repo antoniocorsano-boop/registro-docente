@@ -151,6 +151,36 @@ export function readNativeSnapshot(adb,onState=()=>{}){
   onState('snapshot-ready');return nodes;
 }
 export const nativeReadRetryCodes=['NATIVE_UI_TREE_UNAVAILABLE','ADB_TRANSPORT_OFFLINE','ADB_TRANSPORT_TIMEOUT'];
+// Q5-SYS-14: distinguish an absent session from a moving Android Activity.
+export function readGuardedNativeSnapshot({session,foreground,read,onState=()=>{}}){
+  if(!session)throw new LabFailure('INVALID_HARNESS_ARGUMENT');
+  if(!foreground()){
+    onState('foreground-transition');
+    throw new LabFailure('NATIVE_UI_TREE_UNAVAILABLE');
+  }
+  return read(session);
+}
+// Pure observation only. No action, authentication or write may be retried.
+export function waitNativeOpenOrReturn({activity,read,select,timeoutMs=25000,now,sleep,onState=()=>{}}){
+  let previous=null,count=0;
+  const reset=state=>{previous=null;count=0;onState(state);};
+  return observeUntil(()=>{
+    try{
+      const before=activity();
+      if(before==='application'){reset('open-return-observed');return 'returned';}
+      if(before!=='documentsui'){reset('open-foreground-transition');return false;}
+      const nodes=read();
+      const after=activity();
+      if(after==='application'){reset('open-return-observed');return 'returned';}
+      if(after!=='documentsui'){reset('open-foreground-transition');return false;}
+      const item=select(nodes);
+      if(!item){reset('open-missing-or-ambiguous');return false;}
+      count=item.key===previous?count+1:1;previous=item.key;
+      onState(count>=2?'open-stable':'open-single-sample');
+      return count>=2?item.value:false;
+    }catch(error){reset(classifyFailure(error).code);throw error;}
+  },{timeoutMs,intervalMs:450,now,sleep,retryReadErrors:true,retryCodes:nativeReadRetryCodes});
+}
 export async function waitNativeSelection({read,foreground,select,timeoutMs=45000,now,sleep,onState=()=>{}}){
   let prior=null,count=0;
   return observeUntil(async()=>{

@@ -4,6 +4,8 @@ import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
+import {readGuardedNativeSnapshot,waitNativeOpenOrReturn} from '../native-lab-transitions.mjs';
+import {LabFailure,classifyFailure} from '../native-lab-runtime.mjs';
 const workflow=readFileSync('.github/workflows/qa-appium-replacement-pilot.yml','utf8');
 const q4=readFileSync('.github/workflows/qa-stability-01-q4.yml','utf8');
 const f2=readFileSync('.github/workflows/ap02-f2-native-device.yml','utf8');
@@ -145,6 +147,8 @@ test('Q5-SYS-13 admission: exact promoted product and unchanged Q4 fail closed',
     const green=commit('green');
     put('.github/workflows/qa-appium-replacement-pilot.yml','approved workflow');
     put('scripts/diagnostics/appium-pilot/contract.test.mjs','approved test');
+    put('scripts/diagnostics/ap02-native-device-v7.mjs','approved canonical observation');
+    put('scripts/diagnostics/native-lab-transitions.mjs','approved observation primitive');
     const candidate=commit('candidate');
     const source=workflow.split('      - name: Verify frozen product and approved laboratory-only delta\n')[1].split('      - uses:')[0].split('        run: |\n')[1].split('\n').map(line=>line.slice(10)).join('\n');
     const run=(pr,sha,overrides={})=>{
@@ -168,4 +172,54 @@ test('Q5-SYS-13 admission: exact promoted product and unchanged Q4 fail closed',
     git('checkout','-q','--detach',lab);pass(414,lab);fail(412,lab);
     put('src/unapproved.ts','unauthorized');const q4Bad=commit('q4 unauthorized');fail(414,q4Bad);
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Q5-SYS-14 reads only: foreground loss between checks is transient, missing session is fatal',()=>{
+  let reads=0;const states=[];
+  const read=()=>{reads++;return ['synthetic'];};
+  assert.throws(()=>readGuardedNativeSnapshot({session:'synthetic',foreground:()=>false,read,onState:s=>states.push(s)}),{code:'NATIVE_UI_TREE_UNAVAILABLE'});
+  assert.deepEqual(states,['foreground-transition']);
+  assert.throws(()=>readGuardedNativeSnapshot({session:null,foreground:()=>true,read}),{code:'INVALID_HARNESS_ARGUMENT'});
+  assert.equal(reads,0);
+  assert.deepEqual(readGuardedNativeSnapshot({session:'synthetic',foreground:()=>true,read}),['synthetic']);
+  assert.equal(reads,1);
+});
+test('Q5-SYS-14 documentsui-to-unknown-to-application recovers only with positive return evidence',async()=>{
+  let now=0,reads=0;const states=[];
+  const frames=['documentsui','unknown','application'];
+  const activity=()=>frames.shift()??'application';
+  const result=await waitNativeOpenOrReturn({activity,
+    read:()=>readGuardedNativeSnapshot({session:'synthetic',foreground:()=>activity()==='documentsui',read:()=>{reads++;return [];}}),
+    select:()=>null,now:()=>now,sleep:async ms=>{now+=ms;},onState:s=>states.push(s)});
+  assert.equal(result,'returned');assert.equal(reads,0);
+  assert.deepEqual(states,['NATIVE_UI_TREE_UNAVAILABLE','open-return-observed']);
+  // Old assertion is not a transient read and must still be classified as an assertion.
+  assert.equal(classifyFailure({code:'ERR_ASSERTION'}).code,'ASSERTION_FAILED');
+});
+test('Q5-SYS-14 stale samples are discarded and unknown never qualifies as return',async()=>{
+  let now=0,reads=0;const states=[];
+  const frame=['documentsui','documentsui','documentsui','unknown','documentsui','documentsui','documentsui','documentsui'];
+  const item={key:'confirm',value:{synthetic:true}};
+  const result=await waitNativeOpenOrReturn({activity:()=>frame.shift()??'unknown',read:()=>{reads++;return [];},
+    select:()=>item,now:()=>now,sleep:async ms=>{now+=ms;},onState:s=>states.push(s)});
+  assert.deepEqual(result,item.value);assert.equal(reads,4);
+  assert.deepEqual(states,['open-single-sample','open-foreground-transition','open-single-sample','open-stable']);
+  now=0;
+  await assert.rejects(waitNativeOpenOrReturn({activity:()=> 'unknown',read:()=>assert.fail('must not read'),select:()=>null,
+    timeoutMs:1000,now:()=>now,sleep:async ms=>{now+=ms;}}),{code:'OBSERVATION_DEADLINE'});
+  now=0;
+  await assert.rejects(waitNativeOpenOrReturn({activity:()=> 'documentsui',read:()=>{throw new LabFailure('INVALID_HARNESS_ARGUMENT');},select:()=>null,
+    now:()=>now,sleep:async ms=>{now+=ms;}}),{code:'INVALID_HARNESS_ARGUMENT'});
+  assert.equal(now,0);
+});
+test('Q5-SYS-14 canonical F2 uses guarded observation and one-shot actions',()=>{
+  const source=readFileSync('scripts/diagnostics/ap02-native-device-v7.mjs','utf8');
+  const choose=source.split('async function nativeChoose(filename) {')[1].split('\nlet socket=')[0];
+  assert.ok(source.includes('readGuardedNativeSnapshot({session:nativeSession,foreground:documentsForeground'));
+  assert.ok(!source.includes("assert.ok(nativeSession&&documentsForeground()"));
+  assert.ok(choose.includes('waitNativeOpenOrReturn({activity:activitySurface,read:nativeNodes'));
+  assert.equal(choose.split('tap(sourceControl)').length-1,1);
+  assert.equal(choose.split('tap(next)').length-1,1);
+  assert.ok(choose.includes("await until(()=>activitySurface()==='application','RETURN_FROM_OPEN',45000)"));
+  assert.ok(choose.indexOf("await until(()=>activitySurface()==='application'")<choose.indexOf('noteSafReturned()'));
 });

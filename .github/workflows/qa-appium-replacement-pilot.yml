@@ -98,7 +98,7 @@ jobs:
               post=$(git diff --name-only --no-renames "$green" HEAD)
               while IFS= read -r path; do
                 case "$path" in
-                  ''|.github/workflows/qa-appium-replacement-pilot.yml|scripts/diagnostics/appium-pilot/contract.test.mjs) ;;
+                  ''|.github/workflows/qa-appium-replacement-pilot.yml|scripts/diagnostics/appium-pilot/contract.test.mjs|scripts/diagnostics/ap02-native-device-v7.mjs|scripts/diagnostics/native-lab-transitions.mjs) ;;
                   *) echo 'UNAPPROVED_POST_PROMOTION_DELTA' >&2; exit 1 ;;
                 esac
               done <<< "$post"

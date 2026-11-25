@@ -11,7 +11,7 @@ import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSu
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumedActivity, hasArea } from './native-ui-driver.mjs';
-import { waitUniquePublicTarget, readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, safFailureDetail, prepareClassCreation, nativeReadRetryCodes } from './native-lab-transitions.mjs';
+import { waitUniquePublicTarget, readNativeSnapshot, waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, safFailureDetail, prepareClassCreation, readGuardedNativeSnapshot, waitNativeOpenOrReturn } from './native-lab-transitions.mjs';
 import { probePackagePids, verifiedProcessStop } from './native-process-probe.mjs';
 import { classifyResumedActivity, startSafActivityProbe } from './native-saf-lifecycle-probe.mjs';
 import { createAdbTransportTrace } from './native-adb-transport-probe.mjs';
@@ -187,8 +187,8 @@ async function closeNativeSession(){
 }
 function nativeNodes() {
   if(dualNative){
-    assert.ok(nativeSession&&documentsForeground(),'NATIVE_UI_FOREGROUND_LOST');
-    const nodes=appiumSnapshot(nativeSession);
+    const nodes=readGuardedNativeSnapshot({session:nativeSession,foreground:documentsForeground,
+      read:appiumSnapshot,onState:state=>{nativeUiObservation=state;}});
     nativeSnapshots++;
     return nodes;
   }
@@ -196,7 +196,8 @@ function nativeNodes() {
   return readNativeSnapshot(adb,state=>{nativeUiObservation=state;});
 }
 const doc = n => /documentsui/i.test(n.pkg);
-const documentsForeground=()=>classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg)==='documentsui';
+const activitySurface=()=>classifyResumedActivity(adb('shell','dumpsys','activity','activities'),pkg);
+const documentsForeground=()=>activitySurface()==='documentsui';
 const nativeSelection=(select,timeout=45000)=>waitNativeSelection({
   read:nativeNodes,foreground:documentsForeground,select,timeoutMs:timeout,
   onState:state=>{nativeUiObservation=state;}
@@ -343,22 +344,15 @@ async function nativeChoose(filename) {
   noteSafPicker();
   tap(sourceControl);
   const open=n=>doc(n)&&/^(open|apri)$/i.test(n.text);
+  markSafReturn('document-tapped');
   // Observe return or a stable positive confirmation control; no duplicate tap.
-  let previous=null,consecutive=0;
-  const next=await observeUntil(()=>{
-    let item;
-    try{
-      if(nativeForeground())return 'returned';
-      if(!documentsForeground()){previous=null;consecutive=0;return false;}
-      const nodes=nativeNodes();
-      item=documentsForeground()?uniqueNativeControl(nodes,open):null;
-    }catch(error){previous=null;consecutive=0;throw error;}
-    if(!item){previous=null;consecutive=0;return false;}
-    consecutive=item.key===previous?consecutive+1:1;previous=item.key;
-    return consecutive>=2?item.value:false;
-  },{timeoutMs:25000,intervalMs:450,retryReadErrors:true,retryCodes:nativeReadRetryCodes});
-  if(next!=='returned'&&!nativeForeground())tap(next);
-  await until(nativeForeground,'RETURN_FROM_OPEN',45000);
+  const next=await waitNativeOpenOrReturn({activity:activitySurface,read:nativeNodes,
+    select:nodes=>uniqueNativeControl(nodes,open),onState:state=>{nativeUiObservation=state;}});
+  if(next!=='returned'&&activitySurface()!=='application'){
+    tap(next); // one-shot; requireDocumentsUiTap still rejects lost foreground.
+    markSafReturn('open-confirmation-tapped');
+  }
+  await until(()=>activitySurface()==='application','RETURN_FROM_OPEN',45000);
   noteSafReturned();
 }
 
