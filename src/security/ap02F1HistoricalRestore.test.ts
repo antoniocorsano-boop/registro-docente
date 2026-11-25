@@ -143,6 +143,26 @@ const verifiedEncryptedCopy = async (s: CompleteSecureAppSnapshot, at: string) =
 };
 
 describe('AUDIT-PRE-01/AP-02 F1 — complete synthetic historical V7 restore', () => {
+  test('Q5-APP-01 rejects a current-authorized V7 that would orphan history after persistence', async () => {
+    const current = historicalSnapshot();
+    const scopes = checkHistory(current);
+    const target = await createAssessmentBackupPayloadV7(current, scopes, targetAt);
+    const recovery = await createAssessmentBackupPayloadV7(current, scopes, recoveryAt);
+    const orphaning = {
+      ...target,
+      snapshot: { ...target.snapshot, settings: { ...target.snapshot.settings, year: '2027/2028' } }
+    };
+    expect(validateAssessmentArchiveV1(orphaning.snapshot.appData, scopes).valid).toBe(true);
+    const vault = new SyntheticAtomicVault(current);
+    const restore = async () => {
+      const proposal = await projectAssessmentRestoreV7(current, orphaning, recovery, scopes, scopes);
+      await storage(vault).restoreSnapshotVerified(proposal, current);
+    };
+    await expect(restore()).rejects.toThrow();
+    expect(vault.writes).toBe(0);
+    expect(await storage(vault).loadExactBackupSnapshot()).toEqual(current);
+  });
+
   test('encrypted V7 export, independently approved scopes, exact recovery and atomic readback retain every frozen revision', async () => {
     const current = historicalSnapshot();
     const future = withNewRevision(current);

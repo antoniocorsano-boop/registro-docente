@@ -44,6 +44,19 @@ const request=():AssessmentSetupRequest=>({
 });
 describe('AUDIT-PRE-01 / AP-03 — independently approved historical contexts',()=>{
 
+ test('Q5-APP-01 retains an immutable Tecnologia document after the approved year change',()=>{
+  const data=app();
+  const section=data.classes[0].assessmentEvidenceV1!.documents[0];
+  Object.assign(section.document,{subjectCode:'Tecnologia'});
+  const before=structuredClone(data);
+  const currentSettings={...DEFAULT_SETTINGS,year:older.schoolYear,subject:'Tecnologia'};
+  const next={...currentSettings,year:'2027/2028'};
+  expect(validateAssessmentArchiveV1(data,resolveApprovedAssessmentScopes(data,planning(),currentSettings)).valid).toBe(true);
+  expect(checkSettingsAssessmentContinuity(data,planning('approved',older.classId,'version-h','tecnologia'),currentSettings,next))
+   .toEqual({allowed:true});
+  expect(data).toEqual(before);
+ });
+
  test('F3-CONT-02 planning profile/adoption changes cannot orphan archived evidence',()=>{
   const data=app(),source=planning(),sourceSettings:AppSettings={...DEFAULT_SETTINGS,
    year:'2027/2028',subject:'TECH'},before=JSON.stringify(data),
