@@ -21,7 +21,7 @@ jobs:
       - name: Admit only approved exact-SHA callers (fail closed)
         shell: bash
         env:
-          APPROVED_CALLER: ${{ github.event_name == 'pull_request' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && inputs.candidate_sha == github.event.pull_request.head.sha && ((github.event.pull_request.number == 414 && github.head_ref == 'qa/qa-stability-01-q2' && github.base_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.event.pull_request.base.sha == '80378e9daab60fe6c389e372c3c79e3dcd09aac0') || (github.event.pull_request.number == 412 && github.head_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.base_ref == 'main')) }}
+          APPROVED_CALLER: ${{ github.event_name == 'pull_request' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && inputs.candidate_sha == github.event.pull_request.head.sha && ((github.event.pull_request.number == 414 && github.head_ref == 'qa/qa-stability-01-q2' && github.base_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.event.pull_request.base.sha == '80378e9daab60fe6c389e372c3c79e3dcd09aac0') || (github.event.pull_request.number == 412 && github.head_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.base_ref == 'main') || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main' && github.event.pull_request.base.sha == '1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1')) }}
         run: |
           test "$APPROVED_CALLER" = true
           test "${{ inputs.dual_diagnostic }}" = true
@@ -76,9 +76,25 @@ jobs:
         shell: bash
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          ADMISSION_ROUTE: ${{ (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main') && 'production' || 'legacy' }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          if test "${ADMISSION_ROUTE:-legacy}" = production; then
+            composition=c0b9b1e0c5b5e6976fcb22fcffd4008a45b1829a
+            production_base=1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1
+            approved_tree=361e07245112478461e904109a89d81b4ebbdfe3
+            test "$EVENT_BASE_SHA" = "$production_base"
+            test "$(git rev-list --parents -n 1 "$composition")" = "$composition $production_base"
+            test "$(git rev-parse "$composition^{tree}")" = "$approved_tree"
+            git merge-base --is-ancestor "$composition" HEAD
+            expected=$(printf '%s\n' .github/workflows/ap02-f2-native-device.yml .github/workflows/qa-appium-replacement-pilot.yml scripts/diagnostics/appium-pilot/contract.test.mjs qualification/invariants.v1.json | LC_ALL=C sort)
+            actual=$(git diff --name-only --no-renames "$composition" HEAD | LC_ALL=C sort)
+            test "$actual" = "$expected"
+            python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
+            exit 0
+          fi
           git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD
           # Q4 is still laboratory-only. PR 412 admits only the audited APP-01 promotion.
           lab_head=HEAD

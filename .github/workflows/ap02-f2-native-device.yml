@@ -41,7 +41,7 @@ jobs:
   # Direct qualification of the frozen candidate also requires the hybrid gate.
   # Q4 calls it once in its coordinator, not once per inherited trial.
   hybrid-evidence:
-    if: ${{ inputs.candidate_sha == '' && github.event.pull_request.number == 412 }}
+    if: ${{ inputs.candidate_sha == '' && (github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main')) }}
     uses: ./.github/workflows/qa-appium-replacement-pilot.yml
     with:
       candidate_sha: ${{ github.event.pull_request.head.sha }}
@@ -59,9 +59,9 @@ jobs:
       Q4_TRIAL: ${{ inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
       AP02_API: ${{ matrix.api }}
       AP02_STARTUP_ONLY: ${{ inputs.startup_only && 'true' || 'false' }}
-      USE_HYBRID: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
+      USE_HYBRID: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main')) && 'true' || 'false' }}
       HYBRID_QUALIFICATION_MODE: ${{ inputs.startup_only && 'startup' || 'full' }}
-      Q5_DUAL_QUALIFICATION: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
+      Q5_DUAL_QUALIFICATION: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main')) && 'true' || 'false' }}
     steps:
       - name: Validate isolated Q4 invocation before checkout
         if: ${{ inputs.candidate_sha != '' || github.event.pull_request.base.ref != 'main' }}

@@ -83,7 +83,7 @@ test('canonical Q4 and direct F2 coordinate hybrid without weakening inherited g
   assert.match(q4,/pilot:\n    needs: \[preflight, hybrid, startup\]/);
   assert.match(q4,/q4:\n    needs: \[preflight, hybrid, pilot\]/);
   assert.equal((q4.match(/uses: \.\/\.github\/workflows\/qa-appium-replacement-pilot\.yml/g)||[]).length,1);
-  assert.match(f2,/hybrid-evidence:\n    if:.*inputs\.candidate_sha == '' && github\.event\.pull_request\.number == 412/);
+  assert.ok(f2.includes("inputs.candidate_sha == '' && (github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main'))"));
   assert.match(f2,/uses: \.\/\.github\/workflows\/qa-appium-replacement-pilot\.yml/);
   for(const marker of ['Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','nativeReauthCount>=4','absenceSamples==2','surface-readiness.json','environment.json','AP02_STARTUP_ONLY'])assert.ok(f2.includes(marker),marker);
   assert.ok(workflow.includes('.fullF2Qualified==false'));
@@ -225,4 +225,54 @@ test('Q5-SYS-14 canonical F2 uses guarded observation and one-shot actions',()=>
   assert.equal(choose.split('tap(next)').length-1,1);
   assert.ok(choose.includes("await until(()=>activitySurface()==='application','RETURN_FROM_OPEN',45000)"));
   assert.ok(choose.indexOf("await until(()=>activitySurface()==='application'")<choose.indexOf('noteSafReturned()'));
+});
+
+test('CAND-PROD-01 admission requires exact composed product and mandatory dual gates',()=>{
+  const route="github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main'";
+  const baseRef='1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1';
+  const compositionRef='c0b9b1e0c5b5e6976fcb22fcffd4008a45b1829a';
+  const treeRef='361e07245112478461e904109a89d81b4ebbdfe3';
+  assert.ok(workflow.includes(route+" && github.event.pull_request.base.sha == '"+baseRef+"'"));
+  assert.ok(workflow.includes('github.event.pull_request.head.repo.full_name == github.repository'));
+  assert.ok(workflow.includes('github.event.pull_request.base.repo.full_name == github.repository'));
+  for(const flag of ['USE_HYBRID','Q5_DUAL_QUALIFICATION']){
+    const line=f2.split('\n').find(l=>l.trimStart().startsWith(flag+':'));
+    assert.ok(line?.includes(route),flag);
+  }
+  const hybrid=f2.split('hybrid-evidence:\n')[1].split('\n  installed-professional-v7:')[0];
+  assert.ok(hybrid.includes(route));
+  assert.ok(registry.invariants.some(i=>i.id==='CAND-PROD-01-ADMISSION-I01'));
+  const paths=['.github/workflows/ap02-f2-native-device.yml','.github/workflows/qa-appium-replacement-pilot.yml','scripts/diagnostics/appium-pilot/contract.test.mjs','qualification/invariants.v1.json'];
+  const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
+  const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
+  const commit=message=>{git('add','.');git('commit','-qm',message);return git('rev-parse','HEAD');};
+  try{
+    git('init','-q');git('config','user.name','Synthetic');git('config','user.email','synthetic@example.invalid');
+    put('src/App.tsx','base');const base=commit('base');
+    put('src/App.tsx','qualified');put('scripts/diagnostics/appium-pilot/pilot.py','# synthetic\n');
+    const composition=commit('composition');const tree=git('rev-parse',composition+'^{tree}');
+    for(const path of paths)put(path,'approved admission');const candidate=commit('admission');
+    const source=workflow.split('      - name: Verify frozen product and approved laboratory-only delta\n')[1].split('      - uses:')[0].split('        run: |\n')[1].split('\n').map(line=>line.slice(10)).join('\n');
+    const run=(sha,{eventBase=base,candidateSha=sha,route='production',overrides={}}={})=>{
+      git('checkout','-q','--detach',sha);
+      let script=source;
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,...overrides};
+      for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
+      const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:'999',CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
+      rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
+      return result;
+    };
+    const pass=(sha,options)=>{const r=run(sha,options);assert.equal(r.status,0,r.stderr);};
+    const fail=(sha,options)=>{const r=run(sha,options);assert.equal(typeof r.status,'number');assert.notEqual(r.status,0);};
+    pass(candidate);
+    fail(candidate,{eventBase:composition});
+    fail(candidate,{candidateSha:composition});
+    fail(candidate,{overrides:{[treeRef]:'0'.repeat(40)}});
+    fail(candidate,{eventBase:composition,overrides:{[baseRef]:composition}});
+    fail(composition);
+    fail(candidate,{route:'legacy'});
+    git('checkout','-q','--detach',candidate);put('src/App.tsx','unauthorized');fail(commit('unauthorized product'));
+    git('checkout','-q','--detach',candidate);put('scripts/diagnostics/extra.mjs','unauthorized');fail(commit('unauthorized laboratory'));
+  }finally{rmSync(dir,{recursive:true,force:true});}
 });

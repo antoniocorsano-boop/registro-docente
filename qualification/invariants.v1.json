@@ -3759,6 +3759,20 @@
         "scripts/diagnostics/appium-pilot/contract.test.mjs",
         "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
       ]
+    },
+    {
+      "id": "CAND-PROD-01-ADMISSION-I01",
+      "owner": "CAND-PROD-01",
+      "statement": "The single production candidate branch must be admitted only through a same-repository pull request to the exact frozen main base and exact head SHA. Its composition has the approved Q5 content tree and exactly one parent, the frozen main; after composition only the four enumerated admission files may change. Direct F2 requires both the independent hybrid gate and canonical dual-channel F2 on API 32 and 36, retaining historical Q4 and PR 412 admission unchanged. Wrong base, tree, SHA, route, missing gate or unapproved product/laboratory delta fails closed. Qualification does not grant merge or release authority.",
+      "impactPaths": [
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ]
     }
   ]
 }
