@@ -12,3 +12,24 @@ def classify_activity(raw, app_package):
     if package == app_package:
         return "application"
     return "documentsui" if package in DOCUMENTS_PACKAGES else "other"
+
+
+def webview_attempt(driver, app_package, missing_context, on_transient):
+    """Observe and attach only the application's local WebView; caller bounds retries."""
+    target = "WEBVIEW_" + app_package
+    try:
+        if driver.current_package != app_package:
+            return False
+        contexts = [context for context in driver.contexts if context == target]
+        if len(contexts) > 1:
+            raise RuntimeError("AMBIGUOUS_WEBVIEW")
+        if not contexts:
+            return False
+        driver.switch_to.context(target)
+        return (driver.current_url.startswith(("http://localhost/", "https://localhost/"))
+                and driver.current_package == app_package)
+    except missing_context:
+        # Context may disappear between discovery and attachment (SAF lifecycle).
+        # Rediscover on the next poll. Do not replay any user action or restart the app.
+        on_transient()
+        return False

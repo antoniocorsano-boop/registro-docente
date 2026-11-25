@@ -9,10 +9,11 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from native_contracts import classify_activity
+from native_contracts import classify_activity, webview_attempt
 from qualification_contracts import canonical_records
 
 from appium import webdriver
+from appium.common.exceptions import NoSuchContextException
 from appium.options.android import UiAutomator2Options
 from selenium.common.exceptions import StaleElementReferenceException, NoAlertPresentException, UnexpectedAlertPresentException
 from selenium.webdriver.common.by import By
@@ -109,14 +110,14 @@ def heading(driver, label):
                                      for e in d.find_elements(By.CSS_SELECTOR, "h1,h2")))
 
 def webview(driver):
-    def unique(d):
-        contexts = [c for c in d.contexts if c == "WEBVIEW_" + PKG]
-        if len(contexts) > 1:
-            raise RuntimeError("AMBIGUOUS_WEBVIEW")
-        return contexts[0] if len(contexts) == 1 else False
-    context = wait(driver, unique)
-    driver.switch_to.context(context)
-    wait(driver, lambda d: d.current_url.startswith(("http://localhost/", "https://localhost/")))
+    def transient():
+        evidence["webviewContextRetries"] = evidence.get("webviewContextRetries", 0) + 1
+        save()
+        print("APPIUM_WEBVIEW_CONTEXT_RETRY", evidence["webviewContextRetries"], flush=True)
+
+    # Discovery and attachment are one bounded observation. No UI mutation is replayed.
+    wait(driver, lambda d: webview_attempt(d, PKG, NoSuchContextException, transient), 60)
+
 
 def assert_native_foreground(driver):
     if driver.current_package != PKG:
