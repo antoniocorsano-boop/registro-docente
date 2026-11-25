@@ -58,6 +58,8 @@ jobs:
       Q4_TRIAL: ${{ inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
       AP02_API: ${{ matrix.api }}
       AP02_STARTUP_ONLY: ${{ inputs.startup_only && 'true' || 'false' }}
+      USE_HYBRID: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412) && 'true' || 'false' }}
+      HYBRID_QUALIFICATION_MODE: ${{ inputs.startup_only && 'startup' || 'full' }}
     steps:
       - name: Validate isolated Q4 invocation before checkout
         if: ${{ inputs.candidate_sha != '' || github.event.pull_request.base.ref != 'main' }}
@@ -109,7 +111,23 @@ jobs:
           java-version: '21'
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'
+      - name: Install isolated open-source automation stack
+        if: ${{ env.USE_HYBRID == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APPIUM_HOME="$RUNNER_TEMP/appium-q5"
+          printf 'APPIUM_HOME=%s\n' "$APPIUM_HOME" >> "$GITHUB_ENV"
+          npm install --global --no-audit --no-fund appium@3.8.0
+          appium driver install uiautomator2@8.6.0
+          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
+          appium --version
+          appium driver list --installed
+          test -x "$ANDROID_HOME/emulator/emulator"
+          appium driver doctor uiautomator2
       - name: Build exact real Web UI and separate debug-only Android laboratory
         shell: bash
         run: |
@@ -165,7 +183,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: false
-          script: timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs
+          script: bash -c 'if test "$USE_HYBRID" = true; then bash scripts/diagnostics/appium-pilot/run.sh; else timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs; fi'
       - name: Require exact complete acceptance evidence
         if: ${{ !inputs.startup_only }}
         shell: bash
@@ -247,6 +265,7 @@ jobs:
           name: ${{ inputs.startup_only && format('q4-startup-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || (inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA)) }}
           path: |
             ap02-device-evidence/result.json
+            ap02-device-evidence/appium-pilot.json
             ap02-device-evidence/failure.json
             ap02-device-evidence/saf-diagnostic.json
             ap02-device-evidence/provenance.txt

@@ -94,3 +94,13 @@ test('hybrid workflow has one build, one emulator run and a fail-closed delta ch
   assert.ok(workflow.includes('done <<< "$changed"'));
   assert.ok(!workflow.includes('|| true'));
 });
+
+test('canonical F2 uses hybrid for PR 414 and 412, with real Q3 and startup proofs',()=>{
+  assert.ok(f2.includes("HYBRID_QUALIFICATION_MODE:"));
+  assert.ok(f2.includes('bash scripts/diagnostics/appium-pilot/run.sh'));
+  assert.ok(f2.includes('node scripts/diagnostics/ap02-native-device-v7.mjs'));
+  for(const marker of ['prove_launch(driver,"setup")','prove_launch(driver,"lock")','canonical_ready(driver,"class-detail"','canonical_ready(driver,"class"','canonical_records(evidence,environment,destinations,MODE','before_pids = assert_running()','stopped = assert_stopped()'])assert.ok(pilot.includes(marker),marker);
+  const q3=readFileSync('scripts/diagnostics/appium-pilot/q3-evidence.mjs','utf8');
+  for(const marker of ['waitBootReadiness','emulatorIdentity','versionFacts','publicSurfaceFrame','classifySurface'])assert.ok(q3.includes(marker),marker);
+  assert.ok(f2.includes('ap02-device-evidence/appium-pilot.json'));
+});

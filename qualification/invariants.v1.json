@@ -3726,6 +3726,22 @@
         "scripts/diagnostics/appium-pilot/contract.test.mjs",
         "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
       ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I03",
+      "owner": "QA-STABILITY-01",
+      "statement": "The hybrid driver for the approved PR 414/412 qualification must supply canonical six-stage F2 records or the separate two-stage startup-only record, actual Q3 boot, emulator and WebView fingerprints, stable observed public destinations and two independently observed process absences. The existing workflow acceptance predicates and independent Q4 matrix remain unchanged. Missing evidence blocks; no mutation replay, no release, and no fabricated qualification from the feasibility pilot.",
+      "impactPaths": [
+        "scripts/diagnostics/appium-pilot/pilot.py",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "scripts/diagnostics/appium-pilot/",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
+      ]
     }
   ]
 }

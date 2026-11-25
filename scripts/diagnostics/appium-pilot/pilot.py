@@ -10,6 +10,7 @@ import subprocess
 import time
 from pathlib import Path
 from native_contracts import classify_activity
+from qualification_contracts import canonical_records
 
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
@@ -25,6 +26,56 @@ OUT = Path("ap02-device-evidence/appium-pilot.json")
 evidence = dict(candidate=os.environ["CANDIDATE_SHA"], api=int(os.environ["AP02_API"]),
                 syntheticOnly=True, productionRelease=False, fullF2Qualified=False,
                 stages=[], status="FAIL", failurePhase="native-session")
+
+MODE = os.environ.get("HYBRID_QUALIFICATION_MODE", "pilot")
+if MODE not in ("pilot", "startup", "full"):
+    raise SystemExit("INVALID_HYBRID_MODE")
+environment = dict(candidate=evidence["candidate"],api=evidence["api"],schemaVersion=1,
+                   syntheticOnly=True,productionRelease=False,launches=0)
+destinations = set()
+q3_surface = None
+
+def q3_command(mode, timeout):
+    return subprocess.run(["node", str(Path(__file__).with_name("q3-evidence.mjs")), mode],
+                          check=True,capture_output=True,text=True,timeout=timeout).stdout
+
+def canonical_ready(driver, destination, label=None):
+    if MODE == "pilot":
+        return
+    consecutive = 0
+    def sample(d):
+        nonlocal consecutive
+        state = d.execute_script(q3_surface,label,destination)
+        if state == "gate-error":
+            raise RuntimeError("PUBLIC_GATE_ERROR")
+        if state == "locked":
+            raise RuntimeError("PUBLIC_RELOCK_AFTER_AUTH")
+        if state == "ready" and activity_is(d,"application"):
+            consecutive += 1
+        else:
+            consecutive = 0
+        return consecutive >= 2
+    wait(driver,sample)
+    destinations.add(destination)
+
+def prove_launch(driver,destination):
+    if MODE == "pilot":
+        return
+    if not re.match(rb"^package:/[^\r\n]+\.apk(?:\r?\n|$)",adb_read("shell","pm","path",PKG)):
+        raise RuntimeError("PREFLIGHT_PACKAGE_UNAVAILABLE")
+    wait(driver,lambda d: activity_is(d,"application"))
+    if assert_running() != 1:
+        raise RuntimeError("PREFLIGHT_PROCESS_NOT_UNIQUE")
+    chromium = driver.execute_script("return navigator.userAgent.match(/Chrome\\/([0-9.]+)/)?.[1]??null")
+    if not isinstance(chromium,str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,4}",chromium):
+        raise RuntimeError("PREFLIGHT_VERSION_INCOMPLETE")
+    if environment["versions"].get("chromium") not in (None,chromium):
+        raise RuntimeError("PREFLIGHT_VERSION_CHANGED")
+    canonical_ready(driver,destination)
+    environment["versions"]["chromium"] = chromium
+    environment.update(packageReady=True,foreground=True,cdpReady=True,complete=True,
+                       launches=environment["launches"]+1)
+    (OUT.parent/"environment.json").write_text(json.dumps(environment,indent=2),encoding="utf-8")
 
 def save():
     OUT.parent.mkdir(exist_ok=True)
@@ -80,6 +131,7 @@ def assert_running():
     if result.returncode != 0 or result.stderr.strip() or not pids or not all(
             part.isascii() and part.isdigit() for part in pids):
         raise RuntimeError("PROCESS_PRESENCE_NOT_VERIFIED")
+    return len(pids)
 
 def assert_stopped():
     for index in range(2):
@@ -88,6 +140,7 @@ def assert_stopped():
         result = process_probe()
         if result.returncode != 1 or result.stdout.strip() or result.stderr.strip():
             raise RuntimeError("PROCESS_ABSENCE_NOT_VERIFIED")
+    return {"absenceSamples":2,"afterPidsCount":0}
 
 def home_ready(driver):
     consecutive = 0
@@ -118,6 +171,8 @@ def home_ready(driver):
         consecutive = consecutive + 1 if frame["ready"] else 0
         return consecutive >= 2
     wait(driver, sample)
+    canonical_ready(driver,"session")
+    canonical_ready(driver,"home")
 
 
 def exact_button(driver, label, scope="button"):
@@ -193,6 +248,8 @@ def observe_destination(driver, destination, authentication, allow_confirmation=
     while True:
         result = wait(driver, sample, 60)
         if result != "locked":
+            if result == "ready" and destination in ("home","privacy","session"):
+                canonical_ready(driver,destination)
             return result
         if authentication["used"]:
             raise RuntimeError("PUBLIC_RELOCK_AFTER_AUTH")
@@ -313,11 +370,13 @@ def create_class(driver, name):
     prompt.accept()
     observe_destination(driver, "session", {"used": False})
     wait(driver, lambda d: class_visible(d, "Gestione Elenco Alunni: " + name))
+    canonical_ready(driver,"class-detail","Gestione Elenco Alunni: " + name)
     # A visible save notification is acknowledged only if actually present.
     if driver.execute_script("return document.body.innerText.includes('Dati Salvati in Locale con Successo!')"):
         exact_button(driver, "Chiudi").click()
     navigate(driver, "Oggi", "home")
     wait(driver, lambda d: class_visible(d, name))
+    canonical_ready(driver,"class",name)
 
 def activity_surface():
     raw = adb_read("shell", "dumpsys", "activity", "activities").decode("utf-8", errors="replace")
@@ -444,6 +503,7 @@ def restore_copies(driver, target, recovery):
     assert_class_state(driver, False)
 
 def main():
+    global q3_surface
     opts = UiAutomator2Options().load_capabilities({
         "platformName": "Android", "appium:automationName": "UiAutomator2",
         "appium:deviceName": "Android Emulator", "appium:app": os.environ["AP02_LAB_APK"],
@@ -460,6 +520,9 @@ def main():
                     adb_read("shell", "getprop", "sys.boot_completed").strip() == b"1" and
                     adb_read("shell", "pm", "path", "android").strip().startswith(b"package:"))
         WebDriverWait(None, 60, poll_frequency=1).until(device_ready)
+        if MODE != "pilot":
+            environment.update(json.loads(q3_command("boot",150)))
+            q3_surface = q3_command("surface",10)
         phase("session-create-once")
         driver = webdriver.Remote("http://127.0.0.1:4723", options=opts)
         driver.implicitly_wait(0)
@@ -467,6 +530,7 @@ def main():
         stage("native-session", "webview-setup")
         webview(driver)
         heading(driver, "Configura archivio protetto")
+        prove_launch(driver,"setup")
         stage("webview-setup", "professional-home")
         click(driver, 'input[name="archive-mode"][value="professional"]')
         fields = wait(driver, lambda d: (items if len(items := d.find_elements(By.CSS_SELECTOR, "fieldset input[required]")) == 4 else False))
@@ -476,45 +540,53 @@ def main():
         click(driver, "form button[type=submit]")
         # Read-only confirmation of the real product state, not click acknowledgement.
         home_ready(driver)
-        stage("professional-home", "privacy-navigation")
-        navigate(driver, "Privacy", "privacy")
-        stage("privacy-navigation", "home-navigation")
-        navigate(driver, "Oggi", "home")
-        stage("home-navigation", "target-class")
-        create_class(driver, ORIGINAL_CLASS)
-        assert_class_state(driver, False)
-        stage("target-class", "target-export")
-        navigate(driver, "Privacy", "privacy")
-        target = export_copy(driver)
-        stage("target-export", "recovery-class")
-        navigate(driver, "Oggi", "home")
-        create_class(driver, NEWER_CLASS)
-        assert_class_state(driver, True)
-        stage("recovery-class", "recovery-export")
-        navigate(driver, "Privacy", "privacy")
-        recovery = export_copy(driver, target)
-        stage("recovery-export", "restore")
-        restore_copies(driver, target, recovery)
-        stage("restore", "native-stop-verified")
+        if MODE == "startup":
+            stage("professional-home", "native-stop-verified")
+        else:
+            stage("professional-home", "privacy-navigation")
+            navigate(driver, "Privacy", "privacy")
+            stage("privacy-navigation", "home-navigation")
+            navigate(driver, "Oggi", "home")
+            stage("home-navigation", "target-class")
+            create_class(driver, ORIGINAL_CLASS)
+            assert_class_state(driver, False)
+            stage("target-class", "target-export")
+            navigate(driver, "Privacy", "privacy")
+            target = export_copy(driver)
+            stage("target-export", "recovery-class")
+            navigate(driver, "Oggi", "home")
+            create_class(driver, NEWER_CLASS)
+            assert_class_state(driver, True)
+            stage("recovery-class", "recovery-export")
+            navigate(driver, "Privacy", "privacy")
+            recovery = export_copy(driver, target)
+            stage("recovery-export", "restore")
+            restore_copies(driver, target, recovery)
+            stage("restore", "native-stop-verified")
         driver.switch_to.context("NATIVE_APP")
         assert_native_foreground(driver)
-        assert_running()
+        before_pids = assert_running()
         if not driver.terminate_app(PKG):
             raise RuntimeError("NATIVE_TERMINATION_NOT_ACKNOWLEDGED")
-        assert_stopped()
+        stopped = assert_stopped()
+        evidence["coldProcess"] = dict(stopped,forcedStop=True,beforePidsCount=before_pids)
         stage("native-stop-verified", "cold-lock")
         driver.activate_app(PKG)
         wait(driver, lambda d: d.current_package == PKG)
         webview(driver)
         heading(driver, "Sblocca Registro")
         visible(driver, "#vault-password")
+        prove_launch(driver,"lock")
         stage("cold-lock", "cold-authenticated-home")
         visible(driver, "#vault-password").send_keys(PASSWORD)
         click(driver, "form button[type=submit]")
         home_ready(driver)
-        stage("cold-authenticated-home", "cold-restored-content")
-        assert_class_state(driver, False)
-        stage("cold-restored-content", "complete")
+        if MODE == "startup":
+            stage("cold-authenticated-home", "complete")
+        else:
+            stage("cold-authenticated-home", "cold-restored-content")
+            assert_class_state(driver, False)
+            stage("cold-restored-content", "complete")
         evidence.update(status="PASS", failurePhase=None)
     except Exception as exc:
         # Persist only a categorical exception type, never page source,
@@ -533,6 +605,15 @@ def main():
         save()
     if evidence["status"] != "PASS":
         raise SystemExit("APPIUM_PILOT_FAILED")
+    if MODE != "pilot":
+        try:
+            records = canonical_records(evidence,environment,destinations,MODE,int(os.environ.get("Q4_TRIAL") or 0))
+            for name, value in records.items():
+                (OUT.parent/name).write_text(json.dumps(value,indent=2),encoding="utf-8")
+        except Exception:
+            evidence.update(status="FAIL",failurePhase="canonical-evidence")
+            save()
+            raise SystemExit("HYBRID_CANONICAL_EVIDENCE_INCOMPLETE") from None
 
 if __name__ == "__main__":
     save()
