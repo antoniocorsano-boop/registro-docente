@@ -36,13 +36,18 @@ export interface VaultBootstrapInput {
   hasLegacyData: boolean;
   indexedDbAvailable: boolean;
   webCryptoAvailable: boolean;
+  /** Positive local evidence only; absence is never proof that no archive existed. */
+  archivePreviouslyEstablished?: boolean;
+  /** Outcome of a separate, read-only physical inventory; never authorizes writes. */
+  physicalArchiveStatus?: 'absent' | 'complete' | 'incomplete' | 'unverifiable';
 }
 
 export interface BackupVerificationEvidence {
   readonly bytes: number;
   readonly sha256: string;
   readonly source: 'android-readback' | 'web-readback';
-  readonly payloadVersion: 6;
+  /** 6: historical archive; 7: validated assessment evidence archive. */
+  readonly payloadVersion: 6 | 7;
   readonly checkpointAt: string;
 }
 
@@ -130,6 +135,15 @@ function requireCompleteSnapshot(snapshot: SecureAppSnapshot): CanonicalComplete
 
 export function decideVaultBootstrap(input: VaultBootstrapInput): VaultGateState {
   if (!input.indexedDbAvailable || !input.webCryptoAvailable) {
+    return 'ERROR';
+  }
+
+  // Classification is not authentication or authorization to create storage.
+  // In particular, a lost metadata record must never turn an established
+  // professional archive into a supposedly fresh installation.
+  if (input.physicalArchiveStatus === 'incomplete' ||
+      input.physicalArchiveStatus === 'unverifiable' ||
+      (input.archivePreviouslyEstablished === true && input.metadataState !== 'ACTIVE')) {
     return 'ERROR';
   }
 

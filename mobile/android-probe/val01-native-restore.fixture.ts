@@ -8,7 +8,7 @@ import {nativeSeedDocumentHistory,nativeDocumentRestoreCopies,nativePrepareSelec
 import {saveEncryptedBackupOnAndroid,readEncryptedBackupOnAndroid} from '../../src/security/androidBackupExport';
 import {ANDROID_SESSION_EVENT,readAndroidSessionState,authorizeAndroidSession,acknowledgeAndroidShield,registerAndroidFileAccess} from '../../src/security/androidSessionLifecycle';
 type Kind='recovery'|'target';
-const names={recovery:'Backup_Cifrato_GDPR_2031-01-15.enc.json',target:'Backup_Cifrato_GDPR_2031-01-16.enc.json'};
+const names={recovery:'Backup_Valutazioni_V7_2031-01-15.enc.json',target:'Backup_Valutazioni_V7_2031-01-16.enc.json'};
 let copies:Record<Kind,string>|null=null;
 let selected:Partial<Record<Kind,string>>={};
 let generation=0,revision=0,authenticatedEpoch:number|null=null,busy=false;

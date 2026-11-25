@@ -2,6 +2,7 @@ import {describe,expect,test,beforeAll} from 'bun:test';
 import type {AppData,ClassData} from '../types';
 import type {AssessmentArchiveV1} from '../assessment/assessmentArchive';
 import {validateAssessmentArchiveV1} from '../assessment/assessmentArchive';
+import {resolveApprovedAssessmentScopes} from '../assessment/approvedAssessmentScopes';
 import {deriveConfirmedEvidenceMutation,type EvidenceCommitRequest} from '../assessment/assessmentEvidenceMutation';
 import {previewIndividualObservation} from '../assessment/individualObservation';
 import {previewEvidenceRevision} from '../assessment/individualEvidenceRevision';
@@ -44,6 +45,26 @@ function history(){
  return x;
 }
 describe('VAL-01/S6d.2b — committed evidence V7 recovery inspection',()=>{
+
+ test('F3-CPL-01 V7 preserves raw teacher settings and historical evidence under canonical authority',async()=>{
+  const original=history();
+  for(const year of ['2026/27','2026-2027','2026/2027']){
+   const source=structuredClone(original);
+   source.settings.year=year;
+   source.settings.subject=boardScope.subjectCode;
+   const before=JSON.stringify(source);
+   const scopes=resolveApprovedAssessmentScopes(source.appData,source.planning,source.settings);
+   expect(scopes).toEqual(approved);
+   const payload=await createAssessmentBackupPayloadV7(source,scopes,stamp);
+   expect(payload.snapshot.settings.year).toBe(year);
+   const inspected=await inspectAssessmentBackupPayload(payload,source,scopes);
+   expect(inspected.sourceVersion).toBe(7);
+   expect(inspected.snapshot.appData).toEqual(source.appData);
+   expect(inspected.snapshot.settings.year).toBe(year);
+   expect(JSON.stringify(source)).toBe(before);
+  }
+ });
+
  test('encrypted V7 roundtrip preserves confirmed, corrected and withdrawn revisions and grades',async()=>{
   const x=history(),before=structuredClone(x),payload=await createAssessmentBackupPayloadV7(x,approved,stamp);
   const encrypted=await encryptDataWithPassword(payload,pass);

@@ -50,3 +50,12 @@ test('force-stop failure is not retried and produces no proof',async()=>{
   await assert.rejects(verifiedProcessStop({...s.opts,forceStop:()=>{requests++;throw Error('am failure');}}),/am failure/);
   assert.equal(requests,1);assert.equal(s.probes(),1);
 });
+
+test('R03 rejects late second absence sample without repeating force-stop',async()=>{
+  let now=0,probes=0,stops=0;
+  await assert.rejects(verifiedProcessStop({
+    now:()=>now,timeoutMs:1000,pause:async ms=>{now+=ms;},
+    forceStop:()=>{stops++;},probe:()=>{probes++;if(probes===3)now=1001;return probes===1?[123]:[];}
+  }),/absence not verified|PROCESS_STOP_DEADLINE/);
+  assert.equal(stops,1);assert.equal(probes,3);
+});

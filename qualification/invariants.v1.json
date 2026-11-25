@@ -17,6 +17,66 @@
   ],
   "invariants": [
     {
+      "id": "VAL-01-STAB06-I01",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Protected startup uses bounded classified read-only observation; established missing or partially lost archives remain protected rather than being initialized automatically. Successful authenticated observation does not establish release readiness.",
+      "impactPaths": [
+        "src/security/protectedBootstrap.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/m1BootstrapAdmission.test.ts",
+        "src/security/secureAppStorage.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "tests/browser/qualification-invariant-smoke.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/m1BootstrapAdmission.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I02",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Candidate legacy migration respects session authorization and verified source consistency before invoking ACTIVE commit; a revoked or changed source is preserved. An already invoked commit requires protected observation, not assumed rollback. No claim of isolation against noncooperating historical clients.",
+      "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.ts",
+        "src/security/secureVault.test.ts",
+        "src/components/SecureRegistroRoot.tsx",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/secureVault.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-STAB06-I05",
+      "owner": "VAL-01/STAB-06",
+      "statement": "The recovery copy handoff binds local ciphertext to the current authenticated session and consumes it once. The migration session seals and drains writes, checks current authorization and requires explicit consent and a fresh protected session. UI evidence is distinct from Android acceptance.",
+      "impactPaths": [
+        "src/security/migrationRecoveryHandoff.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/androidBackupExport.ts",
+        "src/persistence/durableMutationCoordinator.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01MigrationRecoveryHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
+      ]
+    },
+    {
       "id": "MOBILE-01-S0-I01",
       "owner": "MOBILE-01/S0",
       "statement": "Android packaging experiments remain isolated from the canonical app and distribution: a distinct test appId, static Vite webDir, no runtime server URL or production secrets, read-only exact-SHA GitHub pull-request build, debug-only APK with checksum and no release/deployment event.",
@@ -1605,12 +1665,15 @@
         "mobile/android-probe/native/RegistroBackupFilesPlugin.java",
         ".github/workflows/mobile-01-android-probe.yml",
         ".github/workflows/browser-qualification.yml",
-        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs",
+        "src/security/migrationRecoveryHandoff.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts"
       ],
       "tests": [
         "src/security/androidBackupRestore.test.ts",
         "src/security/mobile01M2bNativeRestoreContract.test.ts",
-        "src/security/persist01hBackupRestoreContract.test.ts"
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/val01MigrationRecoveryHandoff.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
@@ -1673,6 +1736,11 @@
       "owner": "BETA-1",
       "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced. Historical backups without an archive mode retain the explicit destination mode; confirmed reset permits a fresh empty archive.",
       "impactPaths": [
+        "src/security/legacyMigration.ts",
+        "src/security/legacyMigration.test.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/protectedBootstrap.ts",
+        "src/security/m1BootstrapAdmission.test.ts",
         "src/security/initialArchiveSetup.ts",
         "src/security/secureAppStorage.test.ts",
         "src/components/VaultGate.tsx",
@@ -1736,6 +1804,9 @@
         "src/security/backupPayload.test.ts"
       ],
       "tests": [
+        "src/security/legacyMigration.test.ts",
+        "src/security/protectedBootstrap.test.ts",
+        "src/security/m1BootstrapAdmission.test.ts",
         "src/security/secureAppStorage.test.ts",
         "src/security/vaultGate.test.ts",
         "src/security/backupPayload.test.ts"
@@ -2616,10 +2687,12 @@
       "impactPaths": [
         "src/security/assessmentBackupPayload.ts",
         "src/security/backupPayload.ts",
-        "src/security/val01AssessmentBackupPayload.test.ts"
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/m1B4ExactBeta2Rc2V7Contract.test.ts"
       ],
       "tests": [
-        "src/security/val01AssessmentBackupPayload.test.ts"
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/m1B4ExactBeta2Rc2V7Contract.test.ts"
       ]
     },
     {
@@ -2662,12 +2735,19 @@
         "tests/browser/val01-s6d-db2-persistence.spec.cjs",
         "src/security/val01Db2EvidenceBoundary.test.ts",
         ".github/workflows/beta2-reference-qualification.yml",
-        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md"
+        "docs/superpowers/plans/2026-11-18-val-01-s6d2-durable-evidence.md",
+        "src/security/archivePreflight.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
       ],
       "tests": [
         "src/security/val01Db2EvidenceBoundary.test.ts",
         "src/security/val01AssessmentEvidenceMutation.test.ts",
-        "src/security/val01VersionedBackupReceipt.test.ts"
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts",
+        "src/security/m1SupervisedMigrationHandoff.test.ts"
       ],
       "browserSmoke": [
         "tests/browser/val01-s6d-db2-persistence.spec.cjs"
@@ -3299,6 +3379,209 @@
       ]
     },
     {
+      "id": "VAL-01-STAB06-I04",
+      "owner": "VAL-01/STAB-06",
+      "statement": "Archive preflight classifies an existing archive without granting write authority; exact-version existing-only sessions refuse absent or incompatible databases. Authentication and retirement of the prior owner remain distinct from authorization of migration.",
+      "impactPaths": [
+        "src/security/archivePreflight.ts",
+        "src/security/existingSessionVaultStore.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01MigrationSessionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-D1B3B-I01",
+      "owner": "VAL-01/D1b.3b",
+      "statement": "Existing DB1 archive migration remains isolated and requires authentication of all ten records, matching recovered v6 backup and explicit one-use consent; a changed physical archive or revoked or abandoned request cannot upgrade DB1. No runtime, native or release claim.",
+      "impactPaths": [
+        "src/security/authorizedVaultMigration.ts",
+        "src/security/versionFencedVaultStore.ts",
+        "src/security/migrationSessionBoundary.ts",
+        "src/security/m1SupervisedMigrationHandoff.ts",
+        "src/security/cryptoPrimitives.ts",
+        "src/security/assessmentBackupPayload.ts",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs",
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/m1SupervisedMigrationHandoff.test.ts",
+        "src/security/val01MigrationSessionBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-db2-persistence.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-PRODUCT01-I01",
+      "owner": "VAL-01/PRODUCT-01",
+      "statement": "The student dossier displays only validated, teacher-confirmed, individual criterion evidence from the local optional assessment archive, under an independently supplied exact class, year, subject and roster and with the privacy shield active. It distinguishes observed, not observed, not applicable and missing records, excludes withdrawn/superseded revisions and never infers competency levels or evidence from grades. Invalid or foreign archives fail closed without exposing records, modifying data or initiating network/export. This is read-only development integration, not release acceptance.",
+      "impactPaths": [
+        "src/assessment/studentCriterionReadModel.ts",
+        "src/components/StudentCriterionEvidencePanel.tsx",
+        "src/components/StudentReportView.tsx",
+        "src/types.ts",
+        "src/security/val01StudentCriterionReadModel.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01StudentCriterionReadModel.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-PRODUCT02-I01",
+      "owner": "VAL-01/PRODUCT-02",
+      "statement": "The teacher's actual daily Tabellone permits an explicit two-stage preview and confirmation of one individual criterion observation only for an independently validated, already completed and teacher-confirmed assessment document in the current local class/year/subject and roster. Status, pupil, criterion, event identity and factual description/method must be selected by the teacher; a vote or behavior observation cannot create evidence or competence levels. The App must recheck the latest committed snapshot and current session, use the existing durable encrypted mutation coordinator, show success only after a verified persisted receipt, block concurrent writes and protected navigation while pending, reject stale/conflicting/replayed confirmations, and preserve all original marks, historical observations and backup semantics. An absent or incompatible archive remains read-only and cannot be fabricated or migrated. No real-data network, external provider, automatic publication or release claim.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/components/DailyCriterionRecorder.tsx",
+        "src/assessment/dailyCriterionRecordingContext.ts",
+        "src/assessment/assessmentEvidenceMutation.ts",
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts",
+        "qualification/invariants.v1.json",
+        "src/security/val01Db2EvidenceBoundary.test.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/val01-s6d-operational.spec.cjs"
+      ],
+      "tests": [
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01OperationalEvidenceBoundary.test.ts",
+        "src/security/val01Db2EvidenceBoundary.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/val01-s6d-operational.spec.cjs"
+      ]
+    },
+    {
+      "id": "VAL-01-PRODUCT03-I01",
+      "owner": "VAL-01/PRODUCT-03",
+      "statement": "A teacher can explicitly create a first completed assessment with an independently approved local class/year/subject roster, an original learning objective and one to four observable criteria, expected evidence and methods, or append a subsequent assessment without changing history. The real daily Tabellone requires a review and a separate teacher confirmation. It reuses the canonical S5b preparation and S6a completion validators, checks the exact initial or current V1 archive graph inside the existing atomic encrypted mutation queue, preserves grades, student observations, rubric/revision links and backups, and shows success only after a verified durable commit receipt. It refuses invalid dates, duplicate identities, stale reviews, incompatible archives, wrong scope, revoked context and failed writes. No result or competency level is inferred from existing marks, no auto-created personal observations or second data store, and no remote publication or release gate is activated.",
+      "impactPaths": [
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/components/DailyAssessmentSetupPanel.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/App.tsx",
+        "tests/browser/fixtures/val01-s6d-fixture.tsx",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "src/security/val01Product03AssessmentSetup.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product03AssessmentSetup.test.ts"
+      ]
+    },
+    {
+      "id": "VAL-01-PRODUCT04-I01",
+      "owner": "VAL-01/PRODUCT-04",
+      "statement": "The daily Tabellone permits a teacher to explicitly schedule a proof with dated, individually declared objective and criteria, keeping its planned V1 revision separate from a later teacher-confirmed actual completion in S6a. A planned proof is never offered for individual criterion recording or treated as a missing/failed student observation. Subsequent completion preserves the original planned revision, frozen references/criteria and all existing grades, behaviors and student evidence, rejecting stale graphs, wrong roster/year/subject, duplicate completions and invalid confirmations. Both actions use the same encrypted atomic App mutation queue with independently validated scope, navigation and pending guards and a success receipt only after durable write; failed persistence never publishes. The existing immediate-completed PRODUCT-03 flow remains unchanged. No historical rewrite, AI-generated evaluations, remote student transfer, APK publication or early R1/R2/R3 release requirement is activated.",
+      "impactPaths": [
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/assessment/dailyPlannedAssessmentCompletion.ts",
+        "src/components/DailyAssessmentSetupPanel.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/App.tsx",
+        "tests/browser/fixtures/val01-s6d-db2.fixture.ts",
+        "tests/browser/fixtures/val01-s6d-operational.fixture.tsx",
+        "tests/browser/val01-s6d-operational.spec.cjs",
+        "src/security/val01Product04PlannedLifecycle.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/val01Product04PlannedLifecycle.test.ts"
+      ]
+    },
+    {
+      "id": "AUDIT-PRE01-AP03-I01",
+      "owner": "AUDIT-PRE-01/AP-03",
+      "statement": "The current teacher's explicitly configured year and discipline and already approved, adopted planning profiles for the exact physical class independently authorize each assessment archive context. Neither a stored assessment document nor its own declared school year, subject or bindings can grant scope authority. An archive with valid historical year/subject documents remains readable, and a current proof can be appended only after teacher review and confirmed durable App mutation without rewriting history; unapproved, foreign, malformed, non-adopted or stale scopes fail closed. Daily preparation, planned completion, criterion recording and private student dossier validate all relevant documents before selecting the current one. No automatic migration, backup codec activation, release, merge, personal-data upload or inference from marks.",
+      "impactPaths": [
+        "src/assessment/approvedAssessmentScopes.ts",
+        "src/assessment/dailyAssessmentSetup.ts",
+        "src/assessment/dailyPlannedAssessmentCompletion.ts",
+        "src/assessment/dailyCriterionRecordingContext.ts",
+        "src/assessment/studentCriterionReadModel.ts",
+        "src/App.tsx",
+        "src/components/DailyMatrixWorkspace.tsx",
+        "src/components/DailyAssessmentSetupPanel.tsx",
+        "src/components/DailyCriterionRecorder.tsx",
+        "src/components/StudentCriterionEvidencePanel.tsx",
+        "src/components/StudentReportView.tsx",
+        "src/security/ap03HistoricalAssessmentScopes.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap03HistoricalAssessmentScopes.test.ts",
+        "src/security/val01AssessmentArchive.test.ts",
+        "src/security/val01Product03AssessmentSetup.test.ts",
+        "src/security/val01Product04PlannedLifecycle.test.ts",
+        "src/security/val01Product02DailyCriterionRecording.test.ts",
+        "src/security/val01StudentCriterionReadModel.test.ts"
+      ]
+    },
+    {
+      "id": "AUDIT-PRE01-AP02-V6-GATE-I01",
+      "owner": "AUDIT-PRE-01/AP-02",
+      "statement": "The currently connected V6 backup exporter cannot issue an authoritative receipt for a committed archive containing assessmentEvidenceV1, even when the domain is malformed or empty. The historical V6/legacy restore path cannot replace a destination containing such evidence or accept a source hiding that domain under V6 or legacy labels. The refusal happens inside the existing durable mutation queue before receipt creation, legacy normalization or a Vault write. Synthetic accessors and cycles fail closed without executing getters; valid V6 backups and imports without V7 evidence retain the historical path. This is a partial preventive gate only: V7 export, version-bound receipts, protected V7 restore and physical Android qualification are still unimplemented in the UI, and no release or merge is authorized.",
+      "impactPaths": [
+        "src/security/ap02LegacyBackupBoundary.ts",
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "src/App.tsx",
+        "src/components/PrivacyView.tsx",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "src/security/backup02ReceiptAuthority.test.ts",
+        "src/security/backupPayload.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "AUDIT-PRE01-AP02-V7-OP-I01",
+      "owner": "AUDIT-PRE-01/AP-02",
+      "statement": "The existing Privacy surface offers an opt-in full V7 encrypted copy with session-scoped version-bound receipt; the App derives current and historical class/year/subject authority solely from approved and adopted planning, serializes V7 payload preparation, verifies the actual ciphertext roundtrip, and commits metadata only after explicit Web byte readback or native Android verified write/readback. V6 export and historical restore remain separately gated. V7 restore is a distinct authenticated two-file operation requiring an exact encrypted recovery copy of the current archive, independently approved scopes and an append-only assessment revision graph; it shares the existing atomic Vault persistence, readback, rollback and post-commit navigation without bypassing Council replacement warnings. Invalidation on restore/reset prevents receipt reuse; timestamps or download clicks alone never certify safe copies. No remote transfer, real student data, automatic merge, APK publication or production-release qualification is inferred from static source or unexecuted tests.",
+      "impactPaths": [
+        "src/App.tsx",
+        "src/components/PrivacyView.tsx",
+        "src/security/secureAppStorage.ts",
+        "src/security/ap02V7OperationalBackup.test.ts",
+        "src/security/ap02F1HistoricalRestore.test.ts",
+        "tests/browser/ap02-f2-android-v7-ui.spec.cjs",
+        "src/security/ap02LegacyBackupBoundary.ts",
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "qualification/invariants.v1.json",
+        ".github/workflows/ap02-f2-native-device.yml",
+        "scripts/diagnostics/ap02-native-device-v7.mjs"
+      ],
+      "tests": [
+        "src/security/ap02V7OperationalBackup.test.ts",
+        "src/security/ap02F1HistoricalRestore.test.ts",
+        "src/security/ap02LegacyBackupBoundary.test.ts",
+        "src/security/val01VersionedBackupReceipt.test.ts",
+        "src/security/val01AssessmentRestorePolicy.test.ts",
+        "src/security/val01AssessmentBackupPayload.test.ts",
+        "src/security/persist01hBackupRestoreContract.test.ts",
+        "src/security/persist01hUiContract.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/lib01-private-library-qualification.spec.cjs",
+        "tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs"
+      ]
+    },
+    {
       "id": "CI-FAST-01-I01",
       "owner": "CI-FAST-01",
       "statement": "Development-only CI checks on non-main stacked pull requests must validate exact head and base SHAs, enforce the canonical invariant registry and fail-closed impacted test coverage, run only changed or inherited Bun contracts plus source-relevant typecheck/build, and cancel superseded runs without using write credentials or student data. They must explicitly report NOT_FULL_QUALIFICATION and preserve unchanged every existing main-targeted full security, Chromium, native Android, backup/restore, independent review and release gate. Unrecognized, missing, forged or incompatible test paths cannot be treated as a successful fast qualification.",
@@ -3307,10 +3590,174 @@
         "scripts/qualification/ci-fast-plan.mjs",
         "scripts/qualification/ci-fast-plan.test.mjs",
         "docs/qualification/OPERATING_PROTOCOL.md",
-        "qualification/invariants.v1.json"
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/run-native-lab-contracts.mjs"
       ],
       "tests": [
         "scripts/qualification/ci-fast-plan.test.mjs"
+      ]
+    },
+    {
+      "id": "AUDIT-PRE01-AP01-I01",
+      "owner": "AUDIT-PRE-01/AP-01",
+      "statement": "First activation of a locally encrypted Registro archive must reserve initially absent physical metadata in one atomic IndexedDB transaction before staging any records. Two concurrent creators that read the same empty state may not both acquire a valid owner; a pre-existing record without metadata cannot be overwritten or treated as an empty archive. The actual Root must supply the SecureVault atomic claimInitialMetadata port, and failed or competing claims cannot unlock or publish a second archive. The source contract and synthetic concurrent fixture never establish physical device readiness or authorize migration, student-data writes, release or merge.",
+      "impactPaths": [
+        "src/components/SecureRegistroRoot.tsx",
+        "src/security/secureVault.ts",
+        "src/security/ap01AtomicBootstrap.test.ts",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "src/security/ap01AtomicBootstrap.test.ts"
+      ],
+      "browserSmoke": []
+    },
+    {
+      "id": "F3-CONT-01-I01",
+      "owner": "F3-CONT-01",
+      "statement": "Roster removal never deletes students with linked marks, observations, council records, frozen roster snapshots or archived criterion evidence. Settings changes must preserve independently authorized historical assessment scopes. Rejected changes neither persist nor publish. No implicit historical authority, repair, migration, personal-data export, release or merge.",
+      "impactPaths": [
+        "src/assessment/assessmentContinuity.ts",
+        "src/components/StudentsManagementView.tsx",
+        "src/App.tsx",
+        "src/security/ap03HistoricalAssessmentScopes.test.ts"
+      ],
+      "tests": [
+        "src/security/ap03HistoricalAssessmentScopes.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/qualification-invariant-smoke.spec.cjs"
+      ]
+    },
+    {
+      "id": "SEC-3-OUTBOUND-I01",
+      "owner": "SEC-3",
+      "statement": "Outbound UDA generation requires explicit teacher opt-in and professional classification; missing authorization and student-personal classification are rejected before external provider use. Local embedding routes and direct clients reject unsupported providers and non-loopback endpoints and do not follow redirects to another endpoint. Qualification uses an actual isolated production-mode server with bounded readiness and request deadlines, and never retries a failed security assertion or accepts an unavailable server as a pass. No personal student data, release or merge authority.",
+      "impactPaths": [
+        "src/security/outboundBoundaryClosure.test.ts",
+        "src/security/dataClassification.ts",
+        "src/services/embeddingService.ts",
+        "src/components/UdaGanttView.tsx",
+        "server.ts",
+        "src/server/runtimeHost.ts"
+      ],
+      "tests": [
+        "src/security/outboundBoundaryClosure.test.ts"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-Q4-I01",
+      "owner": "QA-STABILITY-01",
+      "statement": "Q4 is isolated from the main-targeted F2 qualification and executes three independent trials for each of Android API 32 and 36, on the exact PR 414 candidate and frozen base, through the same six-stage F2 workflow and added Q3 evidence gate. Each trial preserves distinct aggregate identity and evidence, does not retry failed jobs for acceptance, has read-only permissions, and cannot authorize merge or publication.",
+      "impactPaths": [
+        ".github/workflows/qa-stability-01-q4.yml",
+        ".github/workflows/ap02-f2-native-device.yml",
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        "scripts/diagnostics/run-native-lab-contracts.mjs",
+        "scripts/diagnostics/native-saf-lifecycle-probe.test.mjs",
+        ".github/workflows/ci-fast-development.yml"
+      ],
+      "tests": [
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        "scripts/diagnostics/native-saf-lifecycle-probe.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-Q4-I02",
+      "owner": "QA-STABILITY-01",
+      "statement": "The shared Node 22 F2 contract runner and invariant impact checks must pass on the exact Q4 head and frozen base before any six-trial matrix job. Boot readiness accepts a stopped animation service or independently verified absent bootanimation process when the service property is empty. Emulator identity requires an exact SDK package revision, executable SHA-256, provenance and successful compatible executable version output or a classified probe failure; missing or mismatching identity fails closed. Earlier published invariant semantics remain unchanged.",
+      "impactPaths": [
+        "scripts/diagnostics/native-lab-readiness.mjs",
+        "scripts/diagnostics/ap02-native-device-v7.mjs",
+        ".github/workflows/qa-stability-01-q4.yml",
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/ci-fast-development.yml",
+        "scripts/diagnostics/run-native-lab-contracts.mjs"
+      ],
+      "tests": [
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        "scripts/diagnostics/native-saf-lifecycle-probe.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-Q4-I03",
+      "owner": "QA-STABILITY-01",
+      "statement": "Q4 R03-R05 must identify the actual public WebView by bounded read-only, stable unique observations; classify native UI snapshot read failures without retrying taps; and re-establish the actual Home gate before one class prompt. All exploratory CDP connections close, only aggregate evidence is retained, and the existing F2 acceptance remains mandatory. After exact-SHA invariant, Node and selected Bun preflight, a separate pilot trial 0 must pass on both APIs before the three counted trials per API; pilot evidence never counts toward the six.",
+      "impactPaths": [
+        "scripts/diagnostics/native-lab-transitions.mjs",
+        "scripts/diagnostics/native-lab-readiness.mjs",
+        "scripts/diagnostics/native-lab-runtime.mjs",
+        "scripts/diagnostics/ap02-native-device-v7.mjs",
+        "scripts/diagnostics/native-lab-runtime.test.mjs",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/qa-stability-01-q4.yml",
+        "scripts/diagnostics/native-adb-transport-probe.mjs"
+      ],
+      "tests": [
+        "scripts/diagnostics/native-lab-runtime.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I01",
+      "owner": "QA-STABILITY-01",
+      "statement": "The isolated Appium feasibility pilot is confined to the exact temporary child PR of the frozen Q4 candidate, requires read-only credentials, exact candidate provenance and static preflight before API 32/36 emulators, uses real installed synthetic professional UI and native process stop/reopening, never replays mutating commands or treats a pilot as full F2, and exports only categorical non-sensitive evidence. Existing F2 acceptance, invariants and integration gates remain unchanged.",
+      "impactPaths": [
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/appium-pilot/"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I02",
+      "owner": "QA-STABILITY-01",
+      "statement": "After the successful temporary feasibility pilot and its fast-forward reconciliation, the hybrid laboratory is a mandatory complementary gate of canonical Q4 and the direct F2 run for the frozen PR 412 candidate. It runs once per coordinator on the exact approved PR 414 or PR 412 head, read-only, with only laboratory delta against the frozen product; all prior F2 six-stage, Q3 environment, readiness and independent Q4 trial criteria remain mandatory. Hybrid evidence never claims full F2 or authorizes merge or release.",
+      "impactPaths": [
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        ".github/workflows/qa-stability-01-q4.yml",
+        ".github/workflows/ap02-f2-native-device.yml",
+        "scripts/diagnostics/appium-pilot/",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I03",
+      "owner": "QA-STABILITY-01",
+      "statement": "The hybrid driver for the approved PR 414/412 qualification must supply canonical six-stage F2 records or the separate two-stage startup-only record, actual Q3 boot, emulator and WebView fingerprints, stable observed public destinations and two independently observed process absences. The existing workflow acceptance predicates and independent Q4 matrix remain unchanged. Missing evidence blocks; no mutation replay, no release, and no fabricated qualification from the feasibility pilot.",
+      "impactPaths": [
+        "scripts/diagnostics/appium-pilot/pilot.py",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "scripts/diagnostics/appium-pilot/",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
+      ]
+    },
+    {
+      "id": "QA-STABILITY-01-APPIUM-I04",
+      "owner": "QA-STABILITY-01",
+      "statement": "For approved PR 414/412 canonical qualification, Appium remains NATIVE_APP for native picker observations and the independent CDP driver operates the real public WebView; no Appium context switching or ChromeDriver download is used. Diagnostic and canonical evidence are mutually exclusive. Canonical evidence requires closed native session, exact SHA, API, mode and actual four authenticated SAF returns in full mode; startup is separately identified. All inherited F2, Q3, Q4 and complementary gates remain mandatory; no merge or release authority.",
+      "impactPaths": [
+        "scripts/diagnostics/ap02-native-device-v7.mjs",
+        "scripts/diagnostics/appium-pilot/",
+        ".github/workflows/ap02-f2-native-device.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        ".github/workflows/qa-stability-01-q4.yml",
+        "qualification/invariants.v1.json"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/diagnostics/appium-pilot/native-picker.test.mjs"
       ]
     }
   ]

@@ -5,6 +5,7 @@ import { encryptDataWithPassword, decryptDataWithPassword } from '../cryptoUtils
 import { createBackupPayload } from '../security/backupPayload';
 import { expectedBackupEvidence, matchesDownloadedBackup, type BackupByteEvidence } from '../security/webBackupVerification';
 import type { AuthorizedBackupCheckpoint, BackupReceipt, PreparedBackupCheckpoint, ExpectedCopyEvidence } from '../persistence/backupCheckpoint';
+import type { VersionedBackupReceipt } from '../persistence/versionedBackupReceipt';
 import { today } from '../utils';
 import {DocumentRecoveryReview} from './documents/DocumentRecoveryReview';
 import type {DocumentRecoveryDriver} from '../security/documentRecoveryDecision';
@@ -24,15 +25,38 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+/** Keep the historical Android restore handler free from direct envelope parsing.
+ * Only an authenticated AES-GCM v2 envelope may carry the V7 archive.
+ */
+function isV7EncryptedEnvelope(encryptedText: string): boolean {
+  try {
+    const data: unknown = JSON.parse(encryptedText);
+    return data !== null && typeof data === 'object' && !Array.isArray(data)
+      && (data as { version?: unknown }).version === 2
+      && typeof (data as { ciphertext?: unknown }).ciphertext === 'string'
+      && typeof (data as { salt?: unknown }).salt === 'string'
+      && typeof (data as { iv?: unknown }).iv === 'string';
+  } catch {
+    return false;
+  }
+}
+
 interface PrivacyViewProps {
   settings: AppSettings;
   classes: ClassData[];
   isPrivacyShieldActive: boolean;
   onTogglePrivacyShield: () => void;
   onPrepareEncryptedBackup: () => Promise<AuthorizedBackupCheckpoint>;
+  /** AP-02: V7 export with version-bound, one-use physical verification. */
+  onPrepareAssessmentV7Backup?: (password: string) => Promise<{ receipt: VersionedBackupReceipt; encryptedText: string }>;
+  onVerifyAssessmentV7WebBackup?: (receipt: VersionedBackupReceipt, file: Blob, active: () => boolean) => Promise<'verified' | 'cancelled'>;
+  onVerifyAssessmentV7AndroidBackup?: (receipt: VersionedBackupReceipt, encrypted: string, filename: string, active: () => boolean) => Promise<'verified' | 'cancelled'>;
+  onRecordAssessmentV7Backup?: (receipt: VersionedBackupReceipt) => Promise<void>;
   onBindBackupEvidence: (receipt: BackupReceipt, evidence: ExpectedCopyEvidence) => Promise<void>;
   onRecordBackupExport: (checkpoint: Pick<PreparedBackupCheckpoint, 'includedChanges' | 'checkpointAt'>) => Promise<void>;
   onImportEncryptedBackup: (decryptedData: unknown) => Promise<void>;
+  /** V7 can restore only after a separately authenticated exact recovery copy. */
+  onImportAssessmentV7Backup?: (decryptedData: unknown, recoveryData: unknown) => Promise<void>;
   onFactoryReset: () => void;
   /** Optional V8 owner authorization. Absent in the released App. */
   documentRecoveryWorkflow?:DocumentRecoveryDriver;
@@ -44,9 +68,14 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   isPrivacyShieldActive,
   onTogglePrivacyShield,
   onPrepareEncryptedBackup,
+  onPrepareAssessmentV7Backup,
+  onVerifyAssessmentV7WebBackup,
+  onVerifyAssessmentV7AndroidBackup,
+  onRecordAssessmentV7Backup,
   onBindBackupEvidence,
   onRecordBackupExport,
   onImportEncryptedBackup,
+  onImportAssessmentV7Backup,
   onFactoryReset,
   documentRecoveryWorkflow
 }) => {
@@ -56,9 +85,12 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
 
   const [decryptPassword, setDecryptPassword] = useState('');
   const [selectedEncryptedFile, setSelectedEncryptedFile] = useState<File | null>(null);
+  const [selectedV7RecoveryFile, setSelectedV7RecoveryFile] = useState<File | null>(null);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
   const [isDecrypting, setIsDecrypting] = useState(false);
   const backupOperationPendingRef = useRef(false);
   const webVerificationRef = useRef<{ receipt: BackupReceipt; evidence: BackupByteEvidence } | null>(null);
+  const v7VerificationRef = useRef<VersionedBackupReceipt | null>(null);
   const [webVerificationAvailable, setWebVerificationAvailable] = useState(false);
   const [webVerificationMessage, setWebVerificationMessage] = useState('');
   const [isVerifyingCopy, setIsVerifyingCopy] = useState(false);
@@ -66,7 +98,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; webVerificationRef.current = null; };
+    return () => { mountedRef.current = false; webVerificationRef.current = null; v7VerificationRef.current = null; };
   }, []);
 
   // Total students & evaluations protected
@@ -96,6 +128,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     backupOperationPendingRef.current = true;
     setIsEncrypting(true);
     webVerificationRef.current = null;
+    v7VerificationRef.current = null;
     setWebVerificationAvailable(false);
     setWebVerificationMessage('');
     let downloadInitiated = false;
@@ -148,6 +181,10 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         ? 'Copia di sicurezza salvata e verificata nella cartella scelta.'
         : 'Download avviato. La copia non è ancora verificata; il contatore delle modifiche resta invariato. Seleziona il file appena scaricato prima di uscire da Privacy.');
     } catch (err) {
+      if (err instanceof Error && err.message.includes('evidenze valutative V7')) {
+        if (mountedRef.current) alert('Copia V6 sospesa: questo archivio contiene evidenze valutative che richiedono la procedura V7 protetta. I dati locali rimangono invariati.');
+        return;
+      }
       if (androidNative) {
         if (mountedRef.current) alert(downloadInitiated
           ? 'La copia è stata verificata, ma lo stato del Registro non è aggiornato. Le registrazioni locali restano salvate; la copia non è registrata come aggiornata.'
@@ -166,6 +203,63 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     }
   };
 
+  // AP-02: an independent, validated V7 export. The authority retains only
+  // version-bound receipt metadata after the ciphertext is produced.
+  const handleExportAssessmentV7 = async () => {
+    if (!onPrepareAssessmentV7Backup || !onVerifyAssessmentV7WebBackup ||
+        !onVerifyAssessmentV7AndroidBackup || !onRecordAssessmentV7Backup) return;
+    if (!encryptPassword || encryptPassword.length < 6 || encryptPassword !== confirmPassword) {
+      alert('Inserisci e conferma una password di almeno 6 caratteri.');
+      return;
+    }
+    if (backupOperationPendingRef.current) return;
+    backupOperationPendingRef.current = true;
+    setIsEncrypting(true);
+    webVerificationRef.current = null;
+    v7VerificationRef.current = null;
+    setWebVerificationAvailable(false);
+    setWebVerificationMessage('');
+    try {
+      const { receipt, encryptedText } = await onPrepareAssessmentV7Backup(encryptPassword);
+      if (!mountedRef.current) return;
+      const filename = `Backup_Valutazioni_V7_${today()}.enc.json`;
+      if (nativeBackupRuntime) {
+        const result = await onVerifyAssessmentV7AndroidBackup(
+          receipt, encryptedText, filename, () => mountedRef.current
+        );
+        if (result !== 'verified' || !mountedRef.current) return;
+        await onRecordAssessmentV7Backup(receipt);
+        if (mountedRef.current) alert('Copia completa V7 salvata, riletta e verificata.');
+      } else {
+        const blob = new Blob([encryptedText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        try {
+          link.click();
+          v7VerificationRef.current = receipt;
+          setWebVerificationAvailable(true);
+        } finally {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+        alert('Copia V7 generata. Seleziona il file scaricato per verificarne i byte prima di considerare la copia aggiornata.');
+      }
+      if (mountedRef.current) {
+        setEncryptPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error) {
+      console.error('Copia valutativa V7 non qualificata:', error instanceof Error ? error.message : 'errore');
+      if (mountedRef.current) alert('Copia V7 non completata o non verificata. I dati locali non sono stati modificati.');
+    } finally {
+      backupOperationPendingRef.current = false;
+      if (mountedRef.current) setIsEncrypting(false);
+    }
+  };
+
   const handleImportEncrypted = async (e: React.FormEvent) => {
     e.preventDefault();
     if (nativeBackupRuntime) {
@@ -180,10 +274,31 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
         const encryptedText = await readEncryptedBackupOnAndroid(() => mountedRef.current);
         if (encryptedText === null || !mountedRef.current) return;
         const decryptedData = await decryptDataWithPassword(encryptedText, decryptPassword);
+        // A V7 restore is allowed only from a current authenticated envelope.
+        if (decryptedData !== null && typeof decryptedData === 'object'
+          && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7
+          && !isV7EncryptedEnvelope(encryptedText)) {
+          throw new Error('Copia V7 senza cifratura V2.');
+        }
         if (!mountedRef.current) return;
-        if (!window.confirm('Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?')) return;
-        if (!mountedRef.current) return;
-        await onImportEncryptedBackup(decryptedData);
+        const isV7 = decryptedData !== null && typeof decryptedData === 'object'
+          && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7;
+        if (isV7) {
+          if (!recoveryPassword) throw new Error('Password della copia V7 di recupero mancante.');
+          if (!window.confirm('Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?')) return;
+          const recoveryText = await readEncryptedBackupOnAndroid(() => mountedRef.current);
+          if (!recoveryText || !mountedRef.current) return;
+          if (!isV7EncryptedEnvelope(recoveryText)) throw new Error('Copia V7 di recupero non cifrata con protocollo V2.');
+          const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
+          if (!mountedRef.current) return;
+          if (!onImportAssessmentV7Backup) throw new Error('Procedura di recupero V7 non disponibile.');
+          await onImportAssessmentV7Backup(decryptedData, recoveryData);
+          setRecoveryPassword('');
+        } else {
+          if (!window.confirm('Il ripristino sostituirà i dati del Registro con quelli della copia di sicurezza. Vuoi continuare?')) return;
+          if (!mountedRef.current) return;
+          await onImportEncryptedBackup(decryptedData);
+        }
         setDecryptPassword('');
         alert('Backup cifrato verificato e ripristinato con successo!');
       } catch {
@@ -203,6 +318,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     backupOperationPendingRef.current = true;
     setIsDecrypting(true);
     webVerificationRef.current = null;
+    v7VerificationRef.current = null;
     setWebVerificationAvailable(false);
     setWebVerificationMessage('');
     const reader = new FileReader();
@@ -230,7 +346,31 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
           decryptedData = parsed;
         }
 
-        await onImportEncryptedBackup(decryptedData);
+        const isV7 = decryptedData !== null && typeof decryptedData === 'object'
+          && (decryptedData as { backupDataVersion?: unknown }).backupDataVersion === 7;
+        if (isV7) {
+          if (!isEncryptedEnvelope || record.version !== 2) {
+            throw new Error('La copia V7 deve essere cifrata con il protocollo V2.');
+          }
+          if (!selectedV7RecoveryFile || !recoveryPassword) {
+            throw new Error('Seleziona la copia V7 dello stato corrente e inserisci la relativa password prima del ripristino.');
+          }
+          if (selectedV7RecoveryFile.size <= 0 || selectedV7RecoveryFile.size > 32 * 1024 * 1024) {
+            throw new Error('Dimensione della copia V7 di recupero non valida.');
+          }
+          const recoveryText = await selectedV7RecoveryFile.text();
+          if (!isV7EncryptedEnvelope(recoveryText)) {
+            throw new Error('La copia di recupero deve essere cifrata con protocollo V2.');
+          }
+          const recoveryData = await decryptDataWithPassword(recoveryText, recoveryPassword);
+          if (!window.confirm('Ripristino V7 protetto: la copia di recupero dello stato attuale sarà verificata prima di ogni sostituzione. Confermi?')) return;
+          if (!onImportAssessmentV7Backup) throw new Error('Procedura di recupero V7 non disponibile.');
+          await onImportAssessmentV7Backup(decryptedData, recoveryData);
+          setRecoveryPassword('');
+          setSelectedV7RecoveryFile(null);
+        } else {
+          await onImportEncryptedBackup(decryptedData);
+        }
         setDecryptPassword('');
         setSelectedEncryptedFile(null);
         alert(isEncryptedEnvelope
@@ -255,12 +395,27 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
   // Explicit readback of the exact web export, never an import or a restore.
   const handleVerifyDownloadedCopy = async (file: File | null) => {
     const pending = webVerificationRef.current;
-    if (!file || nativeBackupRuntime || !pending || backupOperationPendingRef.current) return;
+    if (!file || nativeBackupRuntime || (!pending && !v7VerificationRef.current) || backupOperationPendingRef.current) return;
     backupOperationPendingRef.current = true;
     setIsVerifyingCopy(true);
     setWebVerificationMessage('');
     let recording = false;
     try {
+      const v7Pending = v7VerificationRef.current;
+      if (v7Pending) {
+        if (!onVerifyAssessmentV7WebBackup || !onRecordAssessmentV7Backup) throw new Error('Procedura V7 non disponibile.');
+        // The versioned authority checks the actual encrypted byte count and SHA-256.
+        // Failed or stale verifications consume the one-use grant; re-export.
+        v7VerificationRef.current = null;
+        setWebVerificationAvailable(false);
+        const result = await onVerifyAssessmentV7WebBackup(v7Pending, file, () => mountedRef.current);
+        if (result !== 'verified' || !mountedRef.current) return;
+        recording = true;
+        await onRecordAssessmentV7Backup(v7Pending);
+        if (mountedRef.current) setWebVerificationMessage('Copia V7 verificata. Le registrazioni successive richiedono un nuovo backup.');
+        return;
+      }
+      if (!pending) return;
       const matches = await matchesDownloadedBackup(file, pending.evidence);
       if (!mountedRef.current || webVerificationRef.current !== pending) return;
       if (!matches) {
@@ -276,7 +431,7 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
     } catch {
       if (mountedRef.current) setWebVerificationMessage(recording
         ? 'Il file corrisponde, ma lo stato della copia non è stato aggiornato. Esporta una nuova copia.'
-        : 'Impossibile leggere la copia. Riprova con il file appena scaricato.');
+        : 'Copia non verificata. Per V7 genera una nuova copia; per V6 controlla il file scelto.');
     } finally {
       backupOperationPendingRef.current = false;
       if (mountedRef.current) setIsVerifyingCopy(false);
@@ -439,6 +594,23 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
               <KeyRound className="w-3.5 h-3.5" />
               <span>{isEncrypting ? 'Cifratura in corso...' : 'Cifra e Scarica File'}</span>
             </button>
+            {onPrepareAssessmentV7Backup && onVerifyAssessmentV7WebBackup &&
+              onVerifyAssessmentV7AndroidBackup && onRecordAssessmentV7Backup && (
+              <div className="pt-2 border-t border-[var(--border)] space-y-2">
+                <p className="text-xs text-slate-300">
+                  Per conservare anche le evidenze valutative e le revisioni storiche usa la copia completa V7.
+                  Il formato V6 non può attestare un archivio con tali evidenze.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { void handleExportAssessmentV7(); }}
+                  disabled={isEncrypting || isDecrypting || isVerifyingCopy || backupOperationPendingRef.current}
+                  className="w-full py-2.5 rounded-lg bg-slate-800 border border-slate-600 text-xs font-semibold text-emerald-300"
+                >
+                  <FileCheck2 className="inline w-3.5 h-3.5 mr-1" /> Esporta copia completa V7
+                </button>
+              </div>
+            )}
             {!nativeBackupRuntime && (webVerificationAvailable || webVerificationMessage || isVerifyingCopy) && (
               <div className="border-t border-[var(--border)] pt-3 space-y-2">
                 {webVerificationAvailable && (
@@ -490,10 +662,39 @@ export const PrivacyView: React.FC<PrivacyViewProps> = ({
               />
             </div>
 
+            <div className="space-y-2 rounded-lg border border-[var(--border)] p-3">
+              <p className="text-xs font-semibold text-slate-200">Ripristino V7: copia di recupero obbligatoria</p>
+              <p className="text-xs text-slate-400">
+                Prima di ripristinare una copia V7, salva e conserva separatamente una copia completa V7
+                dell'archivio corrente. Deve corrispondere esattamente allo stato attuale:
+                il controllo avviene prima di sostituire i dati.
+              </p>
+              {!nativeBackupRuntime && (
+                <div>
+                  <label htmlFor="restore-v7-recovery" className="block text-xs text-slate-300">
+                    Copia cifrata V7 dello stato corrente
+                  </label>
+                  <input id="restore-v7-recovery" type="file" accept=".enc.json,application/json"
+                    onChange={e => setSelectedV7RecoveryFile(e.target.files?.[0] ?? null)}
+                    className="w-full min-h-[44px] text-xs neon-input p-1.5" />
+                </div>
+              )}
+              <label htmlFor="restore-v7-recovery-password" className="block text-xs text-slate-300">
+                Password della copia V7 di recupero
+              </label>
+              <input id="restore-v7-recovery-password" type="password" value={recoveryPassword}
+                onChange={e => setRecoveryPassword(e.target.value)}
+                placeholder="Solo per il ripristino V7"
+                className="w-full p-2 neon-input text-xs text-white" />
+              {nativeBackupRuntime && <p className="text-xs text-slate-400">
+                Su Android il file di recupero viene selezionato dopo la copia da ripristinare.
+              </p>}
+            </div>
+
             <p className="text-xs text-slate-400">
               {nativeBackupRuntime
-                ? 'Inserisci la password, scegli il file cifrato da Download o Documenti e conferma il ripristino.'
-                : 'I backup precedenti non cifrati vengono letti esclusivamente in locale, previa conferma. Il nuovo backup esportato sarà sempre cifrato.'}
+                ? 'Inserisci la password e scegli il file cifrato. Per V7 sarà richiesta anche la copia corrente di recupero.'
+                : 'I backup precedenti non cifrati restano leggibili solo in locale. Per V7 serve una copia cifrata esatta dello stato attuale.'}
             </p>
 
             <button
