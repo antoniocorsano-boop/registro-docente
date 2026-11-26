@@ -95,6 +95,52 @@ def reconcile(apk, components, artifact_ids):
     return results
 
 
+
+def verify_artifact_delegations(report, components, artifact_ids):
+    """Only a selected external variant may cover an artifactless wrapper."""
+    selected_edges = {
+        (edge["from"], edge["selected"], edge.get("selected_variant"))
+        for edge in report["edges"] if not edge["constraint"]
+    }
+    artifacts = {(row["component"], row["variant"]) for row in report["artifacts"]}
+    links = {}
+    for row in report.get("artifact_delegations", []):
+        parent, variant = field(row, "from"), field(row, "variant")
+        target, target_variant = field(row, "to"), field(row, "target_variant")
+        key = (parent, variant)
+        require(parent != target and key not in links, "duplicate or circular external variant")
+        for node, name in ((parent, variant), (target, target_variant)):
+            require(node in components and components[node]["kind"] == "module",
+                    f"external variant module missing: {node}")
+            require(name in components[node].get("selected_variants", []),
+                    f"external variant not selected: {node} ({name})")
+        require((parent, target, target_variant) in selected_edges,
+                f"external variant edge missing: {parent} -> {target} ({target_variant})")
+        links[key] = (target, target_variant)
+
+    for origin in links:
+        visited = set()
+        key = origin
+        while key in links:
+            require(key not in visited, f"circular external variant: {origin}")
+            visited.add(key)
+            key = links[key]
+        owner, variant = key
+        # Gradle 8.14.3 reports published artifact variants with the owner
+        # prefix, unlike the selected variant names in ResolutionResult.
+        require(key in artifacts or (owner, f"{owner} variant {variant}") in artifacts,
+                f"external variant has no artifact evidence: {origin} -> {key}")
+
+    for component in components.values():
+        identifier = component["id"]
+        if identifier == report["root"] or identifier in artifact_ids:
+            continue
+        names = component.get("selected_variants", [])
+        delegated = names and all((identifier, name) in links for name in names)
+        platform = (component["kind"] == "module" and component["categories"] and
+                    set(component["categories"]) <= {"platform", "enforced-platform"})
+        require(delegated or platform, f"artifact evidence missing for {identifier}")
+
 def verify(raw_path, apk_path, manifest_path, output, readable):
     require(raw_path.is_file(), "report missing")
     try:
@@ -168,11 +214,7 @@ def verify(raw_path, apk_path, manifest_path, output, readable):
         require(sha256(artifact["sha256"]) and type(artifact["size"]) is int and
                 artifact["size"] > 0, "artifact digest or size unavailable")
         artifact_ids.add(component)
-    for c in components.values():
-        if c["id"] != root and c["id"] not in artifact_ids:
-            require(c["kind"] == "module" and c["categories"] and
-                    set(c["categories"]) <= {"platform", "enforced-platform"},
-                    f"artifact evidence missing for {c['id']}")
+    verify_artifact_delegations(report, components, artifact_ids)
 
     inputs = unique_rows(report["inputs"], "file")
     required_inputs = {
@@ -197,7 +239,8 @@ def verify(raw_path, apk_path, manifest_path, output, readable):
     report["status"] = "complete"
     report["coverage"] = {
         "runtime": ("One resolved releaseRuntimeClasspath; original selected published variant files and "
-                    "AGP/Gradle-produced full runtime JARs for local projects from the release invocation"),
+                    "AGP/Gradle-produced full runtime JARs for local projects from the release invocation; "
+                    "selected external variants are backed by the referenced artifact, without duplicating files"),
         "build": "Toolchain and selected input digests; build plugin transitive graph outside scope",
         "optional": "Selected dependencies only; unselected variants and npm probe transitives outside scope",
         "apk": "Marker-to-graph reconciliation; no assertion that every class survives packaging",
@@ -208,6 +251,9 @@ def verify(raw_path, apk_path, manifest_path, output, readable):
              f"Components: {len(components)}; edges: {len(report['edges'])}; artifacts: {len(report['artifacts'])}",
              "", "Components:"]
     lines.extend(f"- {c['id']} ({c['kind']})" for c in report["components"])
+    lines.extend(["", "Selected external variants:"])
+    lines.extend(f"- {d['from']} ({d['variant']}) -> {d['to']} ({d['target_variant']})"
+                 for d in report.get("artifact_delegations", []))
     lines.extend(["", "APK markers:"])
     lines.extend(f"- {m['marker']}: {m['component']} ({m['method']})" for m in report["markers"])
     lines.extend(["", "Coverage:", *(f"- {k}: {v}" for k, v in report["coverage"].items())])

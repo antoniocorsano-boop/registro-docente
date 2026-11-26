@@ -151,6 +151,66 @@ class NativeInventoryTest(unittest.TestCase):
                       self.manifest.read_text())
         self.assertIn(self.component_id, self.readable.read_text())
 
+    def with_external_variant(self):
+        owner = self.component_id
+        alias = "fixtures:relocated:1.0"
+        variant = "jvmRuntime"
+        self.report["components"][1]["selected_variants"] = [variant]
+        self.report["artifacts"][0]["variant"] = f"{owner} variant {variant}"
+        self.report["components"].append({
+            "id": alias, "kind": "module", "group": "fixtures", "module": "relocated",
+            "version": "1.0", "categories": ["library"], "selected_variants": [variant],
+        })
+        original = self.report["edges"][0]
+        original.update(requested=alias, selected=alias, selected_variant=variant)
+        self.report["edges"].append({
+            "from": alias, "requested": owner, "selected": owner, "selected_variant": variant, "constraint": False,
+        })
+        self.report["artifact_delegations"] = [{
+            "from": alias, "variant": variant, "to": owner, "target_variant": variant,
+        }]
+        return alias
+
+    def test_external_variant_covers_wrapper_without_fabricating_an_artifact(self):
+        alias = self.with_external_variant()
+        self.run_gate(self.report)
+        verified = json.loads(self.output.read_text())
+        self.assertEqual([row["component"] for row in verified["artifacts"]], [self.component_id])
+        self.assertEqual(verified["artifact_delegations"][0]["from"], alias)
+
+    def test_ordinary_dependency_does_not_cover_absent_artifact(self):
+        self.with_external_variant()
+        del self.report["artifact_delegations"]
+        self.run_gate(self.report, diagnostic="artifact evidence missing")
+
+    def test_external_variant_only_covers_its_own_selected_variant(self):
+        alias = self.with_external_variant()
+        component = next(row for row in self.report["components"] if row["id"] == alias)
+        component["selected_variants"].append("unbackedRuntime")
+        self.run_gate(self.report, diagnostic="artifact evidence missing")
+
+    def test_external_variant_rejects_circular_chains(self):
+        alias = self.with_external_variant()
+        variant = "jvmRuntime"
+        self.report["edges"].append({
+            "from": self.component_id, "requested": alias, "selected": alias,
+            "selected_variant": variant, "constraint": False,
+        })
+        self.report["artifact_delegations"].append({
+            "from": self.component_id, "variant": variant, "to": alias, "target_variant": variant,
+        })
+        self.run_gate(self.report, diagnostic="circular external variant")
+
+    def test_external_variant_requires_selected_target_and_its_artifact(self):
+        self.with_external_variant()
+        self.report["artifacts"][0]["variant"] = "different variant"
+        self.run_gate(self.report, diagnostic="external variant has no artifact evidence")
+
+    def test_external_variant_cannot_substitute_an_unrelated_graph_edge(self):
+        self.with_external_variant()
+        self.report["edges"][1]["selected_variant"] = "different variant"
+        self.run_gate(self.report, diagnostic="external variant edge missing")
+
     def test_coroutines_core_alias_resolves_jvm_artifact(self):
         self.make_apk([("META-INF/kotlinx_coroutines_core.version", "1.8.1")])
         self.report["apk_sha256"] = self.apk_hash()
@@ -235,6 +295,14 @@ subprojects {
                 "formatVersion": "1.1", "component": {"group": "fixtures", "module": "multiplatform", "version": "1.0"},
                 "variants": [common, jvm],
             }))
+            for name in ("relocated", "second-wrapper"):
+                alias = android / f"repo/fixtures/{name}/1.0/{name}-1.0.module"
+                put(alias, json.dumps({
+                    "formatVersion": "1.1", "component": {"group": "fixtures", "module": name, "version": "1.0"},
+                    "variants": [{"name": "jvmRuntime", "attributes": {"org.gradle.usage": "java-runtime"},
+                                  "available-at": {"url": "../../multiplatform/1.0/multiplatform-1.0.module",
+                                                   "group": "fixtures", "module": "multiplatform", "version": "1.0"}}],
+                }))
             local_paths = [":capacitor-android", ":capacitor-cordova-android-plugins"]
             for path in local_paths:
                 put(android / path[1:] / "build.gradle", """
@@ -267,7 +335,8 @@ dependencies {
     releaseRuntimeClasspath project(':capacitor-cordova-android-plugins')
     releaseRuntimeClasspath 'fixtures:runtime-aar:1.0'
     releaseRuntimeClasspath 'fixtures:runtime-jar:1.0'
-    releaseRuntimeClasspath 'fixtures:multiplatform:1.0'
+    releaseRuntimeClasspath 'fixtures:relocated:1.0'
+    releaseRuntimeClasspath 'fixtures:second-wrapper:1.0'
     releaseRuntimeClasspath platform('fixtures:bom:1.0')
 }
 extensions.add('android', new Expando(compileSdk: 36, buildToolsVersion: '36.0.0'))
@@ -312,6 +381,10 @@ tasks.register('assembleRelease')
                                        str(probe / "inventory.txt")], env=ENV, text=True, capture_output=True)
             self.assertEqual(verified.returncode, 0, verified.stderr)
             self.assertIn("native_inventory_status=complete", manifest.read_text())
+            self.assertEqual({(entry["from"], entry["to"]) for entry in report["artifact_delegations"]}, {
+                ("fixtures:relocated:1.0", "fixtures:multiplatform:1.0"),
+                ("fixtures:second-wrapper:1.0", "fixtures:multiplatform:1.0"),
+            })
 
 
 if __name__ == "__main__":

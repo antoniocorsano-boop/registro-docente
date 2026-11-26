@@ -56,6 +56,7 @@ gradle.projectsEvaluated {
                 def identity = component.id
                 def row = [
                     id: componentId(identity),
+                    selected_variants: component.variants.collect { it.displayName }.unique().sort(),
                     categories: component.variants.collect {
                         it.attributes.getAttribute(Category.CATEGORY_ATTRIBUTE)?.name
                     }.findAll().unique().sort()
@@ -75,7 +76,7 @@ gradle.projectsEvaluated {
                 def requested = [from: componentId(edge.from.id), requested: edge.requested.displayName,
                                  constraint: edge.constraint]
                 if (edge instanceof ResolvedDependencyResult) {
-                    edges << requested + [selected: componentId(edge.selected.id)]
+                    edges << requested + [selected: componentId(edge.selected.id), selected_variant: edge.resolvedVariant.displayName]
                 } else if (edge instanceof UnresolvedDependencyResult) {
                     unresolved << requested + [attempted: edge.attempted.displayName]
                 } else {
@@ -86,6 +87,23 @@ gradle.projectsEvaluated {
                 throw new GradleException("Unresolved releaseRuntimeClasspath dependencies: " +
                     unresolved.collect { it.attempted }.unique().sort().join(', '))
             }
+            // Gradle Module Metadata available-at can leave the selected wrapper
+            // in the graph while the selected external variant owns the bytes.
+            def artifactDelegations = resolution.allComponents.collectMany { component ->
+                component.variants.findAll { it.externalVariant.present }.collect { variant ->
+                    def target = variant.externalVariant.get()
+                    if (!(component.id instanceof ModuleComponentIdentifier) ||
+                        !(target.owner instanceof ModuleComponentIdentifier) ||
+                        !component.getDependenciesForVariant(variant).any { edge ->
+                            edge instanceof ResolvedDependencyResult && !edge.constraint &&
+                                edge.selected.id == target.owner && edge.resolvedVariant.displayName == target.displayName
+                        }) {
+                        throw new GradleException("Unverified external variant for ${component.id}: ${variant.displayName}")
+                    }
+                    [from: componentId(component.id), variant: variant.displayName,
+                     to: componentId(target.owner), target_variant: target.displayName]
+                }
+            }.sort { row -> [row.from, row.variant].join("\n") }
             def artifacts = (projectArtifacts.artifacts + moduleArtifacts.artifacts).collect { artifact ->
                 def file = artifact.file
                 if (!file.isFile()) {
@@ -119,7 +137,7 @@ gradle.projectsEvaluated {
                         job: System.getenv('GITHUB_JOB')],
                 root: componentId(resolution.root.id), components: components,
                 edges: edges.sort { row -> [row.from, row.requested, row.selected, row.constraint].join("\n") },
-                unresolved: unresolved, artifacts: artifacts,
+                unresolved: unresolved, artifacts: artifacts, artifact_delegations: artifactDelegations,
                 inputs: inputNames.sort().collect { name ->
                     [file: name, sha256: sha256(new File(androidRoot, name))]
                 },
