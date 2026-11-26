@@ -48,6 +48,7 @@ jobs:
           set -euo pipefail
           bun install --frozen-lockfile
           bun test src/security/navAndroid01NativeBackContract.test.ts src/security/mobile01M4BetaIdentityContract.test.ts src/security/mobile01Beta2UpdateSigning.test.ts
+          python3 "$PROBE_DIR/test_native_inventory.py"
           export VITE_REGISTRO_BUILD_SHA="$SOURCE_SHA"
           export VITE_REGISTRO_BUILD_KIND=android
           bun run build
@@ -193,7 +194,9 @@ jobs:
         working-directory: mobile/android-probe/android
         run: |
           set -euo pipefail
-          bash ./gradlew --no-daemon assembleRelease
+          rm -f ../native-inventory-raw.json ../native-inventory.json ../native-inventory.txt
+          bash ./gradlew --no-daemon --init-script ../native-inventory.init.gradle \
+            assembleRelease :app:captureReleaseNativeInventory
 
       - name: Verify unsigned Beta package and provenance
         shell: bash
@@ -249,6 +252,16 @@ jobs:
             printf 'real_data_authorized=false\n'
           } > "$PROBE_DIR/beta-unsigned-manifest.txt"
 
+      - name: Require complete Android release dependency inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$PROBE_DIR/verify-native-inventory.py" \
+            "$PROBE_DIR/native-inventory-raw.json" \
+            "$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk" \
+            "$PROBE_DIR/beta-unsigned-manifest.txt" \
+            "$PROBE_DIR/native-inventory.json" "$PROBE_DIR/native-inventory.txt"
+
       - name: Upload unsigned Beta candidate only — no private key or release
         uses: actions/upload-artifact@v4
         with:
@@ -257,6 +270,8 @@ jobs:
             mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
             mobile/android-probe/beta-unsigned.sha256
             mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/native-inventory.json
+            mobile/android-probe/native-inventory.txt
             mobile/android-probe/beta-identity.json
             mobile/android-probe/sign-beta-locally.sh
           if-no-files-found: error
