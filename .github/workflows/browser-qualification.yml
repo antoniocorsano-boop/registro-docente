@@ -51,6 +51,9 @@ jobs:
       - name: Install application dependencies from lockfile
         run: bun install --frozen-lockfile
 
+      - name: Require R106 production browser coverage
+        run: node scripts/qualification/r106-production.mjs contract
+
       - name: Build production application
         env:
           VITE_INT01_HPR_TRACE: '1'
@@ -77,6 +80,7 @@ jobs:
           # Cap browser download at 120 seconds; fail promptly with a clear error.
           timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
+          cp tests/browser/r106-student-import.spec.cjs .browser-tools/r106-student-import.spec.cjs
           cp tests/browser/ap01-initial-reservation.spec.cjs .browser-tools/ap01-initial-reservation.spec.cjs
           cp tests/browser/ap02-v7-professional-web.spec.cjs .browser-tools/ap02-v7-professional-web.spec.cjs
           cp tests/browser/ap02-f2-android-v7-ui.spec.cjs .browser-tools/ap02-f2-android-v7-ui.spec.cjs
@@ -164,6 +168,45 @@ jobs:
           echo "Production server did not become ready within 30 seconds."
           cat browser-evidence/server.log
           exit 1
+
+      - name: Build and start isolated R106 production fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence/r106-production
+          node scripts/qualification/r106-production.mjs build "$RUNNER_TEMP/r106-production"
+          NODE_ENV=production ./node_modules/.bin/vite preview --mode production --outDir "$RUNNER_TEMP/r106-production" --host 127.0.0.1 --port 4186 --strictPort > browser-evidence/r106-production/server.log 2>&1 &
+          pid=$!
+          echo "$pid" > browser-evidence/r106-production/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4186/tests/browser/fixtures/r106-student-import.html > browser-evidence/r106-production/served.html; then
+              if grep -Eq 'src="/assets/[^"]+\.js"' browser-evidence/r106-production/served.html; then
+                exit 0
+              fi
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          cat browser-evidence/r106-production/server.log
+          exit 1
+
+      - name: Run mandatory R106 production Chromium regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .browser-tools/r106-student-import.spec.cjs
+          rm -f browser-evidence/r106-production/report.json browser-evidence/r106-production/summary.json
+          (
+            cd .browser-tools
+            R106_FIXTURE_URL="http://127.0.0.1:4186/tests/browser/fixtures/r106-student-import.html" \
+            PLAYWRIGHT_JSON_OUTPUT_FILE="../browser-evidence/r106-production/report.json" \
+            ./node_modules/.bin/playwright test \
+              r106-student-import.spec.cjs \
+              --workers=1 \
+              --reporter=line,json \
+              --output=../browser-evidence/r106-production/results
+          )
+          node scripts/qualification/r106-production.mjs report browser-evidence/r106-production/report.json
 
       - name: AUDIT-PRE-01 / AP-01 — Real two-tab archive reservation
         shell: bash
@@ -582,6 +625,9 @@ jobs:
         if: always()
         shell: bash
         run: |
+          if [[ -f browser-evidence/r106-production/server.pid ]]; then
+            kill "$(cat browser-evidence/r106-production/server.pid)" 2>/dev/null || true
+          fi
           if [[ -f browser-evidence/server.pid ]]; then
             server_pid="$(cat browser-evidence/server.pid)"
             kill "${server_pid}" 2>/dev/null || true

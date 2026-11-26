@@ -3806,6 +3806,26 @@
       ]
     },
     {
+      "id": "CAND-PROD-01-R1-06B-I01",
+      "owner": "CAND-PROD-01/R1-06-01b",
+      "statement": "PR 416 may advance from the frozen R1-06-01 SHA only by one exact enumerated qualification-only commit. Verify the historical admission deltas independently. Browser qualification builds a separate production fixture of the real roster UI and worker, serves it locally, and requires the three named regression results with no skips or retries. The fixture is absent from the ordinary product build and simulates persistence failure without exercising the Vault.",
+      "impactPaths": [
+        ".github/workflows/browser-qualification.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/qualification/r106-production.mjs",
+        "tests/browser/fixtures/r106-student-import.html",
+        "tests/browser/r106-student-import.spec.cjs"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ],
+      "browserSmoke": [
+        "tests/browser/r106-student-import.spec.cjs"
+      ]
+    },
+    {
       "id": "CAND-PROD-01-HISTORICAL-SUBJECT-I01",
       "owner": "CAND-PROD-01/R3a",
       "statement": "Only the explicit Tecnologia/tecnologia alias is equivalent in current-class and current-year document selection and App context checks. Exact independently approved scopes and whole-class or whole-archive validation precede selection; the original stored subject code remains exact for projection, preview, mutation and verified receipt. New documents use the canonical code only when no equivalent document exists. Two equivalent documents fail closed rather than choosing, merging or creating another document, including during the durable derive after preview. Opaque identifiers, historical revision graphs, bindings, grades and behavior are preserved. No new persistence authority, archive rewrite, migration or release authorization.",

@@ -1,17 +1,18 @@
 const { test, expect } = require('@playwright/test');
-const base = process.env.BASE_URL || 'http://127.0.0.1:3000';
+const fixture = new URL(process.env.R106_FIXTURE_URL);
 const upload = {
   name: 'classe.csv', mimeType: 'text/csv',
   buffer: Buffer.from('Cognome e Nome\nAlfa Ada\nalfa ada\nSERRA LIA\n'),
 };
 
 async function openFixture(page, reject = false) {
-  await page.route('**/r106-fixture*', async route => {
-    const response = await route.fetch({ url: base + '/' });
-    const html = await response.text();
-    await route.fulfill({ response, body: html.replace('/src/main.tsx', '/tests/browser/fixtures/r106-student-import.fixture.tsx') });
-  });
-  await page.goto(base + '/r106-fixture' + (reject ? '?reject' : ''));
+  const url = new URL(fixture);
+  if (reject) url.searchParams.set('reject', '');
+  const response = await page.goto(url.href);
+  expect(response?.ok()).toBe(true);
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: Classe sintetica' })).toBeVisible();
+  await expect(page.getByLabel('Tentativi di salvataggio')).toHaveText('0');
+  await expect(page.getByText('Serra Lia', { exact: true })).toHaveCount(1);
 }
 
 async function chooseFile(page, accept) {
@@ -21,7 +22,13 @@ async function chooseFile(page, accept) {
     if (dialog.type() === 'confirm' && !accept) await dialog.dismiss();
     else await dialog.accept();
   });
-  await page.locator('input[type=file]').setInputFiles(upload);
+  const [worker] = await Promise.all([
+    page.waitForEvent('worker'),
+    page.locator('input[type=file]').setInputFiles(upload),
+  ]);
+  const workerUrl = new URL(worker.url());
+  expect(workerUrl.origin).toBe(fixture.origin);
+  expect(workerUrl.pathname).toMatch(/^\/assets\/studentImport\.worker-[^/]+\.js$/);
   await expect.poll(() => messages[0]).toMatch(/1 nuovo nominativo.*Classe sintetica/);
   await expect(page.locator('input[type=file]')).toBeEnabled();
   return messages;

@@ -101,9 +101,19 @@ jobs:
             frozen_r3a=9e5177aa1d816b52465072960dd5b0b516def53e
             # R1-06-01: one exact successor on PR 416. Keep the R3a check on its frozen tree.
             if test "$PR_NUMBER" = 416 && test "$CANDIDATE_SHA" != "$frozen_r3a"; then
-              test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_r3a"
+              r1_head=HEAD
+              frozen_r1=69be03663b49d85aa3fd53cdb6cc4934165a0802
+              if test "$CANDIDATE_SHA" != "$frozen_r1"; then
+                test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_r1"
+                expected_r1b=$(printf '%s\n' .github/workflows/browser-qualification.yml .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/r106-production.mjs tests/browser/fixtures/r106-student-import.html tests/browser/r106-student-import.spec.cjs | LC_ALL=C sort)
+                actual_r1b=$(git diff --name-only --no-renames "$frozen_r1" HEAD | LC_ALL=C sort)
+                test "$actual_r1b" = "$expected_r1b"
+                r1_head=$frozen_r1
+              fi
+              r1_sha=$(git rev-parse "$r1_head")
+              test "$(git rev-list --parents -n 1 "$r1_head")" = "$r1_sha $frozen_r3a"
               expected_r1=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml bun.lock package.json qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs src/components/StudentsManagementView.tsx src/components/studentImport.ts src/components/studentImport.worker.ts src/components/studentImportLimits.ts src/security/r106StudentImport.test.ts tests/browser/fixtures/r106-student-import.fixture.tsx tests/browser/r106-student-import.spec.cjs | LC_ALL=C sort)
-              actual_r1=$(git diff --name-only --no-renames "$frozen_r3a" HEAD | LC_ALL=C sort)
+              actual_r1=$(git diff --name-only --no-renames "$frozen_r3a" "$r1_head" | LC_ALL=C sort)
               test "$actual_r1" = "$expected_r1"
               r3a_head=$frozen_r3a
             fi

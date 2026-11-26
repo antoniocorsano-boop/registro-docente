@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {checkR106Workflow, checkR106Report} from '../../qualification/r106-production.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -247,6 +248,9 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   const r3aPaths=[".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","src/App.tsx","src/assessment/assessmentEvidenceMutation.ts","src/assessment/assessmentSubjectScope.ts","src/assessment/dailyAssessmentSetup.ts","src/assessment/dailyCriterionRecordingContext.ts","src/assessment/dailyPlannedAssessmentCompletion.ts","src/assessment/studentCriterionReadModel.ts","src/security/candProdHistoricalSubject.test.ts"];
   const r3aRef='9e5177aa1d816b52465072960dd5b0b516def53e';
   const r1Paths=[".github/workflows/qa-appium-replacement-pilot.yml","bun.lock","package.json","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","src/components/StudentsManagementView.tsx","src/components/studentImport.ts","src/components/studentImport.worker.ts","src/components/studentImportLimits.ts","src/security/r106StudentImport.test.ts","tests/browser/fixtures/r106-student-import.fixture.tsx","tests/browser/r106-student-import.spec.cjs"];
+  const r1Ref='69be03663b49d85aa3fd53cdb6cc4934165a0802';
+  const r1bPaths=[".github/workflows/browser-qualification.yml",".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","scripts/qualification/r106-production.mjs","tests/browser/fixtures/r106-student-import.html","tests/browser/r106-student-import.spec.cjs"];
+  let r1;
   const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
@@ -262,7 +266,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     const run=(sha,{eventBase=base,candidateSha=sha,route='production',prNumber='999',overrides={}}={})=>{
       git('checkout','-q','--detach',sha);
       let script=source;
-      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,...overrides};
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,...overrides};
       for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
       const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:prNumber,CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
       rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
@@ -284,7 +288,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     git('checkout','-q','--detach',candidate);put('src/App.tsx','qualified');fail(commit('missing approved product change'));
     git('checkout','-q','--detach',candidate);
     for(const path of r1Paths)put(path,'approved R1-06-01 correction');
-    const r1=commit('R1-06-01');
+    r1=commit('R1-06-01');
     pass(r1,{prNumber:'416'});
     fail(r1);
     fail(r1,{prNumber:'416',route:'legacy'});
@@ -298,6 +302,53 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     git('checkout','-q','--detach',candidate);
     for(const path of r1Paths.filter(path=>path!=='bun.lock'))put(path,'approved R1-06-01 correction');
     fail(commit('R1 missing required file'),{prNumber:'416'});
+    git('checkout','-q','--detach',r1);
+    for(const path of r1bPaths)put(path,'approved R1-06-01b qualification');
+    const r1b=commit('R1-06-01b');
+    pass(r1b,{prNumber:'416'});
+    fail(r1b);
+    fail(r1b,{prNumber:'416',route:'legacy'});
+    fail(r1b,{prNumber:'416',eventBase:composition});
+    fail(r1b,{prNumber:'416',overrides:{[r1Ref]:candidate}});
+    git('checkout','-q','--detach',r1);
+    for(const path of r1bPaths)put(path,'approved R1-06-01b qualification');
+    put('src/App.tsx','unauthorized product correction');
+    fail(commit('R1b extra file'),{prNumber:'416'});
+    git('checkout','-q','--detach',r1);
+    for(const path of r1bPaths.filter(path=>!path.endsWith('.spec.cjs')))put(path,'qualification without regressions');
+    fail(commit('R1b missing regressions'),{prNumber:'416'});
+    git('checkout','-q','--detach',r1);
+    put('unrelated','intermediate');commit('unapproved parent');
+    for(const path of r1bPaths)put(path,'approved R1-06-01b qualification');
+    fail(commit('R1b wrong parent'),{prNumber:'416'});
+
 
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('R1-06-01b fails closed when production coverage or evidence is omitted',()=>{
+  const browser=readFileSync('.github/workflows/browser-qualification.yml','utf8');
+  checkR106Workflow(browser);
+  for(const marker of [
+    'r106-production.mjs contract',
+    'cp tests/browser/r106-student-import.spec.cjs',
+    'r106-production.mjs build',
+    'vite preview --mode production',
+    'r106-student-import.spec.cjs \\',
+    'r106-production.mjs report',
+    'path: browser-evidence/',
+  ]){
+    const lines=browser.split('\n');
+    const modified=lines.filter(line=>!line.includes(marker)).join('\n');
+    assert.notEqual(modified,browser,marker);
+    assert.throws(()=>checkR106Workflow(modified),{name:'AssertionError'},marker);
+    const commented=lines.map(line=>line.includes(marker)?`          # ${line.trim()}`:line).join('\n');
+    assert.throws(()=>checkR106Workflow(commented),{name:'AssertionError'},marker);
+  }
+  const noRun=browser.replace(/^      - name: Run mandatory R106 production Chromium regressions\n[\s\S]*?(?=^      - name: )/m,'');
+  assert.throws(()=>checkR106Workflow(noRun),/Missing required step/);
+  const skipped={errors:[],stats:{expected:2,unexpected:0,flaky:0,skipped:1},suites:[]};
+  assert.throws(()=>checkR106Report(skipped),{name:'AssertionError'});
+  const uncollected={...skipped,stats:{expected:3,unexpected:0,flaky:0,skipped:0}};
+  assert.throws(()=>checkR106Report(uncollected),/three R106 scenarios/);
 });
