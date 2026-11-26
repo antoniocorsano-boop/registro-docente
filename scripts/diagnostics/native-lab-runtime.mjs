@@ -4,6 +4,48 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 
+const appiumBootstrapMethods = new Map([
+  ['create-session', 'POST'],
+  ['get-native-context', 'GET'],
+]);
+const webdriverBootstrapCodes = new Set([
+  'session not created', 'invalid session id', 'unknown error', 'timeout',
+  'unsupported operation', 'unknown command', 'invalid argument',
+  'unknown method', 'no such driver',
+]);
+
+// Report only closed vocabularies and numeric observations. Never record the
+// URL, capabilities, session id, context value, response body or exceptions.
+export async function observeAppiumBootstrap({operation, send, validate, record, now = () => performance.now()}) {
+  const method = appiumBootstrapMethods.get(operation);
+  if (!method) throw new LabFailure('INVALID_HARNESS_ARGUMENT');
+  const started = now();
+  let httpStatus = null;
+  let webdriverCode = null;
+  let outcome = 'transport-failed';
+  try {
+    const response = await send(method);
+    httpStatus = response.status;
+    outcome = 'invalid-json';
+    const payload = await response.json();
+    if (payload?.value?.error) {
+      const code = payload.value.error;
+      webdriverCode = webdriverBootstrapCodes.has(code) ? code : 'unrecognized';
+    }
+    if (!response.ok || webdriverCode !== null) {
+      outcome = 'rejected';
+      throw new LabFailure('NATIVE_UI_READ_FAILED');
+    }
+    outcome = 'invalid-value';
+    const value = payload.value;
+    validate(value);
+    outcome = 'accepted';
+    return value;
+  } finally {
+    record({operation, method, httpStatus, webdriverCode, outcome, durationMs: Math.max(0, Math.round(now() - started))});
+  }
+}
+
 export const failureCategories=Object.freeze(['INFRASTRUCTURE','HARNESS','PRODUCT','INDETERMINATE']);
 // PRODUCT is reserved for independently established evidence, never inferred from a timeout.
 const categories = Object.freeze({

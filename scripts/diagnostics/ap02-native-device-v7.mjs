@@ -4,7 +4,7 @@
 // mocks, production credentials, plaintext backup uploads or external services.
 import assert from 'node:assert/strict';
 import {appiumSnapshot} from './appium-pilot/native-picker.mjs';
-import { LabFailure, classifyFailure, commandBudget, commandBudgetInfo, classifyAdbDeadline, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, commandBudget, commandBudgetInfo, classifyAdbDeadline, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate, observeAppiumBootstrap } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, sampleDestinationFrame, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
@@ -67,7 +67,8 @@ const readyDestinations=new Set();
 let cdpTargetObservation=null,nativeUiObservation=null,classControlObservation=null;
 const environment={schemaVersion:1,candidate:sha,api,syntheticOnly:true,productionRelease:false,
   runId:process.env.GITHUB_RUN_ID||null,runAttempt:process.env.GITHUB_RUN_ATTEMPT||null,
-  bootReady:false,bootObservation:null,packageReady:false,launches:0,foreground:false,cdpReady:false,versions:null,emulatorIdentity:null,complete:false};
+  bootReady:false,bootObservation:null,packageReady:false,launches:0,foreground:false,cdpReady:false,versions:null,emulatorIdentity:null,complete:false,
+  appiumBootstrap:[]};
 function saveEnvironment(){writeFileSync(out+'/environment.json',JSON.stringify(environment,null,2));}
 const surfaceExpression=(label)=>'('+publicSurfaceFrame.toString()+')('+JSON.stringify(label)+',document,getComputedStyle,'+isInteractiveElement.toString()+')';
 const interactiveSource=isInteractiveElement.toString();
@@ -158,27 +159,43 @@ async function until(fn, name, timeout = 60000, retryReadErrors = true) {
     throw error;
   }
 }
-async function nativeRequest(method,path,body){
-  const response=await fetch('http://127.0.0.1:4723'+path,{
+const sendNativeRequest = (method,path,body) => fetch('http://127.0.0.1:4723'+path,{
     method,headers:{'content-type':'application/json'},
     ...(body===undefined?{}:{body:JSON.stringify(body)}),
     signal:AbortSignal.timeout(commandBudget(60000))});
+async function nativeRequest(method,path,body){
+  const response=await sendNativeRequest(method,path,body);
   const payload=await response.json();
   if(!response.ok||payload.value?.error)throw new LabFailure('NATIVE_UI_READ_FAILED');
   return payload.value;
 }
+function recordAppiumBootstrap(row) {
+  environment.appiumBootstrap.push(row);
+  // Persist each completed operation without suppressing its original outcome.
+  try { saveEnvironment(); } catch {}
+}
 async function startNativeSession(){
-  const value=await nativeRequest('POST','/session',{capabilities:{alwaysMatch:{
+  const capabilities={capabilities:{alwaysMatch:{
     platformName:'Android','appium:automationName':'UiAutomator2',
     'appium:deviceName':'Android Emulator','appium:appPackage':pkg,
     'appium:appActivity':'it.trama.registrodocente.prova.MainActivity',
     'appium:noReset':true,'appium:autoLaunch':false,'appium:autoWebview':false,
     'appium:shouldTerminateApp':false,'appium:newCommandTimeout':900,
     'appium:uiautomator2ServerReadTimeout':30000
-  },firstMatch:[{}]}});
-  assert.match(value?.sessionId||'',/^[a-f0-9-]{36}$/i);
+  },firstMatch:[{}]}};
+  const value=await observeAppiumBootstrap({
+    operation:'create-session',
+    send:method=>sendNativeRequest(method,'/session',capabilities),
+    validate:value=>assert.match(value?.sessionId||'',/^[a-f0-9-]{36}$/i),
+    record:recordAppiumBootstrap,
+  });
   nativeSession=value.sessionId;
-  assert.equal(await nativeRequest('GET','/session/'+nativeSession+'/context'),'NATIVE_APP');
+  await observeAppiumBootstrap({
+    operation:'get-native-context',
+    send:method=>sendNativeRequest(method,'/session/'+nativeSession+'/context'),
+    validate:value=>assert.equal(value,'NATIVE_APP'),
+    record:recordAppiumBootstrap,
+  });
 }
 async function closeNativeSession(){
   if(!nativeSession)return;
@@ -1142,6 +1159,7 @@ try{
     recoveryConsent:recoveryConsent.snapshot(),
     surfaceTransitions:safeSurfaceTrace(surfaceTransitions),readyDestinations:[...readyDestinations].sort(),
     qualified:false,productionRelease:false,syntheticOnly:true,
+    appiumBootstrap:environment.appiumBootstrap,
     cdpTargetObservation,nativeUiObservation,classControlObservation,
     adbTransport:adbTransport.snapshot(),lastDestinationFrame,surfaceReadFailures,
     safActivityTrail:lastSafActivityTrail,

@@ -885,3 +885,85 @@ test('Q5-R12 one authentication allowance spans Home navigation boundaries',asyn
   await assert.rejects(confirmHomeOnce({...fakeClock(),timeoutMs:20000,foreground:()=>true,attempt,authenticate:shared}),{code:'PUBLIC_RELOCK_AFTER_AUTH'});
   assert.equal(submits,1);assert.equal(state.clicks,0);
 });
+
+test('F2 Appium bootstrap distinguishes session creation from context refusal without leaking responses', async () => {
+  const { observeAppiumBootstrap } = await import('./native-lab-runtime.mjs');
+  const records = [];
+  const privateText = 'synthetic-session-id-and-private-message';
+  for (const [operation, status, error] of [
+    ['create-session', 500, 'session not created'],
+    ['get-native-context', 404, 'invalid session id'],
+    ['get-native-context', 200, privateText],
+  ]) {
+    const clock = fakeClock();
+    await assert.rejects(observeAppiumBootstrap({
+      operation, now: clock.now, record: row => records.push(row),
+      send: async () => {
+        clock.advance(14);
+        return Response.json({value:{error,message:privateText,sessionId:privateText}},{status});
+      },
+      validate: () => assert.fail('a rejected response may not pass validation'),
+    }), {code:'NATIVE_UI_READ_FAILED'});
+  }
+  assert.deepEqual(records, [
+    {operation:'create-session',method:'POST',httpStatus:500,webdriverCode:'session not created',outcome:'rejected',durationMs:14},
+    {operation:'get-native-context',method:'GET',httpStatus:404,webdriverCode:'invalid session id',outcome:'rejected',durationMs:14},
+    {operation:'get-native-context',method:'GET',httpStatus:200,webdriverCode:'unrecognized',outcome:'rejected',durationMs:14},
+  ]);
+  assert.ok(!JSON.stringify(records).includes(privateText));
+});
+
+test('F2 Appium bootstrap retains transport, parse and context validation failures', async () => {
+  const { observeAppiumBootstrap } = await import('./native-lab-runtime.mjs');
+  const records = [];
+  const options = {operation:'get-native-context',record:row=>records.push(row),now:()=>0,
+    validate:value=>assert.equal(value,'NATIVE_APP')};
+  await assert.rejects(observeAppiumBootstrap({...options,send:async()=>{throw new Error('synthetic network text');}}));
+  await assert.rejects(observeAppiumBootstrap({...options,send:async()=>new Response('not JSON',{status:502})}), SyntaxError);
+  await assert.rejects(observeAppiumBootstrap({...options,send:async()=>Response.json({value:'wrong context'})}),
+    {code:'ERR_ASSERTION'});
+  assert.equal(await observeAppiumBootstrap({...options,send:async()=>Response.json({value:'NATIVE_APP'})}), 'NATIVE_APP');
+  assert.deepEqual(records.map(r=>[r.outcome,r.httpStatus,r.webdriverCode]), [
+    ['transport-failed',null,null],['invalid-json',502,null],['invalid-value',200,null],['accepted',200,null],
+  ]);
+});
+
+test('F2 real bootstrap records the failed operation in the environment before launch', async () => {
+  const { observeAppiumBootstrap } = await import('./native-lab-runtime.mjs');
+  const source = readFileSync(new URL('./ap02-native-device-v7.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('const sendNativeRequest =');
+  const end = source.indexOf('async function closeNativeSession()', start);
+  assert.ok(start >= 0 && end > start);
+  const create = new Function('fetch', 'commandBudget', 'assert', 'observeAppiumBootstrap',
+    'environment', 'saveEnvironment', 'LabFailure', `
+    const pkg = 'synthetic.test';
+    let nativeSession = null;
+    ${source.slice(start, end)}
+    return startNativeSession;
+  `);
+  for (const rejectMethod of ['POST','GET']) {
+    const environment = {appiumBootstrap:[]};
+    const snapshots = [];
+    const id = 'abcde012-1234-1234-1234-123456789abc';
+    const calls = [];
+    const run = create(async (url, options) => {
+      calls.push(options.method);
+      if (options.method === 'POST') {
+        assert.ok(url.endsWith('/session'));
+        assert.equal(JSON.parse(options.body).capabilities.alwaysMatch['appium:autoLaunch'], false);
+      } else assert.ok(url.endsWith('/context'));
+      if (options.method === rejectMethod) {
+        return Response.json({value:{error:rejectMethod==='POST'?'session not created':'invalid session id',
+          message:id,stacktrace:'synthetic private text'}},{status:500});
+      }
+      return Response.json({value:{sessionId:id}});
+    }, () => 1000, assert, observeAppiumBootstrap, environment,
+    () => snapshots.push(JSON.stringify(environment)), LabFailure);
+    await assert.rejects(run(),{code:'NATIVE_UI_READ_FAILED'});
+    assert.deepEqual(calls,rejectMethod==='POST'?['POST']:['POST','GET']);
+    assert.equal(snapshots.length,calls.length);
+    assert.equal(JSON.parse(snapshots.at(-1)).appiumBootstrap.at(-1).method,rejectMethod);
+    assert.ok(snapshots.every(entry=>!entry.includes(id)&&!entry.includes('synthetic private text')));
+  }
+  assert.match(source,/appiumBootstrap:environment\.appiumBootstrap,/);
+});
