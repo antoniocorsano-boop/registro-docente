@@ -116,9 +116,17 @@ jobs:
                       inv_head=HEAD
                       frozen_inv=17f5a16287d6d17b73588e1ceee6b349428e12d7
                       if test "$CANDIDATE_SHA" != "$frozen_inv"; then
-                        test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_inv"
+                        inv_r1_head=HEAD
+                        frozen_inv_r1=891a2e2e47b8c86ee0829d18462aac1b6f740ad8
+                        if test "$CANDIDATE_SHA" != "$frozen_inv_r1" &&
+                           git merge-base --is-ancestor "$frozen_inv_r1" HEAD 2>/dev/null; then
+                          bash scripts/diagnostics/android-r3-admission.sh
+                          inv_r1_head=$frozen_inv_r1
+                        fi
+                        inv_r1_sha=$(git rev-parse "$inv_r1_head")
+                        test "$(git rev-list --parents -n 1 "$inv_r1_head")" = "$inv_r1_sha $frozen_inv"
                         expected_inv_r1=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml mobile/android-probe/native-inventory.init.gradle mobile/android-probe/test_native_inventory.py mobile/android-probe/verify-native-inventory.py scripts/diagnostics/appium-pilot/contract.test.mjs | LC_ALL=C sort)
-                        actual_inv_r1=$(git diff --name-only --no-renames "$frozen_inv" HEAD | LC_ALL=C sort)
+                        actual_inv_r1=$(git diff --name-only --no-renames "$frozen_inv" "$inv_r1_head" | LC_ALL=C sort)
                         test "$actual_inv_r1" = "$expected_inv_r1"
                         inv_head=$frozen_inv
                       fi

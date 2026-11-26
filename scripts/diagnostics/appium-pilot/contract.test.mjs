@@ -457,3 +457,48 @@ test('R1-TEC-01b requires the production browser gate and a non-skipped report',
   assert.throws(()=>validateBfcacheReport({errors:[],stats:{expected:5,skipped:1,unexpected:0,flaky:0},suites:[]}));
   assert.throws(()=>validateBfcacheReport({errors:[],stats:{expected:6,skipped:0,unexpected:0,flaky:0},suites:[]}));
 });
+
+test('R3 targeted DB2 remains narrow and preserves the normal matrix',()=>{
+  const db2=readFileSync('.github/workflows/val01-native-evidence.yml','utf8');
+  assert.match(db2,/types: \[opened, synchronize, reopened, labeled\]/);
+  assert.match(db2,/github\.actor == 'antoniocorsano-boop'/);
+  assert.match(db2,/test "\$DB2_LABEL" = "db2-r3-\$CANDIDATE_SHA"/);
+  assert.match(db2,/bash scripts\/diagnostics\/android-r3-admission.sh/);
+  assert.match(db2,/\{"api":\[36\],"mode":\["legacy"\]\}/);
+  assert.match(db2,/\{"api":\[32,36\],"mode":\["legacy","v9"\]\}/);
+  assert.match(db2,/if: always\(\)/);
+  assert.match(db2,/Require complete native evidence/);
+});
+
+test('DB2 distinguishes install assertions from launch transport failures without leaking stderr',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'db2-diagnostic-'));
+  try{
+    const driver=join(process.cwd(),'scripts/diagnostics/val01-native-evidence.mjs');
+    writeFileSync(join(dir,'adb'),`#!/bin/sh
+case "$1:$2" in
+  shell:getprop) echo 36 ;;
+  install:--no-incremental) echo "$INSTALL_RESULT" ;;
+  shell:am) printf '%s\\n' 'adb: device offline' 'private-synthetic-marker' >&2; exit 1 ;;
+  forward:--remove) exit 0 ;;
+  *) exit 99 ;;
+esac
+`,{mode:0o700});
+    for(const [installResult,phase,code,category] of [
+      ['Failure','install','ASSERTION_FAILED','INDETERMINATE'],
+      ['Success','launch','ADB_TRANSPORT_OFFLINE','INFRASTRUCTURE'],
+    ]){
+      const run=spawnSync(process.execPath,[driver],{
+        cwd:dir,encoding:'utf8',timeout:5000,
+        env:{...process.env,PATH:dir+':'+process.env.PATH,VAL01_API:'36',CANDIDATE_SHA:'a'.repeat(40),INSTALL_RESULT:installResult},
+      });
+      assert.equal(run.status,1,run.stderr);
+      const output=readFileSync(join(dir,'native-evidence/failure.json'),'utf8');
+      const evidence=JSON.parse(output);
+      assert.equal(evidence.phase,phase);
+      assert.equal(evidence.lastPassedStage,null);
+      assert.deepEqual(evidence.failure,{code,category});
+      assert.equal(evidence.adb.calls.at(-1).kind,phase==='launch'?'activity-command':'lab-install');
+      assert.doesNotMatch(output+run.stderr,/private-synthetic-marker/);
+    }
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});

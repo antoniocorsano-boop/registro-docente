@@ -6,12 +6,29 @@ import {parseNativeNodes,resumedActivity,hasArea} from './native-ui-driver.mjs';
 import assert from 'node:assert/strict';
 import {probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
 
+import {createAdbTransportTrace} from './native-adb-transport-probe.mjs';
+import {classifyFailure,LabFailure,normalizeAdbFailure} from './native-lab-runtime.mjs';
+
 const pkg='it.trama.registrodocente.lab.val01';
 const activity=pkg+'/it.trama.registrodocente.prova.MainActivity';
 const api=Number(process.env.VAL01_API);
 assert.ok([32,36].includes(api));
 assert.match(process.env.CANDIDATE_SHA||'',/^[a-f0-9]{40}$/);
-const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
+const transport=createAdbTransportTrace();
+let phase='verify-api';
+function runAdb(args,encoding){
+ const started=Date.now();
+ try{
+  const value=execFileSync('adb',args,{encoding,timeout:30000,stdio:['ignore','pipe','pipe']});
+  transport.record(args,started,'ok');
+  return value;
+ }catch(error){
+  const normalized=normalizeAdbFailure(error);
+  transport.record(args,started,normalized.code==='ADB_TRANSPORT_TIMEOUT'?'timeout':'failed');
+  throw normalized;
+ }
+}
+const adb=(...args)=>runAdb(args,'utf8').trim();
 const probe=()=>probePackagePids(adb,pkg);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const results=[];
@@ -23,8 +40,16 @@ function stage(name,details={}){
 }
 async function until(fn,label,timeout=60000){
  const end=Date.now()+timeout;
- while(Date.now()<end){try{const r=await fn();if(r)return r;}catch{}await sleep(500);}
- throw Error(label);
+ let lastReadFailure=null;
+ while(Date.now()<end){
+  try{const r=await fn();if(r)return r;lastReadFailure=null;}
+  catch(error){lastReadFailure=classifyFailure(error);}
+  await sleep(500);
+ }
+ const error=new LabFailure('OBSERVATION_DEADLINE');
+ error.cause=Error(label);
+ error.lastReadFailure=lastReadFailure;
+ throw error;
 }
 let ws=null,seq=0;
 const pending=new Map();
@@ -59,10 +84,14 @@ function evaluate(expression,timeout=30000){
 }
 const call=(method,...args)=>evaluate('window.__val01Db2Evidence['+JSON.stringify(method)+'](...'+JSON.stringify(args)+')');
 async function launch(){
+ phase='launch';
  adb('shell','am','start','-W','-n',activity);
+ phase='connect-cdp';
  await connect();
+ phase='load-fixture';
  await until(()=>evaluate('typeof window.__val01Db2Evidence==="object"'),'Native fixture missing');
  assert.equal(probe().length,1);
+ phase='fixture-checks';
 }
 function identity(){
  const d=adb('shell','dumpsys','package',pkg);
@@ -70,6 +99,7 @@ function identity(){
  assert.ok(uid&&first);return {uid,first};
 }
 async function forceRestart(expectedIdentity){
+ phase='stop-process';
  disconnect();
  const proof=await verifiedProcessStop({probe,forceStop:()=>adb('shell','am','force-stop',pkg)});
  await launch();
@@ -114,7 +144,7 @@ async function writeCopy(kind,expected){
  await startPicker('write',kind);
  tap(await find(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'Native Save missing'));
  const written=await pickerResult(kind,'written');
- const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+fileNames[kind]],{timeout:30000});
+ const bytes=runAdb(['exec-out','cat','/sdcard/Download/'+fileNames[kind]]);
  const actual={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
  assert.deepEqual(actual,expected);assert.equal(written.bytes,actual.bytes);assert.equal(written.sha256,actual.sha256);
  return actual;
@@ -146,7 +176,7 @@ async function writeDocCopy(kind,expected){
  await startDocPicker('write',kind);
  tap(await find(n=>doc(n)&&/^(save|salva)$/i.test(n.text),'Native V8 Save missing'));
  const written=await docPickerResult(kind,'written');
- const bytes=execFileSync('adb',['exec-out','cat','/sdcard/Download/'+docFileNames[kind]],{timeout:30000});
+ const bytes=runAdb(['exec-out','cat','/sdcard/Download/'+docFileNames[kind]]);
  const actual={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
  assert.deepEqual(actual,expected);
  assert.equal(written.bytes,actual.bytes);assert.equal(written.sha256,actual.sha256);
@@ -177,6 +207,7 @@ const withdrawn={changes:3,states:['observed','not_observed','withdrawn'],active
 
 try{
  assert.equal(Number(adb('shell','getprop','ro.build.version.sdk')),api);
+ phase='install';
  assert.equal(adb('install','--no-incremental',process.env.LAB_APK).split('\n').filter(x=>x==='Success').length,1);
  await launch();const installation=identity();
  assert.equal(await call('versions'),0);
@@ -287,4 +318,13 @@ try{
  assert.deepEqual(await call('downgrade'),{rejected:true,version:2});
  stage('native-v8-restored-cold-reopen',documentStop);
  await call('close');
+}catch(error){
+ process.exitCode=1;
+ const failure=classifyFailure(error);
+ writeFileSync('native-evidence/failure.json',JSON.stringify({
+  schemaVersion:1,candidate:process.env.CANDIDATE_SHA,api,syntheticOnly:true,
+  phase,lastPassedStage:results.at(-1)?.stage??null,failure,
+  lastReadFailure:error.lastReadFailure??null,adb:transport.snapshot()
+ },null,2));
+ console.error(phase,failure.category,failure.code);
 }finally{disconnect();}
