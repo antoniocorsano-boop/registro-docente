@@ -245,6 +245,8 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   assert.ok(registry.invariants.some(i=>i.id==='CAND-PROD-01-ADMISSION-I01'));
   const paths=['.github/workflows/ap02-f2-native-device.yml','.github/workflows/qa-appium-replacement-pilot.yml','scripts/diagnostics/appium-pilot/contract.test.mjs','qualification/invariants.v1.json'];
   const r3aPaths=[".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","src/App.tsx","src/assessment/assessmentEvidenceMutation.ts","src/assessment/assessmentSubjectScope.ts","src/assessment/dailyAssessmentSetup.ts","src/assessment/dailyCriterionRecordingContext.ts","src/assessment/dailyPlannedAssessmentCompletion.ts","src/assessment/studentCriterionReadModel.ts","src/security/candProdHistoricalSubject.test.ts"];
+  const r3aRef='9e5177aa1d816b52465072960dd5b0b516def53e';
+  const r1Paths=[".github/workflows/qa-appium-replacement-pilot.yml","bun.lock","package.json","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","src/components/StudentsManagementView.tsx","src/components/studentImport.ts","src/components/studentImport.worker.ts","src/components/studentImportLimits.ts","src/security/r106StudentImport.test.ts","tests/browser/fixtures/r106-student-import.fixture.tsx","tests/browser/r106-student-import.spec.cjs"];
   const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
@@ -257,12 +259,12 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     for(const path of paths)put(path,'approved admission');const admission=commit('admission');
     for(const path of r3aPaths)put(path,'approved R3a correction');const candidate=commit('R3a');
     const source=workflow.split('      - name: Verify frozen product and approved laboratory-only delta\n')[1].split('      - uses:')[0].split('        run: |\n')[1].split('\n').map(line=>line.slice(10)).join('\n');
-    const run=(sha,{eventBase=base,candidateSha=sha,route='production',overrides={}}={})=>{
+    const run=(sha,{eventBase=base,candidateSha=sha,route='production',prNumber='999',overrides={}}={})=>{
       git('checkout','-q','--detach',sha);
       let script=source;
-      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,...overrides};
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,...overrides};
       for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
-      const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:'999',CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
+      const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:prNumber,CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
       rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
       return result;
     };
@@ -280,5 +282,22 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     git('checkout','-q','--detach',candidate);put('src/unauthorized.ts','unauthorized');fail(commit('unauthorized product'));
     git('checkout','-q','--detach',candidate);put('scripts/diagnostics/extra.mjs','unauthorized');fail(commit('unauthorized laboratory'));
     git('checkout','-q','--detach',candidate);put('src/App.tsx','qualified');fail(commit('missing approved product change'));
+    git('checkout','-q','--detach',candidate);
+    for(const path of r1Paths)put(path,'approved R1-06-01 correction');
+    const r1=commit('R1-06-01');
+    pass(r1,{prNumber:'416'});
+    fail(r1);
+    fail(r1,{prNumber:'416',route:'legacy'});
+    fail(r1,{prNumber:'416',eventBase:composition});
+    fail(r1,{prNumber:'416',overrides:{[r3aRef]:admission}});
+    put('src/extra.ts','unexpected');fail(commit('R1 extra file'),{prNumber:'416'});
+    git('checkout','-q','--detach',candidate);
+    put('unrelated','intermediate');commit('unapproved parent');
+    for(const path of r1Paths)put(path,'approved R1-06-01 correction');
+    fail(commit('R1 wrong parent'),{prNumber:'416'});
+    git('checkout','-q','--detach',candidate);
+    for(const path of r1Paths.filter(path=>path!=='bun.lock'))put(path,'approved R1-06-01 correction');
+    fail(commit('R1 missing required file'),{prNumber:'416'});
+
   }finally{rmSync(dir,{recursive:true,force:true});}
 });

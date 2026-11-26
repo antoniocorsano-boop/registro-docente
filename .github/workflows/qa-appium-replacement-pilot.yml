@@ -97,7 +97,17 @@ jobs:
             test "$actual" = "$expected"
             # R3a: exclusively the reviewed historical-discipline correction and its contracts.
             expected_r3a=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs src/App.tsx src/assessment/assessmentEvidenceMutation.ts src/assessment/assessmentSubjectScope.ts src/assessment/dailyAssessmentSetup.ts src/assessment/dailyCriterionRecordingContext.ts src/assessment/dailyPlannedAssessmentCompletion.ts src/assessment/studentCriterionReadModel.ts src/security/candProdHistoricalSubject.test.ts | LC_ALL=C sort)
-            actual_r3a=$(git diff --name-only --no-renames "$admission_base" HEAD | LC_ALL=C sort)
+            r3a_head=HEAD
+            frozen_r3a=9e5177aa1d816b52465072960dd5b0b516def53e
+            # R1-06-01: one exact successor on PR 416. Keep the R3a check on its frozen tree.
+            if test "$PR_NUMBER" = 416 && test "$CANDIDATE_SHA" != "$frozen_r3a"; then
+              test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_r3a"
+              expected_r1=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml bun.lock package.json qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs src/components/StudentsManagementView.tsx src/components/studentImport.ts src/components/studentImport.worker.ts src/components/studentImportLimits.ts src/security/r106StudentImport.test.ts tests/browser/fixtures/r106-student-import.fixture.tsx tests/browser/r106-student-import.spec.cjs | LC_ALL=C sort)
+              actual_r1=$(git diff --name-only --no-renames "$frozen_r3a" HEAD | LC_ALL=C sort)
+              test "$actual_r1" = "$expected_r1"
+              r3a_head=$frozen_r3a
+            fi
+            actual_r3a=$(git diff --name-only --no-renames "$admission_base" "$r3a_head" | LC_ALL=C sort)
             test "$actual_r3a" = "$expected_r3a"
             python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
             exit 0
