@@ -1,3 +1,4 @@
+import { assertEmbeddingSession, requireEmbeddingSession } from '../security/embeddingSession';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppSettings, ClassData, OnlineTest, UdaActivityType, UdaLesson, UdaRecord } from '../types';
 import { MONTHS_LABELS, calcAvg, formatGrade, getCompetenceLevel, today, uid } from '../utils';
@@ -674,7 +675,13 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         id: u.id,
         text: `${u.title}. ${u.description || ''} ${u.competencies || ''} ${u.authenticTask || ''}`
       }));
-      const ranked = await rankBySemanticSimilarity(query, candidates, embeddingConfig);
+      if (embeddingConfig.provider !== 'local') {
+        showStatus('La ricerca di testi liberi richiede il provider locale.');
+        return;
+      }
+      const ranked = await rankBySemanticSimilarity(query, candidates, embeddingConfig, {
+        classification: 'TEACHER_PROFESSIONAL', explicitTeacherOptIn: false
+      });
       const scoresMap: Record<string, number> = {};
       ranked.forEach(r => {
         scoresMap[r.item.id] = Math.round(r.similarity * 100);
@@ -702,7 +709,13 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         text: `${u.title}. ${u.description || ''} ${u.competencies || ''}`,
         uda: u
       }));
-      const ranked = await rankBySemanticSimilarity(currentText, candidates, embeddingConfig);
+      if (embeddingConfig.provider !== 'local') {
+        showStatus('L’analisi delle UDA richiede il provider locale.');
+        return;
+      }
+      const ranked = await rankBySemanticSimilarity(currentText, candidates, embeddingConfig, {
+        classification: 'TEACHER_PROFESSIONAL', explicitTeacherOptIn: false
+      });
       const topSuggestions = ranked
         .filter(r => r.similarity > 0.3)
         .slice(0, 4)
@@ -710,7 +723,7 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       setSuggestedPredecessors(topSuggestions);
       showStatus(`✨ Trovate ${topSuggestions.length} UDA correlate`);
     } catch (err: any) {
-      console.error('Suggest dependencies error:', err);
+      console.error('Analisi propedeuticità non riuscita.');
       showStatus('⚠️ Analisi propedeuticità non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsAnalyzingDependenciesSemantic(false);
@@ -722,11 +735,18 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
     setIsAnalyzingCompetenciesSemantic(true);
     try {
       const targetText = `${targetUda.title}. ${targetUda.description || ''} ${targetUda.competencies || ''} ${targetUda.authenticTask || ''}`;
-      const targetVec = await getEmbedding(targetText, embeddingConfig);
+      if (embeddingConfig.provider !== 'local') {
+        showStatus('L’analisi delle UDA richiede il provider locale.');
+        return;
+      }
+      const sessionLease = requireEmbeddingSession();
+      const context = { classification: 'TEACHER_PROFESSIONAL' as const, explicitTeacherOptIn: false, sessionLease };
+      const targetVec = await getEmbedding(targetText, embeddingConfig, context);
+      assertEmbeddingSession(sessionLease);
 
       const scored = await Promise.all(
         MINISTERIAL_COMPETENCY_DESCRIPTORS.map(async desc => {
-          const descVec = await getEmbedding(desc.description, embeddingConfig);
+          const descVec = await getEmbedding(desc.description, embeddingConfig, context);
           const sim = cosineSimilarity(targetVec, descVec);
           return {
             id: desc.id,
@@ -737,11 +757,12 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         })
       );
 
+      assertEmbeddingSession(sessionLease);
       scored.sort((a, b) => b.score - a.score);
       setCompetencyAlignment(scored);
       showStatus(`📊 Mappatura semantica competenze D.M. 221/2025 calcolata`);
     } catch (err: any) {
-      console.error('Competency alignment error:', err);
+      console.error('Analisi competenze non riuscita.');
       showStatus('⚠️ Mappatura semantica non riuscita. Verifica le impostazioni avanzate.');
     } finally {
       setIsAnalyzingCompetenciesSemantic(false);
@@ -765,6 +786,17 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
       return;
     }
 
+    const title = targetUda.title.trim();
+    const preview = [
+      'Saranno inviati a Gemini soltanto questi dati didattici:',
+      'Titolo: ' + title,
+      'Durata: ' + targetUda.durationMonths + ' mesi',
+      'Ore: ' + targetUda.hours,
+      'Periodo: ' + targetUda.period,
+      'Educazione civica: ' + (targetUda.civicEducation ? 'sì' : 'no'),
+      'Non saranno inviati classe, nominativi, competenze o compiti di realtà. Confermi che il titolo non contiene dati personali o riservati?'
+    ].join('\n');
+    if (!window.confirm(preview)) return;
     setIsGeneratingAi(true);
     showStatus('🤖 Generazione traccia UDA con assistenza AI in corso...');
 
@@ -773,14 +805,11 @@ export const UdaGanttView: React.FC<UdaGanttViewProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: targetUda.title,
+          title,
           durationMonths: targetUda.durationMonths,
           hours: targetUda.hours,
-          className: targetUda.className,
           period: targetUda.period,
-          civicEducation: targetUda.civicEducation,
-          competencies: targetUda.competencies,
-          authenticTask: targetUda.authenticTask,
+          civicEducation: targetUda.civicEducation === true,
           classification: 'TEACHER_PROFESSIONAL',
           explicitTeacherOptIn: true
         })

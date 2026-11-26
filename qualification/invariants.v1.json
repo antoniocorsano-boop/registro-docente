@@ -409,11 +409,11 @@
     {
       "id": "MOBILE-01-M1-I01",
       "owner": "MOBILE-01/M1",
-      "statement": "PDF generation is fully local at runtime with the exact previously used html2pdf.js 0.10.1 bundle and license notices pinned to their upstream Git blob identities, with index.html depending only on same-origin script and device fonts and Chromium demonstrating real PDF bytes without outside network access. This does not qualify Android file export, encrypted backup or version updates.",
+      "statement": "PDF generation is fully local at runtime with official jsPDF 4.2.1 UMD and its license pinned to upstream Git blob identities, without the historical html2pdf 0.10.1 bundle. Same-origin assets and fonts; Chromium must demonstrate real selectable-text PDF bytes without outside network access. This does not qualify Android file export, encrypted backup or version updates.",
       "impactPaths": [
         "qualification/invariants.v1.json",
-        "public/vendor/html2pdf.bundle.min.js",
-        "public/vendor/html2pdf.bundle.min.js.LICENSE.txt",
+        "public/vendor/jspdf.umd.min.js",
+        "public/vendor/jspdf.LICENSE.txt",
         "index.html",
         "src/index.css",
         "src/security/mobile01M1OfflineAssetsContract.test.ts",
@@ -3850,6 +3850,60 @@
         "src/security/val01Product04PlannedLifecycle.test.ts",
         "src/security/val01StudentCriterionReadModel.test.ts",
         "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ]
+    },
+    {
+      "id": "CAND-PROD-01-R1-TEC-01-I01",
+      "owner": "CAND-PROD-01/R1-TEC-01",
+      "statement": "The exact successor of the frozen R1-06-01b candidate uses the common classification gate for both embedding destinations, requires explicit remote consent and limits provider payloads, removes the global text/vector cache and rejects stale embedding generations. The historical offline PDF invariant has one explicit asset migration to pinned official jsPDF 4.2.1; old bundle and license are absent, selectable-text exports retain privacy confirmation, local resources, Unicode and native receipt verification. All other published invariants, historical F2 admission and mandatory dual-channel evidence remain intact. This does not qualify real-device release, external security review, recovery R2 or a complete dependency audit.",
+      "impactPaths": [
+        ".github/workflows/mobile-01-android-probe.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "index.html",
+        "public/vendor/html2pdf.bundle.min.js",
+        "public/vendor/html2pdf.bundle.min.js.LICENSE.txt",
+        "public/vendor/jspdf.LICENSE.txt",
+        "public/vendor/jspdf.umd.min.js",
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/qualification/impact.mjs",
+        "scripts/qualification/pdf-invariant-transition.mjs",
+        "server.ts",
+        "src/components/AnalyticsView.tsx",
+        "src/components/SecureRegistroRoot.tsx",
+        "src/components/SettingsView.tsx",
+        "src/components/UdaGanttView.tsx",
+        "src/declarations.d.ts",
+        "src/library/semanticRetrieval.ts",
+        "src/report/formativePdfRendering.ts",
+        "src/security/embeddingSession.ts",
+        "src/security/formativePdfContract.test.ts",
+        "src/security/localPdf.ts",
+        "src/security/mobile01AndroidProbeContract.test.ts",
+        "src/security/mobile01M1OfflineAssetsContract.test.ts",
+        "src/security/mobile01M2cNativePdfContract.test.ts",
+        "src/security/outboundBoundaryClosure.test.ts",
+        "src/security/outboundEmbeddingGuard.test.ts",
+        "src/security/r1EmbeddingSession.test.ts",
+        "src/security/workPdfRendering.ts",
+        "src/services/embeddingService.ts",
+        "tests/browser/fixtures/nav-back-01-app.html",
+        "tests/browser/mobile01-m1-offline-pdf.spec.cjs",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
+      ],
+      "tests": [
+        "src/security/mobile01M1OfflineAssetsContract.test.ts",
+        "src/security/mobile01M2cNativePdfContract.test.ts",
+        "src/security/formativePdfContract.test.ts",
+        "src/security/mobile01AndroidProbeContract.test.ts",
+        "src/security/outboundBoundaryClosure.test.ts",
+        "src/security/outboundEmbeddingGuard.test.ts",
+        "src/security/r1EmbeddingSession.test.ts",
+        "scripts/diagnostics/appium-pilot/contract.test.mjs"
+      ],
+      "browserSmoke": [
+        "tests/browser/mobile01-m1-offline-pdf.spec.cjs",
+        "tests/browser/mobile01-m2c-native-pdf.spec.cjs"
       ]
     }
   ]

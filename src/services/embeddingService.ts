@@ -5,8 +5,9 @@ import {
   type DestinationClass
 } from '../security/dataClassification';
 
-// In-memory cache for generated embeddings during session
-const vectorCache = new Map<string, number[]>();
+import { assertEmbeddingSession, requireEmbeddingSession } from '../security/embeddingSession';
+
+// Do not retain input text or vectors in a module-level cache.
 
 /**
  * High-precision Cosine Similarity calculation between two vectors
@@ -41,18 +42,18 @@ export interface EmbeddingTestResult {
 export interface EmbeddingDataContext {
   classification: DataClassification;
   explicitTeacherOptIn?: boolean;
+  /** Internal generation; never serialized into provider requests. */
+  sessionLease?: symbol;
 }
 
 /**
- * Existing embedding features are teacher/curriculum tools. Selecting and enabling
- * Gemini Cloud is treated as the teacher's explicit opt-in for those existing flows.
- * Callers handling a stricter class must pass it explicitly; sensitive classes are
- * denied by evaluateDataFlow regardless of opt-in.
+ * Enabling a provider is not consent to transmit professional text.
+ * Remote calls require an explicit data context and operation-specific consent.
  */
-function defaultEmbeddingContext(config: LocalEmbeddingConfig): EmbeddingDataContext {
+function defaultEmbeddingContext(_config: LocalEmbeddingConfig): EmbeddingDataContext {
   return {
     classification: 'TEACHER_PROFESSIONAL',
-    explicitTeacherOptIn: config.provider === 'gemini' && config.enabled
+    explicitTeacherOptIn: false
   };
 }
 
@@ -122,7 +123,8 @@ function assertSupportedEmbeddingProvider(config: LocalEmbeddingConfig): void {
  */
 async function fetchDirectLocalEmbedding(
   text: string,
-  config: LocalEmbeddingConfig
+  config: LocalEmbeddingConfig,
+  lease?: symbol
 ): Promise<{ embedding: number[]; model: string }> {
   const baseUrl = normalizeUrl(config.endpointUrl);
   const headers: Record<string, string> = {
@@ -134,6 +136,7 @@ async function fetchDirectLocalEmbedding(
 
   // Strategy 1: OpenAI-compatible /v1/embeddings (standard in llama-server, Ollama, LM Studio)
   try {
+    if (lease !== undefined) assertEmbeddingSession(lease);
     const res = await fetch(`${baseUrl}/v1/embeddings`, {
       method: 'POST',
       redirect: 'error',
@@ -160,6 +163,7 @@ async function fetchDirectLocalEmbedding(
 
   // Strategy 2: llama.cpp native /embedding endpoint
   try {
+    if (lease !== undefined) assertEmbeddingSession(lease);
     const res = await fetch(`${baseUrl}/embedding`, {
       method: 'POST',
       redirect: 'error',
@@ -191,6 +195,7 @@ async function fetchDirectLocalEmbedding(
 
   // Strategy 3: Ollama native /api/embeddings endpoint
   try {
+    if (lease !== undefined) assertEmbeddingSession(lease);
     const res = await fetch(`${baseUrl}/api/embeddings`, {
       method: 'POST',
       redirect: 'error',
@@ -218,6 +223,17 @@ async function fetchDirectLocalEmbedding(
   throw new Error(`Impossibile contattare direttamente ${baseUrl}`);
 }
 
+function projectProxyConfig(config: LocalEmbeddingConfig) {
+  if (config.provider === 'gemini') return { provider: 'gemini' as const };
+  // A hosted server's loopback is not the teacher's device.
+  // Credentials for the local service remain with the direct client.
+  if (config.apiKey?.trim() || !globalThis.location ||
+      !isLoopbackEndpointUrl(globalThis.location.origin)) {
+    throw new Error('Per il provider locale è necessaria una connessione diretta protetta.');
+  }
+  return { provider: 'local' as const, endpointUrl: normalizeUrl(config.endpointUrl), modelName: config.modelName };
+}
+
 /**
  * Fetch embedding via server-side proxy route (/api/embeddings/generate)
  */
@@ -231,7 +247,7 @@ async function fetchProxyEmbedding(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       texts: [text],
-      config,
+      config: projectProxyConfig(config),
       classification: context.classification,
       explicitTeacherOptIn: context.explicitTeacherOptIn === true
     }),
@@ -239,8 +255,8 @@ async function fetchProxyEmbedding(
   });
 
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `Server proxy error HTTP ${res.status}`);
+    await res.body?.cancel();
+    throw new Error(`Servizio embedding non disponibile (HTTP ${res.status}).`);
   }
 
   const data = await res.json();
@@ -269,35 +285,25 @@ export async function getEmbedding(
   assertEmbeddingFlowAllowed(config, context);
   assertLoopbackLocalEndpoint(config);
 
-  const cacheKey = `${config.provider}:${config.endpointUrl}:${config.modelName}:${cleanText}`;
-  if (vectorCache.has(cacheKey)) {
-    return vectorCache.get(cacheKey)!;
-  }
-
-  // If Gemini provider is selected, use the server proxy directly
+  const lease = context.sessionLease ?? requireEmbeddingSession();
+  assertEmbeddingSession(lease);
+  // No cache: neither the source text nor a derived vector survives the operation.
   if (config.provider === 'gemini') {
     const result = await fetchProxyEmbedding(cleanText, config, context);
-    vectorCache.set(cacheKey, result.embedding);
+    assertEmbeddingSession(lease);
     return result.embedding;
   }
 
-  // For Local provider, attempt direct client fetch first (fastest for Termux/localhost)
+  let result: { embedding: number[]; model: string };
   try {
-    const directResult = await fetchDirectLocalEmbedding(cleanText, config);
-    vectorCache.set(cacheKey, directResult.embedding);
-    return directResult.embedding;
-  } catch (directErr) {
-    // Fallback to server proxy
-    try {
-      const proxyResult = await fetchProxyEmbedding(cleanText, config, context);
-      vectorCache.set(cacheKey, proxyResult.embedding);
-      return proxyResult.embedding;
-    } catch (proxyErr: any) {
-      throw new Error(
-        `Errore generazione embedding locale: ${directErr instanceof Error ? directErr.message : ''} (Fallback proxy: ${proxyErr?.message || ''})`
-      );
-    }
+    result = await fetchDirectLocalEmbedding(cleanText, config, lease);
+  } catch {
+    // Never start another request after revocation or in a different session.
+    assertEmbeddingSession(lease);
+    result = await fetchProxyEmbedding(cleanText, config, context);
   }
+  assertEmbeddingSession(lease);
+  return result.embedding;
 }
 
 /**
@@ -308,13 +314,17 @@ export async function getEmbeddingsBatch(
   config: LocalEmbeddingConfig,
   context: EmbeddingDataContext = defaultEmbeddingContext(config)
 ): Promise<number[][]> {
+  const lease = context.sessionLease ?? requireEmbeddingSession();
+  const scopedContext = { ...context, sessionLease: lease };
   const results: number[][] = [];
   for (const t of texts) {
+    assertEmbeddingSession(lease);
     if (!t.trim()) {
       results.push([]);
       continue;
     }
-    const vec = await getEmbedding(t, config, context);
+    const vec = await getEmbedding(t, config, scopedContext);
+    assertEmbeddingSession(lease);
     results.push(vec);
   }
   return results;
@@ -356,8 +366,7 @@ export async function testEmbeddingConnection(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          config,
-          prompt: TEST_PROMPT,
+          config: projectProxyConfig(config),
           classification: 'PUBLIC_APP',
           explicitTeacherOptIn: true
         })
@@ -385,7 +394,7 @@ export async function testEmbeddingConnection(
       return {
         success: false,
         latencyMs: Math.round(performance.now() - start),
-        error: err.message || 'Impossibile completare il test Gemini'
+        error: 'Impossibile completare il test Gemini'
       };
     }
   }
@@ -409,8 +418,7 @@ export async function testEmbeddingConnection(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          config,
-          prompt: TEST_PROMPT,
+          config: projectProxyConfig(config),
           classification: 'PUBLIC_APP',
           explicitTeacherOptIn: false
         })
@@ -432,13 +440,13 @@ export async function testEmbeddingConnection(
       return {
         success: false,
         latencyMs,
-        error: `Connessione diretta fallita (${directErr.message || 'Network error'}). Anche il proxy server ha segnalato: ${data.error || 'Host non raggiungibile'}. Verifica che './build/bin/llama-server' sia in esecuzione su Termux/PC e che l'indirizzo sia corretto.`
+        error: 'Connessione al provider locale non riuscita. Verifica il servizio e le impostazioni.'
       };
     } catch (proxyErr: any) {
       return {
         success: false,
         latencyMs: Math.round(performance.now() - start),
-        error: `Impossibile raggiungere ${config.endpointUrl}: ${directErr.message || ''}. Se usi Termux su Android, assicurati che il comando 'llama-server --embeddings --port 8080' sia attivo.`
+        error: 'Connessione diretta al provider locale non riuscita. Verifica il servizio e le impostazioni.'
       };
     }
   }
@@ -505,7 +513,10 @@ export async function rankBySemanticSimilarity<T extends { id: string; text: str
     return candidates.map(item => ({ item, similarity: 0 }));
   }
 
-  const queryVector = await getEmbedding(query, config, context);
+  const lease = context.sessionLease ?? requireEmbeddingSession();
+  const scopedContext = { ...context, sessionLease: lease };
+  const queryVector = await getEmbedding(query, config, scopedContext);
+  assertEmbeddingSession(lease);
   if (!queryVector || queryVector.length === 0) {
     return candidates.map(item => ({ item, similarity: 0 }));
   }
@@ -514,10 +525,12 @@ export async function rankBySemanticSimilarity<T extends { id: string; text: str
 
   for (const cand of candidates) {
     try {
-      const candVector = await getEmbedding(cand.text, config, context);
+      const candVector = await getEmbedding(cand.text, config, scopedContext);
+      assertEmbeddingSession(lease);
       const sim = cosineSimilarity(queryVector, candVector);
       scored.push({ item: cand, similarity: Math.max(0, sim) });
     } catch {
+      assertEmbeddingSession(lease);
       scored.push({ item: cand, similarity: 0 });
     }
   }

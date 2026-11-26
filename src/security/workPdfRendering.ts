@@ -1,12 +1,11 @@
+import { createLocalPdf } from './localPdf';
 import regularFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url';
 import boldFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf?url';
 
 /**
  * Compose the existing privacy-aware report as selectable PDF text, not a
- * screenshot of the hidden Tailwind template. html2pdf 0.10.1 already bundles
- * jsPDF; initialize its documented canvas worker using an empty 1px canvas,
- * discard the bootstrap page, and use the resulting local PDF document.
- * This avoids html2canvas's unsupported modern CSS colors and hidden layout.
+ * screenshot of the hidden Tailwind template. Use a fresh text-only jsPDF
+ * document; no raster bootstrap or HTML-rendering plugin is needed.
  */
 const WIDTHS = [8, 42, 20, 20, 25, 22, 25, 28];
 const LEFT = 10;
@@ -33,7 +32,6 @@ function textOf(node: Element | null | undefined): string {
 }
 
 export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> {
-  if (typeof html2pdf === 'undefined') throw new Error('Generatore PDF locale non disponibile.');
   // Read only the already rendered report (including its current privacy mask).
   const table = element.querySelector('table');
   const columns = Array.from(table?.querySelectorAll('thead th') || [], textOf);
@@ -50,18 +48,7 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
     throw new Error('Prospetto non completo.');
   }
 
-  const seed = document.createElement('canvas');
-  seed.width = 1;
-  seed.height = 1;
-  const seedContext = seed.getContext('2d');
-  if (!seedContext) throw new Error('Generatore PDF non disponibile.');
-  seedContext.fillStyle = '#ffffff';
-  seedContext.fillRect(0, 0, 1, 1);
-  const worker = (html2pdf() as any).set({
-    margin: 10, enableLinks: false, image: { type: 'png' },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: false },
-  }).from(seed, 'canvas').toPdf();
-  const pdf = await worker.get('pdf');
+  const pdf = createLocalPdf();
   const allText = [heading, title, context, ...metadata, ...columns, ...rows.flat(), footnote];
   const unicode = allText.some(value => !WIN_ANSI.test(value));
   const family = unicode ? 'RegistroUnicode' : 'helvetica';
@@ -85,9 +72,7 @@ export async function renderWorkPdf(element: HTMLElement): Promise<ArrayBuffer> 
       }
     }
   }
-  // Never return the bootstrap raster; every retained page is the real report.
-  pdf.addPage();
-  pdf.deletePage(1);
+  // The constructor's first page is the real report, not a raster bootstrap.
   pdf.setPage(1);
   let y = 10;
   let emittedRows = 0;

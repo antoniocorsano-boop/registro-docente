@@ -53,14 +53,16 @@ jobs:
           bun run build
           grep -lF -- "$SOURCE_SHA" dist/assets/*.js
           test -f dist/index.html
-          test -s dist/vendor/html2pdf.bundle.min.js
-          test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          test -s dist/vendor/jspdf.umd.min.js
+          test -s dist/vendor/jspdf.LICENSE.txt
+          test ! -e dist/vendor/html2pdf.bundle.min.js
+          test ! -e dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
           test -s dist/assets/DejaVu-LICENSE.txt
           test -n "$(find dist/assets -name 'DejaVuSans-*.ttf' -print -quit)"
           test -n "$(find dist/assets -name 'DejaVuSans-Bold-*.ttf' -print -quit)"
           grep -lF -- '--safe-area-inset-top' dist/assets/*.css
           grep -lF -- 'class-card-manage' dist/assets/*.js
-          grep -F '/vendor/html2pdf.bundle.min.js' dist/index.html
+          grep -F '/vendor/jspdf.umd.min.js' dist/index.html
           if grep -E 'fonts.googleapis.com|fonts.gstatic.com|cdnjs.cloudflare.com' dist/index.html; then
             echo 'ERROR: Required PDF/fonts still load from a remote site'
             exit 1
@@ -122,15 +124,16 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/probe-manifest-tree.txt"
           grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/probe-manifest-tree.txt"
           PROBE_APP_ID=it.trama.registrodocente.prova
-          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
-          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/jspdf.umd.min.js'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/jspdf.LICENSE.txt'
+          if unzip -Z1 "$APK" | grep -F 'assets/public/vendor/html2pdf.bundle.min.js'; then exit 1; fi
           unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
           for FONT in dist/assets/DejaVuSans*.ttf; do
             unzip -p "$APK" "assets/public/assets/$(basename "$FONT")" | cmp - "$FONT"
           done
-          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
-          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
-          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/jspdf.umd.min.js'
+          unzip -p "$APK" assets/public/vendor/jspdf.umd.min.js | cmp - dist/vendor/jspdf.umd.min.js
+          unzip -p "$APK" assets/public/vendor/jspdf.LICENSE.txt | cmp - dist/vendor/jspdf.LICENSE.txt
           unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
           unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
           unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- "$SOURCE_SHA" > /dev/null
@@ -220,7 +223,9 @@ jobs:
           grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
           unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
-          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/vendor/jspdf.umd.min.js | cmp - dist/vendor/jspdf.umd.min.js
+          unzip -p "$apk" assets/public/vendor/jspdf.LICENSE.txt | cmp - dist/vendor/jspdf.LICENSE.txt
+          if unzip -Z1 "$apk" | grep -F 'assets/public/vendor/html2pdf.bundle.min.js'; then exit 1; fi
           unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
           for font in dist/assets/DejaVuSans*.ttf; do
             unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"

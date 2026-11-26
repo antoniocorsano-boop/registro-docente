@@ -104,9 +104,19 @@ jobs:
               r1_head=HEAD
               frozen_r1=69be03663b49d85aa3fd53cdb6cc4934165a0802
               if test "$CANDIDATE_SHA" != "$frozen_r1"; then
-                test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_r1"
+                r1b_head=HEAD
+                frozen_r1b=1cf5eea0a5e0c2586915875af94fde3ba04528f7
+                if test "$CANDIDATE_SHA" != "$frozen_r1b"; then
+                  test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_r1b"
+                  expected_r1tec=$(printf '%s\n' .github/workflows/mobile-01-android-probe.yml .github/workflows/qa-appium-replacement-pilot.yml index.html public/vendor/html2pdf.bundle.min.js public/vendor/html2pdf.bundle.min.js.LICENSE.txt public/vendor/jspdf.LICENSE.txt public/vendor/jspdf.umd.min.js qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/impact.mjs scripts/qualification/pdf-invariant-transition.mjs server.ts src/components/AnalyticsView.tsx src/components/SecureRegistroRoot.tsx src/components/SettingsView.tsx src/components/UdaGanttView.tsx src/declarations.d.ts src/library/semanticRetrieval.ts src/report/formativePdfRendering.ts src/security/embeddingSession.ts src/security/formativePdfContract.test.ts src/security/localPdf.ts src/security/mobile01AndroidProbeContract.test.ts src/security/mobile01M1OfflineAssetsContract.test.ts src/security/mobile01M2cNativePdfContract.test.ts src/security/outboundBoundaryClosure.test.ts src/security/outboundEmbeddingGuard.test.ts src/security/r1EmbeddingSession.test.ts src/security/workPdfRendering.ts src/services/embeddingService.ts tests/browser/fixtures/nav-back-01-app.html tests/browser/mobile01-m1-offline-pdf.spec.cjs tests/browser/mobile01-m2c-native-pdf.spec.cjs | LC_ALL=C sort)
+                  actual_r1tec=$(git diff --name-only --no-renames "$frozen_r1b" HEAD | LC_ALL=C sort)
+                  test "$actual_r1tec" = "$expected_r1tec"
+                  r1b_head=$frozen_r1b
+                fi
+                r1b_sha=$(git rev-parse "$r1b_head")
+                test "$(git rev-list --parents -n 1 "$r1b_head")" = "$r1b_sha $frozen_r1"
                 expected_r1b=$(printf '%s\n' .github/workflows/browser-qualification.yml .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/r106-production.mjs tests/browser/fixtures/r106-student-import.html tests/browser/r106-student-import.spec.cjs | LC_ALL=C sort)
-                actual_r1b=$(git diff --name-only --no-renames "$frozen_r1" HEAD | LC_ALL=C sort)
+                actual_r1b=$(git diff --name-only --no-renames "$frozen_r1" "$r1b_head" | LC_ALL=C sort)
                 test "$actual_r1b" = "$expected_r1b"
                 r1_head=$frozen_r1
               fi

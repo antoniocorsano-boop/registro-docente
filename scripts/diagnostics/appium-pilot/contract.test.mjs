@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import {checkR106Workflow, checkR106Report} from '../../qualification/r106-production.mjs';
+import {isExactPdfInvariantTransition} from '../../qualification/pdf-invariant-transition.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -250,14 +251,17 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   const r1Paths=[".github/workflows/qa-appium-replacement-pilot.yml","bun.lock","package.json","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","src/components/StudentsManagementView.tsx","src/components/studentImport.ts","src/components/studentImport.worker.ts","src/components/studentImportLimits.ts","src/security/r106StudentImport.test.ts","tests/browser/fixtures/r106-student-import.fixture.tsx","tests/browser/r106-student-import.spec.cjs"];
   const r1Ref='69be03663b49d85aa3fd53cdb6cc4934165a0802';
   const r1bPaths=[".github/workflows/browser-qualification.yml",".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","scripts/qualification/r106-production.mjs","tests/browser/fixtures/r106-student-import.html","tests/browser/r106-student-import.spec.cjs"];
-  let r1;
+  const r1bRef='1cf5eea0a5e0c2586915875af94fde3ba04528f7';
+  const r1tecPaths=[".github/workflows/mobile-01-android-probe.yml",".github/workflows/qa-appium-replacement-pilot.yml","index.html","public/vendor/html2pdf.bundle.min.js","public/vendor/html2pdf.bundle.min.js.LICENSE.txt","public/vendor/jspdf.LICENSE.txt","public/vendor/jspdf.umd.min.js","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","scripts/qualification/impact.mjs","scripts/qualification/pdf-invariant-transition.mjs","server.ts","src/components/AnalyticsView.tsx","src/components/SecureRegistroRoot.tsx","src/components/SettingsView.tsx","src/components/UdaGanttView.tsx","src/declarations.d.ts","src/library/semanticRetrieval.ts","src/report/formativePdfRendering.ts","src/security/embeddingSession.ts","src/security/formativePdfContract.test.ts","src/security/localPdf.ts","src/security/mobile01AndroidProbeContract.test.ts","src/security/mobile01M1OfflineAssetsContract.test.ts","src/security/mobile01M2cNativePdfContract.test.ts","src/security/outboundBoundaryClosure.test.ts","src/security/outboundEmbeddingGuard.test.ts","src/security/r1EmbeddingSession.test.ts","src/security/workPdfRendering.ts","src/services/embeddingService.ts","tests/browser/fixtures/nav-back-01-app.html","tests/browser/mobile01-m1-offline-pdf.spec.cjs","tests/browser/mobile01-m2c-native-pdf.spec.cjs"];
+  const retiredPdfPaths=["public/vendor/html2pdf.bundle.min.js","public/vendor/html2pdf.bundle.min.js.LICENSE.txt"];
+  let r1, r1b;
   const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
   const commit=message=>{git('add','.');git('commit','-qm',message);return git('rev-parse','HEAD');};
   try{
     git('init','-q');git('config','user.name','Synthetic');git('config','user.email','synthetic@example.invalid');
-    put('src/App.tsx','base');const base=commit('base');
+    put('src/App.tsx','base');for(const path of retiredPdfPaths)put(path,'retired PDF asset');const base=commit('base');
     put('src/App.tsx','qualified');put('scripts/diagnostics/appium-pilot/pilot.py','# synthetic\n');
     const composition=commit('composition');const tree=git('rev-parse',composition+'^{tree}');
     for(const path of paths)put(path,'approved admission');const admission=commit('admission');
@@ -266,7 +270,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     const run=(sha,{eventBase=base,candidateSha=sha,route='production',prNumber='999',overrides={}}={})=>{
       git('checkout','-q','--detach',sha);
       let script=source;
-      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,...overrides};
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,[r1bRef]:r1b ?? r1bRef,...overrides};
       for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
       const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:prNumber,CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
       rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
@@ -304,7 +308,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     fail(commit('R1 missing required file'),{prNumber:'416'});
     git('checkout','-q','--detach',r1);
     for(const path of r1bPaths)put(path,'approved R1-06-01b qualification');
-    const r1b=commit('R1-06-01b');
+    r1b=commit('R1-06-01b');
     pass(r1b,{prNumber:'416'});
     fail(r1b);
     fail(r1b,{prNumber:'416',route:'legacy'});
@@ -321,6 +325,24 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     put('unrelated','intermediate');commit('unapproved parent');
     for(const path of r1bPaths)put(path,'approved R1-06-01b qualification');
     fail(commit('R1b wrong parent'),{prNumber:'416'});
+    const putTec=(omit)=>{for(const path of r1tecPaths) {
+      if(path===omit)continue;
+      if(retiredPdfPaths.includes(path))rmSync(join(dir,path),{force:true});
+      else put(path,'R1-TEC exact correction');
+    }};
+    git('checkout','-q','--detach',r1b);putTec();const tec=commit('R1-TEC-01');
+    pass(tec,{prNumber:'416'});
+    fail(tec);fail(tec,{prNumber:'416',route:'legacy'});
+    fail(tec,{prNumber:'416',eventBase:composition});
+    fail(tec,{prNumber:'416',overrides:{[r1bRef]:r1}});
+    git('checkout','-q','--detach',r1b);putTec('src/security/r1EmbeddingSession.test.ts');
+    fail(commit('TEC missing session test'),{prNumber:'416'});
+    git('checkout','-q','--detach',r1b);putTec(retiredPdfPaths[0]);
+    fail(commit('TEC retains old PDF'),{prNumber:'416'});
+    git('checkout','-q','--detach',r1b);putTec();put('src/unauthorized.ts','extra');
+    fail(commit('TEC extra file'),{prNumber:'416'});
+    git('checkout','-q','--detach',r1b);put('unrelated','intermediate');commit('wrong parent');putTec();
+    fail(commit('TEC wrong parent'),{prNumber:'416'});
 
 
   }finally{rmSync(dir,{recursive:true,force:true});}
@@ -351,4 +373,24 @@ test('R1-06-01b fails closed when production coverage or evidence is omitted',()
   assert.throws(()=>checkR106Report(skipped),{name:'AssertionError'});
   const uncollected={...skipped,stats:{expected:3,unexpected:0,flaky:0,skipped:0}};
   assert.throws(()=>checkR106Report(uncollected),/three R106 scenarios/);
+});
+
+
+test('PDF invariant migration is limited to exact semantics, assets and evidence',()=>{
+  const published={"id":"MOBILE-01-M1-I01","owner":"MOBILE-01/M1","statement":"PDF generation is fully local at runtime with the exact previously used html2pdf.js 0.10.1 bundle and license notices pinned to their upstream Git blob identities, with index.html depending only on same-origin script and device fonts and Chromium demonstrating real PDF bytes without outside network access. This does not qualify Android file export, encrypted backup or version updates."};
+  const candidate={"id":"MOBILE-01-M1-I01","owner":"MOBILE-01/M1","statement":"PDF generation is fully local at runtime with official jsPDF 4.2.1 UMD and its license pinned to upstream Git blob identities, without the historical html2pdf 0.10.1 bundle. Same-origin assets and fonts; Chromium must demonstrate real selectable-text PDF bytes without outside network access. This does not qualify Android file export, encrypted backup or version updates."};
+  const replacement=registry.invariants.find(i=>i.id==='CAND-PROD-01-R1-TEC-01-I01');
+  assert.ok(replacement);
+  const fixture={invariants:[candidate,replacement]};
+  const oldAssets={"public/vendor/html2pdf.bundle.min.js":"c57dc9292239c50312222b91f45613b5cb93518c","public/vendor/html2pdf.bundle.min.js.LICENSE.txt":"7cc52ed18f3e7f0e8b62ae003872b5031ea80635"};
+  const newAssets={"public/vendor/jspdf.umd.min.js":"0e600d49d2b2bf81dd97c1509e22d108c2ddd3b4","public/vendor/jspdf.LICENSE.txt":"dc7d3a9fa305defebad6cb88ba4cd9776f26fcd3"};
+  const blobAt=(role,path)=>(role==='base'?oldAssets[path]:newAssets[path])??null;
+  assert.equal(isExactPdfInvariantTransition(published,candidate,fixture,blobAt),true);
+  assert.equal(isExactPdfInvariantTransition({...published,statement:'altered'},candidate,fixture,blobAt),false);
+  assert.equal(isExactPdfInvariantTransition(published,{...candidate,owner:'other'},fixture,blobAt),false);
+  assert.equal(isExactPdfInvariantTransition(published,{...candidate,statement:'arbitrary relaxation'},fixture,blobAt),false);
+  assert.equal(isExactPdfInvariantTransition(published,candidate,{invariants:[candidate]},blobAt),false);
+  assert.equal(isExactPdfInvariantTransition(published,candidate,{invariants:[candidate,{...replacement,tests:[]}]},blobAt),false);
+  assert.equal(isExactPdfInvariantTransition(published,candidate,fixture,(role,path)=>role==='candidate'&&path in oldAssets?oldAssets[path]:blobAt(role,path)),false);
+  assert.equal(isExactPdfInvariantTransition(published,candidate,fixture,(role,path)=>role==='candidate'&&path.endsWith('.umd.min.js')?'wrong':blobAt(role,path)),false);
 });

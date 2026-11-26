@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { openEmbeddingSession, revokeEmbeddingSession } from './embeddingSession';
+beforeEach(() => { openEmbeddingSession(); });
+afterEach(() => { revokeEmbeddingSession(); });
 import { getEmbedding, testEmbeddingConnection } from '../services/embeddingService';
 import type { LocalEmbeddingConfig } from '../types';
 
@@ -91,6 +94,28 @@ describe('SEC-3 outbound boundary closure', () => {
     expect(requestSlice).toContain('explicitTeacherOptIn: true');
   });
 
+  test('R1-05-02 UDA route rejects unnecessary class and free narrative fields before provider access', async () => {
+    await withProductionServer(async baseUrl => {
+      const safe = { title: 'Energia', durationMonths: 2, hours: 12, period: 'Q1', civicEducation: false,
+        classification: 'TEACHER_PROFESSIONAL', explicitTeacherOptIn: true };
+      for (const extra of [{ className: 'Classe sintetica' }, { competencies: 'Testo sintetico' }, { authenticTask: 'Testo sintetico' }]) {
+        const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...safe, ...extra }), signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS)
+        });
+        expect(response.status).toBe(400);
+        await response.body?.cancel();
+      }
+      const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(safe), signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS)
+      });
+      // With no real Gemini key, the minimal request reaches the configuration check.
+      expect(response.status).toBe(500);
+      expect((await response.json()).error).toContain('non è configurata nel server');
+    });
+  }, SERVER_TEST_TIMEOUT_MS);
+
   test('UDA Gemini server boundary fails closed when policy metadata is missing', async () => {
     await withProductionServer(async baseUrl => {
       const response = await fetch(`${baseUrl}/api/gemini/generate-uda-description`, {
@@ -127,6 +152,58 @@ describe('SEC-3 outbound boundary closure', () => {
 
       expect(response.status).toBe(403);
     });
+  }, SERVER_TEST_TIMEOUT_MS);
+
+  test('R1-05-01 both local proxy routes deny forbidden or absent classifications before provider contact', async () => {
+    let calls = 0;
+    const captured: unknown[] = [];
+    const provider = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      async fetch(request) {
+        calls += 1;
+        captured.push(await request.json());
+        return Response.json({ data: [{ embedding: [0.25, 0.75] }], model: 'synthetic-local' });
+      }
+    });
+    const config: LocalEmbeddingConfig = {
+      provider: 'local',
+      endpointUrl: `http://127.0.0.1:${provider.port}`,
+      modelName: 'synthetic-local',
+      apiType: 'openai-compatible',
+      enabled: true
+    };
+    try {
+      await withProductionServer(async baseUrl => {
+        for (const route of ['test', 'generate']) {
+          const payload = route === 'test'
+            ? { config, prompt: 'Contenuto esclusivamente sintetico' }
+            : { config, texts: ['Contenuto esclusivamente sintetico'] };
+          const post = (classification: string | undefined) => fetch(
+            `${baseUrl}/api/embeddings/${route}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...payload, classification, explicitTeacherOptIn: true }),
+              signal: AbortSignal.timeout(SERVER_REQUEST_TIMEOUT_MS)
+            });
+          const before = calls;
+          for (const classification of [undefined, 'UNKNOWN', 'STUDENT_PERSONAL', 'SECRET']) {
+            const response = await post(classification);
+            expect(response.status).toBe(403);
+            await response.body?.cancel();
+            expect(calls).toBe(before);
+          }
+          const allowed = await post('TEACHER_PROFESSIONAL');
+          expect(allowed.status).toBe(200);
+          await allowed.json();
+          expect(calls).toBe(before + 1);
+          expect(captured.at(-1)).toMatchObject({ input: route === 'test'
+            ? 'Programmazione didattica per competenze D.M. 221/2025' : 'Contenuto esclusivamente sintetico' });
+        }
+      });
+    } finally {
+      provider.stop(true);
+    }
   }, SERVER_TEST_TIMEOUT_MS);
 
   test('local embedding server proxy rejects a non-loopback endpoint before outbound fetch', async () => {

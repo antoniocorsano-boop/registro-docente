@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { isExactPdfInvariantTransition } from './pdf-invariant-transition.mjs';
 
 const REGISTRY_PATH = 'qualification/invariants.v1.json';
 
@@ -45,6 +46,18 @@ function registryAtCommit(commitSha) {
   return JSON.parse(source);
 }
 
+const explicitTransitions = [];
+function blobAt(role, path) {
+  const commit = role === 'base' ? baseSha : candidateSha;
+  try {
+    return execFileSync('git', ['rev-parse', '--verify', `${commit}:${path}`], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 function enforcePublishedInvariantStability(baseRegistry, candidateRegistry) {
   if (!baseRegistry) return [];
 
@@ -64,6 +77,10 @@ function enforcePublishedInvariantStability(baseRegistry, candidateRegistry) {
 
     checked.push(published.id);
     if (candidate.owner !== published.owner || candidate.statement !== published.statement) {
+      if (isExactPdfInvariantTransition(published, candidate, candidateRegistry, blobAt)) {
+        explicitTransitions.push({ id: published.id, replacement: 'CAND-PROD-01-R1-TEC-01-I01' });
+        continue;
+      }
       console.error(`QUAL_INVARIANT_SEMANTICS_CHANGED ${published.id}`);
       failed = true;
     }
@@ -121,6 +138,7 @@ const manifest = {
   candidateSha,
   baseRegistryPresent: Boolean(baseRegistry),
   stableInvariantIdsChecked,
+  explicitTransitions,
   changedPaths,
   affectedInvariantIds,
   testFiles,

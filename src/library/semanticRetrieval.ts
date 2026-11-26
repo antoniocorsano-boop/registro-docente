@@ -1,5 +1,6 @@
 import type { LocalEmbeddingConfig } from '../types';
 import { cosineSimilarity, getEmbedding } from '../services/embeddingService';
+import { assertEmbeddingSession, requireEmbeddingSession } from '../security/embeddingSession';
 import type { LibrarySource } from './types';
 
 const MIN_SEMANTIC_SIMILARITY = 0.35;
@@ -64,18 +65,24 @@ export async function retrieveLibrarySourcesByMeaning(input: {
 
   if (eligibleSources.length === 0) return unavailable('NO_ELIGIBLE_SOURCE');
 
+  const lease = embed === getEmbedding ? requireEmbeddingSession() : undefined;
   const context = {
     classification: 'TEACHER_PROFESSIONAL' as const,
-    explicitTeacherOptIn: false
+    explicitTeacherOptIn: false,
+    ...(lease === undefined ? {} : { sessionLease: lease })
   };
+  const assertCurrent = () => { if (lease !== undefined) assertEmbeddingSession(lease); };
   const queryVector = await embed(cleanQuery, config, context);
+  assertCurrent();
   if (!Array.isArray(queryVector) || queryVector.length === 0) {
     return unavailable('NO_SEMANTIC_MATCH');
   }
 
   const ranked: Array<SemanticLibraryCandidate & { title: string }> = [];
   for (const candidate of eligibleSources) {
+    assertCurrent();
     const sourceVector = await embed(candidate.text, config, context);
+    assertCurrent();
     const similarity = cosineSimilarity(queryVector, sourceVector);
     if (!Number.isFinite(similarity) || similarity < MIN_SEMANTIC_SIMILARITY) continue;
     ranked.push({

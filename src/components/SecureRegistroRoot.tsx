@@ -17,6 +17,7 @@ import {
 } from '../security/secureAppStorage';
 import { initializeNewArchive, type NewArchiveSetup } from '../security/initialArchiveSetup';
 import { SecureVault } from '../security/secureVault';
+import { openEmbeddingSession, revokeEmbeddingSession } from '../security/embeddingSession';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
@@ -167,6 +168,7 @@ export const SecureRegistroRoot: React.FC = () => {
   useEffect(() => {
     void inspectBootstrap();
     return () => {
+      revokeEmbeddingSession();
       bootstrapGenerationRef.current++;
       archiveAuthorityRevisionRef.current++;
       bootstrapRef.current?.cancel();
@@ -178,7 +180,7 @@ export const SecureRegistroRoot: React.FC = () => {
     const onVisibility = () => {
       if (document.hidden) archiveAuthorityRevisionRef.current++;
     };
-    const onPageHide = () => { archiveAuthorityRevisionRef.current++; };
+    const onPageHide = () => { revokeEmbeddingSession(); archiveAuthorityRevisionRef.current++; };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     return () => {
@@ -189,6 +191,7 @@ export const SecureRegistroRoot: React.FC = () => {
   }, []);
 
   const revokeNativeAuthorization = useCallback(() => {
+    revokeEmbeddingSession();
     // Also revoke pending Web/Android setup and migration authorization.
     archiveAuthorityRevisionRef.current++;
     const epoch = authenticatedEpochRef.current;
@@ -406,6 +409,7 @@ export const SecureRegistroRoot: React.FC = () => {
         if (suspendedRef.current !== lease || !lease.resume()) {
           throw new Error('Sessione cambiata. Autenticati nuovamente.');
         }
+        openEmbeddingSession();
         suspendedRef.current = null;
         setSuspensionDelayed(false);
         setSuspensionPhase(null);
@@ -477,6 +481,7 @@ export const SecureRegistroRoot: React.FC = () => {
       assertAuthorized?.();
       window.localStorage.setItem(ESTABLISHED_ARCHIVE_KEY, '1');
       if (physicallyComplete) window.localStorage.setItem(COMPLETE_ARCHIVE_KEY, '1');
+      openEmbeddingSession();
       setSnapshot(nextSnapshot);
       setGateState('READY');
     });
@@ -561,6 +566,7 @@ export const SecureRegistroRoot: React.FC = () => {
     if (archiveOperationPendingRef.current) {
       throw new Error('Operazione sull’archivio in corso: impossibile cancellare ora.');
     }
+    revokeEmbeddingSession();
     const { vault } = getRuntime();
     await vault.clearAll();
     for (const legacyKey of LEGACY_DATA_KEYS) {

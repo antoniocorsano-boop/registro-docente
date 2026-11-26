@@ -80,9 +80,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const start = performance.now();
     try {
       const cfg = formData.embeddingConfig || DEFAULT_EMBEDDING_CONFIG;
+      if (cfg.provider !== 'local') {
+        alert('Il confronto di testi liberi è disponibile soltanto con il provider locale.');
+        return;
+      }
+      if (!window.confirm('Confermi che entrambi i testi contengono soltanto concetti didattici, senza dati personali o riservati?')) return;
+      const context = { classification: 'TEACHER_PROFESSIONAL' as const, explicitTeacherOptIn: false };
       const [vecA, vecB] = await Promise.all([
-        getEmbedding(playgroundTextA, cfg),
-        getEmbedding(playgroundTextB, cfg)
+        getEmbedding(playgroundTextA, cfg, context),
+        getEmbedding(playgroundTextB, cfg, context)
       ]);
       const sim = cosineSimilarity(vecA, vecB);
       setPlaygroundSimilarity(sim);

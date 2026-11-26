@@ -27,7 +27,9 @@ describe('MOBILE-01/M2c native PDF contract', () => {
     const render = await load('src/security/workPdfRendering.ts');
     expect(render).toContain("table?.querySelectorAll('thead th')");
     expect(render).toContain("table?.querySelectorAll('tbody tr')");
-    expect(render).toContain("pdf.deletePage(1)");
+    expect(render).toContain('const pdf = createLocalPdf()');
+    expect(render).not.toContain('pdf.deletePage(1)');
+    expect(render).not.toContain('html2pdf()');
     expect(render).toContain("drawRow(columns, true)");
     expect(render).toContain("emittedRows !== rows.length");
     expect(render).toContain("pdf.output('arraybuffer')");

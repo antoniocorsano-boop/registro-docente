@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { openEmbeddingSession, revokeEmbeddingSession } from './embeddingSession';
 import { getEmbedding } from '../services/embeddingService';
 import type { LocalEmbeddingConfig } from '../types';
 import type { DataClassification } from './dataClassification';
@@ -25,7 +26,9 @@ const GEMINI_CONFIG: LocalEmbeddingConfig = {
   enabled: true
 };
 
+beforeEach(() => { openEmbeddingSession(); });
 afterEach(() => {
+  revokeEmbeddingSession();
   globalThis.fetch = originalFetch;
 });
 
@@ -67,12 +70,18 @@ describe('SEC-2 runtime outbound embedding guard', () => {
     expect(calls).toHaveLength(0);
   });
 
+  test('does not infer consent from an enabled remote provider', async () => {
+    const calls = installSuccessfulEmbeddingFetch();
+    await expect(getEmbedding('Concetto sintetico', GEMINI_CONFIG)).rejects.toThrow(/flusso dati.*non consentito/i);
+    expect(calls).toHaveLength(0);
+  });
+
   test('forwards classification and explicit opt-in when Gemini traffic is allowed', async () => {
     const calls = installSuccessfulEmbeddingFetch();
 
     const vector = await guardedGetEmbedding(
       'Traguardi di competenza per tecnologia',
-      GEMINI_CONFIG,
+      { ...GEMINI_CONFIG, apiKey: 'synthetic-secret-not-for-proxy', endpointUrl: 'http://127.0.0.1:9876' },
       {
         classification: 'INSTITUTIONAL_CURRICULUM',
         explicitTeacherOptIn: true
@@ -85,6 +94,7 @@ describe('SEC-2 runtime outbound embedding guard', () => {
     const payload = JSON.parse(String(calls[0].init?.body));
     expect(payload.classification).toBe('INSTITUTIONAL_CURRICULUM');
     expect(payload.explicitTeacherOptIn).toBe(true);
+    expect(payload.config).toEqual({ provider: 'gemini' });
   });
 
   test('wires the same deny-by-default policy into the server Gemini boundary', async () => {
