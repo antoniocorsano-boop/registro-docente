@@ -1,5 +1,6 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.artifacts.result.ResolvedDependencyResult
@@ -29,15 +30,27 @@ String componentId(def identifier) {
 
 gradle.projectsEvaluated {
     def app = gradle.rootProject.project(':app')
+    def incoming = app.configurations.getByName('releaseRuntimeClasspath').incoming
+    // Both strict views retain the variant graph selected by releaseRuntimeClasspath.
+    // AGP 8.13 publishes its full inter-project runtime JAR as artifactType=jar;
+    // an AAR is a publication artifact, not the default inter-project output.
+    def projectArtifacts = incoming.artifactView {
+        componentFilter { it instanceof ProjectComponentIdentifier }
+        attributes { attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, 'jar') }
+    }.artifacts
+    // Keep the original artifact of each selected published variant (AAR or JAR,
+    // including KMP targets). Platforms legitimately supply no runtime file.
+    def moduleArtifacts = incoming.artifactView {
+        componentFilter { it instanceof ModuleComponentIdentifier }
+    }.artifacts
     app.tasks.register('captureReleaseNativeInventory') {
         // No outputs are declared for Gradle caching. This receipt belongs to this invocation.
         dependsOn 'assembleRelease'
+        dependsOn projectArtifacts.artifactFiles
         doLast {
             def androidRoot = app.rootProject.projectDir
             def probeDir = androidRoot.parentFile
             def apk = app.layout.buildDirectory.file('outputs/apk/release/app-release-unsigned.apk').get().asFile
-            def configuration = app.configurations.getByName('releaseRuntimeClasspath')
-            def incoming = configuration.incoming
             def resolution = incoming.resolutionResult
             def components = resolution.allComponents.collect { component ->
                 def identity = component.id
@@ -73,12 +86,14 @@ gradle.projectsEvaluated {
                 throw new GradleException("Unresolved releaseRuntimeClasspath dependencies: " +
                     unresolved.collect { it.attempted }.unique().sort().join(', '))
             }
-            def artifacts = incoming.artifacts.artifacts.collect { artifact ->
+            def artifacts = (projectArtifacts.artifacts + moduleArtifacts.artifacts).collect { artifact ->
                 def file = artifact.file
                 if (!file.isFile()) {
                     throw new GradleException("Cannot hash runtime artifact: ${artifact.id.displayName}")
                 }
-                [component: componentId(artifact.id.componentIdentifier), file: file.name, size: file.length(),
+                def identity = artifact.id.componentIdentifier
+                [component: componentId(identity), file: file.name, size: file.length(),
+                 representation: identity instanceof ProjectComponentIdentifier ? 'project-runtime-jar' : 'published-variant',
                  sha256: sha256(file), variant: artifact.variant.displayName,
                  attributes: artifact.variant.attributes.keySet().collectEntries { key ->
                      [(key.name): artifact.variant.attributes.getAttribute(key).toString()]

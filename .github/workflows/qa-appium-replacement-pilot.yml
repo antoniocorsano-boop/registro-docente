@@ -110,9 +110,29 @@ jobs:
                   tec_head=HEAD
                   frozen_tec=b196d1027085a781410cef31d973a1b25c4652ec
                   if test "$CANDIDATE_SHA" != "$frozen_tec"; then
-                    test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_tec"
+                    tecb_head=HEAD
+                    frozen_tecb=214fb78e2448f9db14fa31658cf05c0e47dc72e7
+                    if test "$CANDIDATE_SHA" != "$frozen_tecb"; then
+                      inv_head=HEAD
+                      frozen_inv=17f5a16287d6d17b73588e1ceee6b349428e12d7
+                      if test "$CANDIDATE_SHA" != "$frozen_inv"; then
+                        test "$(git rev-list --parents -n 1 HEAD)" = "$CANDIDATE_SHA $frozen_inv"
+                        expected_inv_r1=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml mobile/android-probe/native-inventory.init.gradle mobile/android-probe/test_native_inventory.py mobile/android-probe/verify-native-inventory.py scripts/diagnostics/appium-pilot/contract.test.mjs | LC_ALL=C sort)
+                        actual_inv_r1=$(git diff --name-only --no-renames "$frozen_inv" HEAD | LC_ALL=C sort)
+                        test "$actual_inv_r1" = "$expected_inv_r1"
+                        inv_head=$frozen_inv
+                      fi
+                      inv_sha=$(git rev-parse "$inv_head")
+                      test "$(git rev-list --parents -n 1 "$inv_head")" = "$inv_sha $frozen_tecb"
+                      expected_inv=$(printf '%s\n' .github/workflows/mobile-01-android-probe.yml mobile/android-probe/native-inventory.init.gradle mobile/android-probe/test_native_inventory.py mobile/android-probe/verify-native-inventory.py | LC_ALL=C sort)
+                      actual_inv=$(git diff --name-only --no-renames "$frozen_tecb" "$inv_head" | LC_ALL=C sort)
+                      test "$actual_inv" = "$expected_inv"
+                      tecb_head=$frozen_tecb
+                    fi
+                    tecb_sha=$(git rev-parse "$tecb_head")
+                    test "$(git rev-list --parents -n 1 "$tecb_head")" = "$tecb_sha $frozen_tec"
                     expected_tecb=$(printf '%s\n' .github/workflows/browser-qualification.yml .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/r1-tec-bfcache.mjs src/components/SecureRegistroRoot.tsx tests/browser/r1-tec-bfcache.spec.cjs | LC_ALL=C sort)
-                    actual_tecb=$(git diff --name-only --no-renames "$frozen_tec" HEAD | LC_ALL=C sort)
+                    actual_tecb=$(git diff --name-only --no-renames "$frozen_tec" "$tecb_head" | LC_ALL=C sort)
                     test "$actual_tecb" = "$expected_tecb"
                     tec_head=$frozen_tec
                   fi

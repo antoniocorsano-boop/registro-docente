@@ -158,6 +158,13 @@ def verify(raw_path, apk_path, manifest_path, output, readable):
         field(artifact, "file")
         field(artifact, "variant")
         require(component in components, "artifact component missing from graph")
+        representation = field(artifact, "representation")
+        if components[component]["kind"] == "project":
+            require(representation == "project-runtime-jar" and artifact["file"].endswith(".jar") and
+                    artifact["attributes"].get("artifactType") == "jar",
+                    f"invalid local project runtime JAR: {component}")
+        else:
+            require(representation == "published-variant", f"invalid published artifact: {component}")
         require(sha256(artifact["sha256"]) and type(artifact["size"]) is int and
                 artifact["size"] > 0, "artifact digest or size unavailable")
         artifact_ids.add(component)
@@ -168,8 +175,14 @@ def verify(raw_path, apk_path, manifest_path, output, readable):
                     f"artifact evidence missing for {c['id']}")
 
     inputs = unique_rows(report["inputs"], "file")
-    require({"app/build.gradle", "settings.gradle", "gradle/wrapper/gradle-wrapper.properties"}
-            <= inputs.keys() and all(sha256(v["sha256"]) for v in inputs.values()),
+    required_inputs = {
+        "app/build.gradle", "settings.gradle", "build.gradle", "variables.gradle",
+        "gradle.properties", "gradle/wrapper/gradle-wrapper.properties",
+        "app/capacitor.build.gradle", "capacitor.settings.gradle",
+        "../package.json", "../beta-identity.json", "../native-inventory.init.gradle",
+        "../verify-native-inventory.py", "../../../bun.lock",
+    }
+    require(required_inputs <= inputs.keys() and all(sha256(v["sha256"]) for v in inputs.values()),
             "build input digest missing")
     for name in ("java", "gradle", "agp", "compile_sdk", "build_tools",
                  "capacitor_android", "capacitor_core", "capacitor_cli"):
@@ -183,7 +196,8 @@ def verify(raw_path, apk_path, manifest_path, output, readable):
 
     report["status"] = "complete"
     report["coverage"] = {
-        "runtime": "Resolved releaseRuntimeClasspath and artifact files from the release invocation",
+        "runtime": ("One resolved releaseRuntimeClasspath; original selected published variant files and "
+                    "AGP/Gradle-produced full runtime JARs for local projects from the release invocation"),
         "build": "Toolchain and selected input digests; build plugin transitive graph outside scope",
         "optional": "Selected dependencies only; unselected variants and npm probe transitives outside scope",
         "apk": "Marker-to-graph reconciliation; no assertion that every class survives packaging",

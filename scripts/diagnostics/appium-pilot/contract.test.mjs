@@ -257,7 +257,11 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   const retiredPdfPaths=["public/vendor/html2pdf.bundle.min.js","public/vendor/html2pdf.bundle.min.js.LICENSE.txt"];
   const tecRef='b196d1027085a781410cef31d973a1b25c4652ec';
   const tecbPaths=[".github/workflows/browser-qualification.yml",".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","scripts/qualification/r1-tec-bfcache.mjs","src/components/SecureRegistroRoot.tsx","tests/browser/r1-tec-bfcache.spec.cjs"];
-  let r1, r1b, tec;
+  const tecbRef='214fb78e2448f9db14fa31658cf05c0e47dc72e7';
+  const invRef='17f5a16287d6d17b73588e1ceee6b349428e12d7';
+  const invPaths=['.github/workflows/mobile-01-android-probe.yml','mobile/android-probe/native-inventory.init.gradle','mobile/android-probe/test_native_inventory.py','mobile/android-probe/verify-native-inventory.py'];
+  const invR1Paths=['.github/workflows/qa-appium-replacement-pilot.yml','mobile/android-probe/native-inventory.init.gradle','mobile/android-probe/test_native_inventory.py','mobile/android-probe/verify-native-inventory.py','scripts/diagnostics/appium-pilot/contract.test.mjs'];
+  let r1, r1b, tec, tecb, inv;
   const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
@@ -273,7 +277,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     const run=(sha,{eventBase=base,candidateSha=sha,route='production',prNumber='999',overrides={}}={})=>{
       git('checkout','-q','--detach',sha);
       let script=source;
-      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,[r1bRef]:r1b ?? r1bRef,[tecRef]:tec ?? tecRef,...overrides};
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,[r1bRef]:r1b ?? r1bRef,[tecRef]:tec ?? tecRef,[tecbRef]:tecb ?? tecbRef,[invRef]:inv ?? invRef,...overrides};
       for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
       const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:prNumber,CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
       rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
@@ -347,7 +351,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     git('checkout','-q','--detach',r1b);put('unrelated','intermediate');commit('wrong parent');putTec();
     fail(commit('TEC wrong parent'),{prNumber:'416'});
     const putTecB=omit=>{for(const path of tecbPaths)if(path!==omit)put(path,'R1-TEC-01b exact correction');};
-    git('checkout','-q','--detach',tec);putTecB();const tecb=commit('R1-TEC-01b');
+    git('checkout','-q','--detach',tec);putTecB();tecb=commit('R1-TEC-01b');
     pass(tecb,{prNumber:'416'});
     fail(tecb);fail(tecb,{prNumber:'416',route:'legacy'});
     fail(tecb,{prNumber:'416',eventBase:composition});
@@ -360,6 +364,31 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     fail(commit('TEC b extra file'),{prNumber:'416'});
     git('checkout','-q','--detach',tec);put('unrelated','intermediate');commit('wrong parent');putTecB();
     fail(commit('TEC b wrong parent'),{prNumber:'416'});
+
+    git('checkout','-q','--detach',tecb);
+    for(const path of invPaths)put(path,'R1-INV-03 historical inventory');
+    inv=commit('R1-INV-03 history');
+    const putInvR1=omit=>{for(const path of invR1Paths)if(path!==omit)put(path,'R1-INV-03-R1 exact correction');};
+    putInvR1();
+    const invR1=commit('R1-INV-03-R1');
+    pass(invR1,{prNumber:'416'});
+    pass(inv,{prNumber:'416'});
+    fail(invR1);fail(invR1,{prNumber:'416',route:'legacy'});
+    fail(invR1,{prNumber:'416',eventBase:composition});
+    fail(invR1,{prNumber:'416',candidateSha:inv});
+    fail(invR1,{prNumber:'416',overrides:{[invRef]:tecb}});
+    fail(invR1,{prNumber:'416',overrides:{[tecbRef]:tec}});
+
+    git('checkout','-q','--detach',inv);putInvR1('mobile/android-probe/test_native_inventory.py');
+    fail(commit('INV R1 missing fixture'),{prNumber:'416'});
+    git('checkout','-q','--detach',inv);putInvR1();put('src/App.tsx','unauthorized functional change');
+    fail(commit('INV R1 unauthorized file'),{prNumber:'416'});
+    git('checkout','-q','--detach',inv);put('intermediate','unexpected parent');
+    const intermediate=commit('INV R1 intermediate');putInvR1();
+    fail(commit('INV R1 wrong parent'),{prNumber:'416'});
+    const twoParents=git('commit-tree',git('rev-parse',invR1+'^{tree}'),'-p',inv,'-p',intermediate,'-m','synthetic extra parent');
+    fail(twoParents,{prNumber:'416'});
+
 
 
 
