@@ -22,8 +22,14 @@ check_delta "$mobile" "$diagnostics" \
   scripts/diagnostics/ap02-native-device-v7.mjs \
   scripts/diagnostics/native-lab-runtime.mjs \
   scripts/diagnostics/native-lab-runtime.test.mjs
-check_delta "$diagnostics" "$CANDIDATE_SHA" \
+r3=8d8de5a6a09350a057cf1061909d264fc01b5a8e
+check_delta "$diagnostics" "$r3" \
   .github/workflows/qa-appium-replacement-pilot.yml \
+  .github/workflows/val01-native-evidence.yml \
+  scripts/diagnostics/android-r3-admission.sh \
+  scripts/diagnostics/appium-pilot/contract.test.mjs \
+  scripts/diagnostics/val01-native-evidence.mjs
+check_delta "$r3" "$CANDIDATE_SHA" \
   .github/workflows/val01-native-evidence.yml \
   scripts/diagnostics/android-r3-admission.sh \
   scripts/diagnostics/appium-pilot/contract.test.mjs \

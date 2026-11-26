@@ -12,6 +12,9 @@ import {classifyFailure,LabFailure,normalizeAdbFailure} from './native-lab-runti
 const pkg='it.trama.registrodocente.lab.val01';
 const activity=pkg+'/it.trama.registrodocente.prova.MainActivity';
 const api=Number(process.env.VAL01_API);
+const runScope=process.env.VAL01_RUN_SCOPE??'full-matrix';
+assert.ok(['full-matrix','api36-diagnostic'].includes(runScope));
+assert.ok(runScope!=='api36-diagnostic'||api===36);
 assert.ok([32,36].includes(api));
 assert.match(process.env.CANDIDATE_SHA||'',/^[a-f0-9]{40}$/);
 const transport=createAdbTransportTrace();
@@ -35,7 +38,7 @@ const results=[];
 mkdirSync('native-evidence',{recursive:true});
 function stage(name,details={}){
  results.push({stage:name,status:'PASS',...details});
- writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,api,scope:'synthetic native storage fixture; not production UI',package:pkg,productionRelease:false,results},null,2));
+ writeFileSync('native-evidence/result.json',JSON.stringify({candidate:process.env.CANDIDATE_SHA,api,runScope,scope:'synthetic native storage fixture; not production UI',package:pkg,productionRelease:false,results},null,2));
  console.log(name,'PASS');
 }
 async function until(fn,label,timeout=60000){
@@ -322,7 +325,7 @@ try{
  process.exitCode=1;
  const failure=classifyFailure(error);
  writeFileSync('native-evidence/failure.json',JSON.stringify({
-  schemaVersion:1,candidate:process.env.CANDIDATE_SHA,api,syntheticOnly:true,
+  schemaVersion:1,candidate:process.env.CANDIDATE_SHA,api,runScope,syntheticOnly:true,
   phase,lastPassedStage:results.at(-1)?.stage??null,failure,
   lastReadFailure:error.lastReadFailure??null,adb:transport.snapshot()
  },null,2));

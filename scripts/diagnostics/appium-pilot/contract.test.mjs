@@ -464,9 +464,18 @@ test('R3 targeted DB2 remains narrow and preserves the normal matrix',()=>{
   assert.match(db2,/github\.actor == 'antoniocorsano-boop'/);
   assert.match(db2,/test "\$DB2_LABEL" = "db2-r3-\$CANDIDATE_SHA"/);
   assert.match(db2,/bash scripts\/diagnostics\/android-r3-admission.sh/);
-  assert.match(db2,/\{"api":\[36\],"mode":\["legacy"\]\}/);
-  assert.match(db2,/\{"api":\[32,36\],"mode":\["legacy","v9"\]\}/);
-  assert.match(db2,/if: always\(\)/);
+  const matrix=db2.match(/matrix:\n\s+api: (\[.*\])\n\s+mode: (\[.*\])\n\s+exclude: \$\{\{ fromJSON\(github\.event\.action == 'labeled' && '([^']+)' \|\| '([^']+)'\) \}\}/);
+  assert.ok(matrix,'expected a declarative matrix with event-scoped exclusions');
+  const [,api,mode,targetedExclude,ordinaryExclude]=matrix;
+  const combinations=JSON.parse(api).flatMap(level=>mode.slice(1,-1).split(', ').map(variant=>({api:level,mode:variant})));
+  const resolve=exclude=>combinations.filter(cell=>!JSON.parse(exclude).some(rule=>
+    Object.entries(rule).every(([key,value])=>cell[key]===value)));
+  assert.deepEqual(resolve(ordinaryExclude),[
+    {api:32,mode:'legacy'},{api:32,mode:'v9'},{api:36,mode:'legacy'},{api:36,mode:'v9'},
+  ]);
+  assert.deepEqual(resolve(targetedExclude),[{api:36,mode:'legacy'}]);
+  assert.match(db2,/if: always\(\) && github\.event\.action != 'labeled'\n\s+with:\n\s+name: val01-native-evidence-/);
+  assert.match(db2,/if: always\(\) && github\.event\.action == 'labeled'\n\s+with:\n\s+name: val01-diagnostic-/);
   assert.match(db2,/Require complete native evidence/);
 });
 
@@ -489,12 +498,13 @@ esac
     ]){
       const run=spawnSync(process.execPath,[driver],{
         cwd:dir,encoding:'utf8',timeout:5000,
-        env:{...process.env,PATH:dir+':'+process.env.PATH,VAL01_API:'36',CANDIDATE_SHA:'a'.repeat(40),INSTALL_RESULT:installResult},
+        env:{...process.env,PATH:dir+':'+process.env.PATH,VAL01_API:'36',VAL01_RUN_SCOPE:'api36-diagnostic',CANDIDATE_SHA:'a'.repeat(40),INSTALL_RESULT:installResult},
       });
       assert.equal(run.status,1,run.stderr);
       const output=readFileSync(join(dir,'native-evidence/failure.json'),'utf8');
       const evidence=JSON.parse(output);
       assert.equal(evidence.phase,phase);
+      assert.equal(evidence.runScope,'api36-diagnostic');
       assert.equal(evidence.lastPassedStage,null);
       assert.deepEqual(evidence.failure,{code,category});
       assert.equal(evidence.adb.calls.at(-1).kind,phase==='launch'?'activity-command':'lab-install');
