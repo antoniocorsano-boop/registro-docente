@@ -3853,6 +3853,27 @@
       ]
     },
     {
+      "id": "CAND-PROD-01-R1-TEC-01B-I01",
+      "owner": "CAND-PROD-01/R1-TEC-01b",
+      "statement": "Persisted pagehide revokes embedding and pending archive authorization. The original authenticated web document may open a fresh embedding generation only after persisted pageshow while its Vault and original authority remain active and the captured auto-lock deadline is valid. Android uses the existing protected suspension flow, stale leases remain revoked, and duplicate or ordinary pageshow does not rotate the new generation. Production Chromium must execute the six lifecycle cases with no skips and report real history restoration honestly. Only PR 416 may admit the named direct successor of the frozen R1-TEC-01 candidate; previous deltas are verified independently.",
+      "impactPaths": [
+        ".github/workflows/browser-qualification.yml",
+        ".github/workflows/qa-appium-replacement-pilot.yml",
+        "qualification/invariants.v1.json",
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "scripts/qualification/r1-tec-bfcache.mjs",
+        "src/components/SecureRegistroRoot.tsx",
+        "tests/browser/r1-tec-bfcache.spec.cjs"
+      ],
+      "tests": [
+        "scripts/diagnostics/appium-pilot/contract.test.mjs",
+        "src/security/r1EmbeddingSession.test.ts"
+      ],
+      "browserSmoke": [
+        "tests/browser/r1-tec-bfcache.spec.cjs"
+      ]
+    },
+    {
       "id": "CAND-PROD-01-R1-TEC-01-I01",
       "owner": "CAND-PROD-01/R1-TEC-01",
       "statement": "The exact successor of the frozen R1-06-01b candidate uses the common classification gate for both embedding destinations, requires explicit remote consent and limits provider payloads, removes the global text/vector cache and rejects stale embedding generations. The historical offline PDF invariant has one explicit asset migration to pinned official jsPDF 4.2.1; old bundle and license are absent, selectable-text exports retain privacy confirmation, local resources, Unicode and native receipt verification. All other published invariants, historical F2 admission and mandatory dual-channel evidence remain intact. This does not qualify real-device release, external security review, recovery R2 or a complete dependency audit.",

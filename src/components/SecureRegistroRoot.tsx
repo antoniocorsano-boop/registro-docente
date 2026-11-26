@@ -17,7 +17,7 @@ import {
 } from '../security/secureAppStorage';
 import { initializeNewArchive, type NewArchiveSetup } from '../security/initialArchiveSetup';
 import { SecureVault } from '../security/secureVault';
-import { openEmbeddingSession, revokeEmbeddingSession } from '../security/embeddingSession';
+import { openEmbeddingSession, requireEmbeddingSession, revokeEmbeddingSession } from '../security/embeddingSession';
 import { IndexedDbVaultStore } from '../security/vaultStore';
 import { VaultControls } from './VaultControls';
 import { VaultGate } from './VaultGate';
@@ -62,6 +62,9 @@ export const SecureRegistroRoot: React.FC = () => {
   const [snapshot, setSnapshot] = useState<SecureAppSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState<AutoLockMinutes>(() => readAutoLockMinutes());
+  const autoLockMinutesRef = useRef(autoLockMinutes);
+  const autoLockDeadlineRef = useRef<number | null>(null);
+  const cachedPageRef = useRef<{ authorized: boolean; deadline: number | null } | null>(null);
   const [isCopilotSurfaceOpen, setIsCopilotSurfaceOpen] = useState(false);
   const storeRef = useRef<IndexedDbVaultStore | null>(null);
   const vaultRef = useRef<SecureVault | null>(null);
@@ -175,22 +178,8 @@ export const SecureRegistroRoot: React.FC = () => {
     };
   }, [inspectBootstrap]);
 
-  useEffect(() => {
-    // Leaving the page permanently revokes every in-flight archive mutation.
-    const onVisibility = () => {
-      if (document.hidden) archiveAuthorityRevisionRef.current++;
-    };
-    const onPageHide = () => { revokeEmbeddingSession(); archiveAuthorityRevisionRef.current++; };
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onPageHide);
-    return () => {
-      archiveAuthorityRevisionRef.current++;
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onPageHide);
-    };
-  }, []);
-
   const revokeNativeAuthorization = useCallback(() => {
+    cachedPageRef.current = null;
     revokeEmbeddingSession();
     // Also revoke pending Web/Android setup and migration authorization.
     archiveAuthorityRevisionRef.current++;
@@ -268,6 +257,62 @@ export const SecureRegistroRoot: React.FC = () => {
       setSuspensionPhase('locked');
     });
   }, [lockImmediately, revokeNativeAuthorization]);
+
+  useEffect(() => {
+    const available = () => gateStateRef.current === 'READY' &&
+      !closingRef.current && !suspendedRef.current && !archiveOperationPendingRef.current &&
+      vaultRef.current?.isUnlocked() === true;
+
+    const onVisibility = () => {
+      if (document.hidden) archiveAuthorityRevisionRef.current++;
+    };
+    const onPageHide = (event: PageTransitionEvent) => {
+      if (!event.persisted) cachedPageRef.current = null;
+      else if (!cachedPageRef.current && available()) {
+        let authorized = false;
+        try {
+          requireEmbeddingSession();
+          authorized = true;
+        } catch {
+          // READY alone does not prove a valid generation.
+        }
+        cachedPageRef.current = {
+          authorized,
+          deadline: autoLockMinutesRef.current === 0 ? Infinity : autoLockDeadlineRef.current,
+        };
+      }
+      revokeEmbeddingSession();
+      archiveAuthorityRevisionRef.current++;
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      const cached = cachedPageRef.current;
+      cachedPageRef.current = null;
+      if (!cached || gateStateRef.current !== 'READY' || closingRef.current || suspendedRef.current) return;
+      // WebView restoration does not attest the native epoch or shield.
+      // Keep drafts behind the existing suspension flow until authentication.
+      if (isAndroidSessionRuntime()) {
+        beginSuspension();
+        return;
+      }
+      if (!available() || document.hidden || !cached.authorized ||
+          cached.deadline === null || Date.now() >= cached.deadline) {
+        lockImmediately();
+        return;
+      }
+      openEmbeddingSession();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      cachedPageRef.current = null;
+      archiveAuthorityRevisionRef.current++;
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [beginSuspension, lockImmediately]);
 
   const syncNativeSession = useCallback(async (): Promise<AndroidSessionState | null> => {
     try {
@@ -566,6 +611,7 @@ export const SecureRegistroRoot: React.FC = () => {
     if (archiveOperationPendingRef.current) {
       throw new Error('Operazione sull’archivio in corso: impossibile cancellare ora.');
     }
+    cachedPageRef.current = null;
     revokeEmbeddingSession();
     const { vault } = getRuntime();
     await vault.clearAll();
@@ -591,10 +637,15 @@ export const SecureRegistroRoot: React.FC = () => {
       else lockImmediately();
     };
 
-    let timeoutId = window.setTimeout(timeoutLock, autoLockMinutes * 60_000);
+    const delay = autoLockMinutes * 60_000;
+    const schedule = () => {
+      autoLockDeadlineRef.current = Date.now() + delay;
+      return window.setTimeout(timeoutLock, delay);
+    };
+    let timeoutId = schedule();
     const resetTimer = () => {
       window.clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(timeoutLock, autoLockMinutes * 60_000);
+      timeoutId = schedule();
     };
 
     const activityEvents = ['pointerdown', 'keydown'] as const;
@@ -603,6 +654,7 @@ export const SecureRegistroRoot: React.FC = () => {
     }
 
     return () => {
+      autoLockDeadlineRef.current = null;
       window.clearTimeout(timeoutId);
       for (const eventName of activityEvents) {
         window.removeEventListener(eventName, resetTimer);
@@ -611,6 +663,7 @@ export const SecureRegistroRoot: React.FC = () => {
   }, [autoLockMinutes, gateState, closing, lockImmediately, suspensionPhase, beginSuspension]);
 
   const handleAutoLockChange = (minutes: AutoLockMinutes) => {
+    autoLockMinutesRef.current = minutes;
     setAutoLockMinutes(minutes);
     window.localStorage.setItem(AUTO_LOCK_STORAGE_KEY, String(minutes));
   };

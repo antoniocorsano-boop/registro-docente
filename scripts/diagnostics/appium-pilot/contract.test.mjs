@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {checkBfcacheWorkflow, validateBfcacheReport} from '../../qualification/r1-tec-bfcache.mjs';
 import {checkR106Workflow, checkR106Report} from '../../qualification/r106-production.mjs';
 import {isExactPdfInvariantTransition} from '../../qualification/pdf-invariant-transition.mjs';
 import assert from 'node:assert/strict';
@@ -254,7 +255,9 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
   const r1bRef='1cf5eea0a5e0c2586915875af94fde3ba04528f7';
   const r1tecPaths=[".github/workflows/mobile-01-android-probe.yml",".github/workflows/qa-appium-replacement-pilot.yml","index.html","public/vendor/html2pdf.bundle.min.js","public/vendor/html2pdf.bundle.min.js.LICENSE.txt","public/vendor/jspdf.LICENSE.txt","public/vendor/jspdf.umd.min.js","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","scripts/qualification/impact.mjs","scripts/qualification/pdf-invariant-transition.mjs","server.ts","src/components/AnalyticsView.tsx","src/components/SecureRegistroRoot.tsx","src/components/SettingsView.tsx","src/components/UdaGanttView.tsx","src/declarations.d.ts","src/library/semanticRetrieval.ts","src/report/formativePdfRendering.ts","src/security/embeddingSession.ts","src/security/formativePdfContract.test.ts","src/security/localPdf.ts","src/security/mobile01AndroidProbeContract.test.ts","src/security/mobile01M1OfflineAssetsContract.test.ts","src/security/mobile01M2cNativePdfContract.test.ts","src/security/outboundBoundaryClosure.test.ts","src/security/outboundEmbeddingGuard.test.ts","src/security/r1EmbeddingSession.test.ts","src/security/workPdfRendering.ts","src/services/embeddingService.ts","tests/browser/fixtures/nav-back-01-app.html","tests/browser/mobile01-m1-offline-pdf.spec.cjs","tests/browser/mobile01-m2c-native-pdf.spec.cjs"];
   const retiredPdfPaths=["public/vendor/html2pdf.bundle.min.js","public/vendor/html2pdf.bundle.min.js.LICENSE.txt"];
-  let r1, r1b;
+  const tecRef='b196d1027085a781410cef31d973a1b25c4652ec';
+  const tecbPaths=[".github/workflows/browser-qualification.yml",".github/workflows/qa-appium-replacement-pilot.yml","qualification/invariants.v1.json","scripts/diagnostics/appium-pilot/contract.test.mjs","scripts/qualification/r1-tec-bfcache.mjs","src/components/SecureRegistroRoot.tsx","tests/browser/r1-tec-bfcache.spec.cjs"];
+  let r1, r1b, tec;
   const dir=mkdtempSync(join(tmpdir(),'cand-prod-admission-'));
   const git=(...args)=>execFileSync('git',args,{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   const put=(path,value)=>{const dest=join(dir,path);mkdirSync(dirname(dest),{recursive:true});writeFileSync(dest,value);};
@@ -270,7 +273,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     const run=(sha,{eventBase=base,candidateSha=sha,route='production',prNumber='999',overrides={}}={})=>{
       git('checkout','-q','--detach',sha);
       let script=source;
-      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,[r1bRef]:r1b ?? r1bRef,...overrides};
+      const refs={[baseRef]:base,[compositionRef]:composition,[treeRef]:tree,[admissionRef]:admission,[r3aRef]:candidate,[r1Ref]:r1 ?? r1Ref,[r1bRef]:r1b ?? r1bRef,[tecRef]:tec ?? tecRef,...overrides};
       for(const [from,to] of Object.entries(refs))script=script.replaceAll(from,to);
       const result=spawnSync('bash',['-c',script],{cwd:dir,env:{...process.env,PR_NUMBER:prNumber,CANDIDATE_SHA:candidateSha,EVENT_BASE_SHA:eventBase,ADMISSION_ROUTE:route},encoding:'utf8'});
       rmSync(join(dir,'scripts/diagnostics/appium-pilot/__pycache__'),{recursive:true,force:true});
@@ -330,7 +333,7 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
       if(retiredPdfPaths.includes(path))rmSync(join(dir,path),{force:true});
       else put(path,'R1-TEC exact correction');
     }};
-    git('checkout','-q','--detach',r1b);putTec();const tec=commit('R1-TEC-01');
+    git('checkout','-q','--detach',r1b);putTec();tec=commit('R1-TEC-01');
     pass(tec,{prNumber:'416'});
     fail(tec);fail(tec,{prNumber:'416',route:'legacy'});
     fail(tec,{prNumber:'416',eventBase:composition});
@@ -343,6 +346,21 @@ test('CAND-PROD-01 admission requires exact composed product and mandatory dual 
     fail(commit('TEC extra file'),{prNumber:'416'});
     git('checkout','-q','--detach',r1b);put('unrelated','intermediate');commit('wrong parent');putTec();
     fail(commit('TEC wrong parent'),{prNumber:'416'});
+    const putTecB=omit=>{for(const path of tecbPaths)if(path!==omit)put(path,'R1-TEC-01b exact correction');};
+    git('checkout','-q','--detach',tec);putTecB();const tecb=commit('R1-TEC-01b');
+    pass(tecb,{prNumber:'416'});
+    fail(tecb);fail(tecb,{prNumber:'416',route:'legacy'});
+    fail(tecb,{prNumber:'416',eventBase:composition});
+    fail(tecb,{prNumber:'416',overrides:{[tecRef]:r1b}});
+    git('checkout','-q','--detach',tec);putTecB('tests/browser/r1-tec-bfcache.spec.cjs');
+    fail(commit('TEC b missing browser spec'),{prNumber:'416'});
+    git('checkout','-q','--detach',tec);putTecB('.github/workflows/browser-qualification.yml');
+    fail(commit('TEC b missing browser gate'),{prNumber:'416'});
+    git('checkout','-q','--detach',tec);putTecB();put('src/unauthorized.ts','extra');
+    fail(commit('TEC b extra file'),{prNumber:'416'});
+    git('checkout','-q','--detach',tec);put('unrelated','intermediate');commit('wrong parent');putTecB();
+    fail(commit('TEC b wrong parent'),{prNumber:'416'});
+
 
 
   }finally{rmSync(dir,{recursive:true,force:true});}
@@ -393,4 +411,20 @@ test('PDF invariant migration is limited to exact semantics, assets and evidence
   assert.equal(isExactPdfInvariantTransition(published,candidate,{invariants:[candidate,{...replacement,tests:[]}]},blobAt),false);
   assert.equal(isExactPdfInvariantTransition(published,candidate,fixture,(role,path)=>role==='candidate'&&path in oldAssets?oldAssets[path]:blobAt(role,path)),false);
   assert.equal(isExactPdfInvariantTransition(published,candidate,fixture,(role,path)=>role==='candidate'&&path.endsWith('.umd.min.js')?'wrong':blobAt(role,path)),false);
+});
+
+test('R1-TEC-01b requires the production browser gate and a non-skipped report',()=>{
+  const browser=readFileSync('.github/workflows/browser-qualification.yml','utf8');
+  checkBfcacheWorkflow(browser);
+  for(const marker of [
+    'r1-tec-bfcache.mjs contract', 'cp tests/browser/r1-tec-bfcache.spec.cjs',
+    'NODE_ENV=production PORT=', 'r1-tec-bfcache.spec.cjs \\',
+    'r1-tec-bfcache.mjs report', 'path: browser-evidence/',
+  ]){
+    const modified=browser.split('\n').filter(line=>!line.includes(marker)).join('\n');
+    assert.notEqual(modified,browser,marker);
+    assert.throws(()=>checkBfcacheWorkflow(modified),{name:'AssertionError'},marker);
+  }
+  assert.throws(()=>validateBfcacheReport({errors:[],stats:{expected:5,skipped:1,unexpected:0,flaky:0},suites:[]}));
+  assert.throws(()=>validateBfcacheReport({errors:[],stats:{expected:6,skipped:0,unexpected:0,flaky:0},suites:[]}));
 });

@@ -54,6 +54,9 @@ jobs:
       - name: Require R106 production browser coverage
         run: node scripts/qualification/r106-production.mjs contract
 
+      - name: Require R1-TEC-01b browser coverage
+        run: node scripts/qualification/r1-tec-bfcache.mjs contract
+
       - name: Build production application
         env:
           VITE_INT01_HPR_TRACE: '1'
@@ -81,6 +84,7 @@ jobs:
           timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
           cp tests/browser/r106-student-import.spec.cjs .browser-tools/r106-student-import.spec.cjs
+          cp tests/browser/r1-tec-bfcache.spec.cjs .browser-tools/r1-tec-bfcache.spec.cjs
           cp tests/browser/ap01-initial-reservation.spec.cjs .browser-tools/ap01-initial-reservation.spec.cjs
           cp tests/browser/ap02-v7-professional-web.spec.cjs .browser-tools/ap02-v7-professional-web.spec.cjs
           cp tests/browser/ap02-f2-android-v7-ui.spec.cjs .browser-tools/ap02-f2-android-v7-ui.spec.cjs
@@ -207,6 +211,26 @@ jobs:
               --output=../browser-evidence/r106-production/results
           )
           node scripts/qualification/r106-production.mjs report browser-evidence/r106-production/report.json
+
+      - name: Run mandatory R1-TEC-01b production lifecycle regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .browser-tools/r1-tec-bfcache.spec.cjs
+          test -z "$(find dist -iname '*r1-tec-bfcache*' -print)"
+          mkdir -p browser-evidence/r1-tec-bfcache
+          rm -f browser-evidence/r1-tec-bfcache/report.json browser-evidence/r1-tec-bfcache/summary.json
+          (
+            cd .browser-tools
+            BASE_URL="http://127.0.0.1:${PORT}" \
+            PLAYWRIGHT_JSON_OUTPUT_FILE="../browser-evidence/r1-tec-bfcache/report.json" \
+            ./node_modules/.bin/playwright test \
+              r1-tec-bfcache.spec.cjs \
+              --workers=1 \
+              --reporter=line,json \
+              --output=../browser-evidence/r1-tec-bfcache/results
+          )
+          node scripts/qualification/r1-tec-bfcache.mjs report browser-evidence/r1-tec-bfcache/report.json
 
       - name: AUDIT-PRE-01 / AP-01 — Real two-tab archive reservation
         shell: bash
