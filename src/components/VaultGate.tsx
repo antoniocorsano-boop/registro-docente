@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { gateRejectionCode, type GateActionOperation } from '../security/gateActionDiagnostic';
 import { BuildIdentity } from './BuildIdentity';
 import type { ArchiveProfile, NewArchiveSetup } from '../security/initialArchiveSetup';
 import type { VaultGateState } from '../security/secureAppStorage';
@@ -11,6 +12,7 @@ export interface VaultGateProps {
   onMigrate: (password: string) => Promise<void>;
   onRetry: () => void;
   errorMessage?: string | null;
+  unlockOperation?: 'unlock' | 'resume';
 }
 
 export const VaultGate: React.FC<VaultGateProps> = ({
@@ -20,7 +22,8 @@ export const VaultGate: React.FC<VaultGateProps> = ({
   onUnlock,
   onMigrate,
   onRetry,
-  errorMessage
+  errorMessage,
+  unlockOperation = 'unlock'
 }) => {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'professional' | 'demo' | null>(null);
@@ -33,23 +36,32 @@ export const VaultGate: React.FC<VaultGateProps> = ({
   }, [state]);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // A bootstrap reinspection can change the gate and clear the form before
+  // the qualification observer samples it. Retain only the categorical result.
+  const [actionDiagnostic, setActionDiagnostic] = useState<{ operation: GateActionOperation; code: string } | null>(null);
+  React.useEffect(() => {
+    if (state === 'READY') setActionDiagnostic(null);
+  }, [state]);
 
   if (state === 'READY') {
     return <>{children}</>;
   }
 
-  const runSecureAction = async (action: (value: string) => Promise<void>) => {
+  const runSecureAction = async (action: (value: string) => Promise<void>, operation: GateActionOperation) => {
     if (!password) {
+      setActionDiagnostic({ operation, code: 'PASSWORD_REQUIRED' });
       setActionError('Inserisci la password locale.');
       return;
     }
 
     setSubmitting(true);
+    setActionDiagnostic(null);
     setActionError(null);
     try {
       await action(password);
       setPassword('');
     } catch (error) {
+      setActionDiagnostic({ operation, code: gateRejectionCode(error) });
       setActionError(error instanceof Error ? error.message : 'Operazione di sicurezza non riuscita.');
     } finally {
       setSubmitting(false);
@@ -61,7 +73,9 @@ export const VaultGate: React.FC<VaultGateProps> = ({
   let actionLabel: string | null = null;
   let action: ((value: string) => Promise<void>) | null = null;
 
+  let operation: GateActionOperation = unlockOperation;
   if (state === 'SETUP_REQUIRED') {
+    operation = mode === 'professional' ? 'setup-professional' : 'setup-demo';
     title = 'Configura archivio protetto';
     description = 'Scegli come iniziare. I dati rimangono protetti sul dispositivo.';
     actionLabel = mode === 'professional' ? 'Crea il mio registro' : 'Avvia la prova';
@@ -69,6 +83,7 @@ export const VaultGate: React.FC<VaultGateProps> = ({
       action = value => onSetup(value, mode === 'professional' ? { mode, profile } : { mode });
     }
   } else if (state === 'MIGRATION_REQUIRED') {
+    operation = 'migrate';
     title = 'Proteggi i dati esistenti';
     description = 'I dati locali esistenti devono essere trasferiti nell’archivio protetto prima di aprire il Registro.';
     actionLabel = 'Proteggi i dati esistenti';
@@ -88,7 +103,8 @@ export const VaultGate: React.FC<VaultGateProps> = ({
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex items-center justify-center p-5">
-      <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/90 p-6 shadow-xl">
+      <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/90 p-6 shadow-xl"
+        data-gate-operation={actionDiagnostic?.operation} data-gate-error-code={actionDiagnostic?.code}>
         <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">Registro Docente</p>
         <h1 className="mt-2 text-2xl font-bold">{title}</h1>
         <p className="mt-3 text-sm leading-6 text-slate-300">{description}</p>
@@ -98,12 +114,12 @@ export const VaultGate: React.FC<VaultGateProps> = ({
             <legend className="text-sm font-semibold">Come vuoi iniziare?</legend>
             <label className="flex items-start gap-3 rounded-lg border border-slate-600 p-3">
               <input type="radio" name="archive-mode" value="professional" checked={mode === 'professional'}
-                onChange={() => { setMode('professional'); setActionError(null); }} className="mt-1" />
+                onChange={() => { setMode('professional'); setActionError(null); setActionDiagnostic(null); }} className="mt-1" />
               <span><strong>Archivio professionale</strong><span className="block text-sm text-slate-300">Inizia con un registro vuoto.</span></span>
             </label>
             <label className="flex items-start gap-3 rounded-lg border border-slate-600 p-3">
               <input type="radio" name="archive-mode" value="demo" checked={mode === 'demo'}
-                onChange={() => { setMode('demo'); setActionError(null); }} className="mt-1" />
+                onChange={() => { setMode('demo'); setActionError(null); setActionDiagnostic(null); }} className="mt-1" />
               <span><strong>Ambiente dimostrativo</strong><span className="block text-sm text-slate-300">Esplora con dati di esempio, non reali.</span></span>
             </label>
           </fieldset>
@@ -114,7 +130,7 @@ export const VaultGate: React.FC<VaultGateProps> = ({
             className="mt-6 space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              void runSecureAction(action);
+              void runSecureAction(action, operation);
             }}
           >
             {state === 'SETUP_REQUIRED' && mode === 'professional' && (

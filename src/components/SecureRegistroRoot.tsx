@@ -15,6 +15,7 @@ import {
   type SecureAppSnapshot,
   type VaultGateState
 } from '../security/secureAppStorage';
+import { markGateRejection } from '../security/gateActionDiagnostic';
 import { initializeNewArchive, type NewArchiveSetup } from '../security/initialArchiveSetup';
 import { SecureVault } from '../security/secureVault';
 import { openEmbeddingSession, requireEmbeddingSession, revokeEmbeddingSession } from '../security/embeddingSession';
@@ -381,7 +382,7 @@ export const SecureRegistroRoot: React.FC = () => {
   // The admission lease is checked inside every asynchronous vault boundary.
   const beginArchiveOperation = useCallback(async () => {
     if (archiveOperationPendingRef.current) {
-      throw new Error('Un’altra operazione sull’archivio è ancora in corso.');
+      throw markGateRejection(new Error('Un’altra operazione sull’archivio è ancora in corso.'), 'ARCHIVE_BUSY');
     }
     archiveOperationPendingRef.current = true;
     const authorityRevision = archiveAuthorityRevisionRef.current;
@@ -394,7 +395,7 @@ export const SecureRegistroRoot: React.FC = () => {
             (attempt.epoch !== null && (
               !nativeStateRef.current?.foreground ||
               nativeStateRef.current.epoch !== attempt.epoch))) {
-          throw new Error('Autorizzazione archivio revocata o sessione cambiata.');
+          throw markGateRejection(new Error('Autorizzazione archivio revocata o sessione cambiata.'), 'AUTHORITY_REVOKED');
         }
       };
       assertAuthorized();
@@ -404,7 +405,7 @@ export const SecureRegistroRoot: React.FC = () => {
       };
     } catch (error) {
       archiveOperationPendingRef.current = false;
-      throw error;
+      throw markGateRejection(error, 'ARCHIVE_ADMISSION_REJECTED');
     }
   }, [getForegroundEpoch]);
 
@@ -535,6 +536,7 @@ export const SecureRegistroRoot: React.FC = () => {
   const handleSetup = useCallback(async (password: string, setup: NewArchiveSetup) => {
     const operation = await beginArchiveOperation();
     const { attempt, assertAuthorized } = operation;
+    let rejectionCode: Parameters<typeof markGateRejection>[1] = 'ARCHIVE_INSPECTION_REJECTED';
     try {
       if (establishedArchive()) throw new Error('Archivio già stabilito: non è ammessa una nuova configurazione.');
       const inspected = await protectedBootstrap().run();
@@ -550,13 +552,15 @@ export const SecureRegistroRoot: React.FC = () => {
         throw new Error('È già presente un archivio. Riapri il Registro senza creare nuovi dati.');
       }
       assertAuthorized();
+      rejectionCode = 'ARCHIVE_INITIALIZATION_REJECTED';
       await initializeNewArchive(vault, password, setup, assertAuthorized);
+      rejectionCode = 'READY_SNAPSHOT_REJECTED';
       await loadReadySnapshot(attempt, assertAuthorized);
     } catch (error) {
       // ACTIVE may already be committed: inspect, do not claim a rollback.
       vaultRef.current?.lock();
       await inspectBootstrap();
-      throw error;
+      throw markGateRejection(error, rejectionCode);
     } finally {
       operation.end();
     }
@@ -708,7 +712,7 @@ export const SecureRegistroRoot: React.FC = () => {
                   {suspensionDelayed ? 'Sessione protetta. Attesa della conclusione dell’operazione locale.' : 'Protezione della sessione…'}
                 </div>
               ) : (
-                <VaultGate state="LOCKED" onUnlock={resumeSuspendedSession}
+                <VaultGate state="LOCKED" unlockOperation="resume" onUnlock={resumeSuspendedSession}
                   onSetup={handleSetup} onMigrate={handleMigrate} onRetry={handleRetry}>
                   {null}
                 </VaultGate>

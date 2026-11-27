@@ -186,7 +186,7 @@ test('R03 real pull adapter inherits shared command budget',async()=>{
   assert.equal(bytes.toString(),'synthetic');
 });
 
-import { isInteractiveElement, publicSurfaceFrame, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, sampleDestinationFrame, classifyDestinationObservation, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicSurfaceFrame, sanitizeGateActionFailure, publicHomeConfirmation, confirmHomeOnce, classifySafReturnFrame, waitSafReturnLock, classifySurface, waitPublicSurface, sampleDestinationFrame, classifyDestinationObservation, bootReady, versionFacts, completeFingerprint, safeSurfaceTrace, sampleBootReadiness, waitBootReadiness, createPublicAuthentication, bootAnimationState, emulatorIdentity } from './native-lab-readiness.mjs';
 const readyFrame={foreground:true,documentVisible:true,brand:true,privacy:true,home:true};
 test('Q3 boot needs ready transport, completed boot, stopped animation and package manager',()=>{
   const f={transport:'device',boot:'1',animation:'stopped',packageManager:'package:/system/framework/framework-res.apk'};
@@ -642,6 +642,18 @@ test('Q4-R06 known read-only handoff transport failure may repeat but not beyond
   assert.equal(count,1);assert.deepEqual(closed,[1]);
 });
 
+test('R4a adds one API32 startup trial and retains the full F2 matrix',()=>{
+  const f=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
+  assert.match(f,/api: \[32, 36\]/);
+  assert.match(f,/r4a_startup: \[false\]/);
+  assert.ok(f.includes('{"api":32,"r4a_startup":true}'));
+  assert.ok(f.includes("github.event.action == 'synchronize'"));
+  assert.ok(f.includes('github.event.pull_request.number == 416'));
+  assert.ok(f.includes('bash scripts/diagnostics/android-r3-admission.sh --allow-r4a'));
+  assert.ok(f.includes('if: ${{ inputs.startup_only || matrix.r4a_startup }}'));
+  assert.ok(f.includes('r4a-startup-api32-{0}-run{1}-attempt{2}'));
+});
+
 test('Q4-R07 independent startup matrix precedes pilot and cannot count as full F2 acceptance',()=>{
   const q=readFileSync(new URL('../../.github/workflows/qa-stability-01-q4.yml',import.meta.url),'utf8');
   const f=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
@@ -651,7 +663,7 @@ test('Q4-R07 independent startup matrix precedes pilot and cannot count as full 
   assert.ok(q.slice(q.indexOf('  hybrid:'),q.indexOf('  startup:')).includes('needs: preflight'));
   assert.ok(q.slice(q.indexOf('  pilot:'),q.indexOf('  q4:')).includes('needs: [preflight, hybrid, startup]'));
   assert.ok(q.includes('needs: [preflight, hybrid, pilot]'));
-  assert.ok(f.includes('default: false')&&f.includes('if: ${{ !inputs.startup_only }}'));
+  assert.ok(f.includes('default: false')&&f.includes('if: ${{ !inputs.startup_only && !matrix.r4a_startup }}'));
   assert.ok(f.includes('q4-startup-api{0}-trial{1}')&&f.includes('.fullF2Qualified==false'));
   assert.ok(f.includes('.results[4].nativeReauthCount>=4')&&f.includes('.results[5].absenceSamples==2'));
   assert.ok(d.indexOf('if(startupOnly){')<d.indexOf('await createClass(originalClass)'));
@@ -804,6 +816,16 @@ test('Q5-R01 visible setup and unlock rejections are public gate errors; unrelat
   assert.equal(unrelated.gateActionError,true);
   assert.equal(unrelated.gateError,false);
 });
+test('R4a reports only categorical gate diagnostics after the form disappears',()=>{
+  const marker={getAttribute:k=>k==='data-gate-operation'?'setup-professional':'ARCHIVE_INITIALIZATION_REJECTED'};
+  const doc={querySelector:()=>null,querySelectorAll:s=>s==='section[data-gate-error-code]'?[marker]:[]};
+  const frame=publicSurfaceFrame(null,doc,()=>({}),()=>true);
+  assert.equal(frame.gateActionError,false);
+  assert.deepEqual(sanitizeGateActionFailure(frame.gateActionFailure),
+    {operation:'setup-professional', code:'ARCHIVE_INITIALIZATION_REJECTED'});
+  assert.equal(sanitizeGateActionFailure({...frame.gateActionFailure,code:'synthetic private text'}),null);
+});
+
 test('Q5-R01 rejected unlock terminates after one submission and a verified foreground error',async()=>{
   const clock=fakeClock();let submits=0,reads=0,foregroundReads=0;
   const readFrame=()=>{reads++;return q5GateFrame('Sblocca Registro',submits>0);};

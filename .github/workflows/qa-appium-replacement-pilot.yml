@@ -120,7 +120,7 @@ jobs:
                         frozen_inv_r1=891a2e2e47b8c86ee0829d18462aac1b6f740ad8
                         if test "$CANDIDATE_SHA" != "$frozen_inv_r1" &&
                            git merge-base --is-ancestor "$frozen_inv_r1" HEAD 2>/dev/null; then
-                          bash scripts/diagnostics/android-r3-admission.sh
+                          bash scripts/diagnostics/android-r3-admission.sh --allow-r4a
                           inv_r1_head=$frozen_inv_r1
                         fi
                         inv_r1_sha=$(git rev-parse "$inv_r1_head")

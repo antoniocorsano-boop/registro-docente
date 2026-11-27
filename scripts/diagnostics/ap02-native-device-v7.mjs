@@ -7,7 +7,7 @@ import {appiumSnapshot} from './appium-pilot/native-picker.mjs';
 import { LabFailure, classifyFailure, commandBudget, commandBudgetInfo, classifyAdbDeadline, observeUntil, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, bestEffortDiagnostic, isTransportOrDeadline, createDialogTracker, createRecoveryConsentGate, observeAppiumBootstrap } from './native-lab-runtime.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, sampleDestinationFrame, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace } from './native-lab-readiness.mjs';
+import { isInteractiveElement, publicHomeConfirmation, confirmHomeOnce, publicSurfaceFrame, waitSafReturnLock, waitPublicSurface, sampleDestinationFrame, waitBootReadiness, createPublicAuthentication, emulatorIdentity, classifySurface, versionFacts, completeFingerprint, safeSurfaceTrace, sanitizeGateActionFailure } from './native-lab-readiness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumedActivity, hasArea } from './native-ui-driver.mjs';
@@ -89,6 +89,7 @@ async function waitDestination(destination,label=null,ms=60000,reauth=true){
       const frame=await sampleDestinationFrame({readFrame:()=>dom(surfaceExpression(label)),foreground:nativeForeground,destination});
       lastDestinationFrame={destination,foreground:frame.foreground,documentVisible:frame.documentVisible===true,
         gatePending:frame.gatePending===true,gateBusy:frame.gateBusy===true,gateActionError:frame.gateActionError===true,
+        gateActionFailure:sanitizeGateActionFailure(frame.gateActionFailure),
         protectedField:frame.protectedField===true,lock:frame.lock===true,setup:frame.setup===true,
         brand:frame.brand===true,home:frame.home===true};
       return frame;

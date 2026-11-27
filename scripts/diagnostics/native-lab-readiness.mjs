@@ -86,7 +86,12 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
   const brand=unique('[data-testid="header01-brand-navigation"]');
   const setup=heading('Configura archivio protetto');
   const lock=heading('Sblocca Registro');
-  const gateActionError=Array.from(doc.querySelectorAll('p.text-rose-300')).some(e=>ok(e));
+  const gateActionError=Array.from(doc.querySelectorAll('p.text-rose-300')).some(ok);
+  const gateDiagnostics=Array.from(doc.querySelectorAll('section[data-gate-error-code]')).filter(ok);
+  const gateActionFailure=gateDiagnostics.length===1 ? {
+    operation:gateDiagnostics[0].getAttribute('data-gate-operation'),
+    code:gateDiagnostics[0].getAttribute('data-gate-error-code'),
+  } : null;
   return {
     documentVisible:doc.visibilityState==='visible',
     documentFocused:typeof doc.hasFocus==='function'?doc.hasFocus():null,
@@ -99,7 +104,7 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
       ((setup||lock)&&gateActionError),
     gatePending:heading('Protezione dati in corso')||heading('Protezione del Registro'),
     gateBusy:Array.from(doc.querySelectorAll('button')).some(e=>e.textContent?.trim()==='Operazione in corso…'&&e.getClientRects().length>0),
-    gateActionError,
+    gateActionError,gateActionFailure,
     protectedField:!!doc.querySelector('#vault-password'),
     lockControls:unique('#vault-password')&&button('Sblocca Registro'),
     professionalChoice:unique('input[name="archive-mode"][value="professional"]'),
@@ -111,6 +116,15 @@ export function publicSurfaceFrame(label,doc=document,style=getComputedStyle,vis
     classVisible:typeof label==='string'&&Array.from(doc.querySelectorAll('h1,h2,h3,h4,p,span,button,[role=heading]')).some(e=>ok(e)&&e.textContent?.trim()===label),
     drawer:unique('#registro-navigation-drawer')
   };
+}
+// Only categorical values from the public DOM cross the artifact boundary.
+export function sanitizeGateActionFailure(failure){
+  const {operation,code}=failure??{};
+  if(!['setup-professional','setup-demo','unlock','resume','migrate'].includes(operation)||
+     !['PASSWORD_REQUIRED','ACTION_REJECTED','ARCHIVE_BUSY','AUTHORITY_REVOKED',
+       'ARCHIVE_ADMISSION_REJECTED','ARCHIVE_INSPECTION_REJECTED',
+       'ARCHIVE_INITIALIZATION_REJECTED','READY_SNAPSHOT_REJECTED'].includes(code))return null;
+  return {operation,code};
 }
 // SAF lifecycle evidence: a returned Activity alone is not an unlocked
 // Vault, and an apparently interactive App cannot substitute for a fresh lock.

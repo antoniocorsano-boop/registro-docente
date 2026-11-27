@@ -47,6 +47,7 @@ jobs:
       candidate_sha: ${{ github.event.pull_request.head.sha }}
       dual_diagnostic: true
   installed-professional-v7:
+    name: ${{ matrix.r4a_startup && 'R4a startup-only API 32' || format('installed-professional-v7 ({0})', matrix.api) }}
     runs-on: ubuntu-22.04
     timeout-minutes: 40
     strategy:
@@ -54,13 +55,15 @@ jobs:
       max-parallel: 2
       matrix:
         api: [32, 36]
+        include: ${{ fromJSON(github.event_name == 'pull_request' && github.event.action == 'synchronize' && inputs.candidate_sha == '' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.number == 416 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main' && github.event.pull_request.base.sha == '1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1' && '[{"api":32,"r4a_startup":true}]' || '[]') }}
+        r4a_startup: [false]
     env:
       CANDIDATE_SHA: ${{ inputs.candidate_sha || github.event.pull_request.head.sha }}
-      Q4_TRIAL: ${{ inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
+      Q4_TRIAL: ${{ matrix.r4a_startup && '1' || inputs.candidate_sha != '' && format('{0}', inputs.trial) || '' }}
       AP02_API: ${{ matrix.api }}
-      AP02_STARTUP_ONLY: ${{ inputs.startup_only && 'true' || 'false' }}
+      AP02_STARTUP_ONLY: ${{ (inputs.startup_only || matrix.r4a_startup) && 'true' || 'false' }}
       USE_HYBRID: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main')) && 'true' || 'false' }}
-      HYBRID_QUALIFICATION_MODE: ${{ inputs.startup_only && 'startup' || 'full' }}
+      HYBRID_QUALIFICATION_MODE: ${{ (inputs.startup_only || matrix.r4a_startup) && 'startup' || 'full' }}
       Q5_DUAL_QUALIFICATION: ${{ (github.event.pull_request.number == 414 || github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main')) && 'true' || 'false' }}
     steps:
       - name: Validate isolated Q4 invocation before checkout
@@ -90,11 +93,30 @@ jobs:
           [[ "$Q4_TRIAL" =~ ^[0123]$ ]]
           if test "$AP02_STARTUP_ONLY" = true; then [[ "$Q4_TRIAL" =~ ^[123]$ ]]; fi
           test "$GITHUB_RUN_ATTEMPT" = 1
+      - name: Validate isolated R4a invocation before checkout
+        if: ${{ matrix.r4a_startup }}
+        shell: bash
+        env:
+          EVENT_AUTHORIZED: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' && inputs.candidate_sha == '' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.number == 416 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main' && github.event.pull_request.base.sha == '1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1' }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_AUTHORIZED" = true
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$CANDIDATE_SHA" = "$EVENT_HEAD"
+          test "$CANDIDATE_SHA" != 5e725e2d9241e03f3e04fb4372dda617bc4a2606
+          test "$AP02_API/$AP02_STARTUP_ONLY/$Q4_TRIAL" = 32/true/1
+          test "$GITHUB_RUN_ATTEMPT" = 1
       - name: Checkout exact candidate without write credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ env.CANDIDATE_SHA }}
           persist-credentials: false
+          fetch-depth: ${{ matrix.r4a_startup && '0' || '1' }}
+      - name: Admit exact R4a changes and frozen history
+        if: ${{ matrix.r4a_startup }}
+        shell: bash
+        run: bash scripts/diagnostics/android-r3-admission.sh --allow-r4a
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -187,7 +209,7 @@ jobs:
           disable-animations: false
           script: bash -c 'if test "$USE_HYBRID" = true; then bash scripts/diagnostics/appium-pilot/run.sh; else timeout --signal=TERM --kill-after=10s 900s node scripts/diagnostics/ap02-native-device-v7.mjs; fi'
       - name: Require exact complete acceptance evidence
-        if: ${{ !inputs.startup_only }}
+        if: ${{ !inputs.startup_only && !matrix.r4a_startup }}
         shell: bash
         run: |
           set -euo pipefail
@@ -215,7 +237,7 @@ jobs:
             .results[5].afterPidsCount==0
           ' ap02-device-evidence/result.json
       - name: Require independent startup-only acceptance evidence
-        if: ${{ inputs.startup_only }}
+        if: ${{ inputs.startup_only || matrix.r4a_startup }}
         shell: bash
         run: |
           set -euo pipefail
@@ -266,7 +288,7 @@ jobs:
              else .nativeSnapshots>0 and .nativeReauthCount==4 and .safReturns==["export","export","target-source","recovery-source"] and (.stages|length)==6 end)
           ' ap02-device-evidence/dual-channel.json
       - name: Record isolated Q4 identity
-        if: ${{ always() && inputs.candidate_sha != '' }}
+        if: ${{ always() && (inputs.candidate_sha != '' || matrix.r4a_startup) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -276,7 +298,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ inputs.startup_only && format('q4-startup-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || (inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA)) }}
+          name: ${{ matrix.r4a_startup && format('r4a-startup-api32-{0}-run{1}-attempt{2}', env.CANDIDATE_SHA, github.run_id, github.run_attempt) || inputs.startup_only && format('q4-startup-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || (inputs.candidate_sha != '' && format('q4-api{0}-trial{1}-{2}-run{3}-attempt{4}', matrix.api, inputs.trial, env.CANDIDATE_SHA, github.run_id, github.run_attempt) || format('ap02-f2-native-device-api{0}-{1}', matrix.api, env.CANDIDATE_SHA)) }}
           path: |
             ap02-device-evidence/result.json
             ap02-device-evidence/appium-pilot.json

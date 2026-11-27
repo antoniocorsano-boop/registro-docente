@@ -29,8 +29,23 @@ check_delta "$diagnostics" "$r3" \
   scripts/diagnostics/android-r3-admission.sh \
   scripts/diagnostics/appium-pilot/contract.test.mjs \
   scripts/diagnostics/val01-native-evidence.mjs
-check_delta "$r3" "$CANDIDATE_SHA" \
+r3a=5e725e2d9241e03f3e04fb4372dda617bc4a2606
+check_delta "$r3" "$r3a" \
   .github/workflows/val01-native-evidence.yml \
   scripts/diagnostics/android-r3-admission.sh \
   scripts/diagnostics/appium-pilot/contract.test.mjs \
   scripts/diagnostics/val01-native-evidence.mjs
+if test "$CANDIDATE_SHA" != "$r3a"; then
+  test "${1:-}" = --allow-r4a
+  check_delta "$r3a" "$CANDIDATE_SHA" \
+    .github/workflows/ap02-f2-native-device.yml \
+    .github/workflows/qa-appium-replacement-pilot.yml \
+    qualification/invariants.v1.json \
+    scripts/diagnostics/android-r3-admission.sh \
+    scripts/diagnostics/ap02-native-device-v7.mjs \
+    scripts/diagnostics/native-lab-readiness.mjs \
+    scripts/diagnostics/native-lab-runtime.test.mjs \
+    src/components/SecureRegistroRoot.tsx \
+    src/components/VaultGate.tsx \
+    src/security/gateActionDiagnostic.ts
+fi
