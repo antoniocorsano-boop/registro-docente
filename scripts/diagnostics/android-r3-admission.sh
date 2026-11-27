@@ -37,7 +37,29 @@ check_delta "$r3" "$r3a" \
   scripts/diagnostics/val01-native-evidence.mjs
 if test "$CANDIDATE_SHA" != "$r3a"; then
   test "${1:-}" = --allow-r4a
-  check_delta "$r3a" "$CANDIDATE_SHA" \
+  r4a=b142cc03a8d6b90ee93ec93045e7455ce34639d8
+  r4a_head="$CANDIDATE_SHA"
+  if test "$CANDIDATE_SHA" != "$r4a" && git merge-base --is-ancestor "$r4a" "$CANDIDATE_SHA"; then
+    r4a_head="$r4a"
+    check_delta "$r4a" "$CANDIDATE_SHA" \
+      .github/workflows/behavior-integrity-qualification.yml \
+      .github/workflows/mobile-density-02-qualification.yml \
+      .github/workflows/nav-context-01-isolated-qualification.yml \
+      scripts/diagnostics/android-r3-admission.sh
+    # Tree entries from the qualified PR #393 head (929594d).
+    expected=$(cat <<'EOF'
+100644 blob d0205c714ef623348cf398c411f81d0f5c387461	.github/workflows/behavior-integrity-qualification.yml
+100644 blob 8443ac7dcd15e2703812051cfe34bcbcf4e74ce6	.github/workflows/mobile-density-02-qualification.yml
+100644 blob eb366d463f3ab62bf1ad81c80820ab6680d5e1a0	.github/workflows/nav-context-01-isolated-qualification.yml
+EOF
+)
+    actual=$(git ls-tree "$CANDIDATE_SHA" -- \
+      .github/workflows/behavior-integrity-qualification.yml \
+      .github/workflows/mobile-density-02-qualification.yml \
+      .github/workflows/nav-context-01-isolated-qualification.yml)
+    test "$actual" = "$expected"
+  fi
+  check_delta "$r3a" "$r4a_head" \
     .github/workflows/ap02-f2-native-device.yml \
     .github/workflows/qa-appium-replacement-pilot.yml \
     qualification/invariants.v1.json \
