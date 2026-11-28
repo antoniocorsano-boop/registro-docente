@@ -29,11 +29,22 @@ test('Appium preflight exact and isolated before emulators',()=>{
   assert.match(workflow,/go run github\.com\/rhysd\/actionlint/);
   assert.ok(!workflow.includes('${{ runner.temp }}'));
   assert.ok(workflow.includes('export APPIUM_HOME="$RUNNER_TEMP/appium-q5"'));
-  const sdk = workflow.indexOf("packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'");
+  const sdk = workflow.indexOf("packages: 'platform-tools platforms;android-36 build-tools;35.0.0 build-tools;36.0.0 emulator'");
   const emulator = workflow.indexOf('test -x "$ANDROID_HOME/emulator/emulator"');
   const doctor = workflow.indexOf('appium driver doctor uiautomator2');
   assert.ok(sdk>=0&&sdk<emulator&&emulator<doctor&&doctor<workflow.indexOf('bun run build'));
   assert.match(workflow,/api: \[32, 36\]/);
+});
+test('Generated Android projects use the locked npm graph and verified wrapper before Gradle',()=>{
+  for(const name of ['mobile-01-android-probe','ap02-f2-native-device','qa-appium-replacement-pilot','val01-native-evidence']){
+    const source=readFileSync(`.github/workflows/${name}.yml`,'utf8');
+    const install=source.indexOf('probe-npm.sh');
+    const sync=source.indexOf('npx --no-install cap sync android');
+    const prepare=source.indexOf('python3 build-contract.py prepare');
+    const gradle=[...source.matchAll(/bash \.\/gradlew[^\n]*/g)];
+    assert.ok(install>=0&&install<sync&&sync<prepare&&gradle.length>0, name);
+    assert.ok(gradle.every(call=>call.index>prepare&&call[0].includes('--dependency-verification strict')), name);
+  }
 });
 test('pinned direct versions and non-release evidence',()=>{
   for(const x of ['appium@3.8.0','uiautomator2@8.6.0','Appium-Python-Client==6.1.2','.fullF2Qualified==false','.status=="PASS"'])assert.ok(workflow.includes(x),x);

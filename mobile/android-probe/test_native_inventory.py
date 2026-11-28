@@ -387,5 +387,80 @@ tasks.register('assembleRelease')
             })
 
 
+class BuildContractTest(unittest.TestCase):
+    def setUp(self):
+        from importlib import import_module
+        import shutil
+
+        self.contract = import_module("build-contract")
+        self.inventory = import_module("verify-build-inventory")
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.probe = Path(directory.name)
+        for name in ("package.json", "package-lock.json"):
+            shutil.copyfile(Path(__file__).with_name(name), self.probe / name)
+
+    def test_lock_missing_and_incoherent(self):
+        lock = self.probe / "package-lock.json"
+        self.contract.check_lock(self.probe)
+        value = json.loads(lock.read_text())
+        value["packages"]["node_modules/@capacitor/cli"]["version"] = "8.6.1"
+        lock.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError, "direct version"):
+            self.contract.check_lock(self.probe)
+        lock.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.contract.check_lock(self.probe)
+
+    def test_wrapper_version_checksum_binary_and_duplicate(self):
+        import shutil
+
+        android = self.probe / "android"
+        for name, path in self.contract.wrapper_paths(android).items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.contract.ROOT / "gradle-8.14.8" / name, path)
+        pins = android / "gradle/wrapper/gradle-wrapper.properties"
+        valid = (f"distributionUrl={self.contract.URL}\nvalidateDistributionUrl=true\n"
+                 f"distributionSha256Sum={self.contract.DISTRIBUTION_SHA}\n")
+        pins.write_text(valid)
+        self.contract.check_wrapper(android)
+        for bad, message in [
+            (valid.replace(self.contract.URL, self.contract.TEMPLATE_URL), "URL/version"),
+            (valid.replace(self.contract.DISTRIBUTION_SHA, "0" * 64), "distribution checksum"),
+            (valid.split("distributionSha256Sum")[0], "distribution checksum"),
+            (valid + "distributionUrl=unexpected\n", "duplicate wrapper property"),
+        ]:
+            pins.write_text(bad)
+            with self.assertRaisesRegex(ValueError, message):
+                self.contract.check_wrapper(android)
+        pins.write_text(valid)
+        self.contract.wrapper_paths(android)["gradle-wrapper.jar"].write_bytes(b"invalid")
+        with self.assertRaisesRegex(ValueError, "wrapper checksum"):
+            self.contract.check_wrapper(android)
+
+    def test_npm_graph_missing_or_discordant(self):
+        lock = self.contract.read_json(self.probe / "package-lock.json")
+        with self.assertRaisesRegex(ValueError, "Incomplete npm"):
+            self.inventory.npm_graph({}, lock)
+        with self.assertRaisesRegex(ValueError, "absent from lock"):
+            self.inventory.npm_graph({"dependencies": {"@capacitor/core": {"version": "0.0.0"}}}, lock)
+
+    def test_build_inventory_rejects_wrong_source_and_apk(self):
+        lock = self.contract.read_json(self.probe / "package-lock.json")
+        apk = self.probe / "synthetic.apk"
+        apk.write_bytes(b"synthetic")
+        runtime = {"source_sha": SOURCE, "apk_sha256": self.contract.digest(apk)}
+        gradle = {"source_sha": "b" * 40, "apk_sha256": runtime["apk_sha256"]}
+        with self.assertRaisesRegex(ValueError, "source mismatch"):
+            self.inventory.verify(runtime, gradle, apk, {}, lock)
+        gradle.update(source_sha=SOURCE, apk_sha256="0" * 64)
+        with self.assertRaisesRegex(ValueError, "APK mismatch"):
+            self.inventory.verify(runtime, gradle, apk, {}, lock)
+        gradle.update(apk_sha256=runtime["apk_sha256"], gradle="8.14.8", classpaths=[])
+        runtime["toolchain"] = {"gradle": "8.14.8", "agp": "8.13.0"}
+        with self.assertRaisesRegex(ValueError, "Missing root Gradle"):
+            self.inventory.verify(runtime, gradle, apk, {}, lock)
+
+
 if __name__ == "__main__":
     unittest.main()

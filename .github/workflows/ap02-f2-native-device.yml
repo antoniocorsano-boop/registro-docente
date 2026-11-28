@@ -135,7 +135,7 @@ jobs:
           java-version: '21'
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 emulator'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 build-tools;36.0.0 emulator'
       - name: Install isolated open-source automation stack
         if: ${{ env.USE_HYBRID == 'true' }}
         shell: bash
@@ -162,10 +162,11 @@ jobs:
           bun run build
           test -s dist/index.html
           test -s dist/assets/$(ls dist/assets | head -n1)
-          npm install --prefix mobile/android-probe --no-audit --no-fund --package-lock=false
+          bash mobile/android-probe/probe-npm.sh install
           cd mobile/android-probe
           npx --no-install cap add android
           npx --no-install cap sync android
+          python3 build-contract.py prepare
           node prepare-native-back.mjs
           native=android/app/src/main/java/it/trama/registrodocente/prova
           cp native/*.java "$native/"
@@ -184,7 +185,7 @@ jobs:
           change('src/main/AndroidManifest.xml',r'android:allowBackup="true"',
                  'android:allowBackup="false" android:fullBackupContent="false"')
           PY
-          (cd android; bash ./gradlew --no-daemon assembleDebug)
+          (cd android; bash ./gradlew --no-daemon --dependency-verification strict assembleDebug)
           apk="$RUNNER_TEMP/ap02-f2-device-lab.apk"
           cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/ap02-cert.txt"

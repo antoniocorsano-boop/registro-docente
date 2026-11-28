@@ -78,13 +78,13 @@ jobs:
       - name: Set up Android SDK 36
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 build-tools;36.0.0'
 
       - name: Install isolated, pinned Capacitor dependencies
         shell: bash
         run: |
           set -euo pipefail
-          npm install --prefix "$PROBE_DIR" --no-audit --no-fund --package-lock=false
+          bash "$PROBE_DIR/probe-npm.sh" install
           node -e "const p=require('./mobile/android-probe/node_modules/@capacitor/cli/package.json'); if (p.version !== '8.6.0') process.exit(2)"
           node -e "const p=require('./mobile/android-probe/node_modules/@capacitor/android/package.json'); if (p.version !== '8.6.0') process.exit(2)"
 
@@ -95,6 +95,7 @@ jobs:
           set -euo pipefail
           npx --no-install cap add android
           npx --no-install cap sync android
+          python3 build-contract.py prepare
           test -f android/gradlew
           test -f android/app/src/main/AndroidManifest.xml
           node --check prepare-native-back.mjs
@@ -112,7 +113,7 @@ jobs:
         working-directory: mobile/android-probe/android
         run: |
           set -euo pipefail
-          bash ./gradlew --no-daemon assembleDebug
+          bash ./gradlew --no-daemon --dependency-verification strict assembleDebug
 
       - name: Verify APK, debug signature and hashes
         shell: bash
@@ -194,9 +195,9 @@ jobs:
         working-directory: mobile/android-probe/android
         run: |
           set -euo pipefail
-          rm -f ../native-inventory-raw.json ../native-inventory.json ../native-inventory.txt
-          bash ./gradlew --no-daemon --init-script ../native-inventory.init.gradle \
-            assembleRelease :app:captureReleaseNativeInventory
+          rm -f ../native-inventory-raw.json ../native-inventory.json ../native-inventory.txt ../native-build-gradle.json ../native-build-inventory.json
+          bash ./gradlew --no-daemon --dependency-verification strict --init-script ../native-inventory.init.gradle \
+            --init-script ../build-inventory.init.gradle assembleRelease :app:captureNativeBuildInventory
 
       - name: Verify unsigned Beta package and provenance
         shell: bash
@@ -261,6 +262,13 @@ jobs:
             "$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk" \
             "$PROBE_DIR/beta-unsigned-manifest.txt" \
             "$PROBE_DIR/native-inventory.json" "$PROBE_DIR/native-inventory.txt"
+          npm_tree=$(mktemp)
+          trap 'rm -f "$npm_tree"' EXIT
+          bash "$PROBE_DIR/probe-npm.sh" inventory > "$npm_tree"
+          python3 "$PROBE_DIR/verify-build-inventory.py" \
+            "$PROBE_DIR/native-inventory.json" "$PROBE_DIR/native-build-gradle.json" \
+            "$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk" \
+            "$npm_tree" "$PROBE_DIR/native-build-inventory.json"
 
       - name: Upload unsigned Beta candidate only — no private key or release
         uses: actions/upload-artifact@v4
@@ -272,6 +280,7 @@ jobs:
             mobile/android-probe/beta-unsigned-manifest.txt
             mobile/android-probe/native-inventory.json
             mobile/android-probe/native-inventory.txt
+            mobile/android-probe/native-build-inventory.json
             mobile/android-probe/beta-identity.json
             mobile/android-probe/sign-beta-locally.sh
           if-no-files-found: error

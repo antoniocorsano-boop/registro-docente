@@ -41,7 +41,31 @@ if test "$CANDIDATE_SHA" != "$r3a"; then
   r4a_head="$CANDIDATE_SHA"
   if test "$CANDIDATE_SHA" != "$r4a" && git merge-base --is-ancestor "$r4a" "$CANDIDATE_SHA"; then
     r4a_head="$r4a"
-    check_delta "$r4a" "$CANDIDATE_SHA" \
+    gov=1b83f6364985b89cdbd89b73e6c382bd6300f655
+    gov_head="$CANDIDATE_SHA"
+    if test "$CANDIDATE_SHA" != "$gov" && git merge-base --is-ancestor "$gov" "$CANDIDATE_SHA"; then
+      gov_head="$gov"
+      check_delta "$gov" "$CANDIDATE_SHA" \
+        .github/workflows/ap02-f2-native-device.yml \
+        .github/workflows/mobile-01-android-probe.yml \
+        .github/workflows/qa-appium-replacement-pilot.yml \
+        .github/workflows/val01-native-evidence.yml \
+        mobile/android-probe/.gitignore \
+        mobile/android-probe/build-contract.py \
+        mobile/android-probe/build-inventory.init.gradle \
+        mobile/android-probe/gradle-8.14.8/.gitattributes \
+        mobile/android-probe/gradle-8.14.8/gradle-wrapper.jar \
+        mobile/android-probe/gradle-8.14.8/gradlew \
+        mobile/android-probe/gradle-8.14.8/gradlew.bat \
+        mobile/android-probe/package-lock.json \
+        mobile/android-probe/probe-npm.sh \
+        mobile/android-probe/test_native_inventory.py \
+        mobile/android-probe/verification-metadata.xml \
+        mobile/android-probe/verify-build-inventory.py \
+        scripts/diagnostics/android-r3-admission.sh \
+        scripts/diagnostics/appium-pilot/contract.test.mjs
+    fi
+    check_delta "$r4a" "$gov_head" \
       .github/workflows/behavior-integrity-qualification.yml \
       .github/workflows/mobile-density-02-qualification.yml \
       .github/workflows/nav-context-01-isolated-qualification.yml \
@@ -53,7 +77,7 @@ if test "$CANDIDATE_SHA" != "$r3a"; then
 100644 blob eb366d463f3ab62bf1ad81c80820ab6680d5e1a0	.github/workflows/nav-context-01-isolated-qualification.yml
 EOF
 )
-    actual=$(git ls-tree "$CANDIDATE_SHA" -- \
+    actual=$(git ls-tree "$gov_head" -- \
       .github/workflows/behavior-integrity-qualification.yml \
       .github/workflows/mobile-density-02-qualification.yml \
       .github/workflows/nav-context-01-isolated-qualification.yml)
