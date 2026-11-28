@@ -1,8 +1,32 @@
-import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
+import React, { useEffect, useRef, useState } from 'react';
+import { STUDENT_IMPORT_LIMITS, studentImportFormat, type StudentImportFormat } from './studentImportLimits';
 import { ClassData, Student } from '../types';
-import { formatStudentNameWithPrivacy, sanitizeName, sortStudents, uid } from '../utils';
-import { Users, UserPlus, Upload, RefreshCw, Trash2, FileSpreadsheet } from 'lucide-react';
+import { formatStudentNameWithPrivacy, sanitizeName, uid } from '../utils';
+import { Users, UserPlus, RefreshCw, Trash2, FileSpreadsheet } from 'lucide-react';
+
+function readRosterOffThread(
+  buffer: ArrayBuffer, format: StudentImportFormat, existingNames: string[], signal: AbortSignal
+): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) { reject(); return; }
+    const worker = new Worker(new URL('./studentImport.worker.ts', import.meta.url), { type: 'module' });
+    const finish = (names?: string[]) => {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', abort);
+      worker.terminate();
+      if (names) resolve(names);
+      else reject();
+    };
+    const abort = () => finish();
+    const timeout = window.setTimeout(abort, 10_000);
+    signal.addEventListener('abort', abort, { once: true });
+    worker.onmessage = ({ data }) => finish(data.names);
+    worker.onerror = event => { event.preventDefault(); finish(); };
+    worker.onmessageerror = abort;
+    try { worker.postMessage({ buffer, format, existingNames }, [buffer]); }
+    catch { finish(); }
+  });
+}
 
 interface StudentsManagementViewProps {
   currentClass: ClassData;
@@ -24,6 +48,15 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const [newStudentName, setNewStudentName] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isStudentMutationPending, setIsStudentMutationPending] = useState(false);
+
+  const importJob = useRef<AbortController | null>(null);
+  useEffect(() => {
+    setIsImporting(false);
+    return () => {
+      importJob.current?.abort();
+      importJob.current = null;
+    };
+  }, [currentClass.id]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,72 +96,56 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     }
   };
 
-  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || importJob.current || isStudentMutationPending) return;
 
+    let format: StudentImportFormat;
+    try {
+      format = studentImportFormat(file.name, file.size);
+    } catch {
+      e.target.value = '';
+      alert('Seleziona un file XLS, XLSX o CSV non vuoto, fino a 2 MB.');
+      return;
+    }
+
+    const job = new AbortController();
+    importJob.current = job;
     setIsImporting(true);
-    const reader = new FileReader();
+    try {
+      const names = await readRosterOffThread(
+        await file.arrayBuffer(), format, currentClass.students.map(student => student.name), job.signal
+      );
+      if (job.signal.aborted) return;
+      if (names.length === 0) {
+        alert('Nessun nuovo nominativo valido nel file.');
+        return;
+      }
+      const count = names.length === 1 ? '1 nuovo nominativo' : `${names.length} nuovi nominativi`;
+      if (!confirm(`Aggiungere ${count} alla classe ${currentClass.name}?`)) return;
 
-    reader.onload = async (event) => {
+      const imported = names.map(name => ({ id: uid(), name }));
       try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-        const imported: Student[] = [];
-        const existingNames = new Set(currentClass.students.map(s => s.name.toLowerCase()));
-
-        rows.forEach(row => {
-          if (!Array.isArray(row)) return;
-          // Find text cell with Italian alphabet / surname-name
-          const textCell = row.find(cell => typeof cell === 'string' && /[A-Za-zÀ-ÿ]{2}/.test(cell));
-          if (textCell) {
-            const clean = sanitizeName(textCell);
-            if (clean && clean.length > 3 && !clean.toLowerCase().includes('cognome') && !clean.toLowerCase().includes('nome')) {
-              if (!existingNames.has(clean.toLowerCase())) {
-                imported.push({ id: uid(), name: clean });
-                existingNames.add(clean.toLowerCase());
-              }
-            }
-          }
-        });
-
-        if (imported.length > 0) {
-          if (isStudentMutationPending) return;
-          setIsStudentMutationPending(true);
-          try {
-            const addedCount = await onBulkAddStudents(imported);
-            if (addedCount > 0) {
-              alert(`Importazione completata con successo! Aggiunti ${addedCount} nuovi alunni.`);
-            } else {
-              alert('Nessun nuovo alunno aggiunto: i nominativi erano già presenti.');
-            }
-          } catch {
-            return;
-          } finally {
-            setIsStudentMutationPending(false);
-          }
-        } else {
-          alert('Nessun nominativo valido trovato nel file Excel/CSV.');
-        }
-      } catch (err) {
-        console.error('Error importing file', err);
-        alert('Errore durante la lettura del file Excel/CSV.');
-      } finally {
-        e.target.value = '';
+        const addedCount = await onBulkAddStudents(imported);
+        if (job.signal.aborted) return;
+        alert(addedCount > 0
+          ? `Importazione completata con successo! Aggiunti ${addedCount} nuovi alunni.`
+          : 'Nessun nuovo alunno aggiunto: i nominativi erano già presenti.');
+      } catch {
+        if (!job.signal.aborted) alert('Importazione non salvata. Riprova.');
+        return;
+      }
+    } catch {
+      if (!job.signal.aborted) {
+        alert(`Importazione non completata. Verifica che il file sia leggibile e che il primo foglio non superi ${STUDENT_IMPORT_LIMITS.rows} righe.`);
+      }
+    } finally {
+      e.target.value = '';
+      if (importJob.current === job) {
+        importJob.current = null;
         setIsImporting(false);
       }
-    };
-
-    reader.onerror = () => {
-      setIsImporting(false);
-      alert('Errore durante la lettura del file Excel/CSV.');
-    };
-
-    reader.readAsArrayBuffer(file);
+    }
   };
 
   return (
@@ -230,7 +247,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   type="button"
                   disabled={isImporting || isStudentMutationPending}
                   onClick={() => {
-                    if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" e tutte le sue valutazioni da questa classe?`)) {
+                    if (confirm(`Rimuovere l'alunno "${formatStudentNameWithPrivacy(student.name, isPrivacyShieldActive)}" dalla classe? Se sono presenti valutazioni o evidenze storiche, la rimozione sarà bloccata per conservarle.`)) {
                       void handleRemoveStudent(student.id);
                     }
                   }}

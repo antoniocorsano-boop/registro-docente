@@ -1,0 +1,154 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+import org.gradle.api.attributes.Category
+
+import java.security.MessageDigest
+
+String sha256(File file) {
+    def digest = MessageDigest.getInstance('SHA-256')
+    file.withInputStream { stream ->
+        byte[] buffer = new byte[65536]
+        int count
+        while ((count = stream.read(buffer)) != -1) {
+            digest.update(buffer, 0, count)
+        }
+    }
+    digest.digest().encodeHex().toString()
+}
+
+String componentId(def identifier) {
+    if (identifier instanceof ModuleComponentIdentifier) {
+        return "${identifier.group}:${identifier.module}:${identifier.version}"
+    }
+    identifier.displayName
+}
+
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.project(':app')
+    def incoming = app.configurations.getByName('releaseRuntimeClasspath').incoming
+    // Both strict views retain the variant graph selected by releaseRuntimeClasspath.
+    // AGP 8.13 publishes its full inter-project runtime JAR as artifactType=jar;
+    // an AAR is a publication artifact, not the default inter-project output.
+    def projectArtifacts = incoming.artifactView {
+        componentFilter { it instanceof ProjectComponentIdentifier }
+        attributes { attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, 'jar') }
+    }.artifacts
+    // Keep the original artifact of each selected published variant (AAR or JAR,
+    // including KMP targets). Platforms legitimately supply no runtime file.
+    def moduleArtifacts = incoming.artifactView {
+        componentFilter { it instanceof ModuleComponentIdentifier }
+    }.artifacts
+    app.tasks.register('captureReleaseNativeInventory') {
+        // No outputs are declared for Gradle caching. This receipt belongs to this invocation.
+        dependsOn 'assembleRelease'
+        dependsOn projectArtifacts.artifactFiles
+        doLast {
+            def androidRoot = app.rootProject.projectDir
+            def probeDir = androidRoot.parentFile
+            def apk = app.layout.buildDirectory.file('outputs/apk/release/app-release-unsigned.apk').get().asFile
+            def resolution = incoming.resolutionResult
+            def components = resolution.allComponents.collect { component ->
+                def identity = component.id
+                def row = [
+                    id: componentId(identity),
+                    selected_variants: component.variants.collect { it.displayName }.unique().sort(),
+                    categories: component.variants.collect {
+                        it.attributes.getAttribute(Category.CATEGORY_ATTRIBUTE)?.name
+                    }.findAll().unique().sort()
+                ]
+                if (identity instanceof ModuleComponentIdentifier) {
+                    return row + [kind: 'module', group: identity.group, module: identity.module,
+                                  version: identity.version]
+                }
+                if (identity instanceof ProjectComponentIdentifier) {
+                    return row + [kind: 'project', path: identity.projectPath]
+                }
+                throw new GradleException("Unsupported runtime component: ${identity.displayName}")
+            }.sort { it.id }
+            def edges = []
+            def unresolved = []
+            resolution.allDependencies.each { edge ->
+                def requested = [from: componentId(edge.from.id), requested: edge.requested.displayName,
+                                 constraint: edge.constraint]
+                if (edge instanceof ResolvedDependencyResult) {
+                    edges << requested + [selected: componentId(edge.selected.id), selected_variant: edge.resolvedVariant.displayName]
+                } else if (edge instanceof UnresolvedDependencyResult) {
+                    unresolved << requested + [attempted: edge.attempted.displayName]
+                } else {
+                    throw new GradleException("Unsupported runtime dependency edge: ${edge.requested}")
+                }
+            }
+            if (!unresolved.isEmpty()) {
+                throw new GradleException("Unresolved releaseRuntimeClasspath dependencies: " +
+                    unresolved.collect { it.attempted }.unique().sort().join(', '))
+            }
+            // Gradle Module Metadata available-at can leave the selected wrapper
+            // in the graph while the selected external variant owns the bytes.
+            def artifactDelegations = resolution.allComponents.collectMany { component ->
+                component.variants.findAll { it.externalVariant.present }.collect { variant ->
+                    def target = variant.externalVariant.get()
+                    if (!(component.id instanceof ModuleComponentIdentifier) ||
+                        !(target.owner instanceof ModuleComponentIdentifier) ||
+                        !component.getDependenciesForVariant(variant).any { edge ->
+                            edge instanceof ResolvedDependencyResult && !edge.constraint &&
+                                edge.selected.id == target.owner && edge.resolvedVariant.displayName == target.displayName
+                        }) {
+                        throw new GradleException("Unverified external variant for ${component.id}: ${variant.displayName}")
+                    }
+                    [from: componentId(component.id), variant: variant.displayName,
+                     to: componentId(target.owner), target_variant: target.displayName]
+                }
+            }.sort { row -> [row.from, row.variant].join("\n") }
+            def artifacts = (projectArtifacts.artifacts + moduleArtifacts.artifacts).collect { artifact ->
+                def file = artifact.file
+                if (!file.isFile()) {
+                    throw new GradleException("Cannot hash runtime artifact: ${artifact.id.displayName}")
+                }
+                def identity = artifact.id.componentIdentifier
+                [component: componentId(identity), file: file.name, size: file.length(),
+                 representation: identity instanceof ProjectComponentIdentifier ? 'project-runtime-jar' : 'published-variant',
+                 sha256: sha256(file), variant: artifact.variant.displayName,
+                 attributes: artifact.variant.attributes.keySet().collectEntries { key ->
+                     [(key.name): artifact.variant.attributes.getAttribute(key).toString()]
+                 }.sort()]
+            }.sort { row -> [row.component, row.file, row.variant, row.sha256].join("\n") }
+
+            def android = app.extensions.getByName('android')
+            def agp = app.extensions.getByName('androidComponents').pluginVersion
+            def installed = { String name ->
+                new JsonSlurper().parse(new File(probeDir, "node_modules/@capacitor/${name}/package.json")).version
+            }
+            def inputNames = [
+                'app/build.gradle', 'settings.gradle', 'build.gradle', 'variables.gradle',
+                'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties',
+                'app/capacitor.build.gradle', 'capacitor.settings.gradle',
+                '../package.json', '../beta-identity.json', '../native-inventory.init.gradle',
+                '../verify-native-inventory.py', '../../../bun.lock'
+            ]
+            def report = [
+                schema: 1, configuration: ':app:releaseRuntimeClasspath',
+                source_sha: System.getenv('SOURCE_SHA'), apk_sha256: sha256(apk),
+                build: [run_id: System.getenv('GITHUB_RUN_ID'), run_attempt: System.getenv('GITHUB_RUN_ATTEMPT'),
+                        job: System.getenv('GITHUB_JOB')],
+                root: componentId(resolution.root.id), components: components,
+                edges: edges.sort { row -> [row.from, row.requested, row.selected, row.constraint].join("\n") },
+                unresolved: unresolved, artifacts: artifacts, artifact_delegations: artifactDelegations,
+                inputs: inputNames.sort().collect { name ->
+                    [file: name, sha256: sha256(new File(androidRoot, name))]
+                },
+                toolchain: [java: System.getProperty('java.runtime.version'), gradle: gradle.gradleVersion,
+                            agp: "${agp.major}.${agp.minor}.${agp.micro}".toString(),
+                            compile_sdk: android.compileSdk.toString(), build_tools: android.buildToolsVersion,
+                            capacitor_android: installed('android'), capacitor_core: installed('core'),
+                            capacitor_cli: installed('cli')]
+            ]
+            new File(probeDir, 'native-inventory-raw.json').setText(
+                JsonOutput.prettyPrint(JsonOutput.toJson(report)) + '\n', 'UTF-8')
+        }
+    }
+}

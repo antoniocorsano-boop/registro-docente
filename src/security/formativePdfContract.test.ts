@@ -6,7 +6,9 @@ describe('S3 protected family PDF boundaries',()=>{
     expect(renderer).toContain('model: FormativeRestitution, draft: RestitutionDraft');
     expect(renderer).toContain('emitted!==model.rows.length');
     expect(renderer).toContain('pdf.setProperties');
-    expect(renderer).toContain('pdf.deletePage(1)');
+    expect(renderer).toContain('const pdf=createLocalPdf()');
+    expect(renderer).not.toContain('pdf.deletePage(1)');
+    expect(renderer).not.toContain('html2pdf()');
     expect(renderer).not.toContain('querySelector');
     expect(renderer).not.toContain('studentId');
     expect(renderer).not.toContain('.toCanvas()');

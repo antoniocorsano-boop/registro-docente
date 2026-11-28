@@ -221,13 +221,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     });
   }
 
-  // Official PDF export using html2pdf
+  // Both browser and Android export the same selectable-text work report.
   const handleExportPDF = async () => {
     if (exportInProgress.current) return;
     const android = isAndroidBackupRuntime();
     const element = document.getElementById('official-pdf-report');
-    if (android && !window.confirm('Il PDF è un documento di lavoro non cifrato. Salvalo in una cartella locale protetta e non condividerlo con persone non autorizzate. Continuare?')) return;
-    if (android && !element) {
+    if (!window.confirm('Il PDF è un documento di lavoro non cifrato. Salvalo in una cartella locale protetta e non condividerlo con persone non autorizzate. Continuare?')) return;
+    if (!element) {
       alert('Prospetto non disponibile.');
       return;
     }
@@ -246,29 +246,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         if (result === 'verified' && isActive()) alert('PDF di lavoro salvato e verificato nella cartella scelta.');
         return;
       }
-      if (!element) {
-        window.print();
-        return;
+      const bytes = await renderWorkPdf(element);
+      if (!isActive()) return;
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Prospetto_Lavoro_${new Date().toISOString().slice(0, 10)}.pdf`;
+        link.click();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
       }
-      if (typeof html2pdf !== 'undefined') {
-        const opt = {
-          margin: 10,
-          filename: `Prospetto_Lavoro_${currentClass.name.replace(/\s+/g, '_')}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        await (html2pdf() as any).set(opt).from(element).save();
-      } else {
-        window.print();
-      }
-    } catch (e) {
-      if (android) {
-        if (isActive()) alert('PDF non salvato o non verificato. Controlla la cartella e riprova.');
-      } else {
-        console.error('PDF generation error', e);
-        window.print();
-      }
+    } catch {
+      if (isActive()) alert('PDF non salvato o non verificato. Controlla la cartella e riprova.');
     } finally {
       exportInProgress.current = false;
       if (exportMounted.current) setIsExporting(false);
@@ -840,7 +830,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         </div>
       </div>
 
-      {/* Hidden printable template used by html2pdf and print */}
+      {/* Privacy-aware document source for local text PDF rendering. */}
       <div id="official-pdf-report" className="hidden print:block p-8 bg-white text-black font-sans text-xs">
         <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start">
           <div>

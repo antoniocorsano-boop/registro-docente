@@ -6,6 +6,7 @@ import type {AppData,ClassData} from '../types';
 import type {AssessmentScopeV1,IndividualEvidenceRevision} from './assessmentEvidence';
 import {validateAssessmentArchiveV1,type AssessmentArchiveV1,type ApprovedAssessmentScope} from './assessmentArchive';
 import {snapshotAssessmentData} from './assessmentRevisionBindings';
+import {selectUniqueAssessmentDocument} from './assessmentSubjectScope';
 import {confirmIndividualObservation,type IndividualObservationPreview} from './individualObservation';
 import {confirmEvidenceRevision,type EvidenceRevisionPreview} from './individualEvidenceRevision';
 
@@ -38,6 +39,8 @@ export function deriveConfirmedEvidenceMutation(
   const cls=app.classes.find(c=>c.id===expected.classId) as EvidenceClass|undefined;
   if(!cls||!rosterMatches(cls.students.map(s=>s.id),expected.studentIds))throw reject();
   const envelope=cls.assessmentEvidenceV1;
+  const selected=selectUniqueAssessmentDocument(envelope?.documents.map(s=>s.document)??[],expected);
+  if(!selected||selected.subjectCode!==expected.subjectCode)throw reject();
   const index=envelope?.documents.findIndex(s=>sameScope(s.document,expected))??-1;
   if(!envelope||index<0)throw reject(); // never create or migrate a document
   const section=envelope.documents[index];

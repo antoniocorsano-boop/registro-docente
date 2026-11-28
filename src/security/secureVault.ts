@@ -18,6 +18,7 @@ export interface VaultWriteEntry {
 
 export class SecureVault {
   private sessionDek: CryptoKey | null = null;
+  private initialReservation: VaultMetadataV1 | null = null;
   private mutationTail: Promise<void> = Promise.resolve();
 
   constructor(
@@ -78,8 +79,11 @@ export class SecureVault {
     };
 
     assertAuthorized?.();
-    if (this.reserveInitial) await this.reserveInitial(metadata);
-    else await this.store.putMetadata(metadata);
+    if (this.reserveInitial) {
+      const reservation = structuredClone(metadata);
+      await this.reserveInitial(metadata);
+      this.initialReservation = reservation;
+    } else await this.store.putMetadata(metadata);
     this.sessionDek = dek;
   }
 
@@ -111,6 +115,7 @@ export class SecureVault {
   }
 
   lock(): void {
+    this.initialReservation = null;
     this.sessionDek = null;
   }
 
@@ -158,6 +163,26 @@ export class SecureVault {
   async activate(assertAuthorized?: () => void, onCommitInvoked?: () => void): Promise<void> {
     assertAuthorized?.();
     this.requireUnlocked();
+    if (this.reserveInitial && this.store.activateReservedMetadata && this.store.discardReservedMetadata) {
+      const reservation = this.initialReservation;
+      if (!reservation) throw new Error('Riserva iniziale non disponibile.');
+      let invoked = false;
+      try {
+        await this.store.activateReservedMetadata(reservation, () => {
+          assertAuthorized?.();
+          this.requireUnlocked();
+          if (this.initialReservation !== reservation) throw new Error('Riserva iniziale non più attuale.');
+        }, () => {
+          invoked = true;
+          onCommitInvoked?.();
+        });
+      } finally {
+        // Once ACTIVE was attempted, only the store's confirmed-abort path
+        // may discard the reservation. A generic later catch cannot do so.
+        if (invoked) this.initialReservation = null;
+      }
+      return;
+    }
     const metadata = await this.store.getMetadata();
     if (!metadata) {
       throw new Error('Secure Local Vault non configurato.');
@@ -205,6 +230,17 @@ export class SecureVault {
   }
 
   async discardStaging(): Promise<void> {
+    if (this.reserveInitial && this.store.discardReservedMetadata) {
+      const reservation = this.initialReservation;
+      try {
+        if (!reservation || !await this.store.discardReservedMetadata(reservation)) {
+          throw new Error('Riserva iniziale non eliminabile: proprietà non attestata o vault ACTIVE.');
+        }
+      } finally {
+        this.lock();
+      }
+      return;
+    }
     const metadata = await this.store.getMetadata();
     if (!metadata) {
       this.lock();

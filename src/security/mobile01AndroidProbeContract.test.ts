@@ -39,11 +39,11 @@ describe('MOBILE-01/S0 isolated Android probe governance', () => {
     expect(yml).toContain('sha256sum');
     // The APK must actually contain the offline PDF resources: a Vite build
     // without these assets is not sufficient evidence for Android M1.
-    expect(yml).toContain('test -s dist/vendor/html2pdf.bundle.min.js');
-    expect(yml).toContain('test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt');
-    expect(yml).toContain("assets/public/vendor/html2pdf.bundle.min.js'");
-    expect(yml).toContain('cmp - dist/vendor/html2pdf.bundle.min.js');
-    expect(yml).toContain('cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt');
+    expect(yml).toContain('test -s dist/vendor/jspdf.umd.min.js');
+    expect(yml).toContain('test -s dist/vendor/jspdf.LICENSE.txt');
+    expect(yml).toContain("assets/public/vendor/jspdf.umd.min.js'");
+    expect(yml).toContain('cmp - dist/vendor/jspdf.umd.min.js');
+    expect(yml).toContain('cmp - dist/vendor/jspdf.LICENSE.txt');
     expect(yml).toContain('pdf_offline_bundle_present=true');
     expect(yml).toContain('android_pdf_file_save_qualified=false');
     expect(yml).toContain('remote_fonts_required=false');

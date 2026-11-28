@@ -142,3 +142,58 @@ test('M2c actual Analisi report renders offline and requires verified native rec
   expect(external).toEqual([]);
   page.off('dialog', handler);
 });
+
+
+test('browser Analisi downloads a real masked local text PDF only after confirmation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const origin = new URL(baseURL).origin;
+  const external = [];
+  await page.route('**/*', async route => {
+    const url = route.request().url();
+    if (url.startsWith('data:') || url.startsWith('blob:') || new URL(url).origin === origin) return route.continue();
+    external.push(url); return route.abort();
+  });
+  await page.addInitScript(() => { window.print = () => { throw Error('PDF export must not silently print'); }; });
+  await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
+  await page.locator('input[name="archive-mode"][value="demo"]').check();
+  await page.locator('#vault-password').fill('synthetic-pdf-web-only');
+  await page.getByRole('button', { name: 'Avvia la prova' }).click();
+  await expect(page.getByRole('heading', { name: 'Le mie classi' })).toBeVisible();
+  page.once('dialog', d => d.accept('Classe sintetica PDF Web'));
+  await page.getByRole('button', { name: /Nuova Classe/ }).click();
+  await expect(page.getByRole('heading', { name: 'Gestione Elenco Alunni: Classe sintetica PDF Web' })).toBeVisible();
+  const name = 'Łukasz Sintetico';
+  const privacy = page.getByTestId('header01-privacy');
+  await privacy.click();
+  await page.getByPlaceholder('Cognome e Nome (es. Rossi Maria)').fill(name);
+  await page.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+  const confirmation = page.getByRole('heading', { name: 'Dati Salvati in Locale con Successo!' });
+  if (await confirmation.isVisible().catch(() => false)) await page.getByRole('button', { name: 'Chiudi', exact: true }).click();
+  await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+  await privacy.click();
+  await page.getByRole('button', { name: 'Analisi', exact: true }).filter({ visible: true }).first().click();
+  const template = page.locator('#official-pdf-report');
+  expect(await template.textContent()).toContain('••••');
+  const menu = page.getByRole('button', { name: 'Esportazione e stampa', exact: true });
+  const button = page.getByRole('button', { name: 'Esporta PDF di lavoro', exact: true });
+  let downloads = 0;
+  page.on('download', () => { downloads++; });
+  await menu.click();
+  page.once('dialog', async d => { expect(d.message()).toContain('non cifrato'); await d.dismiss(); });
+  await button.click();
+  await expect(menu).toHaveText('PDF');
+  expect(downloads).toBe(0);
+  await menu.click();
+  page.once('dialog', async d => { expect(d.message()).toContain('non cifrato'); await d.accept(); });
+  const pending = page.waitForEvent('download');
+  await button.click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toMatch(/^Prospetto_Lavoro_\d{4}-\d{2}-\d{2}\.pdf$/);
+  const path = await download.path();
+  const pdf = execFileSync('pdftotext', ['-layout', path, '-'], { encoding: 'utf8' });
+  expect(pdf).toContain('Prospetto di lavoro docente');
+  expect(pdf).toContain('••••');
+  expect(pdf).not.toContain(name);
+  expect(downloads).toBe(1);
+  expect(external).toEqual([]);
+});

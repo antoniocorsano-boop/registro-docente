@@ -51,6 +51,12 @@ jobs:
       - name: Install application dependencies from lockfile
         run: bun install --frozen-lockfile
 
+      - name: Require R106 production browser coverage
+        run: node scripts/qualification/r106-production.mjs contract
+
+      - name: Require R1-TEC-01b browser coverage
+        run: node scripts/qualification/r1-tec-bfcache.mjs contract
+
       - name: Build production application
         env:
           VITE_INT01_HPR_TRACE: '1'
@@ -77,6 +83,13 @@ jobs:
           # Cap browser download at 120 seconds; fail promptly with a clear error.
           timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
+          cp tests/browser/beta-close-cr06.spec.cjs .browser-tools/
+          bun build tests/browser/fixtures/beta-close-cr06.fixture.mjs --target browser --outfile .browser-tools/beta-close-cr06.fixture.mjs
+          cp tests/browser/r106-student-import.spec.cjs .browser-tools/r106-student-import.spec.cjs
+          cp tests/browser/r1-tec-bfcache.spec.cjs .browser-tools/r1-tec-bfcache.spec.cjs
+          cp tests/browser/ap01-initial-reservation.spec.cjs .browser-tools/ap01-initial-reservation.spec.cjs
+          cp tests/browser/ap02-v7-professional-web.spec.cjs .browser-tools/ap02-v7-professional-web.spec.cjs
+          cp tests/browser/ap02-f2-android-v7-ui.spec.cjs .browser-tools/ap02-f2-android-v7-ui.spec.cjs
           cp tests/browser/mobile01-m1-offline-pdf.spec.cjs .browser-tools/mobile01-m1-offline-pdf.spec.cjs
           cp tests/browser/mobile01-m2-native-backup-roundtrip.spec.cjs .browser-tools/mobile01-m2-native-backup-roundtrip.spec.cjs
           cp tests/browser/mobile01-m2c-native-pdf.spec.cjs .browser-tools/mobile01-m2c-native-pdf.spec.cjs
@@ -162,6 +175,104 @@ jobs:
           cat browser-evidence/server.log
           exit 1
 
+      - name: Build and start isolated R106 production fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p browser-evidence/r106-production
+          node scripts/qualification/r106-production.mjs build "$RUNNER_TEMP/r106-production"
+          NODE_ENV=production ./node_modules/.bin/vite preview --mode production --outDir "$RUNNER_TEMP/r106-production" --host 127.0.0.1 --port 4186 --strictPort > browser-evidence/r106-production/server.log 2>&1 &
+          pid=$!
+          echo "$pid" > browser-evidence/r106-production/server.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4186/tests/browser/fixtures/r106-student-import.html > browser-evidence/r106-production/served.html; then
+              if grep -Eq 'src="/assets/[^"]+\.js"' browser-evidence/r106-production/served.html; then
+                exit 0
+              fi
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          cat browser-evidence/r106-production/server.log
+          exit 1
+
+      - name: Run mandatory R106 production Chromium regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .browser-tools/r106-student-import.spec.cjs
+          rm -f browser-evidence/r106-production/report.json browser-evidence/r106-production/summary.json
+          (
+            cd .browser-tools
+            R106_FIXTURE_URL="http://127.0.0.1:4186/tests/browser/fixtures/r106-student-import.html" \
+            PLAYWRIGHT_JSON_OUTPUT_FILE="../browser-evidence/r106-production/report.json" \
+            ./node_modules/.bin/playwright test \
+              r106-student-import.spec.cjs \
+              --workers=1 \
+              --reporter=line,json \
+              --output=../browser-evidence/r106-production/results
+          )
+          node scripts/qualification/r106-production.mjs report browser-evidence/r106-production/report.json
+
+      - name: Run mandatory R1-TEC-01b production lifecycle regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .browser-tools/r1-tec-bfcache.spec.cjs
+          test -z "$(find dist -iname '*r1-tec-bfcache*' -print)"
+          mkdir -p browser-evidence/r1-tec-bfcache
+          rm -f browser-evidence/r1-tec-bfcache/report.json browser-evidence/r1-tec-bfcache/summary.json
+          (
+            cd .browser-tools
+            BASE_URL="http://127.0.0.1:${PORT}" \
+            PLAYWRIGHT_JSON_OUTPUT_FILE="../browser-evidence/r1-tec-bfcache/report.json" \
+            ./node_modules/.bin/playwright test \
+              r1-tec-bfcache.spec.cjs \
+              --workers=1 \
+              --reporter=line,json \
+              --output=../browser-evidence/r1-tec-bfcache/results
+          )
+          node scripts/qualification/r1-tec-bfcache.mjs report browser-evidence/r1-tec-bfcache/report.json
+
+      - name: AUDIT-PRE-01 / AP-01 — Real two-tab archive reservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ap01-initial-reservation.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/ap01-atomic-bootstrap
+
+      - name: AUDIT-PRE-01 / AP-02 — Real V7 Privacy backup and protected restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ap02-v7-professional-web.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/ap02-v7-professional-web
+
+      - name: AUDIT-PRE-01 / AP-02 F2 — Android V7 UI synthetic native bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .browser-tools
+          BASE_URL="http://127.0.0.1:${PORT}" \
+          CANDIDATE_SHA="${CANDIDATE_SHA}" \
+          ./node_modules/.bin/playwright test \
+            ap02-f2-android-v7-ui.spec.cjs \
+            --workers=1 \
+            --reporter=line \
+            --output=../browser-evidence/ap02-f2-android-v7-ui
+
       - name: Run qualification invariant smoke
         shell: bash
         run: |
@@ -171,7 +282,7 @@ jobs:
           EVIDENCE_DIR="../browser-evidence" \
           CANDIDATE_SHA="${CANDIDATE_SHA}" \
           ./node_modules/.bin/playwright test \
-            qualification-invariant-smoke.spec.cjs \
+            qualification-invariant-smoke.spec.cjs beta-close-cr06.spec.cjs \
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/qualification-invariant-smoke-results
@@ -540,6 +651,9 @@ jobs:
         if: always()
         shell: bash
         run: |
+          if [[ -f browser-evidence/r106-production/server.pid ]]; then
+            kill "$(cat browser-evidence/r106-production/server.pid)" 2>/dev/null || true
+          fi
           if [[ -f browser-evidence/server.pid ]]; then
             server_pid="$(cat browser-evidence/server.pid)"
             kill "${server_pid}" 2>/dev/null || true

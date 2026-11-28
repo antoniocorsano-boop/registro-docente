@@ -13,6 +13,9 @@ const CURRENT_METADATA_KEY = 'current';
 export interface VaultStore {
   getMetadata(): Promise<VaultMetadataV1 | null>;
   putMetadata(metadata: VaultMetadataV1): Promise<void>;
+  /** Optional for stores without the production atomic reservation contract. */
+  activateReservedMetadata?(expected: VaultMetadataV1, assertAuthorized?: () => void, onCommitInvoked?: () => void): Promise<void>;
+  discardReservedMetadata?(expected: VaultMetadataV1): Promise<boolean>;
   getRecord(key: VaultRecordKey): Promise<EncryptedVaultRecord | null>;
   putRecord(record: EncryptedVaultRecord): Promise<void>;
   putRecords(records: EncryptedVaultRecord[]): Promise<void>;
@@ -53,6 +56,33 @@ function isVaultRecordKey(value: IDBValidKey): value is VaultRecordKey {
     ].includes(value)
   );
 }
+
+/** The reservation identity is its complete original metadata, not STAGING alone.
+ * Unknown fields or malformed values are not proof of ownership. */
+function sameKeys(value: unknown, expected: object): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' &&
+    Object.keys(value).length === Object.keys(expected).length &&
+    Object.keys(expected).every(key => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.byteLength === b.byteLength && a.every((byte, i) => byte === b[i]);
+}
+
+function isOwnedStaging(actual: unknown, expected: VaultMetadataV1): boolean {
+  if (expected.state !== 'STAGING' || !sameKeys(actual, expected) ||
+      !sameKeys(actual.kdf, expected.kdf)) return false;
+  return actual.vaultVersion === expected.vaultVersion && actual.state === 'STAGING' &&
+    actual.createdAt === expected.createdAt && actual.updatedAt === expected.updatedAt &&
+    actual.kdf.name === expected.kdf.name && actual.kdf.hash === expected.kdf.hash &&
+    actual.kdf.iterations === expected.kdf.iterations &&
+    actual.salt instanceof Uint8Array && sameBytes(actual.salt, expected.salt) &&
+    actual.wrapIv instanceof Uint8Array && sameBytes(actual.wrapIv, expected.wrapIv) &&
+    actual.wrappedDek instanceof ArrayBuffer &&
+    sameBytes(new Uint8Array(actual.wrappedDek), new Uint8Array(expected.wrappedDek));
+}
+
+type ReservedMutation = 'committed' | 'not-owned' | { aborted: unknown };
 
 export class IndexedDbVaultStore implements VaultStore {
   private readonly factory: IDBFactory;
@@ -156,6 +186,81 @@ export class IndexedDbVaultStore implements VaultStore {
         metaCount.onsuccess = recordCount.onsuccess = reserve;
       } catch (error) { abort(error); }
     });
+  }
+
+  /** Compare ownership and mutate within one transaction covering both stores.
+   * Only onabort is evidence of a refused ACTIVE write; request errors or a
+   * thrown exception alone never authorize recovery. */
+  private async mutateReservedStaging(
+    expected: VaultMetadataV1, action: 'activate' | 'discard',
+    assertAuthorized?: () => void, onCommitInvoked?: () => void
+  ): Promise<ReservedMutation> {
+    assertAuthorized?.();
+    const db = await this.openDatabase();
+    if (db.version !== 1 || this.connectionRetired) throw new Error('Sessione archivio non più attuale.');
+    return new Promise<ReservedMutation>((resolve, reject) => {
+      const tx = db.transaction([METADATA_STORE, RECORDS_STORE], 'readwrite');
+      let failure: unknown = null;
+      let owned = false;
+      let activationAttempted = false;
+      const refused = () => new Error('Transazione archivio iniziale annullata.');
+      const abort = (error: unknown) => {
+        failure = error;
+        try { tx.abort(); } catch { reject(error); }
+      };
+      tx.oncomplete = () => resolve(owned ? 'committed' : 'not-owned');
+      tx.onerror = () => { failure ??= tx.error ?? refused(); };
+      tx.onabort = () => {
+        const error = failure ?? tx.error ?? refused();
+        if (activationAttempted) resolve({ aborted: error });
+        else reject(error);
+      };
+      try {
+        const meta = tx.objectStore(METADATA_STORE);
+        const current = meta.get(CURRENT_METADATA_KEY);
+        const count = meta.count();
+        let remaining = 2;
+        const mutate = () => {
+          if (--remaining !== 0) return;
+          try {
+            if (count.result !== 1 || !isOwnedStaging(current.result, expected)) return;
+            assertAuthorized?.();
+            if (this.connectionRetired) throw new Error('Sessione archivio non più attuale.');
+            owned = true;
+            if (action === 'activate') {
+              onCommitInvoked?.();
+              activationAttempted = true;
+              meta.put({ ...expected, state: 'ACTIVE', updatedAt: new Date().toISOString() }, CURRENT_METADATA_KEY);
+            } else {
+              meta.delete(CURRENT_METADATA_KEY);
+              tx.objectStore(RECORDS_STORE).clear();
+            }
+          } catch (error) { abort(error); }
+        };
+        current.onsuccess = count.onsuccess = mutate;
+      } catch (error) { abort(error); }
+    });
+  }
+
+  async activateReservedMetadata(
+    expected: VaultMetadataV1, assertAuthorized?: () => void, onCommitInvoked?: () => void
+  ): Promise<void> {
+    const outcome = await this.mutateReservedStaging(expected, 'activate', assertAuthorized, onCommitInvoked);
+    if (outcome === 'committed') return;
+    if (outcome === 'not-owned') throw new Error('Riserva iniziale non più attuale.');
+    // The activation transaction has definitely aborted. Recheck the exact
+    // reservation and authority in a fresh atomic transaction; a competing
+    // ACTIVE/STAGING, revocation or unreadable store must not be cleared.
+    try {
+      await this.mutateReservedStaging(expected, 'discard', assertAuthorized);
+    } catch {
+      // Preserve the activation error and leave recovery to protected reopen.
+    }
+    throw outcome.aborted;
+  }
+
+  async discardReservedMetadata(expected: VaultMetadataV1): Promise<boolean> {
+    return await this.mutateReservedStaging(expected, 'discard') === 'committed';
   }
 
   async putMetadata(metadata: VaultMetadataV1): Promise<void> {

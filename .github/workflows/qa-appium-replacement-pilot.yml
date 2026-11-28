@@ -1,0 +1,311 @@
+name: Q5-SYS-07 — Mandatory hybrid Android evidence (not full F2 alone)
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
+      dual_diagnostic:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - name: Admit only approved exact-SHA callers (fail closed)
+        shell: bash
+        env:
+          APPROVED_CALLER: ${{ github.event_name == 'pull_request' && github.repository == 'antoniocorsano-boop/registro-docente' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.repo.full_name == github.repository && inputs.candidate_sha == github.event.pull_request.head.sha && ((github.event.pull_request.number == 414 && github.head_ref == 'qa/qa-stability-01-q2' && github.base_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.event.pull_request.base.sha == '80378e9daab60fe6c389e372c3c79e3dcd09aac0') || (github.event.pull_request.number == 412 && github.head_ref == 'fix/audit-pre-01-atomic-bootstrap' && github.base_ref == 'main') || (github.event.pull_request.number == 416 && github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main' && github.event.pull_request.base.sha == '1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1')) }}
+        run: |
+          test "$APPROVED_CALLER" = true
+          test "${{ inputs.dual_diagnostic }}" = true
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact candidate contracts before any emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          node scripts/qualification/check-invariants.mjs
+          node scripts/qualification/impact.mjs "$BASE_SHA" "$CANDIDATE_SHA" --manifest /tmp/appium-impact.json
+          node --test scripts/diagnostics/appium-pilot/contract.test.mjs scripts/diagnostics/appium-pilot/native-picker.test.mjs
+          node --check scripts/diagnostics/appium-pilot/q3-evidence.mjs
+          python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py scripts/diagnostics/appium-pilot/qualification_contracts.py
+          python3 -m unittest discover -s scripts/diagnostics/appium-pilot -p 'test_*.py'
+          bash -n scripts/diagnostics/appium-pilot/run.sh
+      - name: Validate workflow with actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/qa-appium-replacement-pilot.yml .github/workflows/qa-stability-01-q4.yml .github/workflows/ap02-f2-native-device.yml
+  pilot:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        api: [32, 36]
+        trial: [1]
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      AP02_API: ${{ matrix.api }}
+      Q5_DUAL_DIAGNOSTIC: ${{ inputs.dual_diagnostic }}
+      Q5_DUAL_TRIAL: ${{ matrix.trial }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify frozen product and approved laboratory-only delta
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ADMISSION_ROUTE: ${{ (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main') && 'production' || 'legacy' }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          if test "${ADMISSION_ROUTE:-legacy}" = production; then
+            composition=c0b9b1e0c5b5e6976fcb22fcffd4008a45b1829a
+            production_base=1e9bcd0eb8bd5c7e72ea059b3f90f72805f9cdd1
+            approved_tree=361e07245112478461e904109a89d81b4ebbdfe3
+            test "$EVENT_BASE_SHA" = "$production_base"
+            test "$(git rev-list --parents -n 1 "$composition")" = "$composition $production_base"
+            test "$(git rev-parse "$composition^{tree}")" = "$approved_tree"
+            git merge-base --is-ancestor "$composition" HEAD
+            expected=$(printf '%s\n' .github/workflows/ap02-f2-native-device.yml .github/workflows/qa-appium-replacement-pilot.yml scripts/diagnostics/appium-pilot/contract.test.mjs qualification/invariants.v1.json | LC_ALL=C sort)
+            admission_base=177cab29ecbc8e216d656a9d4c9dc66664932892
+            test "$(git rev-list --parents -n 1 "$admission_base")" = "$admission_base $composition"
+            git merge-base --is-ancestor "$admission_base" HEAD
+            actual=$(git diff --name-only --no-renames "$composition" "$admission_base" | LC_ALL=C sort)
+            test "$actual" = "$expected"
+            # R3a: exclusively the reviewed historical-discipline correction and its contracts.
+            expected_r3a=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs src/App.tsx src/assessment/assessmentEvidenceMutation.ts src/assessment/assessmentSubjectScope.ts src/assessment/dailyAssessmentSetup.ts src/assessment/dailyCriterionRecordingContext.ts src/assessment/dailyPlannedAssessmentCompletion.ts src/assessment/studentCriterionReadModel.ts src/security/candProdHistoricalSubject.test.ts | LC_ALL=C sort)
+            r3a_head=HEAD
+            frozen_r3a=9e5177aa1d816b52465072960dd5b0b516def53e
+            # R1-06-01: one exact successor on PR 416. Keep the R3a check on its frozen tree.
+            if test "$PR_NUMBER" = 416 && test "$CANDIDATE_SHA" != "$frozen_r3a"; then
+              r1_head=HEAD
+              frozen_r1=69be03663b49d85aa3fd53cdb6cc4934165a0802
+              if test "$CANDIDATE_SHA" != "$frozen_r1"; then
+                r1b_head=HEAD
+                frozen_r1b=1cf5eea0a5e0c2586915875af94fde3ba04528f7
+                if test "$CANDIDATE_SHA" != "$frozen_r1b"; then
+                  tec_head=HEAD
+                  frozen_tec=b196d1027085a781410cef31d973a1b25c4652ec
+                  if test "$CANDIDATE_SHA" != "$frozen_tec"; then
+                    tecb_head=HEAD
+                    frozen_tecb=214fb78e2448f9db14fa31658cf05c0e47dc72e7
+                    if test "$CANDIDATE_SHA" != "$frozen_tecb"; then
+                      inv_head=HEAD
+                      frozen_inv=17f5a16287d6d17b73588e1ceee6b349428e12d7
+                      if test "$CANDIDATE_SHA" != "$frozen_inv"; then
+                        inv_r1_head=HEAD
+                        frozen_inv_r1=891a2e2e47b8c86ee0829d18462aac1b6f740ad8
+                        if test "$CANDIDATE_SHA" != "$frozen_inv_r1" &&
+                           git merge-base --is-ancestor "$frozen_inv_r1" HEAD 2>/dev/null; then
+                          bash scripts/diagnostics/android-r3-admission.sh --allow-r4a
+                          inv_r1_head=$frozen_inv_r1
+                        fi
+                        inv_r1_sha=$(git rev-parse "$inv_r1_head")
+                        test "$(git rev-list --parents -n 1 "$inv_r1_head")" = "$inv_r1_sha $frozen_inv"
+                        expected_inv_r1=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml mobile/android-probe/native-inventory.init.gradle mobile/android-probe/test_native_inventory.py mobile/android-probe/verify-native-inventory.py scripts/diagnostics/appium-pilot/contract.test.mjs | LC_ALL=C sort)
+                        actual_inv_r1=$(git diff --name-only --no-renames "$frozen_inv" "$inv_r1_head" | LC_ALL=C sort)
+                        test "$actual_inv_r1" = "$expected_inv_r1"
+                        inv_head=$frozen_inv
+                      fi
+                      inv_sha=$(git rev-parse "$inv_head")
+                      test "$(git rev-list --parents -n 1 "$inv_head")" = "$inv_sha $frozen_tecb"
+                      expected_inv=$(printf '%s\n' .github/workflows/mobile-01-android-probe.yml mobile/android-probe/native-inventory.init.gradle mobile/android-probe/test_native_inventory.py mobile/android-probe/verify-native-inventory.py | LC_ALL=C sort)
+                      actual_inv=$(git diff --name-only --no-renames "$frozen_tecb" "$inv_head" | LC_ALL=C sort)
+                      test "$actual_inv" = "$expected_inv"
+                      tecb_head=$frozen_tecb
+                    fi
+                    tecb_sha=$(git rev-parse "$tecb_head")
+                    test "$(git rev-list --parents -n 1 "$tecb_head")" = "$tecb_sha $frozen_tec"
+                    expected_tecb=$(printf '%s\n' .github/workflows/browser-qualification.yml .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/r1-tec-bfcache.mjs src/components/SecureRegistroRoot.tsx tests/browser/r1-tec-bfcache.spec.cjs | LC_ALL=C sort)
+                    actual_tecb=$(git diff --name-only --no-renames "$frozen_tec" "$tecb_head" | LC_ALL=C sort)
+                    test "$actual_tecb" = "$expected_tecb"
+                    tec_head=$frozen_tec
+                  fi
+                  tec_sha=$(git rev-parse "$tec_head")
+                  test "$(git rev-list --parents -n 1 "$tec_head")" = "$tec_sha $frozen_r1b"
+                  expected_r1tec=$(printf '%s\n' .github/workflows/mobile-01-android-probe.yml .github/workflows/qa-appium-replacement-pilot.yml index.html public/vendor/html2pdf.bundle.min.js public/vendor/html2pdf.bundle.min.js.LICENSE.txt public/vendor/jspdf.LICENSE.txt public/vendor/jspdf.umd.min.js qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/impact.mjs scripts/qualification/pdf-invariant-transition.mjs server.ts src/components/AnalyticsView.tsx src/components/SecureRegistroRoot.tsx src/components/SettingsView.tsx src/components/UdaGanttView.tsx src/declarations.d.ts src/library/semanticRetrieval.ts src/report/formativePdfRendering.ts src/security/embeddingSession.ts src/security/formativePdfContract.test.ts src/security/localPdf.ts src/security/mobile01AndroidProbeContract.test.ts src/security/mobile01M1OfflineAssetsContract.test.ts src/security/mobile01M2cNativePdfContract.test.ts src/security/outboundBoundaryClosure.test.ts src/security/outboundEmbeddingGuard.test.ts src/security/r1EmbeddingSession.test.ts src/security/workPdfRendering.ts src/services/embeddingService.ts tests/browser/fixtures/nav-back-01-app.html tests/browser/mobile01-m1-offline-pdf.spec.cjs tests/browser/mobile01-m2c-native-pdf.spec.cjs | LC_ALL=C sort)
+                  actual_r1tec=$(git diff --name-only --no-renames "$frozen_r1b" "$tec_head" | LC_ALL=C sort)
+                  test "$actual_r1tec" = "$expected_r1tec"
+                  r1b_head=$frozen_r1b
+                fi
+                r1b_sha=$(git rev-parse "$r1b_head")
+                test "$(git rev-list --parents -n 1 "$r1b_head")" = "$r1b_sha $frozen_r1"
+                expected_r1b=$(printf '%s\n' .github/workflows/browser-qualification.yml .github/workflows/qa-appium-replacement-pilot.yml qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs scripts/qualification/r106-production.mjs tests/browser/fixtures/r106-student-import.html tests/browser/r106-student-import.spec.cjs | LC_ALL=C sort)
+                actual_r1b=$(git diff --name-only --no-renames "$frozen_r1" "$r1b_head" | LC_ALL=C sort)
+                test "$actual_r1b" = "$expected_r1b"
+                r1_head=$frozen_r1
+              fi
+              r1_sha=$(git rev-parse "$r1_head")
+              test "$(git rev-list --parents -n 1 "$r1_head")" = "$r1_sha $frozen_r3a"
+              expected_r1=$(printf '%s\n' .github/workflows/qa-appium-replacement-pilot.yml bun.lock package.json qualification/invariants.v1.json scripts/diagnostics/appium-pilot/contract.test.mjs src/components/StudentsManagementView.tsx src/components/studentImport.ts src/components/studentImport.worker.ts src/components/studentImportLimits.ts src/security/r106StudentImport.test.ts tests/browser/fixtures/r106-student-import.fixture.tsx tests/browser/r106-student-import.spec.cjs | LC_ALL=C sort)
+              actual_r1=$(git diff --name-only --no-renames "$frozen_r3a" "$r1_head" | LC_ALL=C sort)
+              test "$actual_r1" = "$expected_r1"
+              r3a_head=$frozen_r3a
+            fi
+            actual_r3a=$(git diff --name-only --no-renames "$admission_base" "$r3a_head" | LC_ALL=C sort)
+            test "$actual_r3a" = "$expected_r3a"
+            python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
+            exit 0
+          fi
+          git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD
+          # Q4 is still laboratory-only. PR 412 admits only the audited APP-01 promotion.
+          lab_head=HEAD
+          case "$PR_NUMBER" in
+            414) ;;
+            412)
+              lab_head=72dd969863d6fa74229f04a8c95eabda0095ebb8
+              red=239c9b07a65dd9363073eb133c286f9a154ce622
+              green=69d56478081077eef07aa3c1873bf4710f17807c
+              git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 "$lab_head"
+              test "$(git rev-list --parents -n 1 "$red")" = "$red $lab_head"
+              test "$(git rev-list --parents -n 1 "$green")" = "$green $red"
+              git merge-base --is-ancestor "$green" HEAD
+              expected=$(printf '%s\n' src/App.tsx src/assessment/approvedAssessmentScopes.ts src/assessment/assessmentSubjectScope.ts src/security/ap02F1HistoricalRestore.test.ts src/security/ap03HistoricalAssessmentScopes.test.ts src/security/assessmentRestorePolicy.ts | LC_ALL=C sort)
+              actual=$(git diff --name-only --no-renames "$lab_head" "$green" | LC_ALL=C sort)
+              test "$actual" = "$expected"
+              post=$(git diff --name-only --no-renames "$green" HEAD)
+              while IFS= read -r path; do
+                case "$path" in
+                  ''|.github/workflows/qa-appium-replacement-pilot.yml|scripts/diagnostics/appium-pilot/contract.test.mjs|scripts/diagnostics/ap02-native-device-v7.mjs|scripts/diagnostics/native-lab-transitions.mjs) ;;
+                  *) echo 'UNAPPROVED_POST_PROMOTION_DELTA' >&2; exit 1 ;;
+                esac
+              done <<< "$post"
+              ;;
+            *) echo 'UNAPPROVED_CALLER' >&2; exit 1 ;;
+          esac
+          changed=$(git diff --name-only --no-renames 80378e9daab60fe6c389e372c3c79e3dcd09aac0 "$lab_head")
+          while IFS= read -r path; do
+            if test -z "$path"; then continue; fi
+            if ! [[ "$path" =~ ^(\.github/workflows/(qa-appium-replacement-pilot|ap02-f2-native-device|qa-stability-01-q4|ci-fast-development)\.yml|scripts/diagnostics/appium-pilot/[^/]+|scripts/diagnostics/(ap02-native-device-v7|native-adb-transport-probe|native-home-navigation-probe|native-lab-readiness|native-lab-runtime|native-lab-runtime\.test|native-lab-transitions|native-process-probe|native-process-probe\.test|native-saf-lifecycle-probe\.test|native-v7-document-discovery|run-native-lab-contracts)\.mjs|qualification/invariants\.v1\.json|src/security/ap02V7OperationalBackup\.test\.ts)$ ]]; then
+              echo 'UNAPPROVED_LAB_DELTA' >&2
+              exit 1
+            fi
+          done <<< "$changed"
+          python3 -m py_compile scripts/diagnostics/appium-pilot/pilot.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 build-tools;36.0.0 emulator'
+      - name: Install isolated open-source automation stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APPIUM_HOME="$RUNNER_TEMP/appium-q5"
+          printf 'APPIUM_HOME=%s\n' "$APPIUM_HOME" >> "$GITHUB_ENV"
+          npm install --global --no-audit --no-fund appium@3.8.0
+          appium driver install uiautomator2@8.6.0
+          python3 -m venv "$RUNNER_TEMP/q5-appium-venv"
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" install --disable-pip-version-check Appium-Python-Client==6.1.2
+          "$RUNNER_TEMP/q5-appium-venv/bin/pip" check
+          appium --version
+          appium driver list --installed
+          test -x "$ANDROID_HOME/emulator/emulator"
+          appium driver doctor uiautomator2
+      - name: Build exact real Web UI and separate debug-only Android laboratory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p ap02-device-evidence
+          bun install --frozen-lockfile
+          bun run build
+          test -s dist/index.html
+          test -s dist/assets/$(ls dist/assets | head -n1)
+          bash mobile/android-probe/probe-npm.sh install
+          cd mobile/android-probe
+          npx --no-install cap add android
+          npx --no-install cap sync android
+          python3 build-contract.py prepare
+          node prepare-native-back.mjs
+          native=android/app/src/main/java/it/trama/registrodocente/prova
+          cp native/*.java "$native/"
+          python3 - <<'PY'
+          import pathlib,re
+          root=pathlib.Path('android/app')
+          def change(p,old,new):
+              f=root/p
+              value,n=re.subn(old,new,f.read_text())
+              assert n==1,(str(f),n)
+              f.write_text(value)
+          change('build.gradle',r'applicationId\s+"it\.trama\.registrodocente\.prova"',
+                 'applicationId "it.trama.registrodocente.lab.ap02v7"')
+          change('src/main/AndroidManifest.xml',r'android:name="\.MainActivity"',
+                 'android:name="it.trama.registrodocente.prova.MainActivity"')
+          change('src/main/AndroidManifest.xml',r'android:allowBackup="true"',
+                 'android:allowBackup="false" android:fullBackupContent="false"')
+          PY
+          (cd android; bash ./gradlew --no-daemon --dependency-verification strict assembleDebug)
+          apk="$RUNNER_TEMP/ap02-f2-device-lab.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/ap02-cert.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='it.trama.registrodocente.lab.ap02v7'"
+          unzip -p "$apk" assets/public/index.html | cmp - ../../dist/index.html
+          sha256sum "$apk" > ../../ap02-device-evidence/apk-hash.txt
+          printf 'candidate=%s\napi=%s\npackage=it.trama.registrodocente.lab.ap02v7\nproduction_release=false\nsynthetic_only=true\n' \
+            "$CANDIDATE_SHA" "$AP02_API" > ../../ap02-device-evidence/provenance.txt
+          printf 'AP02_LAB_APK=%s\n' "$apk" >> "$GITHUB_ENV"
+      - name: Enable emulator hardware acceleration
+        shell: bash
+        run: |
+          test -e /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - name: Appium real installed application pilot
+        uses: ReactiveCircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          script: bash scripts/diagnostics/appium-pilot/run.sh
+      - name: Require actual pilot evidence, never F2 qualification
+        if: ${{ !inputs.dual_diagnostic }}
+        run: |
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" '.candidate==$sha and .api==$api and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .stages==["native-session","webview-setup","professional-home","privacy-navigation","home-navigation","target-class","target-export","recovery-class","recovery-export","restore","native-stop-verified","cold-lock","cold-authenticated-home","cold-restored-content"] and .safReturns==["target-export","recovery-export","target-source","recovery-source"] and (.physicalCopies|length)==2 and .physicalCopies[0].sha256!=.physicalCopies[1].sha256' ap02-device-evidence/appium-pilot.json
+      - name: Require isolated dual-channel diagnostic evidence
+        if: ${{ inputs.dual_diagnostic }}
+        run: |
+          jq -e --arg sha "$CANDIDATE_SHA" --argjson api "$AP02_API" --argjson trial "$Q5_DUAL_TRIAL" '.candidate==$sha and .api==$api and .trial==$trial and .syntheticOnly==true and .productionRelease==false and .fullF2Qualified==false and .status=="PASS" and .nativeContextOnly==true and .cdpDirect==true and (.nativeSnapshots|if type=="number" then .>=1 and .==floor and .<=9007199254740991 else false end) and .nativeReauthCount==4 and (.stages|length)==6 and .safReturns==["export","export","target-source","recovery-source"]' ap02-device-evidence/dual-diagnostic/summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.dual_diagnostic && 'dual-diagnostic' || 'appium-pilot' }}-api${{ matrix.api }}-trial${{ matrix.trial }}-${{ github.event.pull_request.head.sha }}
+          path: |
+            ap02-device-evidence/appium-pilot.json
+            ap02-device-evidence/dual-diagnostic/summary.json
+            ap02-device-evidence/dual-diagnostic/failure.json
+            ap02-device-evidence/dual-diagnostic/environment.json
+            ap02-device-evidence/apk-hash.txt
+            ap02-device-evidence/provenance.txt
+          retention-days: 14
+          if-no-files-found: warn

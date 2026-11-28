@@ -184,11 +184,8 @@ app.post('/api/gemini/generate-uda-description', async (req, res) => {
       title,
       durationMonths,
       hours,
-      className,
       period,
       civicEducation,
-      competencies,
-      authenticTask,
       classification,
       explicitTeacherOptIn
     } = req.body;
@@ -204,6 +201,15 @@ app.post('/api/gemini/generate-uda-description', async (req, res) => {
       return res.status(403).json({
         error: 'Flusso dati UDA verso provider remoto non consentito dalla policy SEC-3.'
       });
+    }
+
+    if (Object.keys(req.body).some(key => !['title', 'durationMonths', 'hours', 'period', 'civicEducation', 'classification', 'explicitTeacherOptIn'].includes(key)) ||
+        title.trim().length > 300 ||
+        !Number.isFinite(durationMonths) || durationMonths <= 0 || durationMonths > 12 ||
+        !Number.isFinite(hours) || hours <= 0 || hours > 1000 ||
+        !['Q1', 'Q2'].includes(period) ||
+        typeof civicEducation !== 'boolean') {
+      return res.status(400).json({ error: 'Dati didattici non validi o non necessari.' });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -228,11 +234,9 @@ Il docente ha impostato la seguente programmazione nel Gantt didattico:
 - Titolo UDA: "${title.trim()}"
 - Durata temporale nel Gantt: ${durationMonths || 2} mesi
 - Monte ore programmato: ${hours || 14} ore
-- Classe di destinazione: ${className || 'Scuola secondaria'}
+- Destinazione: scuola secondaria
 - Quadrimestre: ${period || 'Q1'}
 ${civicEducation ? '- Include esplicitamente il modulo trasversale di Educazione Civica (L. 92/2019, Agenda 2030, sostenibilità/cittadinanza)' : ''}
-${competencies ? `- Competenze chiave indicate: ${competencies}` : ''}
-${authenticTask ? `- Compito di realtà previsto: ${authenticTask}` : ''}
 
 Compito:
 Sviluppa una traccia testuale completa, organica e professionale per questa Unità Didattica, perfettamente calibrata sul titolo e sulla durata nel Gantt (${hours || 14}h in ${durationMonths || 2} mesi).
@@ -253,9 +257,9 @@ Usa un tono professionale, chiaro, rigoroso ed elegante, pronto per essere inser
     const generatedText = response.text || '';
     return res.json({ description: generatedText });
   } catch (err: any) {
-    console.error('Gemini UDA Generation error:', err);
+    console.error('Gemini UDA Generation error: PROVIDER_ERROR');
     return res.status(500).json({
-      error: err.message || 'Si è verificato un errore durante la generazione della descrizione dell\'UDA.'
+      error: 'Si è verificato un errore durante la generazione della descrizione dell\'UDA.'
     });
   }
 });
@@ -311,12 +315,12 @@ async function fetchLocalEmbedding(baseUrl: string, body: any, headers: Record<s
   }
 }
 
-// API: Test embedding connectivity (Local llama-server / Ollama / Gemini)
+// API: Test embedding connectivity using only an application-owned public sample.
 app.post('/api/embeddings/test', async (req, res) => {
   try {
+    const prompt = 'Programmazione didattica per competenze D.M. 221/2025';
     const {
       config,
-      prompt = 'Programmazione didattica per competenze D.M. 221/2025',
       classification,
       explicitTeacherOptIn
     } = req.body;
@@ -329,6 +333,18 @@ app.post('/api/embeddings/test', async (req, res) => {
       return res.status(403).json({
         success: false,
         error: 'Provider embedding non consentito.'
+      });
+    }
+
+    // Apply the same data policy to the local proxy as to direct client calls.
+    // A loopback destination alone does not authorize personal or secret data.
+    if (config.provider === 'local' && (
+      typeof classification !== 'string' ||
+      evaluateDataFlow(classification as DataClassification, 'LOCAL_PROVIDER') !== 'ALLOW'
+    )) {
+      return res.status(403).json({
+        success: false,
+        error: 'Flusso dati verso provider locale non consentito dalla policy SEC-2.'
       });
     }
 
@@ -379,8 +395,8 @@ app.post('/api/embeddings/test', async (req, res) => {
     // Local provider (e.g. llama-server on Termux / localhost)
     const endpointUrl = config.endpointUrl || 'http://127.0.0.1:8080';
     const authHeaders: Record<string, string> = {};
-    if (config.apiKey?.trim()) {
-      authHeaders['Authorization'] = `Bearer ${config.apiKey.trim()}`;
+    if (config.apiKey) {
+      return res.status(400).json({ error: 'Le credenziali locali non possono essere inoltrate al proxy.' });
     }
 
     const result = await fetchLocalEmbedding(
@@ -400,10 +416,10 @@ app.post('/api/embeddings/test', async (req, res) => {
       model: result.model || config.modelName
     });
   } catch (err: any) {
-    console.error('Embedding test error:', err);
+    console.error('Embedding test error: PROVIDER_ERROR');
     return res.status(500).json({
       success: false,
-      error: err.message || 'Errore durante la connessione all\'endpoint di embedding.'
+      error: 'Errore durante la connessione all\'endpoint di embedding.'
     });
   }
 });
@@ -424,6 +440,18 @@ app.post('/api/embeddings/generate', async (req, res) => {
       return res.status(403).json({
         success: false,
         error: 'Provider embedding non consentito.'
+      });
+    }
+
+    // Apply the same data policy to the local proxy as to direct client calls.
+    // A loopback destination alone does not authorize personal or secret data.
+    if (config.provider === 'local' && (
+      typeof classification !== 'string' ||
+      evaluateDataFlow(classification as DataClassification, 'LOCAL_PROVIDER') !== 'ALLOW'
+    )) {
+      return res.status(403).json({
+        success: false,
+        error: 'Flusso dati verso provider locale non consentito dalla policy SEC-2.'
       });
     }
 
@@ -476,8 +504,8 @@ app.post('/api/embeddings/generate', async (req, res) => {
     // Local provider
     const endpointUrl = config.endpointUrl || 'http://127.0.0.1:8080';
     const authHeaders: Record<string, string> = {};
-    if (config.apiKey?.trim()) {
-      authHeaders['Authorization'] = `Bearer ${config.apiKey.trim()}`;
+    if (config.apiKey) {
+      return res.status(400).json({ error: 'Le credenziali locali non possono essere inoltrate al proxy.' });
     }
 
     const embeddings: number[][] = [];
@@ -502,9 +530,9 @@ app.post('/api/embeddings/generate', async (req, res) => {
       model: config.modelName
     });
   } catch (err: any) {
-    console.error('Embedding generation error:', err);
+    console.error('Embedding generation error: PROVIDER_ERROR');
     return res.status(500).json({
-      error: err.message || 'Errore durante la generazione dei vettori di embedding.'
+      error: 'Errore durante la generazione dei vettori di embedding.'
     });
   }
 });

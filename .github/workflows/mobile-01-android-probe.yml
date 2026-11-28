@@ -48,19 +48,22 @@ jobs:
           set -euo pipefail
           bun install --frozen-lockfile
           bun test src/security/navAndroid01NativeBackContract.test.ts src/security/mobile01M4BetaIdentityContract.test.ts src/security/mobile01Beta2UpdateSigning.test.ts
+          python3 "$PROBE_DIR/test_native_inventory.py"
           export VITE_REGISTRO_BUILD_SHA="$SOURCE_SHA"
           export VITE_REGISTRO_BUILD_KIND=android
           bun run build
           grep -lF -- "$SOURCE_SHA" dist/assets/*.js
           test -f dist/index.html
-          test -s dist/vendor/html2pdf.bundle.min.js
-          test -s dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          test -s dist/vendor/jspdf.umd.min.js
+          test -s dist/vendor/jspdf.LICENSE.txt
+          test ! -e dist/vendor/html2pdf.bundle.min.js
+          test ! -e dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
           test -s dist/assets/DejaVu-LICENSE.txt
           test -n "$(find dist/assets -name 'DejaVuSans-*.ttf' -print -quit)"
           test -n "$(find dist/assets -name 'DejaVuSans-Bold-*.ttf' -print -quit)"
           grep -lF -- '--safe-area-inset-top' dist/assets/*.css
           grep -lF -- 'class-card-manage' dist/assets/*.js
-          grep -F '/vendor/html2pdf.bundle.min.js' dist/index.html
+          grep -F '/vendor/jspdf.umd.min.js' dist/index.html
           if grep -E 'fonts.googleapis.com|fonts.gstatic.com|cdnjs.cloudflare.com' dist/index.html; then
             echo 'ERROR: Required PDF/fonts still load from a remote site'
             exit 1
@@ -75,13 +78,13 @@ jobs:
       - name: Set up Android SDK 36
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0 build-tools;36.0.0'
 
       - name: Install isolated, pinned Capacitor dependencies
         shell: bash
         run: |
           set -euo pipefail
-          npm install --prefix "$PROBE_DIR" --no-audit --no-fund --package-lock=false
+          bash "$PROBE_DIR/probe-npm.sh" install
           node -e "const p=require('./mobile/android-probe/node_modules/@capacitor/cli/package.json'); if (p.version !== '8.6.0') process.exit(2)"
           node -e "const p=require('./mobile/android-probe/node_modules/@capacitor/android/package.json'); if (p.version !== '8.6.0') process.exit(2)"
 
@@ -92,6 +95,7 @@ jobs:
           set -euo pipefail
           npx --no-install cap add android
           npx --no-install cap sync android
+          python3 build-contract.py prepare
           test -f android/gradlew
           test -f android/app/src/main/AndroidManifest.xml
           node --check prepare-native-back.mjs
@@ -109,7 +113,7 @@ jobs:
         working-directory: mobile/android-probe/android
         run: |
           set -euo pipefail
-          bash ./gradlew --no-daemon assembleDebug
+          bash ./gradlew --no-daemon --dependency-verification strict assembleDebug
 
       - name: Verify APK, debug signature and hashes
         shell: bash
@@ -122,15 +126,16 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$PROBE_DIR/probe-manifest-tree.txt"
           grep -E 'android:enableOnBackInvokedCallback.*0xffffffff$' "$PROBE_DIR/probe-manifest-tree.txt"
           PROBE_APP_ID=it.trama.registrodocente.prova
-          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js'
-          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/jspdf.umd.min.js'
+          unzip -Z1 "$APK" | grep -Fx 'assets/public/vendor/jspdf.LICENSE.txt'
+          if unzip -Z1 "$APK" | grep -F 'assets/public/vendor/html2pdf.bundle.min.js'; then exit 1; fi
           unzip -p "$APK" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
           for FONT in dist/assets/DejaVuSans*.ttf; do
             unzip -p "$APK" "assets/public/assets/$(basename "$FONT")" | cmp - "$FONT"
           done
-          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/html2pdf.bundle.min.js'
-          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
-          unzip -p "$APK" assets/public/vendor/html2pdf.bundle.min.js.LICENSE.txt | cmp - dist/vendor/html2pdf.bundle.min.js.LICENSE.txt
+          unzip -p "$APK" assets/public/index.html | grep -F '/vendor/jspdf.umd.min.js'
+          unzip -p "$APK" assets/public/vendor/jspdf.umd.min.js | cmp - dist/vendor/jspdf.umd.min.js
+          unzip -p "$APK" assets/public/vendor/jspdf.LICENSE.txt | cmp - dist/vendor/jspdf.LICENSE.txt
           unzip -p "$APK" 'assets/public/assets/*.css' | grep -F -- '--safe-area-inset-top' > /dev/null
           unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- 'class-card-manage' > /dev/null
           unzip -p "$APK" 'assets/public/assets/*.js' | grep -F -- "$SOURCE_SHA" > /dev/null
@@ -190,7 +195,9 @@ jobs:
         working-directory: mobile/android-probe/android
         run: |
           set -euo pipefail
-          bash ./gradlew --no-daemon assembleRelease
+          rm -f ../native-inventory-raw.json ../native-inventory.json ../native-inventory.txt ../native-build-gradle.json ../native-build-inventory.json
+          bash ./gradlew --no-daemon --dependency-verification strict --init-script ../native-inventory.init.gradle \
+            --init-script ../build-inventory.init.gradle assembleRelease :app:captureNativeBuildInventory
 
       - name: Verify unsigned Beta package and provenance
         shell: bash
@@ -220,7 +227,9 @@ jobs:
           grep -F 'it.trama.registrodocente.prova.MainActivity' "$PROBE_DIR/beta-manifest-tree.txt"
           grep -F 'it.trama.registrodocente.fileprovider' "$PROBE_DIR/beta-manifest-tree.txt"
           unzip -p "$apk" assets/capacitor.config.json | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); if(c.appId!=='it.trama.registrodocente'||c.server?.url||c.loggingBehavior!=='none')process.exit(1)"
-          unzip -p "$apk" assets/public/vendor/html2pdf.bundle.min.js | cmp - dist/vendor/html2pdf.bundle.min.js
+          unzip -p "$apk" assets/public/vendor/jspdf.umd.min.js | cmp - dist/vendor/jspdf.umd.min.js
+          unzip -p "$apk" assets/public/vendor/jspdf.LICENSE.txt | cmp - dist/vendor/jspdf.LICENSE.txt
+          if unzip -Z1 "$apk" | grep -F 'assets/public/vendor/html2pdf.bundle.min.js'; then exit 1; fi
           unzip -p "$apk" assets/public/assets/DejaVu-LICENSE.txt | cmp - dist/assets/DejaVu-LICENSE.txt
           for font in dist/assets/DejaVuSans*.ttf; do
             unzip -p "$apk" "assets/public/assets/$(basename "$font")" | cmp - "$font"
@@ -244,6 +253,23 @@ jobs:
             printf 'real_data_authorized=false\n'
           } > "$PROBE_DIR/beta-unsigned-manifest.txt"
 
+      - name: Require complete Android release dependency inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$PROBE_DIR/verify-native-inventory.py" \
+            "$PROBE_DIR/native-inventory-raw.json" \
+            "$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk" \
+            "$PROBE_DIR/beta-unsigned-manifest.txt" \
+            "$PROBE_DIR/native-inventory.json" "$PROBE_DIR/native-inventory.txt"
+          npm_tree=$(mktemp)
+          trap 'rm -f "$npm_tree"' EXIT
+          bash "$PROBE_DIR/probe-npm.sh" inventory > "$npm_tree"
+          python3 "$PROBE_DIR/verify-build-inventory.py" \
+            "$PROBE_DIR/native-inventory.json" "$PROBE_DIR/native-build-gradle.json" \
+            "$PROBE_DIR/android/app/build/outputs/apk/release/app-release-unsigned.apk" \
+            "$npm_tree" "$PROBE_DIR/native-build-inventory.json"
+
       - name: Upload unsigned Beta candidate only — no private key or release
         uses: actions/upload-artifact@v4
         with:
@@ -252,6 +278,9 @@ jobs:
             mobile/android-probe/android/app/build/outputs/apk/release/app-release-unsigned.apk
             mobile/android-probe/beta-unsigned.sha256
             mobile/android-probe/beta-unsigned-manifest.txt
+            mobile/android-probe/native-inventory.json
+            mobile/android-probe/native-inventory.txt
+            mobile/android-probe/native-build-inventory.json
             mobile/android-probe/beta-identity.json
             mobile/android-probe/sign-beta-locally.sh
           if-no-files-found: error

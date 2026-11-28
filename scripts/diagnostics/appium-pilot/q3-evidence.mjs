@@ -1,0 +1,40 @@
+// Reuse the canonical Q3 observations; this adapter never drives product UI.
+import {execFileSync,spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {join} from 'node:path';
+import {waitBootReadiness,emulatorIdentity,versionFacts,publicSurfaceFrame,isInteractiveElement,classifySurface} from '../native-lab-readiness.mjs';
+import {commandBudgetInfo,classifyAdbDeadline} from '../native-lab-runtime.mjs';
+const adb=(...args)=>{
+  const budget=commandBudgetInfo(10000);
+  try{return execFileSync('adb',args,{encoding:'utf8',timeout:budget.timeoutMs,killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']}).trim();}
+  catch(error){throw classifyAdbDeadline(error,budget);}
+};
+async function ready(){
+  let bootObservation=null;
+  await waitBootReadiness(adb,{onState:state=>{bootObservation=state;}});
+  return {bootObservation,bootReady:true};
+}
+async function boot(){
+  const {bootObservation}=await ready();
+  if(Number(adb('shell','getprop','ro.build.version.sdk'))!==Number(process.env.AP02_API))throw Error('WRONG_API');
+  const sdk=process.env.ANDROID_HOME||process.env.ANDROID_SDK_ROOT;
+  if(!sdk)throw Error('SDK_UNAVAILABLE');
+  const directory=join(sdk,'emulator'),binary=join(directory,'emulator');
+  const identity=emulatorIdentity({probe:spawnSync(binary,['-version'],{encoding:'utf8',timeout:10000,killSignal:'SIGKILL'}),
+    packageMetadata:readFileSync(join(directory,'source.properties'),'utf8'),
+    binarySha256:createHash('sha256').update(readFileSync(binary)).digest('hex')});
+  if(!identity.version)throw Error('EMULATOR_IDENTITY_UNAVAILABLE');
+  const versions=versionFacts({adb:adb('version'),emulator:'Android emulator version '+identity.version+(identity.build?' (build_id '+identity.build+')':''),
+    webview:adb('shell','dumpsys','webviewupdate'),androidBuild:adb('shell','getprop','ro.build.fingerprint'),
+    runnerImage:process.env.ImageOS,runnerVersion:process.env.ImageVersion,node:process.version});
+  for(const key of ['adb','platformTools','emulator','webviewPackage','webviewVersion','androidBuild','runnerImage','runnerVersion','node'])
+    if(!versions[key])throw Error('VERSION_INCOMPLETE');
+  return {bootObservation,bootReady:true,versions,emulatorIdentity:identity};
+}
+try{
+  if(process.argv[2]==='boot')console.log(JSON.stringify(await boot()));
+  else if(process.argv[2]==='ready')console.log(JSON.stringify(await ready()));
+  else if(process.argv[2]==='surface')console.log('return ('+classifySurface.toString()+')({...('+publicSurfaceFrame.toString()+')(arguments[0],document,getComputedStyle,'+isInteractiveElement.toString()+'),foreground:true},arguments[1]);');
+  else throw Error('INVALID_ADAPTER_MODE');
+}catch{console.error('HYBRID_Q3_ADAPTER_FAILED');process.exitCode=1;}

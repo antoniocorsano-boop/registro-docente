@@ -1,5 +1,7 @@
 // Synthetic CI only. A failed ADB transport or malformed output is never
 // evidence that a process is absent.
+import { performance } from 'node:perf_hooks';
+import { withinDeadline, remainingObservationMs } from './native-lab-runtime.mjs';
 export function packagePidCommand(pkg){
   if(typeof pkg!=='string'||!/^([A-Za-z][A-Za-z0-9_]*\.)+[A-Za-z][A-Za-z0-9_]*$/.test(pkg))throw Error('Invalid Android package');
   // adb shell joins arguments without quoting. Send one complete remote
@@ -23,21 +25,24 @@ function checkedPids(value){
   if(!Array.isArray(value)||value.some(p=>!Number.isSafeInteger(p)||p<=0)||new Set(value).size!==value.length)throw Error('Invalid PID observation');
   return [...value].sort((a,b)=>a-b);
 }
-export async function verifiedProcessStop({probe,forceStop,pause=ms=>new Promise(r=>setTimeout(r,ms)),now=Date.now,timeoutMs=15000}){
+export async function verifiedProcessStop({probe,forceStop,pause=ms=>new Promise(r=>setTimeout(r,ms)),now=performance.now.bind(performance),timeoutMs=15000}){
+  return withinDeadline(async()=>{
   const beforePids=checkedPids(probe());
   if(!beforePids.length)throw Error('Process not positively observed before force-stop');
   // Exactly one stop request. Do not retry a destructive or uncertain action.
+  if(remainingObservationMs()<=0)throw Error('Process still present or absence not verified after force-stop');
   forceStop();
-  const deadline=now()+timeoutMs;
   let absenceSamples=0,observations=0;
-  while(now()<deadline){
+  while(remainingObservationMs()>0){
     const afterPids=checkedPids(probe());
+    if(remainingObservationMs()<=0)break;
     observations++;
     // Two consecutive, independently successful empty probes. A transport
     // or parser error escapes immediately and cannot count as absence.
     absenceSamples=afterPids.length===0?absenceSamples+1:0;
     if(absenceSamples===2)return {forcedStop:true,beforePids,afterPids,absenceSamples,observations};
-    await pause(250);
+    await pause(Math.min(250,remainingObservationMs()));
   }
   throw Error('Process still present or absence not verified after force-stop');
+  },{timeoutMs,now,timeoutCode:'PROCESS_STOP_DEADLINE'});
 }

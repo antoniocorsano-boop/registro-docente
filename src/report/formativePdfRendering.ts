@@ -1,3 +1,4 @@
+import { createLocalPdf } from '../security/localPdf';
 import regularFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans.ttf?url';
 import boldFontUrl from 'dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf?url';
 import { formatGrade } from '../utils';
@@ -24,7 +25,6 @@ async function fontBase64(url: string) {
  * Only the already reviewed protected model and teacher narrative are accepted.
  */
 export async function renderFormativePdf(model: FormativeRestitution, draft: RestitutionDraft): Promise<ArrayBuffer> {
-  if(typeof html2pdf==='undefined') throw new Error('Generatore PDF locale non disponibile.');
   if(model.version!==1 || model.rows.length!==model.summary.count) throw new Error('Bilancio non completo.');
   const header=[model.subject+' · '+model.schoolYear,model.classLabel+' · '+periodLabel(model.period),model.recipientLabel];
   const narrative=RESTITUTION_FIELDS.filter(([field])=>draft[field].trim()).map(([field])=>[FAMILY_RESTITUTION_HEADINGS[field],normalize(draft[field])]);
@@ -50,11 +50,7 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
   const quickLabels=['Media del periodo','Attività registrate','Voti nella media'];
   const labels=[TITLE,'Per l’alunno e la famiglia',...quickLabels,quickMean,quickCount,quickIncluded,'A. Sintesi formativa','B. Rendiconto delle valutazioni','Riepilogo per tipologia','Attività registrate nel periodo','Pagina 1 di 1','Nessuna sintesi inserita dal docente.'];
   const allText=[...labels,...header,...narrative.flat(),metric,counts,method,caution,noMean,...types,...columns,...rows.flat(),foot,empty];
-  const seed=document.createElement('canvas');seed.width=1;seed.height=1;
-  const ctx=seed.getContext('2d');if(!ctx)throw new Error('Generatore PDF locale non disponibile.');
-  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,1,1);
-  const worker=(html2pdf() as any).set({margin:15,enableLinks:false,image:{type:'png'},jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:false}}).from(seed,'canvas').toPdf();
-  const pdf=await worker.get('pdf');
+  const pdf=createLocalPdf();
   const family='RegistroFormativo';
   const [regular,bold]=await Promise.all([fontBase64(regularFontUrl),fontBase64(boldFontUrl)]);
   pdf.addFileToVFS('RegistroFormativo-Regular.ttf',regular);
@@ -71,7 +67,7 @@ export async function renderFormativePdf(model: FormativeRestitution, draft: Res
       if(code<32||code>0xffff||!font.characterToGlyph(code))throw new Error('Il documento contiene caratteri non supportati dal PDF locale.');
     }
   }
-  pdf.addPage();pdf.deletePage(1);pdf.setPage(1);
+  pdf.setPage(1);
   pdf.setProperties({title:TITLE,subject:'Restituzione didattica',author:'',keywords:'',creator:'Registro Docente'});
   let y=15, section='A. Sintesi formativa', emitted=0;
   function style(size:number,bold=false){

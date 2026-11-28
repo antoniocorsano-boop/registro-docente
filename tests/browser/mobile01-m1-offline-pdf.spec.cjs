@@ -13,30 +13,24 @@ test('MOBILE-01/M1 renders a real PDF from locally bundled assets with outside n
   });
   const loaded = await page.goto(baseURL, { waitUntil: 'load' });
   expect(loaded.status()).toBe(200);
-  const vendor = await request.get(baseURL + '/vendor/html2pdf.bundle.min.js');
+  const vendor = await request.get(baseURL + '/vendor/jspdf.umd.min.js');
   expect(vendor.status()).toBe(200);
   expect(vendor.headers()['content-type']).toMatch(/javascript/);
 
   const result = await page.evaluate(async () => {
-    if (typeof window.html2pdf !== 'function') return { loaded: false };
-    const doc = document.createElement('div');
-    doc.id = 'synthetic-offline-pdf-proof';
-    doc.style.cssText = 'background:white;color:black;font:16px system-ui;padding:20px;width:400px';
-    doc.textContent = 'Documento sintetico di Tecnologia — prova PDF senza rete';
-    document.body.append(doc);
-    try {
-      const data = await window.html2pdf().set({
-        margin: 5,
-        html2canvas: { scale: 1 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      }).from(doc).toPdf().outputPdf('arraybuffer');
-      const bytes = new Uint8Array(data);
-      return { loaded: true, header: Array.from(bytes.slice(0, 5)), bytes: bytes.byteLength };
-    } finally {
-      doc.remove();
-    }
+    const Constructor = window.jspdf?.jsPDF;
+    if (typeof Constructor !== 'function') return { loaded: false };
+    const doc = new Constructor({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: false });
+    const synthetic = 'Documento sintetico di Tecnologia';
+    doc.text(synthetic, 15, 20);
+    const bytes = new Uint8Array(doc.output('arraybuffer'));
+    return { loaded: true, version: Constructor.version,
+      text: new TextDecoder().decode(bytes).includes(synthetic),
+      header: Array.from(bytes.slice(0, 5)), bytes: bytes.byteLength };
   });
   expect(result.loaded).toBe(true);
+  expect(result.version).toBe('4.2.1');
+  expect(result.text).toBe(true);
   expect(result.header).toEqual([37, 80, 68, 70, 45]); // %PDF-
   expect(result.bytes).toBeGreaterThan(1000);
   expect(blocked).toEqual([]);
