@@ -45,7 +45,17 @@ if test "$CANDIDATE_SHA" != "$r3a"; then
     gov_head="$CANDIDATE_SHA"
     if test "$CANDIDATE_SHA" != "$gov" && git merge-base --is-ancestor "$gov" "$CANDIDATE_SHA"; then
       gov_head="$gov"
-      check_delta "$gov" "$CANDIDATE_SHA" \
+      build01=c05702fdbd85f3c8bc89dfedfb43df8aee3a85ec
+      build01_head="$CANDIDATE_SHA"
+      if test "$CANDIDATE_SHA" != "$build01" && git merge-base --is-ancestor "$build01" "$CANDIDATE_SHA"; then
+        build01_head="$build01"
+        check_delta "$build01" "$CANDIDATE_SHA" \
+          mobile/android-probe/verification-metadata.xml \
+          scripts/diagnostics/android-r3-admission.sh
+        test "$(git ls-tree "$CANDIDATE_SHA" -- mobile/android-probe/verification-metadata.xml)" = \
+          "$(printf '100644 blob %s\t%s' '171aff841a11b8307f5ef1ccdece58a47615cda4' mobile/android-probe/verification-metadata.xml)"
+      fi
+      check_delta "$gov" "$build01_head" \
         .github/workflows/ap02-f2-native-device.yml \
         .github/workflows/mobile-01-android-probe.yml \
         .github/workflows/qa-appium-replacement-pilot.yml \
