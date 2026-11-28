@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import {withinDeadline} from './native-lab-runtime.mjs';
 import {packagePidCommand,parsePackagePids,probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
 const pkg='it.trama.registrodocente';
 test('one adb shell command preserves actual pidof status and package argument',()=>{
@@ -58,4 +59,14 @@ test('R03 rejects late second absence sample without repeating force-stop',async
     forceStop:()=>{stops++;},probe:()=>{probes++;if(probes===3)now=1001;return probes===1?[123]:[];}
   }),/absence not verified|PROCESS_STOP_DEADLINE/);
   assert.equal(stops,1);assert.equal(probes,3);
+});
+
+
+test('BETA-CLOSE M07 does not issue force-stop after the tighter parent deadline',async()=>{
+  let t=0,stops=0;
+  await assert.rejects(withinDeadline(()=>verifiedProcessStop({
+    now:()=>t,timeoutMs:1000,probe:()=>{t=101;return [123];},
+    forceStop:()=>{stops++;},pause:async ms=>{t+=ms;}
+  }),{timeoutMs:100,now:()=>t}));
+  assert.equal(stops,0);
 });

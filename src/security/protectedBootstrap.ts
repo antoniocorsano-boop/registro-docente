@@ -127,6 +127,7 @@ export interface BootstrapPorts{
   pause?(ms:number,signal:AbortSignal):Promise<void>;
   attemptMs?:number;
   totalMs?:number;
+  now?():number; // monotonic clock; production defaults to performance.now
 }
 function wait(ms:number,signal:AbortSignal):Promise<void>{
   return new Promise((resolve,reject)=>{
@@ -149,14 +150,16 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
     const total=ports.totalMs??12000,attemptMs=ports.attemptMs??3500;
     const pause=ports.pause??wait;
     const trace:BootTrace[]=[];
-    const started=Date.now();
+    const now=ports.now??(()=>performance.now());
+    const started=now();
     const execute=async():Promise<BootResult>=>{
       let absentSeen=false,versionRetried=false;
       for(let attempt=1;attempt<=3;attempt++){
         let phaseFault:BootFault;
-        const remaining=total-(Date.now()-started);
+        const remaining=total-(now()-started);
         if(signal.aborted||generation!==current)return {kind:'error',fault:fault('deadline','cancelled'),trace};
         if(remaining<=0)return {kind:'error',fault:fault('deadline','timeout'),trace};
+        const attemptDeadline=Math.min(started+total,now()+attemptMs);
         const child=new AbortController();
         let rejectCancelled:(()=>void)|undefined;
         const cancel=()=>{rejectCancelled?.();child.abort();};
@@ -166,11 +169,15 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
           const observation=await Promise.race([
             new Promise<never>((_,reject)=>{rejectCancelled=()=>reject(fault('deadline','cancelled'));}),
             ports.observe(child.signal),
-            new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(fault('deadline','timeout'));child.abort();},Math.min(remaining,attemptMs));})
+            new Promise<never>((_,reject)=>{timer=setTimeout(()=>{reject(fault('deadline','timeout'));child.abort();},Math.max(0,attemptDeadline-now()));})
           ]);
           ensureCurrent(signal,'deadline');
           if(generation!==current)throw fault('deadline','cancelled');
+          if(now()>=attemptDeadline)throw fault('deadline','timeout');
           const established=ports.established();
+          ensureCurrent(signal,'deadline');
+          if(generation!==current)throw fault('deadline','cancelled');
+          if(now()>=attemptDeadline)throw fault('deadline','timeout');
           if((observation.kind==='absent'||observation.kind==='empty')&&established)throw fault('classification','missing-established');
           if(observation.kind==='absent'&&!absentSeen){
             absentSeen=true;
@@ -184,7 +191,7 @@ export function createProtectedBootstrap(ports:BootstrapPorts){
         if(signal.aborted||generation!==current)return {kind:'error',fault:fault('deadline','cancelled'),trace};
         if(!retryable(phaseFault)||attempt===3||(phaseFault.code==='version-changed'&&versionRetried))return {kind:'error',fault:phaseFault,trace};
         if(phaseFault.code==='version-changed')versionRetried=true;
-        const delay=Math.min(attempt===1?250:750,total-(Date.now()-started));
+        const delay=Math.min(attempt===1?250:750,total-(now()-started));
         if(delay<=0)return {kind:'error',fault:fault('deadline','timeout'),trace};
         try{await pause(delay,signal);}catch{return {kind:'error',fault:fault('deadline','cancelled'),trace};}
       }

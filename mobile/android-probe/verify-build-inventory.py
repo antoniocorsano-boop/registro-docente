@@ -49,7 +49,8 @@ def verify(runtime, gradle, apk, tree, lock):
     require(isinstance(classpaths, list) and any(row['project'] == ':' for row in classpaths),
             'Missing root Gradle buildscript classpath')
     agp = runtime['toolchain']['agp']
-    require(any(edge['selected'] == f'com.android.tools.build:gradle:{agp}'
+    agp_coordinate = f'com.android.tools.build:gradle:{agp}'
+    require(any(edge['selected'] == agp_coordinate
                 for row in classpaths if row['project'] == ':' for edge in row['edges']),
             'Missing AGP from root buildscript classpath')
     for row in classpaths:
@@ -57,6 +58,9 @@ def verify(runtime, gradle, apk, tree, lock):
                 'Incomplete classpath evidence')
         require(all(SHA.fullmatch(artifact['sha256']) for artifact in row['artifacts']),
                 'Invalid classpath artifact SHA-256')
+    require(any(artifact['component'] == agp_coordinate
+                for row in classpaths if row['project'] == ':' for artifact in row['artifacts']),
+            'Missing AGP artifact digest in root buildscript classpath')
     graph = npm_graph(tree, lock)
     return {
         'schema': 1, 'source_sha': runtime['source_sha'], 'apk_sha256': runtime['apk_sha256'],

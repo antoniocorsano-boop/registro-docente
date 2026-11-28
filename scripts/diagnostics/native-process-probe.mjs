@@ -1,7 +1,7 @@
 // Synthetic CI only. A failed ADB transport or malformed output is never
 // evidence that a process is absent.
 import { performance } from 'node:perf_hooks';
-import { withinDeadline } from './native-lab-runtime.mjs';
+import { withinDeadline, remainingObservationMs } from './native-lab-runtime.mjs';
 export function packagePidCommand(pkg){
   if(typeof pkg!=='string'||!/^([A-Za-z][A-Za-z0-9_]*\.)+[A-Za-z][A-Za-z0-9_]*$/.test(pkg))throw Error('Invalid Android package');
   // adb shell joins arguments without quoting. Send one complete remote
@@ -27,22 +27,21 @@ function checkedPids(value){
 }
 export async function verifiedProcessStop({probe,forceStop,pause=ms=>new Promise(r=>setTimeout(r,ms)),now=performance.now.bind(performance),timeoutMs=15000}){
   return withinDeadline(async()=>{
-  const deadline=now()+timeoutMs;
   const beforePids=checkedPids(probe());
   if(!beforePids.length)throw Error('Process not positively observed before force-stop');
   // Exactly one stop request. Do not retry a destructive or uncertain action.
-  if(now()>=deadline)throw Error('Process still present or absence not verified after force-stop');
+  if(remainingObservationMs()<=0)throw Error('Process still present or absence not verified after force-stop');
   forceStop();
   let absenceSamples=0,observations=0;
-  while(now()<deadline){
+  while(remainingObservationMs()>0){
     const afterPids=checkedPids(probe());
-    if(now()>=deadline)break;
+    if(remainingObservationMs()<=0)break;
     observations++;
     // Two consecutive, independently successful empty probes. A transport
     // or parser error escapes immediately and cannot count as absence.
     absenceSamples=afterPids.length===0?absenceSamples+1:0;
     if(absenceSamples===2)return {forcedStop:true,beforePids,afterPids,absenceSamples,observations};
-    await pause(Math.min(250,Math.max(0,deadline-now())));
+    await pause(Math.min(250,remainingObservationMs()));
   }
   throw Error('Process still present or absence not verified after force-stop');
   },{timeoutMs,now,timeoutCode:'PROCESS_STOP_DEADLINE'});

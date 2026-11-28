@@ -1737,6 +1737,8 @@
       "statement": "Only explicit fresh setup activates a complete verified encrypted archive; professional archives never receive demo entities, mode cannot change through settings, and existing vaults are not replaced. Historical backups without an archive mode retain the explicit destination mode; confirmed reset permits a fresh empty archive.",
       "impactPaths": [
         "src/security/legacyMigration.ts",
+        "tests/browser/beta-close-cr06.spec.cjs",
+        "tests/browser/fixtures/beta-close-cr06.fixture.mjs",
         "src/security/legacyMigration.test.ts",
         "src/security/protectedBootstrap.test.ts",
         "src/security/protectedBootstrap.ts",
@@ -3536,7 +3538,7 @@
     {
       "id": "AUDIT-PRE01-AP02-V6-GATE-I01",
       "owner": "AUDIT-PRE-01/AP-02",
-      "statement": "The currently connected V6 backup exporter cannot issue an authoritative receipt for a committed archive containing assessmentEvidenceV1, even when the domain is malformed or empty. The historical V6/legacy restore path cannot replace a destination containing such evidence or accept a source hiding that domain under V6 or legacy labels. The refusal happens inside the existing durable mutation queue before receipt creation, legacy normalization or a Vault write. Synthetic accessors and cycles fail closed without executing getters; valid V6 backups and imports without V7 evidence retain the historical path. This is a partial preventive gate only: V7 export, version-bound receipts, protected V7 restore and physical Android qualification are still unimplemented in the UI, and no release or merge is authorized.",
+      "statement": "The currently connected V6 backup exporter cannot issue an authoritative receipt for a committed archive containing assessmentEvidenceV1, even when the domain is malformed or empty. The historical V6/legacy restore path cannot replace a destination containing such evidence or accept a source hiding that domain under V6 or legacy labels. The refusal happens inside the existing durable mutation queue before receipt creation, legacy normalization or a Vault write. Synthetic accessors and cycles fail closed without executing getters; valid V6 backups and imports without V7 evidence retain the historical path. This is the V6 preventive gate only; the separate V7 operational path is specified by AUDIT-PRE01-AP02-V7-OP-I01. No release or merge is authorized.",
       "impactPaths": [
         "src/security/ap02LegacyBackupBoundary.ts",
         "src/security/ap02LegacyBackupBoundary.test.ts",

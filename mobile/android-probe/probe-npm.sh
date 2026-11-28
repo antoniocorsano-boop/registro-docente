@@ -20,7 +20,7 @@ test "$("${npm_cli[@]}" --version)" = "$expected"
 case "${1:-}" in
   install)
     before=$(sha256sum package.json package-lock.json)
-    "${npm_cli[@]}" ci
+    "${npm_cli[@]}" ci --dry-run=false
     test "$(sha256sum package.json package-lock.json)" = "$before"
     ;;
   inventory)

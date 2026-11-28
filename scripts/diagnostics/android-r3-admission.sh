@@ -49,10 +49,57 @@ if test "$CANDIDATE_SHA" != "$r3a"; then
       build01_head="$CANDIDATE_SHA"
       if test "$CANDIDATE_SHA" != "$build01" && git merge-base --is-ancestor "$build01" "$CANDIDATE_SHA"; then
         build01_head="$build01"
-        check_delta "$build01" "$CANDIDATE_SHA" \
+        build01a=2e53609d1e627d008e745f043b4e8909b8ed02c3
+        build01a_head="$CANDIDATE_SHA"
+        if test "$CANDIDATE_SHA" != "$build01a" && git merge-base --is-ancestor "$build01a" "$CANDIDATE_SHA"; then
+          build01a_head="$build01a"
+          # Historical admission below remains bound to the frozen predecessor.
+          local_paths=(
+            .github/workflows/ap02-f2-native-device.yml
+            .github/workflows/browser-qualification.yml
+            .github/workflows/header01-copilot-drawer-isolated-qualification.yml
+            .github/workflows/nav-mobile-disclosure-back-isolated-qualification.yml
+            .github/workflows/qa-appium-replacement-pilot.yml
+            docs/superpowers/plans/2026-11-28-beta-close-01-consolidamento.md
+            mobile/android-probe/probe-npm.sh
+            mobile/android-probe/test_native_inventory.py
+            mobile/android-probe/verify-build-inventory.py
+            qualification/invariants.v1.json
+            scripts/diagnostics/ap02-native-device-v7.mjs
+            scripts/diagnostics/appium-pilot/contract.test.mjs
+            scripts/diagnostics/appium-pilot/native-picker.mjs
+            scripts/diagnostics/appium-pilot/pilot.py
+            scripts/diagnostics/appium-pilot/q3-evidence.mjs
+            scripts/diagnostics/appium-pilot/run.sh
+            scripts/diagnostics/appium-pilot/test_native_contracts.py
+            scripts/diagnostics/native-lab-runtime.mjs
+            scripts/diagnostics/native-lab-runtime.test.mjs
+            scripts/diagnostics/native-lab-transitions.mjs
+            scripts/diagnostics/native-process-probe.mjs
+            scripts/diagnostics/native-process-probe.test.mjs
+            scripts/diagnostics/native-saf-lifecycle-probe.mjs
+            scripts/diagnostics/native-saf-lifecycle-probe.test.mjs
+            scripts/diagnostics/val01-native-evidence.mjs
+            src/security/ap02LegacyBackupBoundary.test.ts
+            src/security/ap02V7OperationalBackup.test.ts
+            src/security/protectedBootstrap.test.ts
+            src/security/protectedBootstrap.ts
+            src/security/secureVault.ts
+            src/security/vaultStore.ts
+            tests/browser/beta-close-cr06.spec.cjs
+            tests/browser/fixtures/beta-close-cr06.fixture.mjs
+          )
+          check_delta "$build01a" "$CANDIDATE_SHA" scripts/diagnostics/android-r3-admission.sh "${local_paths[@]}"
+          # Bind the exact blob and mode of each other changed file.
+          # This script's own blob is verified by the independent governance verifier.
+          delta_digest=$(git ls-tree -r "$CANDIDATE_SHA" -- "${local_paths[@]}" | sha256sum)
+          test "${delta_digest%% *}" = 3c9c5bd7da1fe1f3b5cf94ec61fb5c05be1d2bd896d47d16dd4248a6ebd95823
+          test "$(git ls-tree "$CANDIDATE_SHA" -- scripts/diagnostics/android-r3-admission.sh | cut -d ' ' -f 1)" = 100644
+        fi
+        check_delta "$build01" "$build01a_head" \
           mobile/android-probe/verification-metadata.xml \
           scripts/diagnostics/android-r3-admission.sh
-        test "$(git ls-tree "$CANDIDATE_SHA" -- mobile/android-probe/verification-metadata.xml)" = \
+        test "$(git ls-tree "$build01a_head" -- mobile/android-probe/verification-metadata.xml)" = \
           "$(printf '100644 blob %s\t%s' '171aff841a11b8307f5ef1ccdece58a47615cda4' mobile/android-probe/verification-metadata.xml)"
       fi
       check_delta "$gov" "$build01_head" \

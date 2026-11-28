@@ -2,13 +2,19 @@
 // Never persist dumpsys lines, activity names, user documents or filesystem paths.
 export function classifyResumedActivity(raw, appPackage) {
   if (typeof raw !== 'string' || typeof appPackage !== 'string') return 'unknown';
-  const row = raw.split('\n').find(line => /\b(?:topResumedActivity|mResumedActivity)\b/.test(line));
-  if (!row) return 'unknown';
-  const component = row.match(/\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)\/[A-Za-z0-9_.$]+/);
-  if (!component) return 'unknown';
-  const activePackage = component[1].toLowerCase();
+  const lines = raw.split('\n');
+  const top = lines.filter(line => /^\s*topResumedActivity\b/.test(line));
+  const fallback = lines.filter(line => /^\s*ResumedActivity\s*[:=]/.test(line));
+  const rows = top.length ? top : fallback.length ? fallback :
+    lines.filter(line => /^\s*mResumedActivity\b/.test(line));
+  const components = new Set(rows.map(line =>
+    line.match(/\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)\/[A-Za-z0-9_.$]+/)?.[0]
+  ));
+  if (components.size !== 1 || components.has(undefined)) return 'unknown';
+  const [component] = components;
+  const activePackage = component.split('/')[0].toLowerCase();
   if (activePackage === appPackage.toLowerCase()) return 'application';
-  if (activePackage.includes('documentsui')) return 'documentsui';
+  if (['com.android.documentsui','com.google.android.documentsui'].includes(activePackage)) return 'documentsui';
   return 'other';
 }
 export function summarizeSafActivityTrail(samples) {

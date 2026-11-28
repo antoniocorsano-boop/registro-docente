@@ -462,5 +462,45 @@ class BuildContractTest(unittest.TestCase):
             self.inventory.verify(runtime, gradle, apk, {}, lock)
 
 
+class BuildProbeContracts(unittest.TestCase):
+    def test_agp_requires_root_artifact_digest(self):
+        from importlib import import_module
+
+        verifier = import_module("verify-build-inventory")
+        coordinate = "com.android.tools.build:gradle:8.13.0"
+        with tempfile.TemporaryDirectory() as directory:
+            apk = Path(directory) / "synthetic.apk"
+            apk.write_bytes(b"synthetic")
+            receipt = {"source_sha": SOURCE, "apk_sha256": verifier.contract.digest(apk)}
+            runtime = {**receipt, "toolchain": {"agp": "8.13.0", "gradle": "8.14.8"}}
+            artifact = {"component": "sample:other:1", "sha256": "a" * 64}
+            classpath = {"project": ":", "configuration": "buildscript:classpath",
+                         "edges": [{"selected": coordinate}], "artifacts": [artifact]}
+            gradle = {**receipt, "gradle": "8.14.8", "classpaths": [classpath]}
+            tree = {"dependencies": {"sample": {"version": "1"}}}
+            lock = {"packages": {"node_modules/sample": {"version": "1"}}}
+            with self.assertRaisesRegex(ValueError, "Missing AGP artifact digest"):
+                verifier.verify(runtime, gradle, apk, tree, lock)
+            artifact["component"] = coordinate
+            evidence = verifier.verify(runtime, gradle, apk, tree, lock)
+            self.assertEqual(evidence["gradle_classpaths"], [classpath])
+
+    def test_probe_install_overrides_inherited_npm_dry_run(self):
+        from importlib import import_module
+
+        contract = import_module("build-contract")
+        with tempfile.TemporaryDirectory() as directory:
+            npm = Path(directory) / "npm"
+            npm.write_text(
+                "#!/bin/sh\n"
+                f'if [ "$1" = --version ]; then echo {contract.NPM_VERSION}; exit; fi\n'
+                'test "$npm_config_dry_run" = true && test "$*" = "ci --dry-run=false"\n'
+            )
+            npm.chmod(0o755)
+            env = dict(os.environ, PATH=f"{directory}:{os.environ['PATH']}", npm_config_dry_run="true")
+            subprocess.run(["bash", str(Path(__file__).with_name("probe-npm.sh")), "install"],
+                           env=env, check=True, timeout=10)
+
+
 if __name__ == "__main__":
     unittest.main()

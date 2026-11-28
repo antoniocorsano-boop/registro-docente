@@ -4,10 +4,19 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {waitBootReadiness,emulatorIdentity,versionFacts,publicSurfaceFrame,isInteractiveElement,classifySurface} from '../native-lab-readiness.mjs';
-const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:10000,stdio:['ignore','pipe','pipe']}).trim();
-async function boot(){
+import {commandBudgetInfo,classifyAdbDeadline} from '../native-lab-runtime.mjs';
+const adb=(...args)=>{
+  const budget=commandBudgetInfo(10000);
+  try{return execFileSync('adb',args,{encoding:'utf8',timeout:budget.timeoutMs,killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']}).trim();}
+  catch(error){throw classifyAdbDeadline(error,budget);}
+};
+async function ready(){
   let bootObservation=null;
   await waitBootReadiness(adb,{onState:state=>{bootObservation=state;}});
+  return {bootObservation,bootReady:true};
+}
+async function boot(){
+  const {bootObservation}=await ready();
   if(Number(adb('shell','getprop','ro.build.version.sdk'))!==Number(process.env.AP02_API))throw Error('WRONG_API');
   const sdk=process.env.ANDROID_HOME||process.env.ANDROID_SDK_ROOT;
   if(!sdk)throw Error('SDK_UNAVAILABLE');
@@ -25,6 +34,7 @@ async function boot(){
 }
 try{
   if(process.argv[2]==='boot')console.log(JSON.stringify(await boot()));
+  else if(process.argv[2]==='ready')console.log(JSON.stringify(await ready()));
   else if(process.argv[2]==='surface')console.log('return ('+classifySurface.toString()+')({...('+publicSurfaceFrame.toString()+')(arguments[0],document,getComputedStyle,'+isInteractiveElement.toString()+'),foreground:true},arguments[1]);');
   else throw Error('INVALID_ADAPTER_MODE');
 }catch{console.error('HYBRID_Q3_ADAPTER_FAILED');process.exitCode=1;}

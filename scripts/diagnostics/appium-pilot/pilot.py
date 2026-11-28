@@ -41,6 +41,9 @@ def q3_command(mode, timeout):
     return subprocess.run(["node", str(Path(__file__).with_name("q3-evidence.mjs")), mode],
                           check=True,capture_output=True,text=True,timeout=timeout).stdout
 
+class CanonicalRelock(RuntimeError):
+    pass
+
 def canonical_ready(driver, destination, label=None):
     if MODE == "pilot":
         return
@@ -51,7 +54,7 @@ def canonical_ready(driver, destination, label=None):
         if state == "gate-error":
             raise RuntimeError("PUBLIC_GATE_ERROR")
         if state == "locked":
-            raise RuntimeError("PUBLIC_RELOCK_AFTER_AUTH")
+            raise CanonicalRelock("PUBLIC_RELOCK_AFTER_AUTH")
         if state == "ready" and activity_is(d,"application"):
             consecutive += 1
         else:
@@ -265,8 +268,12 @@ def observe_destination(driver, destination, authentication, allow_confirmation=
         result = wait(driver, sample, 60)
         if result != "locked":
             if result == "ready" and destination in ("home","privacy","session"):
-                canonical_ready(driver,destination)
-            return result
+                try:
+                    canonical_ready(driver,destination)
+                except CanonicalRelock:
+                    result = "locked"
+            if result != "locked":
+                return result
         if authentication["used"]:
             raise RuntimeError("PUBLIC_RELOCK_AFTER_AUTH")
         authentication["used"] = True
@@ -424,29 +431,56 @@ def native_picker(driver, action, name=None):
     # No Appium selector fallback, no second invocation after an unknown result.
     phase("saf-canonical-native-driver")
     script = Path(__file__).with_name("native-picker.mjs")
-    result = subprocess.run(["node", str(script)], input=json.dumps({"action": action, "name": name, "sessionId": driver.session_id}),
-                            capture_output=True, text=True, timeout=280)
+    timed_out = False
+    try:
+        result = subprocess.run(["node", str(script)], input=json.dumps({"action": action, "name": name, "sessionId": driver.session_id}),
+                                capture_output=True, text=True, timeout=450)
+        output, returncode = result.stdout, result.returncode
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        output, returncode = exc.stdout or "", 1
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="replace")
     phases = {"saf-downloads-location", "saf-open-roots", "saf-select-downloads",
               "saf-downloads-ready", "saf-save-control", "saf-select-exact-document",
               "saf-observe-open-or-return", "saf-confirm-open", "saf-observe-document-return",
               "saf-native-complete"}
     last_phase = None
     completed = False
-    for line in result.stdout.splitlines():
-        event = json.loads(line)
-        kind, value = event.get("kind"), event.get("value")
+    invalid_event = False
+    reported_failure = False
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+            if (not isinstance(event, dict) or set(event) != {"kind", "value"} or
+                    not isinstance(event["kind"], str) or not isinstance(event["value"], str)):
+                raise ValueError("Invalid native event")
+        except (ValueError, TypeError):
+            invalid_event = True
+            continue  # possible truncated final event; never treat it as PASS
+        if completed or reported_failure:
+            invalid_event = True
+            continue
+        kind, value = event["kind"], event["value"]
         if kind == "phase" and value in phases:
             last_phase = value
             phase(value)
-        elif kind == "observation" and isinstance(value, str) and re.fullmatch(r"[a-z0-9_-]+|[A-Z0-9_]+", value):
+        elif kind == "observation" and re.fullmatch(r"[a-z0-9_-]+|[A-Z0-9_]+", value):
             evidence["nativeObservation"] = value
-        elif kind == "failure" and isinstance(value, str) and re.fullmatch(r"[A-Z0-9_]+", value):
+        elif kind == "failure" and re.fullmatch(r"[A-Z0-9_]+", value):
+            reported_failure = True
             evidence["nativeFailureCode"] = value
             print("APPIUM_NATIVE_FAILURE", value, flush=True)
-        elif kind == "result" and value == "PASS":
+        elif kind == "result" and value == "PASS" and last_phase == "saf-native-complete":
             completed = True
+        else:
+            invalid_event = True
+    if timed_out:
+        evidence["nativeFailureCode"] = "CANONICAL_NATIVE_PICKER_TIMEOUT"
+    elif invalid_event:
+        evidence["nativeFailureCode"] = "CANONICAL_NATIVE_PICKER_INVALID_EVENT"
     save()
-    if result.returncode != 0 or not completed or last_phase != "saf-native-complete":
+    if timed_out or invalid_event or returncode != 0 or not completed or last_phase != "saf-native-complete":
         raise RuntimeError("CANONICAL_NATIVE_PICKER_FAILED")
 
 def picker_return(driver, role, expected_dialog):
@@ -534,12 +568,10 @@ def main():
     driver = None
     try:
         phase("session-device-readiness")
-        def device_ready(_):
-            return (adb_read("get-state").strip() == b"device" and
-                    adb_read("shell", "getprop", "sys.boot_completed").strip() == b"1" and
-                    adb_read("shell", "pm", "path", "android").strip().startswith(b"package:"))
-        WebDriverWait(None, 60, poll_frequency=1).until(device_ready)
-        if MODE != "pilot":
+        # Reuse the canonical, bounded, read-only boot observer in both modes.
+        if MODE == "pilot":
+            q3_command("ready",120)
+        else:
             environment.update(json.loads(q3_command("boot",150)))
             q3_surface = q3_command("surface",10)
         phase("session-create-once")

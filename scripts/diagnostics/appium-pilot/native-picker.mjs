@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
-import {LabFailure, classifyFailure, commandBudgetInfo, classifyAdbDeadline, observeUntil} from '../native-lab-runtime.mjs';
+import {LabFailure, classifyFailure, commandBudgetInfo, classifyAdbDeadline, observeUntil, withinDeadline} from '../native-lab-runtime.mjs';
 import {waitNativeSelection, uniqueNativeControl, requireDocumentsUiTap, nativeReadRetryCodes} from '../native-lab-transitions.mjs';
 import {classifyResumedActivity} from '../native-saf-lifecycle-probe.mjs';
 import {hasArea,parseNativeNodes} from '../native-ui-driver.mjs';
@@ -134,7 +134,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   };
   try{
     const request=JSON.parse(readFileSync(0,'utf8'));
-    await createPicker({adb,readNodes:()=>appiumSnapshot(request.sessionId),api:Number(process.env.AP02_API),report}).run(request.action,request.name);
+    // A single child budget is shorter than the parent's 450 s timeout.
+    await withinDeadline(()=>createPicker({adb,readNodes:()=>appiumSnapshot(request.sessionId),api:Number(process.env.AP02_API),report}).run(request.action,request.name),
+      {timeoutMs:420000,timeoutCode:'OBSERVATION_DEADLINE'});
     report('result','PASS');
   }catch(error){
     const classified=classifyFailure(error);

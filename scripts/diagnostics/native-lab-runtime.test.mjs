@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, existsSync } from 'node:fs';
 import { pullLabV7Bytes } from './native-v7-document-discovery.mjs';
-import { LabFailure, classifyFailure, observeUntil, commandBudget, commandBudgetInfo, classifyAdbDeadline, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, createRecoveryConsentGate, V7_RECOVERY_CONSENT, failureCategories } from './native-lab-runtime.mjs';
+import { LabFailure, classifyFailure, observeUntil, commandBudget, commandBudgetInfo, classifyAdbDeadline, createPendingCommands, withoutObservationScope, cdpEvaluationFailure, normalizeAdbFailure, withinDeadline, bestEffortDiagnostic, createDialogTracker, createRecoveryConsentGate, V7_RECOVERY_CONSENT, failureCategories, val01ObservationId, sanitizedVal01ObservationId } from './native-lab-runtime.mjs';
 const fakeClock = () => {
   let time = 0;
   return { now: () => time, sleep: async ms => { time += ms; }, advance: ms => { time += ms; } };
@@ -349,7 +349,7 @@ test('Q4 wrapper preserves three trials, two APIs, isolated identity and F2 gate
   const f2=readFileSync(new URL('../../.github/workflows/ap02-f2-native-device.yml',import.meta.url),'utf8');
   for(const s of ['branches: [fix/audit-pre-01-atomic-bootstrap]','github.event.pull_request.number == 414','qa/qa-stability-01-q2','80378e9daab60fe6c389e372c3c79e3dcd09aac0','trial: [1, 2, 3]','fail-fast: false','uses: ./.github/workflows/ap02-f2-native-device.yml','contents: read'])
     assert.ok(wrapper.includes(s),s);
-  for(const s of ['branches: [main]','api: [32, 36]','workflow_call:','test "$CANDIDATE_SHA" = "$EVENT_HEAD"','test "$GITHUB_RUN_ATTEMPT" = 1','q4-api{0}-trial{1}-{2}-run{3}-attempt{4}','q4-identity.json','Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','.results[4].nativeReauthCount>=4','.results[5].absenceSamples==2','productionRelease==false','syntheticOnly==true','persist-credentials: false'])
+  for(const s of ['branches: [main]','api: [32, 36]','workflow_call:','test "$CANDIDATE_SHA" = "$EVENT_HEAD"','test "$GITHUB_RUN_ATTEMPT" = 1','q4-api{0}-trial{1}-{2}-run{3}-attempt{4}','q4-identity.json','Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','(.results[4].nativeReauthCount|if type=="number" then .>=4 and .==floor and .<=9007199254740991 else false end)','.results[5].absenceSamples==2','productionRelease==false','syntheticOnly==true','persist-credentials: false'])
     assert.ok(f2.includes(s),s);
   assert.ok(!wrapper.includes('secrets: inherit'));
   assert.ok(!wrapper.includes('contents: write'));
@@ -611,6 +611,30 @@ test('Q4-R06 transient final connection readiness loss resets selection and clos
   assert.deepEqual(closed,[1]);assert.ok(states.includes('handoff-not-ready'));
   assert.equal(states.at(-1),'handoff-stable');
 });
+test('M08 rejects lost focus after the final competing WebView read', async () => {
+  const clock = fakeClock(), released = [], states = [];
+  let connection = 0, lostFocus = false;
+  const identity = () => ({ pid: 17, foreground: true, list: [target('a'), target('b')] });
+  const selected = await waitUniquePublicTarget({
+    expected: 'setup', ...clock, timeoutMs: 5000, sample: identity, confirmIdentity: identity,
+    inspect(candidate) {
+      if (candidate.id === 'a') return setupFrame;
+      if (connection === 1) lostFocus = true;
+      return { documentVisible: true, documentFocused: false };
+    },
+    acquire() {
+      lostFocus = false;
+      return { number: ++connection };
+    },
+    inspectAcquired: () => ({ ...setupFrame, documentFocused: !lostFocus }),
+    release: handle => released.push(handle.number),
+    onState: sample => states.push(sample.state)
+  });
+  assert.equal(selected.connection.number, 2);
+  assert.deepEqual(released, [1]);
+  assert.ok(states.includes('handoff-selection-changed'));
+  assert.equal(states.at(-1), 'handoff-stable');
+});
 test('Q4-R06 final PID, foreground and candidate-set changes require fresh selection',async()=>{
   for(const mode of ['pid','foreground','list']){
     const clock=fakeClock(),closed=[];let n=0;
@@ -665,7 +689,7 @@ test('Q4-R07 independent startup matrix precedes pilot and cannot count as full 
   assert.ok(q.includes('needs: [preflight, hybrid, pilot]'));
   assert.ok(f.includes('default: false')&&f.includes('if: ${{ !inputs.startup_only && !matrix.r4a_startup }}'));
   assert.ok(f.includes('q4-startup-api{0}-trial{1}')&&f.includes('.fullF2Qualified==false'));
-  assert.ok(f.includes('.results[4].nativeReauthCount>=4')&&f.includes('.results[5].absenceSamples==2'));
+  assert.ok(f.includes('(.results[4].nativeReauthCount|if type=="number" then .>=4 and .==floor and .<=9007199254740991 else false end)')&&f.includes('.results[5].absenceSamples==2'));
   assert.ok(d.indexOf('if(startupOnly){')<d.indexOf('await createClass(originalClass)'));
   assert.ok(d.includes("startupOnly?'AP02_STARTUP_ONLY_SUCCESS':'AP02_F2_DEVICE_SUCCESS'"));
   const flow=d.slice(d.indexOf('if(startupOnly){'),d.indexOf('await createClass(originalClass)'));
@@ -988,4 +1012,17 @@ test('F2 real bootstrap records the failed operation in the environment before l
     assert.ok(snapshots.every(entry=>!entry.includes(id)&&!entry.includes('synthetic private text')));
   }
   assert.match(source,/appiumBootstrap:environment\.appiumBootstrap,/);
+});
+
+
+test('M11 persists only allowlisted DB2 observation identifiers', () => {
+  assert.equal(val01ObservationId('Exact encrypted filename missing'), 'EXACT_ENCRYPTED_FILENAME_MISSING');
+  assert.equal(val01ObservationId('synthetic unknown details'), 'UNCLASSIFIED_OBSERVATION');
+  assert.equal(sanitizedVal01ObservationId('V8_FILE_MISSING'), 'V8_FILE_MISSING');
+  assert.equal(sanitizedVal01ObservationId('synthetic unknown details'), null);
+  assert.equal(sanitizedVal01ObservationId(undefined), null);
+  const source = readFileSync('scripts/diagnostics/val01-native-evidence.mjs', 'utf8');
+  assert.match(source, /error\.observationId=val01ObservationId\(label\)/);
+  assert.match(source, /observationId=sanitizedVal01ObservationId\(error\?\.observationId\)/);
+  assert.match(source, /observationId,lastReadFailure:error\.lastReadFailure/);
 });

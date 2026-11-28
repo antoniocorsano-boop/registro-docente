@@ -774,7 +774,7 @@ function readSyntheticFileMetadata(filename) {
   let modifiedEpochSeconds=null,inode=null;
   if(present===true) {
     try {
-      const stat=adb('shell','stat','-c','%Y|%i',quotedLabV7Path(filename));
+      const stat=adb('shell','stat','-c',"'%Y|%i'",quotedLabV7Path(filename));
       const parts=/^(\d+)\|(\d+)$/.exec(stat);
       if(parts) {modifiedEpochSeconds=Number(parts[1]);inode=parts[2];}
     } catch { /* Unavailable metadata is not a reason to pass qualification. */ }
@@ -908,7 +908,7 @@ async function verifiedEncryptedFile(filename){
     throw error;
   }
 }
-async function exportV7(previous=null){
+async function exportV7(previous=null,onDuplicate=null){
   // Let ACTION_CREATE_DOCUMENT create genuinely separate files on a filename
   // collision. No shell rename, copy, media broadcast, or forged receipts.
   const filesBefore=listLabV7Files();
@@ -966,6 +966,9 @@ async function exportV7(previous=null){
     // document must be distinct. The later restore tests its actual content.
     assert.deepEqual(await verifiedEncryptedFile(previous.name),previous.digest,
       'ORIGINAL_V7_FILE_MODIFIED_BY_SECOND_EXPORT');
+    if(digest.sha256===previous.digest.sha256&&onDuplicate) {
+      onDuplicate({name,digest});
+    }
     assert.notEqual(digest.sha256,previous.digest.sha256,
       'V7_SECOND_ENCRYPTED_COPY_NOT_DISTINCT');
   }
@@ -1091,11 +1094,10 @@ async function run(){
   // Observe physical file identities before export #2 through the actual UI.
   const priorExportMetadata=captureSyntheticFilePair(target.name,target.name);
   const pickerReturnsBeforeRecovery=nativeSaveCompletionCount;
-  const recovery=await exportV7(target);
-  if(recovery.digest.sha256===target.digest.sha256) {
-    try {captureDuplicateExportDiagnostic(target,recovery,priorExportMetadata,pickerReturnsBeforeRecovery);}
+  const recovery=await exportV7(target,duplicate=>{
+    try {captureDuplicateExportDiagnostic(target,duplicate,priorExportMetadata,pickerReturnsBeforeRecovery);}
     catch {console.log('AP02_F2_DUPLICATE_EXPORT_DIAGNOSTIC_UNAVAILABLE',api);}
-  }
+  });
   assert.notEqual(recovery.digest.sha256,target.digest.sha256);
   await record('native-v7-current-recovery-export-saf-verified',{recovery:recovery.digest,physical:true,nativeReauthCount});
   await restoreFromRealSaf(target.name,recovery.name);

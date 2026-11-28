@@ -83,6 +83,8 @@ jobs:
           # Cap browser download at 120 seconds; fail promptly with a clear error.
           timeout --signal=TERM --kill-after=5s 120s ./.browser-tools/node_modules/.bin/playwright install chromium
           cp tests/browser/qualification-invariant-smoke.spec.cjs .browser-tools/qualification-invariant-smoke.spec.cjs
+          cp tests/browser/beta-close-cr06.spec.cjs .browser-tools/
+          bun build tests/browser/fixtures/beta-close-cr06.fixture.mjs --target browser --outfile .browser-tools/beta-close-cr06.fixture.mjs
           cp tests/browser/r106-student-import.spec.cjs .browser-tools/r106-student-import.spec.cjs
           cp tests/browser/r1-tec-bfcache.spec.cjs .browser-tools/r1-tec-bfcache.spec.cjs
           cp tests/browser/ap01-initial-reservation.spec.cjs .browser-tools/ap01-initial-reservation.spec.cjs
@@ -280,7 +282,7 @@ jobs:
           EVIDENCE_DIR="../browser-evidence" \
           CANDIDATE_SHA="${CANDIDATE_SHA}" \
           ./node_modules/.bin/playwright test \
-            qualification-invariant-smoke.spec.cjs \
+            qualification-invariant-smoke.spec.cjs beta-close-cr06.spec.cjs \
             --workers=1 \
             --reporter=line \
             --output=../browser-evidence/qualification-invariant-smoke-results

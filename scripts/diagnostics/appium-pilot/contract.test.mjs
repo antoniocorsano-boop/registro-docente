@@ -35,16 +35,39 @@ test('Appium preflight exact and isolated before emulators',()=>{
   assert.ok(sdk>=0&&sdk<emulator&&emulator<doctor&&doctor<workflow.indexOf('bun run build'));
   assert.match(workflow,/api: \[32, 36\]/);
 });
+// Literal shell recipe contract, including direct wrapper invocations.
+function verifiedGradleRecipe(source){
+  const normalized=source.replace(/\\\r?\n[ \t]*/g,' ').replace(/^[ \t]*#[^\n]*/gm,'');
+  const install=normalized.indexOf('probe-npm.sh');
+  const sync=normalized.indexOf('npx --no-install cap sync android');
+  const prepare=normalized.indexOf('python3 build-contract.py prepare');
+  const gradle=[...normalized.matchAll(/(?:^|[ \t;(&|])(?:bash[ \t]+)?\.\/gradlew(?=[ \t;)&|\r\n]|$)[^\r\n;)&|]*/gm)];
+  return install>=0&&install<sync&&sync<prepare&&gradle.length>0&&gradle.every(call=>{
+    const command=call[0].split(/[ \t]+#/)[0];
+    const options=[...command.matchAll(/(?:^|[ \t])--dependency-verification(?=[ \t=]|$)/g)];
+    return call.index>prepare&&options.length===1&&/(?:^|[ \t])--dependency-verification[ \t]+strict(?=[ \t]|$)/.test(command);
+  });
+}
 test('Generated Android projects use the locked npm graph and verified wrapper before Gradle',()=>{
   for(const name of ['mobile-01-android-probe','ap02-f2-native-device','qa-appium-replacement-pilot','val01-native-evidence']){
     const source=readFileSync(`.github/workflows/${name}.yml`,'utf8');
-    const install=source.indexOf('probe-npm.sh');
-    const sync=source.indexOf('npx --no-install cap sync android');
-    const prepare=source.indexOf('python3 build-contract.py prepare');
-    const gradle=[...source.matchAll(/bash \.\/gradlew[^\n]*/g)];
-    assert.ok(install>=0&&install<sync&&sync<prepare&&gradle.length>0, name);
-    assert.ok(gradle.every(call=>call.index>prepare&&call[0].includes('--dependency-verification strict')), name);
+    assert.ok(verifiedGradleRecipe(source),name);
+    const unsafe=source.replace(/(bash \.\/gradlew[^\r\n;)]*assembleDebug[^\r\n]*)/,m=>m+'\n          ./gradlew --no-daemon assembleDebug');
+    assert.notEqual(unsafe,source,name);
+    assert.equal(verifiedGradleRecipe(unsafe),false,name);
   }
+});
+test('Gradle recipe contract rejects unsafe extra and direct commands',()=>{
+  const prefix='bash mobile/android-probe/probe-npm.sh install\n          npx --no-install cap sync android\n          python3 build-contract.py prepare\n';
+  const safe=prefix+'bash ./gradlew --dependency-verification strict assembleDebug\n';
+  assert.ok(verifiedGradleRecipe(safe));
+  assert.ok(verifiedGradleRecipe(prefix+'./gradlew --dependency-verification strict assembleDebug\n'));
+  assert.ok(!verifiedGradleRecipe(safe+'./gradlew assembleDebug\n'));
+  assert.ok(!verifiedGradleRecipe('./gradlew --dependency-verification strict assembleDebug\n'+safe));
+  assert.ok(!verifiedGradleRecipe(safe.replace('strict assembleDebug','strictly assembleDebug')));
+  assert.ok(!verifiedGradleRecipe(safe.replace('strict assembleDebug','strict --dependency-verification lenient assembleDebug')));
+  assert.ok(!verifiedGradleRecipe(prefix+'# bash ./gradlew --dependency-verification strict assembleDebug\n'));
+  assert.ok(!verifiedGradleRecipe(prefix+'bash ./gradlew assembleDebug # --dependency-verification strict\n'));
 });
 test('pinned direct versions and non-release evidence',()=>{
   for(const x of ['appium@3.8.0','uiautomator2@8.6.0','Appium-Python-Client==6.1.2','.fullF2Qualified==false','.status=="PASS"'])assert.ok(workflow.includes(x),x);
@@ -99,7 +122,7 @@ test('canonical Q4 and direct F2 coordinate hybrid without weakening inherited g
   assert.equal((q4.match(/uses: \.\/\.github\/workflows\/qa-appium-replacement-pilot\.yml/g)||[]).length,1);
   assert.ok(f2.includes("inputs.candidate_sha == '' && (github.event.pull_request.number == 412 || (github.head_ref == 'candidate/cand-prod-01' && github.base_ref == 'main'))"));
   assert.match(f2,/uses: \.\/\.github\/workflows\/qa-appium-replacement-pilot\.yml/);
-  for(const marker of ['Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','nativeReauthCount>=4','absenceSamples==2','surface-readiness.json','environment.json','AP02_STARTUP_ONLY'])assert.ok(f2.includes(marker),marker);
+  for(const marker of ['Require exact complete acceptance evidence','Require complete Q3 environment and readiness evidence','(.results[4].nativeReauthCount|if type=="number" then .>=4 and .==floor and .<=9007199254740991 else false end)','absenceSamples==2','surface-readiness.json','environment.json','AP02_STARTUP_ONLY'])assert.ok(f2.includes(marker),marker);
   assert.ok(workflow.includes('.fullF2Qualified==false'));
   assert.ok(workflow.includes('git merge-base --is-ancestor 80378e9daab60fe6c389e372c3c79e3dcd09aac0 HEAD'));
   assert.ok(registry.invariants.some(x=>x.id==='QA-STABILITY-01-APPIUM-I02'));
@@ -522,4 +545,62 @@ esac
       assert.doesNotMatch(output+run.stderr,/private-synthetic-marker/);
     }
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test('BETA-CLOSE CR08 typed counts retain the exact thresholds in F2 and hybrid evidence',()=>{
+  const validate=(source,fields)=>{
+    const expressions=[...source.matchAll(/\((\.(?:results\[\d+\]\.)?\w+)\|if type=="number" then \.>=(\d+) and \.==floor and \.<=9007199254740991 else false end\)/g)];
+    assert.deepEqual(expressions.map(x=>[x[1],Number(x[2])]).sort(),fields.slice().sort());
+    for(const [expr,field,minRaw] of expressions){
+      const min=Number(minRaw);
+      const fixture=value=>{
+        const m=/^\.results\[(\d+)\]\.([A-Za-z]+)$/.exec(field);
+        if(!m)return {[field.slice(1)]:value};
+        const results=Array.from({length:6},()=>({}));results[Number(m[1])][m[2]]=value;return {results};
+      };
+      for(const [value,pass] of [[min,true],[min+1,true],[Number.MAX_SAFE_INTEGER,true],[min-1,false],[String(min),false],[true,false],[null,false],[undefined,false],[min+0.5,false],[Number.MAX_SAFE_INTEGER+1,false],[[],false],[{},false]]){
+        const result=spawnSync('jq',['-e',expr],{input:JSON.stringify(fixture(value)),encoding:'utf8'});
+        assert.equal(result.status,pass?0:1,field+': '+String(value)+' '+String(result.stderr));
+      }
+    }
+  };
+  validate(f2,[['.results[2].nativeReauthCount',1],['.results[3].nativeReauthCount',2],['.results[4].nativeReauthCount',4],['.results[5].beforePidsCount',1],['.beforePidsCount',1],['.nativeSnapshots',1]]);
+  validate(workflow,[['.nativeSnapshots',1]]);
+});
+
+test('M04 pilot starts work only after its own Appium process listens on loopback', () => {
+  const root = mkdtempSync(join(tmpdir(), 'appium-listener-contract-'));
+  try {
+    const commands = {
+      appium: 'echo $$ > "$RUNNER_TEMP/pid"\nexec sleep 15\n',
+      ss: `if [ "$LISTENER_CASE" != occupied ]; then
+  [ -s "$RUNNER_TEMP/pid" ] || exit 0
+  owner=$(cat "$RUNNER_TEMP/pid")
+fi
+[ "$LISTENER_CASE" = own ] || owner=999999
+printf 'LISTEN 0 511 127.0.0.1:4723 0.0.0.0:* users:(("node",pid=%s,fd=5))\\n' "$owner"
+`,
+      curl: 'while [ ! -s "$RUNNER_TEMP/pid" ]; do sleep .02; done\n',
+      timeout: 'echo harness-started\n'
+    };
+    for (const [command, body] of Object.entries(commands)) {
+      writeFileSync(join(root, command), '#!/bin/sh\n' + body, { mode: 0o755 });
+    }
+    for (const listenerCase of ['own', 'foreign', 'occupied']) {
+      rmSync(join(root, 'pid'), { force: true });
+      const result = spawnSync('bash', ['scripts/diagnostics/appium-pilot/run.sh'], {
+        encoding: 'utf8', timeout: 5000,
+        env: {
+          ...process.env, PATH: root + ':' + process.env.PATH, RUNNER_TEMP: root,
+          LISTENER_CASE: listenerCase, Q5_DUAL_QUALIFICATION: 'true'
+        }
+      });
+      assert.ifError(result.error);
+      assert.equal(result.status, listenerCase === 'own' ? 0 : 1, result.stderr);
+      assert.equal(result.stdout.trim(), listenerCase === 'own' ? 'harness-started' : '');
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

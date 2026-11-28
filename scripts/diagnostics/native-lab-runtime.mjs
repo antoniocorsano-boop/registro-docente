@@ -161,6 +161,11 @@ const scope = new AsyncLocalStorage();
 // Unsolicited CDP dialog events have their own command deadline. They must
 // not inherit the expired context of the WebSocket connection handshake.
 export function withoutObservationScope(fn) { return scope.exit(fn); }
+// Read the effective parent-capped deadline, without starting a second clock.
+export function remainingObservationMs(){
+  const deadline=scope.getStore();
+  return deadline?Math.max(0,deadline.end-deadline.now()):Infinity;
+}
 export function commandBudgetInfo(maxMs, now = performance.now.bind(performance)) {
   if (!Number.isFinite(maxMs) || maxMs <= 0) throw new LabFailure('INVALID_HARNESS_ARGUMENT');
   const deadline = scope.getStore();
@@ -318,4 +323,33 @@ export function createRecoveryConsentGate(){
     },
     snapshot(){return {state,submitted,acknowledged,observed,invalid};}
   };
+}
+
+const val01ObservationIds = new Map([
+  ['Native WebView unavailable', 'NATIVE_WEBVIEW_UNAVAILABLE'],
+  ['Native fixture missing', 'NATIVE_FIXTURE_MISSING'],
+  ['Native picker not visible', 'PICKER_NOT_VISIBLE'],
+  ['Native picker roots missing', 'PICKER_ROOTS_MISSING'],
+  ['Downloads root missing', 'DOWNLOADS_ROOT_MISSING'],
+  ['Picker did not return', 'PICKER_NO_RETURN'],
+  ['Native picker operation did not settle', 'PICKER_NOT_SETTLED'],
+  ['Native Save missing', 'SAVE_MISSING'],
+  ['Exact encrypted filename missing', 'EXACT_ENCRYPTED_FILENAME_MISSING'],
+  ['File selection did not complete', 'FILE_SELECTION_INCOMPLETE'],
+  ['Native Open missing', 'OPEN_MISSING'],
+  ['V8 picker did not return', 'V8_PICKER_NO_RETURN'],
+  ['V8 picker did not settle', 'V8_PICKER_NOT_SETTLED'],
+  ['Native V8 Save missing', 'V8_SAVE_MISSING'],
+  ['Native V8 file missing', 'V8_FILE_MISSING'],
+  ['Native V8 selected file did not return', 'V8_FILE_NO_RETURN'],
+  ['Native V8 Open missing', 'V8_OPEN_MISSING'],
+  ['DocumentsUI not active', 'DOCUMENTS_UI_NOT_ACTIVE'],
+  ['Picker remains open', 'PICKER_REMAINS_OPEN'],
+]);
+const allowedVal01ObservationIds = new Set([...val01ObservationIds.values(), 'UNCLASSIFIED_OBSERVATION']);
+export function val01ObservationId(label) {
+  return val01ObservationIds.get(label) ?? 'UNCLASSIFIED_OBSERVATION';
+}
+export function sanitizedVal01ObservationId(id) {
+  return allowedVal01ObservationIds.has(id) ? id : null;
 }

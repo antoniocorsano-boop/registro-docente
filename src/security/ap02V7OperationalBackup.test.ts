@@ -117,10 +117,13 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     expect(v7Export).toContain('assessmentBackupAuthority.consume(current, receipt, 7)');
     expect(v7Export).toContain('secureStorage.saveMeta(candidate)');
     const restore = app.slice(app.indexOf('const handleImportEncryptedBackup ='), app.indexOf('const handleFactoryReset ='));
-    const projection = restore.indexOf('projectAssessmentRestoreV7(');
-    const persistence = restore.indexOf('secureStorage.restoreSnapshotVerified(');
-    expect(projection).toBeGreaterThan(0);
-    expect(persistence).toBeGreaterThan(projection);
+    const v7 = restore.slice(restore.indexOf('const handleImportAssessmentV7Backup ='),restore.indexOf('const restoreVerifiedCandidate = async ('));
+    const projection = v7.indexOf('projectAssessmentRestoreV7(');
+    const invocation = v7.indexOf('await restoreVerifiedCandidate(candidate, previousLogical)');
+    expect(projection).toBeGreaterThanOrEqual(0);
+    expect(invocation).toBeGreaterThan(projection);
+    const helper=restore.slice(restore.indexOf('const restoreVerifiedCandidate = async ('));
+    expect(helper).toContain('secureStorage.restoreSnapshotVerified(');
     expect(restore).toContain('resolveApprovedAssessmentScopes(');
     expect(restore).toContain('selectApprovedScopesForIncomingV7Backup(decryptedData, scopes)');
     expect(restore).toContain('assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData)');
@@ -323,6 +326,8 @@ describe('AUDIT-PRE-01/AP-02 — operational V7 export and conservative recovery
     const consent = 'Ripristino V7: è necessaria una copia cifrata ESATTA dello stato attuale, già conservata su un supporto separato. Dopo la conferma scegli il file di recupero. Continuare?';
     expect(flow).toContain(consent);
     expect(runtime).toContain(consent);
+    expect(flow).toContain('await readEncryptedBackupOnAndroid');
+    expect(flow).toContain('await decryptDataWithPassword(encryptedText, decryptPassword)');
     expect(flow.indexOf('await readEncryptedBackupOnAndroid')).toBeLessThan(flow.indexOf('await decryptDataWithPassword(encryptedText, decryptPassword)'));
     expect(flow.indexOf('await decryptDataWithPassword(encryptedText, decryptPassword)')).toBeLessThan(flow.indexOf(consent));
     const read = bridge.slice(bridge.indexOf('export async function readEncryptedBackupOnAndroid'));

@@ -105,6 +105,13 @@ export async function waitUniquePublicTarget({sample,inspect,verify=()=>true,exp
           target=>target.id===selected.id?inspectAcquired(held):inspect(target),expected);
         if(finalSelection.target?.id!==selected.id||!await verify(selected.pid))
           return rejectHandoff('handoff-selection-changed');
+        // A multi-active selection depends on explicit document focus. Recheck
+        // the retained socket after the last competing read; not an atomic focus guarantee.
+        const handoffFrame=await inspectAcquired(held);
+        if(!handoffFrame||typeof handoffFrame.documentVisible!=='boolean'||
+          (currentTargets.filter(x=>x.nativeView==='active').length>1&&handoffFrame.documentFocused!==true)||
+          classifySurface({...handoffFrame,foreground:true},expected)!=='ready')
+          return rejectHandoff('handoff-selection-changed');
         last='handoff-stable';onState({state:last,candidates:targets.length,matches:1});
         keep=true;
         return {...selected,connection:held};

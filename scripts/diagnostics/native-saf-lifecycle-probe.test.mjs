@@ -10,9 +10,21 @@ test('F2-DIAG-03 recognizes app, DocumentsUI and unrelated foreground activities
   const line = name => 'mResumedActivity: ActivityRecord{a5 u0 ' + name + '/.MainActivity t14}';
   assert.equal(classifyResumedActivity(line(app), app), 'application');
   assert.equal(classifyResumedActivity(line('com.google.android.documentsui'), app), 'documentsui');
+  assert.equal(classifyResumedActivity(line('com.android.documentsui'), app), 'documentsui');
+  assert.equal(classifyResumedActivity('  ResumedActivity: ActivityRecord{a5 u0 com.android.documentsui/.MainActivity t14}', app), 'documentsui');
+  assert.equal(classifyResumedActivity(line('com.example.documentsuihelper'), app), 'other');
+  assert.equal(classifyResumedActivity(line(app)+'\n  ResumedActivity: ActivityRecord{a5 u0 com.android.documentsui/.MainActivity t14}', app), 'documentsui');
   assert.equal(classifyResumedActivity(line('com.android.settings'), app), 'other');
   assert.equal(classifyResumedActivity('mResumedActivity: null', app), 'unknown');
   assert.equal(classifyResumedActivity('ADB unavailable', app), 'unknown');
+});
+test('SAF activity authority prefers the explicit top and rejects ambiguous fallbacks', () => {
+  const docs = '  ResumedActivity: ActivityRecord{a5 u0 com.android.documentsui/.MainActivity t14}';
+  const own = '  ResumedActivity: ActivityRecord{b6 u0 ' + app + '/.MainActivity t15}';
+  const top = '  topResumedActivity=ActivityRecord{b6 u0 ' + app + '/.MainActivity t15}';
+  assert.equal(classifyResumedActivity(docs + '\n' + top, app), 'application');
+  assert.equal(classifyResumedActivity(docs + '\n' + own, app), 'unknown');
+  assert.equal(classifyResumedActivity(docs + '\n  topResumedActivity=null', app), 'unknown');
 });
 test('F2-DIAG-03 shows a documented picker return and only categorical transitions', () => {
   const result = summarizeSafActivityTrail([

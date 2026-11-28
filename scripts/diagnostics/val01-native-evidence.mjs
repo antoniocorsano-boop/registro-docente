@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {probePackagePids,verifiedProcessStop} from './native-process-probe.mjs';
 
 import {createAdbTransportTrace} from './native-adb-transport-probe.mjs';
-import {classifyFailure,LabFailure,normalizeAdbFailure} from './native-lab-runtime.mjs';
+import {classifyFailure,LabFailure,normalizeAdbFailure,val01ObservationId,sanitizedVal01ObservationId} from './native-lab-runtime.mjs';
 
 const pkg='it.trama.registrodocente.lab.val01';
 const activity=pkg+'/it.trama.registrodocente.prova.MainActivity';
@@ -51,6 +51,7 @@ async function until(fn,label,timeout=60000){
  }
  const error=new LabFailure('OBSERVATION_DEADLINE');
  error.cause=Error(label);
+ error.observationId=val01ObservationId(label);
  error.lastReadFailure=lastReadFailure;
  throw error;
 }
@@ -324,10 +325,11 @@ try{
 }catch(error){
  process.exitCode=1;
  const failure=classifyFailure(error);
+ const observationId=sanitizedVal01ObservationId(error?.observationId);
  writeFileSync('native-evidence/failure.json',JSON.stringify({
   schemaVersion:1,candidate:process.env.CANDIDATE_SHA,api,runScope,syntheticOnly:true,
   phase,lastPassedStage:results.at(-1)?.stage??null,failure,
-  lastReadFailure:error.lastReadFailure??null,adb:transport.snapshot()
+  observationId,lastReadFailure:error.lastReadFailure??null,adb:transport.snapshot()
  },null,2));
- console.error(phase,failure.category,failure.code);
+ console.error(phase,failure.category,failure.code,observationId??"NO_OBSERVATION_ID");
 }finally{disconnect();}

@@ -72,12 +72,20 @@ describe('AUDIT-PRE-01/AP-02 — active historical V6 fail-closed boundary', () 
   test('the production app applies the gate before issuing receipts and before normalization', async () => {
     const code = await Bun.file('src/App.tsx').text();
     const exportCode = code.slice(code.indexOf('const prepareEncryptedBackup ='), code.indexOf('const bindBackupEvidence ='));
+    expect(exportCode).toContain('assertV6AssessmentExportAllowed(appDataRef.current)');
+    expect(exportCode).toContain('backupReceiptAuthority.issue(');
     expect(exportCode.indexOf('assertV6AssessmentExportAllowed(appDataRef.current)'))
       .toBeLessThan(exportCode.indexOf('backupReceiptAuthority.issue('));
     const importCode = code.slice(code.indexOf('const handleImportEncryptedBackup ='), code.indexOf('const handleFactoryReset ='));
-    expect(importCode.indexOf('assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData)'))
-      .toBeLessThan(importCode.indexOf('normalizeBackupPayloadVerified(decryptedData, previousLogical)'));
-    expect(importCode.indexOf('normalizeBackupPayloadVerified(decryptedData, previousLogical)'))
-      .toBeLessThan(importCode.indexOf('secureStorage.restoreSnapshotVerified(candidate, previousLogical)'));
+    const v6=importCode.slice(0,importCode.indexOf('const handleImportAssessmentV7Backup ='));
+    expect(v6).toContain('assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData)');
+    expect(v6).toContain('normalizeBackupPayloadVerified(decryptedData, previousLogical)');
+    expect(v6).toContain('await restoreVerifiedCandidate(candidate, previousLogical)');
+    expect(v6.indexOf('assertHistoricalAssessmentRestoreAllowed(previousLogical.appData, decryptedData)'))
+      .toBeLessThan(v6.indexOf('normalizeBackupPayloadVerified(decryptedData, previousLogical)'));
+    expect(v6.indexOf('normalizeBackupPayloadVerified(decryptedData, previousLogical)'))
+      .toBeLessThan(v6.indexOf('await restoreVerifiedCandidate(candidate, previousLogical)'));
+    const helper=importCode.slice(importCode.indexOf('const restoreVerifiedCandidate = async ('));
+    expect(helper).toContain('secureStorage.restoreSnapshotVerified(candidate, previousLogical)');
   });
 });

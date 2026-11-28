@@ -27,6 +27,9 @@ on:
       - 'scripts/diagnostics/native-ui-driver.mjs'
       - 'scripts/diagnostics/native-process-probe.mjs'
       - 'scripts/diagnostics/native-v7-document-discovery.mjs'
+      - 'scripts/diagnostics/native-saf-lifecycle-probe.mjs'
+      - 'scripts/diagnostics/native-adb-transport-probe.mjs'
+      - 'scripts/diagnostics/native-home-navigation-probe.mjs'
       - 'scripts/diagnostics/native-saf-lifecycle-probe.test.mjs'
       - 'mobile/android-probe/**'
       - 'src/**'
@@ -157,6 +160,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          for input in mobile/android-probe/probe-npm.sh mobile/android-probe/build-contract.py mobile/android-probe/verification-metadata.xml; do
+            if ! git cat-file -e "HEAD:$input" 2>/dev/null || ! test -s "$input"; then
+              printf 'MISSING_ANDROID_BUILD_INPUT: %s\n' "$input" >&2
+              exit 1
+            fi
+          done
           mkdir -p ap02-device-evidence
           bun install --frozen-lockfile
           bun run build
@@ -227,14 +236,14 @@ jobs:
               "actual-professional-v7-native-saf-import-and-restored-ui",
               "actual-android-process-cold-reopen-preserves-v7-restore"
             ]) and all(.results[]; .status=="PASS") and
-            .results[2].nativeReauthCount>=1 and
-            .results[3].nativeReauthCount>=2 and
+            (.results[2].nativeReauthCount|if type=="number" then .>=1 and .==floor and .<=9007199254740991 else false end) and
+            (.results[3].nativeReauthCount|if type=="number" then .>=2 and .==floor and .<=9007199254740991 else false end) and
             .results[4].twoFileSelection==true and
             .results[4].encryptedFilesDistinct==true and
-            .results[4].nativeReauthCount>=4 and
+            (.results[4].nativeReauthCount|if type=="number" then .>=4 and .==floor and .<=9007199254740991 else false end) and
             .results[5].forcedStop==true and
             .results[5].absenceSamples==2 and
-            .results[5].beforePidsCount>0 and
+            (.results[5].beforePidsCount|if type=="number" then .>=1 and .==floor and .<=9007199254740991 else false end) and
             .results[5].afterPidsCount==0
           ' ap02-device-evidence/result.json
       - name: Require independent startup-only acceptance evidence
@@ -246,7 +255,7 @@ jobs:
             .candidate==$sha and .api==$api and .trial==$trial and
             .mode=="startup-only" and .syntheticOnly==true and .productionRelease==false and
             .fullF2Qualified==false and .setupHome==true and .coldAuthenticatedHome==true and
-            .forcedStop==true and .absenceSamples==2 and .beforePidsCount>0 and .afterPidsCount==0
+            .forcedStop==true and .absenceSamples==2 and (.beforePidsCount|if type=="number" then .>=1 and .==floor and .<=9007199254740991 else false end) and .afterPidsCount==0
           ' ap02-device-evidence/startup.json
           jq -e '([.results[].stage] == ["installed-professional-android-webview","professional-vault-created-with-synthetic-profile"]) and all(.results[]; .status=="PASS")' ap02-device-evidence/result.json
       - name: Require complete Q3 environment and readiness evidence
@@ -286,7 +295,7 @@ jobs:
             .mode=="canonical-candidate" and .startupOnly==$startup and
             .nativeContextOnly==true and .cdpDirect==true and .sessionClosed==true and
             (if $startup then .nativeSnapshots==0 and .nativeReauthCount==0 and .safReturns==[] and (.stages|length)==2
-             else .nativeSnapshots>0 and .nativeReauthCount==4 and .safReturns==["export","export","target-source","recovery-source"] and (.stages|length)==6 end)
+             else (.nativeSnapshots|if type=="number" then .>=1 and .==floor and .<=9007199254740991 else false end) and .nativeReauthCount==4 and .safReturns==["export","export","target-source","recovery-source"] and (.stages|length)==6 end)
           ' ap02-device-evidence/dual-channel.json
       - name: Record isolated Q4 identity
         if: ${{ always() && (inputs.candidate_sha != '' || matrix.r4a_startup) }}

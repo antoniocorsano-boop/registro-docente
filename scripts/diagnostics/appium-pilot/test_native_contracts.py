@@ -124,3 +124,57 @@ class WebviewLifecycleContracts(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "INVALID_OR_NESTED"):
                 with webview_deadline(1):
                     pass
+
+
+class NativePickerProcessContracts(unittest.TestCase):
+    def evaluate_picker(self, events, *, timed_out, invalid):
+        import ast
+        import json
+        import re
+        import subprocess
+        from pathlib import Path
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        # Run the real function without importing or creating an Appium driver.
+        source = Path(__file__).with_name("pilot.py")
+        function = next(node for node in ast.parse(source.read_text()).body
+                        if isinstance(node, ast.FunctionDef) and node.name == "native_picker")
+        timeouts = []
+
+        def run(*args, **kwargs):
+            timeouts.append(kwargs["timeout"])
+            if timed_out:
+                raise subprocess.TimeoutExpired("node", kwargs["timeout"], output=events)
+            return SimpleNamespace(stdout=events, returncode=0)
+
+        scope = dict(__file__=str(source), Path=Path, json=json, re=re, phase=Mock(), wait=Mock(),
+                     subprocess=SimpleNamespace(run=run, TimeoutExpired=subprocess.TimeoutExpired),
+                     evidence={}, save=Mock())
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), "exec"), scope)
+        driver = SimpleNamespace(session_id="synthetic", switch_to=SimpleNamespace(context=Mock()))
+        if timed_out or invalid:
+            with self.assertRaisesRegex(RuntimeError, "CANONICAL_NATIVE_PICKER_FAILED"):
+                scope["native_picker"](driver, "open", "synthetic")
+        else:
+            scope["native_picker"](driver, "open", "synthetic")
+        self.assertEqual(timeouts, [450])
+        scope["save"].assert_called_once()
+        return scope
+
+    def test_partial_timeout_preserves_only_valid_observations(self):
+        events = b'{"kind":"phase","value":"saf-downloads-ready"}\n{"kind":"observation","value":"ready"}\n{"kind":'
+        scope = self.evaluate_picker(events, timed_out=True, invalid=False)
+        scope["phase"].assert_any_call("saf-downloads-ready")
+        self.assertEqual(scope["evidence"], {
+            "nativeObservation": "ready", "nativeFailureCode": "CANONICAL_NATIVE_PICKER_TIMEOUT",
+        })
+
+    def test_invalid_typed_events_cannot_accompany_success(self):
+        success = '{"kind":"phase","value":"saf-native-complete"}\n{"kind":"result","value":"PASS"}\n'
+        self.evaluate_picker(success, timed_out=False, invalid=False)
+        for event in ('{"kind":"phase","value":[]}', '{"kind":"other","value":"synthetic"}',
+                      '{"kind":"observation","value":"stable","extra":"synthetic"}', '{"kind":"result","value":"PASS"}'):
+            with self.subTest(event=event):
+                scope = self.evaluate_picker(event + "\n" + success, timed_out=False, invalid=True)
+                self.assertEqual(scope["evidence"], {"nativeFailureCode": "CANONICAL_NATIVE_PICKER_INVALID_EVENT"})
